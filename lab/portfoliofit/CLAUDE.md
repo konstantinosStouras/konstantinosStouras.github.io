@@ -329,7 +329,16 @@ publish it; versioned in the repo, deployed manually to the lab project):
     (shown/removed + a per-session toggle — `setRegistration` merge-writes
     `settings.registrationEnabled` into that one session doc, so an existing
     session can drop or restore the Registration page at any time; players who
-    have not reached that step pick the change up on their next load), and
+    have not reached that step pick the change up on their next load),
+    **edit** (any session, active or completed: swaps the ID/Name cells for
+    inputs and saves via `renameSession` — a Name change is a merge-write; a
+    NEW Session ID copies the whole doc to `sessions/{newCode}`, refuses a
+    clash with an existing code, **re-tags every participant** of the old code
+    (`where('sessionId','==',oldCode)` — exports, counts and the resume flow
+    all follow the participant's `sessionId`; admin participant updates are
+    already allowed by the rules), then deletes the old doc — copy-first, so a
+    mid-way failure leaves both docs rather than stranding participants; the
+    old code stops working for joins), and
     **delete**. Players join by code; data is tagged with `sessionId`.
   - **Participants** — table of all players (Player / **University Student ID** / Session
     / Status / Started). The **Started** header is clickable to sort by start date

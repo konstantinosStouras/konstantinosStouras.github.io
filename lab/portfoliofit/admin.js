@@ -748,7 +748,7 @@
   function renderSessions(body) {
     body.innerHTML = '';
     body.appendChild(el('div', { class: 'pfa-card' }, [
-      el('p', { class: 'pfa-note', html: 'Create a <b>session</b>, then share its <b>Session ID</b> (or a <code>?session=CODE</code> link) with players — they enter it on the welcome screen to join (a code is required to play). A session snapshots the <b>current configuration</b> (Content, questions, Settings, the active puzzle set and the Registration-page switch). Sessions are listed under <b>Active</b> (open, accepting players) and <b>Completed</b> (closed, read-only). <b>Close</b> a session to block new joins; data already collected is unaffected. The <b>Registration</b> column shows whether that session includes the Registration page (default: shown) — toggle it per session at any time; players who have not yet reached that step pick the change up on their next load. Use <b>⬇ Excel</b> on any session to download a combined file of every player who has played it.' })
+      el('p', { class: 'pfa-note', html: 'Create a <b>session</b>, then share its <b>Session ID</b> (or a <code>?session=CODE</code> link) with players — they enter it on the welcome screen to join (a code is required to play). A session snapshots the <b>current configuration</b> (Content, questions, Settings, the active puzzle set and the Registration-page switch). Sessions are listed under <b>Active</b> (open, accepting players) and <b>Completed</b> (closed, read-only). <b>Close</b> a session to block new joins; data already collected is unaffected. The <b>Registration</b> column shows whether that session includes the Registration page (default: shown) — toggle it per session at any time; players who have not yet reached that step pick the change up on their next load. Use <b>edit</b> on any row — active or completed — to change its <b>Session ID</b> and/or <b>Name</b>: renaming the ID moves the session’s players and data with it (exports, counts and resumes all follow), but the old code stops working, so share the new code with anyone still joining. Use <b>⬇ Excel</b> on any session to download a combined file of every player who has played it.' })
     ]));
 
     var nameIn = el('input', { type: 'text', placeholder: 'e.g. Spring MBA 2026', style: 'max-width:340px;' });
@@ -847,29 +847,60 @@
       var table = el('table', { class: 'pfa-tbl' });
       table.appendChild(el('thead', {}, [el('tr', {}, ['Session ID', 'Name', 'Participants', 'Registration', 'Created', ''].map(function (th) { return el('th', { text: th }); }))]));
       var tb = el('tbody', {});
+      // Each row has a VIEW mode and an EDIT mode ("edit" swaps the ID and Name
+      // cells for inputs, so any session — active or completed — can be renamed).
       docs.forEach(function (s) {
-        var actions = [
-          el('button', { class: 'pfa-btn sec sm', on: { click: function () { copyText(s._id, 'Session ID copied.'); } } }, ['copy ID']),
-          el('button', { class: 'pfa-btn sm', on: { click: function () { exportSession(s._id); } } }, ['⬇ Excel'])
-        ];
-        if (isDone) actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'open'); } } }, ['reopen']));
-        else actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'closed'); } } }, ['close']));
-        actions.push(el('button', { class: 'pfa-btn danger sm', on: { click: function () { delSession(s._id); } } }, ['delete']));
-        // Per-session Registration-page toggle (absent flag = shown, the default).
-        var regOn = !(s.settings && s.settings.registrationEnabled === false);
-        var regCell = el('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;' }, [
-          el('span', { class: 'pfa-note', style: 'margin:0;', text: regOn ? 'shown' : 'removed' }),
-          el('button', { class: 'pfa-btn sec sm', title: regOn ? 'Remove the Registration page for this session (players go straight from training to the game)' : 'Show the Registration page for this session again',
-            on: { click: function () { setRegistration(s._id, !regOn); } } }, [regOn ? 'remove' : 'show'])
-        ]);
-        tb.appendChild(el('tr', {}, [
-          el('td', {}, [el('b', { text: s._id })]),
-          el('td', { text: s.name || s.label || '' }),
-          el('td', { text: counts ? String(counts[s._id] || 0) : '—' }),
-          el('td', {}, [regCell]),
-          el('td', { text: fmtTs(s.createdAt) }),
-          el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, actions)])
-        ]));
+        var tr = el('tr', {});
+        tb.appendChild(tr);
+        rowView();
+
+        function regState() { return !(s.settings && s.settings.registrationEnabled === false); }
+        function rowView() {
+          tr.innerHTML = '';
+          var actions = [
+            el('button', { class: 'pfa-btn sec sm', on: { click: function () { copyText(s._id, 'Session ID copied.'); } } }, ['copy ID']),
+            el('button', { class: 'pfa-btn sm', on: { click: function () { exportSession(s._id); } } }, ['⬇ Excel']),
+            el('button', { class: 'pfa-btn sec sm', title: 'Edit this session’s Session ID and Name', on: { click: rowEdit } }, ['edit'])
+          ];
+          if (isDone) actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'open'); } } }, ['reopen']));
+          else actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'closed'); } } }, ['close']));
+          actions.push(el('button', { class: 'pfa-btn danger sm', on: { click: function () { delSession(s._id); } } }, ['delete']));
+          // Per-session Registration-page toggle (absent flag = shown, the default).
+          var regOn = regState();
+          var regCell = el('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;' }, [
+            el('span', { class: 'pfa-note', style: 'margin:0;', text: regOn ? 'shown' : 'removed' }),
+            el('button', { class: 'pfa-btn sec sm', title: regOn ? 'Remove the Registration page for this session (players go straight from training to the game)' : 'Show the Registration page for this session again',
+              on: { click: function () { setRegistration(s._id, !regOn); } } }, [regOn ? 'remove' : 'show'])
+          ]);
+          tr.appendChild(el('td', {}, [el('b', { text: s._id })]));
+          tr.appendChild(el('td', { text: s.name || s.label || '' }));
+          tr.appendChild(el('td', { text: counts ? String(counts[s._id] || 0) : '—' }));
+          tr.appendChild(el('td', {}, [regCell]));
+          tr.appendChild(el('td', { text: fmtTs(s.createdAt) }));
+          tr.appendChild(el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, actions)]));
+        }
+        function rowEdit() {
+          tr.innerHTML = '';
+          var idIn = el('input', { type: 'text', value: s._id, style: 'max-width:170px;text-transform:uppercase;' });
+          var nameIn2 = el('input', { type: 'text', value: s.name || s.label || '', placeholder: 'Session name', style: 'max-width:220px;' });
+          var saveBtn = el('button', { class: 'pfa-btn sm', on: { click: doSave } }, ['save']);
+          var cancelBtn = el('button', { class: 'pfa-btn sec sm', on: { click: rowView } }, ['cancel']);
+          tr.appendChild(el('td', {}, [idIn]));
+          tr.appendChild(el('td', {}, [nameIn2]));
+          tr.appendChild(el('td', { text: counts ? String(counts[s._id] || 0) : '—' }));
+          tr.appendChild(el('td', {}, [el('span', { class: 'pfa-note', style: 'margin:0;', text: regState() ? 'shown' : 'removed' })]));
+          tr.appendChild(el('td', { text: fmtTs(s.createdAt) }));
+          tr.appendChild(el('td', {}, [el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;' }, [saveBtn, cancelBtn])]));
+          idIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSave(); });
+          nameIn2.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSave(); });
+          async function doSave() {
+            saveBtn.setAttribute('disabled', 'true'); saveBtn.textContent = 'saving…';
+            var ok = await renameSession(s._id, idIn.value, nameIn2.value.trim());
+            // Success re-renders the whole list (loadList); on failure stay in
+            // edit mode so the typed values are not lost.
+            if (!ok) { saveBtn.removeAttribute('disabled'); saveBtn.textContent = 'save'; }
+          }
+        }
       });
       table.appendChild(tb);
       card.appendChild(table);
@@ -889,6 +920,45 @@
       fb.F.setDoc(fb.F.doc(fb.db, 'sessions', code), { settings: { registrationEnabled: enabled }, updatedAt: fb.F.serverTimestamp() }, { merge: true })
         .then(function () { toast(enabled ? 'Registration page shown for session "' + code + '".' : 'Registration page removed for session "' + code + '".'); loadList(); })
         .catch(function (e) { toast('Failed: ' + ((e && e.code) || 'error')); });
+    }
+    // Edit a session's Session ID and/or Name (any session — active or completed).
+    // The Name alone is a simple merge-write. A Firestore doc cannot be renamed
+    // in place, so a NEW ID copies the WHOLE doc (config snapshot, status,
+    // createdAt) to sessions/{newCode}, RE-TAGS every participant of the old
+    // code (their `sessionId` is what groups exports/participant counts and
+    // drives the resume flow — the rules already allow admin updates on
+    // participants), then deletes the old doc — in that order, so a mid-way
+    // failure leaves both docs present rather than stranding participants on a
+    // deleted code. Returns true on success (the list is re-rendered), false on
+    // any refusal/failure (the caller stays in edit mode).
+    async function renameSession(oldCode, typedCode, newName) {
+      var newCode = sanitizeCode(typedCode);
+      if (!newCode || newCode.length < 3) { toast('Session ID must be 3–40 letters, digits or dashes.'); return false; }
+      try {
+        if (newCode === oldCode) {
+          await fb.F.setDoc(fb.F.doc(fb.db, 'sessions', oldCode), { name: newName, label: newName, updatedAt: fb.F.serverTimestamp() }, { merge: true });
+          toast('Session name updated.'); loadList(); return true;
+        }
+        var oldRef = fb.F.doc(fb.db, 'sessions', oldCode);
+        var oldSnap = await fb.F.getDoc(oldRef);
+        if (!oldSnap.exists()) { toast('Session "' + oldCode + '" no longer exists.'); loadList(); return false; }
+        var clash = await fb.F.getDoc(fb.F.doc(fb.db, 'sessions', newCode));
+        if (clash.exists()) { toast('A session with ID "' + newCode + '" already exists — pick another.'); return false; }
+        if (!window.confirm('Change the Session ID from "' + oldCode + '" to "' + newCode + '"?\n\nThis session’s players and data move to the new ID, but the OLD code stops working — share the new code / ?session= link with anyone still joining.')) return false;
+        var data = Object.assign({}, oldSnap.data(), { name: newName, label: newName, updatedAt: fb.F.serverTimestamp() });
+        await fb.F.setDoc(fb.F.doc(fb.db, 'sessions', newCode), data);
+        var moved = 0, failed = 0;
+        var pSnap = await fb.F.getDocs(fb.F.query(fb.F.collection(fb.db, 'participants'), fb.F.where('sessionId', '==', oldCode)));
+        var ids = []; pSnap.forEach(function (d) { ids.push(d.id); });
+        for (var i = 0; i < ids.length; i++) {
+          try { await fb.F.setDoc(fb.F.doc(fb.db, 'participants', ids[i]), { sessionId: newCode, updatedAt: fb.F.serverTimestamp() }, { merge: true }); moved++; }
+          catch (e) { failed++; }
+        }
+        if (failed) { toast('Copied to "' + newCode + '" but ' + failed + ' participant(s) could not be moved — the old session is kept; edit it again to retry.'); loadList(); return false; }
+        await fb.F.deleteDoc(oldRef);
+        toast('Session renamed to "' + newCode + '"' + (moved ? ' (' + moved + ' participant' + (moved === 1 ? '' : 's') + ' moved)' : '') + '.');
+        loadList(); return true;
+      } catch (e) { toast('Rename failed: ' + ((e && e.code) || 'error')); return false; }
     }
     function delSession(code) {
       if (!window.confirm('Delete session "' + code + '"? Players can no longer join with this code. (Already-collected player data is not affected.)')) return;
