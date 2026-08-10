@@ -44,6 +44,8 @@
       <div class="field"><label for="f-workexp">Work experience (years) <span class="req">*</span></label><input id="f-workexp" type="number" min="0" max="50"></div>
       <div class="field"><label for="f-occupation">Occupation <span class="req">*</span></label>
         <select id="f-occupation"><option value=""></option></select></div>
+      <div class="field"><label for="f-industry">Industry <span class="req">*</span></label>
+        <select id="f-industry"><option value=""></option></select></div>
       <div class="field"><label for="f-english">English fluency <span class="req">*</span></label>
         <select id="f-english"><option value=""></option><option>Native speaker</option><option>Fluent</option><option>Advanced</option><option>Intermediate</option><option>Basic</option></select></div>
     </div>
@@ -107,7 +109,7 @@
     ['name', 'f-name'], ['email', 'f-email'], ['studentId', 'f-sid'],
     ['age', 'f-age'], ['gender', 'f-gender'], ['nationality', 'f-nationality'],
     ['country', 'f-country'], ['levelOfStudy', 'f-level'], ['workExperience', 'f-workexp'],
-    ['occupation', 'f-occupation'], ['englishFluency', 'f-english']
+    ['occupation', 'f-occupation'], ['industry', 'f-industry'], ['englishFluency', 'f-english']
   ];
   var CFG = { sims: {}, source: null };
   var current = null;   // sim shown in the launch dialog
@@ -151,6 +153,15 @@
   var AGE_BANDS = ['18-24', '25-34', '35-44', '45-54', '55-64', '65+'];
   var OCCUPATIONS = ['Student', 'Employed full-time', 'Employed part-time',
     'Self-employed', 'Unemployed', 'Retired', 'Other'];
+  /* Platform-only field (no sim asks it today); sims map an added "Industry"
+     question onto it by label. */
+  var INDUSTRIES = ['Agriculture & Food', 'Banking & Financial Services',
+    'Construction & Real Estate', 'Consulting', 'Consumer Goods & Retail',
+    'Education & Research', 'Energy & Utilities', 'Engineering & Manufacturing',
+    'Entertainment & Media', 'Government & Public Sector', 'Healthcare & Pharmaceuticals',
+    'Hospitality & Tourism', 'Insurance', 'Legal Services', 'Logistics & Transportation',
+    'Marketing & Advertising', 'Non-profit & NGO', 'Technology & Software',
+    'Telecommunications', 'Other'];
   function fillSelect(id, list) {
     var el = $(id);
     list.forEach(function (v) {
@@ -163,6 +174,7 @@
   fillSelect('f-country', COUNTRIES);
   fillSelect('f-age', AGE_BANDS);
   fillSelect('f-occupation', OCCUPATIONS);
+  fillSelect('f-industry', INDUSTRIES);
 
   /* ---------- registration ---------- */
   function showRegister(editing) {

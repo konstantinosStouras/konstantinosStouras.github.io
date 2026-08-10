@@ -80,6 +80,7 @@ try {
   await page.selectOption('#f-level', 'MBA');
   await page.fill('#f-workexp', '5');
   await page.selectOption('#f-occupation', 'Student');
+  await page.selectOption('#f-industry', 'Consulting');
   await page.selectOption('#f-english', 'Fluent');
   await page.click('#btn-save');
   await page.waitForSelector('#s-sims:not([hidden])');

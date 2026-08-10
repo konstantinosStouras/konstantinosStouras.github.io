@@ -253,13 +253,13 @@
   }
   var SIMP_ID_MAP = { participantId: 'studentId', ucdStudentId: 'studentId', age: 'age',
     gender: 'gender', nationality: 'nationality', country: 'country', levelOfStudy: 'levelOfStudy',
-    workExperience: 'workExperience', occupation: 'occupation', englishFluency: 'englishFluency' };
+    workExperience: 'workExperience', occupation: 'occupation', industry: 'industry', englishFluency: 'englishFluency' };
   var SIMP_LABEL_MAP = [
     [/student\s*id|participant\s*id/i, 'studentId'], [/e-?mail/i, 'email'],
     [/full\s*name|^your\s+name/i, 'name'], [/^age\b/i, 'age'], [/^gender/i, 'gender'],
     [/nationality/i, 'nationality'], [/country/i, 'country'],
     [/level\s+of\s+study/i, 'levelOfStudy'], [/work\s+experience/i, 'workExperience'],
-    [/occupation/i, 'occupation'], [/english/i, 'englishFluency']
+    [/occupation/i, 'occupation'], [/industr/i, 'industry'], [/english/i, 'englishFluency']
   ];
   function simpAnswers(qs) {
     var h = simpHandoff();

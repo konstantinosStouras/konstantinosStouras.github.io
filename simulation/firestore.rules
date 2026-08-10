@@ -26,7 +26,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
              'uid', 'name', 'email', 'studentId', 'age', 'gender',
              'nationality', 'country', 'levelOfStudy', 'workExperience',
-             'occupation', 'englishFluency', 'createdAt', 'updatedAt'
+             'occupation', 'industry', 'englishFluency', 'createdAt', 'updatedAt'
            ])
         && request.resource.data.uid == uid;
       allow read: if isAdmin() || (request.auth != null && request.auth.uid == uid);

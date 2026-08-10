@@ -265,7 +265,7 @@
   }
   $('btn-csv') && ($('btn-csv').onclick = function () {
     var cols = ['name', 'studentId', 'email', 'age', 'gender', 'nationality', 'country',
-                'levelOfStudy', 'workExperience', 'occupation', 'englishFluency', 'createdAt'];
+                'levelOfStudy', 'workExperience', 'occupation', 'industry', 'englishFluency', 'createdAt'];
     var esc = function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var csv = cols.join(',') + '\n' + roster.map(function (r) {
       return cols.map(function (c) { return esc(r[c]); }).join(',');
