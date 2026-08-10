@@ -2313,8 +2313,11 @@ platform writes the same-origin **handoff** `localStorage 'simp:handoff:v1'`
 `{sim, session, profile, ts}`; `simulation/prefill.js` is the optional
 one-line drop-in a sim can include to auto-fill its own registration form
 from it — WIRED into the portfoliofit, sustainable-supply-chains and
-answerarena student pages (each with a `SIMP_EXPECT` guard, disabled on
-their `?admin` views; consent checkboxes are never auto-ticked) (explicit `data-simp` attrs first, then label-text matching with the
+answerarena student pages and (via the `_ideasearchlab-src/index.html`
+template + rebuild) ideasearchlab (each with a `SIMP_EXPECT` guard, disabled
+on their admin views; consent checkboxes are never auto-ticked, and
+passwords are never touched — ideasearchlab's account password stays the
+student's own) (explicit `data-simp` attrs first, then label-text matching with the
 native-setter+input-event React trick; inert without a fresh handoff — so
 adding it never changes standalone behaviour). The admin panel also embeds
 each sim's own admin console (same-origin iframes) for creating sessions

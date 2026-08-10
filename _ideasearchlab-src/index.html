@@ -30,5 +30,11 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- Simulation Platform prefill (inert outside a platform launch): fills
+         Full Name / Email on the account screen and the study registration
+         form from the student's saved platform details. Passwords are never
+         touched; consent checkboxes are never auto-ticked. -->
+    <script>window.SIMP_EXPECT = location.pathname.indexOf('/admin') >= 0 ? '__off__' : 'ideasearchlab';</script>
+    <script src="/simulation/prefill.js" defer></script>
   </body>
 </html>
