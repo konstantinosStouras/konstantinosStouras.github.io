@@ -102,11 +102,14 @@ try {
   const conN = await page.locator('#con-pick option').count();
   const catAdminN = await page.evaluate(() => window.SIMP_CATALOG.filter(s => s.adminUrl).length);
   ok(conN === catAdminN, `consoles picker lists every sim with an admin panel (${conN}/${catAdminN})`);
+  ok((await page.textContent('#admin-who')).includes('LOCAL mode'), 'admin bar states LOCAL mode (no sign-in to sign out of)');
+  ok(await page.isHidden('#btn-signout'), 'Sign out button hidden in LOCAL mode');
   // The checkbox itself is visually hidden inside the .switch — click the slider.
   await page.click('tr[data-key="ssc"] .switch .sl');
   await page.fill('tr[data-key="ssc"] .c-session', 'TEST1');
   await page.fill('tr[data-key="ssc"] .c-note', 'Play after the break');
   await page.click('tr[data-key="knapsack-game"] .switch .sl');
+  await page.click('tr[data-key="problem-solving"] .switch .sl');
   await page.click('#btn-savecfg');
   await page.waitForFunction(() => document.getElementById('btn-savecfg').textContent.includes('Saved'));
   ok(true, 'Save button confirms the press (✓ Saved)');
@@ -116,7 +119,7 @@ try {
   // ---- 3. Student cards + launch ---------------------------------------
   await page.goto(BASE + '/simulation/');
   await page.waitForSelector('.sim-card');
-  ok(await page.locator('.sim-card').count() === 2, 'exactly the two activated sims render as cards');
+  ok(await page.locator('.sim-card').count() === 3, 'exactly the three activated sims render as cards');
   ok((await page.textContent('#cfg-src')).includes('local draft'), 'draft-source pill is shown');
   ok((await page.textContent('.sim-card .note')).includes('Play after the break'), 'card note from the admin shows');
   await page.click('.sim-card:has-text("Sustainable Supply Chains")');
@@ -125,6 +128,8 @@ try {
   const [pop] = await Promise.all([ctx.waitForEvent('page'), page.click('#m-launch')]);
   ok(pop.url().includes('/sustainable-supply-chains/?code=TEST1'), 'SSC launches with ?code= (auto-join URL): ' + pop.url());
   await pop.close();
+  ok(page.url().replace(/\?.*/, '').endsWith('/simulation/'), 'platform tab stays put — exactly ONE copy opens (double-open regression)');
+  ok(await page.isHidden('#modal'), 'launch dialog closes itself after launching');
   const handoff = await page.evaluate(() => JSON.parse(localStorage.getItem('simp:handoff:v1')));
   ok(handoff && handoff.sim === 'ssc' && handoff.session === 'TEST1' && handoff.profile.studentId === 'S123',
      'launch wrote the same-origin handoff (sim + session + profile)');
@@ -151,6 +156,19 @@ try {
   await pop2.close();
   ok(await page.evaluate(() => localStorage.getItem('knapsack_session')) === 'simp-S123',
      'launch seeded knapsack_session with the student ID');
+
+  // ---- 6. No-input sims launch directly (no dialog) --------------------
+  const [pop3] = await Promise.all([ctx.waitForEvent('page'), page.click('.sim-card:has-text("Problem Solving")')]);
+  ok(pop3.url().includes('/lab/problem-solving/'), 'a no-input sim launches straight into a new tab (no dialog)');
+  await pop3.close();
+  ok(await page.isHidden('#modal'), 'no dialog was shown for the no-input sim');
+
+  // ---- 7. Student log out ----------------------------------------------
+  page.once('dialog', d => d.accept());
+  await page.click('#who button:nth-of-type(2)');
+  await page.waitForSelector('#s-register:not([hidden])');
+  ok(await page.evaluate(() => localStorage.getItem('simp:profile:v1')) === null,
+     'Log out clears the saved registration and returns to the form');
 } finally {
   await browser.close();
   server.close();

@@ -40,6 +40,17 @@
     return p;
   }
   function clearProfile() { localStorage.removeItem(LS_PROFILE); localStorage.removeItem(LS_SYNCED); }
+  /* Log out of the platform on this browser: forget the saved registration
+     (and the launch handoff), and sign out the Firebase user so the NEXT
+     registration on this machine gets its own roster doc instead of
+     overwriting this student's — the shared-computer case. The roster doc
+     itself stays (logging out is not unregistering from class). */
+  function logout() {
+    clearProfile();
+    try { localStorage.removeItem(LS_HANDOFF); } catch (e) {}
+    if (!CONFIGURED) return Promise.resolve();
+    return fb().then(function (F) { return F.adminSignOut(); }).catch(function () {});
+  }
   /* Mirror the saved profile to the Firestore roster, once per change — also
      called at page load, so a profile registered while the platform was still
      in LOCAL mode joins the roster on the student's next visit. */
@@ -192,6 +203,7 @@
     configured: CONFIGURED,
     catalog: catalog, sim: sim,
     getProfile: getProfile, saveProfile: saveProfile, clearProfile: clearProfile, syncProfile: syncProfile,
+    logout: logout,
     watchConfig: watchConfig, saveConfig: saveConfig, draft: draft, clearDraft: clearDraft,
     buildLaunch: buildLaunch, launch: launch,
     firebase: fb,

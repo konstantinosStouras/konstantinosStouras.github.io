@@ -2293,7 +2293,15 @@ admin e-mails in `SIMP_ADMIN_EMAILS` — keep in sync with `isAdmin()`; setup
 walkthrough in `simulation/_FIREBASE-SETUP.md`) makes
 activation live (`simPlatform/config` doc) and adds a roster
 (`simPlatformStudents/{uid}`, anonymous auth, every registration field
-compulsory) with CSV export. At launch the
+compulsory) with CSV export. Students **log out** from the header (clears the
+browser AND signs out the anonymous uid, so on a shared machine the next
+registration gets its own roster doc instead of overwriting); the roster view
+collapses duplicate re-registrations by student ID, newest kept, and the
+admin panel has its own Sign out. A card with nothing to ask (no session
+input, no copy chips) launches its sim DIRECTLY in a new tab — and NEVER pass
+'noopener' as window.open features: its by-spec null return reads as a
+blocked pop-up and made the fallback also navigate the platform tab (the
+double-open bug). At launch the
 platform writes the same-origin **handoff** `localStorage 'simp:handoff:v1'`
 `{sim, session, profile, ts}`; `simulation/prefill.js` is the optional
 one-line drop-in a sim can include to auto-fill its own registration form
