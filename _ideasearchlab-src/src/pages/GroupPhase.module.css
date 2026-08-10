@@ -193,6 +193,12 @@
 }
 
 /* ─── Task brief ─────────────────────────── */
+.briefWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
 .brief {
   background: var(--white);
   border: 1px solid var(--border);
@@ -201,28 +207,35 @@
   flex-shrink: 0;
   overflow: hidden;
 }
-.briefToggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
+.briefHeader {
   padding: 12px 18px;
   background: rgba(200, 86, 42, 0.10); /* fallback for older browsers */
   background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border: none;
   border-bottom: 1px solid rgba(200, 86, 42, 0.30);
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  cursor: pointer;
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 600;
   color: var(--accent);
 }
-.briefToggle:hover {
-  background: rgba(200, 86, 42, 0.18);
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
+.briefToggleRow { display: flex; justify-content: center; }
+.briefToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 18px;
+  border-radius: 999px;
+  background: rgba(76, 175, 80, 0.12);
+  border: 1px solid rgba(76, 175, 80, 0.5);
+  color: #2e7d32;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
 }
-.briefChevron { font-size: 10px; color: var(--accent); }
+.briefToggleBtn:hover { background: rgba(76, 175, 80, 0.22); }
+.briefToggleChevron { font-size: 9px; }
 .briefContent { padding: 20px 22px; }
 .briefContent p { font-size: 13.5px; line-height: 1.7; color: var(--ink); margin-bottom: 12px; }
 .briefContent ul { padding-left: 20px; margin-bottom: 14px; }
@@ -638,51 +651,6 @@
   .chatSection { min-height: 240px; }
   .topRight { flex-wrap: wrap; }
 }
-
-/* ═══════════════════════════════════════════
-   Task-brief minimize notice (tip banner)
-   ═══════════════════════════════════════════ */
-.briefNotice {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(200,86,42,0.08);
-  border: 1px solid rgba(200,86,42,0.25);
-  color: var(--ink);
-  border-radius: 12px;
-  padding: 9px 12px;
-  margin-bottom: 10px;
-  font-size: 13px;
-  line-height: 1.45;
-  animation: fadeIn 0.2s ease;
-}
-.briefNoticeIcon {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-style: italic;
-  font-weight: 700;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.briefNoticeText { flex: 1; }
-.briefNoticeClose {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 4px;
-  border-radius: 6px;
-}
-.briefNoticeClose:hover { color: var(--ink); }
 
 /* ═══════════════════════════════════════════
    Consensus reminder modal (group selection)

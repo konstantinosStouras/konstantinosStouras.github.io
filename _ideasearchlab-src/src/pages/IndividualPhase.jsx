@@ -455,24 +455,30 @@ export default function IndividualPhase() {
         )
       })()}
 
-      {/* Collapsible task brief */}
-      <div className={styles.brief}>
-        <button
-          className={styles.briefToggle}
-          onClick={() => setBriefOpen(o => !o)}
-          type="button"
-          title={briefOpen
-            ? 'Click here to minimize the Task Brief and see the ideas and workspace more clearly.'
-            : 'Click here to expand the Task Brief.'}
-        >
-          <span>Task Brief</span>
-          <span className={styles.briefChevron}>{briefOpen ? '\u25B2' : '\u25BC'}</span>
-        </button>
+      {/* Collapsible task brief, toggled by the always-visible
+          "Hide/Show task description" pill button below it */}
+      <div className={styles.briefWrap}>
         {briefOpen && (
-          <div className={styles.briefContent}>
-            <RichText html={c.brief} vars={contentVars} aiOn={!!aiEnabled} />
+          <div className={styles.brief}>
+            <div className={styles.briefHeader}>Task Brief</div>
+            <div className={styles.briefContent}>
+              <RichText html={c.brief} vars={contentVars} aiOn={!!aiEnabled} />
+            </div>
           </div>
         )}
+        <div className={styles.briefToggleRow}>
+          <button
+            className={styles.briefToggleBtn}
+            onClick={() => setBriefOpen(o => !o)}
+            type="button"
+            title={briefOpen
+              ? 'Hide the task description to see the ideas and workspace more clearly.'
+              : 'Show the task description.'}
+          >
+            <span className={styles.briefToggleChevron} aria-hidden="true">{briefOpen ? '\u25B2' : '\u25BC'}</span>
+            {briefOpen ? 'Hide task description' : 'Show task description'}
+          </button>
+        </div>
       </div>
 
       {/* Selection indicator */}
