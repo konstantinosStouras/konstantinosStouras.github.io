@@ -680,15 +680,80 @@
   // ID (compulsory first field) plus demographics and research-consent
   // checkboxes, then unlocks the main game. Data is written to the participant
   // doc (registration map + studentId + consent) and exported by the admin panel.
+  // ---- Simulation Platform handoff (stouras.com/simulation) ----
+  // A student launched from the platform registered once there; answer this
+  // form from that data and show ONLY what the platform can't supply.
+  function simpHandoff() {
+    try {
+      var h = JSON.parse(localStorage.getItem('simp:handoff:v1') || 'null');
+      if (!h || h.sim !== 'portfoliofit' || !h.profile) return null;
+      if (Date.now() - (h.ts || 0) > 6 * 60 * 60 * 1000) return null;
+      return h;
+    } catch (e) { return null; }
+  }
+  var SIMP_ID_MAP = { studentId: 'studentId', age: 'age', gender: 'gender', nationality: 'nationality',
+    country: 'country', levelOfStudy: 'levelOfStudy', workExperience: 'workExperience',
+    occupation: 'occupation', englishFluency: 'englishFluency' };
+  var SIMP_LABEL_MAP = [
+    [/student\s*id|participant\s*id/i, 'studentId'], [/e-?mail/i, 'email'],
+    [/full\s*name|^your\s+name/i, 'name'], [/^age\b/i, 'age'], [/^gender/i, 'gender'],
+    [/nationality/i, 'nationality'], [/country/i, 'country'],
+    [/level\s+of\s+study/i, 'levelOfStudy'], [/work\s+experience/i, 'workExperience'],
+    [/occupation/i, 'occupation'], [/english/i, 'englishFluency']
+  ];
+  function simpRegAnswers(questions) {
+    var h = simpHandoff();
+    if (!h) return {};
+    var out = {};
+    questions.forEach(function (q) {
+      var key = SIMP_ID_MAP[q.id];
+      if (!key) for (var i = 0; i < SIMP_LABEL_MAP.length; i++) if (SIMP_LABEL_MAP[i][0].test(q.label || '')) { key = SIMP_LABEL_MAP[i][1]; break; }
+      var v = key && h.profile[key] != null ? String(h.profile[key]).trim() : '';
+      if (!v) return;
+      // The answer must survive this form's own validation, or the field is shown.
+      if (q.type === 'select' && Array.isArray(q.options) && q.options.indexOf(v) < 0) return;
+      if (q.type === 'number') {
+        var n = Number(v);
+        if (isNaN(n) || Math.floor(n) !== n || (q.min != null && n < q.min) || (q.max != null && n > q.max)) return;
+      }
+      out[q.id] = v;
+    });
+    return out;
+  }
+  function simpCoerce(questions, answers) {
+    var out = {};
+    questions.forEach(function (q) {
+      if (!(q.id in answers)) return;
+      var v = answers[q.id];
+      if (q.type === 'number' && v !== '') { var n = Number(v); if (!isNaN(n)) v = n; }
+      out[q.id] = v;
+    });
+    return out;
+  }
+
   function showRegistration() {
     S.phase = 'registration';
     document.body.classList.remove('pf-playing');
     var questions = (cfg.registrationQuestions && cfg.registrationQuestions.length) ? cfg.registrationQuestions : DEFAULTS.registrationQuestions;
     var consents = (cfg.registrationConsents && cfg.registrationConsents.length) ? cfg.registrationConsents : (DEFAULTS.registrationConsents || []);
 
+    var pre = simpRegAnswers(questions);
+    var shown = questions.filter(function (q) { return !(q.id in pre); });
+    if (!shown.length && !consents.length) {
+      // Everything this form asks came from the Simulation Platform — submit
+      // it silently and go straight from training into the main game.
+      var regAll = simpCoerce(questions, pre);
+      (async function () {
+        await saveRegistration(regAll, false);
+        logEvent('registration_submit', { studentId: regAll.studentId || null, silent: true });
+        startMain();
+      })();
+      return;
+    }
+
     var form = el('div', {});
-    form.appendChild(el('h3', { text: 'Participant Information', style: 'font-family:"Space Grotesk",Inter,sans-serif;font-size:1.05rem;margin:6px 0 2px;' }));
-    var fields = questions.map(function (q) { var f = buildField(q); form.appendChild(f.field); return f; });
+    if (shown.length) form.appendChild(el('h3', { text: 'Participant Information', style: 'font-family:"Space Grotesk",Inter,sans-serif;font-size:1.05rem;margin:6px 0 2px;' }));
+    var fields = shown.map(function (q) { var f = buildField(q); form.appendChild(f.field); return f; });
 
     var consentBoxes = [];
     if (consents.length) {
@@ -727,6 +792,9 @@
         }
         reg[q.id] = v;
       }
+      // Merge the answers the platform already supplied (fields not shown).
+      var preC = simpCoerce(questions, pre);
+      Object.keys(preC).forEach(function (id) { if (!(id in reg)) reg[id] = preC[id]; });
       for (var c = 0; c < consentBoxes.length; c++) {
         if (!consentBoxes[c].checked) { err.textContent = 'Please accept all consent statements to continue.'; return; }
       }

@@ -291,11 +291,15 @@ Responses row with `submitted = no (draft)`.
   it still stores into the participant-doc `participantId` slot / export column -
   but it is now **required** (unlike the old optional Participant ID).
 - Keep model identities out of anything the participant sees.
-- The page includes the Simulation Platform's `/simulation/prefill.js`
-  (guarded by `window.SIMP_EXPECT`, off under `?admin`): launched from
-  `stouras.com/simulation`, the intake form auto-fills from the student's
-  platform registration (label-text matching; only empty fields; consent
-  checkboxes are never auto-ticked). Inert outside a platform launch.
+- **Silent intake from the Simulation Platform** (`simpHandoff`/`simpAnswers`/
+  `finishRegister` in arena-app.js): launched from `stouras.com/simulation`,
+  the intake answers itself from the platform handoff and renders ONLY what
+  the platform can't supply — consent checkboxes (never auto-ticked) and any
+  extra/custom field. With nothing left it signs in and submits silently
+  ("Setting up your session..."; failures show the cause + Try again). An
+  answer must survive the form's own validation or its field is shown. The
+  generic `/simulation/prefill.js` include also remains for any form that
+  still renders. Inert outside a platform launch.
 - Anonymous play needs the **Anonymous** sign-in provider enabled in the
   Firebase console; otherwise `Store.signInAnonymously()` fails
   (`auth/operation-not-allowed`) and the intake shows "Anonymous play is not

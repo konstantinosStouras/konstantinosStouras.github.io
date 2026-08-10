@@ -624,11 +624,16 @@ change. Four sections:
 - Drive the game from the **experiment/admin only via the `PFGame` bridge**;
   emit user actions through **one** hook — this is what makes logging, the tour,
   and the admin puzzle tools possible without entangling the game.
-- The page includes the Simulation Platform's `/simulation/prefill.js`
-  (guarded by `window.SIMP_EXPECT`, off under `?admin`): when a student is
-  launched from `stouras.com/simulation`, the post-training Registration form
-  auto-fills from their platform registration (label-text matching; only empty
-  fields, never submits). Inert outside a platform launch.
+- **Silent registration from the Simulation Platform** (`simpHandoff`/
+  `simpRegAnswers` in experiment.js): launched from `stouras.com/simulation`,
+  the post-training Registration answers itself from the platform handoff and
+  renders ONLY what the platform can't supply — extra/custom fields and
+  consent statements (never auto-ticked). When nothing is left it submits
+  silently (`registration_submit` logs `silent: true`) and training leads
+  straight into the main game. An answer must survive the form's own
+  validation (select-option membership, number ranges) or its field is shown.
+  The generic `/simulation/prefill.js` include also remains for any form that
+  still renders. Inert outside a platform launch.
 - For a research build, decide up front what to **hide from participants**
   (optimum, personal bests, difficulty internals) and gate it behind the
   experiment flag so the public game keeps its full feedback.
