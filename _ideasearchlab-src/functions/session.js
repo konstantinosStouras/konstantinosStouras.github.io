@@ -616,11 +616,13 @@ function statusPhaseIndex(status, sequence) {
 /**
  * maybeAdvanceSession
  * Monotonically advances session.status to the furthest phase that EVERY active
- * (non-removed) participant has reached. Idempotent and safe to call on any
- * participant change. This is the self-healing backstop that keeps the session
- * phase in sync even when a per-group auto-advance was delayed or dropped and
- * the members moved themselves on client-side — so the session still reaches
- * survey/done and never sticks on 'group'.
+ * (non-removed) participant has reached — capped at 'survey', never 'done'
+ * (see the comment at the loop: sessions must not auto-close, because new
+ * participants can always still join and play). Idempotent and safe to call on
+ * any participant change. This is the self-healing backstop that keeps the
+ * session phase in sync even when a per-group auto-advance was delayed or
+ * dropped and the members moved themselves on client-side — so the session
+ * still reaches 'survey' and never sticks on 'group'.
  */
 async function maybeAdvanceSession(sessionRef) {
   const sessionSnap = await sessionRef.get()
@@ -635,7 +637,15 @@ async function maybeAdvanceSession(sessionRef) {
   if (active.length === 0) return
 
   let target = curIdx
-  for (let i = sequence.length - 1; i > curIdx; i--) {
+  // Cap automatic advancement at 'survey' (sequence.length - 2; 'done' is
+  // always last) — a session must NEVER auto-close. Every CURRENT participant
+  // being finished does not mean the session is over: new participants can
+  // still join and play — a groupSize-1 session run as many independent solo
+  // plays, or a late joiner arriving after the first cohort finished. Since
+  // status 'done' closes the session to everyone (JoinSession filters done
+  // sessions out of code lookup; useSessionEnded ends every open page), it is
+  // reserved for the instructor: Close Session or Force advance.
+  for (let i = sequence.length - 2; i > curIdx; i--) {
     if (active.every(p => statusPhaseIndex(p.status, sequence) >= i)) { target = i; break }
   }
   if (target > curIdx) {
@@ -652,8 +662,9 @@ async function maybeAdvanceSession(sessionRef) {
  *  1. When a participant locks in their votes, try to finish their group's
  *     voting (tally finalIdeas, move members on).
  *  2. Whenever a participant's phase changes, re-evaluate the session's overall
- *     phase (maybeAdvanceSession) so the session self-heals to survey/done even
+ *     phase (maybeAdvanceSession) so the session self-heals to 'survey' even
  *     if a per-group trigger was missed and participants advanced themselves.
+ *     Never to 'done' — sessions close only by instructor action.
  */
 exports.onParticipantUpdated = functions.firestore
   .document('sessions/{sessionId}/participants/{participantId}')

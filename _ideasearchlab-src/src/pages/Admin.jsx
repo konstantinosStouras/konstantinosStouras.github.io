@@ -635,12 +635,18 @@ export default function Admin() {
   const ac = config.aiConfig
   const bothActive = pc.individualPhaseActive && pc.groupPhaseActive
 
+  // Only 'done' means completed — and a session reaches 'done' ONLY by
+  // instructor action (Close Session / Force advance; the backend never
+  // auto-closes). A 'survey' session stays in Active Sessions: every CURRENT
+  // participant may have finished, but the session is still open — new
+  // participants can join and play (e.g. a groupSize-1 session run as many
+  // independent solo plays, or a late joiner after the first cohort finished).
   const activeSessions = sessions
-    .filter(s => !['done', 'survey'].includes(s.status))
+    .filter(s => s.status !== 'done')
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
 
   const completedSessions = sessions
-    .filter(s => ['done', 'survey'].includes(s.status))
+    .filter(s => s.status === 'done')
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
 
   // ── Registered users + their participation ───────────────────────────────
@@ -1180,13 +1186,10 @@ function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDel
       <div className={styles.sessionCardTop}>
         <div className={styles.sessionCardLeft}>
           <span className={styles.sessionCode}>{session.code}</span>
-          {/* A session only reaches 'survey' once every participant has, and it is
-              then filed under Completed Sessions — so a 'survey' badge there read
-              as if work was still happening. Show it (and 'done') as "done". */}
-          {(() => {
-            const shown = session.status === 'survey' ? 'done' : session.status
-            return <span className={`${styles.statusBadge} ${styles['status_' + shown]}`}>{shown}</span>
-          })()}
+          {/* 'survey' sessions stay in Active Sessions now (a session never
+              auto-closes — new participants can still join and play), so show
+              the real status; the open-note below explains it. */}
+          <span className={`${styles.statusBadge} ${styles['status_' + session.status]}`}>{session.status}</span>
         </div>
         <div className={styles.sessionCardRight}>
           <span className={styles.participantCount}>{participantCount} participants</span>
@@ -1195,6 +1198,12 @@ function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDel
       </div>
       {session.name && <div className={styles.sessionName}>{session.name}</div>}
       {createdStr && <div className={styles.sessionDate}>Created {createdStr}</div>}
+      {session.status === 'survey' && (
+        <div className={styles.sessionOpenNote}>
+          All current participants have finished — the session stays open for new
+          joiners until you press Close Session.
+        </div>
+      )}
       <div className={styles.sessionCardActions}>
         <button className="btn-primary" style={{ padding: '6px 18px', fontSize: 13 }} onClick={onOpen}>Open</button>
         <button
