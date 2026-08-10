@@ -195,6 +195,14 @@
             qs.forEach(function (d) { out.push(d.data()); });
             cb(out);
           }, function () { cb(null); });
+        },
+        /* Delete roster docs (admin-only per the rules — test registrations
+           etc.). Takes the uids backing one displayed student row, so a
+           re-registration's collapsed duplicates go too. */
+        deleteStudents: function (uids) {
+          return Promise.all((uids || []).map(function (uid) {
+            return D.deleteDoc(D.doc(fs, PATHS.students + '/' + uid));
+          }));
         }
       };
     });

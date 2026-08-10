@@ -683,6 +683,8 @@
   // ---- Simulation Platform handoff (stouras.com/simulation) ----
   // A student launched from the platform registered once there; answer this
   // form from that data and show ONLY what the platform can't supply.
+  // Consent checkboxes are carried as ticked too (the platform's terms cover
+  // them — per the study owner), stamped consentVia on the participant doc.
   function simpHandoff() {
     try {
       var h = JSON.parse(localStorage.getItem('simp:handoff:v1') || 'null');
@@ -739,12 +741,15 @@
 
     var pre = simpRegAnswers(questions);
     var shown = questions.filter(function (q) { return !(q.id in pre); });
-    if (!shown.length && !consents.length) {
+    // On a platform launch the consent boxes are bypassed entirely — carried
+    // as ticked (per the study owner) and recorded with consentVia below.
+    var carriedConsent = consents.length > 0 && !!simpHandoff();
+    if (!shown.length && (!consents.length || carriedConsent)) {
       // Everything this form asks came from the Simulation Platform — submit
       // it silently and go straight from training into the main game.
       var regAll = simpCoerce(questions, pre);
       (async function () {
-        await saveRegistration(regAll, false);
+        await saveRegistration(regAll, carriedConsent, carriedConsent);
         logEvent('registration_submit', { studentId: regAll.studentId || null, silent: true });
         startMain();
       })();
@@ -756,7 +761,7 @@
     var fields = shown.map(function (q) { var f = buildField(q); form.appendChild(f.field); return f; });
 
     var consentBoxes = [];
-    if (consents.length) {
+    if (consents.length && !carriedConsent) {
       form.appendChild(el('hr', { style: 'border:none;border-top:1px solid #f0ece3;margin:18px 0 10px;' }));
       form.appendChild(el('h3', { text: 'Consent', style: 'font-family:"Space Grotesk",Inter,sans-serif;font-size:1.05rem;margin:0 0 8px;' }));
       consents.forEach(function (stmt) {
@@ -799,21 +804,24 @@
         if (!consentBoxes[c].checked) { err.textContent = 'Please accept all consent statements to continue.'; return; }
       }
       submit.setAttribute('disabled', 'true'); submit.textContent = 'Saving…';
-      await saveRegistration(reg, consentBoxes.length > 0);
+      await saveRegistration(reg, consentBoxes.length > 0 || carriedConsent, carriedConsent);
       logEvent('registration_submit', { studentId: reg.studentId || null });
       startMain();
     }
   }
 
   // Persist registration to the participant doc (research export reads p.registration,
-  // p.studentId, p.consentGiven). consentGiven is only recorded when consent
-  // statements were actually shown. Non-fatal: a write hiccup must not strand the player.
-  async function saveRegistration(reg, consented) {
+  // p.studentId, p.consentGiven). consentGiven is recorded when consent
+  // statements were shown and ticked, or carried from a platform launch —
+  // the latter also stamps consentVia so the data shows HOW consent was
+  // given. Non-fatal: a write hiccup must not strand the player.
+  async function saveRegistration(reg, consented, viaPlatform) {
     S.participant = Object.assign({}, S.participant, { registration: reg, studentId: reg.studentId || null });
     if (consented) S.participant.consentGiven = true;
     if (!fb || !S.user || S.offline) return;
     var payload = { registration: reg, studentId: reg.studentId || null, updatedAt: fb.F.serverTimestamp() };
     if (consented) { payload.consentGiven = true; payload.consentTimestamp = new Date().toISOString(); }
+    if (consented && viaPlatform) payload.consentVia = 'simulation-platform';
     try {
       await fb.F.setDoc(fb.F.doc(fb.db, 'participants', S.user.uid), payload, { merge: true });
     } catch (e) { console.warn('[PFX] registration save failed', e); }
