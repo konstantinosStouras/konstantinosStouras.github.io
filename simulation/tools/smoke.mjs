@@ -26,7 +26,7 @@ window.SIMP_ADMIN_EMAILS = ['admin@admin.com'];`;
 // wrapped labels, sibling labels, selects, radio groups, placeholders.
 const FIXTURE = `<!doctype html><html><body>
   <label>University Student ID <input id="x-sid"></label>
-  <div class="field"><label>Age *</label><input type="number" id="x-age"></div>
+  <div class="field"><label>Age *</label><select id="x-age"><option value=""></option><option>18-24</option><option>25-34</option><option>35-44</option></select></div>
   <label>Gender <select id="x-gender"><option value=""></option><option>Male</option><option>Female</option></select></label>
   <p><label><input type="radio" name="gender" value="Female"> Female</label>
      <label><input type="radio" name="gender" value="Male"> Male</label></p>
@@ -72,7 +72,8 @@ try {
   ok(await page.isVisible('#s-register'), 'incomplete registration is rejected (every field is compulsory)');
   ok(await page.locator('#f-nationality option').count() > 150, 'nationality select carries the full country list');
   ok(await page.locator('#f-occupation option').nth(1).textContent() === 'Student', 'occupation select puts Student first');
-  await page.fill('#f-age', '30');
+  ok(await page.locator('#f-age option').count() === 7, 'age select carries the sims’ six bands');
+  await page.selectOption('#f-age', '25-34');
   await page.selectOption('#f-gender', 'Male');
   await page.selectOption('#f-nationality', 'Ireland');
   await page.selectOption('#f-country', 'Ireland');
@@ -142,7 +143,7 @@ try {
   await page.goto(BASE + '/__fixture');
   await page.waitForFunction(() => document.getElementById('x-sid').value !== '');
   ok(await page.inputValue('#x-sid') === 'S123', 'prefill: wrapped label → student ID');
-  ok(await page.inputValue('#x-age') === '30', 'prefill: sibling label → age');
+  ok(await page.inputValue('#x-age') === '25-34', 'prefill: sibling label → age band select');
   ok(await page.inputValue('#x-gender') === 'Male', 'prefill: select matched by option text');
   ok(await page.isChecked('input[type="radio"][value="Male"]'), 'prefill: radio group picked the right option');
   ok(!(await page.isChecked('input[type="radio"][value="Female"]')), 'prefill: "Male" never matches the Female radio');
