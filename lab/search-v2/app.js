@@ -1250,6 +1250,9 @@
 
   function finish() {
     S.phase = 'finish';
+    // Tell the Simulation Platform this run is complete (its card shows
+    // "✓ Completed"). Defined by prefill.js only on a platform launch.
+    if (window.simpMarkCompleted) window.simpMarkCompleted();
     var paid = drawPaid();
     if (!S.finishedLogged) {
       var sum = 0, raw = 0, tags = [];

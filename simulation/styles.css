@@ -39,6 +39,11 @@ h2 { font-size: 1.25rem; margin: 26px 0 4px; }
   padding: 2px 9px; border-radius: 999px; background: #e8edfb; color: #33477e; white-space: nowrap;
 }
 .pill.green { background: #e1f5e7; color: #1d6b3a; }
+/* A simulation this student already completed: still visible (with its
+   ✓ Completed pill) but visually settled; clicking shows the notice, not
+   the launch dialog. */
+.sim-card.done { background: #f6f8f6; border-color: #cfe3d5; }
+.sim-card.done:hover, .sim-card.done:focus-visible { transform: none; box-shadow: 0 4px 12px rgba(29, 107, 58, .10); border-color: #b5d6c0; }
 .pill.amber { background: #fff1d6; color: #8a5a00; }
 .pill.gray  { background: #eceef3; color: #5a6478; }
 .empty {

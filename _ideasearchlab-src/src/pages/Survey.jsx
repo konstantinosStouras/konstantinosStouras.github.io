@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSession, useSessionEnded } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'
 import { getSurveyQuestions } from '../data/formDefaults'
+import { isPreview } from '../utils/preview'
 import RichText from '../components/RichText'
 import HeaderControls from '../components/HeaderControls'
 import styles from './Survey.module.css'
@@ -298,6 +299,13 @@ export function Done() {
   const { session } = useSession()
   const c = getContent(session).done
   const aiOn = !!(session?.aiConfig?.individualAI || session?.aiConfig?.groupAI)
+  // Tell the Simulation Platform this run is complete (its card shows
+  // "✓ Completed" and blocks a second play). simpMarkCompleted is defined by
+  // /simulation/prefill.js only on a genuine platform launch, so standalone
+  // participants never stamp it; the preview sandbox is excluded explicitly.
+  useEffect(() => {
+    try { if (!isPreview() && window.simpMarkCompleted) window.simpMarkCompleted() } catch { /* ignore */ }
+  }, [])
   return (
     <div className={styles.donePage}>
       <div className={styles.doneControls}>

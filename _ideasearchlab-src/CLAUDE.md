@@ -640,3 +640,9 @@ handoff) → welcome → tour → SILENT registration → lobby/phases.
 - `index.html` (the Vite template) still loads `/simulation/prefill.js`
   (`SIMP_EXPECT` guard, off on `/admin`) as a belt-and-braces fallback for
   any visible form. The tag rides through every rebuild.
+- **Play-once gate:** the `Done()` component (Survey.jsx) calls
+  `window.simpMarkCompleted()` in a mount effect (guarded by `!isPreview()`,
+  and the function only exists on a genuine platform launch), so the
+  platform's card shows "✓ Completed" and blocks a second play of the same
+  run. Rebuild-sensitive — the platform smoke's marker preflight checks the
+  shipped bundle still carries the call.

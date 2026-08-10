@@ -568,6 +568,11 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Simulation Platform (stouras.com/simulation): completion marker only —
+     this game has no registration form to prefill. Inert standalone. -->
+<script>window.SIMP_EXPECT = /[?&]admin\b/.test(location.search) ? '__off__' : 'problem-solving';</script>
+<script src="/simulation/prefill.js" defer></script>
+
 <script>
 // ============================================================
 // CONFIG
@@ -853,6 +858,9 @@ function handleSubmitRule() {
   gameState = 'done';
   playerAttempts = guesses.length;
   logToSheet(rule, confidence, guesses.length);
+  // Tell the Simulation Platform this run is complete (its card shows
+  // "✓ Completed"). Defined by prefill.js only on a platform launch.
+  if (window.simpMarkCompleted) window.simpMarkCompleted();
 
   document.getElementById('input-section').classList.add('hidden');
   document.getElementById('rule-section').classList.add('hidden');

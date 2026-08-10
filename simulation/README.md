@@ -74,6 +74,20 @@ Then:
 4. The sim opens in a new tab at its **launch URL** — query params per
    `catalog.js` (`?code=` auto-join for Sustainable Supply Chains and
    search-v2, `?session=` prefill for PortfolioFit, `?s=` for Answer Arena…).
+5. **Play-once gate:** when the sim reaches its own thank-you / done screen it
+   calls `window.simpMarkCompleted()` (defined by `prefill.js` only on a
+   genuine platform launch), which records `localStorage['simp:completed:v1']`
+   `{simKey: {ts, session}}`. The student page badges that card
+   **“✓ Completed”** (live — a storage event flips it the moment the sim
+   finishes in its tab) and clicking it shows an *already-completed* notice
+   instead of launching. Pinning a **new Session ID** unlocks the card again
+   (a fresh class run is not a replay), and a student **Log out** clears the
+   markers so the next student on a shared machine starts fresh.
+   Instrumented: Ideation Challenge, PortfolioFit, Answer Arena, Problem
+   Solving, search-v2. Deliberately NOT gated: Sustainable Supply Chains
+   (re-opening to rejoin your firm mid-game is the normal flow), Newsvendor
+   (different origin — it cannot write the marker) and Trust the AI?
+   (a free-play teaching game).
 
 ### Per-simulation integration status
 
@@ -108,6 +122,12 @@ the native value setter + `input` events so React state updates, only fills
 empty fields, and never submits anything. For a Vite-built app the tag goes
 in the app's source `index.html` template and ships on the next rebuild
 (`ideasearchlab-deploy-update.bat` for the Ideation Challenge).
+
+On a genuine platform launch the drop-in also defines
+**`window.simpMarkCompleted()`** — a sim calls it from its own thank-you /
+done screen to power the student page's **“✓ Completed” play-once gate**
+(see “How a launch works”). Standalone visitors and admin previews never get
+the function, so they can never stamp a completion.
 
 ## The admin panel and each simulation's own admin
 

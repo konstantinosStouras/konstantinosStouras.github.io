@@ -1121,6 +1121,10 @@
     S.phase = 'thankyou';
     var tb = document.querySelector('.pfx-topbar'); if (tb) tb.remove();
     document.body.classList.remove('pf-hastop');
+    // Tell the Simulation Platform this run is complete (its card shows
+    // "✓ Completed" and blocks a second play). Defined by prefill.js only on
+    // a genuine platform launch, so standalone runs never stamp it.
+    if (window.simpMarkCompleted) window.simpMarkCompleted();
     // No "Play again" — once the survey is submitted the study run is complete.
     showOverlay(card(cfg.texts.thankyouTitle || 'Thank you!', [
       el('p', { text: cfg.texts.thankyouBody || 'Your responses have been recorded. You may now close this tab.' })
