@@ -45,6 +45,7 @@
     ['levelOfStudy',   /level\s+of\s+study/i],
     ['workExperience', /work\s+experience/i],
     ['occupation',     /occupation/i],
+    ['industry',       /industr/i],
     ['englishFluency', /english/i],
     ['session',        /session\s*(code|id)|game\s*code|join\s*code|entry\s*code/i]
   ];

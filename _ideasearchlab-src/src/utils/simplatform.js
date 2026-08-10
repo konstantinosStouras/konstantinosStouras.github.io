@@ -63,6 +63,7 @@ const ID_MAP = {
   levelOfStudy: 'levelOfStudy',
   workExperience: 'workExperience',
   occupation: 'occupation',
+  industry: 'industry',
   englishFluency: 'englishFluency',
 }
 const LABEL_MAP = [
@@ -76,6 +77,7 @@ const LABEL_MAP = [
   [/level\s+of\s+study/i, 'levelOfStudy'],
   [/work\s+experience/i, 'workExperience'],
   [/occupation/i, 'occupation'],
+  [/industr/i, 'industry'],
   [/english/i, 'englishFluency'],
 ]
 
