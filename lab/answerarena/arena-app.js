@@ -742,9 +742,11 @@
   function showThankYou() {
     S.phase = 'done';
     markCompleted();   // record this session as completed (cannot be retaken)
+    // Deliberately no "Start over" here (or on the already-completed screen):
+    // it minted a fresh anonymous identity, letting a participant replay.
+    // Each user plays once.
     setScreen(overlayWrap(card(t('thankyouTitle', 'Thank you!'), [
-      el('p', { html: t('thankyouBody') }),
-      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Start over'])])
+      el('p', { html: t('thankyouBody') })
     ], 'a-done')));
   }
 
@@ -759,13 +761,12 @@
   }
 
   // Shown when a participant opens a session they have already finished. A user
-  // can take part in many sessions, but each session only once.
+  // can take part in many sessions, but each session only once. Final screen -
+  // no "Start over" (it minted a fresh anonymous identity, enabling a replay).
   function showAlreadyDone() {
     S.phase = 'done';
     setScreen(overlayWrap(card('Already completed', [
-      el('p', { html: 'You have already completed this session, so it cannot be taken again. Thank you for taking part!' }),
-      el('p', { class: 'a-meta', text: 'Want to go again, or join a different session? Choose "Start over".' }),
-      el('div', { class: 'a-row' }, [el('button', { class: 'a-btn a-ghost', on: { click: logout } }, ['Start over'])])
+      el('p', { html: 'You have already completed this session, so it cannot be taken again. Thank you for taking part!' })
     ], 'a-done')));
   }
 
@@ -799,7 +800,7 @@
     if (S.session && (S.session.status === 'closed' || S.session.status === 'waiting')) { showSessionUnavailable(S.session.status); return; }
     var sid = curSid();
     // Each session - including the default no-code play (keyed '_none') - can be
-    // taken only once per anonymous identity; "Start over" mints a fresh one.
+    // taken only once per anonymous identity.
     if (S.p.completedSessions && S.p.completedSessions[sid]) { showAlreadyDone(); return; }
     var sameSession = S.p.sessionId === sid;
     if (sameSession && S.p.status === 'survey') { S.condition = S.p.condition || null; showSurvey(); return; }
