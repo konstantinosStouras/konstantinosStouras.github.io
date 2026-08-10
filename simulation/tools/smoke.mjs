@@ -67,8 +67,17 @@ try {
   await page.fill('#f-name', 'Test Student');
   await page.fill('#f-email', 'test@example.com');
   await page.fill('#f-sid', 'S123');
+  await page.click('#btn-save');
+  await page.waitForFunction(() => document.getElementById('reg-err').textContent !== '');
+  ok(await page.isVisible('#s-register'), 'incomplete registration is rejected (every field is compulsory)');
   await page.fill('#f-age', '30');
   await page.selectOption('#f-gender', 'Male');
+  await page.fill('#f-nationality', 'Irish');
+  await page.fill('#f-country', 'Ireland');
+  await page.selectOption('#f-level', 'MBA');
+  await page.fill('#f-workexp', '5');
+  await page.fill('#f-occupation', 'Analyst');
+  await page.selectOption('#f-english', 'Fluent');
   await page.click('#btn-save');
   await page.waitForSelector('#s-sims:not([hidden])');
   await page.waitForSelector('#empty:not([hidden])');

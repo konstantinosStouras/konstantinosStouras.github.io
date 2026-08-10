@@ -15,6 +15,7 @@
   var LS_PROFILE = 'simp:profile:v1';   // the student's one-time registration
   var LS_DRAFT   = 'simp:config-draft:v1'; // admin's local (unpublished) activation edits
   var LS_HANDOFF = 'simp:handoff:v1';   // written at launch; read by prefill.js inside each sim
+  var LS_SYNCED  = 'simp:profile-synced:v1'; // updatedAt of the last profile mirrored to Firestore
 
   /* ---------- catalog ---------- */
   function catalog() { return window.SIMP_CATALOG || []; }
@@ -35,10 +36,22 @@
     p.updatedAt = new Date().toISOString();
     p.createdAt = (old && old.createdAt) || p.updatedAt;
     localStorage.setItem(LS_PROFILE, JSON.stringify(p));
-    if (CONFIGURED) fb().then(function (F) { return F.saveStudent(p); }).catch(function () {});
+    syncProfile();
     return p;
   }
-  function clearProfile() { localStorage.removeItem(LS_PROFILE); }
+  function clearProfile() { localStorage.removeItem(LS_PROFILE); localStorage.removeItem(LS_SYNCED); }
+  /* Mirror the saved profile to the Firestore roster, once per change — also
+     called at page load, so a profile registered while the platform was still
+     in LOCAL mode joins the roster on the student's next visit. */
+  function syncProfile() {
+    if (!CONFIGURED) return;
+    var p = getProfile();
+    if (!p) return;
+    if (localStorage.getItem(LS_SYNCED) === p.updatedAt) return;
+    fb().then(function (F) { return F.saveStudent(p); })
+      .then(function () { localStorage.setItem(LS_SYNCED, p.updatedAt); })
+      .catch(function () { /* retried on the next visit */ });
+  }
 
   /* ---------- activation config ----------
      shape: { sims: { key: { active, sessionId, note } }, updated } */
@@ -132,8 +145,17 @@
       var fs = D.getFirestore(app);
       var confRef = D.doc(fs, PATHS.config);
       function ensureAnon() {
-        if (auth.currentUser) return Promise.resolve(auth.currentUser);
-        return A.signInAnonymously(auth).then(function (cred) { return cred.user; });
+        // Wait for the restored auth state before deciding — auth.currentUser
+        // is null while Firebase is still restoring a previous session, and
+        // signing in anonymously at that moment would mint a NEW uid (and a
+        // duplicate roster doc) on every visit.
+        return new Promise(function (res, rej) {
+          var un = A.onAuthStateChanged(auth, function (u) {
+            un();
+            if (u) res(u);
+            else A.signInAnonymously(auth).then(function (cred) { res(cred.user); }, rej);
+          });
+        });
       }
       return {
         auth: auth,
@@ -169,7 +191,7 @@
   window.SimPlatform = {
     configured: CONFIGURED,
     catalog: catalog, sim: sim,
-    getProfile: getProfile, saveProfile: saveProfile, clearProfile: clearProfile,
+    getProfile: getProfile, saveProfile: saveProfile, clearProfile: clearProfile, syncProfile: syncProfile,
     watchConfig: watchConfig, saveConfig: saveConfig, draft: draft, clearDraft: clearDraft,
     buildLaunch: buildLaunch, launch: launch,
     firebase: fb,

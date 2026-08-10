@@ -25,21 +25,21 @@
   <section id="s-register" class="card" hidden>
     <h2 id="reg-title">Register to get started</h2>
     <p class="hint">You only do this once — your details are saved in this browser and passed on to each
-    simulation, so you won't have to retype them. Fields marked <span class="req">*</span> are required.</p>
+    simulation, so you won't have to retype them. All fields are required.</p>
     <div class="fgrid" style="margin-top:14px">
       <div class="field"><label for="f-name">Full name <span class="req">*</span></label><input id="f-name" autocomplete="name" maxlength="80"></div>
       <div class="field"><label for="f-email">E-mail <span class="req">*</span></label><input id="f-email" type="email" autocomplete="email" maxlength="120"></div>
       <div class="field"><label for="f-sid">University student ID <span class="req">*</span></label><input id="f-sid" maxlength="40" autocomplete="off"></div>
-      <div class="field"><label for="f-age">Age</label><input id="f-age" type="number" min="16" max="100"></div>
-      <div class="field"><label for="f-gender">Gender</label>
+      <div class="field"><label for="f-age">Age <span class="req">*</span></label><input id="f-age" type="number" min="16" max="100"></div>
+      <div class="field"><label for="f-gender">Gender <span class="req">*</span></label>
         <select id="f-gender"><option value=""></option><option>Male</option><option>Female</option><option>Non-binary</option><option>Prefer not to say</option><option>Other</option></select></div>
-      <div class="field"><label for="f-nationality">Nationality</label><input id="f-nationality" maxlength="60"></div>
-      <div class="field"><label for="f-country">Country of residence</label><input id="f-country" maxlength="60"></div>
-      <div class="field"><label for="f-level">Level of study</label>
+      <div class="field"><label for="f-nationality">Nationality <span class="req">*</span></label><input id="f-nationality" maxlength="60"></div>
+      <div class="field"><label for="f-country">Country of residence <span class="req">*</span></label><input id="f-country" maxlength="60"></div>
+      <div class="field"><label for="f-level">Level of study <span class="req">*</span></label>
         <select id="f-level"><option value=""></option><option>Undergraduate</option><option>Postgraduate (Masters)</option><option>MBA</option><option>PhD</option><option>Executive education</option><option>Other</option></select></div>
-      <div class="field"><label for="f-workexp">Work experience (years)</label><input id="f-workexp" type="number" min="0" max="50"></div>
-      <div class="field"><label for="f-occupation">Occupation</label><input id="f-occupation" maxlength="80"></div>
-      <div class="field"><label for="f-english">English fluency</label>
+      <div class="field"><label for="f-workexp">Work experience (years) <span class="req">*</span></label><input id="f-workexp" type="number" min="0" max="50"></div>
+      <div class="field"><label for="f-occupation">Occupation <span class="req">*</span></label><input id="f-occupation" maxlength="80"></div>
+      <div class="field"><label for="f-english">English fluency <span class="req">*</span></label>
         <select id="f-english"><option value=""></option><option>Native</option><option>Fluent</option><option>Intermediate</option><option>Basic</option></select></div>
     </div>
     <p id="reg-err" class="err"></p>
@@ -145,7 +145,12 @@
   $('btn-save').onclick = function () {
     var p = {};
     FIELDS.forEach(function (f) { p[f[0]] = $(f[1]).value.trim(); });
-    if (!p.name || !p.email || !p.studentId) { $('reg-err').textContent = 'Please fill in your name, e-mail and student ID.'; return; }
+    var missing = FIELDS.filter(function (f) { return !p[f[0]]; });
+    if (missing.length) {
+      $('reg-err').textContent = 'Please fill in every field — all of them are required.';
+      $(missing[0][1]).focus();
+      return;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) { $('reg-err').textContent = 'That e-mail address doesn’t look right.'; return; }
     P.saveProfile(p);
     showSims();
@@ -255,6 +260,7 @@
   /* ---------- boot ---------- */
   P.watchConfig(function (c) { CFG = c; if (!$('s-sims').hidden) render(); else if (P.getProfile()) showSims(); });
   if (P.getProfile()) showSims(); else showRegister(false);
+  P.syncProfile();   /* joins the Firestore roster once Firebase is configured */
 })();
 </script>
 </body>
