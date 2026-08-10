@@ -37,6 +37,23 @@
   var BOT_NAMES = ['Atlas Cycles', 'Borealis Mobility', 'Cardinal Wheels', 'Verde Velo',
                    'Nimbus Rides', 'Quanta Bikes', 'Zephyr Cycleworks', 'Solstice Mobility'];
 
+  // Simulation Platform SSO (optional): one silent sign-in attempt using the
+  // credentials locker saved by stouras.com/simulation/admin/ ('simp:admin-creds').
+  // No-op without saved credentials; on failure the normal sign-in form shows.
+  var simpSsoTried = false;
+  function simpTrySso() {
+    if (simpSsoTried) return false;
+    simpSsoTried = true;
+    var c = null;
+    try {
+      c = JSON.parse(sessionStorage.getItem('simp:admin-creds') ||
+                     localStorage.getItem('simp:admin-creds') || 'null');
+    } catch (e) {}
+    if (!c || !c.email || !c.pass) return false;
+    ST.adminSignIn(c.email, c.pass).catch(function () { show('a-login'); });
+    return true;
+  }
+
   /* ---- boot & auth ------------------------------------------------------------ */
   U.themeInit($('#btn-theme'));
   if (PREVIEW) {
@@ -89,6 +106,7 @@
         showDash();
       } else {
         if (user && user.email) ST.adminSignOut();
+        else if (simpTrySso()) return;
         show('a-login');
       }
     });

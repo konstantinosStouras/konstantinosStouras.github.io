@@ -104,9 +104,26 @@
     FB.onAuth(function (user) {
       if (user && user.email && adminEmails.indexOf(user.email) >= 0) enterAdmin(user);
       else if (user && user.email) { banner($('login-banner'), 'warn', 'Signed in as ' + esc(user.email) + ', which is not an admin account.'); show('a-login'); }
-      else show('a-login');
+      else if (!simpTrySso()) show('a-login');
     });
   });
+
+  // Simulation Platform SSO (optional): one silent sign-in attempt using the
+  // credentials locker saved by stouras.com/simulation/admin/ ('simp:admin-creds').
+  // No-op without saved credentials; on failure the normal sign-in form shows.
+  var simpSsoTried = false;
+  function simpTrySso() {
+    if (simpSsoTried) return false;
+    simpSsoTried = true;
+    var c = null;
+    try {
+      c = JSON.parse(sessionStorage.getItem('simp:admin-creds') ||
+                     localStorage.getItem('simp:admin-creds') || 'null');
+    } catch (e) {}
+    if (!c || !c.email || !c.pass) return false;
+    FB.adminSignIn(c.email, c.pass).catch(function () { show('a-login'); });
+    return true;
+  }
 
   function reload() { location.href = location.pathname; }
   function doLogin() {

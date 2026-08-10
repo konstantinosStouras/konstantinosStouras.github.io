@@ -203,7 +203,24 @@
     try { app = appM.getApp('portfoliofit'); }
     catch (e) { app = appM.initializeApp(FIREBASE_CONFIG, 'portfoliofit'); }
     fb = { app: app, auth: authM.getAuth(app), db: fsM.getFirestore(app), A: authM, F: fsM };
-    authM.onAuthStateChanged(fb.auth, function (u) { user = u || null; route(); });
+    authM.onAuthStateChanged(fb.auth, function (u) { user = u || null; if (!user && simpTrySso()) return; route(); });
+  }
+
+  // Simulation Platform SSO (optional): one silent sign-in attempt using the
+  // credentials locker saved by stouras.com/simulation/admin/ ('simp:admin-creds').
+  // No-op without saved credentials; on failure the normal sign-in form shows.
+  var simpSsoTried = false;
+  function simpTrySso() {
+    if (simpSsoTried) return false;
+    simpSsoTried = true;
+    var c = null;
+    try {
+      c = JSON.parse(sessionStorage.getItem('simp:admin-creds') ||
+                     localStorage.getItem('simp:admin-creds') || 'null');
+    } catch (e) {}
+    if (!c || !c.email || !c.pass) return false;
+    fb.A.signInWithEmailAndPassword(fb.auth, c.email, c.pass).catch(function () { route(); });
+    return true;
   }
   async function loadConfig() {
     cfg = { texts: {}, settings: {}, registrationQuestions: [], registrationConsents: [], surveyQuestions: [] };
