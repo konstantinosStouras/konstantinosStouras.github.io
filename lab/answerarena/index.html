@@ -209,5 +209,11 @@
   <script src="arena-store.js"></script>
   <script src="arena-app.js" defer></script>
   <script src="admin.js" defer></script>
+
+<!-- Simulation Platform prefill (inert outside a platform launch): fills the
+     intake form from the student's saved platform details (consent checkboxes
+     are never auto-ticked). -->
+<script>window.SIMP_EXPECT = /[?&]admin\b/.test(location.search) ? '__off__' : 'answerarena';</script>
+<script src="/simulation/prefill.js" defer></script>
 </body>
 </html>

@@ -74,10 +74,10 @@ Then:
 
 | Simulation | Session ID | Details prefill |
 |---|---|---|
-| Sustainable Supply Chains | `?code=` — **auto-joins** | in-app firm setup (no demographics) |
+| Sustainable Supply Chains | `?code=` — **auto-joins** | **wired** — firm-setup “Your name” fields auto-fill (no demographics by design) |
 | Search w/ & w/o AI (v2) | `?code=` + Prolific-style params — **auto-joins**, student ID rides as `PROLIFIC_PID` | n/a (no demographics form) |
-| PortfolioFit (research) | `?session=` pre-fills its welcome screen | add `prefill.js` to fill its registration by label (see below) |
-| Answer Arena | `?s=` pre-fills (optional — default config without one) | n/a |
+| PortfolioFit (research) | `?session=` pre-fills its welcome screen | **wired** — its post-training registration form auto-fills by label |
+| Answer Arena | `?s=` pre-fills (optional — default config without one) | **wired** — its intake form auto-fills (consents never auto-ticked) |
 | Ideation Challenge | code copied to clipboard; student pastes on its join screen | copy chips in the dialog; `prefill.js` possible after a rebuild |
 | Tetris Challenge | n/a | copy chips (minified React bundle — needs a rebuild for auto-fill) |
 | Knapsack Game | optional — baked into the seeded `knapsack_session` | seeded localStorage key |
@@ -87,8 +87,10 @@ Then:
 
 ### Adopting `prefill.js` in a simulation (optional, one line)
 
-Add to the sim's page (nothing changes when the sim runs standalone —
-without a fresh handoff the script is inert):
+Already wired into **PortfolioFit, Sustainable Supply Chains and Answer
+Arena** (with a `SIMP_EXPECT` guard that also disables it on their `?admin`
+views). To add it to another sim's page (nothing changes when the sim runs
+standalone — without a fresh handoff the script is inert):
 
 ```html
 <script>window.SIMP_EXPECT = 'portfoliofit';</script>  <!-- optional guard -->
