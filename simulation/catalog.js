@@ -100,14 +100,6 @@ window.SIMP_CATALOG = [
     adminNote: 'Email/password per ADMIN_EMAILS in lab/search-v2/firebase-config.js. The launch link mirrors its canonical Prolific link, with the student ID as PROLIFIC_PID.'
   },
   {
-    key: 'search', title: 'Space Exploration', icon: '🚀',
-    path: '/lab/search/',
-    blurb: 'Sequential search over hidden prizes: reveal, pay, and decide when to stop.',
-    session: 'none',
-    adminUrl: null, adminAuth: null,
-    adminNote: 'Static replica, currently in quick-test mode (treatment picker on the start screen). No data is collected.'
-  },
-  {
     key: 'jagged', title: 'Trust the AI?', icon: '🤖',
     path: '/lab/jagged/',
     blurb: 'Trust or verify an AI that looks equally confident everywhere — but is not.',

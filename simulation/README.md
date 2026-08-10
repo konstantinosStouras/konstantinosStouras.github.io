@@ -81,7 +81,7 @@ Then:
 | Sustainable Supply Chains | `?code=` — **auto-joins** | **wired** — firm-setup “Your name” fields auto-fill (no demographics by design) |
 | Newsvendor Game | n/a | impossible (different origin) — copy chips |
 | Search w/ & w/o AI (v2) | `?code=` + Prolific-style params — **auto-joins**, student ID rides as `PROLIFIC_PID` | n/a (no demographics form) |
-| Space Exploration, Trust the AI? | n/a | n/a (no identity forms) |
+| Trust the AI? | n/a | n/a (no identity form) |
 
 ### Adopting `prefill.js` in a simulation (optional, one line)
 
