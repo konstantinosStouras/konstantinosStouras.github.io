@@ -2283,11 +2283,11 @@ app's launch URL, session mechanism (`?code=` auto-join for
 sustainable-supply-chains/search-v2, `?session=` prefill for portfoliofit,
 `?s=` for answerarena, clipboard for ideasearchlab), storage seeds (a hook,
 currently unused) and admin-panel URL. The catalog is DELIBERATELY CURATED
-(per the owner): nine class sims in a fixed display order (ideasearchlab,
+(per the owner): eight class sims in a fixed display order (ideasearchlab,
 portfoliofit — titled plain "PortfolioFit" —, answerarena, problem-solving,
-ssc, newsvendor, then search-v2/search/jagged); the practice/tool apps
-(portfoliofit-testing, interpolation, knapsack-*, tetris) are intentionally
-NOT listed. The admin table floats saved-active sims to the top (stable
+ssc, newsvendor, then search-v2/jagged); the practice/tool apps
+(portfoliofit-testing, interpolation, knapsack-*, tetris, search) are
+intentionally NOT listed. The admin table floats saved-active sims to the top (stable
 sort on the SAVED state, so rows don't jump while ticking). Vanilla JS, no
 build step. **Backend switch follows `sustainable-supply-chains/store.js`:**
 `firebase-config.js` still holds `PASTE_` placeholders → LOCAL mode, where
