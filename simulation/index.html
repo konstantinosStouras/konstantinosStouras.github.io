@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Unlisted until launch — flip to index,follow when announced (see CLAUDE.md). -->
+<meta name="robots" content="noindex,nofollow">
+<title>Simulation Platform · stouras.com</title>
+<meta name="description" content="Class simulation platform by Konstantinos Stouras — register once, then play the simulations activated for your class.">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">🎓 <a href="./">Simulation Platform</a></div>
+    <p class="tag">Register once, then play the simulations your instructor has activated for today's class.</p>
+    <div id="who" class="who" hidden></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- One-time registration -->
+  <section id="s-register" class="card" hidden>
+    <h2 id="reg-title">Register to get started</h2>
+    <p class="hint">You only do this once — your details are saved in this browser and passed on to each
+    simulation, so you won't have to retype them. Fields marked <span class="req">*</span> are required.</p>
+    <div class="fgrid" style="margin-top:14px">
+      <div class="field"><label for="f-name">Full name <span class="req">*</span></label><input id="f-name" autocomplete="name" maxlength="80"></div>
+      <div class="field"><label for="f-email">E-mail <span class="req">*</span></label><input id="f-email" type="email" autocomplete="email" maxlength="120"></div>
+      <div class="field"><label for="f-sid">University student ID <span class="req">*</span></label><input id="f-sid" maxlength="40" autocomplete="off"></div>
+      <div class="field"><label for="f-age">Age</label><input id="f-age" type="number" min="16" max="100"></div>
+      <div class="field"><label for="f-gender">Gender</label>
+        <select id="f-gender"><option value=""></option><option>Male</option><option>Female</option><option>Non-binary</option><option>Prefer not to say</option><option>Other</option></select></div>
+      <div class="field"><label for="f-nationality">Nationality</label><input id="f-nationality" maxlength="60"></div>
+      <div class="field"><label for="f-country">Country of residence</label><input id="f-country" maxlength="60"></div>
+      <div class="field"><label for="f-level">Level of study</label>
+        <select id="f-level"><option value=""></option><option>Undergraduate</option><option>Postgraduate (Masters)</option><option>MBA</option><option>PhD</option><option>Executive education</option><option>Other</option></select></div>
+      <div class="field"><label for="f-workexp">Work experience (years)</label><input id="f-workexp" type="number" min="0" max="50"></div>
+      <div class="field"><label for="f-occupation">Occupation</label><input id="f-occupation" maxlength="80"></div>
+      <div class="field"><label for="f-english">English fluency</label>
+        <select id="f-english"><option value=""></option><option>Native</option><option>Fluent</option><option>Intermediate</option><option>Basic</option></select></div>
+    </div>
+    <p id="reg-err" class="err"></p>
+    <div class="actions">
+      <button id="btn-save" class="btn">Save &amp; continue</button>
+      <button id="btn-cancel" class="btn ghost" hidden>Cancel</button>
+    </div>
+  </section>
+
+  <!-- Active simulations -->
+  <section id="s-sims" hidden>
+    <div class="row-head">
+      <h2>Today's simulations</h2>
+      <span id="cfg-src" class="pill gray" hidden></span>
+    </div>
+    <div id="cards" class="grid"></div>
+    <div id="empty" class="empty" hidden>
+      No simulations are active right now.<br>
+      Your instructor switches them on in class — refresh this page in a moment.
+    </div>
+  </section>
+
+</main>
+
+<!-- Launch dialog -->
+<div id="modal" class="modal" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="m-title">
+    <h3 id="m-title"></h3>
+    <p id="m-blurb" class="bl"></p>
+    <div id="m-session-wrap" hidden>
+      <div class="field" style="margin:14px 0 4px">
+        <label for="m-session" id="m-session-label">Session ID</label>
+        <input id="m-session" maxlength="40" autocomplete="off" placeholder="e.g. SPRING26">
+      </div>
+      <p id="m-session-hint" class="hint"></p>
+    </div>
+    <div id="m-copy" hidden>
+      <p class="hint" style="margin:14px 0 6px">This simulation asks for your details when it starts — copy them from here:</p>
+      <div id="m-copy-rows"></div>
+    </div>
+    <p id="m-err" class="err"></p>
+    <div class="actions">
+      <button id="m-launch" class="btn">Launch ↗</button>
+      <button id="m-close" class="btn ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    Simulation Platform · <a href="https://stouras.com">stouras.com</a> — your registration details stay in
+    this browser and are shared only with the simulation you launch.
+  </div>
+</footer>
+
+<script src="./firebase-config.js"></script>
+<script>window.SIMP_BASE = '.';</script>
+<script src="./catalog.js"></script>
+<script src="./platform.js"></script>
+<script>
+(function () {
+  'use strict';
+  var P = window.SimPlatform;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var FIELDS = [
+    ['name', 'f-name'], ['email', 'f-email'], ['studentId', 'f-sid'],
+    ['age', 'f-age'], ['gender', 'f-gender'], ['nationality', 'f-nationality'],
+    ['country', 'f-country'], ['levelOfStudy', 'f-level'], ['workExperience', 'f-workexp'],
+    ['occupation', 'f-occupation'], ['englishFluency', 'f-english']
+  ];
+  var CFG = { sims: {}, source: null };
+  var current = null;   // sim shown in the launch dialog
+
+  /* ---------- registration ---------- */
+  function showRegister(editing) {
+    var p = P.getProfile() || {};
+    FIELDS.forEach(function (f) { $(f[1]).value = p[f[0]] != null ? p[f[0]] : ''; });
+    $('reg-title').textContent = editing ? 'Edit your details' : 'Register to get started';
+    $('btn-cancel').hidden = !editing;
+    $('reg-err').textContent = '';
+    $('s-register').hidden = false;
+    $('s-sims').hidden = true;
+    $('f-name').focus();
+  }
+  function showSims() {
+    var p = P.getProfile();
+    $('s-register').hidden = true;
+    $('s-sims').hidden = false;
+    $('who').hidden = !p;
+    if (p) {
+      $('who').innerHTML = 'Registered as <strong></strong> (<span></span>) ';
+      $('who').querySelector('strong').textContent = p.name || '';
+      $('who').querySelector('span').textContent = p.studentId || '';
+      var b = document.createElement('button');
+      b.className = 'btn ghost small';
+      b.textContent = 'Edit details';
+      b.onclick = function () { showRegister(true); };
+      $('who').appendChild(b);
+    }
+    render();
+  }
+  $('btn-save').onclick = function () {
+    var p = {};
+    FIELDS.forEach(function (f) { p[f[0]] = $(f[1]).value.trim(); });
+    if (!p.name || !p.email || !p.studentId) { $('reg-err').textContent = 'Please fill in your name, e-mail and student ID.'; return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) { $('reg-err').textContent = 'That e-mail address doesn’t look right.'; return; }
+    P.saveProfile(p);
+    showSims();
+  };
+  $('btn-cancel').onclick = function () { showSims(); };
+
+  /* ---------- cards ---------- */
+  function sessionBadge(s) {
+    if (s.external) return ['External site', 'amber'];
+    if (s.session === 'none' && !s.optionalSession) return ['No session needed', 'gray'];
+    if (s.optionalSession) return ['Session ID optional', 'gray'];
+    return ['Session ID required', ''];
+  }
+  function render() {
+    var cards = $('cards');
+    cards.innerHTML = '';
+    var shown = 0;
+    P.catalog().forEach(function (s) {
+      var c = CFG.sims[s.key];
+      if (!c || !c.active) return;
+      shown++;
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'sim-card';
+      var badge = sessionBadge(s);
+      el.innerHTML =
+        '<span class="ic"></span><span class="ti"></span><span class="bl"></span>' +
+        (c.note ? '<span class="note"></span>' : '') +
+        '<span class="badges"><span class="pill ' + badge[1] + '"></span></span>';
+      el.querySelector('.ic').textContent = s.icon;
+      el.querySelector('.ti').textContent = s.title;
+      el.querySelector('.bl').textContent = s.blurb;
+      if (c.note) el.querySelector('.note').textContent = c.note;
+      el.querySelector('.pill').textContent = badge[0];
+      el.onclick = function () { openModal(s); };
+      cards.appendChild(el);
+    });
+    $('empty').hidden = shown > 0;
+    var src = $('cfg-src');
+    if (CFG.source === 'draft') { src.textContent = 'local draft — visible only in this browser'; src.hidden = false; }
+    else if (CFG.source === 'firestore') { src.textContent = 'live'; src.hidden = false; }
+    else src.hidden = true;
+  }
+
+  /* ---------- launch dialog ---------- */
+  function needsSession(s) {
+    return (s.session === 'auto' || s.session === 'prefill' || s.session === 'inapp') && !s.optionalSession;
+  }
+  function asksSession(s) {
+    return s.session === 'auto' || s.session === 'prefill' || s.session === 'inapp' || s.optionalSession;
+  }
+  function openModal(s) {
+    current = s;
+    var c = CFG.sims[s.key] || {};
+    $('m-title').textContent = s.icon + ' ' + s.title;
+    $('m-blurb').textContent = s.blurb;
+    $('m-err').textContent = '';
+
+    var wantsSession = asksSession(s);
+    $('m-session-wrap').hidden = !wantsSession;
+    if (wantsSession) {
+      $('m-session').value = c.sessionId || '';
+      $('m-session-label').textContent = 'Session ID' + (needsSession(s) ? '' : ' (optional)');
+      $('m-session-hint').textContent =
+        s.session === 'inapp'
+          ? 'This simulation asks for the code on its own join screen — we’ll copy it to your clipboard when you launch.'
+          : (c.sessionId ? 'Pre-filled by your instructor — change it only if you were told to.'
+                         : 'Your instructor announces this in class.');
+    }
+
+    $('m-copy').hidden = !s.manualCopy;
+    if (s.manualCopy) {
+      var p = P.getProfile() || {};
+      var rows = $('m-copy-rows');
+      rows.innerHTML = '';
+      [['Student ID', p.studentId], ['E-mail', p.email], ['Full name', p.name]].forEach(function (r) {
+        if (!r[1]) return;
+        var d = document.createElement('div');
+        d.className = 'copyrow';
+        d.innerHTML = '<code></code><button class="btn ghost small">Copy</button><span class="hint"></span>';
+        d.querySelector('code').textContent = r[1];
+        d.querySelector('span').textContent = r[0];
+        d.querySelector('button').onclick = function () {
+          navigator.clipboard && navigator.clipboard.writeText(r[1]);
+          this.textContent = 'Copied ✓';
+        };
+        rows.appendChild(d);
+      });
+    }
+    $('modal').hidden = false;
+    if (wantsSession && !$('m-session').value) $('m-session').focus();
+  }
+  $('m-close').onclick = function () { $('modal').hidden = true; current = null; };
+  $('modal').addEventListener('click', function (e) { if (e.target === this) $('m-close').onclick(); });
+  $('m-launch').onclick = function () {
+    if (!current) return;
+    var session = $('m-session-wrap').hidden ? '' : $('m-session').value.trim();
+    if (needsSession(current) && !session) { $('m-err').textContent = 'Please enter the Session ID your instructor announced.'; return; }
+    if (current.session === 'inapp' && session && navigator.clipboard) {
+      navigator.clipboard.writeText(session).catch(function () {});
+    }
+    var url = P.launch(current.key, session);
+    var w = window.open(url, '_blank', 'noopener');
+    if (!w) location.href = url;   /* pop-up blocked → same tab */
+  };
+
+  /* ---------- boot ---------- */
+  P.watchConfig(function (c) { CFG = c; if (!$('s-sims').hidden) render(); else if (P.getProfile()) showSims(); });
+  if (P.getProfile()) showSims(); else showRegister(false);
+})();
+</script>
+</body>
+</html>

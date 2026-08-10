@@ -1,0 +1,220 @@
+/* Simulation Platform — admin panel logic. */
+(function () {
+  'use strict';
+  var P = window.SimPlatform;
+  var $ = function (id) { return document.getElementById(id); };
+  var ADMIN_KEY = 'stouras';                 // local-mode gate, same key as the other lab admin panels
+  var CRED_KEY = P.KEYS.adminCreds;          // 'simp:admin-creds'
+  var CFG = { sims: {}, source: null };
+
+  $('mode').textContent = P.configured ? 'FIREBASE' : 'LOCAL';
+  $('mode').className = 'mode ' + (P.configured ? 'fb' : 'local');
+
+  /* ---------- gate ---------- */
+  function openAdmin() {
+    $('s-gate').hidden = true;
+    $('s-admin').hidden = false;
+    $('local-extras').hidden = P.configured;
+    $('roster-local').hidden = P.configured;
+    $('roster-fb').hidden = !P.configured;
+    renderTable();
+    initConsoles();
+    initCreds();
+  }
+  if (P.configured) {
+    $('s-gate').hidden = false;
+    $('gate-fb').hidden = false;
+    P.firebase().then(function (F) {
+      F.onAuth(function (u) {
+        var ok = u && u.email && (window.SIMP_ADMIN_EMAILS || []).indexOf(u.email) >= 0;
+        if (ok) openAdmin();
+      });
+    });
+    $('g-signin').onclick = function () {
+      $('g-err').textContent = '';
+      P.firebase().then(function (F) {
+        return F.adminSignIn($('g-email').value.trim(), $('g-pass').value);
+      }).then(function (cred) {
+        if ((window.SIMP_ADMIN_EMAILS || []).indexOf(cred.user.email) < 0) {
+          $('g-err').textContent = 'That account is not in SIMP_ADMIN_EMAILS.';
+        }
+      }).catch(function (e) { $('g-err').textContent = 'Sign-in failed: ' + (e && e.message || e); });
+    };
+  } else {
+    var key = (location.search.match(/[?&]key=([^&]+)/) || [])[1] || '';
+    if (key === ADMIN_KEY) openAdmin();
+    else { $('s-gate').hidden = false; $('gate-local').hidden = false; }
+  }
+
+  /* ---------- activation table ---------- */
+  function renderTable() {
+    var tb = $('simtab').querySelector('tbody');
+    tb.innerHTML = '';
+    P.catalog().forEach(function (s) {
+      var c = CFG.sims[s.key] || {};
+      var tr = document.createElement('tr');
+      tr.dataset.key = s.key;
+      tr.innerHTML =
+        '<td class="ti"></td>' +
+        '<td><label class="switch"><input type="checkbox" class="c-active"><span class="sl"></span></label></td>' +
+        '<td><input type="text" class="c-session" maxlength="40" placeholder="—"></td>' +
+        '<td><input type="text" class="c-note" maxlength="120" placeholder="—"></td>' +
+        '<td class="links"></td>';
+      tr.querySelector('.ti').textContent = s.icon + ' ' + s.title;
+      tr.querySelector('.c-active').checked = !!c.active;
+      tr.querySelector('.c-session').value = c.sessionId || '';
+      tr.querySelector('.c-note').value = c.note || '';
+      var links = tr.querySelector('.links');
+      var a1 = document.createElement('a');
+      a1.href = s.external || s.path; a1.target = '_blank'; a1.rel = 'noopener'; a1.textContent = 'app ↗';
+      links.appendChild(a1);
+      if (s.adminUrl) {
+        links.appendChild(document.createTextNode(' · '));
+        var a2 = document.createElement('a');
+        a2.href = s.adminUrl; a2.target = '_blank'; a2.rel = 'noopener'; a2.textContent = 'admin ↗';
+        links.appendChild(a2);
+      }
+      tb.appendChild(tr);
+    });
+    var note = $('save-note');
+    if (CFG.source === 'firestore') note.textContent = 'Live (Firestore) — saving publishes to every student instantly.';
+    else if (CFG.source === 'draft') note.textContent = 'Local draft — publish by downloading config.json and committing it to the repo.';
+    else note.textContent = P.configured ? '' : 'Showing the committed config.json — saving creates a local draft in this browser.';
+  }
+  function collect() {
+    var sims = {};
+    var rows = $('simtab').querySelectorAll('tbody tr');
+    Array.prototype.forEach.call(rows, function (tr) {
+      var e = {
+        active: tr.querySelector('.c-active').checked,
+        sessionId: tr.querySelector('.c-session').value.trim(),
+        note: tr.querySelector('.c-note').value.trim()
+      };
+      if (e.active || e.sessionId || e.note) {
+        if (!e.sessionId) delete e.sessionId;
+        if (!e.note) delete e.note;
+        sims[tr.dataset.key] = e;
+      }
+    });
+    return { v: 1, sims: sims };
+  }
+  $('btn-savecfg').onclick = function () {
+    $('save-err').textContent = '';
+    P.saveConfig(collect()).then(function (where) {
+      CFG.source = where;
+      $('save-note').textContent = where === 'firestore'
+        ? 'Saved — students see the change on their next refresh.'
+        : 'Draft saved in this browser. To publish for students: Download config.json and commit it at simulation/config.json.';
+    }).catch(function (e) { $('save-err').textContent = 'Save failed: ' + (e && e.message || e); });
+  };
+  $('btn-download').onclick = function () {
+    var out = collect();
+    out.note = 'Static fallback for which simulations are visible on stouras.com/simulation. Edit via the admin panel (simulation/admin/) in LOCAL mode, download, and commit the file here to publish. Ignored once Firebase is configured in firebase-config.js — Firestore then becomes live-authoritative.';
+    out.updated = new Date().toISOString().slice(0, 10);
+    var blob = new Blob([JSON.stringify(out, null, 2) + '\n'], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'config.json';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+  };
+  $('btn-discard').onclick = function () {
+    P.clearDraft();
+    P.watchConfig(function (c) { CFG = c; renderTable(); });
+  };
+
+  /* ---------- per-simulation consoles ---------- */
+  function initConsoles() {
+    var pick = $('con-pick');
+    pick.innerHTML = '';
+    P.catalog().filter(function (s) { return s.adminUrl; }).forEach(function (s) {
+      var o = document.createElement('option');
+      o.value = s.key;
+      o.textContent = s.icon + ' ' + s.title;
+      pick.appendChild(o);
+    });
+    function sync() {
+      var s = P.sim(pick.value);
+      if (!s) return;
+      $('con-open').href = s.adminUrl;
+      $('con-note').textContent = s.adminNote || '';
+      $('con-frame').hidden = true;
+    }
+    pick.onchange = sync;
+    sync();
+    $('con-embed').onclick = function () {
+      var s = P.sim(pick.value);
+      if (!s) return;
+      $('con-frame').hidden = false;
+      $('con-frame').src = s.adminUrl;
+      $('con-frame').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+  }
+
+  /* ---------- shared admin credentials ---------- */
+  function readCreds() {
+    try {
+      return JSON.parse(sessionStorage.getItem(CRED_KEY) || 'null') ||
+             JSON.parse(localStorage.getItem(CRED_KEY) || 'null');
+    } catch (e) { return null; }
+  }
+  function initCreds() {
+    var c = readCreds();
+    if (c) { $('cr-email').value = c.email || ''; $('cr-note').textContent = 'Saved ✓'; }
+  }
+  $('cr-save').onclick = function () {
+    var c = JSON.stringify({ email: $('cr-email').value.trim(), pass: $('cr-pass').value, ts: Date.now() });
+    sessionStorage.setItem(CRED_KEY, c);
+    if ($('cr-persist').checked) localStorage.setItem(CRED_KEY, c);
+    else localStorage.removeItem(CRED_KEY);
+    $('cr-note').textContent = 'Saved ✓ — consoles with the SSO snippet will sign in automatically.';
+  };
+  $('cr-clear').onclick = function () {
+    sessionStorage.removeItem(CRED_KEY);
+    localStorage.removeItem(CRED_KEY);
+    $('cr-pass').value = '';
+    $('cr-note').textContent = 'Cleared.';
+  };
+
+  /* ---------- roster (Firebase mode) ---------- */
+  var roster = [];
+  $('btn-roster') && ($('btn-roster').onclick = function () {
+    P.firebase().then(function (F) { return F.listStudents(); }).then(function (rows) {
+      roster = rows.sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? 1 : -1; });
+      var tb = $('rostertab').querySelector('tbody');
+      tb.innerHTML = '';
+      roster.forEach(function (r) {
+        var tr = document.createElement('tr');
+        for (var i = 0; i < 5; i++) tr.appendChild(document.createElement('td'));
+        tr.children[0].textContent = r.name || '';
+        tr.children[1].textContent = r.studentId || '';
+        tr.children[2].textContent = r.email || '';
+        tr.children[3].textContent = r.levelOfStudy || '';
+        tr.children[4].textContent = (r.createdAt || '').slice(0, 10);
+        tb.appendChild(tr);
+      });
+      $('rostertab').hidden = false;
+      $('btn-csv').hidden = false;
+      $('roster-count').textContent = roster.length + ' student' + (roster.length === 1 ? '' : 's');
+    }).catch(function (e) { $('roster-count').textContent = 'Failed: ' + (e && e.message || e); });
+  });
+  $('btn-csv') && ($('btn-csv').onclick = function () {
+    var cols = ['name', 'studentId', 'email', 'age', 'gender', 'nationality', 'country',
+                'levelOfStudy', 'workExperience', 'occupation', 'englishFluency', 'createdAt'];
+    var esc = function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var csv = cols.join(',') + '\n' + roster.map(function (r) {
+      return cols.map(function (c) { return esc(r[c]); }).join(',');
+    }).join('\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'simulation-platform-roster.csv';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+  });
+
+  /* ---------- boot ---------- */
+  P.watchConfig(function (c) {
+    CFG = c;
+    if (!$('s-admin').hidden) renderTable();
+  });
+})();

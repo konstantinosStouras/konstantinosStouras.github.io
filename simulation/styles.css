@@ -1,0 +1,102 @@
+/* Simulation Platform — shared styles (student page + admin panel). */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: #f4f6fb; color: #1c2237;
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+a { color: #3b5bdb; }
+.wrap { max-width: 1060px; margin: 0 auto; padding: 0 20px; }
+
+/* Header */
+.hero { background: linear-gradient(135deg, #1e2749 0%, #2b3a67 100%); color: #fff; padding: 30px 0 26px; }
+.hero .brand { font-size: 1.7rem; font-weight: 700; letter-spacing: .2px; }
+.hero .brand a { color: #fff; text-decoration: none; }
+.hero .tag { margin: 6px 0 0; color: #c3cdea; font-size: .98rem; max-width: 640px; }
+.who { margin-top: 14px; font-size: .92rem; color: #dfe6ff; }
+.who button { margin-left: 10px; }
+
+/* Cards */
+h2 { font-size: 1.25rem; margin: 26px 0 4px; }
+.row-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; margin: 16px 0 40px; }
+.sim-card {
+  background: #fff; border: 1px solid #e3e7f2; border-radius: 14px; padding: 18px 18px 16px;
+  cursor: pointer; display: flex; flex-direction: column; gap: 8px; text-align: left; width: 100%;
+  font: inherit; color: inherit; transition: box-shadow .15s, transform .15s, border-color .15s;
+}
+.sim-card:hover, .sim-card:focus-visible { box-shadow: 0 8px 24px rgba(30, 39, 73, .12); transform: translateY(-2px); border-color: #b9c5ea; outline: none; }
+.sim-card .ic { font-size: 1.9rem; line-height: 1; }
+.sim-card .ti { font-weight: 700; font-size: 1.05rem; }
+.sim-card .bl { color: #55607f; font-size: .9rem; flex: 1; }
+.sim-card .note { color: #8a5a00; background: #fff7e3; border-radius: 8px; padding: 4px 8px; font-size: .84rem; }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill {
+  display: inline-block; font-size: .74rem; font-weight: 600; letter-spacing: .2px;
+  padding: 2px 9px; border-radius: 999px; background: #e8edfb; color: #33477e; white-space: nowrap;
+}
+.pill.green { background: #e1f5e7; color: #1d6b3a; }
+.pill.amber { background: #fff1d6; color: #8a5a00; }
+.pill.gray  { background: #eceef3; color: #5a6478; }
+.empty {
+  background: #fff; border: 1px dashed #c3cbdd; border-radius: 14px; padding: 34px 22px;
+  text-align: center; color: #55607f; margin: 18px 0 40px;
+}
+
+/* Forms */
+.card { background: #fff; border: 1px solid #e3e7f2; border-radius: 14px; padding: 22px; margin: 22px 0; }
+.card h2 { margin-top: 0; }
+.fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px 18px; }
+.field label { display: block; font-size: .85rem; font-weight: 600; color: #3a4463; margin-bottom: 4px; }
+.field label .req { color: #c0392b; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 9px 10px; border: 1px solid #c9d1e4; border-radius: 8px;
+  font: inherit; background: #fbfcff; color: inherit;
+}
+.field input:focus, .field select:focus { outline: 2px solid #7b93e8; border-color: #7b93e8; }
+.hint { color: #6a7492; font-size: .85rem; }
+.err { color: #c0392b; font-size: .9rem; min-height: 1.2em; margin: 8px 0 0; }
+.btn {
+  display: inline-block; border: 0; border-radius: 9px; padding: 10px 18px; font: inherit; font-weight: 600;
+  background: #3b5bdb; color: #fff; cursor: pointer; text-decoration: none; text-align: center;
+}
+.btn:hover { background: #3150c4; }
+.btn[disabled], .btn.disabled { background: #a9b4d4; cursor: not-allowed; pointer-events: none; }
+.btn.ghost { background: #eef1fa; color: #33477e; }
+.btn.ghost:hover { background: #e2e8f7; }
+.btn.small { padding: 6px 12px; font-size: .88rem; }
+.btn.danger { background: #c0392b; }
+.actions { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* Modal */
+.modal { position: fixed; inset: 0; background: rgba(20, 26, 48, .55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+.modal[hidden] { display: none; }
+.modal .box { background: #fff; border-radius: 16px; padding: 24px; max-width: 460px; width: 100%; max-height: 90vh; overflow: auto; }
+.modal h3 { margin: 0 0 6px; font-size: 1.2rem; }
+.modal .bl { color: #55607f; font-size: .92rem; }
+.copyrow { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.copyrow code { background: #f0f3fa; border-radius: 6px; padding: 4px 8px; font-size: .95rem; overflow-wrap: anywhere; }
+
+/* Admin */
+table.simtab { width: 100%; border-collapse: collapse; font-size: .92rem; }
+table.simtab th, table.simtab td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #edf0f7; vertical-align: middle; }
+table.simtab th { font-size: .8rem; text-transform: uppercase; letter-spacing: .4px; color: #6a7492; }
+table.simtab input[type="text"] { width: 100%; min-width: 90px; padding: 6px 8px; border: 1px solid #c9d1e4; border-radius: 7px; font: inherit; }
+table.simtab .ti { font-weight: 600; white-space: nowrap; }
+.switch { position: relative; display: inline-block; width: 40px; height: 22px; vertical-align: middle; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .sl { position: absolute; inset: 0; background: #c6cddf; border-radius: 999px; transition: .15s; }
+.switch .sl:before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s; }
+.switch input:checked + .sl { background: #2f9e5b; }
+.switch input:checked + .sl:before { transform: translateX(18px); }
+.mode { font-size: .8rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; vertical-align: middle; }
+.mode.local { background: #fff1d6; color: #8a5a00; }
+.mode.fb { background: #e1f5e7; color: #1d6b3a; }
+.console-frame { width: 100%; height: 72vh; border: 1px solid #c9d1e4; border-radius: 12px; background: #fff; }
+.roster-wrap { overflow-x: auto; }
+footer { color: #79819c; font-size: .85rem; padding: 26px 0 40px; }
+footer a { color: #5b6ea8; }
+@media (max-width: 640px) {
+  .hero { padding: 22px 0 18px; }
+  .hero .brand { font-size: 1.4rem; }
+}
