@@ -70,13 +70,15 @@ try {
   await page.click('#btn-save');
   await page.waitForFunction(() => document.getElementById('reg-err').textContent !== '');
   ok(await page.isVisible('#s-register'), 'incomplete registration is rejected (every field is compulsory)');
+  ok(await page.locator('#f-nationality option').count() > 150, 'nationality select carries the full country list');
+  ok(await page.locator('#f-occupation option').nth(1).textContent() === 'Student', 'occupation select puts Student first');
   await page.fill('#f-age', '30');
   await page.selectOption('#f-gender', 'Male');
-  await page.fill('#f-nationality', 'Irish');
-  await page.fill('#f-country', 'Ireland');
+  await page.selectOption('#f-nationality', 'Ireland');
+  await page.selectOption('#f-country', 'Ireland');
   await page.selectOption('#f-level', 'MBA');
   await page.fill('#f-workexp', '5');
-  await page.fill('#f-occupation', 'Analyst');
+  await page.selectOption('#f-occupation', 'Student');
   await page.selectOption('#f-english', 'Fluent');
   await page.click('#btn-save');
   await page.waitForSelector('#s-sims:not([hidden])');

@@ -33,12 +33,15 @@
       <div class="field"><label for="f-age">Age (years) <span class="req">*</span></label><input id="f-age" type="number" min="16" max="100"></div>
       <div class="field"><label for="f-gender">Gender <span class="req">*</span></label>
         <select id="f-gender"><option value=""></option><option>Male</option><option>Female</option><option>Non-binary</option><option>Prefer not to say</option><option>Other</option></select></div>
-      <div class="field"><label for="f-nationality">Nationality <span class="req">*</span></label><input id="f-nationality" maxlength="60"></div>
-      <div class="field"><label for="f-country">Country of residence <span class="req">*</span></label><input id="f-country" maxlength="60"></div>
+      <div class="field"><label for="f-nationality">Nationality (Country) <span class="req">*</span></label>
+        <select id="f-nationality"><option value=""></option></select></div>
+      <div class="field"><label for="f-country">Country of residence <span class="req">*</span></label>
+        <select id="f-country"><option value=""></option></select></div>
       <div class="field"><label for="f-level">Level of study <span class="req">*</span></label>
         <select id="f-level"><option value=""></option><option>Undergraduate</option><option>Postgraduate (Masters)</option><option>MBA</option><option>PhD</option><option>Executive education</option><option>Other</option></select></div>
       <div class="field"><label for="f-workexp">Work experience (years) <span class="req">*</span></label><input id="f-workexp" type="number" min="0" max="50"></div>
-      <div class="field"><label for="f-occupation">Occupation <span class="req">*</span></label><input id="f-occupation" maxlength="80"></div>
+      <div class="field"><label for="f-occupation">Occupation (Industry) <span class="req">*</span></label>
+        <select id="f-occupation"><option value=""></option></select></div>
       <div class="field"><label for="f-english">English fluency <span class="req">*</span></label>
         <select id="f-english"><option value=""></option><option>Native</option><option>Fluent</option><option>Intermediate</option><option>Basic</option></select></div>
     </div>
@@ -88,13 +91,6 @@
   </div>
 </div>
 
-<footer>
-  <div class="wrap">
-    Simulation Platform · <a href="https://stouras.com">stouras.com</a> — your registration details stay in
-    this browser and are shared only with the simulation you launch.
-  </div>
-</footer>
-
 <script src="./firebase-config.js"></script>
 <script>window.SIMP_BASE = '.';</script>
 <script src="./catalog.js"></script>
@@ -113,6 +109,53 @@
   ];
   var CFG = { sims: {}, source: null };
   var current = null;   // sim shown in the launch dialog
+
+  /* ---------- standardized choice lists ---------- */
+  var COUNTRIES = ['Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda',
+    'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh',
+    'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina',
+    'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso', 'Burundi', 'Cabo Verde', 'Cambodia',
+    'Cameroon', 'Canada', 'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros',
+    'Congo (Democratic Republic)', 'Congo (Republic)', 'Costa Rica', 'Côte d’Ivoire', 'Croatia', 'Cuba',
+    'Cyprus', 'Czechia', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic', 'Ecuador', 'Egypt',
+    'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia', 'Fiji', 'Finland',
+    'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala',
+    'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hong Kong SAR', 'Hungary', 'Iceland',
+    'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Jamaica', 'Japan', 'Jordan',
+    'Kazakhstan', 'Kenya', 'Kiribati', 'Kosovo', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon',
+    'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Macau SAR', 'Madagascar',
+    'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Mauritania', 'Mauritius',
+    'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique',
+    'Myanmar', 'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger',
+    'Nigeria', 'North Korea', 'North Macedonia', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine',
+    'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar',
+    'Romania', 'Russia', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia',
+    'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'São Tomé and Príncipe', 'Saudi Arabia',
+    'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia',
+    'Solomon Islands', 'Somalia', 'South Africa', 'South Korea', 'South Sudan', 'Spain', 'Sri Lanka',
+    'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan', 'Tanzania',
+    'Thailand', 'Timor-Leste', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey',
+    'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom',
+    'United States', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam',
+    'Yemen', 'Zambia', 'Zimbabwe'];
+  var INDUSTRIES = ['Student',   /* first choice, per the owner */
+    'Agriculture & Food', 'Banking & Financial Services', 'Construction & Real Estate', 'Consulting',
+    'Consumer Goods & Retail', 'Education & Research', 'Energy & Utilities',
+    'Engineering & Manufacturing', 'Entertainment & Media', 'Government & Public Sector',
+    'Healthcare & Pharmaceuticals', 'Hospitality & Tourism', 'Insurance', 'Legal Services',
+    'Logistics & Transportation', 'Marketing & Advertising', 'Non-profit & NGO',
+    'Technology & Software', 'Telecommunications', 'Other'];
+  function fillSelect(id, list) {
+    var el = $(id);
+    list.forEach(function (v) {
+      var o = document.createElement('option');
+      o.textContent = v;
+      el.appendChild(o);
+    });
+  }
+  fillSelect('f-nationality', COUNTRIES);
+  fillSelect('f-country', COUNTRIES);
+  fillSelect('f-occupation', INDUSTRIES);
 
   /* ---------- registration ---------- */
   function showRegister(editing) {
