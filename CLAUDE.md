@@ -2281,8 +2281,14 @@ details to the sim. **No hosted simulation was modified** — the platform
 drives them from the outside via `catalog.js`, the ONE place that knows each
 app's launch URL, session mechanism (`?code=` auto-join for
 sustainable-supply-chains/search-v2, `?session=` prefill for portfoliofit,
-`?s=` for answerarena, clipboard for ideasearchlab), storage seeds
-(knapsack-game's `knapsack_session`) and admin-panel URL. Vanilla JS, no
+`?s=` for answerarena, clipboard for ideasearchlab), storage seeds (a hook,
+currently unused) and admin-panel URL. The catalog is DELIBERATELY CURATED
+(per the owner): nine class sims in a fixed display order (ideasearchlab,
+portfoliofit — titled plain "PortfolioFit" —, answerarena, problem-solving,
+ssc, newsvendor, then search-v2/search/jagged); the practice/tool apps
+(portfoliofit-testing, interpolation, knapsack-*, tetris) are intentionally
+NOT listed. The admin table floats saved-active sims to the top (stable
+sort on the SAVED state, so rows don't jump while ticking). Vanilla JS, no
 build step. **Backend switch follows `sustainable-supply-chains/store.js`:**
 `firebase-config.js` still holds `PASTE_` placeholders → LOCAL mode, where
 the committed **`config.json` is what students see** (admin edits are a
@@ -2320,8 +2326,8 @@ signed in; inert without saved credentials, so standalone behaviour is
 unchanged — ideasearchlab would need a Vite rebuild to join) — each sim
 authenticates against its OWN Firebase project, so a shared login means
 registering the same e-mail/password in every project. **Keep `catalog.js`
-in sync with what is actually served under `/lab/`** (add/retire entries with
-the apps, like the fun landing cards). Currently UNLISTED: `noindex` on both
+in sync with the served class sims** (add/retire entries deliberately — it is
+a curated subset of `/lab/`, not a mirror). Currently UNLISTED: `noindex` on both
 pages, no homepage link — flip deliberately at launch. Offline test that must
 stay green: `node simulation/tools/smoke.mjs` (Playwright over a local static
 server, LOCAL mode forced — registration → admin activation → cards → launch

@@ -65,7 +65,14 @@
   function renderTable() {
     var tb = $('simtab').querySelector('tbody');
     tb.innerHTML = '';
-    P.catalog().forEach(function (s) {
+    /* Saved-active sims float to the top (stable sort keeps the catalog's
+       curated order within each group). Sorted on the SAVED state, so rows
+       don't jump around while toggles are being ticked. */
+    var list = P.catalog().slice().sort(function (a, b) {
+      return ((CFG.sims[a.key] && CFG.sims[a.key].active) ? 0 : 1) -
+             ((CFG.sims[b.key] && CFG.sims[b.key].active) ? 0 : 1);
+    });
+    list.forEach(function (s) {
       var c = CFG.sims[s.key] || {};
       var tr = document.createElement('tr');
       tr.dataset.key = s.key;
@@ -127,8 +134,11 @@
   $('btn-savecfg').onclick = function () {
     $('save-err').textContent = '';
     var end = pressed(this, 'Saving…', '✓ Saved', '✗ Save failed');
-    P.saveConfig(collect()).then(function (where) {
+    var out = collect();
+    P.saveConfig(out).then(function (where) {
+      CFG.sims = out.sims;   /* re-sort the table on the newly saved state */
       CFG.source = where;
+      renderTable();
       $('save-note').textContent = where === 'firestore'
         ? 'Saved — students see the change on their next refresh.'
         : 'Draft saved in this browser. To publish for students: Download config.json and commit it at simulation/config.json.';

@@ -108,18 +108,22 @@ try {
   await page.click('tr[data-key="ssc"] .switch .sl');
   await page.fill('tr[data-key="ssc"] .c-session', 'TEST1');
   await page.fill('tr[data-key="ssc"] .c-note', 'Play after the break');
-  await page.click('tr[data-key="knapsack-game"] .switch .sl');
+  await page.click('tr[data-key="answerarena"] .switch .sl');
   await page.click('tr[data-key="problem-solving"] .switch .sl');
   await page.click('#btn-savecfg');
   await page.waitForFunction(() => document.getElementById('btn-savecfg').textContent.includes('Saved'));
   ok(true, 'Save button confirms the press (✓ Saved)');
   await page.waitForFunction(() => document.getElementById('save-note').textContent.includes('Draft saved'));
   ok(true, 'activation saved as a local draft');
+  ok(await page.locator('#simtab tbody tr').first().getAttribute('data-key') === 'answerarena',
+     'active sims float to the top of the admin table after Save');
 
   // ---- 3. Student cards + launch ---------------------------------------
   await page.goto(BASE + '/simulation/');
   await page.waitForSelector('.sim-card');
   ok(await page.locator('.sim-card').count() === 3, 'exactly the three activated sims render as cards');
+  ok((await page.locator('.sim-card .ti').first().textContent()) === 'Answer Arena',
+     'student cards follow the curated catalog order');
   ok((await page.textContent('#cfg-src')).includes('local draft'), 'draft-source pill is shown');
   ok((await page.textContent('.sim-card .note')).includes('Play after the break'), 'card note from the admin shows');
   await page.click('.sim-card:has-text("Sustainable Supply Chains")');
@@ -147,15 +151,14 @@ try {
   ok(await page.inputValue('#x-explicit') === 'Test Student', 'prefill: explicit data-simp attribute');
   ok(await page.inputValue('#x-untouched') === 'keep-me', 'prefill: never overwrites a non-empty field');
 
-  // ---- 5. Storage seeds (knapsack) -------------------------------------
+  // ---- 5. Optional-session sim (Answer Arena, ?s= prefill) -------------
   await page.goto(BASE + '/simulation/');
-  await page.click('.sim-card:has-text("Knapsack Game")');
+  await page.click('.sim-card:has-text("Answer Arena")');
   await page.waitForSelector('#modal:not([hidden])');
+  await page.fill('#m-session', 'ARENA1');
   const [pop2] = await Promise.all([ctx.waitForEvent('page'), page.click('#m-launch')]);
-  ok(pop2.url().includes('/lab/knapsack-game/'), 'Knapsack Game launches (optional session left blank)');
+  ok(pop2.url().includes('/lab/answerarena/?s=ARENA1'), 'Answer Arena launches with ?s= prefill: ' + pop2.url());
   await pop2.close();
-  ok(await page.evaluate(() => localStorage.getItem('knapsack_session')) === 'simp-S123',
-     'launch seeded knapsack_session with the student ID');
 
   // ---- 6. No-input sims launch directly (no dialog) --------------------
   const [pop3] = await Promise.all([ctx.waitForEvent('page'), page.click('.sim-card:has-text("Problem Solving")')]);
