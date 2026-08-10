@@ -71,6 +71,7 @@ h2 { font-size: 1.25rem; margin: 26px 0 4px; }
 .btn.small { padding: 6px 12px; font-size: .88rem; }
 .btn.danger { background: #c0392b; }
 .actions { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+#s-admin > .actions { margin: 18px 0 -6px; }
 
 /* Modal */
 .modal { position: fixed; inset: 0; background: rgba(20, 26, 48, .55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }

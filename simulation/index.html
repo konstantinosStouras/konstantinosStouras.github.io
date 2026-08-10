@@ -7,6 +7,7 @@
 <meta name="robots" content="noindex,nofollow">
 <title>Simulation Platform · stouras.com</title>
 <meta name="description" content="Class simulation platform by Konstantinos Stouras — register once, then play the simulations activated for your class.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -182,6 +183,16 @@
       b.textContent = 'Edit details';
       b.onclick = function () { showRegister(true); };
       $('who').appendChild(b);
+      var lo = document.createElement('button');
+      lo.className = 'btn ghost small';
+      lo.textContent = 'Log out';
+      lo.onclick = function () {
+        if (!confirm('Log out? Your saved details are removed from this browser (your class registration is kept) — the next student can then register here.')) return;
+        lo.disabled = true;
+        lo.textContent = 'Logging out…';
+        P.logout().then(function () { location.reload(); });
+      };
+      $('who').appendChild(lo);
     }
     render();
   }
@@ -245,9 +256,24 @@
   function asksSession(s) {
     return s.session === 'auto' || s.session === 'prefill' || s.session === 'inapp' || s.optionalSession;
   }
+  /* Open the sim in a NEW tab, keeping this one on the platform.
+     NOTE: never pass 'noopener' as window.open features — per spec that makes
+     the call return null, which read as a blocked pop-up and made the fallback
+     ALSO navigate this tab (the double-open bug). Same-origin sims, so the
+     opener reference is nulled manually instead. */
+  function launchNow(s, session) {
+    var url = P.launch(s.key, session);
+    var w = window.open(url, '_blank');
+    if (!w) { location.href = url; return false; }   /* genuinely blocked → same tab */
+    try { w.opener = null; } catch (e) {}
+    return true;
+  }
   function openModal(s) {
-    current = s;
     var c = CFG.sims[s.key] || {};
+    /* Nothing to ask (no session input, no details to copy) → no dialog:
+       the card click itself opens the simulation in a new tab. */
+    if (!asksSession(s) && !s.manualCopy) { launchNow(s, c.sessionId || ''); return; }
+    current = s;
     $('m-title').textContent = s.icon + ' ' + s.title;
     $('m-blurb').textContent = s.blurb;
     $('m-err').textContent = '';
@@ -295,9 +321,10 @@
     if (current.session === 'inapp' && session && navigator.clipboard) {
       navigator.clipboard.writeText(session).catch(function () {});
     }
-    var url = P.launch(current.key, session);
-    var w = window.open(url, '_blank', 'noopener');
-    if (!w) location.href = url;   /* pop-up blocked → same tab */
+    if (launchNow(current, session)) {
+      $('modal').hidden = true;
+      current = null;
+    }
   };
 
   /* ---------- boot ---------- */

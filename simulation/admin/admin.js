@@ -17,6 +17,20 @@
     $('local-extras').hidden = P.configured;
     $('roster-local').hidden = P.configured;
     $('roster-fb').hidden = !P.configured;
+    if (P.configured) {
+      P.firebase().then(function (F) {
+        var u = F.auth.currentUser;
+        $('admin-who').textContent = u && u.email ? 'Signed in as ' + u.email : '';
+        $('btn-signout').hidden = false;
+        $('btn-signout').onclick = function () {
+          this.disabled = true;
+          this.textContent = 'Signing out…';
+          F.adminSignOut().then(function () { location.reload(); });
+        };
+      });
+    } else {
+      $('admin-who').textContent = 'LOCAL mode — no sign-in.';
+    }
     renderTable();
     initConsoles();
     initCreds();
@@ -200,7 +214,19 @@
   $('btn-roster') && ($('btn-roster').onclick = function () {
     var end = pressed(this, 'Loading…', '✓ Loaded', '✗ Failed');
     P.firebase().then(function (F) { return F.listStudents(); }).then(function (rows) {
-      roster = rows.sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? 1 : -1; });
+      /* Newest first, one row per student: a log-out + re-registration (or a
+         second device) mints a new uid, so collapse by student ID keeping the
+         most recent record. */
+      var seen = {};
+      roster = rows.sort(function (a, b) {
+        return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '');
+      }).filter(function (r) {
+        var k = (r.studentId || '').trim().toLowerCase() || ('uid:' + r.uid);
+        if (seen[k]) return false;
+        seen[k] = 1;
+        return true;
+      });
+      var dropped = rows.length - roster.length;
       var tb = $('rostertab').querySelector('tbody');
       tb.innerHTML = '';
       roster.forEach(function (r) {
@@ -215,7 +241,8 @@
       });
       $('rostertab').hidden = false;
       $('btn-csv').hidden = false;
-      $('roster-count').textContent = roster.length + ' student' + (roster.length === 1 ? '' : 's');
+      $('roster-count').textContent = roster.length + ' student' + (roster.length === 1 ? '' : 's') +
+        (dropped ? ' (' + dropped + ' duplicate registration' + (dropped === 1 ? '' : 's') + ' collapsed)' : '');
       end(true);
     }).catch(function (e) {
       $('roster-count').textContent = 'Failed: ' + (e && e.message || e) + RULES_HINT;
