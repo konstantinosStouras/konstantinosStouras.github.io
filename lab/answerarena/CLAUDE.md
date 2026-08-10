@@ -294,12 +294,15 @@ Responses row with `submitted = no (draft)`.
 - **Silent intake from the Simulation Platform** (`simpHandoff`/`simpAnswers`/
   `finishRegister` in arena-app.js): launched from `stouras.com/simulation`,
   the intake answers itself from the platform handoff and renders ONLY what
-  the platform can't supply — consent checkboxes (never auto-ticked) and any
-  extra/custom field. With nothing left it signs in and submits silently
-  ("Setting up your session..."; failures show the cause + Try again). An
-  answer must survive the form's own validation or its field is shown. The
-  generic `/simulation/prefill.js` include also remains for any form that
-  still renders. Inert outside a platform launch.
+  the platform can't supply — any extra/custom field. Consent checkboxes are
+  CARRIED as ticked from the platform launch (bypassed entirely, per the
+  owner 2026-08); when that happens the participant doc is stamped
+  `consentVia: 'simulation-platform'` so the data shows HOW consent was
+  given. With nothing left it signs in and submits silently ("Setting up
+  your session..."; failures show the cause + Try again). An answer must
+  survive the form's own validation or its field is shown. The generic
+  `/simulation/prefill.js` include also remains for any form that still
+  renders. Inert outside a platform launch.
 - Anonymous play needs the **Anonymous** sign-in provider enabled in the
   Firebase console; otherwise `Store.signInAnonymously()` fails
   (`auth/operation-not-allowed`) and the intake shows "Anonymous play is not

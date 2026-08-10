@@ -241,8 +241,9 @@
 
   // ---- Simulation Platform handoff (stouras.com/simulation) ----
   // A student launched from the platform registered once there; answer the
-  // intake from that data and show ONLY what the platform can't supply — a
-  // consent checkbox is never ticked on a student's behalf.
+  // intake from that data and show ONLY what the platform can't supply.
+  // Consent checkboxes are carried as ticked too (the platform's terms cover
+  // them — per the study owner), stamped consentVia on the participant doc.
   function simpHandoff() {
     try {
       var h = JSON.parse(localStorage.getItem('simp:handoff:v1') || 'null');
@@ -266,7 +267,7 @@
     if (!h) return {};
     var out = {};
     qs.forEach(function (q) {
-      if (q.type === 'checkbox') return;   // consents are always shown
+      if (q.type === 'checkbox') { out[q.id] = 'Yes'; return; }   // consent carried from the platform
       var key = SIMP_ID_MAP[q.id];
       if (!key) for (var i = 0; i < SIMP_LABEL_MAP.length; i++) if (SIMP_LABEL_MAP[i][0].test(q.label || '')) { key = SIMP_LABEL_MAP[i][1]; break; }
       var v = key && h.profile[key] != null ? String(h.profile[key]).trim() : '';
@@ -290,7 +291,8 @@
     var qs = (cfg.registrationQuestions || []).filter(function (q) { return q.system !== 'email' && q.system !== 'password'; });
     var pre = simpAnswers(qs);
     var shown = qs.filter(function (q) { return !(q.id in pre); });
-    if (!shown.length) { finishRegister(pre, qs, null); return; }   // fully covered → silent
+    var carriedConsent = qs.some(function (q) { return q.type === 'checkbox' && (q.id in pre); });
+    if (!shown.length) { finishRegister(pre, qs, null, carriedConsent); return; }   // fully covered → silent
     var fields = shown.map(function (q) { var f = buildField(q); form.appendChild(f.node.closest ? f.node.parentNode : f.node); return f; });
     var err = el('div', { class: 'a-err' });
     var submit = el('button', { class: 'a-btn', on: { click: doRegister } }, ['Start']);
@@ -323,14 +325,16 @@
       finishRegister(all, qs, function (e) {
         submit.removeAttribute('disabled'); submit.textContent = 'Start';
         err.textContent = authError(e);
-      });
+      }, carriedConsent);
     }
   }
 
   // Sign in (reusing an existing anonymous identity) and write the participant
   // doc from the collected intake answers. onErr = null → the silent path: show
   // a holding card, and on failure show the cause with a Try again button.
-  function finishRegister(all, qs, onErr) {
+  // carriedConsent → the consent tick(s) came from the platform handoff, not a
+  // click here; recorded as consentVia so the data shows HOW consent was given.
+  function finishRegister(all, qs, onErr, carriedConsent) {
     if (!onErr) setScreen(overlayWrap(card('One moment', [el('p', { text: 'Setting up your session...' })])));
     var answers = {}, participantId = '';
     qs.forEach(function (q) {
@@ -349,6 +353,7 @@
         sessionId: curSid(), condition: cond, completedSessions: {},
         createdAt: nowStamp(), updatedAt: nowStamp()
       };
+      if (carriedConsent) pdoc.consentVia = 'simulation-platform';
       return Store.setParticipant(user.uid, pdoc, false).then(function () {
         S.p = pdoc; S.condition = cond;
         topbar(); startTraining();
@@ -357,7 +362,7 @@
       if (onErr) { onErr(e); return; }
       setScreen(overlayWrap(card('One moment', [
         el('p', { class: 'a-err', text: authError(e) }),
-        el('div', { class: 'a-row' }, [el('button', { class: 'a-btn', on: { click: function () { finishRegister(all, qs, null); } } }, ['Try again'])])
+        el('div', { class: 'a-row' }, [el('button', { class: 'a-btn', on: { click: function () { finishRegister(all, qs, null, carriedConsent); } } }, ['Try again'])])
       ])));
     });
   }

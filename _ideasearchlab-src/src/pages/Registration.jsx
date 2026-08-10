@@ -28,9 +28,9 @@ export default function Registration() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   // Silent registration (platform launches): null = normal form,
-  // 'submitting' = auto-submitting invisibly, 'consent' = data auto-filled
-  // but the session config carries consent statements, which are NEVER
-  // ticked on a student's behalf — show a consent-only card.
+  // 'submitting' = auto-submitting invisibly. Consent statements are carried
+  // from the platform launch too (the platform's terms cover them — owner
+  // decision 2026-08), recorded as consentVia on the participant doc.
   const [auto, setAuto] = useState(null)
   const autoRan = useRef(false)
 
@@ -52,7 +52,6 @@ export default function Registration() {
     setForm(prev => ({ ...mapped, ...prev }))
     const missingRequired = fields.some(f => f.required && !(mapped[f.id] ?? '').toString().trim())
     if (missingRequired) return
-    if (consentStatements.length > 0) { setAuto('consent'); return }
     setAuto('submitting')
     completeRegistration(mapped, true).catch(err => {
       console.error('Silent registration failed:', err)
@@ -122,6 +121,11 @@ export default function Registration() {
         studentId: h.profile.studentId || '',
         source: 'simulation-platform',
         silentRegistration: !!silent,
+      }
+      // On a silent submit any consent statements were carried from the
+      // platform launch, not ticked here — record HOW consent was given.
+      if (silent && consentStatements.length > 0) {
+        payload.consentVia = 'simulation-platform'
       }
     }
 
@@ -206,46 +210,6 @@ export default function Registration() {
         <main className={styles.main}>
           <div className={styles.card}>
             <p style={{ textAlign: 'center', color: 'var(--muted)' }}>Setting up your session...</p>
-          </div>
-        </main>
-      </div>
-    )
-  }
-
-  // Consent-only path: the data fields are auto-filled from the platform, but
-  // consent is never granted on a student's behalf — show just the consents.
-  if (auto === 'consent') {
-    return (
-      <div className={styles.page}>
-        <header className={styles.header}>
-          <span className={styles.wordmark}>Ideation Challenge</span>
-          <HeaderControls />
-        </header>
-        <main className={styles.main}>
-          <div className={styles.card}>
-            <form onSubmit={handleSubmit} className={styles.form}>
-              <h2 className={styles.sectionTitle}>Consent</h2>
-              {consentStatements.map((stmt, i) => (
-                <label key={i} className={styles.checkbox}>
-                  <input
-                    type="checkbox"
-                    checked={!!consents[i]}
-                    onChange={e => setConsents(prev => ({ ...prev, [i]: e.target.checked }))}
-                  />
-                  <span>{stmt}</span>
-                </label>
-              ))}
-              {error && <p className="error-msg">{error}</p>}
-              <div className={styles.submitRow}>
-                <button
-                  className={`btn-primary ${styles.submitBtn}`}
-                  type="submit"
-                  disabled={loading || !isValid}
-                >
-                  {loading ? 'Joining...' : 'Agree and Start Challenge'}
-                </button>
-              </div>
-            </form>
           </div>
         </main>
       </div>
