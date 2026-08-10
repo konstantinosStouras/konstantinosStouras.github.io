@@ -64,8 +64,8 @@ Then:
 2. `platform.js` writes the **handoff** — `localStorage['simp:handoff:v1']` =
    `{sim, session, profile, ts}`. Everything on `stouras.com` is same-origin,
    so any simulation can read it.
-3. Any per-sim **seeds** are written (e.g. the Knapsack Game's
-   `knapsack_session` key, so its submissions become attributable).
+3. Any per-sim **seeds** are written (a `catalog.js` hook for sims that read
+   a localStorage key at startup; no current entry uses it).
 4. The sim opens in a new tab at its **launch URL** — query params per
    `catalog.js` (`?code=` auto-join for Sustainable Supply Chains and
    search-v2, `?session=` prefill for PortfolioFit, `?s=` for Answer Arena…).
@@ -74,16 +74,14 @@ Then:
 
 | Simulation | Session ID | Details prefill |
 |---|---|---|
-| Sustainable Supply Chains | `?code=` — **auto-joins** | **wired** — firm-setup “Your name” fields auto-fill (no demographics by design) |
-| Search w/ & w/o AI (v2) | `?code=` + Prolific-style params — **auto-joins**, student ID rides as `PROLIFIC_PID` | n/a (no demographics form) |
-| PortfolioFit (research) | `?session=` pre-fills its welcome screen | **wired** — its post-training registration form auto-fills by label |
-| Answer Arena | `?s=` pre-fills (optional — default config without one) | **wired** — its intake form auto-fills (consents never auto-ticked) |
 | Ideation Challenge | code copied to clipboard; student pastes on its join screen | copy chips in the dialog; `prefill.js` possible after a rebuild |
-| Tetris Challenge | n/a | copy chips (minified React bundle — needs a rebuild for auto-fill) |
-| Knapsack Game | optional — baked into the seeded `knapsack_session` | seeded localStorage key |
-| Knapsack w/ Dependencies | n/a | impossible (it wipes its own sessionStorage at startup) |
-| Newsvendor | n/a | impossible (different origin) — copy chips |
-| Problem Solving, Space Exploration, Trust the AI?, Interpolation, Knapsack Calculator, PortfolioFit practice | n/a | n/a (no identity forms) |
+| PortfolioFit | `?session=` pre-fills its welcome screen | **wired** — its post-training registration form auto-fills by label |
+| Answer Arena | `?s=` pre-fills (optional — default config without one) | **wired** — its intake form auto-fills (consents never auto-ticked) |
+| Problem Solving | n/a | n/a (anonymous by design) |
+| Sustainable Supply Chains | `?code=` — **auto-joins** | **wired** — firm-setup “Your name” fields auto-fill (no demographics by design) |
+| Newsvendor Game | n/a | impossible (different origin) — copy chips |
+| Search w/ & w/o AI (v2) | `?code=` + Prolific-style params — **auto-joins**, student ID rides as `PROLIFIC_PID` | n/a (no demographics form) |
+| Space Exploration, Trust the AI? | n/a | n/a (no identity forms) |
 
 ### Adopting `prefill.js` in a simulation (optional, one line)
 
@@ -102,7 +100,7 @@ attributes first, then by **label text** (which is what reaches
 PortfolioFit's and ideasearchlab's dynamically built, id-less fields), uses
 the native value setter + `input` events so React state updates, only fills
 empty fields, and never submits anything. For the Vite-built apps
-(ideasearchlab, tetris) add the tag to the app's source `index.html` and
+(ideasearchlab) add the tag to the app's source `index.html` and
 rebuild.
 
 ## The admin panel and each simulation's own admin
