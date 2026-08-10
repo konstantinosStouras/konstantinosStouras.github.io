@@ -1,0 +1,36 @@
+rules_version = '2';
+// Simulation Platform (stouras.com/simulation) — Firestore rules.
+// Deploy to the platform's own Firebase project when moving off LOCAL mode
+// (see simulation/README.md). Keep isAdmin()'s e-mail list in sync with
+// SIMP_ADMIN_EMAILS in simulation/firebase-config.js.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email in ['admin@admin.com'];
+    }
+
+    // One public doc: which simulations are active (+ pinned Session IDs).
+    match /simPlatform/config {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // One doc per student, keyed by their anonymous-auth uid. Students write
+    // only their own doc with a bounded field set; the roster is admin-only.
+    match /simPlatformStudents/{uid} {
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+             'uid', 'name', 'email', 'studentId', 'age', 'gender',
+             'nationality', 'country', 'levelOfStudy', 'workExperience',
+             'occupation', 'englishFluency', 'createdAt', 'updatedAt'
+           ])
+        && request.resource.data.uid == uid;
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow delete: if isAdmin();
+    }
+  }
+}

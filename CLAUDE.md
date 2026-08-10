@@ -2269,3 +2269,44 @@ touches `ssc-db-v1`.
 The app is at the repo root (NOT under `/fun/`), so the fun-landing-page card
 rule does not apply. It is linked from the homepage's "Fun Projects" section
 (in the root `index.html`, below the PortfolioFit card).
+
+## `/simulation` — the class Simulation Platform (hub over the lab apps)
+
+`simulation/` (top level, NOT under `/fun/` — no landing-card rule) is the
+front door for the class simulations: students **register once**
+(`localStorage 'simp:profile:v1'`), the instructor **activates** simulations
+from `simulation/admin/`, and only active ones render as cards on the student
+page; launching a card collects/ships the **Session ID** and hands the saved
+details to the sim. **No hosted simulation was modified** — the platform
+drives them from the outside via `catalog.js`, the ONE place that knows each
+app's launch URL, session mechanism (`?code=` auto-join for
+sustainable-supply-chains/search-v2, `?session=` prefill for portfoliofit,
+`?s=` for answerarena, clipboard for ideasearchlab), storage seeds
+(knapsack-game's `knapsack_session`) and admin-panel URL. Vanilla JS, no
+build step. **Backend switch follows `sustainable-supply-chains/store.js`:**
+`firebase-config.js` still holds `PASTE_` placeholders → LOCAL mode, where
+the committed **`config.json` is what students see** (admin edits are a
+browser-local draft published by committing the panel's downloaded
+config.json; the maintainer key gates the panel) and profiles stay
+client-side; a configured Firebase project (rules in `firestore.rules`,
+admin e-mails in `SIMP_ADMIN_EMAILS` — keep in sync with `isAdmin()`) makes
+activation live (`simPlatform/config` doc) and adds a roster
+(`simPlatformStudents/{uid}`, anonymous auth) with CSV export. At launch the
+platform writes the same-origin **handoff** `localStorage 'simp:handoff:v1'`
+`{sim, session, profile, ts}`; `simulation/prefill.js` is the optional
+one-line drop-in a sim can include to auto-fill its own registration form
+from it (explicit `data-simp` attrs first, then label-text matching with the
+native-setter+input-event React trick; inert without a fresh handoff — so
+adding it never changes standalone behaviour). The admin panel also embeds
+each sim's own admin console (same-origin iframes) for creating sessions
+with parameters there, plus an optional shared-credential locker
+(`'simp:admin-creds'`, sessionStorage by default) that enables auto-sign-in
+in any sim admin page that adopts the README's SSO snippet — each sim
+authenticates against its OWN Firebase project, so a shared login means
+registering the same e-mail/password in every project. **Keep `catalog.js`
+in sync with what is actually served under `/lab/`** (add/retire entries with
+the apps, like the fun landing cards). Currently UNLISTED: `noindex` on both
+pages, no homepage link — flip deliberately at launch. Offline test that must
+stay green: `node simulation/tools/smoke.mjs` (Playwright over a local static
+server, LOCAL mode forced — registration → admin activation → cards → launch
+handoff/seeds → prefill). Details in `simulation/README.md`.

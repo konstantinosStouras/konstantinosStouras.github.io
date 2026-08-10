@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin · Simulation Platform · stouras.com</title>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">🎓 <a href="../">Simulation Platform</a> — Admin <span id="mode" class="mode local">…</span></div>
+    <p class="tag">Activate simulations, pin Session IDs, open each simulation's own admin console, and see who registered.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- Gate -->
+  <section id="s-gate" class="card" hidden>
+    <h2>Admin sign-in</h2>
+    <div id="gate-local" hidden>
+      <p class="hint">The platform is in <strong>LOCAL mode</strong> (no Firebase configured). Add the
+      maintainer key to the URL (<code>?key=…</code>, same convention as the other lab admin panels) to open
+      this panel. In LOCAL mode your edits apply only to this browser until you commit the downloaded
+      <code>config.json</code>.</p>
+    </div>
+    <div id="gate-fb" hidden>
+      <div class="fgrid">
+        <div class="field"><label for="g-email">E-mail</label><input id="g-email" type="email" autocomplete="username"></div>
+        <div class="field"><label for="g-pass">Password</label><input id="g-pass" type="password" autocomplete="current-password"></div>
+      </div>
+      <p id="g-err" class="err"></p>
+      <div class="actions"><button id="g-signin" class="btn">Sign in</button></div>
+    </div>
+  </section>
+
+  <div id="s-admin" hidden>
+
+    <!-- Activation -->
+    <section class="card">
+      <h2>Simulations</h2>
+      <p class="hint">Tick <strong>Active</strong> to show a simulation on the student page. A pinned
+      <strong>Session ID</strong> pre-fills the student launch dialog (students can still change it);
+      the <strong>card note</strong> shows on the student card (e.g. “Play after the lecture break”).</p>
+      <div class="roster-wrap">
+        <table class="simtab" id="simtab">
+          <thead><tr><th>Simulation</th><th>Active</th><th>Session ID</th><th>Card note</th><th>Links</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="save-err" class="err"></p>
+      <div class="actions">
+        <button id="btn-savecfg" class="btn">Save</button>
+        <span id="local-extras" hidden>
+          <button id="btn-download" class="btn ghost">Download config.json</button>
+          <button id="btn-discard" class="btn ghost">Discard local draft</button>
+        </span>
+        <span id="save-note" class="hint"></span>
+      </div>
+    </section>
+
+    <!-- Per-simulation admin consoles -->
+    <section class="card">
+      <h2>Simulation admin consoles</h2>
+      <p class="hint">Every simulation keeps its own admin panel (and its own backend) — create sessions with
+      the parameters of your choice there, then pin the resulting Session ID above. Panels are same-origin,
+      so they open right here in the frame; each one signs in against its <em>own</em> Firebase project, so
+      you'll enter your admin credentials per panel (once per browser session) — use the same e-mail/password
+      on every project to keep that painless, or add the auto-sign-in snippet from the README to a
+      simulation's admin page to have it pick up the credentials saved below.</p>
+      <div class="fgrid" style="margin:12px 0">
+        <div class="field">
+          <label for="con-pick">Simulation</label>
+          <select id="con-pick"></select>
+        </div>
+        <div class="field" style="align-self:end">
+          <a id="con-open" class="btn ghost" target="_blank" rel="noopener">Open in new tab ↗</a>
+          <button id="con-embed" class="btn">Open below</button>
+        </div>
+      </div>
+      <p id="con-note" class="hint"></p>
+      <iframe id="con-frame" class="console-frame" hidden title="Simulation admin console"></iframe>
+
+      <h2 style="margin-top:26px">Shared admin credentials (optional)</h2>
+      <p class="hint">If your simulations share one admin e-mail/password, save it here so consoles opened
+      <em>below</em> can auto-sign-in — but only simulations that adopted the opt-in snippet (README →
+      “Admin single sign-on”) use it. Saved per browser tab by default; nothing is ever committed or sent
+      anywhere except to Firebase when a console signs in.</p>
+      <div class="fgrid">
+        <div class="field"><label for="cr-email">Admin e-mail</label><input id="cr-email" type="email" autocomplete="off"></div>
+        <div class="field"><label for="cr-pass">Admin password</label><input id="cr-pass" type="password" autocomplete="off"></div>
+      </div>
+      <div class="actions">
+        <button id="cr-save" class="btn ghost">Remember for this tab</button>
+        <label class="hint"><input type="checkbox" id="cr-persist"> also for new tabs (kept in this browser until cleared)</label>
+        <button id="cr-clear" class="btn ghost">Clear</button>
+        <span id="cr-note" class="hint"></span>
+      </div>
+    </section>
+
+    <!-- Roster -->
+    <section class="card">
+      <h2>Registered students</h2>
+      <div id="roster-local" hidden>
+        <p class="hint">A central roster needs the Firebase backend. In LOCAL mode each student's details stay
+        in their own browser (and still flow into every simulation at launch) — collect participation from each
+        simulation's own data exports instead.</p>
+      </div>
+      <div id="roster-fb" hidden>
+        <div class="actions" style="margin-top:0">
+          <button id="btn-roster" class="btn ghost">Load roster</button>
+          <button id="btn-csv" class="btn ghost" hidden>Export CSV</button>
+          <span id="roster-count" class="hint"></span>
+        </div>
+        <div class="roster-wrap"><table class="simtab" id="rostertab" hidden>
+          <thead><tr><th>Name</th><th>Student ID</th><th>E-mail</th><th>Level</th><th>Registered</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer><div class="wrap">Simulation Platform admin · <a href="../">student page</a> · <a href="https://stouras.com">stouras.com</a></div></footer>
+
+<script src="../firebase-config.js"></script>
+<script>window.SIMP_BASE = '..';</script>
+<script src="../catalog.js"></script>
+<script src="../platform.js"></script>
+<script src="./admin.js"></script>
+</body>
+</html>

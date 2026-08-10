@@ -1,0 +1,6 @@
+{
+  "v": 1,
+  "note": "Static fallback for which simulations are visible on stouras.com/simulation. Edit via the admin panel (simulation/admin/) in LOCAL mode, download, and commit the file here to publish. Ignored once Firebase is configured in firebase-config.js — Firestore then becomes live-authoritative.",
+  "updated": "2026-08-10",
+  "sims": {}
+}
