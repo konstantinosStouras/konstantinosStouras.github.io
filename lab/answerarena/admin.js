@@ -267,6 +267,23 @@
     ])]));
     function doLogin() { err.textContent = ''; btn.setAttribute('disabled', 'true'); Store.login(email.value.trim(), pass.value).then(function (u) { user = u; route(); }).catch(function (e) { btn.removeAttribute('disabled'); err.textContent = 'Login failed: ' + ((e && e.code) || 'error'); }); }
   }
+  // Simulation Platform SSO (optional): one silent login attempt using the
+  // credentials locker saved by stouras.com/simulation/admin/ ('simp:admin-creds').
+  // No-op without saved credentials; on failure the normal login form shows.
+  var simpSsoTried = false;
+  function simpTrySso() {
+    if (simpSsoTried) return false;
+    simpSsoTried = true;
+    var c = null;
+    try {
+      c = JSON.parse(sessionStorage.getItem('simp:admin-creds') ||
+                     localStorage.getItem('simp:admin-creds') || 'null');
+    } catch (e) {}
+    if (!c || !c.email || !c.pass) return false;
+    Store.login(c.email, c.pass).then(function (u) { user = u; route(); })
+      .catch(function () { route(); });
+    return true;
+  }
   function renderNotAuthorized() {
     clearRoot();
     root.appendChild(el('div', { class: 'aa-wrap' }, [el('div', { class: 'aa-card aa-login' }, [
@@ -3622,7 +3639,7 @@
     if (cachedAdmin()) { /* render after config loads */ }
     if (!Store) { clearRoot(); root.appendChild(el('div', { class: 'aa-wrap' }, [el('div', { class: 'aa-card' }, [el('p', { class: 'aa-err', text: 'arena-store.js failed to load.' })])])); return; }
     Store.init().then(function () {
-      Store.onAuth(function (u) { user = u || null; route(); });
+      Store.onAuth(function (u) { user = u || null; if (!user && simpTrySso()) return; route(); });
     }).catch(function (e) { clearRoot(); root.appendChild(el('div', { class: 'aa-wrap' }, [el('div', { class: 'aa-card' }, [el('p', { class: 'aa-err', text: 'Could not connect: ' + ((e && e.message) || 'error') })])])); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

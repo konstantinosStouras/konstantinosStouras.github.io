@@ -73,10 +73,9 @@
       <h2>Simulation admin consoles</h2>
       <p class="hint">Every simulation keeps its own admin panel (and its own backend) — create sessions with
       the parameters of your choice there, then pin the resulting Session ID above. Panels are same-origin,
-      so they open right here in the frame; each one signs in against its <em>own</em> Firebase project, so
-      you'll enter your admin credentials per panel (once per browser session) — use the same e-mail/password
-      on every project to keep that painless, or add the auto-sign-in snippet from the README to a
-      simulation's admin page to have it pick up the credentials saved below.</p>
+      so they open right here in the frame; each one signs in against its <em>own</em> Firebase project.
+      Save your shared credentials below and the Sustainable Supply Chains, Search, PortfolioFit and
+      Answer Arena consoles sign themselves in; the Ideation Challenge still asks once per browser.</p>
       <div class="con-row">
         <div class="field">
           <label for="con-pick">Simulation</label>
@@ -89,10 +88,11 @@
       <iframe id="con-frame" class="console-frame" hidden title="Simulation admin console"></iframe>
 
       <h2 style="margin-top:26px">Shared admin credentials (optional)</h2>
-      <p class="hint">If your simulations share one admin e-mail/password, save it here so consoles opened
-      <em>below</em> can auto-sign-in — but only simulations that adopted the opt-in snippet (README →
-      “Admin single sign-on”) use it. Saved per browser tab by default; nothing is ever committed or sent
-      anywhere except to Firebase when a console signs in.</p>
+      <p class="hint">If your simulations share one admin e-mail/password, save it here and consoles opened
+      <em>below</em> sign themselves in — wired into Sustainable Supply Chains, Search, PortfolioFit and
+      Answer Arena (the Ideation Challenge would need a rebuild to join; recipe in the README). Saved per
+      browser tab by default; nothing is ever committed or sent anywhere except to Firebase when a console
+      signs in.</p>
       <div class="fgrid">
         <div class="field"><label for="cr-email">Admin e-mail</label><input id="cr-email" type="email" autocomplete="off"></div>
         <div class="field"><label for="cr-pass">Admin password</label><input id="cr-pass" type="password" autocomplete="off"></div>

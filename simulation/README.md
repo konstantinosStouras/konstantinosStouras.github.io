@@ -119,10 +119,13 @@ therefore:
 **Shared credentials:** each Firebase-backed sim authenticates against its
 *own* Firebase project, so no true single session exists across them — but if
 you register the **same e-mail/password** as the admin user in every project,
-it's one credential typed per panel (per browser session). The panel's
-credential locker (sessionStorage by default, opt-in localStorage for new
-tabs) enables real auto-sign-in for any sim that adopts this snippet in its
-admin page, right after its Firebase auth is initialised:
+one credential fits all. The panel's credential locker (sessionStorage by
+default, opt-in localStorage for new tabs) drives real auto-sign-in via a
+small `simpTrySso()` snippet **already wired into the Sustainable Supply
+Chains, search-v2, PortfolioFit and Answer Arena admin pages** (one silent
+attempt when no user is signed in; inert without saved credentials, so
+standalone behaviour is unchanged). To wire a future sim the same way, add
+this right after its Firebase auth is initialised:
 
 ```js
 // Simulation Platform SSO (optional): auto-sign-in from the platform's locker.

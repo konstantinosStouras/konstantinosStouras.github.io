@@ -2311,8 +2311,11 @@ native-setter+input-event React trick; inert without a fresh handoff — so
 adding it never changes standalone behaviour). The admin panel also embeds
 each sim's own admin console (same-origin iframes) for creating sessions
 with parameters there, plus an optional shared-credential locker
-(`'simp:admin-creds'`, sessionStorage by default) that enables auto-sign-in
-in any sim admin page that adopts the README's SSO snippet — each sim
+(`'simp:admin-creds'`, sessionStorage by default) whose `simpTrySso()` SSO
+snippet is WIRED into the sustainable-supply-chains, search-v2, portfoliofit
+and answerarena admin pages (one silent sign-in attempt when no user is
+signed in; inert without saved credentials, so standalone behaviour is
+unchanged — ideasearchlab would need a Vite rebuild to join) — each sim
 authenticates against its OWN Firebase project, so a shared login means
 registering the same e-mail/password in every project. **Keep `catalog.js`
 in sync with what is actually served under `/lab/`** (add/retire entries with
