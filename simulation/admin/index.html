@@ -71,15 +71,13 @@
       you'll enter your admin credentials per panel (once per browser session) — use the same e-mail/password
       on every project to keep that painless, or add the auto-sign-in snippet from the README to a
       simulation's admin page to have it pick up the credentials saved below.</p>
-      <div class="fgrid" style="margin:12px 0">
+      <div class="con-row">
         <div class="field">
           <label for="con-pick">Simulation</label>
           <select id="con-pick"></select>
         </div>
-        <div class="field" style="align-self:end">
-          <a id="con-open" class="btn ghost" target="_blank" rel="noopener">Open in new tab ↗</a>
-          <button id="con-embed" class="btn">Open below</button>
-        </div>
+        <a id="con-open" class="btn ghost" target="_blank" rel="noopener">Open in new tab ↗</a>
+        <button id="con-embed" class="btn">Open below</button>
       </div>
       <p id="con-note" class="hint"></p>
       <iframe id="con-frame" class="console-frame" hidden title="Simulation admin console"></iframe>

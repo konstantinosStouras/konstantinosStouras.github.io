@@ -84,6 +84,8 @@ try {
   await page.waitForSelector('#s-sims:not([hidden])');
   await page.waitForSelector('#empty:not([hidden])');
   ok(true, 'after saving, the sims view shows the empty state (nothing active yet)');
+  ok(await page.evaluate(() => getComputedStyle(document.getElementById('cfg-src')).display) === 'none',
+     'hidden source pill renders as truly hidden (no ghost box)');
   await page.reload();
   await page.waitForSelector('#s-sims:not([hidden])');
   ok(await page.isHidden('#s-register'), 'registration is one-time — a reload goes straight to the sims view');
@@ -106,6 +108,8 @@ try {
   await page.fill('tr[data-key="ssc"] .c-note', 'Play after the break');
   await page.click('tr[data-key="knapsack-game"] .switch .sl');
   await page.click('#btn-savecfg');
+  await page.waitForFunction(() => document.getElementById('btn-savecfg').textContent.includes('Saved'));
+  ok(true, 'Save button confirms the press (✓ Saved)');
   await page.waitForFunction(() => document.getElementById('save-note').textContent.includes('Draft saved'));
   ok(true, 'activation saved as a local draft');
 

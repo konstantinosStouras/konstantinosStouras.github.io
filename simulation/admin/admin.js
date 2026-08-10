@@ -98,16 +98,33 @@
     });
     return { v: 1, sims: sims };
   }
+  /* Button press feedback: label flips to busy → done/failed, then restores. */
+  function pressed(btn, busy, done, failed) {
+    btn.disabled = true;
+    var idle = btn.dataset.idle || (btn.dataset.idle = btn.textContent);
+    btn.textContent = busy;
+    return function (ok) {
+      btn.textContent = ok ? done : failed;
+      setTimeout(function () { btn.disabled = false; btn.textContent = idle; }, 2200);
+    };
+  }
+  var RULES_HINT = ' — “insufficient permissions” means the Firestore rules are not in effect: publish simulation/firestore.rules in the Firebase console and make sure its isAdmin() list has the e-mail you signed in with (see _FIREBASE-SETUP.md).';
   $('btn-savecfg').onclick = function () {
     $('save-err').textContent = '';
+    var end = pressed(this, 'Saving…', '✓ Saved', '✗ Save failed');
     P.saveConfig(collect()).then(function (where) {
       CFG.source = where;
       $('save-note').textContent = where === 'firestore'
         ? 'Saved — students see the change on their next refresh.'
         : 'Draft saved in this browser. To publish for students: Download config.json and commit it at simulation/config.json.';
-    }).catch(function (e) { $('save-err').textContent = 'Save failed: ' + (e && e.message || e); });
+      end(true);
+    }).catch(function (e) {
+      $('save-err').textContent = 'Save failed: ' + (e && e.message || e) + (P.configured ? RULES_HINT : '');
+      end(false);
+    });
   };
   $('btn-download').onclick = function () {
+    var end = pressed(this, 'Preparing…', '✓ Downloaded', '✗ Failed');
     var out = collect();
     out.note = 'Static fallback for which simulations are visible on stouras.com/simulation. Edit via the admin panel (simulation/admin/) in LOCAL mode, download, and commit the file here to publish. Ignored once Firebase is configured in firebase-config.js — Firestore then becomes live-authoritative.';
     out.updated = new Date().toISOString().slice(0, 10);
@@ -117,10 +134,12 @@
     a.download = 'config.json';
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+    end(true);
   };
   $('btn-discard').onclick = function () {
+    var end = pressed(this, 'Discarding…', '✓ Discarded', '✗ Failed');
     P.clearDraft();
-    P.watchConfig(function (c) { CFG = c; renderTable(); });
+    P.watchConfig(function (c) { CFG = c; renderTable(); end(true); });
   };
 
   /* ---------- per-simulation consoles ---------- */
@@ -179,6 +198,7 @@
   /* ---------- roster (Firebase mode) ---------- */
   var roster = [];
   $('btn-roster') && ($('btn-roster').onclick = function () {
+    var end = pressed(this, 'Loading…', '✓ Loaded', '✗ Failed');
     P.firebase().then(function (F) { return F.listStudents(); }).then(function (rows) {
       roster = rows.sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? 1 : -1; });
       var tb = $('rostertab').querySelector('tbody');
@@ -196,7 +216,11 @@
       $('rostertab').hidden = false;
       $('btn-csv').hidden = false;
       $('roster-count').textContent = roster.length + ' student' + (roster.length === 1 ? '' : 's');
-    }).catch(function (e) { $('roster-count').textContent = 'Failed: ' + (e && e.message || e); });
+      end(true);
+    }).catch(function (e) {
+      $('roster-count').textContent = 'Failed: ' + (e && e.message || e) + RULES_HINT;
+      end(false);
+    });
   });
   $('btn-csv') && ($('btn-csv').onclick = function () {
     var cols = ['name', 'studentId', 'email', 'age', 'gender', 'nationality', 'country',
@@ -215,6 +239,12 @@
   /* ---------- boot ---------- */
   P.watchConfig(function (c) {
     CFG = c;
+    /* Firebase is configured but the config doc could not be read → the rules
+       are almost certainly not published. Say so loudly instead of silently
+       showing the committed config.json. */
+    if (P.configured && c.source === 'static') {
+      $('save-err').textContent = 'Firestore could not be read — the platform is falling back to the committed config.json.' + RULES_HINT;
+    }
     if (!$('s-admin').hidden) renderTable();
   });
 })();
