@@ -239,13 +239,59 @@
     } };
   }
 
+  // ---- Simulation Platform handoff (stouras.com/simulation) ----
+  // A student launched from the platform registered once there; answer the
+  // intake from that data and show ONLY what the platform can't supply — a
+  // consent checkbox is never ticked on a student's behalf.
+  function simpHandoff() {
+    try {
+      var h = JSON.parse(localStorage.getItem('simp:handoff:v1') || 'null');
+      if (!h || h.sim !== 'answerarena' || !h.profile) return null;
+      if (Date.now() - (h.ts || 0) > 6 * 60 * 60 * 1000) return null;
+      return h;
+    } catch (e) { return null; }
+  }
+  var SIMP_ID_MAP = { participantId: 'studentId', ucdStudentId: 'studentId', age: 'age',
+    gender: 'gender', nationality: 'nationality', country: 'country', levelOfStudy: 'levelOfStudy',
+    workExperience: 'workExperience', occupation: 'occupation', englishFluency: 'englishFluency' };
+  var SIMP_LABEL_MAP = [
+    [/student\s*id|participant\s*id/i, 'studentId'], [/e-?mail/i, 'email'],
+    [/full\s*name|^your\s+name/i, 'name'], [/^age\b/i, 'age'], [/^gender/i, 'gender'],
+    [/nationality/i, 'nationality'], [/country/i, 'country'],
+    [/level\s+of\s+study/i, 'levelOfStudy'], [/work\s+experience/i, 'workExperience'],
+    [/occupation/i, 'occupation'], [/english/i, 'englishFluency']
+  ];
+  function simpAnswers(qs) {
+    var h = simpHandoff();
+    if (!h) return {};
+    var out = {};
+    qs.forEach(function (q) {
+      if (q.type === 'checkbox') return;   // consents are always shown
+      var key = SIMP_ID_MAP[q.id];
+      if (!key) for (var i = 0; i < SIMP_LABEL_MAP.length; i++) if (SIMP_LABEL_MAP[i][0].test(q.label || '')) { key = SIMP_LABEL_MAP[i][1]; break; }
+      var v = key && h.profile[key] != null ? String(h.profile[key]).trim() : '';
+      if (!v) return;
+      // The answer must survive this form's own validation, or the field is shown.
+      if (q.type === 'select' && Array.isArray(q.options) && q.options.indexOf(v) < 0) return;
+      if (q.type === 'number') {
+        var n = Number(v);
+        if (isNaN(n) || (q.min != null && n < q.min) || (q.max != null && n > q.max)) return;
+      }
+      out[q.id] = v;
+    });
+    return out;
+  }
+
   function showRegister() {
     S.phase = 'register';
     var form = el('div', {});
     // Anonymous play: never ask for credentials. Drop any e-mail/password
     // questions even if an older saved config still lists them.
     var qs = (cfg.registrationQuestions || []).filter(function (q) { return q.system !== 'email' && q.system !== 'password'; });
-    var fields = qs.map(function (q) { var f = buildField(q); form.appendChild(f.node.closest ? f.node.parentNode : f.node); return f; });
+    var pre = simpAnswers(qs);
+    var shown = qs.filter(function (q) { return !(q.id in pre); });
+    if (!shown.length) { finishRegister(pre, qs, null); return; }   // fully covered → silent
+    var fields = shown.map(function (q) { var f = buildField(q); form.appendChild(f.node.closest ? f.node.parentNode : f.node); return f; });
     var err = el('div', { class: 'a-err' });
     var submit = el('button', { class: 'a-btn', on: { click: doRegister } }, ['Start']);
     form.appendChild(err);
@@ -254,7 +300,7 @@
 
     function doRegister() {
       err.textContent = '';
-      var answers = {}, participantId = '';
+      var typed = {};
       for (var i = 0; i < fields.length; i++) {
         var f = fields[i], v = f.read();
         if (f.q.required && !v) {
@@ -269,32 +315,51 @@
             return;
           }
         }
-        if (f.q.system === 'participantId') participantId = v;
-        else answers[f.q.id] = v;
+        typed[f.q.id] = v;
       }
       submit.setAttribute('disabled', 'true'); submit.textContent = 'Starting...';
-      // Reuse an anonymous identity if one already exists (e.g. on a resumed
-      // visit), else mint a fresh anonymous account.
-      var existing = Store.currentUser();
-      var signIn = existing ? Promise.resolve(existing) : Store.signInAnonymously();
-      signIn.then(function (user) {
-        S.user = user;
-        var cond = assignCondition();
-        var pdoc = {
-          uid: user.uid, participantId: participantId || null, email: null, anonymous: true,
-          registration: answers, status: 'registered',
-          sessionId: curSid(), condition: cond, completedSessions: {},
-          createdAt: nowStamp(), updatedAt: nowStamp()
-        };
-        return Store.setParticipant(user.uid, pdoc, false).then(function () {
-          S.p = pdoc; S.condition = cond;
-          topbar(); startTraining();
-        });
-      }).catch(function (e) {
+      var all = {};
+      qs.forEach(function (q) { all[q.id] = (q.id in typed) ? typed[q.id] : (pre[q.id] != null ? pre[q.id] : ''); });
+      finishRegister(all, qs, function (e) {
         submit.removeAttribute('disabled'); submit.textContent = 'Start';
         err.textContent = authError(e);
       });
     }
+  }
+
+  // Sign in (reusing an existing anonymous identity) and write the participant
+  // doc from the collected intake answers. onErr = null → the silent path: show
+  // a holding card, and on failure show the cause with a Try again button.
+  function finishRegister(all, qs, onErr) {
+    if (!onErr) setScreen(overlayWrap(card('One moment', [el('p', { text: 'Setting up your session...' })])));
+    var answers = {}, participantId = '';
+    qs.forEach(function (q) {
+      var v = all[q.id] != null ? all[q.id] : '';
+      if (q.system === 'participantId') participantId = v;
+      else answers[q.id] = v;
+    });
+    var existing = Store.currentUser();
+    var signIn = existing ? Promise.resolve(existing) : Store.signInAnonymously();
+    signIn.then(function (user) {
+      S.user = user;
+      var cond = assignCondition();
+      var pdoc = {
+        uid: user.uid, participantId: participantId || null, email: null, anonymous: true,
+        registration: answers, status: 'registered',
+        sessionId: curSid(), condition: cond, completedSessions: {},
+        createdAt: nowStamp(), updatedAt: nowStamp()
+      };
+      return Store.setParticipant(user.uid, pdoc, false).then(function () {
+        S.p = pdoc; S.condition = cond;
+        topbar(); startTraining();
+      });
+    }).catch(function (e) {
+      if (onErr) { onErr(e); return; }
+      setScreen(overlayWrap(card('One moment', [
+        el('p', { class: 'a-err', text: authError(e) }),
+        el('div', { class: 'a-row' }, [el('button', { class: 'a-btn', on: { click: function () { finishRegister(all, qs, null); } } }, ['Try again'])])
+      ])));
+    });
   }
 
   function authError(e) {

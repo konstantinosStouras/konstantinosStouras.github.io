@@ -75,8 +75,8 @@ Then:
 | Simulation | Session ID | Details prefill |
 |---|---|---|
 | Ideation Challenge | its join screen arrives **pre-filled** from the handoff (clipboard as backup) | **account-free** — a silent throwaway login is minted and the registration auto-submits from the platform data (consent-only screen when the session config has consents) |
-| PortfolioFit | `?session=` pre-fills its welcome screen | **wired** — its post-training registration form auto-fills by label |
-| Answer Arena | `?s=` pre-fills (optional — default config without one) | **wired** — its intake form auto-fills (consents never auto-ticked) |
+| PortfolioFit | `?session=` pre-fills its welcome screen | **silent** — the post-training registration page is skipped when the platform covers every field (only uncovered fields/consents are shown) |
+| Answer Arena | `?s=` pre-fills (optional — default config without one) | **silent** — the intake auto-submits; only consent ticks (and any uncovered field) are shown |
 | Problem Solving | n/a | n/a (anonymous by design) |
 | Sustainable Supply Chains | `?code=` — **auto-joins** | **wired** — firm-setup “Your name” fields auto-fill (no demographics by design) |
 | Newsvendor Game | n/a | impossible (different origin) — copy chips |
