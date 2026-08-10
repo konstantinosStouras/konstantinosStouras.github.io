@@ -74,7 +74,7 @@ Then:
 
 | Simulation | Session ID | Details prefill |
 |---|---|---|
-| Ideation Challenge | code copied to clipboard; student pastes on its join screen | copy chips in the dialog; `prefill.js` possible after a rebuild |
+| Ideation Challenge | code copied to clipboard; student pastes on its join screen | **wired** — Full Name/E-mail on its account screen + the study registration form auto-fill (the account password stays the student's own) |
 | PortfolioFit | `?session=` pre-fills its welcome screen | **wired** — its post-training registration form auto-fills by label |
 | Answer Arena | `?s=` pre-fills (optional — default config without one) | **wired** — its intake form auto-fills (consents never auto-ticked) |
 | Problem Solving | n/a | n/a (anonymous by design) |
@@ -85,9 +85,10 @@ Then:
 
 ### Adopting `prefill.js` in a simulation (optional, one line)
 
-Already wired into **PortfolioFit, Sustainable Supply Chains and Answer
-Arena** (with a `SIMP_EXPECT` guard that also disables it on their `?admin`
-views). To add it to another sim's page (nothing changes when the sim runs
+Already wired into **PortfolioFit, Sustainable Supply Chains, Answer Arena
+and the Ideation Challenge** (the latter via its source template
+`_ideasearchlab-src/index.html` + rebuild; all with a `SIMP_EXPECT` guard
+that also disables it on their admin views). To add it to another sim's page (nothing changes when the sim runs
 standalone — without a fresh handoff the script is inert):
 
 ```html
@@ -99,9 +100,9 @@ It fills inputs by explicit `data-simp="studentId|email|name|age|…"`
 attributes first, then by **label text** (which is what reaches
 PortfolioFit's and ideasearchlab's dynamically built, id-less fields), uses
 the native value setter + `input` events so React state updates, only fills
-empty fields, and never submits anything. For the Vite-built apps
-(ideasearchlab) add the tag to the app's source `index.html` and
-rebuild.
+empty fields, and never submits anything. For a Vite-built app the tag goes
+in the app's source `index.html` template and ships on the next rebuild
+(`ideasearchlab-deploy-update.bat` for the Ideation Challenge).
 
 ## The admin panel and each simulation's own admin
 

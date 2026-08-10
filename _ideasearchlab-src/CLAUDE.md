@@ -603,3 +603,14 @@ Note: Firebase detects unchanged functions and skips them. If a redeploy is skip
 1. End-to-end test of the full participant flow (group size 1 for solo, short timers)
 2. Add sleep mask image to public/images/
 3. Optionally clean up orphaned Cloud Functions (autoAdvanceOnTimer, submitVote)
+
+## Simulation Platform prefill
+
+`index.html` (the Vite template) loads `/simulation/prefill.js` with a
+`window.SIMP_EXPECT` guard (off on `/admin` routes): when a student arrives
+from `stouras.com/simulation`, the Login screen's Full Name / Email and the
+in-study Registration form auto-fill from their platform registration
+(label-text matching through the React native-setter trick; only empty
+fields, never passwords, never consent checkboxes, never auto-submits).
+Inert outside a platform launch. The tag rides through every rebuild since
+it lives in the template itself.
