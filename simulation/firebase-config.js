@@ -16,9 +16,8 @@ window.SIMP_FIREBASE_CONFIG = {
 };
 
 /* Admin sign-in e-mails (client-side gate; the real gate is firestore.rules —
-   keep its isAdmin() list in sync with this one). Trim to the address the
-   admin user was actually created with. */
-window.SIMP_ADMIN_EMAILS = ['admin@admin.com', 'kstouras@gmail.com'];
+   keep its isAdmin() list in sync with this one). */
+window.SIMP_ADMIN_EMAILS = ['admin@admin.com'];
 
 /* Firestore paths. */
 window.SIMP_PATHS = {
