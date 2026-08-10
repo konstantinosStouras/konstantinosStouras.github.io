@@ -69,7 +69,8 @@ import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { wpRecordFromWork, loadCatalog, WP_SOURCES, recKey, normName, nameParts, matchPublished,
-  wpSameWork, collapseWpDuplicates, buildWpRecentCounts, cleanTitle } from './build-data.mjs';
+  wpSameWork, collapseWpDuplicates, buildWpRecentCounts, cleanTitle,
+  loadWpRows, writeWpRows } from './build-data.mjs';
 import { pickPreprint, preprintFromDoi } from '../_scraper/build-data.mjs';
 import { normTitle } from '../_scraper/ec-pages.mjs';
 
@@ -432,13 +433,15 @@ export async function regroupAndWrite(byKey, prevMeta, authorsInCatalog, dir) {
   let total = 0;
   for (const key of Object.keys(WP_SOURCES)) {
     const rows = bySource[key];
-    await writeJson(dir, `papers-${key}.json`, rows);
+    // Chunked write via the crawler's own helper (100 MiB push-limit guard) —
+    // the two writers must never disagree on the on-disk layout.
+    const files = await writeWpRows(dir, key, rows);
     total += rows.length;
     if (!rows.length) continue;
     const firstYear = rows.reduce((m, r) => Math.min(m, parseInt(r.Year, 10) || m), Infinity);
     sources.push({
       key, name: WP_SOURCES[key].name, publisher: WP_SOURCES[key].publisher,
-      file: `papers-${key}.json`, count: rows.length,
+      file: files[0], files: files.length > 1 ? files : undefined, count: rows.length,
       firstYear: isFinite(firstYear) ? firstYear : undefined,
       workingPaper: true,
     });
@@ -689,7 +692,7 @@ async function run() {
   const catalogIndex = catalogAuthorIndex(catalog.authors);
   const byKey = new Map();
   for (const key of Object.keys(WP_SOURCES)) {
-    const rows = await loadJson(join(DATA_DIR, `papers-${key}.json`), []);
+    const rows = await loadWpRows(DATA_DIR, key);
     for (const r of (Array.isArray(rows) ? rows : [])) byKey.set(recKey(r), r);
   }
   const prevMeta = await loadJson(join(DATA_DIR, 'meta.json'), {});

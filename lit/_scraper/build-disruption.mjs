@@ -39,6 +39,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { forwardDisruption } from '../_scraper-refs/build-citedby.mjs';
 import { isNonArticle } from './_nonarticle.mjs';
+import { readChunkedJsonSync } from './_chunked-json.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LIT_DIR = path.resolve(__dirname, '..');            // lit
@@ -219,7 +220,9 @@ const fwd = new Map();        // doi -> Set(citer OpenAlex ids), non-empty only
 const fwdKnown = new Set();   // every doi whose forward citations WERE harvested (incl. zero-citer)
 const fwdCapped = new Set();  // dois whose citer list hit the crawl cap (truncated → D unreliable)
 if (USE_FORWARD) {
-  const cbCache = readJson(path.join(REFS_DIR, '_citedby-cache.json'), {});
+  // Chunk-aware: the citer cache is split across _citedby-cache*.json parts
+  // (100 MiB push-limit guard — see lit/_scraper/_chunked-json.mjs).
+  const cbCache = readChunkedJsonSync(path.join(REFS_DIR, '_citedby-cache.json'), {});
   for (const [doi, e] of Object.entries(cbCache)) {
     if (!e || !Array.isArray(e.c)) continue;
     const d = normDoi(doi);

@@ -9,7 +9,8 @@ import { readFile, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { wpRecordFromWork, orderAuthors, invertAbstract, loadCatalog, cleanText,
-  cleanTitle, wpSameWork, collapseWpDuplicates, recKey } from './build-data.mjs';
+  cleanTitle, wpSameWork, collapseWpDuplicates, recKey,
+  loadWpRows, writeWpRows } from './build-data.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const run = promisify(execFile);
@@ -198,6 +199,23 @@ async function main() {
     ok(JSON.stringify(big) === JSON.stringify(buildWpRecentCounts(rows, '2026-07-14')),
       'the tally is deterministic (unchanged archive → identical bytes → no needless commit)');
     ok(buildWpRecentCounts(rows.slice(500), '2026-07-14').total === 1000, 'removing rows lowers the tally');
+  }
+
+  // Chunked papers files — the 100 MiB push-limit guard (papers-wp-arxiv.json
+  // crossed GitHub's hard limit on 2026-08-01 and every crawl's push was
+  // rejected; files are now written in parts each under a byte cap).
+  console.log('unit: chunked papers files (loadWpRows/writeWpRows round-trip)');
+  {
+    const rows = [];
+    for (let i = 0; i < 300; i++) rows.push({ Title: 'WP ' + i, JKey: 'wp-arxiv', Year: '2026', pad: 'x'.repeat(60) });
+    const files = await writeWpRows(OUT, 'wp-test', rows, 6000);
+    ok(files.length > 1 && files[0] === 'papers-wp-test.json' && files[1] === 'papers-wp-test-2.json',
+      'an over-cap repository splits into ordered part files');
+    const back = await loadWpRows(OUT, 'wp-test');
+    ok(JSON.stringify(back) === JSON.stringify(rows), 'the parts reassemble losslessly, in order');
+    const shrunkFiles = await writeWpRows(OUT, 'wp-test', rows.slice(0, 2), 6000);
+    ok(shrunkFiles.length === 1 && (await loadWpRows(OUT, 'wp-test')).length === 2,
+      'a shrunken rewrite deletes the stale parts (no resurrected rows)');
   }
 
   await rm(OUT, { recursive: true, force: true });

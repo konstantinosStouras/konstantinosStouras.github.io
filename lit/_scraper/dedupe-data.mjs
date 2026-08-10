@@ -23,10 +23,11 @@
  * ===========================================================================
  */
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collapseSameWork, recentScopeKey } from './build-data.mjs';
 import { collapseWpDuplicates, recKey as wpRecKey } from '../_scraper-workingpapers/build-data.mjs';
+import { writeChunkedJson } from './_chunked-json.mjs';
 import { normTitle } from './ec-pages.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -52,6 +53,7 @@ console.log(`dedupe-data: ${DIR}${WP ? ' (working-papers rules)' : ''}${DRY ? ' 
 
 let totalDropped = 0;
 const counts = {};      // source key -> deduped row count
+const wpFilesByKey = {}; // WP: source key -> chunk part file names just written
 const survivors = new Set(); // rowKey of every kept row (for the recent.json filter)
 
 // recent-counts.json is where the page reads its "N papers added in the last 4
@@ -86,12 +88,22 @@ function tallyRecent(rows) {
 
 if (WP) {
   // The whole archive collapses as ONE set (the same paper can sit on two
-  // hosts), exactly like the crawler's step 3c.
+  // hosts), exactly like the crawler's step 3c. A repository may be CHUNKED
+  // across part files (papers-wp-arxiv.json + papers-wp-arxiv-2.json, … — the
+  // 100 MiB push-limit guard), so parts fold into their base key and the
+  // rewrite goes through the same chunked writer the crawler uses.
+  const baseKeyOf = (f) => {
+    const key = f.replace(/^papers-|\.json$/g, '');
+    const m = key.match(/^(.+)-(\d+)$/);
+    return (m && paperFiles.includes(`papers-${m[1]}.json`)) ? m[1] : key;
+  };
+  const keys = [...new Set(paperFiles.map(baseKeyOf))].sort();
   const byKey = new Map();
   const before = {};
   for (const f of paperFiles) {
     const rows = rd(f);
-    before[f] = rows.length;
+    const k = baseKeyOf(f);
+    before[k] = (before[k] || 0) + rows.length;
     for (const r of rows) byKey.set(wpRecKey(r), r);
   }
   const sizeBefore = byKey.size;
@@ -99,17 +111,17 @@ if (WP) {
   console.log(`  archive: ${sizeBefore} -> ${byKey.size} rows (${totalDropped} duplicate posting(s) collapsed)`);
   const bySource = {};
   for (const r of byKey.values()) (bySource[r.JKey] = bySource[r.JKey] || []).push(r);
-  for (const f of paperFiles) {
-    const key = f.replace(/^papers-|\.json$/g, '');
+  for (const key of keys) {
     const rows = (bySource[key] || []).sort((a, b) =>
       ((parseInt(b.Year, 10) || 0) - (parseInt(a.Year, 10) || 0)) ||
       (a.Title < b.Title ? -1 : a.Title > b.Title ? 1 : 0));
     counts[key] = rows.length;
     for (const r of rows) survivors.add(wpRecKey(r));
     tallyRecent(rows);
-    if (rows.length !== before[f]) {
-      console.log(`  ${f}: ${before[f]} -> ${rows.length}`);
-      wr(f, rows);
+    if (rows.length !== before[key]) console.log(`  papers-${key}.json: ${before[key]} -> ${rows.length}`);
+    if (!DRY) {
+      const files = (await writeChunkedJson(join(DIR, `papers-${key}.json`), rows)).map((p) => basename(p));
+      wpFilesByKey[key] = files;
     }
   }
 } else {
@@ -135,6 +147,14 @@ if (existsSync(join(DIR, 'sources.json'))) {
   let changed = false;
   for (const s of sources) {
     if (counts[s.key] !== undefined && s.count !== counts[s.key]) { s.count = counts[s.key]; changed = true; }
+    // Keep the manifest's chunk list (`files`) in step with what was rewritten.
+    if (wpFilesByKey[s.key]) {
+      const want = wpFilesByKey[s.key].length > 1 ? wpFilesByKey[s.key] : undefined;
+      if (JSON.stringify(s.files) !== JSON.stringify(want)) {
+        if (want) s.files = want; else delete s.files;
+        changed = true;
+      }
+    }
   }
   if (changed) wr('sources.json', sources);
 }

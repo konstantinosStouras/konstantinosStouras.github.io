@@ -1609,12 +1609,23 @@ privately at `users/{uid}/alerts/{alertId}` (covered by the existing
 edit, delete). The page only writes subscriptions; **delivery is done by the
 mailer** `lit/_scraper/alerts-mailer.mjs`, run daily by
 `.github/workflows/lit-alerts-mail.yml`: it reads the recently-added papers
-(`data/recent.json` + `data-ft50/recent.json`), reads all alerts via
+(`data/recent.json` + `data-ft50/recent.json` + `data-workingpapers/recent.json`
+— the WP file was NOT read before 2026-08, which is why an "any new paper"
+subscriber never received a single working paper), reads all alerts via
 `collectionGroup('alerts')` with the Admin SDK, matches each with **vendored
 copies of the page's journal-list sets + `textMatch`/`authorMatch`** (keep in
 sync), and e-mails due alerts over SMTP (`To` recipient, `Reply-To` the
 subscriber, `From` = `ALERTS_FROM`/`SMTP_USER`), stamping a per-alert
 `lastCheckedAt`/`lastSentAt` high-water mark so nothing is sent twice.
+**Working papers match with the page's own reachability rules** (`isWorkingPaper`
+by wp-* repository key + the `!scope && !hasTextFilter` gate in
+`matchesCriteria`; `jtypeKeys('wp')` = the WP manifest's keys): "any new paper"
+includes them, an explicit Working Papers scope (jtype `wp` / a `wp-*` key) or a
+text search reaches them, but a bare year or pre-print filter alone never does —
+mirroring `matchesJournal`/`textSearchActive`. `renderEmail` counts the two
+populations separately ("3 new papers and 2 working papers"), lists published
+papers first (so a WP burst can't crowd them out of the 100-row cap), and the
+selftest covers all of it.
 `criteria.allPapers` short-circuits `matchesCriteria` to match every new paper;
 `hasPaperIntent` gates paper matching so a **features-only** subscription (no
 `allPapers`, no filter) never sends paper e-mails. **Feature updates are their
@@ -1718,17 +1729,20 @@ carry a backfill day of ~12–16k stamps; keep the two emissions in sync); the
 page fetches them via `loadDatasetRecent`/`loadRecentCounts` in
 `loadWorkingPapersManifest()` and `matchesJournal` admits WP rows in
 `recentMode` — back-catalog rows crawled before dating began carry no date and
-never appear. **But the recent view is ordered PUBLISHED-FIRST, working papers
-second** (`renderRecent`'s comparator `(a.w - b.w) || (b.d - a.d)`, where `w`
-comes from `isWorkingPaperRow` — `_jkeys` if computeJkeys has run, else the raw
-`JKey`), each block newest-added first. A pure date sort let the WP backfill
-bury the whole published catalogue: it adds ~1,000 rows in one day, so on
-2026-07-28 all 1,000 preceded the 144 published papers added the day before —
-ABS shards first appeared on page 41, Nature/Science on 42, the NATIVE journals
-on 43. This is the same published-first instinct `matchesJournal` already
-applies to bare browsing ("flood the view with unpublished rows"), and it keeps
-the owner's "include working papers in recent" decision intact — they are still
-listed, just after the published block. `buildJTypeSelect()` **hides the Working Papers type until its
+never appear. **The recent view is ordered DAY BY DAY (newest day first), and
+WITHIN a day published papers lead, working papers follow** (per the owner,
+2026-08-10 — `renderRecent`'s comparator: `day` desc, then `(a.w - b.w)`, then
+time desc, where `w` comes from `isWorkingPaperRow` — `_jkeys` if computeJkeys
+has run, else the raw `JKey`). The view reads as a feed: today's journal
+articles, then today's WP arrivals, then yesterday's — NOT the two global
+blocks it briefly used (every published paper of the whole window before any
+working paper, which pushed a day-old working paper below four weeks of
+published rows), and NOT a pure date sort either, which let the WP backfill
+bury the published catalogue (it adds ~1,000 rows in one day: on 2026-07-28
+all 1,000 preceded the 144 published papers added the day before — ABS shards
+first appeared on page 41, the NATIVE journals on 43). The within-day
+published-first rule is the same instinct `matchesJournal` applies to bare
+browsing ("flood the view with unpublished rows"). `buildJTypeSelect()` **hides the Working Papers type until its
 archive has sources**, so the shipped empty `data-workingpapers/` (valid empty
 manifest) stays dormant until data lands. **The archive is built ONLINE, slowly:** two
 workflows — `lit-workingpapers-backfill.yml` (every 3 h, the growth engine) and
@@ -1741,6 +1755,25 @@ concurrency group and commit `lit/data-workingpapers/` back (only on
 `master`). **Author priority:** Management Science / M&SOM / POM authors (last
 15 years) are crawled first (`WP_PRIORITY_KEYS`/`WP_PRIORITY_YEARS`), then the
 rest, newest-active first. Distinct OpenAlex quota identity `kstouras+litwp`.
+**Papers files are CHUNKED under GitHub's hard 100 MiB push limit** (the Aug
+2026 outage: `papers-wp-arxiv.json` crossed it on 2026-08-01 and EVERY
+progress-carrying push was rejected from then on — the archive froze for nine
+days while `meta.json`'s `lastPull` kept advancing, because only no-progress
+runs could still push; the crawl slice itself was fine). Both writers (the
+crawler and `ingest-submissions.mjs`) write each repository through the shared
+`lit/_scraper/_chunked-json.mjs` helpers (`loadWpRows`/`writeWpRows` in
+build-data.mjs, cap `WP_FILE_CAP_BYTES` default 48 MiB): part 1 keeps the
+plain name, later parts insert `-N` (`papers-wp-arxiv.json`,
+`papers-wp-arxiv-2.json`, …), a shrinking rewrite deletes stale parts, and the
+manifest entry lists the parts in `files` (with `file` still the first part).
+The page's `loadExtraSource` fetches every listed part and concatenates —
+single-file sources (FT50/shards) are just the one-part case.
+`counters-selftest`/`dedupe-data` are chunk-aware (`s.files` union; dedupe's
+WP branch folds part files into their base key and rewrites through the same
+chunked writer); `clean-titles`/`build-titlecase-lexicon` glob `papers-*.json`
+per-file, which is already correct for row-local edits. Tests:
+`node lit/_scraper/chunked-json-selftest.mjs` + chunk checks in the WP
+selftest.
 Offline test: `node lit/_scraper-workingpapers/selftest.mjs` (mock, no
 network). Migration to a satellite repo is one constant: `WP_DATA_BASE`
 `'./data-workingpapers/'` → `'/lit-data-workingpapers/data/'`. See
@@ -1901,7 +1934,14 @@ with `REFS_S2=0`). Each source's RAW output is cached
 (`data-refs/_refs-cache.json`: `doi → {r:[Crossref+S2 DOIs], o:[OpenAlex ref
 ids], t, v, oa}`, underscore-prefixed so unserved) and every build
 **re-intersects it offline** with the CURRENT catalog + `_oaid.json`, so catalog
-growth (and a fuller id map) adds edges with NO re-fetch. A published paper's
+growth (and a fuller id map) adds edges with NO re-fetch. **Both crawl caches
+are CHUNKED under GitHub's hard 100 MiB push limit** (`_refs-cache.json` +
+`_refs-cache-2.json` + …, likewise `_citedby-cache.json` — the Aug 2026
+outage: the refs cache hit 114 MB on the runners and every backfill push was
+rejected, exactly like the working-papers archive; see
+`lit/_scraper/_chunked-json.mjs`, whose helpers build-refs/build-citedby write
+through and build-disruption/coverage-audit read through, each part ≤ ~48 MiB,
+stale parts deleted on a shrinking rewrite). A published paper's
 reference list never changes, so a paper stamped at the current version is
 **frozen** (never re-fetched); a **`RF_VER` bump re-sweeps EVERY paper** with the
 wider net (v1 was Crossref-only; v2 added the OpenAlex + Semantic Scholar legs).

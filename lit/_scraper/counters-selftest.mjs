@@ -81,7 +81,15 @@ function auditDataset(label, dir, opts = {}) {
   const rowsByKey = new Map();
   let rowTotal = 0, mismatched = [];
   for (const s of sources) {
-    const rows = rd(path.join(dir, s.file || `papers-${s.key}.json`), null);
+    // A source may be chunked across several part files (`files`, the 100 MiB
+    // push-limit guard — working papers today); its rows are their union.
+    const files = (Array.isArray(s.files) && s.files.length) ? s.files : [s.file || `papers-${s.key}.json`];
+    let rows = null;
+    for (const f of files) {
+      const part = rd(path.join(dir, f), null);
+      if (!Array.isArray(part)) { rows = null; break; }
+      rows = (rows || []).concat(part);
+    }
     if (!Array.isArray(rows)) { mismatched.push(`${s.key}: papers file missing`); continue; }
     rowsByKey.set(s.key, rows);
     rowTotal += rows.length;

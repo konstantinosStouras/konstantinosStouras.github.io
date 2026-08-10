@@ -69,6 +69,7 @@ import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readChunkedJson, writeChunkedJson } from '../_scraper/_chunked-json.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -506,8 +507,12 @@ async function main() {
   const { dbByDoi, papers } = await loadCatalog(CATALOG_DIRS, { log: true });
   console.log(`catalog: ${papers.length} papers with a DOI (${dbByDoi.size} distinct)`);
 
-  // 2. The caches (crawl cursor + the doi→OpenAlex-id map).
-  const cache = await loadJson(join(DATA_DIR, '_refs-cache.json'), {});
+  // 2. The caches (crawl cursor + the doi→OpenAlex-id map). The refs cache is
+  //    CHUNKED (_refs-cache.json, _refs-cache-2.json, …): it crossed GitHub's
+  //    hard 100 MiB per-file push limit in Aug 2026, which had every backfill
+  //    push rejected — the shared chunked-JSON helpers keep each part safely
+  //    under the limit. _oaid.json (a few MB) stays a single plain file.
+  const cache = await readChunkedJson(join(DATA_DIR, '_refs-cache.json'), {});
   const oaidMap = await loadJson(join(DATA_DIR, '_oaid.json'), {});
   console.log(`cache: ${Object.keys(cache).length} papers seen; ${Object.keys(oaidMap).length} OpenAlex ids known`);
 
@@ -516,7 +521,7 @@ async function main() {
   console.log(`processing up to ${slice.length} paper(s) this run (of ${papers.length})`);
 
   const checkpoint = async () => {
-    await awrite(join(DATA_DIR, '_refs-cache.json'), JSON.stringify(cache));
+    await writeChunkedJson(join(DATA_DIR, '_refs-cache.json'), cache);
     await awrite(join(DATA_DIR, '_oaid.json'), JSON.stringify(oaidMap));
   };
 
