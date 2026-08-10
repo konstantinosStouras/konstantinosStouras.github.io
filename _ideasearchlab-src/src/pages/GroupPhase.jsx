@@ -149,7 +149,6 @@ export default function GroupPhase() {
   const [groupVotingStartedAt, setGroupVotingStartedAt] = useState(null)
   const groupOpenedWrittenRef = useRef(false)
   const [briefOpen, setBriefOpen] = useState(true)
-  const [briefHintDismissed, setBriefHintDismissed] = useState(false)
   const [showConsensus, setShowConsensus] = useState(false)
   // 'intro' = the reminder shown when voting opens; 'warn' = re-shown on submit
   // when the group's votes are spread across different ideas (no consensus).
@@ -615,46 +614,31 @@ export default function GroupPhase() {
     </div>
   )
 
-  /** One-time notice telling participants they can minimize the task brief
-      to free up room for the ideas and workspace (task instructions hint). */
-  const briefNotice = (briefOpen && !briefHintDismissed) ? (
-    <div className={styles.briefNotice}>
-      <span className={styles.briefNoticeIcon} aria-hidden="true">i</span>
-      <span className={styles.briefNoticeText}>
-        Tip: you can minimize the Task Brief below (click its header) to see the
-        ideas and workspace more clearly.
-      </span>
-      <button
-        className={styles.briefNoticeClose}
-        onClick={() => setBriefHintDismissed(true)}
-        type="button"
-        aria-label="Dismiss tip"
-        title="Dismiss"
-      >
-        ×
-      </button>
-    </div>
-  ) : null
-
-  /** Collapsible task brief (shown in both sub-phases) */
+  /** Collapsible task brief (shown in both sub-phases), toggled by the
+      always-visible "Hide/Show task description" pill button below it. */
   const taskBrief = (
-    <div className={styles.brief}>
-      <button
-        className={styles.briefToggle}
-        onClick={() => setBriefOpen(o => !o)}
-        type="button"
-        title={briefOpen
-          ? 'Click here to minimize the Task Brief and see the ideas and workspace more clearly.'
-          : 'Click here to expand the Task Brief.'}
-      >
-        <span>Task Brief</span>
-        <span className={styles.briefChevron}>{briefOpen ? '▲' : '▼'}</span>
-      </button>
+    <div className={styles.briefWrap}>
       {briefOpen && (
-        <div className={styles.briefContent}>
-          <RichText html={c.brief} vars={contentVars} aiOn={!!aiEnabled} />
+        <div className={styles.brief}>
+          <div className={styles.briefHeader}>Task Brief</div>
+          <div className={styles.briefContent}>
+            <RichText html={c.brief} vars={contentVars} aiOn={!!aiEnabled} />
+          </div>
         </div>
       )}
+      <div className={styles.briefToggleRow}>
+        <button
+          className={styles.briefToggleBtn}
+          onClick={() => setBriefOpen(o => !o)}
+          type="button"
+          title={briefOpen
+            ? 'Hide the task description to see the ideas and workspace more clearly.'
+            : 'Show the task description.'}
+        >
+          <span className={styles.briefToggleChevron} aria-hidden="true">{briefOpen ? '▲' : '▼'}</span>
+          {briefOpen ? 'Hide task description' : 'Show task description'}
+        </button>
+      </div>
     </div>
   )
 
@@ -894,7 +878,6 @@ export default function GroupPhase() {
 
         <NudgeBanner sessionId={sessionId} autoMessage={autoNudgeMessage} />
 
-        {briefNotice}
         {taskBrief}
 
         {!votesLocked && (
@@ -971,7 +954,6 @@ export default function GroupPhase() {
 
       <NudgeBanner sessionId={sessionId} autoMessage={autoNudgeMessage} />
 
-      {briefNotice}
       {taskBrief}
 
       {individualActive ? (

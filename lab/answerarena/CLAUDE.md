@@ -230,9 +230,14 @@ The participant doc carries `completedSessions` (a `{ sid: completedAtMs }`
 map); `sid` = the session id, or `'_none'` for the default code-less play. On
 entry (`routeParticipant`), the app resolves the target session (from a chosen
 session, a code typed on welcome, or `?s=CODE`) and: blocks a session already in
-`completedSessions` - **including `'_none'`** - (`showAlreadyDone`, whose "Start
-over" mints a fresh anonymous identity), resumes an in-progress survey for the
-same session, or else (re)starts the comparisons for that session. `sessionId`
+`completedSessions` - **including `'_none'`** - (`showAlreadyDone`), resumes an
+in-progress survey for the same session, or else (re)starts the comparisons for
+that session. The thank-you and already-completed screens are **final - no
+"Start over" button** (it minted a fresh anonymous identity, which let a
+participant replay; each user plays once, per the owner 2026-08). Only the
+closed/not-yet-open session screen (`showSessionUnavailable`) keeps a "Start
+over" as its way back to the welcome screen - that visitor never played the
+session. `sessionId`
 on the participant doc is the **current** session; per-session completion lives
 in `completedSessions`. `markCompleted()` adds the current sid on the thank-you
 screen. Responses, events and survey docs are all tagged/keyed by `sid`, and the
