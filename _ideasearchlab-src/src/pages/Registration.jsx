@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, updateDoc, getFunctions, httpsCallable, db } from '../utils/db'
+import { platformHandoff, registrationAnswers } from '../utils/simplatform'
 import { useAuth } from '../context/AuthContext'
 import { useSession } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'
@@ -26,10 +27,40 @@ export default function Registration() {
   const [consents, setConsents] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Silent registration (platform launches): null = normal form,
+  // 'submitting' = auto-submitting invisibly, 'consent' = data auto-filled
+  // but the session config carries consent statements, which are NEVER
+  // ticked on a student's behalf — show a consent-only card.
+  const [auto, setAuto] = useState(null)
+  const autoRan = useRef(false)
 
   // Timing: stamp when the Registration page first opened (client-side, since
   // the participant doc doesn't exist until submit).
   useEffect(() => { markTiming(sessionId, 'registrationOpenedAt') }, [sessionId])
+
+  // A student arriving from stouras.com/simulation already registered there —
+  // fill this form from the handoff and, when every required field is
+  // covered, submit it without showing it (owner decision 2026-08). Falls
+  // back to the normal (pre-filled) form if a required field can't be mapped
+  // or the silent submit fails.
+  useEffect(() => {
+    if (!session || autoRan.current) return
+    autoRan.current = true
+    const h = platformHandoff()
+    if (!h) return
+    const mapped = registrationAnswers(fields, h.profile)
+    setForm(prev => ({ ...mapped, ...prev }))
+    const missingRequired = fields.some(f => f.required && !(mapped[f.id] ?? '').toString().trim())
+    if (missingRequired) return
+    if (consentStatements.length > 0) { setAuto('consent'); return }
+    setAuto('submitting')
+    completeRegistration(mapped, true).catch(err => {
+      console.error('Silent registration failed:', err)
+      setAuto(null)
+      setError('Something went wrong — please review your details and submit below.')
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session])
 
   function updateField(id, value) {
     setForm(prev => ({ ...prev, [id]: value }))
@@ -52,6 +83,60 @@ export default function Registration() {
     return null
   }
 
+  async function completeRegistration(values, silent) {
+    const functions = getFunctions(undefined, 'europe-west1')
+    const joinSession = httpsCallable(functions, 'joinSession')
+    await joinSession({ code: session.code })
+
+    const demographics = {}
+    fields.forEach(f => {
+      const raw = (values[f.id] ?? '').toString().trim()
+      demographics[f.id] = f.type === 'number' ? (raw === '' ? '' : Number(raw)) : raw
+    })
+
+    // Flush the client-side timing marks collected on Welcome + Registration
+    // (which ran before this participant doc existed) onto the doc, plus the
+    // submit moment. Stored as client epoch ms; durations (welcome read,
+    // registration time) are computed within this same clock domain.
+    const marks = readTiming(sessionId)
+    const timing = {
+      welcomeOpenedAt: marks.welcomeOpenedAt ?? null,
+      welcomeAgreedAt: marks.welcomeAgreedAt ?? null,
+      registrationOpenedAt: marks.registrationOpenedAt ?? null,
+      registrationSubmittedAt: Date.now(),
+    }
+
+    const payload = {
+      demographics,
+      consentGiven: true,
+      consentTimestamp: new Date().toISOString(),
+      timing,
+    }
+    // The login is a throwaway (synthetic e-mail), so record the student's
+    // REAL identity from the platform registration alongside the demographics.
+    const h = platformHandoff()
+    if (h) {
+      payload.platform = {
+        name: h.profile.name || '',
+        email: h.profile.email || '',
+        studentId: h.profile.studentId || '',
+        source: 'simulation-platform',
+        silentRegistration: !!silent,
+      }
+    }
+
+    const participantRef = doc(db, 'sessions', sessionId, 'participants', user.uid)
+    // The next screen doesn't need the demographics/consent write to finish,
+    // so don't block navigation on it — fire it and move on immediately so
+    // the button doesn't sit on "Joining..." for an extra round-trip. The
+    // Firestore SDK still delivers the write after we leave this page.
+    updateDoc(participantRef, payload)
+      .then(() => clearTiming(sessionId))
+      .catch(err => console.error('Profile save failed:', err))
+
+    navigate(`/session/${sessionId}`)
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     const validationError = validate()
@@ -59,43 +144,7 @@ export default function Registration() {
     setError('')
     setLoading(true)
     try {
-      const functions = getFunctions(undefined, 'europe-west1')
-      const joinSession = httpsCallable(functions, 'joinSession')
-      await joinSession({ code: session.code })
-
-      const demographics = {}
-      fields.forEach(f => {
-        const raw = (form[f.id] ?? '').toString().trim()
-        demographics[f.id] = f.type === 'number' ? (raw === '' ? '' : Number(raw)) : raw
-      })
-
-      // Flush the client-side timing marks collected on Welcome + Registration
-      // (which ran before this participant doc existed) onto the doc, plus the
-      // submit moment. Stored as client epoch ms; durations (welcome read,
-      // registration time) are computed within this same clock domain.
-      const marks = readTiming(sessionId)
-      const timing = {
-        welcomeOpenedAt: marks.welcomeOpenedAt ?? null,
-        welcomeAgreedAt: marks.welcomeAgreedAt ?? null,
-        registrationOpenedAt: marks.registrationOpenedAt ?? null,
-        registrationSubmittedAt: Date.now(),
-      }
-
-      const participantRef = doc(db, 'sessions', sessionId, 'participants', user.uid)
-      // The next screen doesn't need the demographics/consent write to finish,
-      // so don't block navigation on it — fire it and move on immediately so
-      // the button doesn't sit on "Joining..." for an extra round-trip. The
-      // Firestore SDK still delivers the write after we leave this page.
-      updateDoc(participantRef, {
-        demographics,
-        consentGiven: true,
-        consentTimestamp: new Date().toISOString(),
-        timing,
-      })
-        .then(() => clearTiming(sessionId))
-        .catch(err => console.error('Profile save failed:', err))
-
-      navigate(`/session/${sessionId}`)
+      await completeRegistration(form, false)
     } catch (err) {
       console.error(err)
       setError('Something went wrong. Please try again.')
@@ -143,6 +192,63 @@ export default function Registration() {
         <option value="">Select...</option>
         {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
       </select>
+    )
+  }
+
+  // Silent path: the platform data is being submitted invisibly.
+  if (auto === 'submitting') {
+    return (
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <span className={styles.wordmark}>Ideation Challenge</span>
+          <HeaderControls />
+        </header>
+        <main className={styles.main}>
+          <div className={styles.card}>
+            <p style={{ textAlign: 'center', color: 'var(--muted)' }}>Setting up your session...</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // Consent-only path: the data fields are auto-filled from the platform, but
+  // consent is never granted on a student's behalf — show just the consents.
+  if (auto === 'consent') {
+    return (
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <span className={styles.wordmark}>Ideation Challenge</span>
+          <HeaderControls />
+        </header>
+        <main className={styles.main}>
+          <div className={styles.card}>
+            <form onSubmit={handleSubmit} className={styles.form}>
+              <h2 className={styles.sectionTitle}>Consent</h2>
+              {consentStatements.map((stmt, i) => (
+                <label key={i} className={styles.checkbox}>
+                  <input
+                    type="checkbox"
+                    checked={!!consents[i]}
+                    onChange={e => setConsents(prev => ({ ...prev, [i]: e.target.checked }))}
+                  />
+                  <span>{stmt}</span>
+                </label>
+              ))}
+              {error && <p className="error-msg">{error}</p>}
+              <div className={styles.submitRow}>
+                <button
+                  className={`btn-primary ${styles.submitBtn}`}
+                  type="submit"
+                  disabled={loading || !isValid}
+                >
+                  {loading ? 'Joining...' : 'Agree and Start Challenge'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </main>
+      </div>
     )
   }
 

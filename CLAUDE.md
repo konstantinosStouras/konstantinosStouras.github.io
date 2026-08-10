@@ -2281,7 +2281,12 @@ details to the sim. **No hosted simulation was modified** — the platform
 drives them from the outside via `catalog.js`, the ONE place that knows each
 app's launch URL, session mechanism (`?code=` auto-join for
 sustainable-supply-chains/search-v2, `?session=` prefill for portfoliofit,
-`?s=` for answerarena, clipboard for ideasearchlab), storage seeds (a hook,
+`?s=` for answerarena, handoff-prefilled join code for ideasearchlab —
+whose student flow is now ACCOUNT-FREE: `RequireStudent` mints a silent
+throwaway e-mail/password login (NOT anonymous auth — the deployed
+joinSession writes token name+email and the Admin SDK rejects undefined)
+and Registration auto-submits from the handoff, with a consent-only screen
+when the session config carries consent statements), storage seeds (a hook,
 currently unused) and admin-panel URL. The catalog is DELIBERATELY CURATED
 (per the owner): eight class sims in a fixed display order (ideasearchlab,
 portfoliofit — titled plain "PortfolioFit" —, answerarena, problem-solving,

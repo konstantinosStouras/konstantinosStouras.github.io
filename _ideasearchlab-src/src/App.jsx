@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { SessionProvider } from './context/SessionContext'
-import { RequireAuth, RequireGuest, RequireInstructor } from './components/ProtectedRoute'
+import { RequireAuth, RequireStudent, RequireGuest, RequireInstructor } from './components/ProtectedRoute'
 
 import Login from './pages/Login'
 import JoinSession from './pages/JoinSession'
@@ -42,72 +42,72 @@ export default function App() {
         <Route path="/login" element={<RequireGuest><Login /></RequireGuest>} />
 
         {/* Participant flow */}
-        <Route path="/join" element={<RequireAuth><JoinSession /></RequireAuth>} />
+        <Route path="/join" element={<RequireStudent><JoinSession /></RequireStudent>} />
 
         <Route path="/history" element={<RequireAuth><UserHistory /></RequireAuth>} />
 
         <Route path="/session/:sessionId/welcome" element={
-          <RequireAuth>
+          <RequireStudent>
             <SessionWrapper>
               <Welcome />
             </SessionWrapper>
-          </RequireAuth>
+          </RequireStudent>
         } />
 
         <Route path="/session/:sessionId/tour" element={
-          <RequireAuth>
+          <RequireStudent>
             <SessionWrapper>
               <DemoTour />
             </SessionWrapper>
-          </RequireAuth>
+          </RequireStudent>
         } />
 
         <Route path="/session/:sessionId/register" element={
-          <RequireAuth>
+          <RequireStudent>
             <SessionWrapper>
               <Registration />
             </SessionWrapper>
-          </RequireAuth>
+          </RequireStudent>
         } />
 
         <Route path="/session/:sessionId" element={
-          <RequireAuth>
+          <RequireStudent>
             <SessionWrapper>
               <SessionLobby />
             </SessionWrapper>
-          </RequireAuth>
+          </RequireStudent>
         } />
 
         <Route path="/session/:sessionId/individual" element={
-          <RequireAuth>
+          <RequireStudent>
             <SessionWrapper>
               <IndividualPhase />
             </SessionWrapper>
-          </RequireAuth>
+          </RequireStudent>
         } />
 
         <Route path="/session/:sessionId/group" element={
-          <RequireAuth>
+          <RequireStudent>
             <SessionWrapper>
               <GroupPhase />
             </SessionWrapper>
-          </RequireAuth>
+          </RequireStudent>
         } />
 
         <Route path="/session/:sessionId/survey" element={
-          <RequireAuth>
+          <RequireStudent>
             <SessionWrapper>
               <Survey />
             </SessionWrapper>
-          </RequireAuth>
+          </RequireStudent>
         } />
 
         <Route path="/session/:sessionId/done" element={
-          <RequireAuth>
+          <RequireStudent>
             <SessionWrapper>
               <Done />
             </SessionWrapper>
-          </RequireAuth>
+          </RequireStudent>
         } />
 
         {/* Instructor flow */}

@@ -3,13 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import { platformHandoff } from '../utils/simplatform'
 import HeaderControls from '../components/HeaderControls'
 import styles from './JoinSession.module.css'
 
 export default function JoinSession() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [code, setCode] = useState('')
+  // A launch from stouras.com/simulation lands here with the Session ID in
+  // the handoff — pre-fill it so the student just clicks Join.
+  const [code, setCode] = useState(() =>
+    ((platformHandoff()?.session) || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
