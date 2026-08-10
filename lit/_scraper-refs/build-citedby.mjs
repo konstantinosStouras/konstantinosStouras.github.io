@@ -90,6 +90,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normDoi, shortOaid, tierOf, loadCatalog } from './build-refs.mjs';
+import { readChunkedJson, writeChunkedJson } from '../_scraper/_chunked-json.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK = process.env.CB_MOCK === '1';
@@ -352,7 +353,11 @@ async function main() {
 
   // 1. Catalog + the caches (crawl state + the doi→OpenAlex-id map built by build-refs).
   const { dbByDoi, papers } = await loadCatalog(CATALOG_DIRS, { log: true });
-  const cache = await loadJson(join(DATA_DIR, '_citedby-cache.json'), {});
+  // The citer cache is CHUNKED (_citedby-cache.json, _citedby-cache-2.json, …)
+  // like build-refs's _refs-cache.json: both sat at ~100 MB when the refs cache
+  // crossed GitHub's hard 100 MiB push limit in Aug 2026 and every backfill
+  // push was rejected. The shared helpers keep each part safely under it.
+  const cache = await readChunkedJson(join(DATA_DIR, '_citedby-cache.json'), {});
   const oaidMap = await loadJson(join(DATA_DIR, '_oaid.json'), {});
   const citedCounts = await loadJson(join(DATA_DIR, 'cited-counts.json'), {});
   const withOaid = papers.filter(p => oaidMap[p.doi]).length;
@@ -386,7 +391,7 @@ async function main() {
   console.log(`processing up to ${slice.length} paper(s) this run`);
 
   const checkpoint = async () => {
-    await writeFile(join(DATA_DIR, '_citedby-cache.json'), JSON.stringify(cache), 'utf8');
+    await writeChunkedJson(join(DATA_DIR, '_citedby-cache.json'), cache);
   };
 
   // 4. Harvest each paper's citing works.

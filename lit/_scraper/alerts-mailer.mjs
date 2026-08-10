@@ -8,8 +8,12 @@
  * (see .github/workflows/lit-alerts-mail.yml). It:
  *
  *   1. Loads the papers ADDED to the database recently, from the same files the
- *      site's "Recently added papers" view uses: lit/data/recent.json and
- *      lit/data-ft50/recent.json (each row carries a "Date Added").
+ *      site's "Recently added papers" view uses: lit/data/recent.json,
+ *      lit/data-ft50/recent.json AND lit/data-workingpapers/recent.json (each
+ *      row carries a "Date Added"). Working papers are matched with the page's
+ *      own semantics — see matchesCriteria — so an "any new paper" subscriber
+ *      hears about new SSRN/NBER/arXiv/OSF working papers too (they never did
+ *      before 2026-08: the archive's recent.json simply wasn't read here).
  *   2. Reads every user's saved alerts with the Firebase Admin SDK
  *      (collectionGroup('alerts')), which bypasses the Firestore rules.
  *   3. Matches the new papers against each alert's `criteria`, reusing the exact
@@ -64,6 +68,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR  = path.join(__dirname, '..', 'data');
 const FT50_DIR  = path.join(__dirname, '..', 'data-ft50');
+// The Working Papers archive (SSRN/NBER/arXiv/OSF pre-prints of the listed
+// authors) — its recent.json joins the paper stream, and its manifest keys
+// back the 'wp' journal type exactly like the page's WP_KEYS.
+const WP_DIR    = path.join(__dirname, '..', 'data-workingpapers');
 // The feature "changelog" catalogue that drives "New features & updates to the
 // website" alerts. Hand-maintained (NOT build output), served at
 // stouras.com/lit/changelog.json, and read here from the checkout. Adding an
@@ -136,7 +144,7 @@ function absSets() {
 // instead of the raw key "opre". Built once at startup from local manifests.
 function loadJournalNames() {
   const names = {};
-  for (const dir of [DATA_DIR, FT50_DIR]) {
+  for (const dir of [DATA_DIR, FT50_DIR, WP_DIR]) {
     try {
       const man = JSON.parse(fs.readFileSync(path.join(dir, 'sources.json'), 'utf8'));
       for (const s of (Array.isArray(man) ? man : [])) {
@@ -200,14 +208,28 @@ function paperJKeys(p) {
   return keys.filter(Boolean);
 }
 
+// The Working Papers archive's repository keys (wp-ssrn/wp-nber/wp-arxiv/
+// wp-osf), from its own manifest — mirrors the page's WP_KEYS, which back its
+// 'wp' journal type. Absent archive → empty set (the jtype just matches nothing).
+function loadWpKeys() {
+  const set = new Set();
+  try {
+    const man = JSON.parse(fs.readFileSync(path.join(WP_DIR, 'sources.json'), 'utf8'));
+    for (const s of (Array.isArray(man) ? man : [])) if (s && s.key && s.workingPaper) set.add(s.key);
+  } catch { /* archive missing → empty */ }
+  return set;
+}
+
 function makeCtx() {
   const ft50 = loadFt50Keys();
   const abs = absSets();
+  const wpKeys = loadWpKeys();
   const jtypeKeys = (t) => {
     if (t === 'utd24') return UTD24_KEYS;
     if (t === 'ft50')  return ft50;
     if (t === 'abs4')  return abs.abs4;
     if (t === 'abs3')  return abs.abs3;
+    if (t === 'wp')    return wpKeys;
     return new Set();
   };
   const scopeFor = (c) => {
@@ -219,8 +241,18 @@ function makeCtx() {
   };
   // abs4/abs3/ft50 are exposed (not just closed over) so loadShards() can extend
   // them at runtime with the ABS grades the satellite shards publish.
-  return { jtypeKeys, scopeFor, abs4: abs.abs4, abs3: abs.abs3, ft50 };
+  return { jtypeKeys, scopeFor, abs4: abs.abs4, abs3: abs.abs3, ft50, wpKeys };
 }
+
+// Is this row an unpublished working paper from the archive? Keyed on the
+// repository key (like the page's isWorkingPaperRow), with the wp- prefix as a
+// fallback so a row still classifies if the manifest could not be read.
+function isWorkingPaper(p, ctx) {
+  const k = String((p && p.JKey) || '');
+  return (ctx && ctx.wpKeys && ctx.wpKeys.has(k)) || k.startsWith('wp-');
+}
+const TEXT_CRIT_KEYS = ['author', 'title', 'abstract', 'affiliation'];
+function hasTextFilter(c) { return TEXT_CRIT_KEYS.some(k => ((c || {})[k] || []).length); }
 
 // True if a paper satisfies an alert's criteria. Mirrors applyFilters():
 // journal scope + pre-print + year/editor/area/se/ae (OR within field) +
@@ -240,6 +272,13 @@ function matchesCriteria(p, c, ctx) {
   if (c && c.allPapers) return true;   // "any new paper" — no filters at all
   const scope = ctx.scopeFor(c);
   if (scope && !paperJKeys(p).some(k => scope.has(k))) return false;
+  // Working papers mirror the page's reachability rules: "any new paper"
+  // (above), an explicit Working Papers scope (jtype 'wp' or a wp-* repository
+  // key — the scope test just passed it), or a TEXT search with no journal
+  // scope (textSearchActive on the page). A bare year or pre-print filter
+  // alone never matches one — on the page either would flood the view with
+  // unpublished rows, so matchesJournal excludes WP_KEYS there too.
+  if (!scope && isWorkingPaper(p, ctx) && !hasTextFilter(c)) return false;
   if (c.preprintOnly && !safeUrl(p.Preprint)) return false;
 
   if ((c.year || []).length && !c.year.includes(String(p.Year || ''))) return false;
@@ -265,7 +304,7 @@ function matchesCriteria(p, c, ctx) {
 // Human summary of an alert's criteria, for the e-mail body / subject.
 function describeCriteria(c) {
   if (c && c.allPapers) return 'any new paper';
-  const JTL = { utd24: 'UTD24', ft50: 'FT50', abs4: 'ABS 4/4*', abs3: 'ABS 3' };
+  const JTL = { utd24: 'UTD24', ft50: 'FT50', abs4: 'ABS 4/4*', abs3: 'ABS 3', wp: 'Working Papers' };
   const parts = [];
   (c.jtype || []).forEach(t => parts.push(JTL[t] || t));
   (c.journal || []).forEach(k => parts.push(JOURNAL_NAMES[k] || k));   // human name, matching the on-page preview
@@ -290,7 +329,10 @@ function parseAdded(s) {
 }
 function loadRecentPapers(extraRows) {
   const rows = [];
-  for (const f of [path.join(DATA_DIR, 'recent.json'), path.join(FT50_DIR, 'recent.json')]) {
+  // The same recent files the page's "Recently added" view merges: native +
+  // FT50 + the Working Papers archive (whose absence pre-2026-08 was why an
+  // "any new paper" subscriber never heard about a new working paper).
+  for (const f of [path.join(DATA_DIR, 'recent.json'), path.join(FT50_DIR, 'recent.json'), path.join(WP_DIR, 'recent.json')]) {
     try {
       const arr = JSON.parse(fs.readFileSync(f, 'utf8'));
       if (Array.isArray(arr)) for (const p of arr) { p._added = parseAdded(p['Date Added']); if (p._added) rows.push(p); }
@@ -417,10 +459,22 @@ function emailShell(headerLabel, innerHtml, bannerHtml) {
 function renderEmail(alert, papers, opts) {
   opts = opts || {};
   const name = alert.name || describeCriteria(alert.criteria || {});
+  // Published papers lead the digest, working papers follow (each side
+  // newest-added first) — mirroring the page's recently-added view, so a
+  // working-paper burst can never crowd the journal articles out of the
+  // MAX_LIST window — and the counts are stated separately, like the page's
+  // "N papers and M working papers added" label.
+  const isWp = (p) => String((p && p.JKey) || '').startsWith('wp-') || (p && p.Status === 'Working paper');
+  papers = papers.slice().sort((a, b) => (isWp(a) - isWp(b)) || ((b._added || 0) - (a._added || 0)));
   const n = papers.length;
+  const nWp = papers.filter(isWp).length, nPub = n - nWp;
+  const countPhrase =
+    nPub && nWp ? `${nPub} new paper${nPub === 1 ? '' : 's'} and ${nWp} working paper${nWp === 1 ? '' : 's'}`
+    : nWp       ? `${nWp} new working paper${nWp === 1 ? '' : 's'}`
+    :             `${nPub} new paper${nPub === 1 ? '' : 's'}`;
   const shown = papers.slice(0, MAX_LIST);
   const more = n - shown.length;
-  const subject = `${opts.subjectPrefix || ''}The Lit: ${n} new paper${n === 1 ? '' : 's'} — ${name}`;
+  const subject = `${opts.subjectPrefix || ''}The Lit: ${countPhrase} — ${name}`;
 
   const lineText = shown.map((p, i) => {
     const bits = [p.Journal, p.Year, p.Status].filter(Boolean).join(' · ');
@@ -429,7 +483,7 @@ function renderEmail(alert, papers, opts) {
     return s;
   }).join('\n\n');
   const text =
-`${opts.noteText || ''}${n} new paper${n === 1 ? '' : 's'} matching your alert "${name}" ${n === 1 ? 'was' : 'were'} added to The Lit.
+`${opts.noteText || ''}${countPhrase} matching your alert "${name}" ${n === 1 ? 'was' : 'were'} added to The Lit.
 Criteria: ${describeCriteria(alert.criteria || {})}
 
 ${lineText}${more > 0 ? `\n\n…and ${more} more. See them all on ${SITE_URL}` : ''}
@@ -447,7 +501,7 @@ ${footerText()}`;
     </li>`;
   }).join('');
   const inner =
-`<p style="font-size:14px;margin:0 0 4px"><strong>${n} new paper${n === 1 ? '' : 's'}</strong> matching your alert
+`<p style="font-size:14px;margin:0 0 4px"><strong>${esc(countPhrase)}</strong> matching your alert
       <strong>${esc(name)}</strong> ${n === 1 ? 'was' : 'were'} added to The Lit.</p>
     <p style="color:#6a5a60;font-size:12.5px;margin:0 0 16px">Criteria: ${esc(describeCriteria(alert.criteria || {}))}</p>
     <ul style="list-style:none;padding:0;margin:0">${items}</ul>
@@ -1008,6 +1062,30 @@ function selftest() {
   ok('text footer has edit-prefs/unsubscribe/feedback', /Edit your preferences/.test(em.text) && /Unsubscribe from future/.test(em.text) && em.text.includes(CONTACT_EMAIL));
   ok('html footer has edit-prefs/unsubscribe/feedback', /Edit your preferences/.test(em.html) && /Unsubscribe/.test(em.html) && em.html.includes('mailto:' + CONTACT_EMAIL));
   ok('html escapes', renderEmail({ name: 'x', criteria: {} }, [P({ Title: 'A <b> & "q"' })]).html.includes('A &lt;b&gt; &amp; &quot;q&quot;'));
+
+  // ── Working papers in alerts (user report 2026-08-10: an "any new paper"
+  // subscriber had never received a single working paper — the archive's
+  // recent.json simply wasn't loaded, and no matching rule admitted its rows).
+  const WPP = P({ JKey: 'wp-ssrn', Journal: 'SSRN Working Papers', Status: 'Working paper',
+    Title: 'A Theory of Ambitious Statements', Authors: 'Bhagwan Chowdhry',
+    Abstract: '', Affiliations: '',
+    Preprint: 'https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6426218' });
+  ok('allPapers matches a working paper', matchesCriteria(WPP, { allPapers: true }, ctx));
+  ok('jtype wp matches a working paper', matchesCriteria(WPP, { jtype: ['wp'] }, ctx));
+  ok('wp repository key matches its working papers', matchesCriteria(WPP, { journal: ['wp-ssrn'] }, ctx));
+  ok('author search reaches working papers (page parity)', matchesCriteria(WPP, { author: ['chowdhry'] }, ctx));
+  ok('title search reaches working papers', matchesCriteria(WPP, { title: ['ambitious'] }, ctx));
+  ok('year alone never matches a working paper (page parity)', !matchesCriteria(WPP, { year: ['2026'] }, ctx));
+  ok('pre-print toggle alone never matches a working paper', !matchesCriteria(WPP, { preprintOnly: true }, ctx));
+  ok('a published-list scope excludes working papers', !matchesCriteria(WPP, { jtype: ['ft50'] }, ctx));
+  ok('wp jtype label in criteria description', describeCriteria({ jtype: ['wp'] }) === 'Working Papers');
+  // digest rendering: split counts, published papers listed first
+  const emMix = renderEmail({ name: 'Everything', criteria: { allPapers: true } }, [WPP, P()]);
+  ok('mixed digest counts published + working papers separately', /1 new paper and 1 working paper — Everything/.test(emMix.subject));
+  ok('published papers lead the digest list', emMix.html.indexOf('platform markets') < emMix.html.indexOf('Ambitious Statements'));
+  ok('wp-only digest says working papers', /1 new working paper — WPs/.test(renderEmail({ name: 'WPs', criteria: { jtype: ['wp'] } }, [WPP]).subject));
+  // the archive's recent.json is loaded with the others (repo data on disk)
+  ok('loadRecentPapers includes the working-papers archive', loadRecentPapers().some(p => String(p.JKey || '').startsWith('wp-')));
 
   // "any new paper" (allPapers) + features-only (no paper intent)
   ok('allPapers matches any paper', matchesCriteria(P({ Journal: 'Whatever', Year: '1990' }), { allPapers: true }, ctx));

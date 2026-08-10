@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "recent-by-day-and-wp-alerts",
+      "date": "2026-08-10",
+      "title": "Recently added, day by day — and working papers now reach your e-mail alerts",
+      "summary": "The “Recently added papers” view now reads as a day-by-day feed: papers are grouped by the day they entered the database, newest day first, and within each day the newly published papers come first with that day's new working papers right after them — so you see everything that arrived on a given day in one place, instead of all published papers of the whole window before any working paper. E-mail alerts cover working papers too: an “any new paper” subscription now includes new SSRN, NBER, arXiv and OSF working papers (counted separately in the digest, published papers listed first), and an alert scoped to Working Papers, or one whose author, title, abstract or affiliation search a working paper matches, hears about them as well.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "analytics-citation-flows",
       "date": "2026-08-05",
       "title": "Citation flows — who each journal cites, and who cites it",

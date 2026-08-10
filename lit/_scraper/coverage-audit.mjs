@@ -56,6 +56,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readChunkedJsonSync } from './_chunked-json.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LIT = resolve(__dirname, '..');            // …/lit
@@ -358,7 +359,9 @@ if (!stems.length || stemShare < 0.9) {
   const have = new Set(rows.map(r => bareDoi(r.DOI)));
   const ourShapes = new Set([...have].map(doiShape));
   const ourCoords = coordIndex(rows);
-  const cache = JSON.parse(readFileSync(refsPath, 'utf8'));
+  // Chunk-aware: the refs cache is split across _refs-cache*.json parts
+  // (100 MiB push-limit guard — see _chunked-json.mjs).
+  const cache = readChunkedJsonSync(refsPath, {});
   const crawled = Object.keys(cache).length;
   const cited = new Map();                       // journal doi -> citer count
   for (const v of Object.values(cache)) {

@@ -54,7 +54,7 @@
 
 import { readFile, writeFile, mkdir, readdir, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pickPreprint, preprintFromDoi, canonPreprint } from '../_scraper/build-data.mjs';
 import { normTitle } from '../_scraper/ec-pages.mjs';
@@ -126,6 +126,28 @@ export function normName(s) { return stripAccents(s).toLowerCase().replace(/\s+/
 // way. cleanTitle = cleanText + the LIT-260725-YWTL trim.
 import { cleanText, titleText as cleanTitle, stripPageFurniture } from '../_scraper/_entities.mjs';
 export { cleanText, cleanTitle };
+
+// GitHub hard-rejects any pushed file ≥ 100 MiB — papers-wp-arxiv.json crossed
+// it on 2026-08-01 and every crawl's push was rejected from then on (the
+// archive froze while lastPull kept advancing, because only no-progress runs
+// could still push). So each repository's papers file is now written in PART
+// files each safely under the limit (papers-wp-arxiv.json, papers-wp-arxiv-2
+// .json, …) via the shared chunked-JSON helpers; the manifest lists the parts
+// in `files` (with `file` still the first part, for old readers) and the page
+// fetches them all. See lit/_scraper/_chunked-json.mjs.
+import { readChunkedJson, writeChunkedJson, CHUNK_CAP_BYTES } from '../_scraper/_chunked-json.mjs';
+const FILE_CAP_BYTES = parseInt(process.env.WP_FILE_CAP_BYTES || String(CHUNK_CAP_BYTES), 10);
+
+// Chunk-aware read/write of one repository's rows, shared with the submission
+// ingest (ingest-submissions.mjs) so the two writers can never disagree on the
+// on-disk layout. Returns the part file NAMES (not paths) it wrote, in order.
+export async function loadWpRows(dir, key) {
+  return readChunkedJson(join(dir, `papers-${key}.json`), []);
+}
+export async function writeWpRows(dir, key, rows, cap = FILE_CAP_BYTES) {
+  const files = await writeChunkedJson(join(dir, `papers-${key}.json`), rows, cap);
+  return files.map((f) => basename(f));
+}
 
 // OpenAlex stores abstracts as an inverted index {word: [positions]}.
 export function invertAbstract(inv) {
@@ -535,7 +557,7 @@ async function main() {
   const cache = await loadJson(join(DATA_DIR, '_authors.json'), {});
   const byKey = new Map();
   for (const key of Object.keys(WP_SOURCES)) {
-    const rows = await loadJson(join(DATA_DIR, `papers-${key}.json`), []);
+    const rows = await loadWpRows(DATA_DIR, key);
     for (const r of (Array.isArray(rows) ? rows : [])) byKey.set(recKey(r), r);
   }
   console.log(`archive: ${byKey.size} working papers so far; ${Object.keys(cache).length} authors crawled`);
@@ -623,13 +645,15 @@ async function main() {
   let total = 0;
   for (const key of Object.keys(WP_SOURCES)) {
     const rows = bySource[key];
-    await writeJson(`papers-${key}.json`, rows);
+    // Chunked write (100 MiB push-limit guard): `file` stays the first part
+    // for old readers; `files` lists every part for the page's loader.
+    const files = await writeWpRows(DATA_DIR, key, rows);
     total += rows.length;
     if (!rows.length) continue; // manifest lists only non-empty repositories
     const firstYear = rows.reduce((m, r) => Math.min(m, parseInt(r.Year, 10) || m), Infinity);
     sources.push({
       key, name: WP_SOURCES[key].name, publisher: WP_SOURCES[key].publisher,
-      file: `papers-${key}.json`, count: rows.length,
+      file: files[0], files: files.length > 1 ? files : undefined, count: rows.length,
       firstYear: isFinite(firstYear) ? firstYear : undefined,
       workingPaper: true,
     });

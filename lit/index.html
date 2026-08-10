@@ -2037,17 +2037,28 @@ function loadExtraSource(key) {
   if (extraPromise[key]) return extraPromise[key];
   extraState[key] = 'loading';
   extraPromise[key] = (async function() {
+    // A source may be CHUNKED across several part files (`files` in its
+    // manifest entry, with `file` = the first part): the working-papers
+    // archive outgrew GitHub's hard 100 MiB per-file push limit in Aug 2026,
+    // so its pipeline now writes papers-wp-x.json + papers-wp-x-2.json + ….
+    // All parts fetch and concatenate; a single-file source is just the
+    // one-part case, so the FT50 catalog and the shards are unchanged.
+    var files = (src.files && src.files.length) ? src.files : [src.file];
     for (var attempt = 0; attempt < 4; attempt++) {
       try {
         // Shard-ready: a manifest entry may carry an absolute `base` URL
         // (e.g. a satellite GitHub Pages data site — Pages serves everything
         // with Access-Control-Allow-Origin: *), so the catalog can outgrow
         // this repo's 1 GB Pages limit without the page changing.
-        var r = await fetch((src.base || FT50_DATA_BASE) + src.file, { cache: 'default' });
-        if (r.status === 404) break; // not built yet
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        var rows = await r.json();
-        if (!Array.isArray(rows)) rows = [];
+        var rows = [], notBuilt = false;
+        for (var fi = 0; fi < files.length; fi++) {
+          var r = await fetch((src.base || FT50_DATA_BASE) + files[fi], { cache: 'default' });
+          if (r.status === 404 && fi === 0) { notBuilt = true; break; } // not built yet
+          if (!r.ok) throw new Error('HTTP ' + r.status); // a missing LATER part is an error worth retrying
+          var part = await r.json();
+          if (Array.isArray(part)) rows = rows.concat(part);
+        }
+        if (notBuilt) break;
         rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); applySubmittedPreprint(p); });
         allPapers = allPapers.concat(rows);
         extraState[key] = 'done';
@@ -3863,6 +3874,7 @@ function renderRecent() {
       .filter(matchesJournal)
       .map(function(p) { return { p: p, d: getAddedDate(p), w: isWorkingPaperRow(p) ? 1 : 0 }; })
       .filter(function(x) { return x.d && x.d >= cutoff; });
+    rows.forEach(function(x) { x.day = isoDay(x.d); });
     var seen = { papers: 0, wp: 0 };
     rows.forEach(function(x) { if (x.w) seen.wp++; else seen.papers++; });
     // The uncapped tally wins whenever it is available AND at least as large as
@@ -3878,18 +3890,22 @@ function renderRecent() {
     }
     dated = dated.concat(rows);
   });
-  // PUBLISHED papers form the first block, working papers the second — each
-  // newest-added first. A pure date sort let the working-papers backfill bury
-  // the published catalogue: it adds ~1,000 SSRN/NBER/arXiv rows in a single
-  // day, so on 2026-07-28 all 1,000 preceded the 144 published papers added
-  // the day before, pushing the ABS shards to page 41, Nature/Science to 42
-  // and the native journals to 43 — "Recently added" showed nothing but
-  // unpublished work. Working papers stay in the view (they are still the
-  // archive's only "what's new" surface), just below the published block —
-  // the same published-first instinct `matchesJournal` already applies to
-  // bare browsing, where WP_KEYS would "flood the view with unpublished rows".
+  // Ordered by the DAY each paper entered the database (newest day first),
+  // and WITHIN a day published papers lead, working papers follow (per the
+  // owner, 2026-08-10): the view reads as a day-by-day feed — today's journal
+  // articles, then today's SSRN/NBER/arXiv/OSF arrivals, then yesterday's —
+  // instead of the previous two global blocks (ALL published papers of the
+  // whole window before ANY working paper), which pushed a day-old working
+  // paper below four weeks of published rows. The within-day published-first
+  // rule is what keeps a WP-backfill burst (~1,000 stamps in one day) from
+  // burying that same day's journal articles — the instinct `matchesJournal`
+  // already applies to bare browsing, where WP_KEYS would "flood the view
+  // with unpublished rows".
   var recent = dated
-    .sort(function(a, b) { return (a.w - b.w) || (b.d - a.d); })
+    .sort(function(a, b) {
+      if (a.day !== b.day) return a.day < b.day ? 1 : -1;   // newest day first
+      return (a.w - b.w) || (b.d - a.d);                    // published lead the day
+    })
     .map(function(x) { return x.p; });
 
   // Set the global `filtered` so the Abstract/BibTeX toggles resolve correctly.
@@ -7383,7 +7399,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '<div class="alert-block-label">' + (editing ? 'Edit alert' : 'New alert') + '</div>' +
       '<div class="alert-types">' +
         '<label class="alert-optrow"><input type="checkbox" id="litAlertFeatures"' + (d.features ? ' checked' : '') + ' onchange="litAlertToggleFeatures(this.checked)"><span><strong>New features &amp; updates to the website</strong><span class="sub">An e-mail when a new tool or feature is added to The Lit, at your chosen frequency below — daily sends each update as it lands; weekly or monthly batch that period’s updates together.</span></span></label>' +
-        '<label class="alert-optrow"><input type="checkbox" id="litAlertAll"' + (d.allPapers ? ' checked' : '') + ' onchange="litAlertToggleAll(this.checked)"><span><strong>Any new paper added to the database</strong><span class="sub">Every new paper, with no filters.</span></span></label>' +
+        '<label class="alert-optrow"><input type="checkbox" id="litAlertAll"' + (d.allPapers ? ' checked' : '') + ' onchange="litAlertToggleAll(this.checked)"><span><strong>Any new paper added to the database</strong><span class="sub">Every new paper — new working papers included — with no filters.</span></span></label>' +
       '</div>' +
       (d.allPapers
         ? '<div class="alert-allnote">All new papers will be sent — no filters needed. Untick “Any new paper” to narrow it down by journal type, journal, author, year and more.</div>'
