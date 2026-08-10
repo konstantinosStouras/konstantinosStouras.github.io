@@ -2289,9 +2289,11 @@ the committed **`config.json` is what students see** (admin edits are a
 browser-local draft published by committing the panel's downloaded
 config.json; the maintainer key gates the panel) and profiles stay
 client-side; a configured Firebase project (rules in `firestore.rules`,
-admin e-mails in `SIMP_ADMIN_EMAILS` — keep in sync with `isAdmin()`) makes
+admin e-mails in `SIMP_ADMIN_EMAILS` — keep in sync with `isAdmin()`; setup
+walkthrough in `simulation/_FIREBASE-SETUP.md`) makes
 activation live (`simPlatform/config` doc) and adds a roster
-(`simPlatformStudents/{uid}`, anonymous auth) with CSV export. At launch the
+(`simPlatformStudents/{uid}`, anonymous auth, every registration field
+compulsory) with CSV export. At launch the
 platform writes the same-origin **handoff** `localStorage 'simp:handoff:v1'`
 `{sim, session, profile, ts}`; `simulation/prefill.js` is the optional
 one-line drop-in a sim can include to auto-fill its own registration form

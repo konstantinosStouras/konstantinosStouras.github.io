@@ -42,7 +42,8 @@ flow against a local static server, no network).
 project, enable **Anonymous** + **Email/Password** auth and **Firestore**,
 deploy `firestore.rules` (keep its `isAdmin()` list in sync with
 `SIMP_ADMIN_EMAILS`), create the admin user, paste the web config into
-`firebase-config.js`. Then:
+`firebase-config.js` — step-by-step walkthrough in `_FIREBASE-SETUP.md`.
+Then:
 
 - Activation toggles are **live**: Save publishes instantly to every student
   (one `simPlatform/config` doc, `onSnapshot` on the student page).
