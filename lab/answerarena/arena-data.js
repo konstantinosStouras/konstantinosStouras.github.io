@@ -181,6 +181,34 @@ window.ARENA_DEFAULTS = {
       ]
     },
     {
+      "id": "industry",
+      "label": "Industry",
+      "type": "select",
+      "required": true,
+      "options": [
+        "Agriculture & Food",
+        "Banking & Financial Services",
+        "Construction & Real Estate",
+        "Consulting",
+        "Consumer Goods & Retail",
+        "Education & Research",
+        "Energy & Utilities",
+        "Engineering & Manufacturing",
+        "Entertainment & Media",
+        "Government & Public Sector",
+        "Healthcare & Pharmaceuticals",
+        "Hospitality & Tourism",
+        "Insurance",
+        "Legal Services",
+        "Logistics & Transportation",
+        "Marketing & Advertising",
+        "Non-profit & NGO",
+        "Technology & Software",
+        "Telecommunications",
+        "Other"
+      ]
+    },
+    {
       "id": "englishFluency",
       "label": "English Fluency",
       "type": "select",

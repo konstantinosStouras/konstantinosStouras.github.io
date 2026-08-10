@@ -86,6 +86,7 @@ export const DEFAULT_REGISTRATION = {
     { id: 'levelOfStudy', label: 'Level of Study', type: 'select', required: true, options: ['Undergraduate', 'Postgraduate (Masters)', 'Postgraduate (PhD)', 'MBA', 'Other'] },
     { id: 'workExperience', label: 'Work Experience (in years)', type: 'number', required: true, min: 0, max: 50 },
     { id: 'occupation', label: 'Occupation', type: 'select', required: true, options: ['Student', 'Employed full-time', 'Employed part-time', 'Self-employed', 'Unemployed', 'Retired', 'Other'] },
+    { id: 'industry', label: 'Industry', type: 'select', required: true, options: ['Agriculture & Food', 'Banking & Financial Services', 'Construction & Real Estate', 'Consulting', 'Consumer Goods & Retail', 'Education & Research', 'Energy & Utilities', 'Engineering & Manufacturing', 'Entertainment & Media', 'Government & Public Sector', 'Healthcare & Pharmaceuticals', 'Hospitality & Tourism', 'Insurance', 'Legal Services', 'Logistics & Transportation', 'Marketing & Advertising', 'Non-profit & NGO', 'Technology & Software', 'Telecommunications', 'Other'] },
     { id: 'englishFluency', label: 'English Fluency', type: 'select', required: true, options: ['Native speaker', 'Fluent', 'Advanced', 'Intermediate', 'Basic'] },
   ],
   consents: [

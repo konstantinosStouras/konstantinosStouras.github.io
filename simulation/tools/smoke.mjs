@@ -9,12 +9,75 @@
    ========================================================================== */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs';
 const { chromium } = await import(PW);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/* ---- Registration-bucket parity preflight (no browser) -------------------
+   The platform's answer sets must stay identical to the sims' default
+   registration forms (formDefaults.js / pf-defaults.js / arena-data.js) —
+   a drifted bucket stops the silent registration from covering that field.
+   Compared as SETS (order may differ). Fails the smoke on any mismatch. */
+{
+  const plat = readFileSync(join(ROOT, 'simulation/index.html'), 'utf8');
+  const strs = (txt) => (txt.match(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g) || [])
+    .map(s => s.slice(1, -1).replace(/\\(['"])/g, '$1'));
+  const jsList = (src, name) => {
+    const m = src.match(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[:=]\\s*\\[([\\s\\S]*?)\\]'));
+    return m ? strs(m[1]) : null;
+  };
+  const selList = (id) => {
+    const m = plat.match(new RegExp('<select id="' + id + '">([\\s\\S]*?)</select>'));
+    return (m[1].match(/<option>[^<]*<\/option>/g) || []).map(s => s.slice(8, -9));
+  };
+  const qOptions = (src, id) => {
+    const m = src.match(new RegExp(`['"]?id['"]?\\s*:\\s*['"]${id}['"][\\s\\S]{0,1200}?['"]?options['"]?\\s*:\\s*\\[([\\s\\S]*?)\\]`));
+    return m ? strs(m[1]) : null;
+  };
+  const sims = {
+    ideasearchlab: readFileSync(join(ROOT, '_ideasearchlab-src/src/data/formDefaults.js'), 'utf8'),
+    portfoliofit: readFileSync(join(ROOT, 'lab/portfoliofit/pf-defaults.js'), 'utf8'),
+    answerarena: readFileSync(join(ROOT, 'lab/answerarena/arena-data.js'), 'utf8'),
+  };
+  const platSets = {
+    age: jsList(plat, 'var AGE_BANDS'),
+    occupation: jsList(plat, 'var OCCUPATIONS'),
+    industry: jsList(plat, 'var INDUSTRIES'),
+    gender: selList('f-gender'),
+    levelOfStudy: selList('f-level'),
+    englishFluency: selList('f-english'),
+  };
+  let parityFails = 0;
+  const same = (a, b) => [...a].sort().join('') === [...b].sort().join('');
+  for (const [field, platList] of Object.entries(platSets)) {
+    for (const [sim, src] of Object.entries(sims)) {
+      const opts = qOptions(src, field);
+      if (!opts) { console.error(`PARITY FAIL — ${sim} has no '${field}' question`); parityFails++; continue; }
+      if (!same(platList, opts)) {
+        console.error(`PARITY FAIL — ${field}: platform [${platList.join(', ')}] vs ${sim} [${opts.join(', ')}]`);
+        parityFails++;
+      }
+    }
+  }
+  const platCountries = jsList(plat, 'var COUNTRIES');
+  const countryLists = {
+    ideasearchlab: jsList(sims.ideasearchlab, 'COUNTRIES'),
+    portfoliofit: jsList(sims.portfoliofit, 'countries'),
+    answerarena: jsList(sims.answerarena, 'window.ARENA_COUNTRIES'),
+  };
+  for (const [sim, list] of Object.entries(countryLists)) {
+    if (!list || !same(platCountries, list)) {
+      console.error(`PARITY FAIL — country list differs: platform ${platCountries.length} vs ${sim} ${list ? list.length : 'none'}`);
+      parityFails++;
+    }
+  }
+  if (parityFails) { console.error(`\nPARITY PREFLIGHT FAILED — ${parityFails} mismatch(es).`); process.exit(1); }
+  console.log('  ok — registration buckets identical across platform + ideasearchlab + portfoliofit + answerarena');
+}
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
 
