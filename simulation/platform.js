@@ -187,12 +187,14 @@
             return D.setDoc(D.doc(fs, PATHS.students + '/' + u.uid), doc, { merge: true });
           });
         },
-        listStudents: function () {
-          return D.getDocs(D.collection(fs, PATHS.students)).then(function (qs) {
+        /* Live roster (admin-only per the rules): cb(rows) now and on every
+           change; cb(null) on a permission error. Returns unsubscribe. */
+        watchStudents: function (cb) {
+          return D.onSnapshot(D.collection(fs, PATHS.students), function (qs) {
             var out = [];
             qs.forEach(function (d) { out.push(d.data()); });
-            return out;
-          });
+            cb(out);
+          }, function () { cb(null); });
         }
       };
     });
