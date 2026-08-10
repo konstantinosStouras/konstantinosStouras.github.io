@@ -155,16 +155,20 @@ export default function AdminSession() {
   if (!session) return <div className={styles.loading}>Loading...</div>
 
   const sequence = getPhaseSequence(session.phaseConfig)
-  // A session in the survey phase is already filed under "Completed Sessions"
-  // (the admin list buckets both 'survey' and 'done' there) and needs no further
-  // phase advancing — a session only reaches 'survey' once every participant has.
-  // So the control room presents it as finished: the header badge and timeline
-  // read "done", and the advance bar is replaced by the completion note.
-  const isCompleted = session.status === 'done' || session.status === 'survey'
-  const displayStatus = isCompleted ? 'done' : session.status
-  const currentIndex = isCompleted ? sequence.indexOf('done') : sequence.indexOf(session.status)
+  // A session is COMPLETE only when the instructor closed it (status 'done',
+  // via Close Session or Force advance — the backend never auto-closes).
+  // 'survey' is a working phase and the session stays OPEN: every current
+  // participant may have finished, but new participants can still join and
+  // play (e.g. a groupSize-1 session run as many independent solo plays), so
+  // the control room keeps the real status and the advance bar (Force advance
+  // → done is the close action); an open-note bar explains the state.
+  const isCompleted = session.status === 'done'
+  const displayStatus = session.status
+  const currentIndex = sequence.indexOf(session.status)
   const nextPhase = sequence[currentIndex + 1]
-  const isLast = !nextPhase || nextPhase === 'done'
+  // Advancing survey → done is the instructor's CLOSE action (the backend
+  // never auto-closes), so 'done' being next must not disable the button.
+  const isLast = !nextPhase
 
   const byStatus = participants.reduce((acc, p) => {
     acc[p.status] = (acc[p.status] || 0) + 1
@@ -734,18 +738,18 @@ export default function AdminSession() {
         )}
 
         {isCompleted && (
-          <div className={styles.doneBar}>
-            {session.status === 'done'
-              ? 'Session complete. All participants have finished.'
-              : (() => {
-                  const inSurvey = participants.filter(p => p.status === 'survey').length
-                  const finished = participants.filter(p => p.status === 'done').length
-                  return inSurvey > 0
-                    ? `Session complete and read-only. ${finished} of ${participants.length} finished the survey; ${inSurvey} still had it open.`
-                    : 'Session complete. All participants have finished.'
-                })()}
-          </div>
+          <div className={styles.doneBar}>Session complete. All participants have finished.</div>
         )}
+        {!isCompleted && session.status === 'survey' && (() => {
+          const finished = participants.filter(p => p.status === 'done').length
+          return (
+            <div className={styles.doneBar}>
+              {finished} of {participants.length} current participant{participants.length === 1 ? '' : 's'} finished.
+              The session stays open — new participants can still join and play — until
+              you close it (Close Session on the admin list, or Force advance to done).
+            </div>
+          )
+        })()}
       </main>
 
       {viewGroup && (
