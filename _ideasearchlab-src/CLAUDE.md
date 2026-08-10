@@ -631,10 +631,12 @@ handoff) → welcome → tour → SILENT registration → lobby/phases.
   field is covered — **submits invisibly** ("Setting up your session...")
   and proceeds; the participant doc also records the student's REAL
   name/e-mail/ID under `platform` (the login e-mail is synthetic). Consent
-  statements are **never ticked on a student's behalf**: when the session
-  config carries consents, a consent-only card shows (data fields hidden,
-  already filled). No handoff, or an unmappable required field → the
-  normal form, pre-filled where possible.
+  statements are **bypassed on a platform launch** (owner decision
+  2026-08): the silent submit carries them as granted and stamps
+  `consentVia: 'simulation-platform'` on the participant doc so the data
+  shows HOW consent was given (the old consent-only card was removed). No
+  handoff, or an unmappable required field → the normal form (consents
+  ticked by the student), pre-filled where possible.
 - `index.html` (the Vite template) still loads `/simulation/prefill.js`
   (`SIMP_EXPECT` guard, off on `/admin`) as a belt-and-braces fallback for
   any visible form. The tag rides through every rebuild.

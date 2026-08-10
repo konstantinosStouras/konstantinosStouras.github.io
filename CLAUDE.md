@@ -2325,8 +2325,10 @@ sustainable-supply-chains/search-v2, `?session=` prefill for portfoliofit,
 whose student flow is now ACCOUNT-FREE: `RequireStudent` mints a silent
 throwaway e-mail/password login (NOT anonymous auth — the deployed
 joinSession writes token name+email and the Admin SDK rejects undefined)
-and Registration auto-submits from the handoff, with a consent-only screen
-when the session config carries consent statements), storage seeds (a hook,
+and Registration auto-submits from the handoff — consent statements
+included, carried as granted from the platform launch and stamped
+`consentVia: 'simulation-platform'` on the participant doc, per the owner),
+storage seeds (a hook,
 currently unused) and admin-panel URL. The catalog is DELIBERATELY CURATED
 (per the owner): eight class sims in a fixed display order (ideasearchlab,
 portfoliofit — titled plain "PortfolioFit" —, answerarena, problem-solving,
@@ -2361,8 +2363,12 @@ from it. Portfoliofit's and answerarena's registration/intake pages go
 further — SILENT registration (simpHandoff/simpRegAnswers in
 experiment.js / arena-app.js): fields the platform covers are answered and
 NOT rendered, the page auto-submits when nothing is left, and only
-uncovered fields plus consent checkboxes (never auto-ticked) are shown;
-ideasearchlab does the same natively (see its account-free flow above).
+uncovered fields are shown. Consent checkboxes differ per the owner:
+answerarena and ideasearchlab CARRY them as ticked from a platform launch
+(bypassed entirely, stamped `consentVia: 'simulation-platform'` on the
+participant doc so the data shows how consent was given), while
+portfoliofit still shows its consent ticks; ideasearchlab silent-registers
+natively (see its account-free flow above).
 The generic prefill.js drop-in also stays on those pages and ssc (each
 with a `SIMP_EXPECT` guard, disabled on admin views) for any form that
 still renders (explicit `data-simp` attrs first, then label-text matching with the
