@@ -9,15 +9,16 @@
    simulation/firestore.rules, create the admin user, and paste the web-app
    config below. Full steps in simulation/README.md. */
 window.SIMP_FIREBASE_CONFIG = {
-  apiKey: 'PASTE_API_KEY',
-  authDomain: 'PASTE_PROJECT_ID.firebaseapp.com',
-  projectId: 'PASTE_PROJECT_ID',
-  appId: 'PASTE_APP_ID'
+  apiKey: 'AIzaSyDAgP5OlgdqqN0m9t3WtUXNfeW9T6W3iYA',
+  authDomain: 'simulation-platform-233cf.firebaseapp.com',
+  projectId: 'simulation-platform-233cf',
+  appId: '1:829779403130:web:b469add747d2ae3d25b6c3'
 };
 
 /* Admin sign-in e-mails (client-side gate; the real gate is firestore.rules —
-   keep its isAdmin() list in sync with this one). */
-window.SIMP_ADMIN_EMAILS = ['admin@admin.com'];
+   keep its isAdmin() list in sync with this one). Trim to the address the
+   admin user was actually created with. */
+window.SIMP_ADMIN_EMAILS = ['admin@admin.com', 'kstouras@gmail.com'];
 
 /* Firestore paths. */
 window.SIMP_PATHS = {
