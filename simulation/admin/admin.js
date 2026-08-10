@@ -225,12 +225,18 @@
   function renderRoster(rows) {
     /* Newest first, one row per student: a log-out + re-registration (or a
        second device) mints a new uid, so collapse by student ID keeping the
-       most recent record. */
-    var seen = {};
+       most recent record. uidsByKey remembers EVERY uid behind a displayed
+       row, so deleting it also removes its collapsed duplicates. */
+    var seen = {}, uidsByKey = {};
+    var keyOf = function (r) { return (r.studentId || '').trim().toLowerCase() || ('uid:' + r.uid); };
+    rows.forEach(function (r) {
+      var k = keyOf(r);
+      (uidsByKey[k] = uidsByKey[k] || []).push(r.uid);
+    });
     roster = rows.sort(function (a, b) {
       return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '');
     }).filter(function (r) {
-      var k = (r.studentId || '').trim().toLowerCase() || ('uid:' + r.uid);
+      var k = keyOf(r);
       if (seen[k]) return false;
       seen[k] = 1;
       return true;
@@ -240,12 +246,37 @@
     tb.innerHTML = '';
     roster.forEach(function (r) {
       var tr = document.createElement('tr');
-      for (var i = 0; i < 5; i++) tr.appendChild(document.createElement('td'));
+      for (var i = 0; i < 6; i++) tr.appendChild(document.createElement('td'));
       tr.children[0].textContent = r.name || '';
       tr.children[1].textContent = r.studentId || '';
       tr.children[2].textContent = r.email || '';
       tr.children[3].textContent = r.levelOfStudy || '';
       tr.children[4].textContent = (r.createdAt || '').slice(0, 10);
+      /* Delete a registration (e.g. a test row). Removes the roster doc(s)
+         behind this row — the live snapshot refreshes the table by itself.
+         The student's own browser profile is untouched (they can just
+         register again). */
+      var del = document.createElement('button');
+      del.className = 'btn ghost small';
+      del.textContent = 'Delete';
+      del.onclick = function () {
+        var who = (r.name || r.email || r.studentId || 'this student');
+        if (!window.confirm('Delete the registration of ' + who + ' from the roster? This cannot be undone.')) return;
+        del.disabled = true; del.textContent = 'Deleting…';
+        P.firebase().then(function (F) {
+          return F.deleteStudents(uidsByKey[keyOf(r)] || [r.uid]);
+        }).then(function () {
+          tr.remove();   // instant; the snapshot re-render follows
+        }, function (e) {
+          del.disabled = false; del.textContent = 'Delete';
+          $('roster-count').textContent = 'Delete failed: ' +
+            ((e && e.code && e.code.indexOf('permission-denied') >= 0)
+              ? 'permission denied — sign in as the admin' + RULES_HINT
+              : ((e && e.message) || e));
+        });
+      };
+      tr.children[5].appendChild(del);
+      tr.children[5].style.textAlign = 'right';
       tb.appendChild(tr);
     });
     $('rostertab').hidden = roster.length === 0;
