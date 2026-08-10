@@ -2293,7 +2293,8 @@ admin e-mails in `SIMP_ADMIN_EMAILS` — keep in sync with `isAdmin()`; setup
 walkthrough in `simulation/_FIREBASE-SETUP.md`) makes
 activation live (`simPlatform/config` doc) and adds a roster
 (`simPlatformStudents/{uid}`, anonymous auth, every registration field
-compulsory) with CSV export. Students **log out** from the header (clears the
+compulsory; LIVE in the admin panel — auto-loads and updates via
+onSnapshot, no manual load) with CSV export. Students **log out** from the header (clears the
 browser AND signs out the anonymous uid, so on a shared machine the next
 registration gets its own roster doc instead of overwriting); the roster view
 collapses duplicate re-registrations by student ID, newest kept, and the

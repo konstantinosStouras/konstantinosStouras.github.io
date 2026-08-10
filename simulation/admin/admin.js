@@ -34,6 +34,7 @@
     renderTable();
     initConsoles();
     initCreds();
+    if (P.configured) startRoster();
   }
   if (P.configured) {
     $('s-gate').hidden = false;
@@ -209,46 +210,49 @@
     $('cr-note').textContent = 'Cleared.';
   };
 
-  /* ---------- roster (Firebase mode) ---------- */
+  /* ---------- roster (Firebase mode; auto-loaded + live) ---------- */
   var roster = [];
-  $('btn-roster') && ($('btn-roster').onclick = function () {
-    var end = pressed(this, 'Loading…', '✓ Loaded', '✗ Failed');
-    P.firebase().then(function (F) { return F.listStudents(); }).then(function (rows) {
-      /* Newest first, one row per student: a log-out + re-registration (or a
-         second device) mints a new uid, so collapse by student ID keeping the
-         most recent record. */
-      var seen = {};
-      roster = rows.sort(function (a, b) {
-        return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '');
-      }).filter(function (r) {
-        var k = (r.studentId || '').trim().toLowerCase() || ('uid:' + r.uid);
-        if (seen[k]) return false;
-        seen[k] = 1;
-        return true;
-      });
-      var dropped = rows.length - roster.length;
-      var tb = $('rostertab').querySelector('tbody');
-      tb.innerHTML = '';
-      roster.forEach(function (r) {
-        var tr = document.createElement('tr');
-        for (var i = 0; i < 5; i++) tr.appendChild(document.createElement('td'));
-        tr.children[0].textContent = r.name || '';
-        tr.children[1].textContent = r.studentId || '';
-        tr.children[2].textContent = r.email || '';
-        tr.children[3].textContent = r.levelOfStudy || '';
-        tr.children[4].textContent = (r.createdAt || '').slice(0, 10);
-        tb.appendChild(tr);
-      });
-      $('rostertab').hidden = false;
-      $('btn-csv').hidden = false;
-      $('roster-count').textContent = roster.length + ' student' + (roster.length === 1 ? '' : 's') +
-        (dropped ? ' (' + dropped + ' duplicate registration' + (dropped === 1 ? '' : 's') + ' collapsed)' : '');
-      end(true);
-    }).catch(function (e) {
-      $('roster-count').textContent = 'Failed: ' + (e && e.message || e) + RULES_HINT;
-      end(false);
+  function renderRoster(rows) {
+    /* Newest first, one row per student: a log-out + re-registration (or a
+       second device) mints a new uid, so collapse by student ID keeping the
+       most recent record. */
+    var seen = {};
+    roster = rows.sort(function (a, b) {
+      return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '');
+    }).filter(function (r) {
+      var k = (r.studentId || '').trim().toLowerCase() || ('uid:' + r.uid);
+      if (seen[k]) return false;
+      seen[k] = 1;
+      return true;
     });
-  });
+    var dropped = rows.length - roster.length;
+    var tb = $('rostertab').querySelector('tbody');
+    tb.innerHTML = '';
+    roster.forEach(function (r) {
+      var tr = document.createElement('tr');
+      for (var i = 0; i < 5; i++) tr.appendChild(document.createElement('td'));
+      tr.children[0].textContent = r.name || '';
+      tr.children[1].textContent = r.studentId || '';
+      tr.children[2].textContent = r.email || '';
+      tr.children[3].textContent = r.levelOfStudy || '';
+      tr.children[4].textContent = (r.createdAt || '').slice(0, 10);
+      tb.appendChild(tr);
+    });
+    $('rostertab').hidden = roster.length === 0;
+    $('btn-csv').hidden = roster.length === 0;
+    $('roster-count').textContent = roster.length === 0
+      ? 'No registrations yet — students appear here the moment they register.'
+      : roster.length + ' student' + (roster.length === 1 ? '' : 's') +
+        (dropped ? ' (' + dropped + ' duplicate registration' + (dropped === 1 ? '' : 's') + ' collapsed)' : '');
+  }
+  function startRoster() {
+    P.firebase().then(function (F) {
+      F.watchStudents(function (rows) {
+        if (rows) renderRoster(rows);
+        else $('roster-count').textContent = 'Roster unavailable: permission denied' + RULES_HINT;
+      });
+    });
+  }
   $('btn-csv') && ($('btn-csv').onclick = function () {
     var cols = ['name', 'studentId', 'email', 'age', 'gender', 'nationality', 'country',
                 'levelOfStudy', 'workExperience', 'occupation', 'englishFluency', 'createdAt'];

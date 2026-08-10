@@ -48,7 +48,9 @@ Then:
 - Activation toggles are **live**: Save publishes instantly to every student
   (one `simPlatform/config` doc, `onSnapshot` on the student page).
 - Registrations are mirrored to `simPlatformStudents/{uid}` (anonymous auth),
-  giving the admin panel a **roster with CSV export**. A student's **Log out**
+  giving the admin panel a **live roster with CSV export** — it loads by
+  itself when the panel opens and updates the moment a student registers
+  (Firestore `onSnapshot`), no manual load step. A student's **Log out**
   (header button) clears the browser and signs out the anonymous uid, so on a
   shared machine the next registration gets its own roster doc instead of
   overwriting the previous student's; the roster view collapses duplicate
