@@ -2748,5 +2748,10 @@
 <script src="experiment.js" defer></script>
 <!-- Admin panel — only activates with ?admin (requires admin@admin.com). -->
 <script src="admin.js" defer></script>
+
+<!-- Simulation Platform prefill (inert outside a platform launch): fills the
+     post-training Registration form from the student's saved platform details. -->
+<script>window.SIMP_EXPECT = /[?&]admin([=&]|$)/.test(location.search) ? '__off__' : 'portfoliofit';</script>
+<script src="/simulation/prefill.js" defer></script>
 </body>
 </html>

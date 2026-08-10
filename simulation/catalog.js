@@ -68,7 +68,7 @@ window.SIMP_CATALOG = [
     blurb: 'Fit project shapes into a limited portfolio under time pressure — training, main game and survey.',
     session: 'prefill', sessionParam: 'session',
     adminUrl: '/lab/portfoliofit/?admin', adminAuth: 'firebase',
-    adminNote: 'Opens with ?admin; email/password on the “stouras-portfoliofit” Firebase project. Its registration form can be auto-filled by adding the prefill drop-in (see README).'
+    adminNote: 'Opens with ?admin; email/password on the “stouras-portfoliofit” Firebase project. Its in-game registration form auto-fills from the platform registration (prefill drop-in wired).'
   },
   {
     key: 'answerarena', title: 'Answer Arena', icon: '⚖️',
