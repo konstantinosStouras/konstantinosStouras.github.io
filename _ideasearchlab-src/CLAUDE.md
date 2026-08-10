@@ -604,13 +604,37 @@ Note: Firebase detects unchanged functions and skips them. If a redeploy is skip
 2. Add sleep mask image to public/images/
 3. Optionally clean up orphaned Cloud Functions (autoAdvanceOnTimer, submitVote)
 
-## Simulation Platform prefill
+## Simulation Platform integration — the ACCOUNT-FREE student flow
 
-`index.html` (the Vite template) loads `/simulation/prefill.js` with a
-`window.SIMP_EXPECT` guard (off on `/admin` routes): when a student arrives
-from `stouras.com/simulation`, the Login screen's Full Name / Email and the
-in-study Registration form auto-fill from their platform registration
-(label-text matching through the React native-setter trick; only empty
-fields, never passwords, never consent checkboxes, never auto-submits).
-Inert outside a platform launch. The tag rides through every rebuild since
-it lives in the template itself.
+Owner decision 2026-08: students never see an account screen or the
+registration form ("each user plays once by entering a code"). The
+participant flow is now: `/join` (code, pre-filled from the platform
+handoff) → welcome → tour → SILENT registration → lobby/phases.
+
+- **`src/utils/simplatform.js`** — reads the platform launch handoff
+  (`localStorage 'simp:handoff:v1'`, same origin, sim === 'ideasearchlab',
+  ≤6 h old), mints the silent login and maps registration fields onto the
+  platform profile (by default field id, then by label).
+- **`RequireStudent`** (ProtectedRoute.jsx) wraps `/join` and every
+  `/session/*` route: a visitor with no session gets a **silent THROWAWAY
+  e-mail/password account** (synthetic `student-…@simplatform.stouras.com`
+  address + random password, displayName = the student's real name;
+  "Preparing your session..." while it mints; falls back to `/login` only
+  if creation fails). **Deliberately NOT Firebase anonymous auth:** the
+  deployed `joinSession` writes `{ name, email }` from the auth token and
+  the Admin SDK rejects `undefined` — an anonymous user (no email claim)
+  crashes it server-side; the synthetic account keeps the deployed backend
+  untouched. `/login` remains for instructors (and `/history` keeps
+  `RequireAuth`).
+- **Registration.jsx**: on a platform launch it maps the session's
+  registration fields from the handoff profile and — when every required
+  field is covered — **submits invisibly** ("Setting up your session...")
+  and proceeds; the participant doc also records the student's REAL
+  name/e-mail/ID under `platform` (the login e-mail is synthetic). Consent
+  statements are **never ticked on a student's behalf**: when the session
+  config carries consents, a consent-only card shows (data fields hidden,
+  already filled). No handoff, or an unmappable required field → the
+  normal form, pre-filled where possible.
+- `index.html` (the Vite template) still loads `/simulation/prefill.js`
+  (`SIMP_EXPECT` guard, off on `/admin`) as a belt-and-braces fallback for
+  any visible form. The tag rides through every rebuild.

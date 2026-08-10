@@ -38,9 +38,8 @@ window.SIMP_CATALOG = [
     path: '/lab/ideasearchlab/join',
     blurb: 'Team ideation experiment: individual brainstorming, a group round and a survey — with optional AI assistance.',
     session: 'inapp',
-    manualCopy: true,
     adminUrl: '/lab/ideasearchlab/admin/', adminAuth: 'firebase',
-    adminNote: 'Instructor account on the “ideasearchlab” Firebase project. Students also create their own login (name/e-mail/password) before joining.'
+    adminNote: 'Instructor account on the “ideasearchlab” Firebase project. Students get a silent throwaway login (no account screen); their join code arrives pre-filled and the registration auto-submits from the platform data (a consent-only screen shows when the session config carries consent statements).'
   },
   {
     key: 'portfoliofit', title: 'PortfolioFit', icon: '🧩',

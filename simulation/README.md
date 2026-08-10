@@ -74,7 +74,7 @@ Then:
 
 | Simulation | Session ID | Details prefill |
 |---|---|---|
-| Ideation Challenge | code copied to clipboard; student pastes on its join screen | **wired** — Full Name/E-mail on its account screen + the study registration form auto-fill (the account password stays the student's own) |
+| Ideation Challenge | its join screen arrives **pre-filled** from the handoff (clipboard as backup) | **account-free** — a silent throwaway login is minted and the registration auto-submits from the platform data (consent-only screen when the session config has consents) |
 | PortfolioFit | `?session=` pre-fills its welcome screen | **wired** — its post-training registration form auto-fills by label |
 | Answer Arena | `?s=` pre-fills (optional — default config without one) | **wired** — its intake form auto-fills (consents never auto-ticked) |
 | Problem Solving | n/a | n/a (anonymous by design) |

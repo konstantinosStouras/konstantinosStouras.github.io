@@ -285,7 +285,7 @@
       $('m-session-label').textContent = 'Session ID' + (needsSession(s) ? '' : ' (optional)');
       $('m-session-hint').textContent =
         s.session === 'inapp'
-          ? 'This simulation asks for the code on its own join screen — we’ll copy it to your clipboard when you launch.'
+          ? 'This simulation asks for the code on its own join screen — it will arrive pre-filled there (we also copy it to your clipboard as backup).'
           : (c.sessionId ? 'Pre-filled by your instructor — change it only if you were told to.'
                          : 'Your instructor announces this in class.');
     }
