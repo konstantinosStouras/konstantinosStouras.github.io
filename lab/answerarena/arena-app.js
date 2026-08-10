@@ -742,6 +742,9 @@
   function showThankYou() {
     S.phase = 'done';
     markCompleted();   // record this session as completed (cannot be retaken)
+    // Tell the Simulation Platform too (its card shows "✓ Completed" and
+    // blocks a second play). Defined by prefill.js only on a platform launch.
+    if (window.simpMarkCompleted) window.simpMarkCompleted();
     // Deliberately no "Start over" here (or on the already-completed screen):
     // it minted a fresh anonymous identity, letting a participant replay.
     // Each user plays once.
@@ -765,6 +768,7 @@
   // no "Start over" (it minted a fresh anonymous identity, enabling a replay).
   function showAlreadyDone() {
     S.phase = 'done';
+    if (window.simpMarkCompleted) window.simpMarkCompleted();   // keep the platform card in step
     setScreen(overlayWrap(card('Already completed', [
       el('p', { html: 'You have already completed this session, so it cannot be taken again. Thank you for taking part!' })
     ], 'a-done')));

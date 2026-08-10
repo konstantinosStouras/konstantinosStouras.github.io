@@ -394,3 +394,12 @@ CLAUDE.md               — This documentation file
 5. **Charts at 3× resolution**: The CSS zoom for larger screens would blur canvas-based charts. Rendering at 3× device pixel ratio ensures crisp rendering at any zoom.
 6. **LaTeX-style fonts**: STIX Two Text for charts and Times for PDFs give an academic paper feel appropriate for a business school classroom tool.
 7. **No letter grades**: Initially implemented (A–F) but removed — the grading formula was too crude for edge cases (e.g., a player who tested 1 failing sequence got rewarded for "balanced evidence" despite minimal effort). Replaced with contextual bias detection banners.
+
+## Simulation Platform integration (stouras.com/simulation)
+The page loads `/simulation/prefill.js` (`SIMP_EXPECT = 'problem-solving'`,
+off on `?admin`) purely for the **play-once gate** — this game has no
+registration form to prefill. `handleSubmitRule()` (the moment the player
+submits their rule = the run is complete) calls
+`window.simpMarkCompleted()`, which prefill.js defines only on a genuine
+platform launch, so the platform's card shows "✓ Completed" and blocks a
+second play; standalone visitors and the `?admin` view are unaffected.

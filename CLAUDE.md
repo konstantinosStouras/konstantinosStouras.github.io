@@ -2377,7 +2377,20 @@ The generic prefill.js drop-in also stays on those pages and ssc (each
 with a `SIMP_EXPECT` guard, disabled on admin views) for any form that
 still renders (explicit `data-simp` attrs first, then label-text matching with the
 native-setter+input-event React trick; inert without a fresh handoff — so
-adding it never changes standalone behaviour). The admin panel also embeds
+adding it never changes standalone behaviour). **Play-once gate:** on a
+platform launch prefill.js also defines `window.simpMarkCompleted()`, which
+each sim's own thank-you/done screen calls (ideasearchlab's `Done()` —
+preview-guarded, portfoliofit's `showThankYou`, arena's `showThankYou` +
+`showAlreadyDone`, problem-solving's `handleSubmitRule`, search-v2's
+`finish`) to record `simp:completed:v1` `{simKey:{ts,session}}`; the
+student page badges that card "✓ Completed" (live via the storage event)
+and clicking it shows an already-completed notice instead of launching —
+a NEW pinned Session ID unlocks the card (fresh run ≠ replay), and Log out
+clears the markers. Deliberately NOT gated: ssc (rejoining your firm
+mid-game is the normal flow), newsvendor (cross-origin) and jagged
+(free-play). The smoke test drives the real cross-tab path and a
+marker-drift preflight fails it if an instrumented sim (or the shipped
+ideasearchlab bundle) loses its simpMarkCompleted call. The admin panel also embeds
 each sim's own admin console (same-origin iframes) for creating sessions
 with parameters there, plus an optional shared-credential locker
 (`'simp:admin-creds'`, sessionStorage by default) whose `simpTrySso()` SSO

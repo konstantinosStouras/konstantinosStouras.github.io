@@ -16,6 +16,7 @@
   var LS_DRAFT   = 'simp:config-draft:v1'; // admin's local (unpublished) activation edits
   var LS_HANDOFF = 'simp:handoff:v1';   // written at launch; read by prefill.js inside each sim
   var LS_SYNCED  = 'simp:profile-synced:v1'; // updatedAt of the last profile mirrored to Firestore
+  var LS_COMPLETED = 'simp:completed:v1';  // {simKey:{ts,session}} — written by each sim's done screen (via prefill.js's simpMarkCompleted)
 
   /* ---------- catalog ---------- */
   function catalog() { return window.SIMP_CATALOG || []; }
@@ -40,6 +41,13 @@
     return p;
   }
   function clearProfile() { localStorage.removeItem(LS_PROFILE); localStorage.removeItem(LS_SYNCED); }
+  /* Completions recorded by the sims' own done screens ({simKey:{ts,session}}).
+     Read by the student page to badge a card "✓ Completed" and block a second
+     play of the same run (a NEW pinned Session ID unlocks the card again). */
+  function completed() {
+    try { return JSON.parse(localStorage.getItem(LS_COMPLETED) || '{}'); }
+    catch (e) { return {}; }
+  }
   /* Log out of the platform on this browser: forget the saved registration
      (and the launch handoff), and sign out the Firebase user so the NEXT
      registration on this machine gets its own roster doc instead of
@@ -48,6 +56,7 @@
   function logout() {
     clearProfile();
     try { localStorage.removeItem(LS_HANDOFF); } catch (e) {}
+    try { localStorage.removeItem(LS_COMPLETED); } catch (e) {}   // next student starts fresh
     if (!CONFIGURED) return Promise.resolve();
     return fb().then(function (F) { return F.adminSignOut(); }).catch(function () {});
   }
@@ -213,10 +222,10 @@
     configured: CONFIGURED,
     catalog: catalog, sim: sim,
     getProfile: getProfile, saveProfile: saveProfile, clearProfile: clearProfile, syncProfile: syncProfile,
-    logout: logout,
+    logout: logout, completed: completed,
     watchConfig: watchConfig, saveConfig: saveConfig, draft: draft, clearDraft: clearDraft,
     buildLaunch: buildLaunch, launch: launch,
     firebase: fb,
-    KEYS: { profile: LS_PROFILE, handoff: LS_HANDOFF, draft: LS_DRAFT, adminCreds: 'simp:admin-creds' }
+    KEYS: { profile: LS_PROFILE, handoff: LS_HANDOFF, draft: LS_DRAFT, completed: LS_COMPLETED, adminCreds: 'simp:admin-creds' }
   };
 })();

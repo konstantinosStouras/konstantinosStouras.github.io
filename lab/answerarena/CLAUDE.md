@@ -307,7 +307,11 @@ Responses row with `submitted = no (draft)`.
   your session..."; failures show the cause + Try again). An answer must
   survive the form's own validation or its field is shown. The generic
   `/simulation/prefill.js` include also remains for any form that still
-  renders. Inert outside a platform launch.
+  renders. Inert outside a platform launch. **Play-once gate:**
+  `showThankYou()` and `showAlreadyDone()` call
+  `window.simpMarkCompleted()` (defined by prefill.js only on a platform
+  launch), so the platform's card shows "✓ Completed" and blocks a second
+  play of the same run.
 - Anonymous play needs the **Anonymous** sign-in provider enabled in the
   Firebase console; otherwise `Store.signInAnonymously()` fails
   (`auth/operation-not-allowed`) and the intake shows "Anonymous play is not

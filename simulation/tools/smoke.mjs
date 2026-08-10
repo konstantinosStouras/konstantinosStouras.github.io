@@ -77,6 +77,33 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
   }
   if (parityFails) { console.error(`\nPARITY PREFLIGHT FAILED — ${parityFails} mismatch(es).`); process.exit(1); }
   console.log('  ok — registration buckets identical across platform + ideasearchlab + portfoliofit + answerarena');
+
+  /* Completion-marker drift guard: every instrumented sim must still call
+     simpMarkCompleted at its done screen (and the shipped ideasearchlab
+     bundle must carry it). ssc (rejoin-by-design), newsvendor (cross-origin)
+     and jagged (free-play teaching game) are deliberately NOT instrumented. */
+  const markers = [
+    'lab/portfoliofit/experiment.js',
+    'lab/answerarena/arena-app.js',
+    'lab/problem-solving/index.html',
+    'lab/search-v2/app.js',
+    '_ideasearchlab-src/src/pages/Survey.jsx',
+  ];
+  let markerFails = 0;
+  for (const f of markers) {
+    if (!readFileSync(join(ROOT, f), 'utf8').includes('simpMarkCompleted')) {
+      console.error(`MARKER FAIL — ${f} no longer calls simpMarkCompleted`);
+      markerFails++;
+    }
+  }
+  const { readdirSync } = await import('node:fs');
+  const bundle = readdirSync(join(ROOT, 'lab/ideasearchlab/assets')).find(n => /^index-.*\.js$/.test(n));
+  if (!bundle || !readFileSync(join(ROOT, 'lab/ideasearchlab/assets', bundle), 'utf8').includes('simpMarkCompleted')) {
+    console.error('MARKER FAIL — the shipped ideasearchlab bundle lacks simpMarkCompleted (rebuild needed)');
+    markerFails++;
+  }
+  if (markerFails) { console.error(`\nMARKER PREFLIGHT FAILED — ${markerFails} file(s).`); process.exit(1); }
+  console.log('  ok — completion markers present in all five instrumented sims (+ built bundle)');
 }
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
@@ -228,8 +255,45 @@ try {
   // ---- 6. No-input sims launch directly (no dialog) --------------------
   const [pop3] = await Promise.all([ctx.waitForEvent('page'), page.click('.sim-card:has-text("Problem Solving")')]);
   ok(pop3.url().includes('/lab/problem-solving/'), 'a no-input sim launches straight into a new tab (no dialog)');
+  // Before closing the sim tab, complete the run the way the sim itself does:
+  // prefill.js (fresh handoff) defines simpMarkCompleted; the done screen calls it.
+  await pop3.waitForFunction(() => typeof window.simpMarkCompleted === 'function');
+  await pop3.evaluate(() => window.simpMarkCompleted());
   await pop3.close();
   ok(await page.isHidden('#modal'), 'no dialog was shown for the no-input sim');
+
+  // ---- 6b. Completed runs: badge + play-once gate ----------------------
+  // The sim tab's marker write fires a storage event → the card flips live.
+  await page.waitForSelector('.sim-card.done', { timeout: 5000 });
+  ok((await page.textContent('.sim-card.done .pill')).includes('✓ Completed'),
+     'completed sim card flips to "✓ Completed" the moment the sim finishes');
+  let popped = false;
+  const popWatch = () => { popped = true; };
+  ctx.once('page', popWatch);
+  await page.click('.sim-card.done');
+  await page.waitForSelector('#donemodal:not([hidden])');
+  ok(true, 'clicking a completed card shows the already-completed notice instead of launching');
+  ok((await page.textContent('#dm-body')).includes('already completed'),
+     'the notice says the simulation was already completed');
+  await page.waitForTimeout(400);
+  ok(!popped, 'no new tab opens for a completed simulation');
+  ctx.off('page', popWatch);
+  await page.click('#dm-close');
+  ok(await page.isHidden('#donemodal'), 'the notice closes');
+  // A NEW pinned Session ID unlocks the card (different run ≠ replay): SSC is
+  // pinned TEST1 in the draft config, so a completion under OLD1 must not gate.
+  await page.evaluate(() => localStorage.setItem('simp:completed:v1',
+    JSON.stringify({ ssc: { ts: Date.now(), session: 'OLD1' } })));
+  await page.reload();
+  await page.waitForSelector('.sim-card');
+  ok(await page.locator('.sim-card:has-text("Sustainable Supply Chains").done').count() === 0,
+     'a completion under an OLD session does not gate the newly pinned session');
+  await page.evaluate(() => localStorage.setItem('simp:completed:v1',
+    JSON.stringify({ ssc: { ts: Date.now(), session: 'TEST1' } })));
+  await page.reload();
+  await page.waitForSelector('.sim-card');
+  ok(await page.locator('.sim-card:has-text("Sustainable Supply Chains").done').count() === 1,
+     'a completion under the CURRENT pinned session gates the card');
 
   // ---- 7. Student log out ----------------------------------------------
   page.once('dialog', d => d.accept());
@@ -237,10 +301,12 @@ try {
   await page.waitForSelector('#s-register:not([hidden])');
   ok(await page.evaluate(() => localStorage.getItem('simp:profile:v1')) === null,
      'Log out clears the saved registration and returns to the form');
+  ok(await page.evaluate(() => localStorage.getItem('simp:completed:v1')) === null,
+     'Log out clears the completion markers (next student starts fresh)');
 } finally {
   await browser.close();
   server.close();
 }
 
 if (fails) { console.error(`\nSMOKE FAILED — ${fails} check(s) failed.`); process.exit(1); }
-console.log('\nSMOKE OK — registration, admin activation draft, cards, launch handoff/seeds, prefill drop-in.');
+console.log('\nSMOKE OK — registration, admin activation draft, cards, launch handoff/seeds, prefill drop-in, completed-run gating.');

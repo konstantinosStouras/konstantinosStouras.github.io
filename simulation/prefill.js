@@ -34,6 +34,19 @@
   if (h.session) V.session = h.session;
   window.SIMP_HANDOFF = h;                  // apps may also read it directly
 
+  /* Completion marker: a simulation calls window.simpMarkCompleted() from its
+     own thank-you / done screen. Defined ONLY on a genuine platform launch
+     (fresh matching handoff), so standalone visitors and admin previews can
+     never stamp it. The platform's student page reads 'simp:completed:v1' to
+     badge the card "✓ Completed" and block a second play of the same run. */
+  window.simpMarkCompleted = function () {
+    try {
+      var m = JSON.parse(localStorage.getItem('simp:completed:v1') || '{}');
+      m[h.sim] = { ts: Date.now(), session: h.session || null };
+      localStorage.setItem('simp:completed:v1', JSON.stringify(m));
+    } catch (e) {}
+  };
+
   var LABELS = [
     ['studentId',      /university\s+student\s*id|participant\s*id|student\s*id|prolific\s*id/i],
     ['email',          /e-?mail/i],
