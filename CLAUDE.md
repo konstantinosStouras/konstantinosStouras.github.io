@@ -2347,7 +2347,10 @@ walkthrough in `simulation/_FIREBASE-SETUP.md`) makes
 activation live (`simPlatform/config` doc) and adds a roster
 (`simPlatformStudents/{uid}`, anonymous auth, every registration field
 compulsory; LIVE in the admin panel — auto-loads and updates via
-onSnapshot, no manual load) with CSV export. Students **log out** from the header (clears the
+onSnapshot, no manual load) with CSV export and a per-row **Delete**
+(confirm-guarded; removes the row's doc(s) incl. collapsed duplicate
+re-registrations — for test registrations etc.; rules already allow
+admin delete). Students **log out** from the header (clears the
 browser AND signs out the anonymous uid, so on a shared machine the next
 registration gets its own roster doc instead of overwriting); the roster view
 collapses duplicate re-registrations by student ID, newest kept, and the
@@ -2363,12 +2366,13 @@ from it. Portfoliofit's and answerarena's registration/intake pages go
 further — SILENT registration (simpHandoff/simpRegAnswers in
 experiment.js / arena-app.js): fields the platform covers are answered and
 NOT rendered, the page auto-submits when nothing is left, and only
-uncovered fields are shown. Consent checkboxes differ per the owner:
-answerarena and ideasearchlab CARRY them as ticked from a platform launch
-(bypassed entirely, stamped `consentVia: 'simulation-platform'` on the
-participant doc so the data shows how consent was given), while
-portfoliofit still shows its consent ticks; ideasearchlab silent-registers
-natively (see its account-free flow above).
+uncovered fields are shown. Consent checkboxes are BYPASSED on a platform
+launch in all three (per the owner): portfoliofit, answerarena and
+ideasearchlab CARRY them as ticked, stamping
+`consentVia: 'simulation-platform'` on the participant doc so the data
+shows how consent was given; ideasearchlab silent-registers natively (see
+its account-free flow above), and standalone visitors still tick the boxes
+themselves.
 The generic prefill.js drop-in also stays on those pages and ssc (each
 with a `SIMP_EXPECT` guard, disabled on admin views) for any form that
 still renders (explicit `data-simp` attrs first, then label-text matching with the

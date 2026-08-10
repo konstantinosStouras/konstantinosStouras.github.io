@@ -193,8 +193,9 @@ publish it; versioned in the repo, deployed manually to the lab project):
   `buildField` (now also handling `country` dropdowns and `min`/`max` `number`
   inputs) plus any `cfg.registrationConsents` checkboxes (empty by default = no
   consent section). On submit it writes `registration` (map) + `studentId` +
-  (when consents are shown) `consentGiven`/`consentTimestamp` to the participant
-  doc, then starts the main game.
+  (when consents are shown and ticked, or carried from a platform launch)
+  `consentGiven`/`consentTimestamp` (+ `consentVia` when carried) to the
+  participant doc, then starts the main game.
 - **Training phase signposting:** `startTraining` shows an intro pop-up clearly
   marked **Training Phase** that says it is a practice round and states exactly how
   many real puzzles follow (`plannedMainCount()` = frozen-set size, else
@@ -627,13 +628,18 @@ change. Four sections:
 - **Silent registration from the Simulation Platform** (`simpHandoff`/
   `simpRegAnswers` in experiment.js): launched from `stouras.com/simulation`,
   the post-training Registration answers itself from the platform handoff and
-  renders ONLY what the platform can't supply — extra/custom fields and
-  consent statements (never auto-ticked). When nothing is left it submits
+  renders ONLY what the platform can't supply — extra/custom fields. Consent
+  statements are BYPASSED on a platform launch (per the owner 2026-08):
+  carried as granted (`carriedConsent` in showRegistration), the checkboxes
+  never rendered, and the participant doc stamped
+  `consentVia: 'simulation-platform'` beside `consentGiven`/`consentTimestamp`
+  so the data shows HOW consent was given. When nothing is left it submits
   silently (`registration_submit` logs `silent: true`) and training leads
   straight into the main game. An answer must survive the form's own
   validation (select-option membership, number ranges) or its field is shown.
   The generic `/simulation/prefill.js` include also remains for any form that
-  still renders. Inert outside a platform launch.
+  still renders. Inert outside a platform launch (standalone visitors still
+  see and tick the consent boxes themselves).
 - For a research build, decide up front what to **hide from participants**
   (optimum, personal bests, difficulty internals) and gate it behind the
   experiment flag so the public game keeps its full feedback.

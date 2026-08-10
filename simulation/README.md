@@ -50,7 +50,12 @@ Then:
 - Registrations are mirrored to `simPlatformStudents/{uid}` (anonymous auth),
   giving the admin panel a **live roster with CSV export** — it loads by
   itself when the panel opens and updates the moment a student registers
-  (Firestore `onSnapshot`), no manual load step. A student's **Log out**
+  (Firestore `onSnapshot`), no manual load step. Each roster row has a
+  **Delete** button (confirm first) for removing test or stale
+  registrations — it deletes the row's roster doc(s), including any
+  collapsed duplicate re-registrations, via the rules'
+  `allow delete: if isAdmin()`; the student's own browser profile is
+  untouched, so they can simply register again. A student's **Log out**
   (header button) clears the browser and signs out the anonymous uid, so on a
   shared machine the next registration gets its own roster doc instead of
   overwriting the previous student's; the roster view collapses duplicate
@@ -75,7 +80,7 @@ Then:
 | Simulation | Session ID | Details prefill |
 |---|---|---|
 | Ideation Challenge | its join screen arrives **pre-filled** from the handoff (clipboard as backup) | **account-free** — a silent throwaway login is minted and the registration auto-submits from the platform data, consents included (bypassed, recorded as `consentVia: 'simulation-platform'`) |
-| PortfolioFit | `?session=` pre-fills its welcome screen | **silent** — the post-training registration page is skipped when the platform covers every field (only uncovered fields/consents are shown) |
+| PortfolioFit | `?session=` pre-fills its welcome screen | **silent** — the post-training registration page is skipped when the platform covers every field, consent ticks carried from the platform (`consentVia` stamped); only an uncovered/custom field is shown |
 | Answer Arena | `?s=` pre-fills (optional — default config without one) | **silent** — the intake auto-submits, consent ticks carried from the platform (`consentVia` stamped); only an uncovered/custom field is shown |
 | Problem Solving | n/a | n/a (anonymous by design) |
 | Sustainable Supply Chains | `?code=` — **auto-joins** | **wired** — firm-setup “Your name” fields auto-fill (no demographics by design) |
