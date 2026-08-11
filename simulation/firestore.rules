@@ -20,8 +20,12 @@ service cloud.firestore {
 
     // One doc per student, keyed by their anonymous-auth uid. Students write
     // only their own doc with a bounded field set; the roster is admin-only.
+    // 'approved' is the instructor's play gate (only approved students can
+    // launch the active simulations): the ADMIN sets it, and a student can
+    // never grant it to themselves — their create can't include it, and
+    // their update must leave it exactly as it was.
     match /simPlatformStudents/{uid} {
-      allow create, update: if request.auth != null
+      allow create: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly([
              'uid', 'name', 'email', 'studentId', 'age', 'gender',
@@ -29,6 +33,17 @@ service cloud.firestore {
              'occupation', 'industry', 'englishFluency', 'createdAt', 'updatedAt'
            ])
         && request.resource.data.uid == uid;
+      allow update: if isAdmin()
+        || (request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+             'uid', 'name', 'email', 'studentId', 'age', 'gender',
+             'nationality', 'country', 'levelOfStudy', 'workExperience',
+             'occupation', 'industry', 'englishFluency', 'createdAt', 'updatedAt',
+             'approved'
+           ])
+        && request.resource.data.uid == uid
+        && request.resource.data.get('approved', false) == resource.data.get('approved', false));
       allow read: if isAdmin() || (request.auth != null && request.auth.uid == uid);
       allow delete: if isAdmin();
     }

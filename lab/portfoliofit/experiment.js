@@ -420,11 +420,23 @@
 
     var err = el('div', { class: 'pfx-err' });
     var sessInput = el('input', { type: 'text', placeholder: 'e.g. SPRING25', autocomplete: 'off', spellcheck: 'false', value: urlSession() || '' });
-    body.push(el('div', { class: 'pfx-field' }, [
+    // A Simulation Platform launch carries the session code in the handoff —
+    // the code is entered silently and NEVER shown to the student (per the
+    // owner: an unshown code is harder to pass to classmates outside class).
+    // The field is revealed again if that code fails, so nobody dead-ends.
+    var hiddenCode = (function () {
+      var h = simpHandoff();
+      var u = (urlSession() || '').trim();
+      return (h && h.session && u && String(h.session).trim().toUpperCase() === u.toUpperCase());
+    })();
+    var sessField = el('div', { class: 'pfx-field' }, [
       el('label', { text: 'Session code *' }),
       el('div', { class: 'help', text: 'Enter the session code provided by the organiser to begin. A code is required to take part.' }),
       sessInput
-    ]));
+    ]);
+    if (hiddenCode) sessField.style.display = 'none';
+    body.push(sessField);
+    if (hiddenCode) body.push(el('p', { class: 'help', text: '✓ Your class session is set — just press ' + (cfg.texts.welcomeButton || 'Start') + '.' }));
 
     var startBtn = el('button', { class: 'pfx-btn', on: { click: onStart } }, [cfg.texts.welcomeButton || 'Start']);
     body.push(err, el('div', { class: 'pfx-row' }, [startBtn]));
@@ -440,6 +452,7 @@
       var res = await beginSession(sid);
       if (!res.ok) {
         startBtn.removeAttribute('disabled'); startBtn.textContent = cfg.texts.welcomeButton || 'Start';
+        if (hiddenCode) sessField.style.display = '';   // reveal the field so nobody dead-ends on a bad pinned code
         err.textContent = res.closed
           ? ('Session “' + sid + '” is closed and is no longer accepting new players.')
           : (res.notFound

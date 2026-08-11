@@ -62,6 +62,14 @@
       <h2>Today's simulations</h2>
       <span id="cfg-src" class="pill gray" hidden></span>
     </div>
+    <!-- Instructor approval gate (Firebase mode): until the instructor
+         approves this student in the admin roster, NO simulation cards are
+         shown (approval overrides the active toggles, per the owner). -->
+    <div id="appr-note" class="appr-note" hidden>
+      ⏳ <strong>Waiting for your instructor's approval.</strong>
+      You are registered — today's simulations appear here the moment your
+      instructor approves you (this page updates by itself, no refresh needed).
+    </div>
     <div id="cards" class="grid"></div>
     <div id="empty" class="empty" hidden>
       No simulations are active right now.<br>
@@ -203,6 +211,7 @@
     var p = P.getProfile();
     $('s-register').hidden = true;
     $('s-sims').hidden = false;
+    startApprovalWatch();
     $('who').hidden = !p;
     if (p) {
       $('who').innerHTML = 'Registered as <strong></strong> (<span></span>) ';
@@ -242,9 +251,12 @@
   $('btn-cancel').onclick = function () { showSims(); };
 
   /* ---------- cards ---------- */
-  function sessionBadge(s) {
+  function sessionBadge(s, c) {
     if (s.external) return ['External site', 'amber'];
     if (s.session === 'none' && !s.optionalSession) return ['No session needed', 'gray'];
+    /* Instructor pinned the Session ID → the card launches straight in; the
+       student is never shown (or asked for) the code. */
+    if (asksSession(s) && c && c.sessionId && !s.manualCopy) return ['Session ready', 'gray'];
     if (s.optionalSession) return ['Session ID optional', 'gray'];
     return ['Session ID required', ''];
   }
@@ -261,8 +273,14 @@
   function render() {
     var cards = $('cards');
     cards.innerHTML = '';
+    updateApprNote();
+    /* Unapproved student (Firebase mode): the cards are simply NOT rendered —
+       approval overrides the active toggles (per the owner). The waiting note
+       above explains it; the live watch re-renders the moment the admin
+       approves. */
+    var blocked = apprBlocked();
     var shown = 0;
-    P.catalog().forEach(function (s) {
+    if (!blocked) P.catalog().forEach(function (s) {
       var c = CFG.sims[s.key];
       if (!c || !c.active) return;
       shown++;
@@ -270,7 +288,7 @@
       var el = document.createElement('button');
       el.type = 'button';
       el.className = 'sim-card' + (done ? ' done' : '');
-      var badge = done ? ['✓ Completed', 'green'] : sessionBadge(s);
+      var badge = done ? ['✓ Completed', 'green'] : sessionBadge(s, c);
       el.innerHTML =
         '<span class="ic"></span><span class="ti"></span><span class="bl"></span>' +
         (c.note ? '<span class="note"></span>' : '') +
@@ -283,7 +301,7 @@
       el.onclick = function () { done ? openDoneModal(s) : openModal(s); };
       cards.appendChild(el);
     });
-    $('empty').hidden = shown > 0;
+    $('empty').hidden = shown > 0 || blocked;   /* blocked → the appr-note explains, not the empty state */
     var src = $('cfg-src');
     if (CFG.source === 'draft') { src.textContent = 'local draft — visible only in this browser'; src.hidden = false; }
     else if (CFG.source === 'firestore') { src.textContent = 'live'; src.hidden = false; }
@@ -314,6 +332,12 @@
     /* Nothing to ask (no session input, no details to copy) → no dialog:
        the card click itself opens the simulation in a new tab. */
     if (!asksSession(s) && !s.manualCopy) { launchNow(s, c.sessionId || ''); return; }
+    /* The instructor pinned the Session ID → enter it ourselves and launch
+       straight away, never showing the code to the student (per the owner —
+       an unshown code is harder to pass to classmates outside class). The
+       dialog only remains for sims where the student genuinely has to type
+       the code, or has details to copy (cross-origin sims). */
+    if (asksSession(s) && c.sessionId && !s.manualCopy) { launchNow(s, c.sessionId); return; }
     current = s;
     $('m-title').textContent = s.icon + ' ' + s.title;
     $('m-blurb').textContent = s.blurb;
@@ -358,10 +382,33 @@
 
   /* ---------- already-completed notice ---------- */
   function openDoneModal(s) {
+    $('dm-title').textContent = 'Thank you for playing!';
     $('dm-body').textContent = 'Our records on this browser show you have already completed ' +
       s.title + '. Your responses have been recorded — each simulation can only be played once. ' +
       'If your instructor starts a new run with a new Session ID, the card will unlock again.';
     $('donemodal').hidden = false;
+  }
+
+  /* ---------- instructor approval gate (Firebase mode only) ----------
+     Approval overrides the active toggles per student (per the owner): until
+     the instructor clicks Approve on a student's roster row, that student
+     sees NO simulation cards — the guard against class links being shared
+     with students who are not in the room. The page unlocks itself live
+     (own-doc onSnapshot). LOCAL mode has no roster, so no gate. */
+  var APPR = { active: false, ok: false, started: false };
+  function apprBlocked() { return APPR.active && !APPR.ok; }
+  function updateApprNote() { $('appr-note').hidden = !apprBlocked(); }
+  function startApprovalWatch() {
+    if (APPR.started || !P.configured || !P.getProfile()) return;
+    APPR.started = true;
+    APPR.active = true;
+    render();
+    P.firebase().then(function (F) {
+      F.watchApproval(function (approved) {
+        APPR.ok = !!approved;
+        render();
+      });
+    }).catch(function () { APPR.active = false; render(); });
   }
   $('dm-close').onclick = function () { $('donemodal').hidden = true; };
   $('donemodal').addEventListener('click', function (e) { if (e.target === this) $('dm-close').onclick(); });

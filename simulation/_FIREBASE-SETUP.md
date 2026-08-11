@@ -45,7 +45,14 @@ Time: ~10 minutes. (Same recipe as the other sims' projects, e.g.
 What the rules give you: the activation doc (`simPlatform/config`) is
 world-readable but admin-only writable; each student (anonymous auth) can
 write only their own `simPlatformStudents/{uid}` doc with a bounded field
-set; only the admin can read the roster.
+set; only the admin can read the roster, delete rows, and set the
+**`approved` flag** — the play gate: an unapproved student sees no
+simulation cards, and a student can never approve themselves (their own
+writes must leave `approved` exactly as it was).
+
+**If you deployed the rules before the approval gate existed, re-paste and
+Publish the current `simulation/firestore.rules`** — until then the admin's
+Approve button is refused by the old rules and every student stays gated.
 
 ## 4. Register a web app and copy its config
 

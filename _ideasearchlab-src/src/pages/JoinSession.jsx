@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -10,20 +10,25 @@ import styles from './JoinSession.module.css'
 export default function JoinSession() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  // A launch from stouras.com/simulation lands here with the Session ID in
-  // the handoff — pre-fill it so the student just clicks Join.
-  const [code, setCode] = useState(() =>
+  // A launch from stouras.com/simulation carries the Session ID in the
+  // handoff — it is entered SILENTLY and never shown to the student (per the
+  // owner: an unshown code is harder to pass to classmates outside class).
+  // If the silent join fails, the normal form appears (empty) so nobody
+  // dead-ends; students without a handoff see the form exactly as before.
+  const [autoCode] = useState(() =>
     ((platformHandoff()?.session) || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
+  const [auto, setAuto] = useState(() => autoCode.length >= 3)
+  const autoTried = useRef(false)
+  const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleJoin(e) {
-    e.preventDefault()
+  async function joinWithCode(raw, silent) {
     setError('')
     setLoading(true)
 
     try {
-      const trimmedCode = code.trim().toUpperCase()
+      const trimmedCode = raw.trim().toUpperCase()
 
       // Validate the session code via a client-side Firestore query
       const sessionsQuery = query(
@@ -34,7 +39,12 @@ export default function JoinSession() {
       const snap = await getDocs(sessionsQuery)
 
       if (snap.empty) {
-        setError('Session not found. Check the code and try again.')
+        if (silent) {
+          setAuto(false)
+          setError('Your class session could not be joined — ask your instructor, or enter a session code below.')
+        } else {
+          setError('Session not found. Check the code and try again.')
+        }
         setLoading(false)
         return
       }
@@ -54,10 +64,47 @@ export default function JoinSession() {
       }
     } catch (err) {
       console.error(err)
-      setError('Something went wrong. Please try again.')
+      if (silent) {
+        setAuto(false)
+        setError('Your class session could not be joined — ask your instructor, or enter a session code below.')
+      } else {
+        setError('Something went wrong. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  // Silent auto-join on a platform launch (once).
+  useEffect(() => {
+    if (!auto || autoTried.current) return
+    autoTried.current = true
+    joinWithCode(autoCode, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleJoin(e) {
+    e.preventDefault()
+    joinWithCode(code, false)
+  }
+
+  // Platform launch: joining silently — the code is never displayed.
+  if (auto) {
+    return (
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <span className={styles.wordmark}>Ideation Challenge</span>
+          <HeaderControls />
+        </header>
+        <main className={styles.main}>
+          <div className={styles.card}>
+            <div className={styles.icon} aria-hidden="true">&#x25C8;</div>
+            <h1 className={styles.title}>Joining your class session...</h1>
+            <p className={styles.desc}>One moment — your session is set by your instructor.</p>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (

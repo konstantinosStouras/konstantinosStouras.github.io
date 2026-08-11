@@ -50,11 +50,19 @@ Then:
 - Registrations are mirrored to `simPlatformStudents/{uid}` (anonymous auth),
   giving the admin panel a **live roster with CSV export** — it loads by
   itself when the panel opens and updates the moment a student registers
-  (Firestore `onSnapshot`), no manual load step. Each roster row has a
-  **Delete** button (confirm first) for removing test or stale
-  registrations — it deletes the row's roster doc(s), including any
-  collapsed duplicate re-registrations, via the rules'
-  `allow delete: if isAdmin()`; the student's own browser profile is
+  (Firestore `onSnapshot`), no manual load step. Each roster row has an
+  **Approve** toggle and a **Delete** button (confirm first). **Approval is
+  the play gate** (the guard against class links shared with students who
+  are not in the room): until the admin clicks Approve on a student's row,
+  that student sees **no simulation cards at all** — approval overrides the
+  active toggles per student. The student page shows a "waiting for your
+  instructor's approval" note and unlocks itself live (own-doc `onSnapshot`)
+  the moment Approve is clicked; clicking `✓ Approved` again revokes.
+  Students can never approve themselves — the rules pin `approved` to
+  admin-only writes (**republish `firestore.rules` when adopting this**).
+  LOCAL mode has no roster and therefore no gate. Delete removes the row's
+  roster doc(s), including any collapsed duplicate re-registrations, via the
+  rules' `allow delete: if isAdmin()`; the student's own browser profile is
   untouched, so they can simply register again. A student's **Log out**
   (header button) clears the browser and signs out the anonymous uid, so on a
   shared machine the next registration gets its own roster doc instead of
@@ -64,8 +72,15 @@ Then:
 
 ## How a launch works
 
-1. The student clicks a card; the dialog asks for the Session ID unless the
-   admin pinned one (then it's pre-filled) or the sim doesn't need one.
+1. The student clicks a card. **A pinned Session ID is entered silently and
+   never shown** — the card reads "Session ready" and launches straight into
+   the sim (per the owner: an unshown code is harder to pass to classmates
+   outside class); the same-origin sims hide their own code fields too when
+   the code came from the handoff (PortfolioFit / Answer Arena welcome
+   screens, the Ideation Challenge join screen auto-joins), revealing them
+   again only if the pinned code fails, so nobody dead-ends. The dialog
+   appears only when no code is pinned (the student types the announced
+   code) or for the cross-origin Newsvendor (copy chips).
 2. `platform.js` writes the **handoff** — `localStorage['simp:handoff:v1']` =
    `{sim, session, profile, ts}`. Everything on `stouras.com` is same-origin,
    so any simulation can read it.

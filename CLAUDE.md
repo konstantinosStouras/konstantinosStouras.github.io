@@ -2347,10 +2347,24 @@ walkthrough in `simulation/_FIREBASE-SETUP.md`) makes
 activation live (`simPlatform/config` doc) and adds a roster
 (`simPlatformStudents/{uid}`, anonymous auth, every registration field
 compulsory; LIVE in the admin panel — auto-loads and updates via
-onSnapshot, no manual load) with CSV export and a per-row **Delete**
+onSnapshot, no manual load) with CSV export, a per-row **Delete**
 (confirm-guarded; removes the row's doc(s) incl. collapsed duplicate
 re-registrations — for test registrations etc.; rules already allow
-admin delete). Students **log out** from the header (clears the
+admin delete) and a per-row **Approve** toggle — the play gate (per the
+owner, against class links shared with out-of-class students): an
+unapproved student sees NO simulation cards (approval overrides the
+active toggles; `startApprovalWatch`/`apprBlocked` in index.html, live
+own-doc onSnapshot unlock, waiting-note banner; LOCAL mode ungated), a
+student can never self-approve (the rules pin `approved` to admin-only
+writes — REPUBLISH firestore.rules when adopting), and Approve writes all
+uids behind a roster row like Delete. **Pinned Session IDs are never
+shown to students**: a pinned code launches the card DIRECTLY ("Session
+ready" badge, no dialog — openModal's pinned branch), and the same-origin
+sims hide their own code fields when the code came from the handoff
+(portfoliofit + arena welcome `hiddenCode`, revealed again on a failing
+code so nobody dead-ends; ideasearchlab's JoinSession silently
+auto-joins), leaving the dialog only for unpinned codes and the
+cross-origin newsvendor's copy chips. Students **log out** from the header (clears the
 browser AND signs out the anonymous uid, so on a shared machine the next
 registration gets its own roster doc instead of overwriting); the roster view
 collapses duplicate re-registrations by student ID, newest kept, and the

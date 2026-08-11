@@ -246,12 +246,35 @@
     tb.innerHTML = '';
     roster.forEach(function (r) {
       var tr = document.createElement('tr');
-      for (var i = 0; i < 6; i++) tr.appendChild(document.createElement('td'));
+      for (var i = 0; i < 7; i++) tr.appendChild(document.createElement('td'));
       tr.children[0].textContent = r.name || '';
       tr.children[1].textContent = r.studentId || '';
       tr.children[2].textContent = r.email || '';
       tr.children[3].textContent = r.levelOfStudy || '';
       tr.children[4].textContent = (r.createdAt || '').slice(0, 10);
+      /* Approval gate: only approved students can launch the active sims (the
+         in-class guard — a shared link is useless to a classmate the admin
+         never approves). Toggles every doc behind this row; the student's
+         page unlocks itself live via its own onSnapshot. */
+      var appr = document.createElement('button');
+      appr.className = r.approved ? 'btn small' : 'btn ghost small';
+      appr.textContent = r.approved ? '✓ Approved' : 'Approve';
+      appr.title = r.approved ? 'Click to revoke — the student can no longer launch simulations.'
+                              : 'Click to let this student play the active simulations.';
+      appr.onclick = function () {
+        appr.disabled = true; appr.textContent = '…';
+        P.firebase().then(function (F) {
+          return F.approveStudents(uidsByKey[keyOf(r)] || [r.uid], !r.approved);
+        }).catch(function (e) {
+          appr.disabled = false; appr.textContent = r.approved ? '✓ Approved' : 'Approve';
+          $('roster-count').textContent = 'Approval failed: ' +
+            ((e && e.code && String(e.code).indexOf('permission-denied') >= 0)
+              ? 'permission denied — republish the updated firestore.rules' + RULES_HINT
+              : ((e && e.message) || e));
+        });
+        /* success needs no handler — the live snapshot repaints the row */
+      };
+      tr.children[5].appendChild(appr);
       /* Delete a registration (e.g. a test row). Removes the roster doc(s)
          behind this row — the live snapshot refreshes the table by itself.
          The student's own browser profile is untouched (they can just
@@ -275,15 +298,18 @@
               : ((e && e.message) || e));
         });
       };
-      tr.children[5].appendChild(del);
-      tr.children[5].style.textAlign = 'right';
+      tr.children[6].appendChild(del);
+      tr.children[6].style.textAlign = 'right';
       tb.appendChild(tr);
     });
     $('rostertab').hidden = roster.length === 0;
     $('btn-csv').hidden = roster.length === 0;
+    var approvedN = roster.filter(function (r) { return r.approved; }).length;
     $('roster-count').textContent = roster.length === 0
       ? 'No registrations yet — students appear here the moment they register.'
       : roster.length + ' student' + (roster.length === 1 ? '' : 's') +
+        ' · ' + approvedN + ' approved' +
+        (roster.length - approvedN ? ' · ' + (roster.length - approvedN) + ' waiting (they see no simulations until approved)' : '') +
         (dropped ? ' (' + dropped + ' duplicate registration' + (dropped === 1 ? '' : 's') + ' collapsed)' : '');
   }
   function startRoster() {
@@ -296,7 +322,7 @@
   }
   $('btn-csv') && ($('btn-csv').onclick = function () {
     var cols = ['name', 'studentId', 'email', 'age', 'gender', 'nationality', 'country',
-                'levelOfStudy', 'workExperience', 'occupation', 'industry', 'englishFluency', 'createdAt'];
+                'levelOfStudy', 'workExperience', 'occupation', 'industry', 'englishFluency', 'approved', 'createdAt'];
     var esc = function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var csv = cols.join(',') + '\n' + roster.map(function (r) {
       return cols.map(function (c) { return esc(r[c]); }).join(',');
