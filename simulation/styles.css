@@ -39,6 +39,10 @@ h2 { font-size: 1.25rem; margin: 26px 0 4px; }
   padding: 2px 9px; border-radius: 999px; background: #e8edfb; color: #33477e; white-space: nowrap;
 }
 .pill.green { background: #e1f5e7; color: #1d6b3a; }
+/* Instructor-approval banner: shown while the student is registered but not
+   yet approved to play (Firebase mode); hides itself the moment the admin
+   approves. */
+.appr-note { background: #fff7e3; color: #6b4a00; border: 1px solid #f0dfae; border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: .93rem; }
 /* A simulation this student already completed: still visible (with its
    ✓ Completed pill) but visually settled; clicking shows the notice, not
    the launch dialog. */

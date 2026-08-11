@@ -118,11 +118,22 @@
     // The field is prefilled from a typed code or the ?s=CODE link if present.
     var urlCode = S.pendingCode || (location.search.match(/[?&]s=([A-Za-z0-9]+)/) || [])[1] || '';
     var codeField = el('input', { type: 'text', placeholder: 'Session code (optional)', value: urlCode, style: 'text-transform:uppercase;letter-spacing:.12em;' });
-    body.push(el('div', { class: 'a-field' }, [
+    // A Simulation Platform launch carries the session code in the handoff —
+    // it is entered silently and NEVER shown to the student (per the owner:
+    // an unshown code is harder to pass to classmates outside class). The
+    // field is revealed again if that code fails, so nobody dead-ends.
+    var hiddenCode = (function () {
+      var h = simpHandoff();
+      return !!(h && h.session && urlCode && String(h.session).trim().toUpperCase() === urlCode.toUpperCase());
+    })();
+    var codeWrap = el('div', { class: 'a-field' }, [
       el('label', { text: 'Session code (optional)' }),
       el('div', { class: 'a-help', text: 'Have a code from the organiser? Enter it to join that session. Otherwise just continue.' }),
       codeField
-    ]));
+    ]);
+    if (hiddenCode) codeWrap.style.display = 'none';
+    body.push(codeWrap);
+    if (hiddenCode) body.push(el('p', { class: 'a-help', text: '✓ Your class session is set — just continue.' }));
     var err = el('div', { class: 'a-err' });
     body.push(err);
     body.push(el('p', { class: 'a-meta', text: 'No sign-up needed - you take part anonymously. About 5-10 minutes; please complete it in one sitting.' }));
@@ -139,11 +150,15 @@
       if (!c) { S.session = null; startTour(); return; }
       // A code was given -> it must resolve to an open session.
       Store.getSessionByCode(c).then(function (sess) {
-        if (!sess) { err.textContent = 'That session code was not found.'; return; }
-        if (sess.status === 'closed') { err.textContent = 'That session has closed.'; return; }
-        if (sess.status === 'waiting') { err.textContent = 'That session has not opened yet. Please check back soon.'; return; }
+        if (!sess) { fail('That session code was not found.'); return; }
+        if (sess.status === 'closed') { fail('That session has closed.'); return; }
+        if (sess.status === 'waiting') { fail('That session has not opened yet. Please check back soon.'); return; }
         S.session = sess; startTour();
-      }).catch(function () { err.textContent = 'Could not check the code. Please try again.'; });
+      }).catch(function () { fail('Could not check the code. Please try again.'); });
+      function fail(msg) {
+        err.textContent = msg;
+        if (hiddenCode) codeWrap.style.display = '';   // reveal on a bad pinned code so nobody dead-ends
+      }
     }
   }
 

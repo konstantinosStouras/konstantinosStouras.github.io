@@ -307,7 +307,12 @@ Responses row with `submitted = no (draft)`.
   your session..."; failures show the cause + Try again). An answer must
   survive the form's own validation or its field is shown. The generic
   `/simulation/prefill.js` include also remains for any form that still
-  renders. Inert outside a platform launch. **Play-once gate:**
+  renders. Inert outside a platform launch. **The session code is hidden on
+  a platform launch** (`hiddenCode` in showWelcome): when the handoff's
+  session matches `?s=`, the welcome's optional-code field is not rendered
+  (a "✓ Your class session is set" note shows instead) and is revealed again
+  only if that code fails to resolve — the code is never displayed to
+  students, per the owner. **Play-once gate:**
   `showThankYou()` and `showAlreadyDone()` call
   `window.simpMarkCompleted()` (defined by prefill.js only on a platform
   launch), so the platform's card shows "✓ Completed" and blocks a second

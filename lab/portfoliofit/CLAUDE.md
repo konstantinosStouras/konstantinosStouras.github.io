@@ -639,7 +639,12 @@ change. Four sections:
   validation (select-option membership, number ranges) or its field is shown.
   The generic `/simulation/prefill.js` include also remains for any form that
   still renders. Inert outside a platform launch (standalone visitors still
-  see and tick the consent boxes themselves). **Play-once gate:**
+  see and tick the consent boxes themselves). **The session code is hidden on
+  a platform launch** (`hiddenCode` in showWelcome): when the handoff's
+  session matches `?session=`, the welcome's code field is not rendered
+  (a "✓ Your class session is set" note shows instead) and is revealed again
+  only if that code fails validation — so the code is never displayed to
+  students, per the owner. **Play-once gate:**
   `showThankYou()` calls `window.simpMarkCompleted()` (defined by prefill.js
   only on a platform launch), so the platform's card shows "✓ Completed" and
   blocks a second play of the same run.

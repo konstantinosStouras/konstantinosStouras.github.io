@@ -218,14 +218,14 @@ try {
      'student cards follow the curated catalog order');
   ok((await page.textContent('#cfg-src')).includes('local draft'), 'draft-source pill is shown');
   ok((await page.textContent('.sim-card .note')).includes('Play after the break'), 'card note from the admin shows');
-  await page.click('.sim-card:has-text("Sustainable Supply Chains")');
-  await page.waitForSelector('#modal:not([hidden])');
-  ok(await page.inputValue('#m-session') === 'TEST1', 'pinned Session ID pre-fills the launch dialog');
-  const [pop] = await Promise.all([ctx.waitForEvent('page'), page.click('#m-launch')]);
-  ok(pop.url().includes('/sustainable-supply-chains/?code=TEST1'), 'SSC launches with ?code= (auto-join URL): ' + pop.url());
+  ok((await page.locator('.sim-card:has-text("Sustainable Supply Chains") .pill').textContent()) === 'Session ready',
+     'a pinned-code card reads "Session ready" — never "Session ID required"');
+  const [pop] = await Promise.all([ctx.waitForEvent('page'),
+    page.click('.sim-card:has-text("Sustainable Supply Chains")')]);
+  ok(pop.url().includes('/sustainable-supply-chains/?code=TEST1'), 'pinned Session ID launches DIRECTLY with ?code= — the student never sees the code: ' + pop.url());
   await pop.close();
   ok(page.url().replace(/\?.*/, '').endsWith('/simulation/'), 'platform tab stays put — exactly ONE copy opens (double-open regression)');
-  ok(await page.isHidden('#modal'), 'launch dialog closes itself after launching');
+  ok(await page.isHidden('#modal'), 'no session dialog was shown for the pinned code');
   const handoff = await page.evaluate(() => JSON.parse(localStorage.getItem('simp:handoff:v1')));
   ok(handoff && handoff.sim === 'ssc' && handoff.session === 'TEST1' && handoff.profile.studentId === 'S123',
      'launch wrote the same-origin handoff (sim + session + profile)');

@@ -212,6 +212,26 @@
           return Promise.all((uids || []).map(function (uid) {
             return D.deleteDoc(D.doc(fs, PATHS.students + '/' + uid));
           }));
+        },
+        /* Approve / revoke a student (admin-only per the rules): only approved
+           students can launch the active simulations — the owner's guard
+           against class links being passed to students who are not in the
+           room. Writes every uid behind one displayed roster row. */
+        approveStudents: function (uids, approved) {
+          return Promise.all((uids || []).map(function (uid) {
+            return D.setDoc(D.doc(fs, PATHS.students + '/' + uid),
+              { approved: !!approved }, { merge: true });
+          }));
+        },
+        /* Live approval state of THIS student's own roster doc. cb(approved,
+           exists) now and on every change — the student page unlocks itself
+           the moment the instructor approves. */
+        watchApproval: function (cb) {
+          return ensureAnon().then(function (u) {
+            return D.onSnapshot(D.doc(fs, PATHS.students + '/' + u.uid), function (snap) {
+              cb(snap.exists() ? !!snap.data().approved : false, snap.exists());
+            }, function () { cb(false, false); });
+          });
         }
       };
     });
