@@ -168,7 +168,8 @@
     S.phase = 'tour';
     var demo = D.practiceTask || { title: 'Example task', task: 'An example task.', outputA: 'Answer one.', outputB: 'Answer two.' };
     var comp = buildComparison(demo, 1, 1, false, { demo: true });
-    setScreen(overlayWrap(comp.node));
+    // Wide wrap like the real comparisons, so the demo shows the same layout.
+    setScreen(el('div', { class: 'a-wrap a-wide' }, [comp.node]));
     runSpotlight(cfg.tourSteps || [], function () { showRegister(); });
   }
 
