@@ -2172,6 +2172,33 @@ ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export da
 button (calling the same `exportSessionWorkbook` builder the control room uses, so
 the file is identical), matching what Answer Arena's session cards already had.
 
+**Both admins' session cards carry a Copy link button** (owner 2026-08).
+ideasearchlab gained the one Answer Arena already had: on every ACTIVE card,
+beside Open, it copies that session's participant join link and flips to a green
+"✓ Copied". Completed cards have none — a closed session is filtered out of the
+join lookup, so its link would dead-end. The URL shape and the parser that reads
+it back live together in `_ideasearchlab-src/src/utils/joinLink.js`; it points at
+the app ROOT with the code on the query string
+(`stouras.com/lab/ideasearchlab/?code=BALI`), never at the `/join` client route,
+so it can't depend on the SPA 404 fallback — and it PRE-FILLS the join field
+rather than auto-joining (the Simulation-Platform handoff stays the only silent
+path, its code deliberately never shown). Offline test:
+`node _ideasearchlab-src/tools/join-link-guard.mjs`.
+
+**Both working phases end on a 15-second summary of what the participant just
+produced** (owner 2026-08). The individual phase already held its "Your ideas are
+submitted" card for `CONFIRM_HOLD_MS`; the group phase now does the same once
+EVERY member has voted, showing the group's **final selected ideas** (most-voted
+first, with vote counts) before the phase change goes through. Same mechanism —
+park the navigation, stamp the completion, count down — because the backend
+advances everyone the instant the last member submits, which in a solo group is
+that same instant. Neither summary shows a phase timer any more: they come after
+their stage's work is done, and the only countdown that still governs anything is
+the hold printed on the card (the individual one used to leave the selection
+stage's clock ticking there, and its expiry re-fired `autoFinish`). Offline test:
+`node _ideasearchlab-src/tools/phase-hold-guard.mjs` (Playwright over the Test-round
+sandbox — nothing is saved).
+
 **Session cards look and behave the same in both admins** (owner request
 2026-08). *Alignment:* ideasearchlab's cards used a mix of global
 `btn-primary`/`btn-ghost` (bigger padding) and borderless text buttons, so its
@@ -2182,7 +2209,21 @@ lines; every card button now uses ONE pill family — `.sBtn` + a variant
 `Admin.module.css`, mirroring Answer Arena's `.aa-btn … sm` set (same height,
 radius, weight, colour roles, `white-space: nowrap`). Keep the two in sync — a
 new card button must be added as `.sBtn` + a variant, never a bare
-`btn-primary`/`btn-ghost`. *No editing a session that exists:* the **Edit**
+`btn-primary`/`btn-ghost`. **The Arena pill is the reference and `.sBtn` now
+carries its geometry VERBATIM — `font-size:12px`, `padding:7px 11px`,
+`border-radius:10px`, `font-weight:600`, `line-height:1.4`, nowrap** (measured
+identical: every pill in both admins renders 32.8px tall on one baseline). Those
+numbers are a contract between `Admin.module.css` and `.aa-btn`/`.aa-btn.sm` in
+`lab/answerarena/admin.js` — change them in both or neither. Each panel keeps its
+OWN theme (arena dark, ideasearchlab light) and its own action set, so the colour
+roles map rather than match: `.sBtnSec` paints `var(--white)` where arena's
+`.sec` paints `var(--panel)`, and ideasearchlab keeps a neutral **Close Session**
+(non-destructive — moves the session to Completed) beside the red **Delete**,
+where arena has only one closing action and paints it `danger`. **Every variant
+carries a 1px border, transparent on the filled ones**, in BOTH admins: with
+arena's old `.aa-btn{border:none}` a filled pill (Open / Export data) sat 2px
+shorter than an outlined neighbour (Copy link / Test round / Close), so even
+arena's own row was subtly ragged. *No editing a session that exists:* the **Edit**
 button (ideasearchlab) and **Edit name** (Answer Arena) were REMOVED — a session
 may already have participants playing in it, so its configuration is fixed at
 creation. ideasearchlab's whole edit path went with it (`editingSession` state,

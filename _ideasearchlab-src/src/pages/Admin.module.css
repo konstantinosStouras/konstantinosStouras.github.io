@@ -133,17 +133,22 @@
 .sessionCardActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 /* ── Session-card action buttons ───────────────────────────────────────────
-   ONE pill family for every button on a session card, mirroring the Answer
-   Arena admin's `.aa-btn … sm` set (same height, radius, weight and colour
-   roles) so the two admins read as the same product. Every card button must
-   use `.sBtn` + one variant — never a bare `btn-primary`/`btn-ghost`, whose
-   larger padding is what made these rows ragged (and wrapped "Export data"
-   onto two lines). */
+   ONE pill family for every button on a session card, carrying the Answer
+   Arena admin's `.aa-btn … sm` geometry VERBATIM — font-size 12px, padding
+   7px 11px, radius 10px, weight 600, line-height 1.4, nowrap — so a card in
+   this admin and a card in that one are the same object. Those four numbers
+   are the contract: change them here only together with `.aa-btn`/`.aa-btn.sm`
+   in `lab/answerarena/admin.js`.
+   Every variant keeps a 1px border (transparent on the filled ones) so a
+   filled pill and an outlined one are exactly the same height in a row.
+   Every card button must use `.sBtn` + one variant — never a bare
+   `btn-primary`/`btn-ghost`, whose larger padding is what made these rows
+   ragged (and wrapped "Export data" onto two lines). */
 .sBtn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1.4;
+  font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1.4;
   white-space: nowrap;
-  padding: 7px 16px; border-radius: var(--radius);
+  padding: 7px 11px; border-radius: 10px;
   border: 1px solid transparent; background: none; color: var(--ink);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.06s;
@@ -155,8 +160,14 @@
 .sBtnPrimary { background: var(--accent); color: #ffffff; border-color: var(--accent); }
 .sBtnPrimary:hover { background: var(--accent-light); border-color: var(--accent-light); }
 
-/* Neutral action ("🧪 Test round"). */
-.sBtnSec { border-color: var(--border); color: var(--ink); }
+/* Neutral action ("Copy link", "🧪 Test round") — a raised panel-coloured pill on
+   the card's paper background, the light-theme reading of arena's `.sec`
+   (var(--panel)). `--white` flips with the theme, so this stays a dark pill in
+   dark mode; never hard-code #fff here. */
+.sBtnSec { background: var(--white); border-color: var(--border); color: var(--ink); }
+
+/* Momentary "✓ Copied" confirmation on the Copy-link pill (arena's `.is-ok`). */
+.sBtnOk { background: #2e9e5b; color: #ffffff; border-color: #2e9e5b; }
 .sBtnSec:hover { border-color: var(--ink); background: var(--paper-dark); }
 
 /* "Export data" — download this session's research workbook straight from its
@@ -166,7 +177,7 @@
 
 /* "Close Session" — mark an active session completed (moves it to Completed
    Sessions). Green-on-hover to signal a finishing, non-destructive action. */
-.closeBtn { border-color: var(--border); color: var(--muted); }
+.closeBtn { background: var(--white); border-color: var(--border); color: var(--muted); }
 .closeBtn:hover { color: #2e9e5b; border-color: #2e9e5b; background: rgba(46,158,91,0.08); }
 
 /* Destructive action ("Delete"): a red-outlined pill, not borderless text, so

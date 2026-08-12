@@ -239,7 +239,13 @@ inline `editMode` rename form were removed (owner 2026-08: participants may
 already be playing in it), the same rule as the ideasearchlab admin, which lost
 its Edit button in the same change; name a session on the Create card. The
 `.aa-btn … sm` pill set here is the reference the ideasearchlab cards were
-aligned to (`.sBtn` + variants in its `Admin.module.css`) — keep the two in sync. Per-session
+aligned to (`.sBtn` + variants in its `Admin.module.css`) — keep the two in sync:
+its `font-size:12px` / `padding:7px 11px` / `border-radius:10px` / `font-weight:600`
+are copied there verbatim, so changing them here means changing them there too.
+**`.aa-btn` carries a 1px TRANSPARENT border** (it used to be `border:none`, and
+`.green` with it) so a filled pill and an outlined one are exactly the same
+height — without it Open/Export data sat 2px shorter than Copy link/Test round/
+Close in the very same row. Per-session
 participant counts include anyone who **played** it - started (`playedSessions`),
 is on it (`sessionId`), or completed it (`completedSessions`).
 

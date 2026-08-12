@@ -21,6 +21,26 @@ import styles from './GroupPhase.module.css'
 
 const MAX_VOTES = 3
 
+// How long the group's final-ideas summary is held on screen once every member
+// has voted, before the phase change is allowed through (owner 2026-08). The
+// twin of IndividualPhase's CONFIRM_HOLD_MS — and for the same reason: the
+// backend flips the group to the next phase the moment the LAST member submits,
+// which for a solo group is the same instant, so without a hold the group's
+// result flashed past. Keep the two values together.
+const CONFIRM_HOLD_MS = 15000
+
+// The group's final ideas, tallied the way the backend does it
+// (`finishGroupVoting`): most votes first, top 3. Used while its write is still
+// in flight — the recorded `finalIdeas` wins as soon as it arrives, so what a
+// participant reads is what the study records.
+function topVotedIds(voteCounts, limit = 3) {
+  return Object.entries(voteCounts)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id)
+}
+
 // ── Format timestamp for chat bubbles ───────────────
 function formatTime(timestamp) {
   if (!timestamp?.seconds) return ''
@@ -181,6 +201,17 @@ export default function GroupPhase() {
   const [subPhase, setSubPhase] = useState('ideation')
   const [votesLocked, setVotesLocked] = useState(false)
   const subPhaseInit = useRef(false)
+  // Voting-confirmation hold (see CONFIRM_HOLD_MS): once the WHOLE group has
+  // submitted its votes, everyone is shown the group's final selected ideas for
+  // 15 s before moving on — the group-phase twin of the individual phase's
+  // submission summary. `groupDoneAtRef` is stamped when this browser first sees
+  // the group complete, `pendingPathRef` parks a phase change that arrives
+  // inside the hold, and `holdLeft` is the countdown printed on the card.
+  const groupDoneAtRef = useRef(0)
+  const pendingPathRef = useRef(null)
+  const [holdLeft, setHoldLeft] = useState(0)
+  // The group's recorded final ideas (top-voted), once the backend tally lands.
+  const [finalIdeaIds, setFinalIdeaIds] = useState(null)
   // Mirrors subPhase for callbacks that must not re-fire once the stage moved
   // (the expired ideation timer keeps ticking at 0).
   const subPhaseRef = useRef('ideation')
@@ -276,9 +307,30 @@ export default function GroupPhase() {
             setSubPhase('voting')
           }
         }
+        // A phase change arriving within CONFIRM_HOLD_MS of the group finishing
+        // its vote is PARKED until the summary has had its time on screen (the
+        // backend advances everyone the instant the last member submits). The
+        // hold only applies once the group is actually done — before that, a
+        // status change is an instructor override and must land at once. Status
+        // 'done' is never held: that is the instructor closing the session.
+        const goNext = path => {
+          // The hold starts the first time we learn the group is done, from
+          // EITHER source: the members snapshot (self-advance effect below) or
+          // this very status change. The backend's own trigger can advance us
+          // before that snapshot arrives, and without this the summary would be
+          // skipped exactly when the server was quick. My votes being in is what
+          // makes this status change "the group finished", not an instructor
+          // override mid-vote.
+          if (!groupDoneAtRef.current && data.votesSubmitted) groupDoneAtRef.current = Date.now()
+          const since = groupDoneAtRef.current
+          const left = since ? CONFIRM_HOLD_MS - (Date.now() - since) : 0
+          if (left <= 0) { navigate(path); return }
+          pendingPathRef.current = path
+          setHoldLeft(Math.ceil(left / 1000))
+        }
         const status = data.status
-        if (status === 'survey') navigate(`/session/${sessionId}/survey`)
-        else if (status === 'individual') navigate(`/session/${sessionId}/individual`)
+        if (status === 'survey') goNext(`/session/${sessionId}/survey`)
+        else if (status === 'individual') goNext(`/session/${sessionId}/individual`)
         else if (status === 'done') navigate(`/session/${sessionId}/done`)
       }
     )
@@ -301,6 +353,13 @@ export default function GroupPhase() {
     if (selfAdvancedRef.current) return
     if (!votesLocked || !sessionId || !user || !groupId) return
     if (members.length === 0 || !members.every(m => m.votesSubmitted)) return
+    // Stamp the group's completion BEFORE the write that advances us, so the
+    // status change this triggers can never beat the hold's start (the same
+    // ordering IndividualPhase relies on in markDone).
+    if (!groupDoneAtRef.current) {
+      groupDoneAtRef.current = Date.now()
+      setHoldLeft(Math.ceil(CONFIRM_HOLD_MS / 1000))
+    }
     selfAdvancedRef.current = true
     updateDoc(
       doc(db, 'sessions', sessionId, 'participants', user.uid),
@@ -312,13 +371,36 @@ export default function GroupPhase() {
     })
   }, [votesLocked, members, sessionId, user, groupId, nextAfterGroup])
 
-  // ── Load member labels from group document ──────────
+  // Runs the voting-confirmation hold down and then makes the parked move.
+  // Recomputes from the stamped completion time rather than decrementing, so a
+  // backgrounded tab (throttled intervals) still leaves on time.
+  const holding = holdLeft > 0
+  useEffect(() => {
+    if (!holding) return
+    const id = setInterval(() => {
+      const left = CONFIRM_HOLD_MS - (Date.now() - groupDoneAtRef.current)
+      if (left > 0) { setHoldLeft(Math.ceil(left / 1000)); return }
+      clearInterval(id)
+      setHoldLeft(0)
+      const path = pendingPathRef.current
+      pendingPathRef.current = null
+      if (path) navigate(path)
+    }, 250)
+    return () => clearInterval(id)
+  }, [holding, navigate])
+
+  // ── Load member labels + the recorded final ideas from the group document ──
   useEffect(() => {
     if (!sessionId || !groupId) return
     const unsub = onSnapshot(
       doc(db, 'sessions', sessionId, 'groups', groupId),
       snap => {
-        if (snap.exists()) setMemberLabels(snap.data().memberLabels || {})
+        if (!snap.exists()) return
+        const data = snap.data()
+        setMemberLabels(data.memberLabels || {})
+        // Only once tallied — an empty array is the value a group is CREATED
+        // with, so it must not be mistaken for "the group chose nothing".
+        if (Array.isArray(data.finalIdeas) && data.finalIdeas.length) setFinalIdeaIds(data.finalIdeas)
       }
     )
     return unsub
@@ -583,6 +665,17 @@ export default function GroupPhase() {
 
   // For voting mode: merge all ideas into one list sorted by votes
   const allIdeasForVoting = [...(ideas.individual || []), ...(ideas.group || [])].sort(sortByVotes)
+
+  // ── The group's result, shown to everyone once the whole group has voted ──
+  // `groupVotingDone` is the same condition the self-advance effect uses. The
+  // final set prefers the tallied `finalIdeas` on the group doc and falls back
+  // to the identical client-side tally while that write is in flight, so the
+  // card is never blank in the seconds after the last vote lands.
+  const groupVotingDone = votesLocked && members.length > 0 && members.every(m => m.votesSubmitted)
+  const finalIds = (finalIdeaIds && finalIdeaIds.length) ? finalIdeaIds : topVotedIds(voteCounts)
+  const finalIdeas = finalIds
+    .map(id => allIdeasForVoting.find(i => i.id === id))
+    .filter(Boolean)
 
   /** Renders one idea pill card (uses the stable module-scope IdeaPill) */
   function renderPill(idea, variant, showTag = false) {
@@ -897,6 +990,60 @@ export default function GroupPhase() {
             <button className={`btn-primary ${styles.startBtn}`} onClick={startGroup}>
               Start
             </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════
+  // RESULT view: every member has voted — show the group's final selected
+  // ideas for CONFIRM_HOLD_MS before the phase change goes through (owner
+  // 2026-08; the group-phase twin of the individual phase's submission
+  // summary). No phase timer in the header: voting is over, and the only
+  // countdown that still governs anything is the hold, printed on the card.
+  // ═══════════════════════════════════════════════════
+  if (groupVotingDone) {
+    return (
+      <div className={styles.instrPage}>
+        <header className={styles.instrHeader}>
+          <span className={styles.wordmark}>Ideation Challenge</span>
+          <HeaderControls />
+        </header>
+        <div className={styles.confirmContainer}>
+          <div className={styles.confirmCard}>
+            <div className={styles.confirmCheck}>{'✓'}</div>
+            <h1 className={styles.confirmTitle}>Your group has voted</h1>
+            <p className={styles.confirmSub}>
+              {finalIdeas.length > 0
+                ? `These ${finalIdeas.length === 1 ? 'is the idea' : `are the ${finalIdeas.length} ideas`} your group selected — the most voted of the ${allIdeasForVoting.length} idea${allIdeasForVoting.length === 1 ? '' : 's'} you worked with.`
+                : 'Your group\'s votes are in.'}
+            </p>
+
+            <div className={styles.confirmList}>
+              {finalIdeas.map((idea, i) => (
+                <div key={idea.id} className={`${styles.confirmItem} ${styles.confirmItemSel}`}>
+                  <div className={styles.confirmItemHead}>
+                    <h3 className={styles.confirmItemTitle}>
+                      <span className={styles.confirmRank}>{i + 1}</span>
+                      {idea.title || idea.text}
+                    </h3>
+                    <span className={styles.confirmBadge}>
+                      {voteCounts[idea.id] || 0} vote{(voteCounts[idea.id] || 0) === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {idea.description && (
+                    <p className={styles.confirmItemDesc}>{idea.description}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.confirmWait}>
+              {holdLeft > 0
+                ? `Your group's ideas are saved. ${nextAfterGroup === 'individual' ? 'The individual phase' : 'The survey'} starts in ${holdLeft}s...`
+                : 'Your group\'s ideas are saved. Please wait for the session to advance.'}
+            </div>
           </div>
         </div>
       </div>

@@ -176,8 +176,22 @@ export function stripAllKpis(rows) {
 /**
  * Apply uploaded extra-KPI values onto the loaded rows, matched by Idea ID (then,
  * if no id match, by normalised title). `entries` = [{ idea_id, title, values }]
- * where `values` maps each x_ key to a number; `keys` is the x_ columns to write.
- * Returns { rows, matched, unmatched }.
+ * where `values` maps each key to a number; `keys` is the columns to write.
+ *
+ * Two kinds of column, two rules (owner 2026-08 — the same "an upload adds, it
+ * never overrides" rule as `matchScoresIntoRows`):
+ *  - A **canonical KPI** column (novelty / usefulness / overall_quality / ext_* /
+ *    det_*) is one the app itself scores, so it is only ever FILLED WHERE BLANK.
+ *    A file recognised as carrying "Novelty" lands in the AI Novelty column, and
+ *    without this an upload wiped every idea a past AI rater had already scored —
+ *    including blanking cells the file left empty, since the write was
+ *    unconditional.
+ *  - An **uploaded extra** (`x_…`) column belongs to the file itself — a column
+ *    of the user's own values (prototypicality, ks, …) — so re-uploading it
+ *    REPLACES it, which is the point of re-uploading a corrected file.
+ *
+ * Returns { rows, matched, unmatched, filled, kept }, where `filled`/`kept` count
+ * ideas that gained / retained a canonical KPI (an extras-only upload leaves both 0).
  */
 export function matchUploadedKpisIntoRows(rows, entries, keys) {
   const byId = new Map()
@@ -189,20 +203,29 @@ export function matchUploadedKpisIntoRows(rows, entries, keys) {
     if (t && !byTitle.has(t)) byTitle.set(t, i)
   })
   const next = rows.slice()
-  let matched = 0, unmatched = 0
+  let matched = 0, unmatched = 0, filled = 0, kept = 0
   for (const e of entries || []) {
     let idx = byId.get(String(e.idea_id ?? ''))
     if (idx == null) idx = byTitle.get(normTitle(e.title))
     if (idx == null) { unmatched++; continue }
+    matched++
+    const cur = next[idx]
     const patch = {}
+    let gained = false, held = false
     for (const k of keys) {
       const v = e.values?.[k]
-      patch[k] = (v === '' || v == null || !Number.isFinite(Number(v))) ? '' : Number(v)
+      const val = (v === '' || v == null || !Number.isFinite(Number(v))) ? '' : Number(v)
+      if (k.startsWith(UPLOADED_KPI_PREFIX)) { patch[k] = val; continue }  // the file's own column — replace
+      if (val === '') continue                       // nothing usable: never blank what is there
+      if (!isBlankScore(cur[k])) { held = true; continue }  // already scored: keep it
+      patch[k] = val
+      gained = true
     }
-    next[idx] = { ...next[idx], ...patch }
-    matched++
+    if (gained) filled++
+    else if (held) kept++
+    if (Object.keys(patch).length) next[idx] = { ...cur, ...patch }
   }
-  return { rows: next, matched, unmatched }
+  return { rows: next, matched, unmatched, filled, kept }
 }
 
 /**
@@ -658,6 +681,11 @@ function rowTitle(r) {
   return i > 0 ? t.slice(0, i) : t
 }
 
+/** Is this KPI cell empty (so an upload may fill it)? Scores are 1–5 or ''. */
+function isBlankScore(v) {
+  return v == null || String(v).trim() === ''
+}
+
 function clampScore(v) {
   if (v == null || String(v).trim() === '') return ''
   const n = Number(v)
@@ -670,11 +698,29 @@ function clampScore(v) {
  * idea TITLE (the imported file — e.g. an "All Ideas Ranked" sheet — usually has
  * no idea id). Each `entry` is { title, novelty, usefulness }. Matching is
  * exact-on-normalised-title first, then a length-guarded contains match; each
- * dataset row is used at most once. Returns the updated rows plus counts.
+ * dataset row is used at most once.
+ *
+ * **An upload only ADDS scores — it never overwrites one that is already there**
+ * (owner 2026-08). A file often carries ideas scored in an earlier sitting (by a
+ * past AI rater or by hand), and re-importing it used to clobber every one of
+ * them, silently replacing the kept scores with the file's — and blanking a
+ * score outright wherever the file's cell was empty or unparseable, since the
+ * write was unconditional. So each KPI is filled ONLY where the row is still
+ * blank and the incoming value is usable; a row already carrying that KPI is
+ * left exactly as it is. This is the same rule the LLM scoring run applies
+ * (`scoreUnscored` fills only the missing field(s)) — change a kept score by
+ * editing its cell in the Step-3 table, which is the one deliberate path.
  *
  * `fields` chooses WHICH KPI columns to fill, so the same matcher serves both the
  * 3.2 AI-scores upload ({novelty:'novelty', usefulness:'usefulness'}, the default)
  * and the 3.3 external-evaluator upload ({novelty:'ext_novelty', usefulness:'ext_usefulness'}).
+ *
+ * Returns { rows, matched, unmatched, filled, kept }: `matched` counts file rows
+ * that found an idea (as before), `filled` those that actually gained a score,
+ * and `kept` the matched ideas left untouched because they were already scored.
+ * `filled`/`kept` are per-idea and MUTUALLY EXCLUSIVE — an idea that gained one
+ * KPI while holding the other counts as filled — so the two never double-count
+ * an idea in the message the page reports.
  */
 export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelty: 'novelty', usefulness: 'usefulness' }) {
   const eligible = typeof isEligible === 'function' ? isEligible : () => true
@@ -691,6 +737,8 @@ export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelt
   const used = new Set()
   let matched = 0
   let unmatched = 0
+  let filled = 0
+  let kept = 0
 
   for (const e of entries || []) {
     const key = normTitle(e.title)
@@ -715,10 +763,19 @@ export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelt
     const idx = candidates && candidates.find(i => !used.has(i))
     if (idx == null) { unmatched++; continue }
     used.add(idx)
-    next[idx] = { ...next[idx], [fields.novelty]: clampScore(e.novelty), [fields.usefulness]: clampScore(e.usefulness) }
     matched++
+    // Fill blanks only — never overwrite a score the dataset already carries,
+    // and never blank one because this file had nothing usable for it.
+    const cur = next[idx]
+    const patch = {}
+    const nov = clampScore(e.novelty)
+    const use = clampScore(e.usefulness)
+    if (nov !== '' && isBlankScore(cur[fields.novelty])) patch[fields.novelty] = nov
+    if (use !== '' && isBlankScore(cur[fields.usefulness])) patch[fields.usefulness] = use
+    if (Object.keys(patch).length) { next[idx] = { ...cur, ...patch }; filled++ }
+    else kept++
   }
-  return { rows: next, matched, unmatched }
+  return { rows: next, matched, unmatched, filled, kept }
 }
 
 /**
