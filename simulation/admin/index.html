@@ -125,7 +125,9 @@
         (all → only ✓ → only —).</p>
         <div class="actions" style="margin-top:0">
           <button id="btn-csv" class="btn ghost" hidden>Export CSV</button>
+          <button id="btn-verify-arena" class="btn ghost" hidden>⟲ Verify from Answer Arena</button>
           <span id="roster-count" class="hint">Loading roster…</span>
+          <span id="verify-note" class="hint"></span>
         </div>
         <div class="roster-wrap"><table class="simtab" id="rostertab" hidden>
           <thead><tr><th>Name</th><th>Student ID</th><th>E-mail</th><th>Level</th><th>Registered</th><th>Approved</th><th></th></tr></thead>
@@ -140,6 +142,9 @@
 <footer><div class="wrap">Simulation Platform admin · <a href="../">student page</a> · <a href="https://stouras.com">stouras.com</a></div></footer>
 
 <script src="../firebase-config.js"></script>
+<!-- Answer Arena's public web config — used by the roster's "Verify from
+     Answer Arena" reconciliation (reads arena's own completion records). -->
+<script src="/lab/answerarena/arena-config.js"></script>
 <script>window.SIMP_BASE = '..';</script>
 <script src="../catalog.js"></script>
 <script src="../platform.js"></script>

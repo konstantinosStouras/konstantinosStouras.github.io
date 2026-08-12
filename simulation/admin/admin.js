@@ -412,6 +412,7 @@
     });
     $('rostertab').hidden = roster.length === 0;
     $('btn-csv').hidden = roster.length === 0;
+    $('btn-verify-arena').hidden = roster.length === 0;
     var approvedN = roster.filter(function (r) { return r.approved; }).length;
     var filtered = visible.length !== roster.length;
     $('roster-count').textContent = roster.length === 0
@@ -447,6 +448,100 @@
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
   });
+
+  /* ---------- verify completions from Answer Arena's own records ----------
+     The client-side markers can miss a student (platform tab closed when
+     they finished, a direct URL, another browser) — but the arena's OWN
+     backend is the ground truth: its intake stores the UCD student ID as
+     participantId, the join key to this roster. Reads the arena project
+     with the shared admin credentials (the locker above) and stamps
+     completed.answerarena onto every matching roster doc; each student's
+     page pulls the ✓ down live via its own-doc watch. Only ever ADDS. */
+  function verifyFromArena() {
+    if (!lastRows) return Promise.reject(new Error('the roster has not loaded yet'));
+    var creds = null;
+    try {
+      creds = JSON.parse(sessionStorage.getItem(P.KEYS.adminCreds) ||
+                         localStorage.getItem(P.KEYS.adminCreds) || 'null');
+    } catch (e) {}
+    if (!creds || !creds.email || !creds.pass) {
+      return Promise.reject(new Error('save the shared admin credentials in the locker above first — they are used to read Answer Arena’s records'));
+    }
+    var cfg = window.ARENA_FIREBASE;
+    if (!cfg || !cfg.apiKey) return Promise.reject(new Error('arena-config.js did not load'));
+    var U = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    return Promise.all([
+      import(U + 'firebase-app.js'), import(U + 'firebase-auth.js'), import(U + 'firebase-firestore.js')
+    ]).then(function (m) {
+      var A = m[1], D = m[2], app;
+      try { app = m[0].getApp('arena-verify'); } catch (e) { app = m[0].initializeApp(cfg, 'arena-verify'); }
+      var auth = A.getAuth(app);
+      var signin = auth.currentUser ? Promise.resolve()
+        : A.signInWithEmailAndPassword(auth, creds.email, creds.pass);
+      return signin.then(function () {
+        var fs = D.getFirestore(app);
+        return Promise.all([
+          D.getDocs(D.collection(fs, 'participants')),
+          D.getDocs(D.collection(fs, 'sessions'))
+        ]);
+      });
+    }).then(function (r) {
+      var codeById = {};
+      r[1].forEach(function (d) { codeById[d.id] = String(d.data().code || '').toUpperCase(); });
+      var doneById = {};   // normalized student ID -> {ts, session}
+      r[0].forEach(function (d) {
+        var x = d.data();
+        var cs = x.completedSessions || {};
+        var sids = Object.keys(cs);
+        if (!sids.length && x.status !== 'done') return;   // not completed
+        var pid = String(x.participantId || '').trim().toLowerCase();
+        if (!pid) return;
+        var best = { ts: Number(x.updatedAt) || 0, session: null };
+        sids.forEach(function (sid) {
+          var ts = Number(cs[sid]) || 0;
+          if (ts >= best.ts) best = { ts: ts, session: sid === '_none' ? null : (codeById[sid] || null) };
+        });
+        if (!doneById[pid] || best.ts > doneById[pid].ts) doneById[pid] = best;
+      });
+      var byPid = {};
+      lastRows.forEach(function (row) {
+        var k = String(row.studentId || '').trim().toLowerCase();
+        if (k) (byPid[k] = byPid[k] || []).push(row);
+      });
+      var stamps = [], already = 0, unmatched = [];
+      Object.keys(doneById).forEach(function (pid) {
+        var rows = byPid[pid];
+        if (!rows) { unmatched.push(pid); return; }
+        if (rows.some(function (row) { return row.completed && row.completed.answerarena; })) { already++; return; }
+        stamps.push({ uids: rows.map(function (row) { return row.uid; }).filter(Boolean), mark: doneById[pid] });
+      });
+      var tail = (unmatched.length
+        ? ' · ' + unmatched.length + ' completed arena ID(s) not in this roster: ' +
+          unmatched.slice(0, 10).join(', ') + (unmatched.length > 10 ? '…' : '')
+        : '');
+      if (!stamps.length) {
+        return 'Checked ' + Object.keys(doneById).length + ' completed Arena participant(s) — every match already shows ✓' + tail;
+      }
+      return P.firebase().then(function (F) {
+        return Promise.all(stamps.map(function (s) {
+          return F.stampCompleted(s.uids, 'answerarena', s.mark);
+        }));
+      }).then(function () {
+        return 'Stamped ✓ for ' + stamps.length + ' student(s) from Answer Arena’s own records (' +
+          already + ' already had it)' + tail + ' — the roster and the students’ own pages update live.';
+      });
+    });
+  }
+  $('btn-verify-arena').onclick = function () {
+    var btn = this;
+    $('verify-note').textContent = 'Reading Answer Arena’s records…';
+    btn.disabled = true;
+    verifyFromArena().then(function (msg) {
+      $('verify-note').textContent = msg;
+    }, function (e) {
+      $('verify-note').textContent = 'Verify failed: ' + ((e && e.message) || e);
+    }).then(function () { btn.disabled = false; });
+  };
 
   /* ---------- boot ---------- */
   P.watchConfig(function (c) {

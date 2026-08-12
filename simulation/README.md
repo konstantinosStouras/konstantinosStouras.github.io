@@ -78,7 +78,18 @@ Then:
   header to filter** (all → only ✓ → only —), and the CSV export carries the
   same `completed:<sim>` columns. The data is the student page mirroring its
   play-once markers onto the student's roster doc (`syncCompleted` — the
-  `completed` map is student-writable in the rules; it grants nothing). Delete removes the row's
+  `completed` map is student-writable in the rules; it grants nothing), and
+  the roster doc flows BACK DOWN: the student page's own-doc watch merges any
+  centrally stamped completion into the local markers, so a ✓ shows on the
+  student's card wherever they log in. Client-side markers can still miss a
+  student (platform tab closed at the moment of finishing, a direct URL,
+  another browser) — the **"⟲ Verify from Answer Arena"** button beside
+  Export CSV is the ground-truth reconciliation: it reads the ARENA project's
+  own participant records with the shared admin credentials from the locker
+  (arena stores the UCD student ID as `participantId` — the join key),
+  matches them to the roster by student ID, and stamps `completed.answerarena`
+  (with the session code) onto every matching student — add-only, applied to
+  the whole roster in one click, live everywhere. Delete removes the row's
   roster doc(s), including any collapsed duplicate re-registrations, via the
   rules' `allow delete: if isAdmin()`; the student's own browser profile is
   untouched, so they can simply register again. **Returning students:** on

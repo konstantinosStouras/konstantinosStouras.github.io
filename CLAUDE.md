@@ -2368,7 +2368,16 @@ in the header, click the Approved/sim headers to cycle filters all→✓→—,
 CSV carries `completed:<sim>` columns): the student page mirrors its
 play-once markers onto the roster doc (`syncCompleted` in platform.js, at
 load + on the completion storage event; `completed` is student-writable in
-the rules — it grants nothing). **Pinned Session IDs are never
+the rules — it grants nothing), and the roster's `completed` map flows BACK
+DOWN via the own-doc watch (merge in `watchApproval`, forced re-render), so
+a centrally stamped ✓ reaches the student's card live wherever they log in.
+The admin's **"⟲ Verify from Answer Arena"** button (`verifyFromArena` in
+admin/admin.js; arena-config.js loaded on the admin page) is the
+ground-truth reconciliation for markers the client side missed: it signs
+into the ARENA project with the locker credentials, reads participants
+(+ sessions for id→code), joins `participantId` ↔ roster studentId, and
+`stampCompleted`s (admin write) every match — add-only, whole roster at
+once. **Pinned Session IDs are never
 shown to students**: a pinned code launches the card DIRECTLY ("Session
 ready" badge, no dialog — openModal's pinned branch), and the same-origin
 sims hide their own code fields when the code came from the handoff
