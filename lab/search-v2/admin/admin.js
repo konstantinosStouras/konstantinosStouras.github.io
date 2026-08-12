@@ -460,13 +460,19 @@
   }
 
   // ============================================================= launch + summary
+  // The sandbox ("test round") link for a session: preview mode skips the intro
+  // and writes NOTHING to Firestore. Shared by the launch box and each session
+  // card's 🧪 Test round button so the two can never drift.
+  function previewUrl(code) {
+    return appBase() + '?code=' + encodeURIComponent(code) + '&preview=1&debug=1&key=' + DEBUG_KEY;
+  }
   function renderLaunch(sess) {
     var base = appBase(), code = sess.code;
     // One participant link per session: the phases (and their order) come from the
     // session settings, so no ?arm= is needed. (?arm still works as a legacy
     // fallback for sessions saved before the phases model.)
     var link = base + '?code=' + code;
-    var prev = base + '?code=' + code + '&preview=1&debug=1&key=' + DEBUG_KEY;
+    var prev = previewUrl(code);
     var box = $('launch-box');
     box.style.display = 'block';
     box.className = 'code-box';
@@ -727,6 +733,7 @@
         '<button class="link-btn" data-act="edit" data-id="' + s.id + '">Edit</button>' +
         '<button class="link-btn" data-act="data" data-id="' + s.id + '">View data</button>' +
         '<button class="link-btn" data-act="excel" data-id="' + s.id + '" title="Download this session\'s full dataset as an Excel workbook (settings, participants, rounds, every action with decision times, survey).">⬇ Excel</button>' +
+        '<button class="link-btn" data-act="testround" data-id="' + s.id + '" title="Play this session\'s whole flow in a private sandbox: the intro is skipped and NOTHING is written to Firestore — no participant, no rounds, no events.">🧪 Test round</button>' +
         (s.status === 'completed'
           ? '<button class="link-btn" data-act="reopen" data-id="' + s.id + '">Reopen</button>'
           : '<button class="link-btn" data-act="complete" data-id="' + s.id + '">Mark completed</button>') +
@@ -742,6 +749,10 @@
       if (act === 'edit') { fillForm(sess, null); renderSummary(); selectTab('sessions'); window.scrollTo(0, 0); }
       else if (act === 'data') { $('data-filter').value = sess.code; selectTab('data'); }
       else if (act === 'excel') { exportExcel(sess.code); }
+      // 🧪 Test round: the participant app in preview mode — it skips the intro
+      // and never writes to Firestore (see PREVIEW in app.js), so the whole flow
+      // can be rehearsed on a live session without adding a participant.
+      else if (act === 'testround') { window.open(previewUrl(sess.code), '_blank'); }
       else if (act === 'complete') { FB.updateSession(id, { status: 'completed' }).then(loadSessions); }
       else if (act === 'reopen') { FB.updateSession(id, { status: 'active' }).then(loadSessions); }
       else if (act === 'delete') { if (confirm('Delete session "' + (sess.name || sess.code) + '"? Its collected event rows are kept.')) FB.deleteSession(id).then(loadSessions); }

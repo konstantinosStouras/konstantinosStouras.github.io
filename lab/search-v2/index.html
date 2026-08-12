@@ -227,7 +227,9 @@
 
   <!-- Simulation Platform (stouras.com/simulation): completion marker only —
        the study has no demographics form to prefill. Inert standalone. -->
-  <script>window.SIMP_EXPECT = 'search-v2';</script>
+  <!-- Off in a test round (?preview=1): a sandbox must never tell the platform
+       the run completed, or it would gate the student's real play. -->
+  <script>window.SIMP_EXPECT = /[?&]preview=1\b/.test(location.search) ? '__off__' : 'search-v2';</script>
   <script src="/simulation/prefill.js" defer></script>
   <script src="config.js"></script>
   <script src="landscape.js"></script>

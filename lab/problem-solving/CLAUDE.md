@@ -302,9 +302,24 @@ month-first text dates, slash dates (`5/17/2026 14:22:33`, month-first unless
 the first number is >12) and anything `new Date` can parse; unparseable cells
 yield `null`. `detectColumns` gained a `timestamp` key (falls back to column A).
 
-Mode precedence: `?admin` wins over `?preview`. The game and preview code
-paths are untouched — admin mode only adds `initAdmin()` + `admin*` helpers
-and the `.admin-*` styles.
+- **🧪 Test round** (beside "Refresh data") — opens `?preview=1&key=stouras` in a
+  new tab: the REAL game, played exactly as a student would, with the single
+  submission POST replaced by a no-op (`logToSheet` is swapped for a console log
+  + "Test round — response NOT saved ✓" toast). A fixed `#ps-ribbon` banner says
+  so, and `SIMP_EXPECT` is switched off for `?preview=1` so a test round can
+  never mark the Simulation Platform's card "✓ Completed" and block the
+  student's real play. Nothing else in the app changes — there is no
+  registration form here, so nothing to pre-fill.
+
+Mode precedence: `?admin` wins over the previews, and the TEST ROUND
+(`?preview=1&key=stouras`) is checked before the older `?preview`, which keeps
+its own meaning (auto-simulate a FINISHED game to preview the results screen).
+`IS_TEST_ROUND` is gated on the key so a stray `?preview=1` can never silently
+stop logging. The game and preview code paths are otherwise untouched — admin
+mode only adds `initAdmin()` + `admin*` helpers and the `.admin-*` styles.
+Offline test: `node lab/problem-solving/tools/preview-guard.mjs` (Playwright;
+stubs the Chart.js CDN, counts Apps-Script POSTs, asserts 0 in a test round and
+that a plain visit still logs).
 
 ## Display scaling
 

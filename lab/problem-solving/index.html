@@ -570,7 +570,7 @@
 
 <!-- Simulation Platform (stouras.com/simulation): completion marker only —
      this game has no registration form to prefill. Inert standalone. -->
-<script>window.SIMP_EXPECT = /[?&]admin\b/.test(location.search) ? '__off__' : 'problem-solving';</script>
+<script>window.SIMP_EXPECT = (/[?&]admin\b/.test(location.search) || /[?&]preview=1\b/.test(location.search)) ? '__off__' : 'problem-solving';</script>
 <script src="/simulation/prefill.js" defer></script>
 
 <script>
@@ -2755,6 +2755,7 @@ function initAdmin() {
       <div class="admin-actions">
         <button class="pdf-btn" id="admin-download" disabled><span class="btn-icon">↓</span> <span id="admin-download-label">Download CSV</span></button>
         <button type="button" class="admin-refresh" id="admin-refresh">⟳ Refresh data</button>
+        <button type="button" class="admin-refresh" id="admin-testround" title="Play the game exactly as a student would, in a private sandbox — your response is NOT saved to the Google Sheet.">🧪 Test round</button>
       </div>
     </div>
 
@@ -2781,6 +2782,9 @@ function initAdmin() {
     document.getElementById(id).addEventListener('change', () => { adminMarkPreset(null); adminRender(); }));
   document.getElementById('admin-download').addEventListener('click', adminDownloadCSV);
   document.getElementById('admin-refresh').addEventListener('click', () => adminLoadData(true));
+  // 🧪 Test round: the participant game in a private sandbox that logs nothing.
+  document.getElementById('admin-testround').addEventListener('click', () =>
+    window.open(location.origin + location.pathname + '?preview=1&key=stouras', '_blank'));
 
   adminLoadData(false);
 }
@@ -2949,9 +2953,40 @@ function adminDownloadCSV() {
 // Init
 const URL_PARAMS = new URLSearchParams(window.location.search);
 const IS_ADMIN = URL_PARAMS.has('admin');
-const IS_PREVIEW = !IS_ADMIN && URL_PARAMS.has('preview');
+// TEST ROUND (the admin's 🧪 button): play the game for real, but log NOTHING —
+// no row reaches the Google Sheet and the Simulation Platform is never told the
+// run completed (SIMP_EXPECT is switched off above). Distinct from the older
+// ?preview below, which auto-simulates a FINISHED game to preview the results
+// screen. Gated on the key so a stray ?preview=1 can't silently stop logging.
+const IS_TEST_ROUND = !IS_ADMIN && URL_PARAMS.get('preview') === '1' && URL_PARAMS.get('key') === 'stouras';
+const IS_PREVIEW = !IS_ADMIN && !IS_TEST_ROUND && URL_PARAMS.has('preview');
 
-if (IS_ADMIN) {
+if (IS_TEST_ROUND) {
+  // ============================================================
+  // TEST ROUND — the real game, nothing saved
+  // ============================================================
+  // The ONLY write this app makes is the single submission POST, so replacing
+  // logToSheet is the whole sandbox: the instructor plays through exactly as a
+  // student would (same rule, same guesses, same results screen) and no row is
+  // written. A constant ribbon says so.
+  logToSheet = function (rule, conf, numAttempts) {
+    if (submitted) return;
+    submitted = true;
+    console.log('[Test round] submission NOT saved:', { rule: rule, confidence: conf, attempts: numAttempts });
+    showToast('Test round — response NOT saved ✓');
+  };
+  window.addEventListener('DOMContentLoaded', function () {
+    var r = document.createElement('div');
+    r.id = 'ps-ribbon';
+    r.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#b26a00;color:#fff;'
+      + 'text-align:center;padding:7px 14px;font-size:13px;font-family:inherit;'
+      + 'box-shadow:0 -2px 10px rgba(0,0,0,.18);pointer-events:none;';
+    r.innerHTML = '<span aria-hidden="true">🧪 </span><b>Test mode</b> — this is a private sandbox. '
+      + 'Play as a student would; your response is NOT saved.';
+    document.body.appendChild(r);
+  });
+
+} else if (IS_ADMIN) {
   // ============================================================
   // ADMIN MODE — data download + date-filtered analytics
   // ============================================================

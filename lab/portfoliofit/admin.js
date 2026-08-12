@@ -877,6 +877,7 @@
           var actions = [
             el('button', { class: 'pfa-btn sec sm', on: { click: function () { copyText(s._id, 'Session ID copied.'); } } }, ['copy ID']),
             el('button', { class: 'pfa-btn sm', on: { click: function () { exportSession(s._id); } } }, ['⬇ Excel']),
+            el('button', { class: 'pfa-btn sec sm', title: TEST_ROUND_HINT, on: { click: function () { launchTestRound(s); } } }, ['🧪 Test round']),
             el('button', { class: 'pfa-btn sec sm', title: 'Edit this session’s Session ID and Name', on: { click: rowEdit } }, ['edit'])
           ];
           if (isDone) actions.push(el('button', { class: 'pfa-btn sec sm', on: { click: function () { setStatus(s._id, 'open'); } } }, ['reopen']));
@@ -1239,6 +1240,57 @@
   function exportParticipant(p) { var tag = (sidOf(p) || whoOf(p) || p._id).toString().replace(/[^A-Za-z0-9_-]/g, '_'); return exportWorkbook([p], cfg.registrationQuestions, cfg.surveyQuestions, 'portfoliofit-user-' + tag + '-' + stamp() + '.xlsx'); }
   // Every participant who played a given session (one combined file; the session's
   // own registration/survey question order is used for those sheets).
+  /* ---- 🧪 Test round: rehearse a session, saving NOTHING ---------------
+     Hands the session's OWN snapshot (texts, settings, questions, consents) and
+     its frozen puzzle specs to the participant app via localStorage, then opens
+     it at ?preview=1&key=stouras&session=CODE. There the app skips Firebase
+     entirely (see PREVIEW in experiment.js): no participant doc, no events, no
+     rounds — and the registration form arrives filled with random test data.
+     Mirrors the ideasearchlab / Answer Arena admin Test round buttons. */
+  var TEST_ROUND_HINT = 'Play this session’s whole flow in a private sandbox: '
+    + 'the registration form is pre-filled with random test data and nothing is saved '
+    + '— no participant record, no events, no rounds.';
+  async function launchTestRound(s) {
+    var code = s && s._id;
+    toast('Preparing the test round…');
+    var puzzles = [];
+    var ids = ((s && s.settings && s.settings.activePuzzleIds) || []).slice(0, 12);
+    // Rehearse the puzzles participants really get: the sandbox has no Firebase,
+    // so the frozen set's specs travel with the seed. A read failure is
+    // non-fatal — the sandbox falls back to the built-in pool.
+    for (var i = 0; i < ids.length; i++) {
+      try {
+        var snap = await fb.F.getDoc(fb.F.doc(fb.db, 'puzzleSets', ids[i]));
+        if (snap.exists()) {
+          var spec = null;
+          try { spec = JSON.parse(snap.data().specJson); } catch (e) { spec = null; }
+          if (spec) puzzles.push({ id: ids[i], spec: spec });
+        }
+      } catch (e) { /* skip this one */ }
+    }
+    var seed = {
+      ts: Date.now(), code: code,
+      session: {
+        texts: s.texts || null, settings: s.settings || null,
+        registrationQuestions: s.registrationQuestions || null,
+        registrationConsents: s.registrationConsents || null,
+        surveyQuestions: s.surveyQuestions || null
+      },
+      puzzles: puzzles
+    };
+    try { localStorage.setItem('pfx-preview-config', JSON.stringify(seed)); }
+    catch (e) {
+      // Too big for localStorage: drop the puzzle specs (the sandbox then plays
+      // the built-in pool) rather than leaving it unseeded.
+      seed.puzzles = [];
+      try { localStorage.setItem('pfx-preview-config', JSON.stringify(seed)); }
+      catch (e2) { toast('Could not start the test round (browser storage is full).'); return; }
+    }
+    var base = location.origin + location.pathname;
+    window.open(base + '?preview=1&key=stouras&session=' + encodeURIComponent(code), '_blank');
+    toast('Test round opened in a new tab. Nothing you do there is saved.');
+  }
+
   async function exportSession(code) {
     toast('Loading session data…');
     try {

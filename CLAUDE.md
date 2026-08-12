@@ -2172,6 +2172,51 @@ ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export da
 button (calling the same `exportSessionWorkbook` builder the control room uses, so
 the file is identical), matching what Answer Arena's session cards already had.
 
+### 🧪 Test round — EVERY class simulation that can have one has one
+
+Owner request 2026-08: the instructor must be able to rehearse any simulation
+end to end without leaving a trace. Each app's admin therefore has a **🧪 Test
+round** button that opens the participant flow in a private sandbox writing
+**nothing** — and, where the app asks for demographics, the form arrives
+**pre-filled with random test data and the consents ticked**. The shape differs
+because the apps differ, but the contract is identical: *no participant record,
+no responses/events/rounds, no completion marker, and a constant "Test mode —
+nothing is saved" ribbon.* Also uniform: a REAL Simulation-Platform handoff is
+IGNORED in a sandbox, and each app's `SIMP_EXPECT` is switched off for
+`?preview=1`, so a test round can never stamp the platform card "✓ Completed"
+and gate a student's real play.
+
+| Simulation | How the sandbox is isolated | Gate |
+| --- | --- | --- |
+| **ideasearchlab** | `src/utils/db.js` façade swaps Firestore/Functions for the in-memory `previewDb`; solo run, synthetic user | `?preview=1&key=stouras` |
+| **Answer Arena** | `ArenaStore` forced to the LOCAL backend in its own `arena:preview:` localStorage namespace (Firebase SDK never fetched) | `?preview=1&key=stouras` |
+| **PortfolioFit** | `init()` returns `startPreview()` before Firebase is imported; `S.offline` already no-ops every write; session snapshot + frozen puzzle specs seeded via localStorage | `?preview=1&key=stouras` |
+| **Problem Solving** | its ONE write (the Apps-Script POST) is replaced by a no-op; the real game is played | `?preview=1&key=stouras` |
+| **Search-v2** | its pre-existing admin preview (`PREVIEW` in app.js) skips the intro and never calls `startFirebaseSync`; now reachable from every session card + a visible ribbon | `?preview=1&debug=1&key=stouras` |
+| **Sustainable Supply Chains** | `store.js` returns an isolated, resettable `ssc-preview-*` demo backend | `?preview=1` |
+
+Random-data fillers are deliberate triplets — `randomRegistrationAnswers`
+(`_ideasearchlab-src/src/utils/testData.js`), `previewAnswers`
+(`lab/answerarena/arena-app.js`) and `previewRegAnswers`
+(`lab/portfoliofit/experiment.js`) — each answering a field by what it asks for
+(random option for a select/country, a value inside `min`/`max`, digits for a
+Student-ID, a test address for e-mail, a name for a name field). Keep them in
+sync. Deliberately NOT pre-filled: the end-of-study **surveys** (a tester may
+want to exercise their validation).
+
+**Two sims deliberately have no test round.** `newsvendor` is hosted
+CROSS-ORIGIN (newsvendor-kostas.web.app) — this repo cannot instrument it, and
+it has no admin here; `jagged` collects nothing at all, so free play already IS
+a sandbox. Search-v2 and Problem Solving have no registration form, so there is
+nothing to pre-fill there.
+
+Offline tests (Playwright, no network — each asserts the isolation, the ribbon
+and, where applicable, the pre-filled form): `node
+lab/answerarena/tools/preview-guard.mjs`, `node
+lab/portfoliofit/tools/preview-guard.mjs`, `node
+lab/problem-solving/tools/preview-guard.mjs`, `node
+lab/search-v2/tools/preview-guard.mjs`.
+
 The retired static prototype `lab/brainstorming/` (an older Google-Sheets-backed
 version of the same Ideation Challenge, superseded by `lab/ideasearchlab/`) was
 removed.

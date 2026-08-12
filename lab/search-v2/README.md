@@ -250,10 +250,19 @@ The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
   `**bold**` and blank lines are supported. **Save**, **Make this the default**
   (seed new sessions), and **Restore built-in default** controls, plus a **Settings
   summary**.
-- **test immediately** — each session has a **▶ Test this session** link that opens
-  the app with the intro (consent/instructions/quiz) **skipped, just for you**
-  (gated on the debug key; real participants always see consent). Preview never
-  writes to Firestore.
+- **test immediately (🧪 Test round)** — every session **card** carries a
+  **🧪 Test round** action, and the launch box keeps its **▶ Test this session**
+  link; both open the same sandbox URL (built once by `previewUrl(code)`) with
+  the intro (consent/instructions/quiz) **skipped, just for you** (gated on the
+  debug key; real participants always see consent). Preview never writes to
+  Firestore — and the tab now carries a constant **`.sv-ribbon`** banner saying
+  nothing is saved (the small `PREVIEW ·` nav label was easy to miss, and later
+  phase updates overwrite it), while `SIMP_EXPECT` is switched off for
+  `?preview=1` so a rehearsal can never mark the Simulation Platform's card
+  "✓ Completed" and block the student's real play. This study has no
+  registration/demographics form, so there is nothing to pre-fill (unlike the
+  ideasearchlab / Answer Arena / PortfolioFit sandboxes). Offline test:
+  `node lab/search-v2/tools/preview-guard.mjs`.
 - **see the data & analytics** — a per-session data table (CSV/JSON export) and an
   **Analytics** tab comparing **Without AI vs With AI** (net, reveals, best found
   per round) over completed participants. In a within-subjects session each

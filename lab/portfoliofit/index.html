@@ -2751,7 +2751,9 @@
 
 <!-- Simulation Platform prefill (inert outside a platform launch): fills the
      post-training Registration form from the student's saved platform details. -->
-<script>window.SIMP_EXPECT = /[?&]admin([=&]|$)/.test(location.search) ? '__off__' : 'portfoliofit';</script>
+<!-- Off on the admin views and in a test round (?preview=1), where the sandbox
+     fills the registration form with its own random data. -->
+<script>window.SIMP_EXPECT = (/[?&]admin([=&]|$)/.test(location.search) || /[?&]preview=1\b/.test(location.search)) ? '__off__' : 'portfoliofit';</script>
 <script src="/simulation/prefill.js" defer></script>
 </body>
 </html>
