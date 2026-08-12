@@ -663,6 +663,7 @@
         // Show the most recent account; Delete covers all of them.
         var list = g.rows.slice().sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
         var p = list[0], ids = list.map(function (x) { return x._id; });
+        var gkey = String(p.participantId || '').trim().toLowerCase();
         var doneN = 0;
         list.forEach(function (x) { doneN += Object.keys(x.completedSessions || {}).length; });
         var c = p.condition || {};
@@ -675,6 +676,9 @@
             el('span', { class: 'aa-note', text: p.status || '' })
           ]),
           el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'registered ' + fmtTs(p.createdAt) + '  ·  ' + doneN + ' session(s) completed' + (ids.length > 1 ? '  ·  ' + ids.length + ' accounts' : '') + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
+          /* The account IDs are the export's own account_id column, so a row
+             in the spreadsheet can be matched to the card that removes it. */
+          el('div', { class: 'aa-note', style: 'margin-top:2px;opacity:.75;', text: 'account_id: ' + ids.join(', ') }),
           el('div', { class: 'aa-row', style: 'margin-top:6px;' }, [
             el('button', { class: 'aa-btn danger sm', on: { click: function () {
               if (!window.confirm('Delete "' + (p.participantId || p.email || p._id) + '" and all their data?' +
@@ -684,10 +688,23 @@
                  reporting success while its data is still exportable. */
               Promise.allSettled(ids.map(function (id) { return Store.deleteParticipant(id); })).then(function (rs) {
                 var bad = rs.filter(function (x) { return x.status === 'rejected'; });
-                if (bad.length) toast('Delete FAILED for ' + bad.length + ' of ' + ids.length + ' account(s) — their data is still there; please try again.');
-                else toast('Deleted ' + (ids.length > 1 ? ids.length + ' accounts' : '') + ' — their data is gone from every export.');
-                load();
-              });
+                /* VERIFY, never assume: re-read and check nothing is left under
+                   this Participant ID. A delete that silently half-worked used
+                   to leave an account behind that kept appearing in exports. */
+                return Store.listParticipants().then(function (fresh) {
+                  all = fresh.sort(function (a, b) { return tsMs(a.createdAt) - tsMs(b.createdAt); });
+                  var left = gkey ? all.filter(function (x) { return String(x.participantId || '').trim().toLowerCase() === gkey; }) : [];
+                  if (left.length) {
+                    toast('STILL PRESENT: ' + left.length + ' account(s) for ' + (p.participantId || '') +
+                          ' could not be removed (' + left.map(function (x) { return x._id; }).join(', ') +
+                          ')' + (bad.length ? ' — ' + bad.length + ' delete(s) were rejected' : '') + '. Please try again.');
+                  } else {
+                    toast('Deleted ' + (ids.length > 1 ? ids.length + ' accounts' : '') +
+                          ' — verified gone from the database, so they cannot appear in any export.');
+                  }
+                  render();
+                });
+              }).catch(function (e) { toast('Delete error: ' + ((e && e.code) || e)); load(); });
             } } }, ['Delete'])
           ])
         ]));
@@ -1191,6 +1208,9 @@
   // (with its timestamp), and one survey per session taken.
   // opts.sessionId (optional) restricts the export to one session: only the
   // users who played it, and only their data for that session.
+  /* Exposed (function reference only, no data) so the offline export-guard
+     test can drive the real builder — see tools/export-guard.mjs. */
+  window.__arenaExportExcel = function (parts, opts) { return exportExcel(parts, opts); };
   function exportExcel(parts, opts) {
     opts = opts || {};
     var only = opts.sessionId || null;
@@ -1203,10 +1223,28 @@
       // session ids to their human join codes on every sheet.
       return Promise.all([
         Store.loadActiveTasks().catch(function () { return { tasks: [] }; }),
-        Store.listSessions().catch(function () { return []; })
+        Store.listSessions().catch(function () { return []; }),
+        /* The LIVE participant list. Every export is intersected with it, so a
+           deleted account can never reach the file no matter which caller
+           supplied `parts` — a stale in-memory array, a list captured before a
+           deletion, or a future caller that forgets to re-read. Deleting a
+           participant hard-deletes their doc, so "deleted" == "absent here".
+           Fail-open on a read error (keep the caller's list) rather than
+           silently exporting nothing. */
+        Store.listParticipants().catch(function () { return null; })
       ]).then(function (pre) {
         var activeSet = pre[0] || { tasks: [] };
         var sessions = pre[1] || [];
+        var live = pre[2];
+        if (live) {
+          var alive = {};
+          live.forEach(function (x) { if (x && x._id) alive[x._id] = 1; });
+          var before = parts.length;
+          parts = parts.filter(function (x) { return x && alive[x._id]; });
+          if (parts.length !== before) {
+            console.log('[arena] export: excluded ' + (before - parts.length) + ' deleted account(s)');
+          }
+        }
         var sessById = {}; sessions.forEach(function (s) { if (s && s.id != null) sessById[String(s.id)] = s; });
         // Also load the task set each in-scope session was pinned to, so a session
         // whose set differs from the current active set (the admin changed it since)
