@@ -63,7 +63,11 @@
 /* ═══════════════════════════════════════════
    Workspace
    ═══════════════════════════════════════════ */
-.page { height: 100vh; display: flex; overflow: hidden; }
+/* dvh follows the VISIBLE viewport. With plain 100vh + overflow:hidden, iOS and
+   Android hide the bottom strip behind the browser chrome and there is no
+   document scroll to recover it — that strip holds the chat composer and the
+   add-idea footer. The 100vh line stays as the fallback for Safari < 15.4. */
+.page { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
 
 .main {
   height: 100%;
@@ -404,13 +408,18 @@
 
 /* ─── Vote badge (inside pill, top-right) ── */
 .voteBadge {
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  font-size: 11px;
+  /* In flow, at the end of the meta row — NOT absolutely positioned. As an
+     absolute top-right chip it painted over the Vote button that now lives on
+     that same row and, being positioned, won the hit test: every idea that
+     already had a vote (i.e. the ones a group converges on) became unvotable by
+     the very control added because double-tap does not work on tablets. */
+  margin-left: auto;
+  font-size: 10.5px;
   font-weight: 700;
-  color: var(--accent);
+  letter-spacing: 0.02em;
+  color: var(--muted);
   white-space: nowrap;
+  pointer-events: none;
 }
 .voteBadgeMine {
   color: var(--accent);
@@ -445,7 +454,8 @@
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1.4;
-  padding: 5px 11px;
+  padding: 9px 15px;
+  min-height: 40px;
   border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
@@ -515,7 +525,7 @@
 .addTitleInput {
   border: none; outline: none;
   font-family: var(--font-body);
-  font-size: 14px; font-weight: 600;
+  font-size: 16px; font-weight: 600;
   color: var(--ink); padding: 0;
   background: transparent;
 }
@@ -526,7 +536,7 @@
 .addDescInput {
   border: none; outline: none;
   font-family: var(--font-body);
-  font-size: 13px; color: var(--ink);
+  font-size: 16px; color: var(--ink);
   padding: 0; background: transparent;
   resize: none; line-height: 1.5;
 }
@@ -650,7 +660,7 @@
   border-radius: 20px;
   padding: 8px 14px;
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ink);
   background: var(--paper);
   outline: none;
@@ -682,7 +692,13 @@
   .instrContainer { padding: 24px 12px 60px; }
   .instrBody { padding: 20px 16px; }
   .startBtn { margin: 20px 16px 24px; }
-  .columns { grid-template-columns: 1fr; }
+  /* .columns is a FLEX row (it gained a drag divider); grid-template-columns is
+     ignored on it, so this breakpoint did nothing and the ideation workspace
+     stayed two ~190px columns on a phone, a half-width window, an iPad in Split
+     View, or a 1366px laptop at 200% zoom. The inline flex-basis the divider
+     writes has to be overridden too. */
+  .columns { flex-direction: column; }
+  .column, .columnRight { flex: 1 1 auto !important; }
   .votingColumns { grid-template-columns: 1fr; }
   .ideaPill { border-radius: 16px; padding: 12px 16px; }
   .addPill { border-radius: 16px; padding: 12px 16px; }

@@ -79,6 +79,8 @@ export default function IndividualPhase() {
   // restored from it on reload.
   const [stage, setStage] = useState('generation')
   const [selectionStartedAt, setSelectionStartedAt] = useState(null)
+  const [submitError, setSubmitError] = useState('')
+  const submittedRef = useRef(false)
   const stageInit = useRef(false)
   const stageRef = useRef('generation')
 
@@ -278,6 +280,17 @@ export default function IndividualPhase() {
         if (next.size >= ideasCarried) return prev
         next.add(ideaId)
       }
+      // Persist as they choose, not only at submit. The selection used to live
+      // in React state alone, so a reload during the selection stage silently
+      // dropped every pick — and if the clock then expired, the group received a
+      // hash-picked random subset instead of what the participant chose (with
+      // "Carried to Group" reading No for all of them in the export). The
+      // author-update rule already permits this; markDone's batch stays as the
+      // confirming pass.
+      if (sessionId && user) {
+        updateDoc(doc(db, 'sessions', sessionId, 'ideas', ideaId), { selected: next.has(ideaId) })
+          .catch(err => console.warn('Could not save idea selection:', err.message))
+      }
       return next
     })
   }
@@ -320,7 +333,13 @@ export default function IndividualPhase() {
   }
 
   async function markDone(selectionOverride) {
-    if (done) return
+    // A REF, not the `done` state: autoFinish runs from a setInterval callback
+    // whose closure can still see `done === false` while a click handler from an
+    // earlier render fires in the same frame — two submits whose batches then
+    // raced to decide the carried set.
+    if (submittedRef.current || done) return
+    submittedRef.current = true
+    setSubmitError('')
     setDone(true)
     // Anchors the confirmation hold. Stamped before the write, so the status
     // change it triggers can never beat it and slip past the hold.
@@ -353,7 +372,12 @@ export default function IndividualPhase() {
     } catch (err) {
       console.error('Failed to submit:', err)
       setDone(false)
+      submittedRef.current = false
       submittedAtRef.current = 0
+      // Say so. Silently reverting to the workspace looked like the submit had
+      // gone through, and an expired timer then re-fired autoFinish in a loop,
+      // flipping the screen between the confirmation card and the workspace.
+      setSubmitError('Your ideas could not be submitted — check your connection and press Finish & Submit again.')
     }
   }
 
@@ -578,6 +602,8 @@ export default function IndividualPhase() {
           <HeaderControls />
         </div>
       </div>
+
+      {submitError && <p className="error-msg" role="alert">{submitError}</p>}
 
       <NudgeBanner sessionId={sessionId} autoMessage={autoNudgeMessage} />
 

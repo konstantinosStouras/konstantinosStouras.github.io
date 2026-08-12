@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  collection, addDoc, onSnapshot, orderBy, query, serverTimestamp,
+  collection, addDoc, onSnapshot, orderBy, query, where, serverTimestamp,
   httpsCallable, db, functions
 } from '../utils/db'
 import { marked } from 'marked'
@@ -39,6 +39,7 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [aiError, setAiError] = useState('')
   const [userHeight, setUserHeight] = useState(null)
   const listRef = useRef(null)
   // Whether to keep the view pinned to the latest message. Stays true while the
@@ -52,8 +53,14 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
   // Listen to messages for this scope
   useEffect(() => {
     if (!sessionId || !scopeId) return
+    // Scoped server-side. This used to stream the session's WHOLE aiMessages
+    // collection and filter in JS, so every participant's browser held every
+    // other participant's private AI transcript — and on a 70-student session
+    // that is megabytes per tablet. The composite index already exists.
     const q = query(
       collection(db, chatPath),
+      where('scope', '==', scope),
+      where('scopeId', '==', scopeId),
       orderBy('timestamp', 'asc')
     )
     const unsub = onSnapshot(q, snap => {
@@ -98,6 +105,7 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
     if (!text || sending) return
 
     setInput('')
+    setAiError('')
     setSending(true)
     // Sending a new message always jumps to the bottom to reveal it + the reply.
     stickRef.current = true
@@ -123,7 +131,12 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
         userMessage: text,
       })
     } catch (err) {
+      // Do not destroy what they typed. The box is cleared optimistically, so a
+      // failed call (expired provider key, provider 5xx, a callable timeout) used
+      // to take the question with it and leave no reply and no explanation.
       console.error('AI message error:', err)
+      setInput(prev => (prev ? prev : text))
+      setAiError('The assistant did not respond — press send again.')
     } finally {
       setSending(false)
     }
@@ -148,17 +161,21 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
     const maxH = Math.min(460, Math.round(window.innerHeight * 0.6))
     document.body.style.cursor = 'ns-resize'
     document.body.style.userSelect = 'none'
+    // Safari < 17 only exposes the prefixed property to CSSOM, so the unprefixed
+    // assignment above is silently dropped and text highlights while dragging.
+    document.body.style.webkitUserSelect = 'none'
     function move(ev) {
       setUserHeight(Math.max(52, Math.min(maxH, startH + (startY - ev.clientY))))
     }
     function up() {
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
-      window.removeEventListener('mousemove', move)
-      window.removeEventListener('mouseup', up)
+    document.body.style.webkitUserSelect = ''
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
     }
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseup', up)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
   }
 
   return (
@@ -215,7 +232,7 @@ export default function AIChat({ sessionId, scope, scopeId, aiConfig }) {
           {/* Drag this top handle to resize the input (taller when dragged up) */}
           <div
             className={styles.resizeHandle}
-            onMouseDown={startResize}
+            onPointerDown={startResize}
             title="Drag to resize"
             role="separator"
             aria-orientation="horizontal"

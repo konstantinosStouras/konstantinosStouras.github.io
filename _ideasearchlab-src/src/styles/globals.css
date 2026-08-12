@@ -1,4 +1,7 @@
 :root {
+  /* Native controls (select popups, scrollbars, caret, autofill) follow this.
+     Without it a dark-mode session opens a white 195-entry country list. */
+  color-scheme: light;
   /* Light mode palette */
   --ink: #0f0e0c;
   --paper: #f5f2eb;
@@ -66,6 +69,7 @@
 
 /* Dark mode */
 [data-theme="dark"] {
+  color-scheme: dark;
   --ink: #f0ede6;
   --paper: #1a1917;
   --paper-dark: #232220;
@@ -167,7 +171,7 @@ input, textarea, select {
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 14px;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--ink);
   outline: none;
   transition: border-color 0.15s, background 0.15s, color 0.15s;

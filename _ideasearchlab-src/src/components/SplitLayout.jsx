@@ -34,6 +34,9 @@ export default function SplitLayout({
     dragging.current = true
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
+    // Safari < 17 only exposes the prefixed property to CSSOM, so the unprefixed
+    // assignment above is silently dropped and text highlights while dragging.
+    document.body.style.webkitUserSelect = 'none'
   }, [])
 
   useEffect(() => {
@@ -49,13 +52,14 @@ export default function SplitLayout({
       dragging.current = false
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
+    document.body.style.webkitUserSelect = ''
     }
 
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('pointermove', onMouseMove)
+    window.addEventListener('pointerup', onMouseUp)
     return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('pointermove', onMouseMove)
+      window.removeEventListener('pointerup', onMouseUp)
     }
   }, [minLeft, maxLeft])
 
@@ -75,7 +79,7 @@ export default function SplitLayout({
         <>
           <div
             className={styles.divider}
-            onMouseDown={onMouseDown}
+            onPointerDown={onMouseDown}
             title="Drag to resize"
           >
             <div className={styles.dividerHandle} />

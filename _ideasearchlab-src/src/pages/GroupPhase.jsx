@@ -83,11 +83,6 @@ function IdeaPill({
         : undefined
       }
     >
-      {isVoting && voteCount > 0 && (
-        <div className={`${styles.voteBadge} ${votedByMe ? styles.voteBadgeMine : ''}`}>
-          Votes: {voteCount}
-        </div>
-      )}
       <div className={styles.pillTop}>
         <div className={styles.pillMeta}>
           <span className={styles.pillAuthor}>{label}</span>
@@ -95,6 +90,11 @@ function IdeaPill({
           {(isVoting || showPhaseTag) && (
             <span className={styles.phaseTag}>
               {idea.phase === 'group' ? 'group' : 'individual'}
+            </span>
+          )}
+          {isVoting && voteCount > 0 && (
+            <span className={`${styles.voteBadge} ${votedByMe ? styles.voteBadgeMine : ''}`}>
+              Votes: {voteCount}
             </span>
           )}
         </div>
@@ -107,6 +107,7 @@ function IdeaPill({
             type="button"
             className={`${styles.voteBtn} ${votedByMe ? styles.voteBtnOn : ''}`}
             onClick={e => { e.stopPropagation(); if (!votesLocked && canVote) onVote(idea.id) }}
+            onDoubleClick={e => e.stopPropagation()}
             disabled={votesLocked || (!canVote && !votedByMe)}
             aria-pressed={votedByMe}
             title={votesLocked

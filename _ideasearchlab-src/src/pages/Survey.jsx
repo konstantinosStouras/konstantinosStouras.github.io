@@ -16,7 +16,17 @@ export default function Survey() {
   const { session } = useSession()
   const ended = useSessionEnded()
   const navigate = useNavigate()
-  const [answers, setAnswers] = useState({})
+  // Answers are kept in sessionStorage as they are typed. The questionnaire is
+  // ~27 items and used to live only in React state, so a reload, a tablet
+  // reclaiming the backgrounded tab, or an accidental pull-to-refresh threw the
+  // whole thing away with no trace — at the last step of the study.
+  const draftKey = `ideationSurvey:${sessionId}:${user?.uid || 'anon'}`
+  const [answers, setAnswers] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(draftKey) || '{}') } catch (e) { return {} }
+  })
+  useEffect(() => {
+    try { sessionStorage.setItem(draftKey, JSON.stringify(answers)) } catch (e) { /* best effort */ }
+  }, [draftKey, answers])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -47,10 +57,28 @@ export default function Survey() {
   const aiOn = !!(session?.aiConfig?.individualAI || session?.aiConfig?.groupAI)
 
   const groupActive = session?.phaseConfig?.groupPhaseActive
-  const visibleQuestions = getSurveyQuestions(session).filter(q => !q.showIfGroup || groupActive)
+  // A question that renders NO input can never be answered, so including it in
+  // the completeness gate below disabled Submit forever with nothing on screen
+  // to click — the participant could not finish the study. The admin's
+  // "+ Add survey question" seeds `items: []` / `options: []`, so this is one
+  // forgotten step away in the builder.
+  const answerable = q =>
+    !(q.type === 'rating_group' && !(q.items || []).length) &&
+    !(q.type === 'radio' && !(q.options || []).length)
+  const visibleQuestions = getSurveyQuestions(session)
+    .filter(q => !q.showIfGroup || groupActive)
+    .filter(answerable)
 
   function setAnswer(id, value) {
-    setAnswers(prev => ({ ...prev, [id]: value }))
+    setAnswers(prev => {
+      const next = { ...prev, [id]: value }
+      // A conditional follow-up keeps its answer when the parent changes away
+      // from the trigger — the input disappears but the text is still submitted,
+      // so the Survey sheet showed e.g. a product name beside an explicit "No".
+      const q = visibleQuestions.find(x => x.id === id)
+      if (q && q.followUp && value !== q.followUp.trigger) delete next[q.followUp.id]
+      return next
+    })
   }
 
   function setRatingGroupAnswer(parentId, subId, value) {
@@ -60,11 +88,15 @@ export default function Survey() {
     }))
   }
 
-  const allAnswered = visibleQuestions.every(q => {
+  // Only REQUIRED questions gate Submit. `q.required` is a real checkbox in the
+  // admin's form builder and the footer says "Questions marked with * are
+  // required", but the gate used to demand every question — so unticking
+  // Required on one optional freetext greyed out Submit for good.
+  const allAnswered = visibleQuestions.filter(q => q.required !== false).every(q => {
     if (q.type === 'rating_group') {
       const group = answers[q.id]
       if (!group) return false
-      return q.items.every(item => group[item.id] !== undefined)
+      return (q.items || []).every(item => group[item.id] !== undefined)
     }
     if (q.type === 'radio' && q.followUp) {
       const val = answers[q.id]
@@ -90,6 +122,7 @@ export default function Survey() {
         surveyCompletedAt: serverTimestamp(),
       })
       setSubmitted(true)
+      try { sessionStorage.removeItem(draftKey) } catch (e) { /* ignore */ }
     } catch (err) {
       // A failed submit used to log to the console and silently re-enable the
       // button, so the participant could not tell their answers had NOT been
@@ -191,7 +224,7 @@ export default function Survey() {
                     {/* ── rating_group: each criterion gets its own 1-5 box scale ── */}
                     {q.type === 'rating_group' && (
                       <div className={styles.ratingGroup}>
-                        {q.items.map(item => {
+                        {(q.items || []).map(item => {
                           const ga = answers[q.id] || {}
                           return (
                             <div key={item.id} className={styles.ratingItem}>
@@ -236,7 +269,7 @@ export default function Survey() {
                     {q.type === 'radio' && (
                       <div className={styles.radioWrap}>
                         <div className={styles.radioRow}>
-                          {q.options.map(opt => (
+                          {(q.options || []).map(opt => (
                             <label key={opt} className={styles.radioLabel}>
                               <input
                                 type="radio"

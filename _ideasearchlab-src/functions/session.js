@@ -30,10 +30,21 @@ async function assignToGroup(sessionRef, uid, name, email) {
     const participantRef = sessionRef.collection('participants').doc(uid)
     const pSnap = await tx.get(participantRef)
 
-    const groupSize = session.phaseConfig?.groupSize ?? 3
-    const individualActive = session.phaseConfig?.individualPhaseActive ?? true
-    const phaseOrder = session.phaseConfig?.phaseOrder ?? 'individual_first'
-    const firstPhase = (individualActive && phaseOrder === 'individual_first') ? 'individual' : 'group'
+    // Group size is hardened against what the admin form can actually store:
+    // `?? 3` let a typed 0 through, and `Math.floor(n / 0)` then produced group
+    // ids of `gNaN` / `gInfinity` with every label `pNaN` — the whole class in
+    // one group. A session with no group phase is one participant per group, so
+    // an individual-only run never parks students in the lobby waiting for a
+    // third member of a group that does not exist.
+    const groupActive = session.phaseConfig?.groupPhaseActive ?? true
+    const groupSize = groupActive
+      ? Math.max(1, Math.floor(Number(session.phaseConfig?.groupSize)) || 3)
+      : 1
+    // Read from the session's own phase sequence instead of re-deriving it: the
+    // old expression ignored groupPhaseActive, so an individual-only session that
+    // still carried phaseOrder 'group_first' placed everyone into a phase that is
+    // not in its sequence — a state advancePhase then refused to leave.
+    const firstPhase = getPhaseSequence(session.phaseConfig)[1] || 'survey'
 
     // A vacancy opens when the instructor removes someone from an in-progress
     // group (see removeParticipant), recorded on session.backfillQueue. The
@@ -56,7 +67,7 @@ async function assignToGroup(sessionRef, uid, name, email) {
 
     // ── Backfill a vacated slot: the late joiner jumps straight into that
     // group's current phase, so the group is whole again. ──
-    if (slot && backfillGroupSnap && backfillGroupSnap.exists) {
+    if (slot && backfillGroupSnap && backfillGroupSnap.exists && backfillGroupSnap.data().status === 'active') {
       const g = backfillGroupSnap.data()
       const members = [...(g.members || []), uid]
       const label = slot.label || `p${members.length}`
@@ -110,8 +121,10 @@ async function assignToGroup(sessionRef, uid, name, email) {
 
     // Advance the join counter; if this filled the group, start everyone in it.
     const sessionUpdates = { joinCount: myIndex + 1 }
-    // A queued slot whose group has vanished is stale — drop it.
-    if (slot && (!backfillGroupSnap || !backfillGroupSnap.exists)) {
+    // A queued slot whose group has vanished — or has since FINISHED — is stale.
+    // Backfilling into a finished group flipped it back to 'active' and dragged
+    // its members, some already in the survey, back into the group phase.
+    if (slot && (!backfillGroupSnap || !backfillGroupSnap.exists || backfillGroupSnap.data().status !== 'active')) {
       sessionUpdates.backfillQueue = queue.slice(1)
     }
     if (isFull) {
@@ -343,8 +356,11 @@ exports.joinSession = functions.https.onCall(async (data, context) => {
   const sessionId = snap.docs[0].id
   const sessionRef = db.collection('sessions').doc(sessionId)
   const uid = context.auth.uid
-  const name = context.auth.token.name || context.auth.token.email
-  const email = context.auth.token.email
+  // The Admin SDK rejects `undefined`, which would fail the whole join
+  // transaction with an opaque 'internal' error for any account without an
+  // e-mail or display-name claim (anonymous auth, some OIDC providers).
+  const name = context.auth.token.name || context.auth.token.email || 'Participant'
+  const email = context.auth.token.email || null
 
   const status = await assignToGroup(sessionRef, uid, name, email)
 
@@ -400,6 +416,10 @@ exports.advancePhase = functions.https.onCall(async (data, context) => {
 
   participantsSnap.docs.forEach(pDoc => {
     const p = pDoc.data()
+    // A removed participant is out of the session. Force-advancing used to
+    // rewrite their status to survey/done, which took the "you've left this
+    // session" overlay off their screen and let them fill in the survey.
+    if (p.removed || p.status === 'removed') return
     let newStatus = p.status
 
     if (nextPhase === 'individual') {
@@ -411,10 +431,15 @@ exports.advancePhase = functions.https.onCall(async (data, context) => {
     if (nextPhase === 'group') {
       if (session.phaseConfig?.phaseOrder === 'group_first') {
         // group_first: move waiting participants directly into group
-        if (p.status === 'waiting') newStatus = 'group'
+        if (['waiting', 'waiting_for_group'].includes(p.status)) newStatus = 'group'
       } else {
-        // individual_first: force-advance anyone who hasn't reached group yet
-        if (['waiting', 'individual'].includes(p.status)) newStatus = 'group'
+        // individual_first: force-advance anyone who hasn't reached group yet.
+        // 'waiting_for_group' MUST be here — it is where a participant sits once
+        // they have SUBMITTED their ideas, i.e. exactly the people the instructor
+        // is trying to unblock. Leaving them behind stranded them on the
+        // confirmation screen for good and deadlocked their whole group, because
+        // finishGroupVoting waits for every member to vote.
+        if (['waiting', 'individual', 'waiting_for_group'].includes(p.status)) newStatus = 'group'
       }
     }
 
@@ -463,9 +488,12 @@ async function tallyGroupVotes(sessionRef) {
   for (const groupDoc of groupsSnap.docs) {
     const groupMembers = participants.filter(p => p.groupId === groupDoc.id)
 
-    // Tally votes from all members' votedFor arrays
+    // Tally votes from the members who actually CAST a ballot, mirroring
+    // finishGroupVoting. Counting an unsubmitted ballot let a participant who
+    // never pressed Submit Votes decide the group's final picks, while the same
+    // workbook reports them as "not submitted".
     const voteMap = {}
-    groupMembers.forEach(m => {
+    groupMembers.filter(m => m.votesSubmitted && !m.removed).forEach(m => {
       (m.votedFor || []).forEach(ideaId => {
         voteMap[ideaId] = (voteMap[ideaId] || 0) + 1
       })
@@ -537,8 +565,14 @@ async function finishGroupVoting(sessionId, triggeringUid, after) {
   const sessionSnap = await sessionRef.get()
   if (!sessionSnap.exists) return
   const session = sessionSnap.data()
-  if (session.status !== 'group') return
-
+  // Deliberately NOT gated on `session.status === 'group'`. The session status is
+  // monotonic and caps at 'survey' once every CURRENT participant has finished —
+  // but the session stays open for later joiners (a groupSize-1 session is run as
+  // many independent solo plays). Gating here meant that from the second player
+  // on, no group was ever tallied: `finalIdeas` stayed empty, every one of those
+  // ideas exported as `Final Group Pick = No`, and the study's primary outcome
+  // silently vanished for everyone after the first. The correct scope is the
+  // GROUP, checked below (`status === 'active'`).
   const sequence = getPhaseSequence(session.phaseConfig)
   const groupIndex = sequence.indexOf('group')
   if (groupIndex === -1 || groupIndex >= sequence.length - 1) return

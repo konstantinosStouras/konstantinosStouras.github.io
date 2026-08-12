@@ -139,7 +139,18 @@
   transition: all 0.15s ease;
 }
 
-.scaleBox input { display: none; }
+.scaleBox input {
+  /* Visually hidden but STILL FOCUSABLE. `display: none` removed these from
+     the tab order and the accessibility tree, so 21 likert items, the rating
+     group and both radio questions were unreachable by keyboard — and Submit is
+     gated on them, so the study could not be completed without a mouse. */
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
 
 .scaleBoxNum {
   font-size: 15px;
@@ -212,7 +223,18 @@
 }
 
 .radioLabel { cursor: pointer; }
-.radioLabel input { display: none; }
+.radioLabel input {
+  /* Visually hidden but STILL FOCUSABLE. `display: none` removed these from
+     the tab order and the accessibility tree, so 21 likert items, the rating
+     group and both radio questions were unreachable by keyboard — and Submit is
+     gated on them, so the study could not be completed without a mouse. */
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
 
 .radioPill {
   display: inline-flex;
@@ -264,7 +286,7 @@
   border-radius: var(--radius);
   padding: 12px 14px;
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 16px;
   color: var(--ink);
   resize: vertical;
   background: var(--white);
@@ -340,3 +362,7 @@
 
   .footer { flex-direction: column; gap: 12px; align-items: flex-end; }
 }
+
+/* Keyboard focus must be visible now that the controls are reachable. */
+.scaleBox:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.radioLabel:focus-within .radioPill { outline: 2px solid var(--accent); outline-offset: 2px; }

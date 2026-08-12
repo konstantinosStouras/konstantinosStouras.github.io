@@ -222,7 +222,7 @@
   border: 1px solid var(--ai-field-border);
   border-radius: var(--radius);
   color: var(--ink);
-  font-size: 13.5px;
+  font-size: 16px;
   padding: 10px 12px;
   /* Height is controlled in JS: auto-grows with content (capped ~240px), or a
      fixed height once the user drags the top handle (see AIChat.jsx). Scrolls
