@@ -25,12 +25,16 @@ service cloud.firestore {
     // never grant it to themselves — their create can't include it, and
     // their update must leave it exactly as it was.
     match /simPlatformStudents/{uid} {
+      // 'completed' is the play-once tracking map ({simKey: {ts, session}},
+      // mirrored from the student's own browser) — the student MAY write it
+      // (it only ever marks them as done; it grants nothing).
       allow create: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly([
              'uid', 'name', 'email', 'studentId', 'age', 'gender',
              'nationality', 'country', 'levelOfStudy', 'workExperience',
-             'occupation', 'industry', 'englishFluency', 'createdAt', 'updatedAt'
+             'occupation', 'industry', 'englishFluency', 'createdAt', 'updatedAt',
+             'completed'
            ])
         && request.resource.data.uid == uid;
       allow update: if isAdmin()
@@ -40,7 +44,7 @@ service cloud.firestore {
              'uid', 'name', 'email', 'studentId', 'age', 'gender',
              'nationality', 'country', 'levelOfStudy', 'workExperience',
              'occupation', 'industry', 'englishFluency', 'createdAt', 'updatedAt',
-             'approved'
+             'completed', 'approved'
            ])
         && request.resource.data.uid == uid
         && request.resource.data.get('approved', false) == resource.data.get('approved', false));

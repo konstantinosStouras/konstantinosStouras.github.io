@@ -47,6 +47,17 @@ Then:
 
 - Activation toggles are **live**: Save publishes instantly to every student
   (one `simPlatform/config` doc, `onSnapshot` on the student page).
+- **Live updates are hardened against broken streaming networks** (campus
+  proxies / antivirus HTTPS inspection deliver the FIRST snapshot but never
+  push again — "it only updates after a refresh"): Firestore is initialised
+  with `experimentalAutoDetectLongPolling`, one **memoized** anonymous
+  sign-in per page load (two concurrent sign-ins used to mint two uids,
+  landing the roster doc under one identity while the approval watch
+  listened to the other's), and polling fallbacks — the student's approval
+  watch re-checks its own doc every 5 s while unapproved, and the admin
+  roster polls a cheap `count()` every 10 s and refetches on change, so a
+  new registration appears within seconds even with a dead stream. The
+  Approve button also repaints its row locally on success.
 - Registrations are mirrored to `simPlatformStudents/{uid}` (anonymous auth),
   giving the admin panel a **live roster with CSV export** — it loads by
   itself when the panel opens and updates the moment a student registers
@@ -60,7 +71,14 @@ Then:
   the moment Approve is clicked; clicking `✓ Approved` again revokes.
   Students can never approve themselves — the rules pin `approved` to
   admin-only writes (**republish `firestore.rules` when adopting this**).
-  LOCAL mode has no roster and therefore no gate. Delete removes the row's
+  LOCAL mode has no roster and therefore no gate. The roster also carries
+  **one column per active simulation** (dynamic — it follows the activation
+  toggles) showing who has answered it (✓) and who hasn't (—), with an
+  answered/total tally in each header; **click the Approved or a simulation
+  header to filter** (all → only ✓ → only —), and the CSV export carries the
+  same `completed:<sim>` columns. The data is the student page mirroring its
+  play-once markers onto the student's roster doc (`syncCompleted` — the
+  `completed` map is student-writable in the rules; it grants nothing). Delete removes the row's
   roster doc(s), including any collapsed duplicate re-registrations, via the
   rules' `allow delete: if isAdmin()`; the student's own browser profile is
   untouched, so they can simply register again. A student's **Log out**

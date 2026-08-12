@@ -39,6 +39,10 @@ h2 { font-size: 1.25rem; margin: 26px 0 4px; }
   padding: 2px 9px; border-radius: 999px; background: #e8edfb; color: #33477e; white-space: nowrap;
 }
 .pill.green { background: #e1f5e7; color: #1d6b3a; }
+/* Roster column filters: the Approved + per-simulation headers are clickable
+   (cycle all → only ✓ → only —). */
+.simtab th.th-filter { cursor: pointer; user-select: none; white-space: nowrap; }
+.simtab th.th-filter:hover { color: #33477e; text-decoration: underline; }
 /* Instructor-approval banner: shown while the student is registered but not
    yet approved to play (Firebase mode); hides itself the moment the admin
    approves. */
