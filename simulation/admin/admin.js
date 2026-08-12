@@ -506,7 +506,15 @@
                          localStorage.getItem(P.KEYS.adminCreds) || 'null');
     } catch (e) {}
     if (!creds || !creds.email || !creds.pass) {
-      return Promise.reject(new Error('save the shared admin credentials in the locker above first — they are used to read Answer Arena’s records'));
+      /* No locker? Just ask — the admin e-mail is known (the shared login),
+         only the password is needed; remembered for this tab so the next
+         click doesn't re-ask. */
+      var email = (window.SIMP_ADMIN_EMAILS || [])[0] || '';
+      var pass = window.prompt('Answer Arena admin password for ' + email +
+        '\n(the shared admin login — used once to read arena’s completion records; Cancel to abort):');
+      if (!pass) return Promise.reject(new Error('cancelled — save the shared admin credentials in the locker above, or enter the password when prompted'));
+      creds = { email: email, pass: pass };
+      try { sessionStorage.setItem(P.KEYS.adminCreds, JSON.stringify(creds)); } catch (e) {}
     }
     var cfg = window.ARENA_FIREBASE;
     if (!cfg || !cfg.apiKey) return Promise.reject(new Error('arena-config.js did not load'));
@@ -518,7 +526,12 @@
       try { app = m[0].getApp('arena-verify'); } catch (e) { app = m[0].initializeApp(cfg, 'arena-verify'); }
       var auth = A.getAuth(app);
       var signin = auth.currentUser ? Promise.resolve()
-        : A.signInWithEmailAndPassword(auth, creds.email, creds.pass);
+        : A.signInWithEmailAndPassword(auth, creds.email, creds.pass).catch(function (e) {
+            /* a wrong saved password must not wedge every future click —
+               clear it so the next attempt prompts again */
+            try { sessionStorage.removeItem(P.KEYS.adminCreds); } catch (x) {}
+            throw new Error('Answer Arena sign-in failed (' + ((e && e.code) || e) + ') — click Verify again and re-enter the password');
+          });
       return signin.then(function () {
         var fs = D.getFirestore(app);
         return Promise.all([
