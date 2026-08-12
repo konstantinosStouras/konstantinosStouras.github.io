@@ -182,7 +182,8 @@
   font-family: var(--font-body);
   font-size: 12px;
   cursor: pointer;
-  padding: 0;
+  padding: 10px 4px;
+  display: inline-block;
   text-decoration: underline;
 }
 .backLink:hover { opacity: 0.8; }
@@ -455,7 +456,10 @@
    invisible: on a tablet the edit and delete actions did not appear to exist.
    Show them permanently wherever hover isn't available. */
 @media (hover: none) {
-  .editBtn, .deleteBtn { opacity: 0.7; }
+  /* Permanently visible (there is no hover to reveal them) — and big enough to
+     hit: at 21px, 6px apart, a finger aiming for the pencil lands on the trash. */
+  .editBtn, .deleteBtn { opacity: 0.7; min-width: 40px; min-height: 40px; padding: 10px; justify-content: center; }
+  .pillActions { gap: 12px; }
 }
 
 /* ── Select toggle (selection stage) ────────────────────────

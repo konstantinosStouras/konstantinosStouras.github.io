@@ -265,7 +265,8 @@
   font-family: var(--font-body);
   font-size: 13px;
   cursor: pointer;
-  padding: 0;
+  padding: 10px 4px;
+  display: inline-block;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -280,8 +281,16 @@
 .columns {
   display: flex;
   gap: 0;
-  flex: 1;
-  min-height: 0;
+  /* A FLOOR, not `min-height: 0`. `.main` is a height-constrained flex column
+     inside `.page { height: 100dvh; overflow: hidden }` and every sibling here
+     (top bar, member strip, task brief) is flex-shrink: 0 — so as the only
+     flexible child, `.columns` absorbed the whole deficit and collapsed to
+     0-42px on an iPad with the brief open (the default). The ideas list, the
+     add-idea form and the group chat were all clipped away, with nothing
+     scrollable to reach them. With a floor, `.main` scrolls instead — which is
+     also what lets the browser lift the chat composer above the keyboard. */
+  flex: 1 0 auto;
+  min-height: min(520px, 55vh);
   min-width: 0;
 }
 
@@ -550,7 +559,9 @@
    ═══════════════════════════════════════════ */
 .chatSection {
   flex: 1;
-  min-height: 180px;
+  /* The floor now lives on .columns; keeping one here made the chat overflow
+     its clipped parent instead of letting the page scroll. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--white);
@@ -688,7 +699,7 @@
 /* ═══════════════════════════════════════════
    Responsive
    ═══════════════════════════════════════════ */
-@media (max-width: 700px) {
+@media (max-width: 1100px), (max-height: 820px) {
   .instrContainer { padding: 24px 12px 60px; }
   .instrBody { padding: 20px 16px; }
   .startBtn { margin: 20px 16px 24px; }
@@ -703,7 +714,7 @@
   .ideaPill { border-radius: 16px; padding: 12px 16px; }
   .addPill { border-radius: 16px; padding: 12px 16px; }
   .groupIdeasSection { max-height: none; }
-  .chatSection { min-height: 240px; }
+  .chatSection { min-height: 220px; }
   .topRight { flex-wrap: wrap; }
 }
 

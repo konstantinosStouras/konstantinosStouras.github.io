@@ -1210,7 +1210,7 @@ export default function GroupPhase() {
               draggable divider between them. New group ideas appear in the
               combined list on the left. */}
           <div className={styles.columnRight} ref={rightColRef}>
-            <div className={styles.groupIdeasSection} style={{ flex: `0 0 ${groupIdeasPct}%`, maxHeight: 'none', minHeight: 0 }}>
+            <div className={styles.groupIdeasSection} style={{ flex: `0 0 ${groupIdeasPct}%`, maxHeight: 'none' }}>
               <h2 className={styles.columnTitle}>Add a Group Idea</h2>
               <p className={styles.columnSub}>New ideas appear in the list on the left</p>
               <div className={styles.ideaList}>

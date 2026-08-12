@@ -14,6 +14,9 @@
 }
 
 .divider {
+  /* Without this the browser claims the first touchmove as a pan and fires
+     pointercancel, so the drag dies one frame in on any touch device. */
+  touch-action: none;
   width: 6px;
   flex-shrink: 0;
   background: var(--border);
@@ -55,7 +58,7 @@
 }
 
 /* Mobile: stack vertically */
-@media (max-width: 768px) {
+@media (max-width: 1100px) {
   .container {
     flex-direction: column;
   }

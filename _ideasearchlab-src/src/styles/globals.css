@@ -210,3 +210,9 @@ input, textarea, select {
 .richText s, .richText strike { text-decoration: line-through; }
 .richTextInline { display: inline; }
 .richTextInline p { display: inline; margin: 0; }
+
+/* Touch screens: the buttons that gate every phase transition were all 36px.
+   Above the WCAG floor, below what a finger reliably hits on a tablet. */
+@media (pointer: coarse) {
+  .btn-primary, .btn-ghost { min-height: 44px; }
+}

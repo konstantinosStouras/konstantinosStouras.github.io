@@ -320,6 +320,10 @@ export default function IndividualPhase() {
   function cancelEdit() { setEditingId(null) }
 
   async function deleteIdea(ideaId) {
+    // Irreversible, and on a touch device the trash icon is permanently visible
+    // 12px from the pencil — a mis-tap used to destroy the idea outright, with
+    // no undo and no trace in the exported dataset.
+    if (typeof window !== 'undefined' && !window.confirm('Delete this idea? This cannot be undone.')) return
     try {
       await deleteDoc(doc(db, 'sessions', sessionId, 'ideas', ideaId))
       setSelectedIds(prev => {
