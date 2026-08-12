@@ -49,6 +49,19 @@
   --ai-badge-bg: rgba(200,86,42,0.14);
   --ai-badge-fg: #a8451f;
   --ai-sent-fg: #ffffff;
+
+  /* ── Login branding hero ─────────────────────────────────────────────
+     The left half of /login is a deliberate dark brand panel beside the
+     light sign-in form. It was painted `var(--ink)` on `var(--paper)`, so
+     under dark mode it inverted into a cream half-screen. These tokens pin
+     it to the branded dark surface in BOTH themes: the panel is meant to be
+     the darkest thing on the page, not the inverse of whatever the page is.
+     They are deliberately NOT re-declared under [data-theme="dark"] — a dark
+     override is what made it flip. (It stays legible either way: in dark mode
+     the hero sits a step below the form side's --paper.) */
+  --login-hero-bg: #0f0e0c;
+  --login-hero-fg: #f5f2eb;
+  --login-hero-dim: rgba(245,242,235,0.6);
 }
 
 /* Dark mode */
