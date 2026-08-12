@@ -10,7 +10,11 @@
   var CONFIGURED = !!(cfg.apiKey && cfg.apiKey.indexOf('PASTE_') !== 0 &&
                       cfg.projectId && cfg.projectId.indexOf('PASTE_') !== 0);
   var BASE = window.SIMP_BASE || '.';
-  var PATHS = window.SIMP_PATHS || { config: 'simPlatform/config', students: 'simPlatformStudents' };
+  /* Defaults MERGED under any override, so a firebase-config.js written
+     before a new path existed can never leave it undefined. */
+  var PATHS = Object.assign(
+    { config: 'simPlatform/config', students: 'simPlatformStudents', recovery: 'simPlatformRecovery' },
+    window.SIMP_PATHS || {});
 
   var LS_PROFILE = 'simp:profile:v1';   // the student's one-time registration
   var LS_DRAFT   = 'simp:config-draft:v1'; // admin's local (unpublished) activation edits
@@ -35,10 +39,41 @@
     p = p || {};
     var old = getProfile();
     p.updatedAt = new Date().toISOString();
-    p.createdAt = (old && old.createdAt) || p.updatedAt;
+    /* keep a recovered profile's ORIGINAL registration date */
+    p.createdAt = (old && old.createdAt) || p.createdAt || p.updatedAt;
     localStorage.setItem(LS_PROFILE, JSON.stringify(p));
     syncProfile();
     return p;
+  }
+  /* sha256 hex of the normalized e-mail — the deterministic recovery-doc key
+     (same e-mail → same key on any device; no listing, you must KNOW it). */
+  function emailKeyOf(email) {
+    var s = String(email || '').trim().toLowerCase();
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+        return ('0' + b.toString(16)).slice(-2);
+      }).join('');
+    });
+  }
+  /* Returning student on a NEW device / cleared browser: look their saved
+     registration up by e-mail (Firebase mode only). Resolves to the profile
+     (with any play-once completion markers restored into this browser) or
+     null when no registration exists for that e-mail. */
+  function recoverByEmail(email) {
+    if (!CONFIGURED) return Promise.resolve(null);
+    return fb().then(function (F) { return F.getRecovery(email); }).then(function (rec) {
+      if (!rec) return null;
+      if (rec.completed) {
+        try {
+          var m = completed();
+          Object.keys(rec.completed).forEach(function (k) { if (!m[k]) m[k] = rec.completed[k]; });
+          localStorage.setItem(LS_COMPLETED, JSON.stringify(m));
+        } catch (e) {}
+      }
+      var p = {};
+      Object.keys(rec).forEach(function (k) { if (k !== 'completed' && k !== 'emailKey') p[k] = rec[k]; });
+      return p;
+    });
   }
   function clearProfile() { localStorage.removeItem(LS_PROFILE); localStorage.removeItem(LS_SYNCED); }
   /* Completions recorded by the sims' own done screens ({simKey:{ts,session}}).
@@ -78,7 +113,12 @@
     var p = getProfile();
     if (!p) return;
     if (localStorage.getItem(LS_SYNCED) === p.updatedAt) return;
-    fb().then(function (F) { return F.saveStudent(p); })
+    fb().then(function (F) {
+      return F.saveStudent(p).then(function () {
+        /* also mirror to the e-mail recovery doc — non-fatal */
+        return F.saveRecovery(p).catch(function () {});
+      });
+    })
       .then(function () { localStorage.setItem(LS_SYNCED, p.updatedAt); })
       .catch(function () { /* retried on the next visit */ });
   }
@@ -267,7 +307,9 @@
         },
         /* Mirror the student's play-once completion markers onto their own
            roster doc ({completed: {simKey: {ts, session}}}), so the admin
-           roster can track who has answered which active simulation. */
+           roster can track who has answered which active simulation — and
+           onto the e-mail recovery doc, so the markers survive a device
+           switch (a replay can't be earned by changing browsers). */
         saveCompleted: function (m) {
           return ensureAnon().then(function (u) {
             var clean = {};
@@ -277,9 +319,36 @@
             });
             /* uid included so the write also passes the CREATE rule when the
                profile sync hasn't made the doc yet (a race at page load). */
-            return D.setDoc(D.doc(fs, PATHS.students + '/' + u.uid),
+            var main = D.setDoc(D.doc(fs, PATHS.students + '/' + u.uid),
               { uid: u.uid, completed: clean }, { merge: true });
+            var p = getProfile();
+            if (!p || !p.email) return main;
+            return main.then(function () {
+              return emailKeyOf(p.email).then(function (key) {
+                return D.setDoc(D.doc(fs, PATHS.recovery + '/' + key),
+                  { completed: clean }, { merge: true });
+              }).catch(function () {});
+            });
           });
+        },
+        /* E-mail recovery doc: the registration mirrored under a key derived
+           from the e-mail, so a returning student on a NEW device can restore
+           their details by typing just their e-mail. */
+        saveRecovery: function (p) {
+          return emailKeyOf(p.email).then(function (key) {
+            return ensureAnon().then(function () {
+              var doc = {};
+              Object.keys(p).forEach(function (k) { if (p[k] != null && p[k] !== '') doc[k] = p[k]; });
+              return D.setDoc(D.doc(fs, PATHS.recovery + '/' + key), doc, { merge: true });
+            });
+          });
+        },
+        getRecovery: function (email) {
+          return emailKeyOf(email).then(function (key) {
+            return ensureAnon().then(function () {
+              return D.getDoc(D.doc(fs, PATHS.recovery + '/' + key));
+            });
+          }).then(function (snap) { return snap.exists() ? snap.data() : null; });
         },
         /* Approve / revoke a student (admin-only per the rules): only approved
            students can launch the active simulations — the owner's guard
@@ -328,6 +397,7 @@
     catalog: catalog, sim: sim,
     getProfile: getProfile, saveProfile: saveProfile, clearProfile: clearProfile, syncProfile: syncProfile,
     logout: logout, completed: completed, syncCompleted: syncCompleted,
+    recoverByEmail: recoverByEmail,
     watchConfig: watchConfig, saveConfig: saveConfig, draft: draft, clearDraft: clearDraft,
     buildLaunch: buildLaunch, launch: launch,
     firebase: fb,

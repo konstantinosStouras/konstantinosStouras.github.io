@@ -53,6 +53,9 @@ writes must leave `approved` exactly as it was).
 **If you deployed the rules before the approval gate existed, re-paste and
 Publish the current `simulation/firestore.rules`** — until then the admin's
 Approve button is refused by the old rules and every student stays gated.
+The rules also cover **`simPlatformRecovery`** (returning-student e-mail
+restore — see the README): re-publish when adopting it, or the recovery
+box reports "could not look that up".
 
 ## 4. Register a web app and copy its config
 

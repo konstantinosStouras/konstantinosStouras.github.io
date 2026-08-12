@@ -154,6 +154,7 @@ try {
   // ---- 1. Student page: one-time registration --------------------------
   await page.goto(BASE + '/simulation/');
   ok(await page.isVisible('#s-register'), 'first visit shows the registration form');
+  ok(await page.isHidden('#recover-box'), 'the e-mail recovery box stays hidden in LOCAL mode (no central roster to recover from)');
   await page.fill('#f-name', 'Test Student');
   await page.fill('#f-email', 'test@example.com');
   await page.fill('#f-sid', 'S123');

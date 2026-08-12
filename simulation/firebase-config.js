@@ -22,5 +22,6 @@ window.SIMP_ADMIN_EMAILS = ['admin@admin.com'];
 /* Firestore paths. */
 window.SIMP_PATHS = {
   config: 'simPlatform/config',        // one doc: { sims: { key: {active, sessionId, note} }, updated }
-  students: 'simPlatformStudents'      // one doc per student, keyed by anonymous-auth uid
+  students: 'simPlatformStudents',     // one doc per student, keyed by anonymous-auth uid
+  recovery: 'simPlatformRecovery'      // registration mirror keyed by sha256(e-mail) — returning-student restore
 };
