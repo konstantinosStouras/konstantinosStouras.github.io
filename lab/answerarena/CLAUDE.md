@@ -415,6 +415,28 @@ Four sections:
    Responses · Events · Survey` plus any imported extras, each source stacked
    within every tab. Sheet names are sanitised/deduped for Excel's rules
    (`safeSheetName`).
+   - **Randomization-balance block** (`renderBalance` + `daBalanceData`), directly
+     under the stat boxes — *how many students answered each task*, so the
+     randomization can be eyeballed. Two inline-SVG charts: (a) the
+     **distribution** (`daDistChart`) — one row per response-count value (equal-width
+     buckets aimed at ~14 rows when the observed range is longer), **one dot per
+     task**, with the **median · mode** rows and the **fewest / most** tasks called
+     out by id, empty rows inside the range kept because a gap is part of the shape;
+     (b) **per task, descending** (`daTaskCountChart`) — one bar per task labelled
+     `T### · domain`, the whole bar every submitted response and the **darker part the
+     decisive ones** (ties excluded), with a dashed **mean** line. Both are in a
+     scroll box, `<title>` tooltips carry the task ids/counts. The note above them
+     turns "the bars are uneven" into a verdict: each task's count has variance
+     `Σ_students q(1−q)` with `q = m_i/k` if every student really drew a uniform
+     random subset, so the observed spread is compared with that expectation
+     (`daChiSqUpper`, a regularised incomplete gamma matching `scipy.stats.chi2.sf`
+     to ~1e-11) and **both tails are read** — wider than random (a task was not in
+     every session's set), *more even* than random (a deliberately balanced
+     allocation, or stacked/duplicated sources), consistent, or nothing to judge
+     (every student saw every task → `expSd == 0`; or fewer than 5 tasks / 20
+     responses). It also flags tasks holding more responses than distinct students.
+     Deliberately **the same row filter as the provisioning charts** (blank/`yes`
+     `submitted`), so every block in §2 describes the same rows.
    - **Model-provisioning charts** (`renderProvisioning` + `daProvChart`). Below
      the stats, three inline-SVG grouped-bar charts computed from the aggregate
      **Responses** sheet: preferring **Opus** = **over-provisioning**, a **tie** =
@@ -466,40 +488,88 @@ Four sections:
    read them. Both embed a `TASK_META` map (task_id → **complexity** Simple/Complex
    + **domain**, the 30-task study list) and join it onto each row (a non-blank
    exported `task_complexity`/`task_domain` overrides it). They then print, in
-   order: **(1) summary statistics** per task, per domain and per task type
-   (mean/SD/n + Opus win-rate); **(2) the main hypothesis test** with Haiku as the
+   order: **(1) the 99%-confidence classification** (below); **(2) summary
+   statistics** per task, per domain and per task type
+   (mean/SD/n + Opus win-rate); **(3) the main hypothesis test** with Haiku as the
    baseline (H0: mean graded preference = 0) two ways — task-level (each task = one
    observation, so unequal response counts don't bias it) and response-level with
    SEs **clustered on the student** — plus the decisive-choice binomial test;
-   **(3) a per-task recommendation** (one-sample t-test of each task → Opus / Haiku
-   / no clear preference, with p-values); **(4) by task type** and **(5) by domain**
+   **(4) a per-task recommendation** (one-sample t-test of each task → Opus / Haiku
+   / no clear preference, with p-values); **(5) by task type** and **(6) by domain**
    using **task-level means so each task is weighted equally** (this is how the CIs
    "account for unequal responses per task" — the random 15-of-30 subset per
    student), each group tested vs baseline, a Welch Simple-vs-Complex test and a
-   one-way ANOVA across domains; **(6) regressions** of preference on complexity and
-   on domain (cluster-robust). **Six figures**, in this order (the harvest order the
-   Insights section relies on): **(1)** responses-per-task (sample balance);
-   **(2)** the preference distribution + outcome shares; **(3)** per-task means ±
-   95% CI (whiskers widen where fewer students responded); **(4)** *"what each
+   one-way ANOVA across domains; **(7) regressions** of preference on complexity and
+   on domain (cluster-robust).
+
+   **Section 1 — what we can say at 99% confidence** (the headline, printed first
+   because it is what the study is *for*). Every task, then every task type, then
+   every domain is placed in exactly one of four buckets, in the order
+   **1a Haiku preferred · 1b Opus preferred · 1c indifferent · 1d not decided yet**,
+   followed by **1e by task type** and **1f by domain**. The three claims are NOT
+   symmetric and each gets its own test (`decide`, shared by both languages, in
+   Python `st.t` / in R `qt`/`pt`, verified to agree to 3 dp on five synthetic
+   exports): a **direction** needs the two-sided t-test of the mean graded
+   preference vs 0 to clear `ALPHA` = 0.01 (equivalently, the 99% CI sits entirely
+   on one side of 0); **indifference is a positive claim** and needs an
+   **equivalence test** — TOST, two one-sided t-tests each at 1%, i.e. the 98% CI
+   inside `EQUIV_MARGIN` = ±0.5 scale points — because a merely non-significant
+   test is evidence of nothing; and what clears neither is **"not decided yet"**,
+   the *absence* of a finding rather than a finding of equality. A direction beats
+   equivalence when both fire, with the row flagged `small` / the group verdict
+   suffixed **"(small gap)"** — real but inside the indifference margin, i.e. not
+   worth paying for. The undecided table carries a `why` column (`n<2` vs "CI still
+   spans 0"), since those need different amounts of new data. **Group rows average
+   the TASK means** (equal task weights) and their SE pools only the *within*-task
+   sampling error — `Var = (1/k²)·Σ sd²/n`, Welch–Satterthwaite df (`group_estimate`)
+   — the same fixed-tasks reasoning as §2's delta-method CIs, which is why they are
+   informative where §§5–6's t-test *across* task means (also allowing task
+   sampling) is not; both are printed and the difference is stated. Constants
+   `CONF_LEVEL` / `ALPHA` / `EQUIV_MARGIN` sit at the top of each template and are
+   the one place to retune the confidence level or the margin — **keep the two
+   copies identical** (`templates-guard.mjs` checks it). Degenerate data follows the
+   existing conventions: all-ties → *indifferent* (proven, p_equiv = 0), a constant
+   non-zero task → decisive, n<2 → undecided; displayed intervals are clipped to the
+   bounded [−3, +3] scale (`clip3`, display only — verdicts come from p-values, so
+   clipping can never flip one).
+
+   **Seven figures**, in this order (the harvest order the
+   Insights section relies on): **(1)** the 99% verdict per task — bar = the task's
+   mean, whisker = its **99% CI**, colour = the verdict (blue Haiku / orange Opus /
+   **green = proven indifferent** / pale grey = not decided), with the ±margin
+   indifference zone shaded (Python) or dotted (R); **(2)** responses-per-task
+   (sample balance);
+   **(3)** the preference distribution + outcome shares; **(4)** per-task means ±
+   95% CI (whiskers widen where fewer students responded); **(5)** *"what each
    task's users prefer"* — a ranked bar chart (Haiku → indifferent → Opus) whose
    **bar length is the task's mean preference** and whose **colour is the
    statistical verdict** (blue Haiku / orange Opus when the per-task t-test is
    significant, **grey = no clear preference**, i.e. its CI still includes 0 — so a
    long grey bar means "leaned one way on average but not distinguishable from
-   indifference"); **(5)** the tasks classifiable **with 95% confidence** into
+   indifference"); **(6)** the tasks classifiable **with 95% confidence** into
    over- / indifferent / under-provisioning (an **exact binomial test** on the
    top-two choice counts — under H0 the leading category and the runner-up are
    equally likely — keeps only tasks where the leader significantly beats the
    runner-up, hence the other two; exact, so small/lopsided tasks are not
    over-called the way the earlier z-test was, e.g. 5-0-0 came out "certain";
-   empty → a "not enough data" note);
-   **(6)** by-domain / by-type means ± 95% CI. A plain-language **`INSIGHTS`** block
+   empty → a "not enough data" note; note this is the **choice-count** view at
+   95%, while Figure 1 is the **graded-preference** view at 99% — they answer
+   different questions and may disagree);
+   **(7)** by-domain / by-type means ± 95% CI. A plain-language **`INSIGHTS`** block
    ends each script and now also contains a **`## Figure N — …` heading + guide for
    every figure**, so each plot is explained in words next to it (§4).
 
    The Python version uses numpy / pandas / scipy; the R version computes the
    **same numbers** with base R (`t.test`, `lm`, `anova`, `tapply`, `binom.test`);
-   they are verified to agree. **Neither needs statsmodels** — the cluster-robust
+   they are verified to agree — the Section-1 verdicts, means, 99% CIs and both
+   p-values were checked task-by-task and group-by-group across five synthetic
+   exports (full 60-task, built-in-30-task, all-ties, n=1-per-task and
+   single-student), and `node lab/answerarena/tools/templates-guard.mjs` keeps the
+   two in step offline (section numbers 1..N in the same order in both, figure
+   guides contiguous 1..N with identical titles and no reference to a figure
+   nobody draws, and identical `CONF_LEVEL`/`ALPHA`/`EQUIV_MARGIN`). Numerical
+   agreement itself needs Pyodide/CPython + WebR/Rscript, so it stays a manual
+   step. **Neither needs statsmodels** — the cluster-robust
    vcov (CR1, else HC3) is done by hand (`ols_robust` in Python, the same algebra
    in R), matching to 4 dp, with **G−1 degrees of freedom when clustered** (the
    cluster-robust standard; n−k for HC3) and the response-level CI using the same
@@ -518,7 +588,11 @@ Four sections:
    to the null (e.g. all ties) → t=0, **p=1** — reported as *no clear
    preference*, NOT "too little data"; every value equal to some other constant
    → t=±Inf, p=0 (scipy's own convention). The same rule covers a zero-SE
-   coefficient in `ols_robust`. Other alignment rules shared by the charts and
+   coefficient in `ols_robust` and a zero-SE estimate in `decide` (where it also
+   settles the equivalence leg: the mean is inside, or outside, the margin with
+   certainty — which is why an all-ties task is *proven indifferent* in Section 1
+   while Section 4 still calls it "no clear preference", the older and weaker
+   phrasing of the same fact). Other alignment rules shared by the charts and
    both templates: a **blank/missing `submitted`** counts as submitted (only
    real drafts are dropped), `task_id`/`chosen_model` are **trimmed and
    NA-safe** (R maps NA keys and NA cluster ids to `""` the way pandas reads
@@ -565,7 +639,10 @@ played is KEPT — folding them under a single button would hide that choice. On
 no caller — a stale in-memory array, a list captured before a deletion, a
 future caller that forgets to re-read — can leak a removed account into a
 file; it fails open (keeps the caller's list) if that read errors. Offline
-test: `node lab/answerarena/tools/admin-guard.mjs`.
+tests (both no-network, no-deps): `node lab/answerarena/tools/admin-guard.mjs`
+(the deleted-participant / duplicate-account guarantees above) and
+`node lab/answerarena/tools/templates-guard.mjs` (the Python and R analytics
+templates stay in step — see §8).
 
 **Gotchas:** the runtimes need network access to jsDelivr on first Run (blocked
 in some sandboxes → a visible "Failed to load … (CDN / network / CSP?)" error,
