@@ -2377,7 +2377,16 @@ ground-truth reconciliation for markers the client side missed: it signs
 into the ARENA project with the locker credentials, reads participants
 (+ sessions for id→code), joins `participantId` ↔ roster studentId, and
 `stampCompleted`s (admin write) every match — add-only, whole roster at
-once. **Pinned Session IDs are never
+once; its outcome (stamped count + unmatched arena IDs, i.e. student-ID
+typos) prints in `#verify-note` beside the button. For those stragglers
+the roster's ✓/— cells are CLICKABLE (confirm-guarded manual override —
+stamp or `unstampCompleted` via deleteField; flows to the student live).
+The admin panel also AUTO-BACKFILLS the e-mail recovery docs once per
+open (`backfillRecovery`, `#backfill-note`): students who registered
+before the recovery feature existed have no recovery doc and could not
+log back in by e-mail until the backfill (student browsers also
+self-mirror via the separate `simp:recovery-synced:v1` high-water mark
+in syncProfile). **Pinned Session IDs are never
 shown to students**: a pinned code launches the card DIRECTLY ("Session
 ready" badge, no dialog — openModal's pinned branch), and the same-origin
 sims hide their own code fields when the code came from the handoff

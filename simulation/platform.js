@@ -21,6 +21,7 @@
   var LS_HANDOFF = 'simp:handoff:v1';   // written at launch; read by prefill.js inside each sim
   var LS_SYNCED  = 'simp:profile-synced:v1'; // updatedAt of the last profile mirrored to Firestore
   var LS_COMPLETED = 'simp:completed:v1';  // {simKey:{ts,session}} — written by each sim's done screen (via prefill.js's simpMarkCompleted)
+  var LS_RECOVERY = 'simp:recovery-synced:v1'; // updatedAt of the last profile mirrored to the e-mail recovery doc
 
   /* ---------- catalog ---------- */
   function catalog() { return window.SIMP_CATALOG || []; }
@@ -112,15 +113,21 @@
     if (!CONFIGURED) return;
     var p = getProfile();
     if (!p) return;
-    if (localStorage.getItem(LS_SYNCED) === p.updatedAt) return;
+    /* Separate high-water marks: a browser that synced its roster doc BEFORE
+       the e-mail recovery feature existed must still write its recovery doc
+       on the next visit (else the student can never log back in by e-mail). */
+    var needStudent = localStorage.getItem(LS_SYNCED) !== p.updatedAt;
+    var needRecovery = localStorage.getItem(LS_RECOVERY) !== p.updatedAt;
+    if (!needStudent && !needRecovery) return;
     fb().then(function (F) {
-      return F.saveStudent(p).then(function () {
-        /* also mirror to the e-mail recovery doc — non-fatal */
-        return F.saveRecovery(p).catch(function () {});
-      });
-    })
-      .then(function () { localStorage.setItem(LS_SYNCED, p.updatedAt); })
-      .catch(function () { /* retried on the next visit */ });
+      var a = needStudent
+        ? F.saveStudent(p).then(function () { localStorage.setItem(LS_SYNCED, p.updatedAt); })
+        : Promise.resolve();
+      var b = needRecovery
+        ? F.saveRecovery(p).then(function () { localStorage.setItem(LS_RECOVERY, p.updatedAt); }).catch(function () {})
+        : Promise.resolve();
+      return Promise.all([a, b]);
+    }).catch(function () { /* retried on the next visit */ });
   }
 
   /* ---------- activation config ----------
@@ -343,6 +350,24 @@
             });
           });
         },
+        /* Admin-side backfill: write the e-mail recovery doc for every roster
+           row — students who registered BEFORE the recovery feature existed
+           have none, and without one they cannot log back in by e-mail.
+           Idempotent (merge); resolves to how many rows were written. */
+        backfillRecovery: function (rows) {
+          var fields = ['name', 'email', 'studentId', 'age', 'gender', 'nationality',
+                        'country', 'levelOfStudy', 'workExperience', 'occupation',
+                        'industry', 'englishFluency', 'createdAt', 'updatedAt'];
+          var todo = (rows || []).filter(function (r) { return r && r.email; });
+          return Promise.all(todo.map(function (r) {
+            return emailKeyOf(r.email).then(function (key) {
+              var doc = {};
+              fields.forEach(function (k) { if (r[k] != null && r[k] !== '') doc[k] = r[k]; });
+              if (r.completed) doc.completed = r.completed;
+              return D.setDoc(D.doc(fs, PATHS.recovery + '/' + key), doc, { merge: true });
+            });
+          })).then(function (x) { return x.length; });
+        },
         getRecovery: function (email) {
           return emailKeyOf(email).then(function (key) {
             return ensureAnon().then(function () {
@@ -360,6 +385,15 @@
             var patch = { completed: {} };
             patch.completed[simKey] = { ts: Number(mark.ts) || 0, session: mark.session || null };
             return D.setDoc(D.doc(fs, PATHS.students + '/' + uid), patch, { merge: true });
+          }));
+        },
+        /* Admin-only: remove a completion stamp (the manual override's other
+           direction — e.g. an accidental click). */
+        unstampCompleted: function (uids, simKey) {
+          return Promise.all((uids || []).map(function (uid) {
+            var patch = {};
+            patch['completed.' + simKey] = D.deleteField();
+            return D.updateDoc(D.doc(fs, PATHS.students + '/' + uid), patch).catch(function () {});
           }));
         },
         /* Approve / revoke a student (admin-only per the rules): only approved

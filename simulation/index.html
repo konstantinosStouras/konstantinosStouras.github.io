@@ -233,9 +233,11 @@
       if (!p) { $('r-err').textContent = 'No registration found for that e-mail — please fill in the form below.'; return; }
       P.saveProfile(p);
       showSims();
-    }).catch(function () {
+    }).catch(function (e) {
       b.disabled = false; b.textContent = 'Restore my registration';
-      $('r-err').textContent = 'Could not look that up just now — please try again, or fill in the form below.';
+      $('r-err').textContent = (e && e.code && String(e.code).indexOf('permission-denied') >= 0)
+        ? 'The platform needs a settings update — please tell your instructor ("republish the Firestore rules").'
+        : 'Could not look that up just now — please try again, or fill in the form below.';
     });
   };
   function showSims() {
