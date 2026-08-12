@@ -2380,7 +2380,12 @@ cache), joins `participantId` ↔ roster studentId, and `stampCompleted`s
 (admin write) every match — and, TWO-WAY, **revokes** a ✓ whose student is
 no longer a completed arena participant (deleted there so they may retake
 it; arena's `deleteParticipant` hard-deletes the doc + its subcollections,
-so they simply vanish). A revocation is a TOMBSTONE inside the
+so they simply vanish — and the arena's participant list is GROUPED BY
+STUDENT, so Delete removes EVERY account a student registered under, not
+just the card clicked: a duplicate registration is a second anonymous uid
+= a second participant doc, and deleting one used to leave the other's
+answers in the Excel export; both arena exports also re-read participants
+at export time). A revocation is a TOMBSTONE inside the
 already-allowed `completed` map (`{revoked:1,rts}` — no rules republish),
 written to the roster doc AND the e-mail recovery replica (else logging in
 elsewhere resurrects it); the student's browser stamps `seenAt` from its
@@ -2416,7 +2421,11 @@ cross-origin newsvendor's copy chips. Students **log out** from the header (clea
 browser AND signs out the anonymous uid, so on a shared machine the next
 registration gets its own roster doc instead of overwriting); the roster view
 collapses duplicate re-registrations by student ID, newest kept, and the
-admin panel has its own Sign out. **Returning students** (Log in / Register choice on entry): same browser =
+admin panel has its own Sign out. **Returning students** (**Log in** / **Register** pill buttons at the TOP
+RIGHT of the header — `#hero-auth`/`setHeroAuth`, shown on every entry
+screen while signed out, replaced by the "Registered as …" row once in;
+`showSims` calls `hideAll()` so the login card cannot linger behind the
+cards): same browser =
 auto-signed-in (localStorage + persisted anon auth); a NEW device/cleared
 browser presses **Log in** and gives the university student ID + e-mail —
 BOTH must match (`recoverByEmail(email, studentId)`) — restoring the
