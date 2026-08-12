@@ -68,7 +68,7 @@ Served (`lab/answerarena/`):
 | `arena-app.js` | Participant phase machine, comparison UI, 2x2 assignment, session join, resume. |
 | `admin.js` | Admin panel (`?admin`): Sessions, Tasks (Excel upload), Content, Registration, Survey, 2x2 & Settings, Participants + Excel export. |
 | `CLAUDE.md` | This file. |
-| `tools/admin-guard.mjs` | Offline test: a deleted participant can never reach an export. |
+| `tools/admin-guard.mjs` | Offline test: a deleted participant can never reach an export; session Close vs Delete (see §6). |
 | `tools/preview-guard.mjs` | Offline test: the 🧪 Test round sandbox is isolated + pre-filled. |
 
 Backend (`_lab-arena-firebase/`, underscore-prefixed so it is not published):
@@ -232,8 +232,36 @@ no status picker. The right column has two cards: **Active sessions** and a
 separate **Closed sessions** card (shown only when there are closed ones). Each
 card shows a session's code + status, participant count + **2x2 conditions**
 (right) and created date (left). A running session offers Open / Copy link /
-⬇ Export data / **🧪 Test round** / **Close**; a closed session (no joins)
-offers ⬇ Export data / **🧪 Test round** / **Reopen** / permanently **Delete**.
+⬇ Export data / **🧪 Test round** / **Close Session** / **Delete**; a closed
+session (no joins) offers ⬇ Export data / **🧪 Test round** / **Reopen** /
+**Delete**.
+
+**Close Session and Delete are two DIFFERENT endings** (owner 2026-08, mirroring
+the ideasearchlab cards' grey `.closeBtn` + red `.deleteBtn` pair): **Close
+Session** is styled neutrally (`.aa-btn sec`, grey) because it only stops new
+joins and moves the card into **Closed sessions** below with everything kept —
+it used to be a red `danger` button labelled just "Close", which read as the
+destructive action. **Delete** (`.aa-btn danger`, red, directly after it) is the
+destructive one and **removes the session AND all of its data**:
+`Store.deleteSessionData(sid)` runs FIRST and `Store.deleteSession(sid)` second,
+so a failed purge leaves the session listed and the action retryable instead of
+orphaning rows under a session that appears nowhere (Firestore keeps
+sub-collection docs alive under a deleted parent — the same trap
+`deleteParticipant` documents). Two confirms, since there is no undo.
+`deleteSessionData` exists in **both** backends and, for every participant who
+played the session, deletes the responses/events tagged with it, its
+`survey/{sid}` doc and an unsubmitted `draftResponse` belonging to it, drops it
+from `playedSessions`/`completedSessions` (clearing `sessionId` when it still
+points at it) — and deletes the participant record **outright** when that was
+the only session they ever touched (the record exists only because of it). A
+participant who also played another session keeps that session's data: nobody is
+owned by one session. The shared helpers `sessionKeysOf`/`touchesSession`/
+`onlySession` (module level in `arena-store.js`) are what both backends decide
+with — keep the two implementations in step. Covered by
+`node lab/answerarena/tools/admin-guard.mjs` (button order/styling, Close writes
+only `status`, Delete's data-then-session order, and the local backend's purge
+semantics end to end).
+
 **A session is never edited once it exists** — the old "Edit name" button and its
 inline `editMode` rename form were removed (owner 2026-08: participants may
 already be playing in it), the same rule as the ideasearchlab admin, which lost
