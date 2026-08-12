@@ -22,10 +22,6 @@
 .cardSubtitle {
   font-size: 11px; color: var(--muted); margin-bottom: 20px; line-height: 1.6;
 }
-.editBadge {
-  font-size: 11px; font-family: var(--font-body); background: #fff3e0;
-  color: #e65100; padding: 2px 8px; border-radius: 3px; font-weight: 500;
-}
 .section { margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
 /* Highlighted box for an important parameter (AI Assistant) — thin yellow border. */
 .aiBox {
@@ -134,33 +130,49 @@
 
 .participantCount { font-size: 13px; font-weight: 600; color: var(--ink); }
 .phasesMeta { font-size: 11px; color: var(--muted); }
-.sessionCardActions { display: flex; gap: 8px; align-items: center; }
-.deleteBtn {
-  background: none; border: none; color: var(--muted); font-size: 13px;
-  cursor: pointer; padding: 6px 10px; border-radius: var(--radius);
-  transition: color 0.15s, background 0.15s; margin-left: auto;
+.sessionCardActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ── Session-card action buttons ───────────────────────────────────────────
+   ONE pill family for every button on a session card, mirroring the Answer
+   Arena admin's `.aa-btn … sm` set (same height, radius, weight and colour
+   roles) so the two admins read as the same product. Every card button must
+   use `.sBtn` + one variant — never a bare `btn-primary`/`btn-ghost`, whose
+   larger padding is what made these rows ragged (and wrapped "Export data"
+   onto two lines). */
+.sBtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1.4;
+  white-space: nowrap;
+  padding: 7px 16px; border-radius: var(--radius);
+  border: 1px solid transparent; background: none; color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.06s;
 }
-.deleteBtn:hover { color: #c0392b; background: #fce4ec; }
+.sBtn:active { transform: translateY(1px) scale(0.985); }
+.sBtn:disabled { opacity: 0.55; cursor: default; }
+
+/* Primary action ("Open"). */
+.sBtnPrimary { background: var(--accent); color: #ffffff; border-color: var(--accent); }
+.sBtnPrimary:hover { background: var(--accent-light); border-color: var(--accent-light); }
+
+/* Neutral action ("🧪 Test round"). */
+.sBtnSec { border-color: var(--border); color: var(--ink); }
+.sBtnSec:hover { border-color: var(--ink); background: var(--paper-dark); }
+
+/* "Export data" — download this session's research workbook straight from its
+   card in the session list (solid green, like the Answer Arena admin's). */
+.exportBtn { background: #2e9e5b; color: #ffffff; border-color: #2e9e5b; box-shadow: 0 4px 12px rgba(46,158,91,0.28); }
+.exportBtn:hover:not(:disabled) { background: #268a4c; border-color: #268a4c; box-shadow: 0 7px 18px rgba(46,158,91,0.36); }
 
 /* "Close Session" — mark an active session completed (moves it to Completed
    Sessions). Green-on-hover to signal a finishing, non-destructive action. */
-.closeBtn {
-  background: none; border: 1px solid var(--border); color: var(--muted);
-  font-size: 13px; cursor: pointer; padding: 6px 14px; border-radius: var(--radius);
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
+.closeBtn { border-color: var(--border); color: var(--muted); }
 .closeBtn:hover { color: #2e9e5b; border-color: #2e9e5b; background: rgba(46,158,91,0.08); }
 
-/* "Export data" — download this session's research workbook straight from its
-   card in the session list (green, like the Answer Arena admin's export). */
-.exportBtn {
-  background: none; border: 1px solid #2e9e5b; color: #2e9e5b;
-  font-size: 13px; font-weight: 600; cursor: pointer;
-  padding: 6px 14px; border-radius: var(--radius);
-  transition: color 0.15s, border-color 0.15s, background 0.15s, opacity 0.15s;
-}
-.exportBtn:hover:not(:disabled) { background: rgba(46,158,91,0.1); }
-.exportBtn:disabled { opacity: 0.55; cursor: default; }
+/* Destructive action ("Delete"): a red-outlined pill, not borderless text, so
+   it sits on the same baseline as its neighbours (arena's `.aa-btn danger`). */
+.deleteBtn { border-color: rgba(192,57,43,0.45); color: #c0392b; }
+.deleteBtn:hover { border-color: #c0392b; background: rgba(192,57,43,0.08); }
 .sessionExportError { margin-top: 8px; font-size: 12px; color: #c0392b; }
 
 /* Destructive "Delete all" action for a whole list (sessions / users). */
