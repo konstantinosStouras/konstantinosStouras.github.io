@@ -97,8 +97,30 @@ Each submitted comparison writes a **response** doc:
                     //   .. 0 (Equal) .. +3 (B much better); A = left, B = right
   prefLabel,        // the matching text label
   prefModelValue,   // re-framed to the models: neg = baseline better, pos = frontier better
+  choiceMs,         // decision time part 1: shown -> first side pick
+  prefMs,           // part 2: that pick -> final grading on the 7-point bar
+  answerMs,         // total to a final answer = choiceMs + prefMs (exactly)
+  prefSource,       // 'bar' (graded explicitly) | 'card' (kept the seeded degree)
   responseMs, condition, ts }
 ```
+
+**Decision timing is split in two** (per the owner): `choiceMs` is how long the
+participant took to pick a side, `prefMs` how long they then took to say HOW MUCH
+better it is, and `answerMs` their sum - the total time to a final answer. The two
+stopwatches live in `buildComparison` (`times()`, fed by `pick()`/`setPref()`),
+are derived from stored timestamps (so `data()` can be polled without the numbers
+drifting), and ride on both the submitted response and the saved `draftResponse`.
+`buildComparison` is handed the same `opts.shownAt` stamp `responseMs` measures
+from, so `responseMs >= answerMs` always holds and their difference is exactly the
+time spent re-reading after deciding. Because tapping an answer card *seeds* a
+degree (-2/+2/0), a participant can finish without touching the bar: that is
+`prefSource: 'card'` with `prefMs = 0`, distinguished from a fast explicit grading
+(`'bar'`) so the two can never be conflated in analysis. The export adds
+`choice_ms` / `preference_ms` / `answer_ms` / `preference_source` to **Responses**
+and `mean_choice_ms` / `mean_preference_ms` / `mean_answer_ms` to **Task summary**
+(each averaged only over rows that carry it, so pre-change data can't skew a mean);
+older responses recorded before this leave the columns blank. The raw per-click
+`Events` sheet remains the finest-grained record.
 
 The comparison UI: the participant taps an answer (or "They're equally good"),
 which reveals a **7-point preference bar** centered below the tie button (`A much

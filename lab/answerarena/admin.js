@@ -651,7 +651,7 @@
          Delete removes every account behind it. */
       var groups = [], byKey = {};
       rows.forEach(function (p) {
-        var k = String(p.participantId || '').trim().toLowerCase() || (' id:' + p._id);
+        var k = String(p.participantId || '').trim().toLowerCase() || ('\u0000id:' + p._id);
         if (!byKey[k]) { byKey[k] = { rows: [] }; groups.push(byKey[k]); }
         byKey[k].rows.push(p);
       });
@@ -1244,7 +1244,7 @@
         // task_id that shows up anywhere in the exported data (so the Tasks sheet
         // lists them even if the active set has since changed).
         var agg = {}, seenTaskIds = {};
-        function aggOf(id) { return agg[id] || (agg[id] = { n: 0, baseline: 0, frontier: 0, tie: 0, prefSum: 0, prefN: 0, msSum: 0, msN: 0 }); }
+        function aggOf(id) { return agg[id] || (agg[id] = { n: 0, baseline: 0, frontier: 0, tie: 0, prefSum: 0, prefN: 0, msSum: 0, msN: 0, chSum: 0, chN: 0, pfSum: 0, pfN: 0, anSum: 0, anN: 0 }); }
         var chain = Promise.resolve();
         parts.forEach(function (p) {
           var uid = p._id, c = p.condition || {};
@@ -1295,6 +1295,11 @@
                   if (cm === 'o1') a.baseline++; else if (cm === 'o2') a.frontier++; else if (cm === 'tie') a.tie++;
                   var pm = Number(it.v.prefModelValue); if (it.v.prefModelValue != null && isFinite(pm)) { a.prefSum += pm; a.prefN++; }
                   var ms = Number(it.v.responseMs); if (it.v.responseMs != null && isFinite(ms)) { a.msSum += ms; a.msN++; }
+                  // Decision-timing means (each averaged over the responses that
+                  // carry it, so older rows without them never skew the mean).
+                  var chm = Number(it.v.choiceMs); if (it.v.choiceMs != null && isFinite(chm)) { a.chSum += chm; a.chN++; }
+                  var pfm = Number(it.v.prefMs); if (it.v.prefMs != null && isFinite(pfm)) { a.pfSum += pfm; a.pfN++; }
+                  var anm = Number(it.v.answerMs); if (it.v.answerMs != null && isFinite(anm)) { a.anSum += anm; a.anN++; }
                 }
               });
               // Answers tracked so far for this participant (in this export's scope).
@@ -1339,6 +1344,9 @@
               n_responses: a.n, n_baseline_preferred: a.baseline, n_frontier_preferred: a.frontier, n_tie: a.tie,
               frontier_win_rate: decisive ? round4(a.frontier / decisive) : '',
               mean_preference_model: a.prefN ? round4(a.prefSum / a.prefN) : '',
+              mean_choice_ms: a.chN ? Math.round(a.chSum / a.chN) : '',
+              mean_preference_ms: a.pfN ? Math.round(a.pfSum / a.pfN) : '',
+              mean_answer_ms: a.anN ? Math.round(a.anSum / a.anN) : '',
               mean_response_ms: a.msN ? Math.round(a.msSum / a.msN) : '',
               cost_baseline_usd: t.costA != null ? t.costA : '', cost_frontier_usd: t.costB != null ? t.costB : ''
             };
@@ -1441,6 +1449,12 @@
       preference_model: v.prefModelValue != null ? v.prefModelValue : '',
       cost_baseline_usd: v.costBaseline != null ? v.costBaseline : '', cost_frontier_usd: v.costFrontier != null ? v.costFrontier : '',
       chosen_cost_usd: v.answerCost != null ? v.answerCost : '', running_cost_usd: v.runningCost != null ? v.runningCost : '',
+      // Decision timing: the two stopwatches and their sum. Blank on older data
+      // recorded before they were tracked (response_ms was the only timing then).
+      choice_ms: v.choiceMs != null ? v.choiceMs : '',
+      preference_ms: v.prefMs != null ? v.prefMs : '',
+      answer_ms: v.answerMs != null ? v.answerMs : '',
+      preference_source: v.prefSource || '',
       response_ms: responseMs, decided_at: fmtTs(ts), decided_ts: ts || '',
       cost_transparency: base.cost_transparency, firm_pay: base.firm_pay
     };
@@ -1510,7 +1524,10 @@
     add('Task summary', 'n_tie', 'How many participants marked the two answers equally good.');
     add('Task summary', 'frontier_win_rate', 'n_frontier_preferred / (n_frontier_preferred + n_baseline_preferred), i.e. the frontier win share among decisive (non-tie) choices; blank if all ties.');
     add('Task summary', 'mean_preference_model', 'Mean of preference_model over this task (-3..+3): negative favours baseline, positive favours frontier.');
-    add('Task summary', 'mean_response_ms', 'Mean decision time (milliseconds) for this task.');
+    add('Task summary', 'mean_choice_ms', 'Mean time (milliseconds) participants took to pick a side on this task (see Responses.choice_ms).');
+    add('Task summary', 'mean_preference_ms', 'Mean time (milliseconds) participants then took to grade how much better it is (see Responses.preference_ms).');
+    add('Task summary', 'mean_answer_ms', 'Mean TOTAL time (milliseconds) to a final answer for this task (see Responses.answer_ms).');
+    add('Task summary', 'mean_response_ms', 'Mean time (milliseconds) from seeing the pair to pressing Next for this task.');
     add('Task summary', 'cost_baseline_usd / cost_frontier_usd', 'The two answers\' US$ costs for this task (from the uploaded set).');
     add('Responses', 'participant_id', "The participant's optional ID (see Participants); usually blank - join on account_id.");
     add('Responses', 'account_id', 'Unique participant ID (see Participants). The reliable join key.');
@@ -1534,7 +1551,11 @@
     add('Responses', 'cost_frontier_usd', 'US$ cost of the frontier model\'s answer for this task; blank if no cost was provided.');
     add('Responses', 'chosen_cost_usd', 'US$ cost charged for this comparison: the chosen answer\'s cost, or the average of the two for a tie.');
     add('Responses', 'running_cost_usd', "Cumulative US$ cost of the participant's choices up to and including this comparison (shown live to the 'translated' cost-transparency group).");
-    add('Responses', 'response_ms', 'Time in milliseconds from seeing the pair to pressing Next.');
+    add('Responses', 'choice_ms', 'DECISION TIME, part 1: milliseconds from seeing the pair to picking a side (tapping an answer or "They\'re equally good"). Blank if the comparison was never answered.');
+    add('Responses', 'preference_ms', 'DECISION TIME, part 2: milliseconds from that first pick to the final setting of the 7-point preference bar - the time spent deciding HOW MUCH better it is. Includes any revisions; 0 when the participant kept the degree seeded by tapping the answer (see preference_source).');
+    add('Responses', 'answer_ms', 'TOTAL decision time in milliseconds: choice_ms + preference_ms exactly, i.e. from seeing the pair to the answer AND its preference being final.');
+    add('Responses', 'preference_source', '"bar" = the participant set the degree themselves on the 7-point bar; "card" = they kept the degree seeded by tapping the answer (so preference_ms is 0 by construction). Blank if never answered.');
+    add('Responses', 'response_ms', 'Time in milliseconds from seeing the pair to pressing Next. Always >= answer_ms; the difference is time spent re-reading after the answer was final.');
     add('Responses', 'decided_at', 'Local date/time when the comparison was decided.');
     add('Responses', 'decided_ts', 'Decision time as epoch milliseconds (useful for sorting).');
     add('Responses', 'cost_transparency', "The participant's cost-transparency group, 1/0 (see Participants).");
