@@ -400,7 +400,14 @@ export default function DataAnalytics() {
         // Don't let a removed participant's idea absorb a title match meant for a visible one.
         const res = matchScoresIntoRows(rows, entries, r => !excludedUsers.has(userKey(r.session, r.author_id)), fields)
         setRows(recomputeOverall(res.rows))
-        setMsg(`Loaded scores from "${sheetName}": updated ${res.matched} idea${res.matched === 1 ? '' : 's'} by title; ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} had no match in the loaded data.`)
+        // Say what was ADDED and what was left alone: the upload only fills ideas
+        // with no score yet, so a file re-imported over already-scored ideas must
+        // not read as if it had updated them.
+        setMsg(
+          `Loaded scores from "${sheetName}": scored ${res.filled} idea${res.filled === 1 ? '' : 's'} that had no score yet`
+          + (res.kept ? `; kept the existing scores of ${res.kept} already-scored idea${res.kept === 1 ? '' : 's'}` : '')
+          + `; ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} had no match in the loaded data.`
+        )
       } catch (err) {
         setMsg('Could not read the scores file: ' + (err.message || err))
       }
@@ -535,12 +542,15 @@ export default function DataAnalytics() {
       title: titleCol ? r[titleCol] : '',
       values: Object.fromEntries(cols.map(c => [c.key, r[c.name]])),
     }))
-    const { rows: next, matched, unmatched } = matchUploadedKpisIntoRows(rows, entries, keys)
+    const { rows: next, matched, unmatched, kept } = matchUploadedKpisIntoRows(rows, entries, keys)
     setRows(next)
     const names = cols.map(c => c.label).join(', ')
     setKpiUploadMsg(
       `Loaded ${keys.length} KPI${keys.length === 1 ? '' : 's'} (${names}) from “${fileName}” onto ${matched} idea${matched === 1 ? '' : 's'}` +
       (unmatched ? `, ${unmatched} file row${unmatched === 1 ? '' : 's'} unmatched.` : '.') +
+      // A recognised KPI column (Novelty/Usefulness/…) only fills ideas with no
+      // score yet, so say when existing scores were left alone.
+      (kept ? ` Kept the existing scores of ${kept} already-scored idea${kept === 1 ? '' : 's'}.` : '') +
       ' Added to the Step-2 aggregate Rankings tab and the Step-5 regressions.'
     )
   }
@@ -1427,7 +1437,9 @@ export default function DataAnalytics() {
                 <strong>Score each idea with an LLM, or upload an offline AI-scoring file.</strong> The AI rater scores each
                 idea on novelty and usefulness (1–5); quality is their mean. Choose the API and model below — it uses the
                 matching key saved under AI&nbsp;Settings. Scores flow into the <em>Rankings</em> tab of the Step&nbsp;2
-                aggregate and the Step&nbsp;5 regressions. You can also edit any score directly in the table below.
+                aggregate and the Step&nbsp;5 regressions. <strong>Both the AI run and an uploaded file only fill ideas
+                that have no score yet</strong> — ideas already scored (in an earlier sitting, by a past AI rater, or by
+                hand) keep their scores. To change one, edit it directly in the table below.
               </div>
 
               <div className={styles.raterRow}>
@@ -1456,7 +1468,7 @@ export default function DataAnalytics() {
                     : `Score ${scopeUnscored} ${scoreOnlyFinal ? 'final ' : ''}idea${scopeUnscored === 1 ? '' : 's'} with AI`}
                 </button>
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => scoreFileRef.current?.click()} disabled={!!scoring}
-                  title='Upload an offline AI-scoring file ("All Ideas Ranked" / Rankings sheet) → fills the AI KPI columns'>Load AI scores file</button>
+                  title='Upload an offline AI-scoring file ("All Ideas Ranked" / Rankings sheet) → fills the AI KPI columns of ideas that have no score yet (already-scored ideas keep theirs)'>Load AI scores file</button>
                 <input ref={scoreFileRef} type="file" accept=".xlsx,.xls" className={styles.fileInput} onChange={onPickScores} />
                 {scoring && <span className={styles.statusLine}><span className={styles.spinner} /> contacting {scoreProvider}…</span>}
               </div>
@@ -1589,7 +1601,8 @@ export default function DataAnalytics() {
                 {' '}<em>Rankings</em> / <em>All Ideas Ranked</em> sheet — a header row with an <em>Idea Title</em> (or Title)
                 column plus <em>Novelty</em> and <em>Usefulness</em> columns (one or more rater columns are averaged); quality
                 is their mean. They are matched onto the loaded ideas by title and kept in their own <em>Evaluator</em> KPI
-                columns (separate from the AI scores), so Step&nbsp;4 and Step&nbsp;5 can compare the two.
+                columns (separate from the AI scores), so Step&nbsp;4 and Step&nbsp;5 can compare the two. As in 3.2, an
+                upload only fills ideas with no evaluator rating yet — existing ones are never overwritten.
               </div>
               <div className={styles.row} style={{ marginBottom: 8 }}>
                 <button className="btn-primary" onClick={() => evalScoreFileRef.current?.click()}>Load evaluator scores file</button>
@@ -2154,9 +2167,11 @@ const SORT_GETTERS = {
   condition: { label: 'Condition', get: r => CONDITIONS.indexOf(r.condition), type: 'num' },
   phase: { label: 'Phase', get: r => r.phase, type: 'str' },
   final: { label: 'Final', get: r => Number(r.final_pick) || 0, type: 'num' },
-  novelty: { label: 'Novelty', get: r => r.novelty, type: 'num' },
-  usefulness: { label: 'Usefulness', get: r => r.usefulness, type: 'num' },
-  quality: { label: 'Quality', get: r => r.overall_quality, type: 'num' },
+  // Named "AI …" because these three are the AI rater's columns (3.2) — the
+  // evaluator (3.3) and objective (3.1) KPIs get their own columns after them.
+  novelty: { label: 'AI Novelty', get: r => r.novelty, type: 'num' },
+  usefulness: { label: 'AI Usefulness', get: r => r.usefulness, type: 'num' },
+  quality: { label: 'AI Quality', get: r => r.overall_quality, type: 'num' },
   idea: { label: 'Idea', get: r => r.text, type: 'str' },
 }
 const TABLE_COLS = ['idea_id', 'session', 'condition', 'phase', 'final', 'novelty', 'usefulness', 'quality', 'idea']

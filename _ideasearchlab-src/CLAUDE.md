@@ -287,7 +287,7 @@ sessions/{sessionId}/aiMessages/{messageId}: {
 **Admin UI (Admin.jsx + Admin.module.css):**
 - Two-column layout: left = Create session form, right = Active/Completed sessions list
 - **A session is never edited after it is created** (owner 2026-08: participants may already be playing in it). The session cards have no Edit button and the whole edit path is gone — `editingSession` state, `startEdit`/`saveEdit`/`cancelEdit`, the form's "Edit Session — CODE" title + editing badge, and the "Save Changes / Cancel" form actions. Each section's **Save** button now only confirms the value is captured for the session about to be created ("Saved — used when you create the session."); "Make this the default" / "Restore built-in default" are unchanged. Answer Arena's "Edit name" went in the same change.
-- **Session-card buttons are ONE pill family**, aligned with the Answer Arena admin's `.aa-btn … sm` set: `.sBtn` + a variant — `.sBtnPrimary` (Open), `.exportBtn` (solid green ⬇ Export data), `.sBtnSec` (🧪 Test round), `.closeBtn` (Close Session), `.deleteBtn` (red-outlined Delete, no longer borderless/`margin-left:auto`) — same height, radius, weight and `white-space: nowrap`, in `Admin.module.css`. Active and Completed cards use the same set. A new card button must be `.sBtn` + a variant, never a bare `btn-primary`/`btn-ghost` (their larger padding is what made these rows ragged and wrapped "⬇ Export data" onto two lines).
+- **Session-card buttons are ONE pill family**, carrying the Answer Arena admin's `.aa-btn … sm` geometry verbatim — `font-size:12px`, `padding:7px 11px`, `border-radius:10px`, `font-weight:600`, `line-height:1.4`, nowrap, and a 1px border on every variant (transparent on the filled ones, so a filled pill and an outlined one are exactly the same height). Those numbers are a contract with `lab/answerarena/admin.js` — change them in both or neither. `.sBtn` + a variant — `.sBtnPrimary` (Open), `.exportBtn` (solid green ⬇ Export data), `.sBtnSec` (🧪 Test round), `.closeBtn` (Close Session), `.deleteBtn` (red-outlined Delete, no longer borderless/`margin-left:auto`) — same height, radius, weight and `white-space: nowrap`, in `Admin.module.css`. Active and Completed cards use the same set. A new card button must be `.sBtn` + a variant, never a bare `btn-primary`/`btn-ghost` (their larger padding is what made these rows ragged and wrapped "⬇ Export data" onto two lines).
 - **Content editor default buttons:** every page block in the "Page Text & Content" editor has three actions: "Make this the default" (saves that page's current text to the Firestore doc `settings/contentDefaults`, merged per page; future sessions start with it), "Reset this page to defaults" (resets the editor to the effective default = admin-saved if present, else built-in), and "Restore built-in default" (shown only when an admin-saved default exists; deletes it via `deleteField()` and puts the built-in text back). Transient feedback text appears next to the buttons. The same three buttons (shared `DefaultActions` component) also appear under the Registration form and Survey questions builders, stored in the same doc under the `registrationForm` and `surveyQuestions` keys (whole config objects) — covered by the existing contentDefaults Firestore rule, no rules change needed.
 - `getEffectiveDefaults(custom)` in defaultContent.js merges the admin-saved defaults over `DEFAULT_CONTENT` field-by-field (empty-safe). Admin.jsx listens to `settings/contentDefaults` with onSnapshot and seeds the create form once on first load. Sessions still snapshot their full contentConfig at creation, so changing defaults later never alters existing sessions (`getContent` intentionally falls back to built-ins only).
 - Firestore rule: `allow write: if isAdmin() && docId == 'contentDefaults'` on `settings/{docId}` — must be deployed for the buttons to work.
@@ -473,7 +473,32 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    has *Idea Title* + *Novelty* columns) and matches each row's Novelty/Usefulness onto the
    loaded ideas **by normalised title** (`matchScoresIntoRows` in `analyticsData.js`: exact,
    then length-guarded contains; each idea used once), reporting matched/unmatched counts. So
-   you can score externally and pull the scores back in, then re-download. **Download:** a
+   you can score externally and pull the scores back in, then re-download.
+   - **An upload ADDS scores — it never overrides one that is already there** (owner 2026-08).
+     A scores file typically carries ideas rated in an earlier sitting (by a past AI rater or
+     by hand); both upload paths used to write unconditionally, replacing those scores with
+     the file's and **blanking a score outright wherever the file's cell was empty or
+     unparseable**. Now each KPI is filled ONLY where the row is still blank AND the incoming
+     value is usable — the same rule the LLM run already applied (`scoreUnscored` fills only
+     the missing field(s)). It covers **both** paths into the canonical KPI columns:
+     `matchScoresIntoRows` (3.2 AI scores, 3.3 evaluator ratings) and
+     `matchUploadedKpisIntoRows` (3.1 "Upload additional KPIs", whose `canonicalKpiField`
+     routing means a file with a "Novelty" column lands in the AI Novelty column). The one
+     deliberate exception: an **`x_…` uploaded-extra column is the file's OWN column**
+     (prototypicality, ks, …), so re-uploading it REPLACES it — that is the point of
+     re-uploading a corrected file. Both matchers now also return `filled` / `kept` (per-idea
+     and mutually exclusive — an idea that gains one KPI while holding the other counts as
+     filled), which the page reports: *"scored 12 ideas that had no score yet; kept the
+     existing scores of 30 already-scored ideas"*. To change a kept score, edit its cell in
+     the Step-3 table — the one deliberate path, stated in the 3.2/3.3 banners.
+     Offline test: `node _ideasearchlab-src/tools/analytics-scores-guard.mjs` (no network,
+     no deps — imports `analyticsData.js` directly).
+   - **The Step-3 table's three AI columns are headed *AI Novelty* / *AI Usefulness* /
+     *AI Quality*** (`SORT_GETTERS` labels, used only for that header row), so they read
+     unambiguously beside the evaluator (3.3) and objective (3.1) KPI columns appended after
+     them. The Excel exports' own column labels are unchanged (*Novelty* / *Usefulness* /
+     *Overall Quality*), and `canonicalKpiField` already accepts both spellings, so a
+     re-imported workbook still lands in the right columns. **Download:** a
    single summarized **Excel** workbook (`xlsx-js-style`, bold headers) — sheets *Ideas* (the
    per-idea dataset), *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and
    *Removed participants* when any — plus a raw-dataset **CSV**. Both reflect the current

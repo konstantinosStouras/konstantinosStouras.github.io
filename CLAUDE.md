@@ -2182,7 +2182,21 @@ lines; every card button now uses ONE pill family — `.sBtn` + a variant
 `Admin.module.css`, mirroring Answer Arena's `.aa-btn … sm` set (same height,
 radius, weight, colour roles, `white-space: nowrap`). Keep the two in sync — a
 new card button must be added as `.sBtn` + a variant, never a bare
-`btn-primary`/`btn-ghost`. *No editing a session that exists:* the **Edit**
+`btn-primary`/`btn-ghost`. **The Arena pill is the reference and `.sBtn` now
+carries its geometry VERBATIM — `font-size:12px`, `padding:7px 11px`,
+`border-radius:10px`, `font-weight:600`, `line-height:1.4`, nowrap** (measured
+identical: every pill in both admins renders 32.8px tall on one baseline). Those
+numbers are a contract between `Admin.module.css` and `.aa-btn`/`.aa-btn.sm` in
+`lab/answerarena/admin.js` — change them in both or neither. Each panel keeps its
+OWN theme (arena dark, ideasearchlab light) and its own action set, so the colour
+roles map rather than match: `.sBtnSec` paints `var(--white)` where arena's
+`.sec` paints `var(--panel)`, and ideasearchlab keeps a neutral **Close Session**
+(non-destructive — moves the session to Completed) beside the red **Delete**,
+where arena has only one closing action and paints it `danger`. **Every variant
+carries a 1px border, transparent on the filled ones**, in BOTH admins: with
+arena's old `.aa-btn{border:none}` a filled pill (Open / Export data) sat 2px
+shorter than an outlined neighbour (Copy link / Test round / Close), so even
+arena's own row was subtly ragged. *No editing a session that exists:* the **Edit**
 button (ideasearchlab) and **Edit name** (Answer Arena) were REMOVED — a session
 may already have participants playing in it, so its configuration is fixed at
 creation. ideasearchlab's whole edit path went with it (`editingSession` state,
