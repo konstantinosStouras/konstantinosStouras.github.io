@@ -514,7 +514,10 @@
     var flip = !!S.flips[S.idx];
     var leftId = flip ? 'o2' : 'o1', rightId = flip ? 'o1' : 'o2';
     S.choice = null; S.shownAt = Date.now(); S.draft = null;
-    var comp = buildComparison(task, S.idx + 1, S.order.length, flip, {});
+    // Hand the comparison the same "shown" stamp responseMs is measured from, so
+    // the two clocks agree and response_ms - answer_ms is exactly the time spent
+    // after the answer was final (re-reading, then pressing Next).
+    var comp = buildComparison(task, S.idx + 1, S.order.length, flip, { shownAt: S.shownAt });
     var nextBtn = el('button', { class: 'a-btn a-go', on: { click: next } }, [(S.idx === S.order.length - 1) ? 'Finish' : 'Next']);
     nextBtn.setAttribute('data-tour', 'next');
     nextBtn.setAttribute('disabled', 'true');
@@ -544,6 +547,7 @@
         taskId: task.id, idx: S.idx, sessionId: curSid(), leftOutput: leftId, rightOutput: rightId,
         choice: d.choice, chosenOutput: d.choice === 'tie' ? 'tie' : (d.choice === 'left' ? leftId : rightId),
         prefValue: d.prefValue, prefLabel: d.prefLabel, prefModelValue: modelPref(d.prefValue),
+        choiceMs: d.choiceMs, prefMs: d.prefMs, answerMs: d.answerMs, prefSource: d.prefSource,
         condition: S.condition || (S.p && S.p.condition) || null,
         complete: !!d.complete, updatedAt: Date.now()
       };
@@ -600,6 +604,9 @@
       var resp = {
         taskId: task.id, idx: S.idx, sessionId: curSid(), leftOutput: leftId, rightOutput: rightId,
         choice: d.choice, chosenOutput: chosenOutput, responseMs: Date.now() - S.shownAt,
+        // Decision timing: time to pick a side, time to grade how much better,
+        // and their sum (the total time to a final answer). See buildComparison.
+        choiceMs: d.choiceMs, prefMs: d.prefMs, answerMs: d.answerMs, prefSource: d.prefSource,
         prefValue: d.prefValue, prefLabel: d.prefLabel, prefModelValue: modelPref(d.prefValue),
         costBaseline: costA, costFrontier: costB, answerCost: answerCost, runningCost: S.spent,
         condition: S.condition || (S.p && S.p.condition) || null, ts: Date.now()
@@ -674,6 +681,32 @@
     ];
     var pref = null;             // -3..3 in the displayed A/B frame; null until chosen
     var segBtns = [], follow = null;
+
+    // ---- Decision timing (two stopwatches per comparison) ----------------
+    // Recorded separately, per the study owner: (1) how long the participant
+    // takes to pick a side, and (2) how long they then take to say HOW MUCH
+    // better it is on the 7-point bar. Their sum is the total time to a final
+    // answer (answerMs). Every value is derived from stored timestamps, so
+    // data() can be called any number of times without the numbers drifting
+    // (it is polled by askProceed/onChange, not only at submit time).
+    var tShown = opts.shownAt || Date.now();   // the moment the pair became visible
+    var tFirstChoice = null;                   // first side pick (card, tie or keyboard)
+    var tLastAnswer = null;                    // most recent change to the answer
+    var prefFromBar = false;                   // was the degree set on the bar itself?
+    function times() {
+      // Nothing decided yet -> blank rather than 0, so "instant" and "never
+      // answered" can never be confused in the exported data.
+      if (tFirstChoice == null) return { choiceMs: null, prefMs: null, answerMs: null, prefSource: '' };
+      var choiceMs = tFirstChoice - tShown;
+      // Grading phase: first choice -> last change of the answer. Includes any
+      // revisions (re-tapping a card, moving the bar again); 0 when the seeded
+      // degree from the card tap was simply kept.
+      var prefMs = Math.max(0, tLastAnswer - tFirstChoice);
+      return {
+        choiceMs: choiceMs, prefMs: prefMs, answerMs: choiceMs + prefMs,
+        prefSource: prefFromBar ? 'bar' : 'card'
+      };
+    }
     if (showFollow || opts.demo) {
       var seg = el('div', { class: 'a-prefseg' });
       STEPS.forEach(function (s) {
@@ -696,7 +729,10 @@
     }
     function revealBar() { if (follow && follow.style.display === 'none') follow.style.display = 'block'; }
     // Exact 7-point preference (a bar segment click).
-    function setPref(v) { pref = v; revealBar(); renderSel(); emit({ type: 'preference', value: v }); change(); }
+    function setPref(v) {
+      tLastAnswer = Date.now(); prefFromBar = true;
+      pref = v; revealBar(); renderSel(); emit({ type: 'preference', value: v }); change();
+    }
 
     function pick(side) {
       // Tapping a card / tie picks a side and reveals the bar, seeded at a sensible
@@ -704,6 +740,9 @@
       // side keeps the degree they already set.
       var seed = side === 'left' ? -2 : side === 'right' ? 2 : 0;
       if (pref != null && ((side === 'left' && pref < 0) || (side === 'right' && pref > 0) || (side === 'tie' && pref === 0))) seed = pref;
+      var now = Date.now();
+      if (tFirstChoice == null) tFirstChoice = now;   // stopwatch 1 stops here
+      tLastAnswer = now;                              // stopwatch 2 runs to the last change
       pref = seed; revealBar(); renderSel();
       emit({ type: 'choice', value: side });
       if (api.onChoose) api.onChoose(side);
@@ -714,7 +753,11 @@
     function data() {
       var side = pref == null ? null : (pref < 0 ? 'left' : pref > 0 ? 'right' : 'tie');
       var step = null; for (var i = 0; i < STEPS.length; i++) if (STEPS[i].v === pref) step = STEPS[i];
-      return { choice: side, prefValue: pref, prefLabel: step ? step.label : '', complete: pref != null };
+      var tm = times();
+      return {
+        choice: side, prefValue: pref, prefLabel: step ? step.label : '', complete: pref != null,
+        choiceMs: tm.choiceMs, prefMs: tm.prefMs, answerMs: tm.answerMs, prefSource: tm.prefSource
+      };
     }
     function change() { if (api.onChange) api.onChange(data()); }
     // Fires on every pick/rating change so the time of each decision - and of
