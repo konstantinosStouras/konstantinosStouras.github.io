@@ -2,8 +2,12 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--ink);
-  color: var(--paper);
+  /* Follows the chosen theme (see the --ai-* tokens in globals.css): a light
+     panel in light mode, a dark one in dark mode. It used to be painted
+     ink-on-paper, i.e. always the inverse of the page. */
+  background: var(--ai-panel-bg);
+  color: var(--ink);
+  transition: var(--theme-transition);
 }
 
 .header {
@@ -11,22 +15,22 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid var(--ai-line);
   flex-shrink: 0;
 }
 
 .title {
   font-family: var(--font-display);
   font-size: 16px;
-  color: var(--paper);
+  color: var(--ink);
 }
 
 .badge {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  background: rgba(200,86,42,0.3);
-  color: var(--accent-light);
+  background: var(--ai-badge-bg);
+  color: var(--ai-badge-fg);
   padding: 3px 8px;
   border-radius: 3px;
 }
@@ -39,7 +43,7 @@
   flex-direction: column;
   gap: 14px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.1) transparent;
+  scrollbar-color: var(--ai-scroll-thumb) transparent;
 }
 
 .empty {
@@ -49,7 +53,7 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  color: rgba(245,242,235,0.3);
+  color: var(--ai-faint);
   gap: 12px;
   padding: 40px;
 }
@@ -97,15 +101,15 @@
 
 .userMsg .bubble {
   background: var(--accent);
-  color: var(--white);
+  color: var(--ai-sent-fg);
   border-bottom-right-radius: 3px;
 }
 
 .aiMsg .bubble {
-  background: rgba(255,255,255,0.07);
-  color: var(--paper);
+  background: var(--ai-bubble-bg);
+  color: var(--ink);
   border-bottom-left-radius: 3px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--ai-bubble-border);
 }
 
 /* Rendered Markdown (assistant messages). The plain-text bubble keeps
@@ -126,14 +130,14 @@
 .markdown strong, .markdown b { font-weight: 700; }
 .markdown a { color: var(--accent); text-decoration: underline; }
 .markdown code {
-  background: rgba(255,255,255,0.12);
+  background: var(--ai-code-bg);
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 12.5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 .markdown pre {
-  background: rgba(0,0,0,0.28);
+  background: var(--ai-pre-bg);
   padding: 10px 12px;
   border-radius: 8px;
   overflow-x: auto;
@@ -143,12 +147,12 @@
 .markdown blockquote {
   margin: 0 0 8px;
   padding-left: 10px;
-  border-left: 3px solid rgba(255,255,255,0.2);
-  color: rgba(255,255,255,0.82);
+  border-left: 3px solid var(--ai-quote-line);
+  color: var(--ai-quote-fg);
 }
-.markdown hr { border: none; border-top: 1px solid rgba(255,255,255,0.15); margin: 8px 0; }
+.markdown hr { border: none; border-top: 1px solid var(--ai-line); margin: 8px 0; }
 .markdown table { border-collapse: collapse; margin: 0 0 8px; }
-.markdown th, .markdown td { border: 1px solid rgba(255,255,255,0.15); padding: 4px 8px; }
+.markdown th, .markdown td { border: 1px solid var(--ai-bubble-border); padding: 4px 8px; }
 
 /* Typing dots */
 .typing {
@@ -163,7 +167,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(245,242,235,0.4);
+  background: var(--ai-dim);
   animation: blink 1.2s ease-in-out infinite;
 }
 
@@ -181,9 +185,9 @@
   align-items: flex-end;
   gap: 8px;
   padding: 12px 14px;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid var(--ai-line);
   flex-shrink: 0;
-  background: rgba(255,255,255,0.03);
+  background: var(--ai-bar-bg);
 }
 
 /* Column wrapper: drag handle on top, textarea below. */
@@ -207,17 +211,17 @@
   width: 40px;
   height: 3px;
   border-radius: 3px;
-  background: rgba(255,255,255,0.18);
+  background: var(--ai-grip);
   transition: background 0.15s;
 }
 .resizeHandle:hover .resizeGrip { background: var(--accent); }
 
 .input {
   width: 100%;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--ai-field-bg);
+  border: 1px solid var(--ai-field-border);
   border-radius: var(--radius);
-  color: var(--paper);
+  color: var(--ink);
   font-size: 13.5px;
   padding: 10px 12px;
   /* Height is controlled in JS: auto-grows with content (capped ~240px), or a
@@ -232,7 +236,7 @@
   transition: border-color 0.15s;
 }
 
-.input::placeholder { color: rgba(245,242,235,0.3); }
+.input::placeholder { color: var(--ai-faint); }
 .input:focus { border-color: var(--accent); }
 
 .sendBtn {
