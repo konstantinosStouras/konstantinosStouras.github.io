@@ -675,6 +675,26 @@ export default function DataAnalytics() {
         onProgress: ({ done, total }) => setScoring({ done, total }),
       })
       const byRid = new Map(targets.map((t, k) => [t.rid, scores[k]]))
+      // Report what did NOT come back. Scoring hundreds of ideas is dozens of
+      // API calls and some can fail (rate limit, an unreadable reply); the run
+      // now keeps every score it got instead of discarding the lot, so the
+      // honest close is "X scored, Y still empty — press Score again", not a
+      // silent success with blank rows. `blank` are ideas with no text at all,
+      // which no amount of retrying can fix.
+      const blank = targets.filter(t => !String(t.text || '').trim()).length
+      const missed = targets.filter((t, k) => {
+        const s = scores[k]
+        return !(s && s.novelty != null && s.usefulness != null)
+      }).length - blank
+      if (missed > 0 || blank > 0) {
+        setScoreErr(
+          [
+            `Scored ${targets.length - missed - blank} of ${targets.length} ideas.`,
+            missed > 0 && `${missed} could not be scored this run (the model's reply for them could not be read, or the API kept failing) — press "Score …" again to retry just those.`,
+            blank > 0 && `${blank} ${blank === 1 ? 'idea has' : 'ideas have'} no text to rate.`,
+          ].filter(Boolean).join(' ')
+        )
+      }
       setRows(prev => recomputeOverall(prev.map(r => {
         const sc = byRid.get(r.rid)
         if (!sc) return r

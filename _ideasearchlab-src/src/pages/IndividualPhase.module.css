@@ -10,6 +10,14 @@
 .instrHeader {
   display: flex;
   align-items: center;
+  /* Wordmark left, HeaderControls (theme + account) hard right — the SAME rule
+     every other page's header uses, so the controls never shift position from
+     one step of the flow to the next. It used to rely solely on `.instrTimer`'s
+     `margin-left: auto`, so the confirmation screens — which correctly have no
+     phase timer — left the controls sitting next to the wordmark. With a timer
+     present its auto margin absorbs the free space first, so the timer and the
+     controls still sit together on the right, exactly as before. */
+  justify-content: space-between;
   gap: 18px;
   padding: 20px 40px;
   border-bottom: 1px solid var(--border);
@@ -123,7 +131,12 @@
   z-index: 30;
   background: var(--paper);
   margin: 0 -28px;             /* span the .main horizontal padding, edge to edge */
-  padding: 18px 28px 14px;
+  /* Right padding is 40px, not 28px, so the header controls (theme + account)
+     land on exactly the same right edge as every page header in the flow —
+     they are present on every screen and must not shift between steps. The
+     LEFT stays at 28px so the phase title keeps aligning with the workspace
+     content below it. */
+  padding: 18px 40px 14px 28px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: flex-start;

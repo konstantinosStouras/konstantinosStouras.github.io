@@ -14,6 +14,7 @@
  */
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
+import { runScoring, extractScoreObjects, clamp1to5 } from './scoreBatch'
 
 const PROVIDER_DEFAULTS = {
   claude: 'claude-sonnet-4-6',
@@ -69,19 +70,30 @@ function oneLine(s) {
   return String(s || '').replace(/\s+/g, ' ').trim().slice(0, 600)
 }
 
-/** Tolerant JSON-array extractor (models sometimes wrap output in prose/fences). */
+/** Tolerant JSON-array extractor (models sometimes wrap output in prose/fences).
+ *  Kept as the module's public parser; the recovery rules live in scoreBatch.js
+ *  (`extractScoreObjects` also salvages a reply truncated mid-array). */
 export function extractJsonArray(text) {
-  if (!text) return null
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const body = fenced ? fenced[1] : text
-  const start = body.indexOf('[')
-  const end = body.lastIndexOf(']')
-  if (start === -1 || end === -1 || end < start) return null
-  try {
-    return JSON.parse(body.slice(start, end + 1))
-  } catch {
-    return null
-  }
+  const objs = extractScoreObjects(text)
+  return objs.length ? objs : null
+}
+
+/** An error the run should give up on rather than retry: a rejected or missing
+ *  API key, or a request the provider refuses outright, fails identically every
+ *  time. Everything else (429 rate limits, 5xx, dropped connections) is worth
+ *  another go — those are exactly what made a long 435-idea run lose batches. */
+function isFatalApiError(err) {
+  const s = err?.status
+  if (s === 401 || s === 403 || s === 404) return true
+  if (s === 400) return true
+  return false
+}
+
+/** Wrap a non-OK response in an Error that carries its HTTP status. */
+async function httpError(label, res) {
+  const err = new Error(`${label} API error (${res.status}): ${await res.text()}`)
+  err.status = res.status
+  return err
 }
 
 // ── Provider calls (browser) ──────────────────────────────────────────────────
@@ -89,7 +101,10 @@ export function extractJsonArray(text) {
 async function callClaude({ apiKey, model }, system, userText) {
   // Opus 4.7+/Opus 5+/Fable/Mythos reject sampling params; older models accept them.
   const supportsTemperature = !/^claude-(opus-(?:4-(?:[7-9]|\d{2})|[5-9])|fable|mythos)/.test(model || '')
-  const body = { model, max_tokens: 1500, system, messages: [{ role: 'user', content: userText }] }
+  // 4000, not 1500: a reply cut off by the token limit has no closing "]" and
+  // used to lose the WHOLE batch (see scoreBatch.js). The headroom is free —
+  // the rater's actual output is a few hundred tokens.
+  const body = { model, max_tokens: 4000, system, messages: [{ role: 'user', content: userText }] }
   if (supportsTemperature) body.temperature = 0
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -101,7 +116,7 @@ async function callClaude({ apiKey, model }, system, userText) {
     },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`Claude API error: ${await res.text()}`)
+  if (!res.ok) throw await httpError('Claude', res)
   const data = await res.json()
   return data.content?.find(b => b.type === 'text')?.text || ''
 }
@@ -115,14 +130,17 @@ async function callOpenAI({ apiKey, model }, system, userText) {
       { role: 'user', content: userText },
     ],
   }
-  if (isReasoning) body.max_completion_tokens = 2000
-  else { body.max_tokens = 1500; body.temperature = 0 }
+  // A reasoning model spends this budget on hidden reasoning FIRST, so a tight
+  // cap can return an empty message and silently lose the batch — hence the
+  // generous ceiling here and 4000 for the rest.
+  if (isReasoning) body.max_completion_tokens = 8000
+  else { body.max_tokens = 4000; body.temperature = 0 }
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`OpenAI API error: ${await res.text()}`)
+  if (!res.ok) throw await httpError('OpenAI', res)
   const data = await res.json()
   return data.choices?.[0]?.message?.content || ''
 }
@@ -135,10 +153,10 @@ async function callGemini({ apiKey, model }, system, userText) {
     body: JSON.stringify({
       system_instruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: userText }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 2000, responseMimeType: 'application/json' },
+      generationConfig: { temperature: 0, maxOutputTokens: 8000, responseMimeType: 'application/json' },
     }),
   })
-  if (!res.ok) throw new Error(`Gemini API error: ${await res.text()}`)
+  if (!res.ok) throw await httpError('Gemini', res)
   const data = await res.json()
   return data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || ''
 }
@@ -154,8 +172,18 @@ function callProvider(resolved, system, userText) {
 
 /**
  * Score a list of ideas with the configured LLM, in batches.
+ *
+ * Returns PARTIAL results rather than losing them: a batch the provider or the
+ * model fails on leaves those entries null and the run carries on (see
+ * scoreBatch.js for the four ways a 435-idea run used to end with empty rows).
+ * The caller applies what came back and can simply press Score again to retry
+ * the remainder, since the button's scope is "ideas with no score yet".
+ *
+ * It throws only when the run cannot produce anything: no API key, a fatal
+ * provider error (bad key / refused request), or every single batch failing.
+ *
  * @param ideas   array of idea text strings (caller maps rows → text first)
- * @param opts    { provider?, model?, brief?, batchSize?, onProgress? }
+ * @param opts    { provider?, model?, brief?, batchSize?, onProgress?, settings? }
  * @returns array (same length/order as ideas) of { novelty, usefulness } | null
  */
 export async function scoreIdeas(ideas, opts = {}) {
@@ -166,44 +194,17 @@ export async function scoreIdeas(ideas, opts = {}) {
       `No API key saved for "${resolved.provider}". Add it under Admin → AI Settings first.`
     )
   }
-  const batchSize = opts.batchSize || 8
-  const results = new Array(ideas.length).fill(null)
-  let done = 0
-  for (let start = 0; start < ideas.length; start += batchSize) {
-    const batch = ideas.slice(start, start + batchSize)
-    const userText = buildBatchPrompt(batch, opts.brief)
-    let parsed = null
-    try {
-      const raw = await callProvider(resolved, RATER_SYSTEM_PROMPT, userText)
-      parsed = extractJsonArray(raw)
-    } catch (err) {
-      if (opts.onProgress) opts.onProgress({ done, total: ideas.length, error: err.message })
-      throw err
-    }
-    if (Array.isArray(parsed)) {
-      parsed.forEach((item, pos) => {
-        // Prefer the explicit index the model echoes; fall back to array position
-        // if it omits `i` or returns a 1-based / out-of-range index.
-        let idx = Number(item.i)
-        if (!Number.isInteger(idx) || idx < 0 || idx >= batch.length) idx = pos
-        if (idx >= 0 && idx < batch.length) {
-          results[start + idx] = {
-            novelty: clamp1to5(item.novelty),
-            usefulness: clamp1to5(item.usefulness),
-          }
-        }
-      })
-    }
-    done += batch.length
-    if (opts.onProgress) opts.onProgress({ done, total: ideas.length })
-  }
-  return results
-}
-
-function clamp1to5(v) {
-  const n = Number(v)
-  if (!Number.isFinite(n)) return null
-  return Math.max(1, Math.min(5, Math.round(n * 10) / 10))
+  const { scores, unscored, lastError } = await runScoring({
+    texts: ideas,
+    batchSize: opts.batchSize || 8,
+    onProgress: opts.onProgress,
+    isFatal: isFatalApiError,
+    call: batch => callProvider(resolved, RATER_SYSTEM_PROMPT, buildBatchPrompt(batch, opts.brief)),
+  })
+  // Nothing at all came back and we know why: surface it instead of returning a
+  // silent array of nulls (the run looked like it "worked" and scored nothing).
+  if (lastError && unscored === scores.length) throw lastError
+  return scores
 }
 
 // Note: the Section 3.1 deterministic KPIs no longer use text embeddings — they
