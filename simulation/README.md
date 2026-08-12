@@ -81,7 +81,17 @@ Then:
   `completed` map is student-writable in the rules; it grants nothing). Delete removes the row's
   roster doc(s), including any collapsed duplicate re-registrations, via the
   rules' `allow delete: if isAdmin()`; the student's own browser profile is
-  untouched, so they can simply register again. A student's **Log out**
+  untouched, so they can simply register again. **Returning students:** on
+  the SAME browser nothing is ever asked again (registration + identity
+  persist — closing the window loses nothing). On a NEW device or a cleared
+  browser, the registration screen shows an **"Already registered before?"**
+  box: typing the registered e-mail restores the whole profile (and the
+  play-once completion markers, so a replay can't be earned by switching
+  devices) from `simPlatformRecovery/{sha256(email)}` — a mirror written on
+  every profile sync, fetchable only by exact key (listing denied), with
+  `approved` deliberately NOT in its field set: approval never rides
+  through recovery, so a recovered device waits for the instructor's
+  (one-click, live) approval again. A student's **Log out**
   (header button) clears the browser and signs out the anonymous uid, so on a
   shared machine the next registration gets its own roster doc instead of
   overwriting the previous student's; the roster view collapses duplicate

@@ -27,6 +27,18 @@
     <h2 id="reg-title">Register to get started</h2>
     <p class="hint">You only do this once — your details are saved in this browser and passed on to each
     simulation, so you won't have to retype them. All fields are required.</p>
+    <!-- Returning student on a NEW device / cleared browser (Firebase mode):
+         restore the whole registration by e-mail instead of retyping it.
+         Same-browser returns never see this — they're signed in already. -->
+    <div id="recover-box" class="recover" hidden>
+      <strong>Already registered before?</strong> If you registered on another device
+      (or cleared this browser), enter the same e-mail to restore your details:
+      <div class="rec-row">
+        <input id="r-email" type="email" placeholder="you@example.com" autocomplete="email" maxlength="120">
+        <button id="btn-recover" class="btn ghost small" type="button">Restore my registration</button>
+      </div>
+      <span id="r-err" class="err"></span>
+    </div>
     <div class="fgrid" style="margin-top:14px">
       <div class="field"><label for="f-name">Full name <span class="req">*</span></label><input id="f-name" autocomplete="name" maxlength="80"></div>
       <div class="field"><label for="f-email">E-mail <span class="req">*</span></label><input id="f-email" type="email" autocomplete="email" maxlength="120"></div>
@@ -203,10 +215,29 @@
     $('reg-title').textContent = editing ? 'Edit your details' : 'Register to get started';
     $('btn-cancel').hidden = !editing;
     $('reg-err').textContent = '';
+    /* the e-mail recovery box: only for FRESH registrations in Firebase mode
+       (an edit already has the profile; LOCAL mode has nothing central). */
+    $('recover-box').hidden = editing || !P.configured;
+    $('r-err').textContent = '';
     $('s-register').hidden = false;
     $('s-sims').hidden = true;
     $('f-name').focus();
   }
+  $('btn-recover').onclick = function () {
+    var em = $('r-email').value.trim();
+    $('r-err').textContent = '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { $('r-err').textContent = 'Enter the e-mail you registered with.'; return; }
+    var b = this; b.disabled = true; b.textContent = 'Looking up…';
+    P.recoverByEmail(em).then(function (p) {
+      b.disabled = false; b.textContent = 'Restore my registration';
+      if (!p) { $('r-err').textContent = 'No registration found for that e-mail — please fill in the form below.'; return; }
+      P.saveProfile(p);
+      showSims();
+    }).catch(function () {
+      b.disabled = false; b.textContent = 'Restore my registration';
+      $('r-err').textContent = 'Could not look that up just now — please try again, or fill in the form below.';
+    });
+  };
   function showSims() {
     var p = P.getProfile();
     $('s-register').hidden = true;

@@ -2379,7 +2379,17 @@ cross-origin newsvendor's copy chips. Students **log out** from the header (clea
 browser AND signs out the anonymous uid, so on a shared machine the next
 registration gets its own roster doc instead of overwriting); the roster view
 collapses duplicate re-registrations by student ID, newest kept, and the
-admin panel has its own Sign out. A card with nothing to ask (no session
+admin panel has its own Sign out. **Returning students:** same browser =
+auto-signed-in (localStorage + persisted anon auth); a NEW device/cleared
+browser restores the registration by e-mail from
+`simPlatformRecovery/{sha256(email)}` (mirrored on every profile sync +
+completion sync; get-by-exact-key only, list denied, `approved` NOT in the
+field set so approval never rides through recovery — the instructor
+re-approves with one live click; completion markers restore too so a
+device switch earns no replay; `recoverByEmail`/`saveRecovery`/`emailKeyOf`
+in platform.js, the "Already registered before?" box in index.html;
+SIMP_PATHS defaults are MERGED under overrides so an older
+firebase-config.js can never leave a new path undefined). A card with nothing to ask (no session
 input, no copy chips) launches its sim DIRECTLY in a new tab — and NEVER pass
 'noopener' as window.open features: its by-spec null return reads as a
 blocked pop-up and made the fallback also navigate the platform tab (the

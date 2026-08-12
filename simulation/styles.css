@@ -39,6 +39,10 @@ h2 { font-size: 1.25rem; margin: 26px 0 4px; }
   padding: 2px 9px; border-radius: 999px; background: #e8edfb; color: #33477e; white-space: nowrap;
 }
 .pill.green { background: #e1f5e7; color: #1d6b3a; }
+/* Returning-student e-mail recovery box on the registration screen. */
+.recover { background: #eef4ff; border: 1px solid #cfdcf7; border-radius: 10px; padding: 12px 14px; margin: 14px 0 4px; font-size: .93rem; color: #2c3a5e; }
+.recover .rec-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.recover input { flex: 1 1 220px; min-width: 0; }
 /* Roster column filters: the Approved + per-simulation headers are clickable
    (cycle all → only ✓ → only —). */
 .simtab th.th-filter { cursor: pointer; user-select: none; white-space: nowrap; }
