@@ -363,6 +363,10 @@
   position: relative;
   /* Idea text must stay selectable/copyable throughout the group phase. */
   user-select: text;
+  /* iOS/iPadOS Safari reserves the double-tap for its zoom gesture and delays
+     (or swallows) the dblclick that casts a vote. `manipulation` gives the
+     double-tap back to the page. */
+  touch-action: manipulation;
 }
 /* Make every piece of idea text explicitly selectable (copy/paste). */
 .pillTitle,
@@ -428,8 +432,30 @@
 }
 
 /* Meta row */
-.pillTop { margin-bottom: 6px; }
-.pillMeta { display: flex; align-items: center; gap: 6px; }
+.pillTop { margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pillMeta { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+
+/* ── Vote toggle (voting sub-phase) ─────────────────────────
+   The single-tap/keyboard equivalent of double-clicking the card. */
+.voteBtn {
+  background: none;
+  border: 1.3px solid var(--border);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 5px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.voteBtn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.voteBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.voteBtnOn { background: var(--accent); border-color: var(--accent); color: #fff; }
+.voteBtnOn:hover:not(:disabled) { color: #fff; opacity: 0.9; }
 .pillAuthor {
   font-size: 11px;
   font-weight: 600;

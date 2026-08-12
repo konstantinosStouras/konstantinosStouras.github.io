@@ -15,7 +15,7 @@ import RichTextEditor from '../components/RichTextEditor'
 import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
 import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
 import { exportSessionWorkbook, conditionOf } from '../utils/sessionExport'
-import { joinLinkFor } from '../utils/joinLink'
+import { joinLinkFor, normalizeJoinCode } from '../utils/joinLink'
 import { getPhaseSequence } from '../utils/phaseSequence'
 import {
   INDIVIDUAL_TIMER_KEYS, GROUP_TIMER_KEYS,
@@ -466,7 +466,7 @@ export default function Admin() {
     // an auto-generated short code. Custom codes are a single word of capital
     // letters and digits (3–40 chars) — the same normalisation the join page
     // applies — so what the admin shares can always be typed back in.
-    const raw = newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    const raw = normalizeJoinCode(newCode)
     let code
     if (raw) {
       if (!/^[A-Z0-9]{3,40}$/.test(raw)) {
@@ -911,7 +911,7 @@ export default function Admin() {
                   <input
                     className="input-field"
                     value={newCode}
-                    onChange={e => { setNewCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); setCreateError('') }}
+                    onChange={e => { setNewCode(normalizeJoinCode(e.target.value)); setCreateError('') }}
                     placeholder="(OPTIONAL) CUSTOM CODE"
                     maxLength={40}
                     spellCheck={false}

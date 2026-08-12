@@ -10,14 +10,26 @@ export function SessionProvider({ sessionId, children }) {
   useEffect(() => {
     if (!sessionId) { setLoading(false); return }
 
-    const unsub = onSnapshot(doc(db, 'sessions', sessionId), (snap) => {
-      if (snap.exists()) {
-        setSession({ id: snap.id, ...snap.data() })
-      } else {
+    const unsub = onSnapshot(
+      doc(db, 'sessions', sessionId),
+      (snap) => {
+        if (snap.exists()) {
+          setSession({ id: snap.id, ...snap.data() })
+        } else {
+          setSession(null)
+        }
+        setLoading(false)
+      },
+      (err) => {
+        // Without this handler a listener error (a denied read, an auth token
+        // that failed to refresh) left `loading` true forever and every page
+        // under this provider sat on its loading state with no way out. Clear
+        // it so the pages can render their own ended/error state instead.
+        console.error('Session listener error:', err)
         setSession(null)
+        setLoading(false)
       }
-      setLoading(false)
-    })
+    )
 
     return unsub
   }, [sessionId])

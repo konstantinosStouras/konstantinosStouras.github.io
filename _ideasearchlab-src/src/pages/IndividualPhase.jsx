@@ -679,7 +679,7 @@ export default function IndividualPhase() {
             Selected ideas: <strong>{selectedIds.size} / {ideasCarried}</strong>
           </span>
           <span className={styles.selectionHint}>
-            Double-click an idea to select or deselect it
+            Tap <strong>Select</strong> on an idea (or double-click it) to choose it
             {!atMax && (
               <>
                 {' · '}
@@ -745,7 +745,29 @@ export default function IndividualPhase() {
               <div className={styles.pillTop}>
                 <h3 className={styles.pillTitle}>{idea.title || idea.text}</h3>
                 <div className={styles.pillActions}>
-                  {isSelected && <span className={styles.selectedBadge}>Selected</span>}
+                  {/* Explicit single-tap control. Double-click still works, but
+                      it is a MOUSE idiom: on a tablet a double-tap is claimed by
+                      Safari's zoom gesture and the `title` tooltip that explains
+                      it never appears, so selecting was effectively unreachable
+                      on the devices half the class uses. This button is also the
+                      keyboard path. */}
+                  {isSelecting && !done && (
+                    <button
+                      type="button"
+                      className={`${styles.selectBtn} ${isSelected ? styles.selectBtnOn : ''}`}
+                      onClick={e => { e.stopPropagation(); toggleSelect(idea.id) }}
+                      disabled={!isSelected && selectedIds.size >= ideasCarried}
+                      aria-pressed={isSelected}
+                      title={isSelected
+                        ? 'Remove this idea from your selection'
+                        : (selectedIds.size >= ideasCarried
+                          ? `You have already chosen ${ideasCarried}`
+                          : 'Carry this idea into the group phase')}
+                    >
+                      {isSelected ? '✓ Selected' : 'Select'}
+                    </button>
+                  )}
+                  {isSelected && !isSelecting && <span className={styles.selectedBadge}>Selected</span>}
                   {canAddIdeas && (
                     <>
                       <button

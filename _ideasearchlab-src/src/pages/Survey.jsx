@@ -19,6 +19,7 @@ export default function Survey() {
   const [answers, setAnswers] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const surveyOpenedWrittenRef = useRef(false)
 
   useEffect(() => {
@@ -81,6 +82,7 @@ export default function Survey() {
     e.preventDefault()
     if (!allAnswered || submitting) return
     setSubmitting(true)
+    setSubmitError('')
     try {
       await updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid), {
         status: 'done',
@@ -89,7 +91,12 @@ export default function Survey() {
       })
       setSubmitted(true)
     } catch (err) {
+      // A failed submit used to log to the console and silently re-enable the
+      // button, so the participant could not tell their answers had NOT been
+      // recorded — the last write of the study, lost without a word. Say so and
+      // let them press it again; their answers are still in state.
       console.error(err)
+      setSubmitError('Your answers could not be saved — please check your connection and press Submit again.')
     } finally {
       setSubmitting(false)
     }
@@ -276,6 +283,8 @@ export default function Survey() {
               </div>
             </div>
           ))}
+
+          {submitError && <p className="error-msg" role="alert">{submitError}</p>}
 
           <div className={styles.footer}>
             <span className={styles.footerNote}>Questions marked with * are required.</span>
