@@ -146,13 +146,18 @@ export default function Registration() {
     }
 
     const participantRef = doc(db, 'sessions', sessionId, 'participants', user.uid)
-    // The next screen doesn't need the demographics/consent write to finish,
-    // so don't block navigation on it — fire it and move on immediately so
-    // the button doesn't sit on "Joining..." for an extra round-trip. The
-    // Firestore SDK still delivers the write after we leave this page.
-    updateDoc(participantRef, payload)
-      .then(() => clearTiming(sessionId))
-      .catch(err => console.error('Profile save failed:', err))
+    // AWAIT this write. It carries the consent record and the demographics —
+    // the study's controls — and it is the ONE write with no second chance:
+    // `joinSession` has already created the participant doc, so a re-join
+    // takes the "already registered" path straight to the lobby and this form
+    // is never shown again. Firing it and navigating away (which is what this
+    // did, to save one round-trip on the button) meant a student whose write
+    // was still in flight when they reloaded or lost the network — the SDK
+    // holds unacked writes in MEMORY, there is no offline persistence here —
+    // played the whole session with no consent and no demographics on record,
+    // silently. One round-trip is the right price for that.
+    await updateDoc(participantRef, payload)
+    clearTiming(sessionId)
 
     navigate(`/session/${sessionId}`)
   }

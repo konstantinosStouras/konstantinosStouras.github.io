@@ -79,6 +79,8 @@ export default function IndividualPhase() {
   // restored from it on reload.
   const [stage, setStage] = useState('generation')
   const [selectionStartedAt, setSelectionStartedAt] = useState(null)
+  const [submitError, setSubmitError] = useState('')
+  const submittedRef = useRef(false)
   const stageInit = useRef(false)
   const stageRef = useRef('generation')
 
@@ -278,6 +280,17 @@ export default function IndividualPhase() {
         if (next.size >= ideasCarried) return prev
         next.add(ideaId)
       }
+      // Persist as they choose, not only at submit. The selection used to live
+      // in React state alone, so a reload during the selection stage silently
+      // dropped every pick — and if the clock then expired, the group received a
+      // hash-picked random subset instead of what the participant chose (with
+      // "Carried to Group" reading No for all of them in the export). The
+      // author-update rule already permits this; markDone's batch stays as the
+      // confirming pass.
+      if (sessionId && user) {
+        updateDoc(doc(db, 'sessions', sessionId, 'ideas', ideaId), { selected: next.has(ideaId) })
+          .catch(err => console.warn('Could not save idea selection:', err.message))
+      }
       return next
     })
   }
@@ -307,6 +320,10 @@ export default function IndividualPhase() {
   function cancelEdit() { setEditingId(null) }
 
   async function deleteIdea(ideaId) {
+    // Irreversible, and on a touch device the trash icon is permanently visible
+    // 12px from the pencil — a mis-tap used to destroy the idea outright, with
+    // no undo and no trace in the exported dataset.
+    if (typeof window !== 'undefined' && !window.confirm('Delete this idea? This cannot be undone.')) return
     try {
       await deleteDoc(doc(db, 'sessions', sessionId, 'ideas', ideaId))
       setSelectedIds(prev => {
@@ -320,7 +337,13 @@ export default function IndividualPhase() {
   }
 
   async function markDone(selectionOverride) {
-    if (done) return
+    // A REF, not the `done` state: autoFinish runs from a setInterval callback
+    // whose closure can still see `done === false` while a click handler from an
+    // earlier render fires in the same frame — two submits whose batches then
+    // raced to decide the carried set.
+    if (submittedRef.current || done) return
+    submittedRef.current = true
+    setSubmitError('')
     setDone(true)
     // Anchors the confirmation hold. Stamped before the write, so the status
     // change it triggers can never beat it and slip past the hold.
@@ -353,7 +376,12 @@ export default function IndividualPhase() {
     } catch (err) {
       console.error('Failed to submit:', err)
       setDone(false)
+      submittedRef.current = false
       submittedAtRef.current = 0
+      // Say so. Silently reverting to the workspace looked like the submit had
+      // gone through, and an expired timer then re-fired autoFinish in a loop,
+      // flipping the screen between the confirmation card and the workspace.
+      setSubmitError('Your ideas could not be submitted — check your connection and press Finish & Submit again.')
     }
   }
 
@@ -579,6 +607,8 @@ export default function IndividualPhase() {
         </div>
       </div>
 
+      {submitError && <p className="error-msg" role="alert">{submitError}</p>}
+
       <NudgeBanner sessionId={sessionId} autoMessage={autoNudgeMessage} />
 
       {/* Group progress: where the other members stand, visible throughout */}
@@ -679,7 +709,7 @@ export default function IndividualPhase() {
             Selected ideas: <strong>{selectedIds.size} / {ideasCarried}</strong>
           </span>
           <span className={styles.selectionHint}>
-            Double-click an idea to select or deselect it
+            Tap <strong>Select</strong> on an idea (or double-click it) to choose it
             {!atMax && (
               <>
                 {' · '}
@@ -745,7 +775,29 @@ export default function IndividualPhase() {
               <div className={styles.pillTop}>
                 <h3 className={styles.pillTitle}>{idea.title || idea.text}</h3>
                 <div className={styles.pillActions}>
-                  {isSelected && <span className={styles.selectedBadge}>Selected</span>}
+                  {/* Explicit single-tap control. Double-click still works, but
+                      it is a MOUSE idiom: on a tablet a double-tap is claimed by
+                      Safari's zoom gesture and the `title` tooltip that explains
+                      it never appears, so selecting was effectively unreachable
+                      on the devices half the class uses. This button is also the
+                      keyboard path. */}
+                  {isSelecting && !done && (
+                    <button
+                      type="button"
+                      className={`${styles.selectBtn} ${isSelected ? styles.selectBtnOn : ''}`}
+                      onClick={e => { e.stopPropagation(); toggleSelect(idea.id) }}
+                      disabled={!isSelected && selectedIds.size >= ideasCarried}
+                      aria-pressed={isSelected}
+                      title={isSelected
+                        ? 'Remove this idea from your selection'
+                        : (selectedIds.size >= ideasCarried
+                          ? `You have already chosen ${ideasCarried}`
+                          : 'Carry this idea into the group phase')}
+                    >
+                      {isSelected ? '✓ Selected' : 'Select'}
+                    </button>
+                  )}
+                  {isSelected && !isSelecting && <span className={styles.selectedBadge}>Selected</span>}
                   {canAddIdeas && (
                     <>
                       <button

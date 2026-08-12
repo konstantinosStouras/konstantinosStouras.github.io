@@ -83,11 +83,6 @@ function IdeaPill({
         : undefined
       }
     >
-      {isVoting && voteCount > 0 && (
-        <div className={`${styles.voteBadge} ${votedByMe ? styles.voteBadgeMine : ''}`}>
-          Votes: {voteCount}
-        </div>
-      )}
       <div className={styles.pillTop}>
         <div className={styles.pillMeta}>
           <span className={styles.pillAuthor}>{label}</span>
@@ -97,7 +92,31 @@ function IdeaPill({
               {idea.phase === 'group' ? 'group' : 'individual'}
             </span>
           )}
+          {isVoting && voteCount > 0 && (
+            <span className={`${styles.voteBadge} ${votedByMe ? styles.voteBadgeMine : ''}`}>
+              Votes: {voteCount}
+            </span>
+          )}
         </div>
+        {/* Explicit single-tap vote control. Double-click still works, but it is
+            a MOUSE idiom — on a tablet the double-tap is claimed by Safari's
+            zoom gesture and the `title` tooltip explaining it never shows, so
+            voting was effectively unreachable there. Also the keyboard path. */}
+        {isVoting && (
+          <button
+            type="button"
+            className={`${styles.voteBtn} ${votedByMe ? styles.voteBtnOn : ''}`}
+            onClick={e => { e.stopPropagation(); if (!votesLocked && canVote) onVote(idea.id) }}
+            onDoubleClick={e => e.stopPropagation()}
+            disabled={votesLocked || (!canVote && !votedByMe)}
+            aria-pressed={votedByMe}
+            title={votesLocked
+              ? 'Votes locked'
+              : votedByMe ? 'Remove your vote' : canVote ? 'Vote for this idea' : 'Maximum votes reached'}
+          >
+            {votedByMe ? '✓ Voted' : 'Vote'}
+          </button>
+        )}
       </div>
       <h4 className={styles.pillTitle}>{idea.title || idea.text}</h4>
       {idea.description && (
@@ -129,7 +148,15 @@ function ChatComposer({ onSend, disabled }) {
     const t = text.trim()
     if (!t || disabled) return
     setText('')
-    try { await onSend(t) } catch (_) { /* surfaced by caller */ }
+    // Clearing the box before the write is what makes sending feel instant, but
+    // it also means a failed send used to destroy the message with no trace.
+    // Put it back so the participant can retry (and so the group discussion,
+    // which is exported research data, is not silently lost).
+    try {
+      await onSend(t)
+    } catch (_) {
+      setText(prev => (prev ? prev : t))
+    }
   }
   return (
     <form className={styles.chatInputBar} onSubmit={submit}>
@@ -644,6 +671,9 @@ export default function GroupPhase() {
       )
     } catch (err) {
       console.error('Chat send error:', err)
+      // Rethrow so the composer can put the text back in the box — swallowing
+      // it here made the message vanish as if it had been sent.
+      throw err
     } finally {
       setSendingChat(false)
     }
@@ -1088,7 +1118,7 @@ export default function GroupPhase() {
 
         {!votesLocked && (
           <div className={styles.votingHint}>
-            Double-click any idea to vote. Select {requiredVotes} idea{requiredVotes === 1 ? '' : 's'} to represent your group.
+            Tap <strong>Vote</strong> on an idea (or double-click it). Choose {requiredVotes} idea{requiredVotes === 1 ? '' : 's'} to represent your group.
             {' '}<button className={styles.backLink} onClick={() => goToStage('ideation')}>
               Back to ideation
             </button>
@@ -1180,7 +1210,7 @@ export default function GroupPhase() {
               draggable divider between them. New group ideas appear in the
               combined list on the left. */}
           <div className={styles.columnRight} ref={rightColRef}>
-            <div className={styles.groupIdeasSection} style={{ flex: `0 0 ${groupIdeasPct}%`, maxHeight: 'none', minHeight: 0 }}>
+            <div className={styles.groupIdeasSection} style={{ flex: `0 0 ${groupIdeasPct}%`, maxHeight: 'none' }}>
               <h2 className={styles.columnTitle}>Add a Group Idea</h2>
               <p className={styles.columnSub}>New ideas appear in the list on the left</p>
               <div className={styles.ideaList}>

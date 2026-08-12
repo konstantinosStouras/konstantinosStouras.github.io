@@ -4,7 +4,7 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { platformHandoff } from '../utils/simplatform'
-import { joinCodeFromSearch } from '../utils/joinLink'
+import { joinCodeFromSearch, normalizeJoinCode } from '../utils/joinLink'
 import HeaderControls from '../components/HeaderControls'
 import styles from './JoinSession.module.css'
 
@@ -17,7 +17,7 @@ export default function JoinSession() {
   // If the silent join fails, the normal form appears (empty) so nobody
   // dead-ends; students without a handoff see the form exactly as before.
   const [autoCode] = useState(() =>
-    ((platformHandoff()?.session) || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
+    normalizeJoinCode(platformHandoff()?.session || ''))
   const [auto, setAuto] = useState(() => autoCode.length >= 3)
   const autoTried = useRef(false)
   // A shared join link carries the session code: the admin's "Copy link" copies
@@ -36,7 +36,10 @@ export default function JoinSession() {
     setLoading(true)
 
     try {
-      const trimmedCode = raw.trim().toUpperCase()
+      // Same normalisation as the input, the admin's create form and the
+      // shared join link — one rule, so a code can never fail to match because
+      // one of the four sites sanitised it differently.
+      const trimmedCode = normalizeJoinCode(raw)
 
       // Validate the session code via a client-side Firestore query
       const sessionsQuery = query(
@@ -64,8 +67,16 @@ export default function JoinSession() {
       const participantSnap = await getDoc(participantRef)
 
       if (participantSnap.exists()) {
-        // Already registered, skip welcome/registration and go to lobby
-        navigate(`/session/${sessionId}`)
+        // Already registered, skip welcome/registration and go to lobby —
+        // UNLESS the consent/demographics write never landed (a dropped
+        // network right after `joinSession` created the doc). That participant
+        // would otherwise never see this form again and would finish the study
+        // with no consent record, so send them back through it once; the form
+        // re-calls joinSession, which only refreshes name/email on a rejoin and
+        // never re-groups them.
+        const p = participantSnap.data() || {}
+        const registered = p.consentGiven || (p.demographics && Object.keys(p.demographics).length > 0)
+        navigate(registered ? `/session/${sessionId}` : `/session/${sessionId}/register`)
       } else {
         // New participant, show welcome page first
         navigate(`/session/${sessionId}/welcome`)
@@ -135,13 +146,18 @@ export default function JoinSession() {
               className={`input-field ${styles.codeInput}`}
               type="text"
               value={code}
-              onChange={e => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              onChange={e => setCode(normalizeJoinCode(e.target.value))}
               placeholder="e.g. ABC123"
               maxLength={40}
               required
               autoFocus
               spellCheck={false}
               autoComplete="off"
+              /* iOS/Android otherwise open a lowercase keyboard and run
+                 autocorrect over the code as it is typed. */
+              autoCapitalize="characters"
+              autoCorrect="off"
+              enterKeyHint="go"
             />
             {error && <p className="error-msg">{error}</p>}
             <button

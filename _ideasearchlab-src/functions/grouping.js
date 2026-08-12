@@ -139,9 +139,17 @@ exports.handleStragglers = functions.https.onCall(async (data, context) => {
     throw new HttpsError('permission-denied', 'Only the instructor can do this.')
   }
 
-  const phaseOrder = session.phaseConfig?.phaseOrder ?? 'individual_first'
+  // The first WORKING phase, honouring which phases are actually active. The old
+  // expression ignored groupPhaseActive, so an individual-only session carrying a
+  // stale phaseOrder of 'group_first' started its stragglers in a phase that is
+  // not in its sequence at all — a state advancePhase then refused to leave.
   const individualActive = session.phaseConfig?.individualPhaseActive ?? true
-  const firstPhase = (individualActive && phaseOrder === 'individual_first') ? 'individual' : 'group'
+  const groupActive = session.phaseConfig?.groupPhaseActive ?? true
+  const phaseOrder = session.phaseConfig?.phaseOrder ?? 'individual_first'
+  const firstPhase = !groupActive
+    ? (individualActive ? 'individual' : 'survey')
+    : (!individualActive ? 'group'
+      : (phaseOrder === 'individual_first' ? 'individual' : 'group'))
 
   const waitingSnap = await sessionRef.collection('participants')
     .where('status', '==', 'waiting')

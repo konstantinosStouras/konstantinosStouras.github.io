@@ -24,6 +24,9 @@ export default function ResizeDivider({ direction = 'x', containerRef, onResize,
     dragging.current = true
     document.body.style.cursor = vertical ? 'row-resize' : 'col-resize'
     document.body.style.userSelect = 'none'
+    // Safari < 17 only exposes the prefixed property to CSSOM, so the unprefixed
+    // assignment above is silently dropped and text highlights while dragging.
+    document.body.style.webkitUserSelect = 'none'
   }
 
   useEffect(() => {
@@ -40,19 +43,20 @@ export default function ResizeDivider({ direction = 'x', containerRef, onResize,
       dragging.current = false
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
+    document.body.style.webkitUserSelect = ''
     }
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseup', up)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
     return () => {
-      window.removeEventListener('mousemove', move)
-      window.removeEventListener('mouseup', up)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
     }
   }, [containerRef, onResize, min, max, vertical])
 
   return (
     <div
       className={vertical ? styles.dividerY : styles.dividerX}
-      onMouseDown={onDown}
+      onPointerDown={onDown}
       title="Drag to resize"
       role="separator"
       aria-orientation={vertical ? 'horizontal' : 'vertical'}

@@ -23,15 +23,34 @@ export const PREVIEW_SESSION_ID = 'PREVIEW'
 export const PREVIEW_UID = 'preview-user'
 export const PREVIEW_CONFIG_KEY = 'ideasearchlab-preview-config'
 
+// The answer is also STICKY FOR THE TAB (sessionStorage — exactly the sandbox's
+// lifetime). Caching it in a module variable survives SPA navigations but not a
+// RELOAD: after F5 the query string is long gone, `isPreview()` flipped to
+// false, and the app quietly left the sandbox — dropping the "nothing is saved"
+// ribbon and starting to talk to the REAL Firebase project (minting a genuine
+// throwaway Auth account and looking up a session literally called "PREVIEW",
+// which dead-ends on the login screen). A test round must stay a test round
+// until the tab is closed.
+const PREVIEW_STICKY_KEY = 'ideasearchlab-preview-mode'
+
 let _cached
 export function isPreview() {
   if (_cached === undefined) {
+    let fromUrl = false
     try {
       const p = new URLSearchParams(window.location.search)
-      _cached = p.get('preview') === '1' && p.get('key') === PREVIEW_KEY
+      fromUrl = p.get('preview') === '1' && p.get('key') === PREVIEW_KEY
     } catch (e) {
-      _cached = false
+      fromUrl = false
     }
+    let sticky = false
+    try {
+      if (fromUrl) sessionStorage.setItem(PREVIEW_STICKY_KEY, '1')
+      else sticky = sessionStorage.getItem(PREVIEW_STICKY_KEY) === '1'
+    } catch (e) {
+      /* sessionStorage unavailable — fall back to the URL alone */
+    }
+    _cached = fromUrl || sticky
   }
   return _cached
 }

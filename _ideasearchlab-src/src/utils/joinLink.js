@@ -22,7 +22,12 @@
 
 /** Normalise a code the way the join form and the admin's create form do. */
 export function normalizeJoinCode(raw) {
-  return String(raw ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40)
+  // NFKC first: a code pasted out of a slide, a PDF or a phone keyboard can
+  // arrive in full-width forms (SGP１) that the [^A-Z0-9] strip would silently
+  // delete, turning a correct code into a "Session not found".
+  let s = String(raw ?? '')
+  try { s = s.normalize('NFKC') } catch (e) { /* pre-ES6 engine: use as-is */ }
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40)
 }
 
 /**
