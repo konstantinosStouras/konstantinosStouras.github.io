@@ -39,6 +39,28 @@
   var SDK = '10.12.2';
   var ADMIN_EMAIL = 'admin@admin.com';
 
+  /* ---- TEST ROUND ("preview") — rehearse the flow, saving NOTHING -------
+     Opened by the admin's 🧪 Test round button as ?preview=1&key=stouras
+     [&session=CODE]. The whole participant flow (welcome → training →
+     registration → main → stats → survey → thank-you) runs against the
+     session's own snapshotted config, but **Firebase is never loaded**: the
+     sandbox sets S.offline (which already makes every write path a no-op) and
+     stands a synthetic uid in for the anonymous account, so no participant
+     doc, no events and no rounds can reach the research project. The admin
+     hands the session snapshot (and its frozen puzzle specs) over in
+     localStorage under PREVIEW_KEY. Mirrors the ideasearchlab / Answer Arena /
+     sustainable-supply-chains sandboxes. */
+  var PREVIEW = (function () {
+    try {
+      var p = new URLSearchParams(location.search);
+      return p.get('preview') === '1' && p.get('key') === 'stouras';
+    } catch (e) { return false; }
+  })();
+  var PREVIEW_KEY = 'pfx-preview-config';
+  function previewSeed() {
+    try { return JSON.parse(localStorage.getItem(PREVIEW_KEY) || 'null') || {}; } catch (e) { return {}; }
+  }
+
   // ---- Editable content defaults (admin can override via config/app) ----
   var DEFAULTS = window.PF_DEFAULTS || {
     texts: {
@@ -152,6 +174,11 @@
       + '.pfx-field input,.pfx-field select{width:100%;padding:10px 12px;border:1px solid #e0dbd0;border-radius:10px;font-size:14px;font-family:inherit;}'
       + '.pfx-field .radio{display:flex;gap:18px;}.pfx-field .radio label{font-weight:500;display:flex;align-items:center;gap:6px;}'
       + '.pfx-err{color:#e74c3c;font-size:13px;margin:6px 0;min-height:18px;}'
+      // Test round (?preview=1&key=…): a constant banner that nothing is saved.
+      // Above the overlay (z 9000) but pointer-events:none so it never blocks.
+      + '.pfx-ribbon{position:fixed;left:0;right:0;bottom:0;z-index:9500;background:#b26a00;color:#fff;'
+      + 'text-align:center;padding:7px 14px;font-size:13px;font-family:Inter,system-ui,sans-serif;'
+      + 'box-shadow:0 -2px 10px rgba(0,0,0,.18);pointer-events:none;}'
       + '.pfx-topbar{position:fixed;top:0;left:0;right:0;z-index:8000;display:flex;justify-content:space-between;align-items:center;'
       + 'gap:10px;padding:6px 14px;background:#2b2b2b;color:#fff;font-family:Inter,sans-serif;font-size:13px;}'
       + '.pfx-topbar b{color:#f1c40f;}.pfx-topbar button{background:transparent;border:1px solid #555;color:#eee;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;}'
@@ -283,6 +310,18 @@
     } catch (e) { console.warn('[PFX] Cloud Functions unavailable; using direct writes', e); return false; }
   }
 
+  // Merge one stored config/session document over the built-in defaults.
+  function mergeCfg(d) {
+    d = d || {};
+    return {
+      texts: Object.assign({}, DEFAULTS.texts, d.texts || {}),
+      settings: Object.assign({}, DEFAULTS.settings, d.settings || {}),
+      registrationQuestions: (d.registrationQuestions && d.registrationQuestions.length) ? d.registrationQuestions : DEFAULTS.registrationQuestions,
+      registrationConsents: (d.registrationConsents && d.registrationConsents.length) ? d.registrationConsents : DEFAULTS.registrationConsents,
+      surveyQuestions: (d.surveyQuestions && d.surveyQuestions.length) ? d.surveyQuestions : DEFAULTS.surveyQuestions
+    };
+  }
+
   // Load the effective configuration. With a session code, read sessions/{code}
   // (an admin-frozen snapshot); otherwise read the default config/app document.
   // Returns { ok, notFound } so the welcome screen can flag an unknown code.
@@ -294,13 +333,7 @@
       if (sessionId && !snap.exists()) return { ok: false, notFound: true };
       if (snap.exists()) {
         var d = snap.data();
-        cfg = {
-          texts: Object.assign({}, DEFAULTS.texts, d.texts || {}),
-          settings: Object.assign({}, DEFAULTS.settings, d.settings || {}),
-          registrationQuestions: (d.registrationQuestions && d.registrationQuestions.length) ? d.registrationQuestions : DEFAULTS.registrationQuestions,
-          registrationConsents: (d.registrationConsents && d.registrationConsents.length) ? d.registrationConsents : DEFAULTS.registrationConsents,
-          surveyQuestions: (d.surveyQuestions && d.surveyQuestions.length) ? d.surveyQuestions : DEFAULTS.surveyQuestions
-        };
+        cfg = mergeCfg(d);
         return { ok: true, status: d.status || 'open' };
       }
       cfg = DEFAULTS;
@@ -411,7 +444,9 @@
     (cfg.texts.welcomeBody || []).forEach(function (p) { body.push(el('p', { html: p })); });
 
     // Offline: a session cannot be validated, so play is blocked entirely.
-    if (S.offline) {
+    // A TEST ROUND is deliberately exempt: it is "offline" by design (no
+    // Firebase at all) and rehearses the flow from the seeded session config.
+    if (S.offline && !PREVIEW) {
       body.push(el('p', { class: 'muted', text: 'You appear to be offline. PortfolioFit requires an internet connection and a valid session code to play. Please reconnect and reload this page.' }));
       var wcOff = card(cfg.texts.welcomeTitle, body); wcOff.classList.add('pfx-justify');
       showOverlay(wcOff);
@@ -477,6 +512,14 @@
   // participant record tagged with that session. A code is mandatory: there is no
   // default / anonymous play. Returns { ok, notFound, closed } for the welcome UI.
   async function beginSession(sid) {
+    // TEST ROUND: the config is already seeded, so accept the code as-is and
+    // start playing — nothing is validated because nothing is recorded.
+    if (PREVIEW) {
+      S.sessionId = sid || (previewSeed().code || 'PREVIEW');
+      S.participant = { anonymousLabel: 'test-round', sessionId: S.sessionId, status: 'joined' };
+      renderTopbar();
+      return { ok: true };
+    }
     if (S.offline || !fb) return { ok: false };          // can't validate a session offline
     if (!sid) return { ok: false, notFound: true };      // no code → no play
     if (!S.user) {
@@ -702,6 +745,9 @@
   // Consent checkboxes are carried as ticked too (the platform's terms cover
   // them — per the study owner), stamped consentVia on the participant doc.
   function simpHandoff() {
+    // A test round rehearses the standalone flow with its own random data, so a
+    // real platform launch still in this browser must not answer its form.
+    if (PREVIEW) return null;
     try {
       var h = JSON.parse(localStorage.getItem('simp:handoff:v1') || 'null');
       if (!h || h.sim !== 'portfoliofit' || !h.profile) return null;
@@ -774,7 +820,9 @@
 
     var form = el('div', {});
     if (shown.length) form.appendChild(el('h3', { text: 'Participant Information', style: 'font-family:"Space Grotesk",Inter,sans-serif;font-size:1.05rem;margin:6px 0 2px;' }));
-    var fields = shown.map(function (q) { var f = buildField(q); form.appendChild(f.field); return f; });
+    // Test round: hand every visible field a random plausible answer.
+    var seeded = PREVIEW ? previewRegAnswers(shown) : {};
+    var fields = shown.map(function (q) { var f = buildField(q, seeded[q.id]); form.appendChild(f.field); return f; });
 
     var consentBoxes = [];
     if (consents.length && !carriedConsent) {
@@ -782,6 +830,7 @@
       form.appendChild(el('h3', { text: 'Consent', style: 'font-family:"Space Grotesk",Inter,sans-serif;font-size:1.05rem;margin:0 0 8px;' }));
       consents.forEach(function (stmt) {
         var cb = el('input', { type: 'checkbox', style: 'width:16px;height:16px;flex:0 0 auto;margin-top:2px;accent-color:#e67e22;' });
+        if (PREVIEW) cb.checked = true;   // test round: consents arrive ticked
         consentBoxes.push(cb);
         form.appendChild(el('label', { style: 'display:flex;gap:9px;align-items:flex-start;font-weight:500;font-size:14px;margin:8px 0;cursor:pointer;color:#4a4843;' },
           [cb, el('span', { text: stmt })]));
@@ -869,6 +918,15 @@
     var s = cfg.settings || {};
     var ids = s.activePuzzleIds || [];
     var q = [];
+    // TEST ROUND: the admin seeded this session's frozen puzzle specs (Firebase
+    // is not available here), so rehearse the puzzles participants really get.
+    if (PREVIEW) {
+      var seeded = previewSeed().puzzles || [];
+      seeded.forEach(function (p) {
+        if (p && p.spec) q.push({ id: p.id || null, diff: p.spec.diff || p.diff || 'easy', spec: p.spec });
+      });
+      if (q.length) { if (s.randomizeOrder !== false) shuffle(q); return q; }
+    }
     if (ids.length && fb) {
       // Frozen set: replay the exact puzzles the admin reviewed & froze.
       for (var k = 0; k < ids.length; k++) {
@@ -1060,7 +1118,56 @@
   }
 
   // ---- Phase: survey ----------------------------------------------------
-  function buildField(q) {
+  /* ---- TEST-ROUND random registration data ----------------------------
+     A test round is for rehearsing the flow, not for retyping demographics,
+     so in preview every registration field arrives filled in with a random
+     plausible answer and the consents are ticked (the tester can still change
+     anything before submitting). Preview-only — nothing is saved there.
+     Twin of `previewAnswers` in lab/answerarena/arena-app.js and
+     `randomRegistrationAnswers` in _ideasearchlab-src/src/utils/testData.js —
+     keep the three in sync. */
+  var TEST_FIRST = ['Alex', 'Sam', 'Robin', 'Jamie', 'Casey', 'Riley', 'Jordan', 'Morgan', 'Avery', 'Quinn'];
+  var TEST_LAST = ['Taylor', 'Walsh', 'Byrne', 'Okoye', 'Novak', 'Costa', 'Meyer', 'Haddad', 'Lindqvist', 'Moreau'];
+  var TEST_WORDS = ['Pilot', 'Trial', 'Sandbox', 'Rehearsal', 'Dry run', 'Check'];
+  function pickOne(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function intBetween(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+  function previewRegAnswers(questions) {
+    var first = pickOne(TEST_FIRST), last = pickOne(TEST_LAST);
+    var person = {
+      name: first + ' ' + last,
+      email: (first + '.' + last).toLowerCase() + '+test@example.com',
+      studentId: String(intBetween(10000000, 99999999))
+    };
+    var out = {};
+    (questions || []).forEach(function (q) {
+      var label = String(q.label || ''), id = String(q.id || '');
+      if (q.type === 'select' || q.type === 'radio') {
+        var opts = (q.options || []).filter(Boolean);
+        if (opts.length) out[q.id] = pickOne(opts);
+        return;
+      }
+      if (q.type === 'country') {
+        var cs = (((window.PF_DEFAULTS && window.PF_DEFAULTS.countries) || DEFAULTS.countries) || []).filter(Boolean);
+        if (cs.length) out[q.id] = pickOne(cs);
+        return;
+      }
+      if (q.type === 'number') {
+        var lo = q.min != null ? Number(q.min) : 0;
+        var hi = q.max != null ? Number(q.max) : Math.max(lo + 10, 10);
+        out[q.id] = String(intBetween(lo, Math.max(lo, hi)));
+        return;
+      }
+      if (/student\s*id|participant\s*id/i.test(label) || /studentid|participantid/i.test(id)) out[q.id] = person.studentId;
+      else if (/e-?mail/i.test(label) || /email/i.test(id)) out[q.id] = person.email;
+      else if (/name/i.test(label) || /name/i.test(id)) out[q.id] = person.name;
+      else if (/^age\b/i.test(label)) out[q.id] = String(intBetween(18, 45));
+      else out[q.id] = pickOne(TEST_WORDS) + ' answer';
+    });
+    return out;
+  }
+
+  // `preset` (test rounds only) pre-fills the rendered control with a value.
+  function buildField(q, preset) {
     var field = el('div', { class: 'pfx-field' });
     field.appendChild(el('label', { text: q.label + (q.required ? ' *' : '') }));
     if (q.help) field.appendChild(el('div', { class: 'help', text: q.help }));
@@ -1085,6 +1192,14 @@
       input = el('input', { type: q.type || 'text', autocomplete: 'off' });
     }
     field.appendChild(input);
+    if (preset != null && preset !== '') {
+      if (q.type === 'radio') {
+        var pre = input.querySelector('input[value="' + String(preset).replace(/"/g, '\\"') + '"]');
+        if (pre) pre.checked = true;
+      } else {
+        input.value = preset;
+      }
+    }
     return {
       field: field, q: q,
       read: function () { if (q.type === 'radio') { var s = input.querySelector('input:checked'); return s ? s.value : ''; } return input.value.trim(); }
@@ -1307,9 +1422,31 @@
   });
 
   // ---- Bootstrap --------------------------------------------------------
+  // ---- TEST ROUND boot --------------------------------------------------
+  // No Firebase, no auth, no writes: S.offline keeps every persistence path a
+  // no-op, the config comes from the seed the admin wrote, and a synthetic uid
+  // stands in for the anonymous account so the flow behaves normally.
+  function startPreview() {
+    var seed = previewSeed();
+    S.offline = true;
+    S.user = { uid: 'preview-user' };
+    S.participant = null;
+    cfg = mergeCfg(seed.session || null);
+    showPreviewRibbon();
+    enableLayoutCustomize();
+    showWelcome();
+  }
+  function showPreviewRibbon() {
+    if (document.getElementById('pfx-ribbon')) return;
+    document.body.appendChild(el('div', { id: 'pfx-ribbon', class: 'pfx-ribbon', html:
+      '<span aria-hidden="true">🧪 </span><b>Test mode</b> — this is a private sandbox. '
+      + 'Nothing you do here is saved, and the registration form was filled with random test data.' }));
+  }
+
   async function init() {
     if (inited) return; inited = true;
     injectStyles();
+    if (PREVIEW) return startPreview();
     showOverlay(card('Loading…', [el('p', { text: 'Connecting…' })]));
     // Watchdog: if boot stalls (e.g. the SDK import or auth never resolves) and we
     // are still on the Loading screen, reload once rather than sit on a blank page.

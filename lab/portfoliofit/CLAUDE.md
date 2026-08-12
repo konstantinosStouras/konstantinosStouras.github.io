@@ -196,6 +196,30 @@ publish it; versioned in the repo, deployed manually to the lab project):
   (when consents are shown and ticked, or carried from a platform launch)
   `consentGiven`/`consentTimestamp` (+ `consentVia` when carried) to the
   participant doc, then starts the main game.
+- **TEST ROUND (`?preview=1&key=stouras`) — rehearse a session, saving NOTHING.**
+  Opened by the admin's **🧪 Test round** button on any Sessions row (active or
+  completed). `PREVIEW` is resolved once from the URL and `init()` returns
+  `startPreview()` **before Firebase is even imported**: it sets `S.offline`
+  (which already makes every write path a no-op — `logEvent`, `flush`,
+  `createParticipant`, `saveRegistration`, `writeRound`, `persistQueue/Progress`,
+  the survey submit), stands a synthetic `preview-user` uid in for the anonymous
+  account, and loads `cfg` from the seed the admin wrote to
+  `localStorage['pfx-preview-config']` (that session's own snapshot, merged over
+  the defaults by the extracted `mergeCfg`). The welcome screen's offline
+  "please reconnect" block is skipped for a test round (it is the one case where
+  being offline is intentional), `beginSession()` short-circuits to `{ok:true}`
+  without validating a code, and `buildQueue()` plays the **seeded frozen puzzle
+  specs** (the admin ships up to 12 with the seed, since Firestore is
+  unreachable in the sandbox) falling back to the built-in pool. The
+  registration form arrives **pre-filled with random test data** and any consent
+  boxes ticked (`previewRegAnswers` + `buildField(q, preset)`), a fixed
+  `.pfx-ribbon` banner says nothing is saved, a real Simulation-Platform handoff
+  is ignored (`simpHandoff()` returns null; `SIMP_EXPECT` is off for
+  `?preview=1`, so a test round can never mark the platform card "✓ Completed"),
+  and the game's own local best-score key is the only thing it can touch.
+  Offline test: `node lab/portfoliofit/tools/preview-guard.mjs` (Playwright,
+  no network — asserts the SDK is never fetched, the sandbox is playable, the
+  seeded config is in force, and the form is fully pre-filled).
 - **Training phase signposting:** `startTraining` shows an intro pop-up clearly
   marked **Training Phase** that says it is a practice round and states exactly how
   many real puzzles follow (`plannedMainCount()` = frozen-set size, else
@@ -295,6 +319,12 @@ publish it; versioned in the repo, deployed manually to the lab project):
   (`?admin=data-analytics`, also accepting `?admin=analytics` /
   `?admin&view=analytics` / `#data-analytics`) and keep the address bar
   canonical; a `popstate` listener makes browser Back/Forward switch views.
+- **🧪 Test round (Sessions rows):** `launchTestRound(s)` seeds that session's
+  own snapshot + its frozen puzzle specs into `localStorage['pfx-preview-config']`
+  and opens `?preview=1&key=stouras&session=CODE` in a new tab — the whole
+  participant flow, writing nothing (see the experiment-layer note above). A
+  seed too large for localStorage drops the puzzle specs rather than leaving the
+  sandbox unseeded.
 - **Tabs:**
   - **Content** — collapsible per-page text editors (welcome/training/registration/
     game/stats/survey/thank-you), each pre-filled with the current effective text.

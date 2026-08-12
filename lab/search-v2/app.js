@@ -363,6 +363,17 @@
     }
 
     if (DEBUG) { $('nav-arm').textContent = (PREVIEW ? 'PREVIEW · ' : '') + navPhaseLabel() + (SESSION_CODE ? ' · ' + SESSION_CODE : ''); $('btn-restart').style.display = ''; }
+    // TEST ROUND: a constant banner that this tab is a throwaway sandbox, so a
+    // rehearsal can never be mistaken for a real run (the nav label alone was
+    // easy to miss). Matches the ribbon in the other lab apps' sandboxes.
+    if (PREVIEW && !document.getElementById('sv-ribbon')) {
+      var rib = document.createElement('div');
+      rib.id = 'sv-ribbon';
+      rib.className = 'sv-ribbon';
+      rib.innerHTML = '<span aria-hidden="true">\uD83E\uDDEA </span><b>Test mode</b> — this is a private sandbox. '
+        + 'Nothing you do here is saved: no participant, no rounds, no events.';
+      document.body.appendChild(rib);
+    }
 
     // Study closed: only turn away subjects who have not started (in-progress and
     // finished subjects are always let through so they can finish / see the code).
