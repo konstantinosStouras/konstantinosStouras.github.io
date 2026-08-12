@@ -1,12 +1,14 @@
 /* ==========================================================================
-   Answer Arena — export guard (offline, Playwright; no network)
-       node lab/answerarena/tools/export-guard.mjs
+   Answer Arena — admin guard (offline, Playwright; no network)
+       node lab/answerarena/tools/admin-guard.mjs
    A participant the admin DELETED must never appear in a data export. The
    deletion hard-deletes their doc, so "deleted" == "absent from the live
    participants collection"; exportExcel intersects with that collection, so
    even a caller handing it a stale list cannot leak a removed account.
-   This drives the REAL exportExcel with the store stubbed and SheetJS served
-   locally (the CDN is not reachable offline).
+   It also covers the roster: a student who registered twice has TWO accounts
+   and must be shown as one card listing both, each individually removable.
+   Drives the REAL exportExcel / buildUsersCard with the store stubbed and
+   SheetJS served locally (the CDN is not reachable offline).
    ========================================================================== */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -73,6 +75,41 @@ else {
   ok(!all.includes('DELETED'), 'a DELETED participant is NOT in the export, even though the caller passed them in');
   ok(!all.includes('"222"') && !all.includes(':"222"'), 'the deleted participant_id does not appear either');
 }
+/* ---- Roster: one student, TWO anonymous accounts ------------------------
+   A student who registers twice gets two participant docs. They must appear
+   as ONE card that lists BOTH accounts individually, each with its own
+   Delete, so a stale account can be removed while the played one is kept. */
+const deleted = [];
+await pg.evaluate(() => {
+  const mk = (id, pid, at) => ({ _id:id, participantId:pid, status:'done', createdAt:at,
+    completedSessions:{s1:1}, playedSessions:{s1:1}, sessionId:'s1', condition:{}, registration:{} });
+  window.__deleted = [];
+  window.ArenaStore.listParticipants = () => Promise.resolve([
+    mk('ACC_OLD','25266811',1), mk('ACC_NEW','25266811',2), mk('SOLO','999',3),
+  ]);
+  window.ArenaStore.deleteParticipant = (id) => { window.__deleted.push(id); return Promise.resolve(); };
+  const card = window.__arenaBuildUsersCard();
+  card.id = 'test-users-card';
+  document.body.appendChild(card);
+});
+await pg.waitForFunction(() => /2 accounts/.test(document.getElementById('test-users-card').textContent), null, { timeout: 8000 });
+const txt = await pg.textContent('#test-users-card');
+ok(/1 duplicate account\(s\) folded in/.test(txt), 'the duplicate is folded into one card, and said so');
+ok(txt.includes('ACC_OLD') && txt.includes('ACC_NEW'), 'BOTH account_ids are listed, so neither is hidden');
+const perAcct = await pg.evaluate(() =>
+  [...document.querySelectorAll('#test-users-card .aa-row')]
+    .filter(r => /ACC_OLD|ACC_NEW/.test(r.textContent) && r.querySelector('button')).length);
+ok(perAcct === 2, 'each account has its own Delete row (got ' + perAcct + ')');
+// Delete ONLY the stale account.
+pg.on('dialog', d => d.accept());
+await pg.evaluate(() => {
+  const row = [...document.querySelectorAll('#test-users-card .aa-row')].find(r => /ACC_OLD/.test(r.textContent) && r.querySelector('button'));
+  row.querySelector('button').click();
+});
+await pg.waitForFunction(() => window.__deleted.length > 0, null, { timeout: 8000 });
+const gone = await pg.evaluate(() => window.__deleted);
+ok(gone.length === 1 && gone[0] === 'ACC_OLD', 'deleting one account removes ONLY that account (' + gone.join(',') + ')');
+
 await br.close(); srv.close();
-console.log(fails ? `\nARENA EXPORT GUARD FAILED (${fails})` : '\nARENA EXPORT GUARD OK');
+console.log(fails ? `\nARENA ADMIN GUARD FAILED (${fails})` : '\nARENA ADMIN GUARD OK — export excludes deleted accounts; duplicates are individually removable');
 process.exit(fails ? 1 : 0);
