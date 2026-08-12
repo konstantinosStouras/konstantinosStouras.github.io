@@ -66,7 +66,13 @@ Then:
   the play gate** (the guard against class links shared with students who
   are not in the room): until the admin clicks Approve on a student's row,
   that student sees **no simulation cards at all** — approval overrides the
-  active toggles per student. The student page shows a "waiting for your
+  active toggles per student — **except simulations they have already
+  completed, which stay visible**: logging out and back in mints a new
+  anonymous account (approval never rides through recovery), so a returning
+  student would otherwise lose sight of finished work until re-approved.
+  It grants nothing — a completed card can't be launched, it opens the
+  already-completed notice — and the waiting note appears only while
+  something is genuinely still locked. The student page shows a "waiting for your
   instructor's approval" note and unlocks itself live (own-doc `onSnapshot`)
   the moment Approve is clicked; clicking `✓ Approved` again revokes.
   Students can never approve themselves — the rules pin `approved` to
@@ -98,8 +104,11 @@ Then:
   existed had none and could not log back in by e-mail until then). Delete removes the row's
   roster doc(s), including any collapsed duplicate re-registrations, via the
   rules' `allow delete: if isAdmin()`; the student's own browser profile is
-  untouched, so they can simply register again. **Returning students —
-  Log in / Register:** the student page opens on a two-button choice.
+  untouched, so they can simply register again. **The account corner (top right):**
+  signed out it holds the **Log in** / **Register** pills; signed in it holds
+  the student's **name chip** alone (never the pills beside it), which opens
+  an account menu with *Edit details* and *Log out*. **Returning students:**
+  the page opens on the Log in / Register choice.
   On the SAME browser nothing is ever asked again (registration + identity
   persist — closing the window loses nothing, they land straight on the
   cards). On a NEW device or a cleared browser they press **Log in** and

@@ -14,16 +14,31 @@
 
 <header class="hero">
   <div class="wrap hero-wrap">
-    <!-- Signed-out entry buttons, top-right (like the /fun games). Shown on
-         every entry screen so a student can switch between them; replaced by
-         the "Registered as …" row once they are in. -->
-    <div id="hero-auth" class="hero-auth" hidden>
-      <button id="btn-go-login" class="btn ghost">Log in</button>
-      <button id="btn-go-register" class="btn">Register</button>
+    <!-- The account corner, top-right (like the /fun games): the Log in /
+         Register pills while signed out, swapped for the student's NAME chip
+         once they are in. Exactly one of the two is ever shown — the pills
+         never sit beside the name. -->
+    <div class="hero-corner">
+      <div id="hero-auth" class="hero-auth" hidden>
+        <button id="btn-go-login" class="btn ghost">Log in</button>
+        <button id="btn-go-register" class="btn">Register</button>
+      </div>
+      <!-- Signed in: just the student's name. Clicking it opens the account
+           menu (Edit details / Log out); the Log in / Register pills are
+           never shown beside it. -->
+      <div id="who" class="who" hidden>
+        <button id="who-chip" class="chip" aria-haspopup="true" aria-expanded="false">
+          <span class="av">👤</span><span id="who-name"></span><span class="caret">▾</span>
+        </button>
+        <div id="who-menu" class="who-menu" hidden role="menu">
+          <div class="wm-head">Signed in as<br><strong id="wm-id"></strong></div>
+          <button id="wm-edit" class="wm-item" role="menuitem">Edit details</button>
+          <button id="wm-logout" class="wm-item danger" role="menuitem">Log out</button>
+        </div>
+      </div>
     </div>
     <div class="brand">🎓 <a href="./">Simulation Platform</a></div>
     <p class="tag">Register once, then play the simulations your instructor has activated for today's class.</p>
-    <div id="who" class="who" hidden></div>
   </div>
 </header>
 
@@ -111,6 +126,7 @@
       ⏳ <strong>Waiting for your instructor's approval.</strong>
       You are registered — today's simulations appear here the moment your
       instructor approves you (this page updates by itself, no refresh needed).
+      <span id="appr-note-some" hidden>Simulations you have already completed are shown below.</span>
     </div>
     <div id="cards" class="grid"></div>
     <div id="empty" class="empty" hidden>
@@ -249,6 +265,25 @@
      is replaced by the "Registered as …" row once they are in. LOCAL mode has
      no central roster to log in against, so it stays hidden there. */
   function setHeroAuth(on) { $('hero-auth').hidden = !(on && P.configured); }
+  /* Account menu behind the name chip (top right). */
+  function closeWhoMenu() { $('who-menu').hidden = true; $('who-chip').setAttribute('aria-expanded', 'false'); }
+  function toggleWhoMenu() {
+    var open = $('who-menu').hidden;
+    $('who-menu').hidden = !open;
+    $('who-chip').setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  $('who-chip').onclick = function (e) { e.stopPropagation(); toggleWhoMenu(); };
+  document.addEventListener('click', function (e) {
+    if (!$('who-menu').hidden && !$('who').contains(e.target)) closeWhoMenu();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeWhoMenu(); });
+  $('wm-edit').onclick = function () { closeWhoMenu(); showRegister(true); };
+  $('wm-logout').onclick = function () {
+    if (!confirm('Log out? Your saved details are removed from this browser (your class registration is kept) — the next student can then register here.')) return;
+    var b = this;
+    b.disabled = true; b.textContent = 'Logging out…';
+    P.logout().then(function () { location.reload(); });
+  };
   function showWelcome() {
     if (!P.configured) { showRegister(false); return; }
     hideAll();
@@ -320,24 +355,9 @@
     startApprovalWatch();
     $('who').hidden = !p;
     if (p) {
-      $('who').innerHTML = 'Registered as <strong></strong> (<span></span>) ';
-      $('who').querySelector('strong').textContent = p.name || '';
-      $('who').querySelector('span').textContent = p.studentId || '';
-      var b = document.createElement('button');
-      b.className = 'btn ghost small';
-      b.textContent = 'Edit details';
-      b.onclick = function () { showRegister(true); };
-      $('who').appendChild(b);
-      var lo = document.createElement('button');
-      lo.className = 'btn ghost small';
-      lo.textContent = 'Log out';
-      lo.onclick = function () {
-        if (!confirm('Log out? Your saved details are removed from this browser (your class registration is kept) — the next student can then register here.')) return;
-        lo.disabled = true;
-        lo.textContent = 'Logging out…';
-        P.logout().then(function () { location.reload(); });
-      };
-      $('who').appendChild(lo);
+      $('who-name').textContent = p.name || p.studentId || 'Account';
+      $('wm-id').textContent = p.email || p.studentId || '';
+      closeWhoMenu();
     }
     render();
   }
@@ -389,18 +409,22 @@
   function render() {
     var cards = $('cards');
     cards.innerHTML = '';
-    updateApprNote();
-    /* Unapproved student (Firebase mode): the cards are simply NOT rendered —
-       approval overrides the active toggles (per the owner). The waiting note
-       above explains it; the live watch re-renders the moment the admin
-       approves. */
+    /* Unapproved student (Firebase mode): approval overrides the active
+       toggles (per the owner), so nothing they have NOT done is rendered.
+       They still see what they have already COMPLETED — that is their own
+       record, and logging out and back in mints a new anonymous account, so
+       an approved student who returns would otherwise lose sight of work
+       they had already finished until the instructor re-approved them. It
+       grants nothing: a completed card cannot be launched (it opens the
+       "already completed" notice), so approval still gates all actual play. */
     var blocked = apprBlocked();
-    var shown = 0;
-    if (!blocked) P.catalog().forEach(function (s) {
+    var shown = 0, pending = 0;
+    P.catalog().forEach(function (s) {
       var c = CFG.sims[s.key];
       if (!c || !c.active) return;
-      shown++;
       var done = isCompleted(s, c);
+      if (blocked && !done) { pending++; return; }
+      shown++;
       var el = document.createElement('button');
       el.type = 'button';
       el.className = 'sim-card' + (done ? ' done' : '');
@@ -417,7 +441,12 @@
       el.onclick = function () { done ? openDoneModal(s) : openModal(s); };
       cards.appendChild(el);
     });
-    $('empty').hidden = shown > 0 || blocked;   /* blocked → the appr-note explains, not the empty state */
+    /* The waiting note is about what is STILL LOCKED, so it goes only when
+       something actually is: a student who has completed every active
+       simulation has nothing pending and should not be told to wait. */
+    $('appr-note').hidden = !(blocked && pending > 0);
+    $('appr-note-some').hidden = !(blocked && pending > 0 && shown > 0);
+    $('empty').hidden = shown > 0 || (blocked && pending > 0);
     var src = $('cfg-src');
     if (CFG.source === 'draft') { src.textContent = 'local draft — visible only in this browser'; src.hidden = false; }
     else if (CFG.source === 'firestore') { src.textContent = 'live'; src.hidden = false; }
@@ -513,7 +542,6 @@
      (own-doc onSnapshot). LOCAL mode has no roster, so no gate. */
   var APPR = { active: false, ok: false, started: false };
   function apprBlocked() { return APPR.active && !APPR.ok; }
-  function updateApprNote() { $('appr-note').hidden = !apprBlocked(); }
   function startApprovalWatch() {
     if (APPR.started || !P.configured || !P.getProfile()) return;
     APPR.started = true;

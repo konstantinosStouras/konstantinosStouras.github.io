@@ -46,13 +46,41 @@ h2 { font-size: 1.25rem; margin: 26px 0 4px; }
 /* Entry buttons, top-right of the header while signed out (same shape as the
    /fun games): a white "Log in" pill beside the filled "Register" pill. */
 .hero-wrap { position: relative; }
-.hero-auth { position: absolute; top: 0; right: 20px; display: flex; gap: 10px; z-index: 2; }
-.hero-auth .btn { border-radius: 999px; padding: 9px 20px; box-shadow: 0 2px 10px rgba(10, 15, 35, .18); }
-.hero-auth .btn.ghost { background: #fff; color: #33477e; }
-.hero-auth .btn.ghost:hover { background: #eef1fa; }
-@media (max-width: 620px) {
+/* The account corner holds EITHER the signed-out pills or the signed-in
+   "Registered as … · Edit details · Log out" row — never both. */
+.hero-corner { position: absolute; top: 0; right: 20px; z-index: 2; display: flex; align-items: center; gap: 10px; }
+.hero-auth { display: flex; gap: 10px; }
+.hero-corner .btn { border-radius: 999px; padding: 9px 20px; box-shadow: 0 2px 10px rgba(10, 15, 35, .18); }
+.hero-corner .btn.ghost { background: #fff; color: #33477e; }
+.hero-corner .btn.ghost:hover { background: #eef1fa; }
+.hero-corner .who { margin: 0; position: relative; }
+/* the signed-in name chip + its dropdown */
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; font: inherit; font-weight: 600; font-size: .93rem;
+  color: #1c2237; background: #fff; border: 0; border-radius: 999px; padding: 8px 16px; cursor: pointer;
+  box-shadow: 0 2px 10px rgba(10, 15, 35, .18); max-width: 260px;
+}
+.chip:hover { background: #eef1fa; }
+.chip #who-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip .av { font-size: 1rem; }
+.chip .caret { color: #6a7492; font-size: .8rem; }
+.who-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; min-width: 230px; z-index: 60;
+  background: #fff; color: #1c2237; border-radius: 12px; padding: 6px;
+  box-shadow: 0 12px 34px rgba(10, 15, 35, .28);
+}
+.who-menu .wm-head { padding: 10px 12px 12px; font-size: .82rem; color: #6a7492; border-bottom: 1px solid #edf0f7; margin-bottom: 6px; }
+.who-menu .wm-head strong { color: #1c2237; font-size: .9rem; overflow-wrap: anywhere; }
+.who-menu .wm-item {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: .93rem; color: #1c2237;
+  background: none; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer;
+}
+.who-menu .wm-item:hover { background: #eef1fa; }
+.who-menu .wm-item.danger { color: #c0392b; }
+@media (max-width: 900px) {
   /* stack under the title rather than colliding with it */
-  .hero-auth { position: static; margin: 0 0 14px; }
+  .hero-corner { position: static; margin: 14px 0 0; justify-content: flex-start; flex-wrap: wrap; }
+  .hero-corner .who { justify-content: flex-start; }
 }
 /* Roster column filters: the Approved + per-simulation headers are clickable
    (cycle all → only ✓ → only —). */
