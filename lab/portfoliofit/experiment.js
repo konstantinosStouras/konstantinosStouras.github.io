@@ -446,7 +446,10 @@
 
     async function onStart() {
       err.textContent = '';
-      var sid = (sessInput.value || '').trim();
+      // Session codes are minted UPPERCASE (admin genCode/sanitizeCode), so
+      // normalise what was typed — or arrived via ?session= from the platform
+      // — the same way, or a lowercase code fails the case-sensitive lookup.
+      var sid = (sessInput.value || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
       if (!sid) { err.textContent = 'Please enter a session code to begin.'; sessInput.focus(); return; }
       startBtn.setAttribute('disabled', 'true'); startBtn.textContent = 'Starting…';
       var res = await beginSession(sid);

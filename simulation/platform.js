@@ -275,8 +275,10 @@
               var v = m[k] || {};
               clean[k] = { ts: Number(v.ts) || 0, session: v.session || null };
             });
+            /* uid included so the write also passes the CREATE rule when the
+               profile sync hasn't made the doc yet (a race at page load). */
             return D.setDoc(D.doc(fs, PATHS.students + '/' + u.uid),
-              { completed: clean }, { merge: true });
+              { uid: u.uid, completed: clean }, { merge: true });
           });
         },
         /* Approve / revoke a student (admin-only per the rules): only approved

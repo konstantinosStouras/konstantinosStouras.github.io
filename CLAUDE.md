@@ -2416,7 +2416,11 @@ mid-game is the normal flow), newsvendor (cross-origin) and jagged
 (free-play). The smoke test drives the real cross-tab path and a
 marker-drift preflight fails it if an instrumented sim (or the shipped
 ideasearchlab bundle) loses its simpMarkCompleted call. The admin panel also embeds
-each sim's own admin console (same-origin iframes) for creating sessions
+each sim's own admin console (same-origin iframes, picker ordered
+active-first on the SAVED config — `buildConsoleOptions`, refreshed on
+save/config change; pinned Session IDs are UPPERCASED at save since every
+sim mints uppercase codes, and pf's welcome normalizes typed/handoff codes
+the same way) for creating sessions
 with parameters there, plus an optional shared-credential locker
 (`'simp:admin-creds'`, sessionStorage by default) whose `simpTrySso()` SSO
 snippet is WIRED into the sustainable-supply-chains, search-v2, portfoliofit

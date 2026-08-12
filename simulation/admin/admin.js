@@ -109,7 +109,10 @@
     Array.prototype.forEach.call(rows, function (tr) {
       var e = {
         active: tr.querySelector('.c-active').checked,
-        sessionId: tr.querySelector('.c-session').value.trim(),
+        /* Uppercased: every sim mints UPPERCASE session codes (pf genCode,
+           arena code6, search-v2/ssc/ideasearchlab all A-Z0-9), so a
+           lowercase pin would fail their case-sensitive lookups. */
+        sessionId: tr.querySelector('.c-session').value.trim().toUpperCase(),
         note: tr.querySelector('.c-note').value.trim()
       };
       if (e.active || e.sessionId || e.note) {
@@ -139,8 +142,9 @@
       CFG.sims = out.sims;   /* re-sort the table on the newly saved state */
       CFG.source = where;
       renderTable();
+      buildConsoleOptions();   /* consoles picker follows the activations */
       $('save-note').textContent = where === 'firestore'
-        ? 'Saved — students see the change on their next refresh.'
+        ? 'Saved — live: open student pages update by themselves.'
         : 'Draft saved in this browser. To publish for students: Download config.json and commit it at simulation/config.json.';
       end(true);
     }).catch(function (e) {
@@ -168,15 +172,33 @@
   };
 
   /* ---------- per-simulation consoles ---------- */
-  function initConsoles() {
+  /* ACTIVE simulations first — the same saved-state order as the activation
+     table above — so today's consoles sit on top; called again on every
+     config change/save so the order follows the activations. Stable sort
+     (catalog order within each group); the current selection is kept and an
+     open embedded console is never collapsed by a reorder. */
+  function buildConsoleOptions() {
     var pick = $('con-pick');
+    if (!pick) return;
+    var prev = pick.value;
     pick.innerHTML = '';
-    P.catalog().filter(function (s) { return s.adminUrl; }).forEach(function (s) {
+    var list = P.catalog().filter(function (s) { return s.adminUrl; });
+    list.sort(function (a, b) {
+      var aa = (CFG.sims[a.key] && CFG.sims[a.key].active) ? 0 : 1;
+      var bb = (CFG.sims[b.key] && CFG.sims[b.key].active) ? 0 : 1;
+      return aa - bb;
+    });
+    list.forEach(function (s) {
       var o = document.createElement('option');
       o.value = s.key;
-      o.textContent = s.icon + ' ' + s.title;
+      o.textContent = s.icon + ' ' + s.title + ((CFG.sims[s.key] && CFG.sims[s.key].active) ? ' — active' : '');
       pick.appendChild(o);
     });
+    if (prev && list.some(function (s) { return s.key === prev; })) pick.value = prev;
+  }
+  function initConsoles() {
+    var pick = $('con-pick');
+    buildConsoleOptions();
     function sync() {
       var s = P.sim(pick.value);
       if (!s) return;
@@ -436,8 +458,9 @@
       $('save-err').textContent = 'Firestore could not be read — the platform is falling back to the committed config.json.' + RULES_HINT;
     }
     if (!$('s-admin').hidden) renderTable();
-    /* The roster's per-simulation columns mirror the ACTIVE set — re-render
-       it whenever the activation config changes. */
+    /* The roster's per-simulation columns and the consoles picker both
+       mirror the ACTIVE set — refresh them whenever the config changes. */
     if (lastRows) renderRoster(lastRows);
+    if (!$('s-admin').hidden) buildConsoleOptions();
   });
 })();

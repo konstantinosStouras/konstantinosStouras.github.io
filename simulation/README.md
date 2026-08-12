@@ -169,7 +169,10 @@ panel — those panels already encode each game's settings, validation and
 backend, and duplicating that in the platform would rot. The platform admin
 therefore:
 
-- links and **embeds** each sim's admin console (same-origin iframes:
+- links and **embeds** each sim's admin console (same-origin iframes,
+  picker ordered **active-first** following the saved activation state —
+  it re-orders on every Save/config change, tags active sims "— active",
+  keeps your selection and never collapses an open console:
   Sustainable Supply Chains, search-v2, PortfolioFit `?admin`, Answer Arena
   `?admin`, Ideation Challenge, Problem Solving `?admin`);
 - lets you pin the Session ID you just created onto the student card, so
