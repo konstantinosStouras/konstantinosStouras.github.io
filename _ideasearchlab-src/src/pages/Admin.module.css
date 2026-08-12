@@ -160,9 +160,14 @@
 .sBtnPrimary { background: var(--accent); color: #ffffff; border-color: var(--accent); }
 .sBtnPrimary:hover { background: var(--accent-light); border-color: var(--accent-light); }
 
-/* Neutral action ("🧪 Test round") — a raised panel-coloured pill on the card's
-   paper background, the light-theme reading of arena's `.sec` (var(--panel)). */
+/* Neutral action ("Copy link", "🧪 Test round") — a raised panel-coloured pill on
+   the card's paper background, the light-theme reading of arena's `.sec`
+   (var(--panel)). `--white` flips with the theme, so this stays a dark pill in
+   dark mode; never hard-code #fff here. */
 .sBtnSec { background: var(--white); border-color: var(--border); color: var(--ink); }
+
+/* Momentary "✓ Copied" confirmation on the Copy-link pill (arena's `.is-ok`). */
+.sBtnOk { background: #2e9e5b; color: #ffffff; border-color: #2e9e5b; }
 .sBtnSec:hover { border-color: var(--ink); background: var(--paper-dark); }
 
 /* "Export data" — download this session's research workbook straight from its

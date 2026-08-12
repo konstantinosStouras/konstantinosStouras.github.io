@@ -485,9 +485,12 @@ export default function IndividualPhase() {
       <div className={styles.instrPage}>
         <header className={styles.instrHeader}>
           <span className={styles.wordmark}>Ideation Challenge</span>
-          <div className={styles.instrTimer}>
-            <PhaseTimer {...timerProps()} />
-          </div>
+          {/* NO phase timer here (owner 2026-08). This screen comes AFTER the
+              submit, so the selection stage's countdown is over — leaving it
+              running showed the participant a clock that no longer governs
+              anything (and whose expiry would re-fire autoFinish) next to the
+              only countdown that does: the confirmation hold, printed in the
+              card below. */}
           <HeaderControls />
         </header>
         <div className={styles.confirmContainer}>

@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { platformHandoff } from '../utils/simplatform'
+import { joinCodeFromSearch } from '../utils/joinLink'
 import HeaderControls from '../components/HeaderControls'
 import styles from './JoinSession.module.css'
 
@@ -19,7 +20,14 @@ export default function JoinSession() {
     ((platformHandoff()?.session) || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
   const [auto, setAuto] = useState(() => autoCode.length >= 3)
   const autoTried = useRef(false)
-  const [code, setCode] = useState('')
+  // A shared join link carries the session code: the admin's "Copy link" copies
+  // …/lab/ideasearchlab/?code=BALI (`?s=` accepted too — Answer Arena's spelling).
+  // It PRE-FILLS the field and the student presses Join, exactly like arena's
+  // `?s=CODE`; it deliberately does NOT auto-join, so they can see which session
+  // they are entering and a stale link fails on the normal form instead of a
+  // dead end. The platform launch above is the only silent path — its code stays
+  // hidden because the instructor never handed it out.
+  const [code, setCode] = useState(() => joinCodeFromSearch(window.location.search))
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 

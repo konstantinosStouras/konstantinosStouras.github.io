@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { SessionProvider } from './context/SessionContext'
 import { RequireAuth, RequireStudent, RequireGuest, RequireInstructor } from './components/ProtectedRoute'
@@ -23,6 +23,13 @@ import PreviewRibbon from './components/PreviewRibbon'
 // Wraps session pages with SessionProvider using the :sessionId param.
 // AdminBroadcast rides along so an instructor's group message / removal notice
 // can appear over any session page the participant is on.
+// <Navigate> that keeps the current query string. Used for the "/" → "/join"
+// default so a shared join link's ?code= survives the redirect.
+function NavigateKeepingQuery({ to }) {
+  const { search } = useLocation()
+  return <Navigate to={`${to}${search}`} replace />
+}
+
 function SessionWrapper({ children }) {
   const { sessionId } = useParams()
   return (
@@ -122,9 +129,13 @@ export default function App() {
           </RequireInstructor>
         } />
 
-        {/* Default */}
-        <Route path="/" element={<Navigate to="/join" replace />} />
-        <Route path="*" element={<Navigate to="/join" replace />} />
+        {/* Default. The query string is CARRIED THROUGH to /join, because the
+            admin's "Copy link" hands out the app root with the session code on
+            it (…/lab/ideasearchlab/?code=BALI) — the root is a real file, so
+            such a link never depends on the SPA 404 fallback. A bare
+            `<Navigate to="/join">` would drop the code on the way in. */}
+        <Route path="/" element={<NavigateKeepingQuery to="/join" />} />
+        <Route path="*" element={<NavigateKeepingQuery to="/join" />} />
       </Routes>
     </AuthProvider>
   )

@@ -15,6 +15,7 @@ import RichTextEditor from '../components/RichTextEditor'
 import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
 import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
 import { exportSessionWorkbook } from '../utils/sessionExport'
+import { joinLinkFor } from '../utils/joinLink'
 import {
   INDIVIDUAL_TIMER_KEYS, GROUP_TIMER_KEYS,
   individualTimers, groupTimers, formatDuration, migratePhaseTimers,
@@ -980,7 +981,8 @@ export default function Admin() {
                     <SessionCard key={s.id} session={s} participantCount={countFor(s.id)}
                       onOpen={() => navigate(`/admin/session/${s.id}`)}
                       onClose={() => setCloseConfirm(s.id)}
-                      onDelete={() => setDeleteConfirm(s.id)} />
+                      onDelete={() => setDeleteConfirm(s.id)}
+                      joinable />
                   ))}
                 </div>
               )}
@@ -1124,7 +1126,7 @@ export default function Admin() {
   )
 }
 
-function SessionCard({ session, participantCount, onOpen, onClose, onDelete }) {
+function SessionCard({ session, participantCount, onOpen, onClose, onDelete, joinable }) {
   // Per-session Excel download, straight from the session list (the same
   // workbook the control room's "Download Excel" produces — one shared builder,
   // so the two can never drift). Mirrors the Answer Arena admin, where every
@@ -1143,6 +1145,36 @@ function SessionCard({ session, participantCount, onOpen, onClose, onDelete }) {
     } finally {
       setExporting(false)
     }
+  }
+
+  // "Copy link" — the participant join link for THIS session, so the instructor
+  // can paste it into a class chat instead of dictating the code (mirrors the
+  // Answer Arena admin's Copy link). The URL shape and the reader that parses it
+  // back live together in utils/joinLink.js. Falls back to a hidden-textarea
+  // copy where the async clipboard API is unavailable.
+  const [copied, setCopied] = useState(false)
+  const joinUrl = joinLinkFor(window.location.origin, import.meta.env.BASE_URL, session.code)
+  async function copyJoinLink() {
+    let ok = false
+    try {
+      await navigator.clipboard.writeText(joinUrl)
+      ok = true
+    } catch (_) {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = joinUrl
+        ta.setAttribute('readonly', '')
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        ok = document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch (err) { console.error('Copy link failed:', err) }
+    }
+    if (!ok) { window.prompt('Copy this join link:', joinUrl); return }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1600)
   }
 
   const pc = session.phaseConfig || {}
@@ -1183,6 +1215,18 @@ function SessionCard({ session, participantCount, onOpen, onClose, onDelete }) {
           Edit button; the configuration is fixed at creation. */}
       <div className={styles.sessionCardActions}>
         <button className={`${styles.sBtn} ${styles.sBtnPrimary}`} type="button" onClick={onOpen}>Open</button>
+        {/* Only on ACTIVE cards: a completed session is closed to joins (the
+            join query filters out status 'done'), so its link would dead-end. */}
+        {joinable && (
+          <button
+            className={`${styles.sBtn} ${copied ? styles.sBtnOk : styles.sBtnSec}`}
+            type="button"
+            onClick={copyJoinLink}
+            title={`Copy the participant join link for this session (${joinUrl}) — it opens the join page with the code already filled in`}
+          >
+            {copied ? '✓ Copied' : 'Copy link'}
+          </button>
+        )}
         <button
           className={`${styles.sBtn} ${styles.exportBtn}`}
           type="button"

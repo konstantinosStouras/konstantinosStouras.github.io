@@ -738,3 +738,125 @@
   from { opacity: 1; }
   to   { opacity: 0; transform: scale(0.97); }
 }
+/* ── Voting result card ────────────────────────────────────────────────────
+   Shown to every member for CONFIRM_HOLD_MS once the whole group has voted:
+   the group's final selected ideas, before the phase change goes through.
+   Mirrors IndividualPhase.module.css's `.confirm*` block (the individual
+   phase's submission summary) so the two moments read as the same object —
+   keep them in step. */
+.confirmContainer {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 32px 20px 60px;
+  overflow-y: auto;
+}
+.confirmCard {
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: 22px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+  max-width: 640px;
+  width: 100%;
+  padding: 32px 34px 28px;
+}
+.confirmCheck {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #2e9e5b;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.confirmTitle {
+  font-family: var(--font-display);
+  font-size: 26px;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+.confirmSub {
+  font-size: 14.5px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0 0 22px;
+}
+.confirmList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.confirmItem {
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  padding: 13px 17px;
+  background: var(--paper);
+  user-select: text;
+}
+.confirmItemSel {
+  border-color: var(--accent);
+  background: rgba(200,86,42,0.05);
+}
+.confirmItemHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.confirmItemTitle {
+  font-size: 15px;
+  color: var(--ink);
+  margin: 0;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+/* Rank chip (1, 2, 3) — the group's ideas are shown most-voted first. */
+.confirmRank {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.confirmBadge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: rgba(200,86,42,0.1);
+  border: 1px solid rgba(200,86,42,0.3);
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+.confirmItemDesc {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 8px 0 0;
+  user-select: text;
+}
+.confirmWait {
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink);
+  background: rgba(200,86,42,0.06);
+  border: 1px solid rgba(200,86,42,0.2);
+  border-radius: 14px;
+  padding: 13px 16px;
+}
