@@ -13,9 +13,10 @@
      2. FIGURE GUIDES — the "Insights gained" panel drops the Nth harvested image
         under the heading "## Figure N", so the headings must be contiguous 1..N
         and identical in both languages, or a plot lands under the wrong text.
-     3. SHARED CONSTANTS — the 99%-confidence rules (CONF_LEVEL / ALPHA /
-        EQUIV_MARGIN) decide every Section-1 verdict; if the two copies drift,
-        Python and R answer the same question differently.
+     3. SHARED CONSTANTS — the confidence rules (CONF_LEVEL / ALPHA /
+        EQUIV_MARGIN for section 1, CONF95 for section 8) decide every verdict;
+        if the two copies drift, Python and R answer the same question
+        differently.
 
    Numerical agreement itself is verified by running both templates against the
    same synthetic export (Python via Pyodide/CPython, R via WebR/Rscript) — that
@@ -83,24 +84,32 @@ ok(refR.every((n) => n >= 1 && n <= fR.length),
 /* ---- 3. the 99%-confidence constants agree ------------------------------- */
 // The whole right-hand side, up to the trailing comment (ALPHA is an expression).
 const constOf = (t, name, sep) => {
-  const m = t.match(new RegExp('^' + name + '\\s*' + sep + '\\s*([^#\\n]+)', 'm'));
+  const m = t.match(new RegExp('^\\s*' + name + '\\s*' + sep + '\\s*([^#\\n]+)', 'm'));
   return m ? m[1].trim() : null;
 };
-for (const name of ['CONF_LEVEL', 'ALPHA', 'EQUIV_MARGIN']) {
+for (const name of ['CONF_LEVEL', 'ALPHA', 'EQUIV_MARGIN', 'CONF95']) {
   const a = constOf(py, name, '='), b = constOf(r, name, '<-');
   ok(a != null && a === b, name + ' matches in both templates (' + a + ' vs ' + b + ')');
 }
 
-/* ---- 4. the four verdict buckets exist, in the order the owner asked for -- */
+/* ---- 4. the verdict buckets exist, in the order the owner asked for ------- */
 for (const [lang, t] of [['Python', py], ['R', r]]) {
   const order = ['1a. HAIKU', '1b. OPUS', '1c. USERS ARE INDIFFERENT', '1d. NOT DECIDED YET',
     '1e. BY TASK TYPE', '1f. BY DOMAIN'];
   const at = order.map((s) => t.indexOf(s));
   ok(at.every((i) => i >= 0) && at.every((v, i) => !i || v > at[i - 1]),
-    lang + ' prints Haiku -> Opus -> indifferent -> undecided -> task type -> domain, in that order');
+    lang + ' section 1: Haiku -> Opus -> indifferent -> undecided -> task type -> domain, in that order');
+  // Section 8 is the same three claims at 95%, and must NOT grow a fourth
+  // "undecided" bucket — those tasks are deliberately unlisted.
+  const s8 = ['8a. GROUND TRUTH = PEOPLE PREFER HAIKU', '8b. GROUND TRUTH = PEOPLE PREFER OPUS',
+    '8c. GROUND TRUTH = PEOPLE ARE INDIFFERENT'];
+  const at8 = s8.map((s) => t.indexOf(s));
+  ok(at8.every((i) => i >= 0) && at8.every((v, i) => !i || v > at8[i - 1]),
+    lang + ' section 8: the three 95%-confident sets print Haiku -> Opus -> indifferent');
+  ok(t.indexOf('8d.') === -1, lang + ' section 8 lists no fourth bucket (unclassified tasks stay unlisted)');
 }
 
 console.log(fails
   ? `\nARENA TEMPLATES GUARD FAILED (${fails})`
-  : '\nARENA TEMPLATES GUARD OK — sections, figure guides and 99% constants agree across Python and R');
+  : '\nARENA TEMPLATES GUARD OK — sections, figure guides and confidence constants agree across Python and R');
 process.exit(fails ? 1 : 0);

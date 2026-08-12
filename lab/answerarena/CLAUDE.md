@@ -500,7 +500,7 @@ Four sections:
    "account for unequal responses per task" — the random 15-of-30 subset per
    student), each group tested vs baseline, a Welch Simple-vs-Complex test and a
    one-way ANOVA across domains; **(7) regressions** of preference on complexity and
-   on domain (cluster-robust).
+   on domain (cluster-robust); **(8) the 95%-confident sets** (below).
 
    **Section 1 — what we can say at 99% confidence** (the headline, printed first
    because it is what the study is *for*). Every task, then every task type, then
@@ -532,6 +532,20 @@ Four sections:
    non-zero task → decisive, n<2 → undecided; displayed intervals are clipped to the
    bounded [−3, +3] scale (`clip3`, display only — verdicts come from p-values, so
    clipping can never flip one).
+
+   **Section 8 — the 95%-confident sets** (printed last, per the owner). The same
+   three tests as section 1 at the **5%** level instead of the 1% one, so `decide`
+   takes the confidence as an argument (`CONF_LEVEL` for §1, `CONF95` for §8 —
+   keep both in sync across the two languages, `templates-guard.mjs` checks it).
+   It prints exactly three sets — **8a people prefer Haiku · 8b people prefer Opus ·
+   8c people are indifferent** — where "ground truth" means the preference of the
+   POPULATION the students are drawn from, which is what a confidence interval is a
+   claim about. **The tasks that reach no 95% verdict are deliberately NOT listed**
+   (only counted): no verdict is an absence of evidence, not a third kind of answer,
+   and printing them beside the three sets invites reading them as a finding. Because
+   a stricter bar can only classify fewer tasks, **§1's 99% sets are subsets of these**
+   — asserted in the output and verified on every fixture. There is no §8 figure: the
+   picture of the same classification is Figure 1, at 99%.
 
    **Seven figures**, in this order (the harvest order the
    Insights section relies on): **(1)** the 99% verdict per task — bar = the task's
