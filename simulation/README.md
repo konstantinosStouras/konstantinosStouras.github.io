@@ -89,7 +89,13 @@ Then:
   (arena stores the UCD student ID as `participantId` — the join key),
   matches them to the roster by student ID, and stamps `completed.answerarena`
   (with the session code) onto every matching student — add-only, applied to
-  the whole roster in one click, live everywhere. Delete removes the row's
+  the whole roster in one click, live everywhere; its outcome (incl. arena
+  IDs it could not match — usually a student ID typed differently in the two
+  forms) prints beside the button. For those, the ✓/— cells are **clickable**:
+  a confirm-guarded manual mark/unmark, the instructor's final word. Opening
+  the roster also **auto-backfills the e-mail recovery docs** for every
+  registered student (students who registered before the recovery feature
+  existed had none and could not log back in by e-mail until then). Delete removes the row's
   roster doc(s), including any collapsed duplicate re-registrations, via the
   rules' `allow delete: if isAdmin()`; the student's own browser profile is
   untouched, so they can simply register again. **Returning students:** on

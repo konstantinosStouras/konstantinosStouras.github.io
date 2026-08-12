@@ -378,10 +378,39 @@
         var td = tr.children[6 + i];
         var done = rowCompleted(r, s.key);
         td.textContent = done ? '✓' : '—';
-        td.title = s.title + ': ' + completedTip(r, s.key);
         td.style.textAlign = 'center';
         td.style.color = done ? '#1d6b3a' : '#a9b0c0';
         if (done) td.style.fontWeight = '700';
+        /* Manual override (confirm-guarded): click a cell to mark/unmark a
+           completion by hand — the instructor's final word for students the
+           automatic markers and the arena reconciliation missed (e.g. a
+           student ID typed differently in the two forms). Flows down to the
+           student's own page live. */
+        td.style.cursor = 'pointer';
+        td.title = s.title + ': ' + completedTip(r, s.key) +
+          ' — click to ' + (done ? 'REMOVE this ✓ (mark as not completed)' : 'manually mark as completed') + '.';
+        td.onclick = function () {
+          var who = r.name || r.studentId || 'this student';
+          var q = done
+            ? 'Remove the ✓ for ' + who + ' on ' + s.title + '?'
+            : 'Manually mark ' + who + ' as having completed ' + s.title + '?';
+          if (!window.confirm(q)) return;
+          td.textContent = '…';
+          var uids = uidsByKey[keyOf(r)] || [r.uid];
+          P.firebase().then(function (F) {
+            return done
+              ? F.unstampCompleted(uids, s.key)
+              : F.stampCompleted(uids, s.key, { ts: new Date().getTime(), session: (CFG.sims[s.key] && CFG.sims[s.key].sessionId) || null });
+          }).then(function () {
+            r.completed = r.completed || {};
+            if (done) delete r.completed[s.key];
+            else r.completed[s.key] = { ts: new Date().getTime(), session: (CFG.sims[s.key] && CFG.sims[s.key].sessionId) || null };
+            renderRoster(lastRows);   // instant; the live snapshot confirms
+          }, function (e) {
+            td.textContent = done ? '✓' : '—';
+            $('roster-count').textContent = 'Update failed: ' + ((e && e.message) || e);
+          });
+        };
       });
       /* Delete a registration (e.g. a test row). Removes the roster doc(s)
          behind this row — the live snapshot refreshes the table by itself.
@@ -423,10 +452,22 @@
         (filtered ? ' · showing ' + visible.length + ' (column filters on — click the headers to change)' : '') +
         (dropped ? ' (' + dropped + ' duplicate registration' + (dropped === 1 ? '' : 's') + ' collapsed)' : '');
   }
+  var recoveryBackfilled = false;
   function startRoster() {
     P.firebase().then(function (F) {
       F.watchStudents(function (rows) {
-        if (rows) renderRoster(rows);
+        if (rows) {
+          renderRoster(rows);
+          /* Auto-backfill the e-mail recovery docs once per panel open —
+             students who registered before the recovery feature existed
+             have none and could not log back in by e-mail until now. */
+          if (!recoveryBackfilled && rows.length) {
+            recoveryBackfilled = true;
+            F.backfillRecovery(rows).then(function (n) {
+              $('backfill-note').textContent = 'E-mail login enabled for ' + n + ' registered student(s) (recovery records up to date).';
+            }).catch(function () { recoveryBackfilled = false; });
+          }
+        }
         else $('roster-count').textContent = 'Roster unavailable: permission denied' + RULES_HINT;
       });
     });
