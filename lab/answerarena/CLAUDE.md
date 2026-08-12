@@ -547,6 +547,22 @@ Four sections:
    script's `INSIGHTS` prose (or the `## Figure N` headings) changes what shows and
    where the plots land.
 
+**Deleted participants can never appear in an export.** The admin's Delete
+**hard-deletes** the participant doc *and* its `responses`/`events`/`survey`
+sub-collections (`deleteParticipant`, arena-store.js) — failures are no longer
+swallowed, because Firestore keeps sub-collection docs alive under a deleted
+parent and a half-delete used to orphan a student's answers while the UI said
+"Deleted." The **Registered users list is grouped by student** (one card per
+Participant ID, showing each account's `account_id` — the export's own join
+key — and "N accounts" when they registered more than once), so Delete removes
+**every account behind that student**, then **re-reads and verifies** nothing
+is left under that Participant ID before reporting success. On top of that,
+`exportExcel` **intersects `parts` with a fresh `listParticipants()` read**, so
+no caller — a stale in-memory array, a list captured before a deletion, a
+future caller that forgets to re-read — can leak a removed account into a
+file; it fails open (keeps the caller's list) if that read errors. Offline
+test: `node lab/answerarena/tools/export-guard.mjs`.
+
 **Gotchas:** the runtimes need network access to jsDelivr on first Run (blocked
 in some sandboxes → a visible "Failed to load … (CDN / network / CSP?)" error,
 not a crash). `SHEET_ORDER` is the single source of truth for the tab order,
