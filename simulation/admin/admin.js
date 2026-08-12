@@ -222,7 +222,25 @@
 
   /* ---------- roster (Firebase mode; auto-loaded + live) ---------- */
   var roster = [];
+  var lastRows = null;                      // latest snapshot rows, for filter/config re-renders
+  /* Column filters: click the Approved / a simulation column header to cycle
+     all → only-yes(✓) → only-no(—). Per the owner: track which students
+     have not responded to which active simulation. */
+  var rosterFilters = { appr: null, sims: {} };
+  function activeSims() {
+    return P.catalog().filter(function (s) { return CFG.sims[s.key] && CFG.sims[s.key].active; });
+  }
+  function rowCompleted(r, key) { return !!(r.completed && r.completed[key]); }
+  function completedTip(r, key) {
+    var c = r.completed && r.completed[key];
+    if (!c) return 'Not answered yet';
+    var d = c.ts ? new Date(Number(c.ts)) : null;
+    return 'Completed' + (d && !isNaN(d) ? ' ' + d.toISOString().slice(0, 16).replace('T', ' ') : '') +
+           (c.session ? ' · session ' + c.session : '');
+  }
+  function cycleGlyph(v) { return v === 'yes' ? ' ✓' : v === 'no' ? ' —' : ''; }
   function renderRoster(rows) {
+    lastRows = rows;
     /* Newest first, one row per student: a log-out + re-registration (or a
        second device) mints a new uid, so collapse by student ID keeping the
        most recent record. uidsByKey remembers EVERY uid behind a displayed
@@ -242,11 +260,58 @@
       return true;
     });
     var dropped = rows.length - roster.length;
+    var sims = activeSims();
+
+    /* Dynamic header: base columns + Approved + one column per ACTIVE sim
+       (each header shows the sim icon + answered/total tally; clicking it
+       cycles the filter) + the actions column. */
+    var hd = $('rostertab').querySelector('thead tr');
+    hd.innerHTML = '';
+    ['Name', 'Student ID', 'E-mail', 'Level', 'Registered'].forEach(function (t) {
+      var th = document.createElement('th'); th.textContent = t; hd.appendChild(th);
+    });
+    var thA = document.createElement('th');
+    thA.textContent = 'Approved' + cycleGlyph(rosterFilters.appr);
+    thA.className = 'th-filter';
+    thA.title = 'Click to filter: all → only approved → only waiting';
+    thA.onclick = function () {
+      rosterFilters.appr = rosterFilters.appr === null ? 'yes' : rosterFilters.appr === 'yes' ? 'no' : null;
+      renderRoster(lastRows);
+    };
+    hd.appendChild(thA);
+    sims.forEach(function (s) {
+      var doneN = roster.filter(function (r) { return rowCompleted(r, s.key); }).length;
+      var f = rosterFilters.sims[s.key] || null;
+      var th = document.createElement('th');
+      th.className = 'th-filter';
+      th.textContent = s.icon + ' ' + doneN + '/' + roster.length + cycleGlyph(f);
+      th.title = s.title + ' — ' + doneN + ' of ' + roster.length + ' answered. Click to filter: all → only answered → only not-yet.';
+      th.onclick = function () {
+        var cur = rosterFilters.sims[s.key] || null;
+        rosterFilters.sims[s.key] = cur === null ? 'yes' : cur === 'yes' ? 'no' : null;
+        renderRoster(lastRows);
+      };
+      hd.appendChild(th);
+    });
+    hd.appendChild(document.createElement('th'));
+
+    /* Apply the column filters to what is DISPLAYED (counts below name both). */
+    var visible = roster.filter(function (r) {
+      if (rosterFilters.appr === 'yes' && !r.approved) return false;
+      if (rosterFilters.appr === 'no' && r.approved) return false;
+      for (var i = 0; i < sims.length; i++) {
+        var f = rosterFilters.sims[sims[i].key] || null;
+        if (f === 'yes' && !rowCompleted(r, sims[i].key)) return false;
+        if (f === 'no' && rowCompleted(r, sims[i].key)) return false;
+      }
+      return true;
+    });
+
     var tb = $('rostertab').querySelector('tbody');
     tb.innerHTML = '';
-    roster.forEach(function (r) {
+    visible.forEach(function (r) {
       var tr = document.createElement('tr');
-      for (var i = 0; i < 7; i++) tr.appendChild(document.createElement('td'));
+      for (var i = 0; i < 7 + sims.length; i++) tr.appendChild(document.createElement('td'));
       tr.children[0].textContent = r.name || '';
       tr.children[1].textContent = r.studentId || '';
       tr.children[2].textContent = r.email || '';
@@ -284,6 +349,18 @@
         });
       };
       tr.children[5].appendChild(appr);
+      /* One cell per ACTIVE simulation: ✓ answered / — not yet (tooltip has
+         the completion time + session). Data comes from the student page
+         mirroring its play-once markers onto the roster doc (syncCompleted). */
+      sims.forEach(function (s, i) {
+        var td = tr.children[6 + i];
+        var done = rowCompleted(r, s.key);
+        td.textContent = done ? '✓' : '—';
+        td.title = s.title + ': ' + completedTip(r, s.key);
+        td.style.textAlign = 'center';
+        td.style.color = done ? '#1d6b3a' : '#a9b0c0';
+        if (done) td.style.fontWeight = '700';
+      });
       /* Delete a registration (e.g. a test row). Removes the roster doc(s)
          behind this row — the live snapshot refreshes the table by itself.
          The student's own browser profile is untouched (they can just
@@ -307,18 +384,20 @@
               : ((e && e.message) || e));
         });
       };
-      tr.children[6].appendChild(del);
-      tr.children[6].style.textAlign = 'right';
+      tr.children[6 + sims.length].appendChild(del);
+      tr.children[6 + sims.length].style.textAlign = 'right';
       tb.appendChild(tr);
     });
     $('rostertab').hidden = roster.length === 0;
     $('btn-csv').hidden = roster.length === 0;
     var approvedN = roster.filter(function (r) { return r.approved; }).length;
+    var filtered = visible.length !== roster.length;
     $('roster-count').textContent = roster.length === 0
       ? 'No registrations yet — students appear here the moment they register.'
       : roster.length + ' student' + (roster.length === 1 ? '' : 's') +
         ' · ' + approvedN + ' approved' +
         (roster.length - approvedN ? ' · ' + (roster.length - approvedN) + ' waiting (they see no simulations until approved)' : '') +
+        (filtered ? ' · showing ' + visible.length + ' (column filters on — click the headers to change)' : '') +
         (dropped ? ' (' + dropped + ' duplicate registration' + (dropped === 1 ? '' : 's') + ' collapsed)' : '');
   }
   function startRoster() {
@@ -332,10 +411,14 @@
   $('btn-csv') && ($('btn-csv').onclick = function () {
     var cols = ['name', 'studentId', 'email', 'age', 'gender', 'nationality', 'country',
                 'levelOfStudy', 'workExperience', 'occupation', 'industry', 'englishFluency', 'approved', 'createdAt'];
+    var simCols = activeSims();
     var esc = function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-    var csv = cols.join(',') + '\n' + roster.map(function (r) {
-      return cols.map(function (c) { return esc(r[c]); }).join(',');
-    }).join('\n');
+    var csv = cols.concat(simCols.map(function (s) { return 'completed:' + s.key; })).join(',') + '\n' +
+      roster.map(function (r) {
+        return cols.map(function (c) { return esc(r[c]); })
+          .concat(simCols.map(function (s) { return rowCompleted(r, s.key) ? 'yes' : ''; }))
+          .join(',');
+      }).join('\n');
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     a.download = 'simulation-platform-roster.csv';
@@ -353,5 +436,8 @@
       $('save-err').textContent = 'Firestore could not be read — the platform is falling back to the committed config.json.' + RULES_HINT;
     }
     if (!$('s-admin').hidden) renderTable();
+    /* The roster's per-simulation columns mirror the ACTIVE set — re-render
+       it whenever the activation config changes. */
+    if (lastRows) renderRoster(lastRows);
   });
 })();

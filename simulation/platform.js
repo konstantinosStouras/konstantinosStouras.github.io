@@ -48,6 +48,16 @@
     try { return JSON.parse(localStorage.getItem(LS_COMPLETED) || '{}'); }
     catch (e) { return {}; }
   }
+  /* Mirror the local completion markers onto the student's roster doc so the
+     admin can track who answered which simulation (Firebase mode; a silent
+     no-op otherwise). The student page calls this at load and whenever a sim
+     tab stamps a completion (the storage event). Non-fatal by design. */
+  function syncCompleted() {
+    if (!CONFIGURED) return Promise.resolve();
+    var m = completed();
+    if (!Object.keys(m).length) return Promise.resolve();
+    return fb().then(function (F) { return F.saveCompleted(m); }).catch(function () {});
+  }
   /* Log out of the platform on this browser: forget the saved registration
      (and the launch handoff), and sign out the Firebase user so the NEXT
      registration on this machine gets its own roster doc instead of
@@ -255,6 +265,20 @@
             return D.deleteDoc(D.doc(fs, PATHS.students + '/' + uid));
           }));
         },
+        /* Mirror the student's play-once completion markers onto their own
+           roster doc ({completed: {simKey: {ts, session}}}), so the admin
+           roster can track who has answered which active simulation. */
+        saveCompleted: function (m) {
+          return ensureAnon().then(function (u) {
+            var clean = {};
+            Object.keys(m || {}).forEach(function (k) {
+              var v = m[k] || {};
+              clean[k] = { ts: Number(v.ts) || 0, session: v.session || null };
+            });
+            return D.setDoc(D.doc(fs, PATHS.students + '/' + u.uid),
+              { completed: clean }, { merge: true });
+          });
+        },
         /* Approve / revoke a student (admin-only per the rules): only approved
            students can launch the active simulations — the owner's guard
            against class links being passed to students who are not in the
@@ -301,7 +325,7 @@
     configured: CONFIGURED,
     catalog: catalog, sim: sim,
     getProfile: getProfile, saveProfile: saveProfile, clearProfile: clearProfile, syncProfile: syncProfile,
-    logout: logout, completed: completed,
+    logout: logout, completed: completed, syncCompleted: syncCompleted,
     watchConfig: watchConfig, saveConfig: saveConfig, draft: draft, clearDraft: clearDraft,
     buildLaunch: buildLaunch, launch: launch,
     firebase: fb,

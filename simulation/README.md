@@ -71,7 +71,14 @@ Then:
   the moment Approve is clicked; clicking `✓ Approved` again revokes.
   Students can never approve themselves — the rules pin `approved` to
   admin-only writes (**republish `firestore.rules` when adopting this**).
-  LOCAL mode has no roster and therefore no gate. Delete removes the row's
+  LOCAL mode has no roster and therefore no gate. The roster also carries
+  **one column per active simulation** (dynamic — it follows the activation
+  toggles) showing who has answered it (✓) and who hasn't (—), with an
+  answered/total tally in each header; **click the Approved or a simulation
+  header to filter** (all → only ✓ → only —), and the CSV export carries the
+  same `completed:<sim>` columns. The data is the student page mirroring its
+  play-once markers onto the student's roster doc (`syncCompleted` — the
+  `completed` map is student-writable in the rules; it grants nothing). Delete removes the row's
   roster doc(s), including any collapsed duplicate re-registrations, via the
   rules' `allow delete: if isAdmin()`; the student's own browser profile is
   untouched, so they can simply register again. A student's **Log out**

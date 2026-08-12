@@ -2362,7 +2362,13 @@ active toggles; `startApprovalWatch`/`apprBlocked` in index.html, live
 own-doc onSnapshot unlock, waiting-note banner; LOCAL mode ungated), a
 student can never self-approve (the rules pin `approved` to admin-only
 writes — REPUBLISH firestore.rules when adopting), and Approve writes all
-uids behind a roster row like Delete. **Pinned Session IDs are never
+uids behind a roster row like Delete. The roster also tracks **who answered
+which ACTIVE simulation** — one dynamic column per active sim (✓/—, tally
+in the header, click the Approved/sim headers to cycle filters all→✓→—,
+CSV carries `completed:<sim>` columns): the student page mirrors its
+play-once markers onto the roster doc (`syncCompleted` in platform.js, at
+load + on the completion storage event; `completed` is student-writable in
+the rules — it grants nothing). **Pinned Session IDs are never
 shown to students**: a pinned code launches the card DIRECTLY ("Session
 ready" badge, no dialog — openModal's pinned branch), and the same-origin
 sims hide their own code fields when the code came from the handoff

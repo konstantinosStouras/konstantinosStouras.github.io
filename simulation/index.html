@@ -212,6 +212,7 @@
     $('s-register').hidden = true;
     $('s-sims').hidden = false;
     startApprovalWatch();
+    P.syncCompleted();   // catch up markers stamped while this page was closed
     $('who').hidden = !p;
     if (p) {
       $('who').innerHTML = 'Registered as <strong></strong> (<span></span>) ';
@@ -413,9 +414,11 @@
   $('dm-close').onclick = function () { $('donemodal').hidden = true; };
   $('donemodal').addEventListener('click', function (e) { if (e.target === this) $('dm-close').onclick(); });
   /* A sim's done screen stamps the completion marker in ITS tab — the storage
-     event lets this tab flip the card to "✓ Completed" the moment it happens. */
+     event lets this tab flip the card to "✓ Completed" the moment it happens,
+     and mirror the marker onto the roster doc so the admin's tracking columns
+     update too. */
   window.addEventListener('storage', function (e) {
-    if (e.key === P.KEYS.completed) render();
+    if (e.key === P.KEYS.completed) { P.syncCompleted(); render(); }
   });
   $('m-launch').onclick = function () {
     if (!current) return;
