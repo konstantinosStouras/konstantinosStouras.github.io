@@ -15,6 +15,7 @@
 // student's REAL name rides as displayName and the real e-mail is recorded
 // in the registration data.
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { COUNTRIES } from '../data/formDefaults'
 
 const HANDOFF_KEY = 'simp:handoff:v1'
 const MAX_AGE_MS = 6 * 60 * 60 * 1000   // a handoff older than 6 h is stale
@@ -90,7 +91,22 @@ export function registrationAnswers(fields, profile) {
       key = hit && hit[1]
     }
     const v = key ? profile[key] : undefined
-    if (v != null && String(v).trim() !== '') out[f.id] = String(v).trim()
+    if (v == null || String(v).trim() === '') return
+    const s = String(v).trim()
+    // The answer must survive the Registration form's own validation, or the
+    // field is left unanswered so the (pre-filled) form shows instead — the
+    // same contract as portfoliofit's/answerarena's silent intakes. This is
+    // what stops a custom session form (admin-edited options) or an
+    // out-of-range number from being silently submitted off-list.
+    if (f.type === 'number') {
+      const n = Number(s)
+      if (isNaN(n) || !Number.isInteger(n)) return
+      if (f.min != null && n < f.min) return
+      if (f.max != null && n > f.max) return
+    }
+    if (f.type === 'select' && Array.isArray(f.options) && f.options.length && !f.options.includes(s)) return
+    if (f.type === 'country' && !COUNTRIES.includes(s)) return
+    out[f.id] = s
   })
   return out
 }

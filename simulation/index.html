@@ -246,6 +246,16 @@
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) { $('reg-err').textContent = 'That e-mail address doesn’t look right.'; return; }
+    /* Whole-number years, 0–50 — the sims' registration forms validate this
+       (PortfolioFit/ideasearchlab demand an integer in range), so a decimal
+       here would break the promised silent pass-through downstream. */
+    var we = Number(p.workExperience);
+    if (isNaN(we) || Math.floor(we) !== we || we < 0 || we > 50) {
+      $('reg-err').textContent = 'Work experience must be a whole number of years (0–50).';
+      $('f-workexp').focus();
+      return;
+    }
+    p.workExperience = String(we);
     P.saveProfile(p);
     showSims();
   };
