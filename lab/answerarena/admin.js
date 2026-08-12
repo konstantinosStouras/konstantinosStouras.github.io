@@ -424,7 +424,7 @@
     var activeCard = el('div', { class: 'aa-card' });
     var activeCount = el('span', { class: 'aa-count' });
     activeCard.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Active sessions' }), activeCount]));
-    activeCard.appendChild(el('p', { class: 'aa-note', text: 'Every session is created open. Copy its join link to invite participants, export its data, or close it to stop new joins. Create sessions from the left column.' }));
+    activeCard.appendChild(el('p', { class: 'aa-note', text: 'Every session is created open. Copy its join link to invite participants, export its data, or close it to stop new joins (it moves to "Closed sessions" below, data kept). Delete removes the session and its data for good. Create sessions from the left column.' }));
     var activeSearch = el('input', { type: 'text', placeholder: 'Search by session ID, name or date...' });
     activeCard.appendChild(el('div', { class: 'aa-field' }, [activeSearch]));
     var activeList = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
@@ -436,7 +436,7 @@
     var closedCard = el('div', { class: 'aa-card', style: 'display:none;' });
     var closedCount = el('span', { class: 'aa-count' });
     closedCard.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:4px;' }, [el('h3', { text: 'Closed sessions' }), closedCount]));
-    closedCard.appendChild(el('p', { class: 'aa-note', text: 'These no longer accept participants. Export their data to review, reopen them, or delete if no longer needed.' }));
+    closedCard.appendChild(el('p', { class: 'aa-note', text: 'These no longer accept participants. Export their data to review, reopen them, or delete them — Delete also erases everything recorded in the session.' }));
     var closedSearch = el('input', { type: 'text', placeholder: 'Search by session ID, name or date...' });
     closedCard.appendChild(el('div', { class: 'aa-field' }, [closedSearch]));
     var closedList = el('div', {});
@@ -510,6 +510,8 @@
     var n = Number(s.comparisonsPerUser) || 0;
     return 'Comparisons/participant: ' + (n > 0 ? n : 'whole active set');
   }
+  /* Exposed (function reference only) for the offline admin-guard test. */
+  window.__arenaSessionCard = function (s, counts, refresh) { return sessionCard(s, counts || {}, refresh || function () {}); };
   function sessionCard(s, counts, refresh) {
     var liveCount = counts[s.id] != null ? counts[s.id] : (s.count || 0);
     var joinUrl = location.origin + location.pathname + '?s=' + s.code;
@@ -534,7 +536,7 @@
       actions.push(el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['⬇ Export data']));
       actions.push(el('button', { class: 'aa-btn sec sm', title: TEST_ROUND_HINT, on: { click: function () { launchTestRound(s); } } }, ['🧪 Test round']));
       actions.push(el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.updateSession(s.id, { status: 'open' }).then(function () { toast('Reopened.'); refresh(); }); } } }, ['Reopen']));
-      actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Permanently delete session ' + s.code + '? (Participant data is kept.)')) Store.deleteSession(s.id).then(function () { toast('Deleted.'); refresh(); }); } } }, ['Delete']));
+      actions.push(el('button', { class: 'aa-btn danger sm', on: { click: deleteSession } }, ['Delete']));
     } else {
       actions.push(el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']));
       actions.push(el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']));
@@ -543,10 +545,45 @@
       // No rename/edit here (nor in the ideasearchlab admin): a session that
       // exists may already have participants playing in it, so it is never
       // changed after creation — name it on the Create card.
-      // "Delete" a running session = close it (participants can no longer join).
-      actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Close session ' + s.code + '? Participants will no longer be able to join.')) Store.updateSession(s.id, { status: 'closed' }).then(function () { toast('Closed.'); refresh(); }); } } }, ['Close']));
+      // Two DISTINCT endings, mirroring the ideasearchlab cards: a neutral
+      // "Close Session" (grey) that only stops new joins and moves the card
+      // into "Closed sessions" below, and a red "Delete" that destroys the
+      // session and everything recorded in it. Close was styled `danger` and
+      // labelled just "Close" before, which read as the destructive one.
+      actions.push(el('button', { class: 'aa-btn sec sm', title: 'Stops new joins and moves this session to "Closed sessions" below. Nothing is deleted.', on: { click: function () { if (window.confirm('Close session ' + s.code + '? Participants will no longer be able to join. Its data is kept and it moves to "Closed sessions".')) Store.updateSession(s.id, { status: 'closed' }).then(function () { toast('Closed.'); refresh(); }); } } }, ['Close Session']));
+      actions.push(el('button', { class: 'aa-btn danger sm', title: 'Permanently deletes this session AND all of its data.', on: { click: deleteSession } }, ['Delete']));
     }
     box.appendChild(el('div', { class: 'aa-row', style: 'margin-top:8px;' }, actions));
+    /* Permanently remove the session AND everything it recorded: every
+       response, event, survey answer and unsubmitted draft given in it, plus
+       the participant records that exist only because of it (someone who also
+       played another session keeps that other session's data). The data goes
+       FIRST and the session doc last, so a failure leaves the session listed
+       and the action retryable instead of orphaning rows under a session that
+       no longer appears anywhere. There is no undo, hence the two prompts. */
+    function deleteSession() {
+      var n = liveCount;
+      if (!window.confirm('Permanently delete session ' + s.code + ' AND all of its data?\n\n'
+        + 'This removes the session and everything recorded in it — responses, events, survey answers '
+        + 'and unsubmitted drafts. A participant who played only this session is removed entirely; '
+        + 'anyone who also played another session keeps that session\'s data.\n\n'
+        + 'This cannot be undone. Export the data first if you may still need it.')) return;
+      if (n && !window.confirm('Last check: delete ' + s.code + ' and the data of '
+        + n + ' participant' + (n === 1 ? '' : 's') + '?')) return;
+      toast('Deleting ' + s.code + '…');
+      var purge = Store.deleteSessionData ? Store.deleteSessionData(s.id) : Promise.resolve(null);
+      purge.then(function (res) {
+        return Store.deleteSession(s.id).then(function () {
+          var gone = (res && res.participantsRemoved) || 0;
+          toast('Deleted' + (gone ? ' — ' + gone + ' participant record' + (gone === 1 ? '' : 's') + ' removed too' : '') + '.');
+          refresh();
+        });
+      }).catch(function (e) {
+        console.error('[arena] delete session failed', e);
+        toast('Delete failed: ' + ((e && e.code) || 'error') + ' — the session is still listed; try again.');
+        refresh();
+      });
+    }
     // Download only the data for the users who played THIS session.
     function exportSession() {
       Store.listParticipants().then(function (all) {

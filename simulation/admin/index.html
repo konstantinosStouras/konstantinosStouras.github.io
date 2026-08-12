@@ -123,9 +123,14 @@
         One column per <em>active</em> simulation shows who has answered it (✓) and who hasn't (—);
         click the <strong>Approved</strong> or a simulation column header to filter
         (all → only ✓ → only —).</p>
+        <p class="hint">A <strong>⟲ Verify from …</strong> button appears for every <em>active</em> simulation
+        that keeps an identifiable participant record (one carrying the university student ID): it reads that
+        simulation's own backend — the ground truth — and fixes the column for students whose browser never
+        reported back. Simulations that collect no identifiable data (Problem Solving, Sustainable Supply
+        Chains, Newsvendor, Trust the AI?) have nothing to reconcile against, so they show no button.</p>
         <div class="actions" style="margin-top:0">
           <button id="btn-csv" class="btn ghost" hidden>Export CSV</button>
-          <button id="btn-verify-arena" class="btn ghost" hidden>⟲ Verify from Answer Arena</button>
+          <span id="verify-btns" class="actions" style="margin:0;gap:8px"></span>
           <span id="roster-count" class="hint">Loading roster…</span>
           <span id="verify-note" class="hint"></span>
           <span id="backfill-note" class="hint"></span>
@@ -143,12 +148,17 @@
 <footer><div class="wrap">Simulation Platform admin · <a href="../">student page</a> · <a href="https://stouras.com">stouras.com</a></div></footer>
 
 <script src="../firebase-config.js"></script>
-<!-- Answer Arena's public web config — used by the roster's "Verify from
-     Answer Arena" reconciliation (reads arena's own completion records). -->
+<!-- Answer Arena's public web config — it publishes one as its own file, so the
+     roster's "Verify from Answer Arena" reconciliation reads it from here
+     rather than keeping a copy. The other verifiable simulations keep their web
+     config inside their bundle; the catalog carries a copy in their verify
+     block (see catalog.js). -->
 <script src="/lab/answerarena/arena-config.js"></script>
 <script>window.SIMP_BASE = '..';</script>
 <script src="../catalog.js"></script>
 <script src="../platform.js"></script>
+<!-- Per-simulation completion readers for the roster's Verify buttons. -->
+<script src="./verify.js"></script>
 <script src="./admin.js"></script>
 </body>
 </html>

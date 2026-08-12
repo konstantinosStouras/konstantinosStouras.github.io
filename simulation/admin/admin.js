@@ -143,6 +143,10 @@
       CFG.source = where;
       renderTable();
       buildConsoleOptions();   /* consoles picker follows the activations */
+      /* The roster's per-simulation columns and Verify buttons mirror the
+         ACTIVE set too — repaint them now rather than waiting for the config
+         snapshot to echo back (which never arrives in LOCAL mode). */
+      if (lastRows) renderRoster(lastRows);
       $('save-note').textContent = where === 'firestore'
         ? 'Saved — live: open student pages update by themselves.'
         : 'Draft saved in this browser. To publish for students: Download config.json and commit it at simulation/config.json.';
@@ -269,7 +273,12 @@
     var d = c.ts ? new Date(Number(c.ts)) : null;
     return 'Completed' + (d && !isNaN(d) ? ' ' + d.toISOString().slice(0, 16).replace('T', ' ') : '') +
            (c.session ? ' · session ' + c.session : '') +
-           (c.src === 'manual' ? ' · marked by you' : c.src === 'arena' ? ' · verified from Answer Arena' : '');
+           (c.src === 'manual' ? ' · marked by you'
+             /* 'arena' is the legacy marker from when Answer Arena was the only
+                verifiable simulation; 'verify' is what every reconciliation
+                writes now (the simulation is already known — it IS this key). */
+             : (c.src === 'verify' || c.src === 'arena')
+               ? ' · verified from ' + ((P.sim(key) || {}).title || key) : '');
   }
   function cycleGlyph(v) { return v === 'yes' ? ' ✓' : v === 'no' ? ' —' : ''; }
   function renderRoster(rows) {
@@ -456,7 +465,7 @@
     });
     $('rostertab').hidden = roster.length === 0;
     $('btn-csv').hidden = roster.length === 0;
-    $('btn-verify-arena').hidden = roster.length === 0;
+    renderVerifyButtons();
     var approvedN = roster.filter(function (r) { return r.approved; }).length;
     var filtered = visible.length !== roster.length;
     $('roster-count').textContent = roster.length === 0
@@ -505,86 +514,106 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
   });
 
-  /* ---------- verify completions from Answer Arena's own records ----------
-     The client-side markers can miss a student (platform tab closed when
-     they finished, a direct URL, another browser) — but the arena's OWN
-     backend is the ground truth: its intake stores the UCD student ID as
-     participantId, the join key to this roster. Reads the arena project
-     with the shared admin credentials (the locker above) and stamps
-     completed.answerarena onto every matching roster doc; each student's
-     page pulls the ✓ down live via its own-doc watch. Only ever ADDS. */
-  function verifyFromArena() {
-    if (!lastRows) return Promise.reject(new Error('the roster has not loaded yet'));
-    if (!(CFG.sims.answerarena && CFG.sims.answerarena.active)) {
-      return Promise.reject(new Error('activate Answer Arena first — while it is off the roster shows no column for it, so a change here would be invisible'));
-    }
+  /* ---------- verify completions from each simulation's own records ----------
+     The client-side markers can miss a student (platform tab closed when they
+     finished, a direct URL, another browser) — but each simulation's OWN
+     backend is the ground truth wherever it keeps an IDENTIFIABLE participant
+     record, i.e. one carrying the university student ID, the join key to this
+     roster. One button per ACTIVE simulation that declares a `verify` block in
+     catalog.js (Answer Arena, the Ideation Challenge, PortfolioFit, Search);
+     the per-simulation reading lives in verify.js, everything below is generic.
+     Simulations that collect nothing identifiable (Problem Solving writes to a
+     Google Sheet, Sustainable Supply Chains records firm decisions, Newsvendor
+     is another project, Trust the AI? stores nothing) get no button — there is
+     nothing to reconcile against. Reads that project with the shared admin
+     credentials (the locker above), then stamps completed.<simKey> onto every
+     matching roster doc; each student's page pulls the ✓ down live via its
+     own-doc watch. Read-only on the simulation's side. */
+  function verifiableSims() {
+    return activeSims().filter(function (s) {
+      return s.verify && window.SIMP_VERIFY && window.SIMP_VERIFY[s.verify.adapter];
+    });
+  }
+  /* An app either publishes its web config as its own file (Answer Arena's
+     arena-config.js, loaded by this page) or keeps it inside its bundle, in
+     which case the catalog carries a copy. */
+  function verifyConfig(s) {
+    var v = s.verify || {};
+    var cfg = (v.configGlobal && window[v.configGlobal]) || v.config || null;
+    return (cfg && cfg.apiKey) ? cfg : null;
+  }
+  /* The simulations share one admin login by design (see the locker above), so
+     the credentials are asked for once and reused for every verification. */
+  function sharedCreds(simTitle) {
     var creds = null;
     try {
       creds = JSON.parse(sessionStorage.getItem(P.KEYS.adminCreds) ||
                          localStorage.getItem(P.KEYS.adminCreds) || 'null');
     } catch (e) {}
-    if (!creds || !creds.email || !creds.pass) {
-      /* No locker? Just ask — the admin e-mail is known (the shared login),
-         only the password is needed; remembered for this tab so the next
-         click doesn't re-ask. */
-      var email = (window.SIMP_ADMIN_EMAILS || [])[0] || '';
-      var pass = window.prompt('Answer Arena admin password for ' + email +
-        '\n(the shared admin login — used once to read arena’s completion records; Cancel to abort):');
-      if (!pass) return Promise.reject(new Error('cancelled — save the shared admin credentials in the locker above, or enter the password when prompted'));
-      creds = { email: email, pass: pass };
-      try { sessionStorage.setItem(P.KEYS.adminCreds, JSON.stringify(creds)); } catch (e) {}
-    }
-    var cfg = window.ARENA_FIREBASE;
-    if (!cfg || !cfg.apiKey) return Promise.reject(new Error('arena-config.js did not load'));
+    if (creds && creds.email && creds.pass) return creds;
+    /* No locker? Just ask — the admin e-mail is known (the shared login),
+       only the password is needed; remembered for this tab so the next
+       click doesn't re-ask. */
+    var email = (window.SIMP_ADMIN_EMAILS || [])[0] || '';
+    var pass = window.prompt(simTitle + ' admin password for ' + email +
+      '\n(the shared admin login — used once to read its completion records; Cancel to abort):');
+    if (!pass) return null;
+    creds = { email: email, pass: pass };
+    try { sessionStorage.setItem(P.KEYS.adminCreds, JSON.stringify(creds)); } catch (e) {}
+    return creds;
+  }
+  /* Sign in to ONE simulation's own Firebase project in a named secondary app,
+     so the platform's own session is never disturbed. */
+  function simFirestore(s) {
+    var cfg = verifyConfig(s);
+    if (!cfg) return Promise.reject(new Error('no Firebase web config for ' + s.title +
+      ' — add it to its verify block in catalog.js'));
+    var creds = sharedCreds(s.title);
+    if (!creds) return Promise.reject(new Error('cancelled — save the shared admin credentials in the locker above, or enter the password when prompted'));
     var U = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    var appName = 'verify-' + s.key;
     return Promise.all([
       import(U + 'firebase-app.js'), import(U + 'firebase-auth.js'), import(U + 'firebase-firestore.js')
     ]).then(function (m) {
       var A = m[1], D = m[2], app;
-      try { app = m[0].getApp('arena-verify'); } catch (e) { app = m[0].initializeApp(cfg, 'arena-verify'); }
+      try { app = m[0].getApp(appName); } catch (e) { app = m[0].initializeApp(cfg, appName); }
       var auth = A.getAuth(app);
-      var signin = auth.currentUser ? Promise.resolve()
-        : A.signInWithEmailAndPassword(auth, creds.email, creds.pass).catch(function (e) {
-            /* a wrong saved password must not wedge every future click —
-               clear it so the next attempt prompts again */
-            try { sessionStorage.removeItem(P.KEYS.adminCreds); } catch (x) {}
-            throw new Error('Answer Arena sign-in failed (' + ((e && e.code) || e) + ') — click Verify again and re-enter the password');
-          });
-      return signin.then(function () {
-        var fs = D.getFirestore(app);
-        return Promise.all([
-          D.getDocs(D.collection(fs, 'participants')),
-          D.getDocs(D.collection(fs, 'sessions')),
-          /* Decide from a FRESH roster read, never from the live-snapshot
-             cache (a dead streaming channel would make this destructive
-             pass act on a stale view). */
-          P.firebase().then(function (F) { return F.listStudents(); })
-        ]);
+      var signin = auth.currentUser ? Promise.resolve(auth.currentUser)
+        : A.signInWithEmailAndPassword(auth, creds.email, creds.pass).then(function (c) { return c.user; })
+           .catch(function (e) {
+             /* a wrong saved password must not wedge every future click —
+                clear it so the next attempt prompts again */
+             try { sessionStorage.removeItem(P.KEYS.adminCreds); } catch (x) {}
+             throw new Error(s.title + ' sign-in failed (' + ((e && e.code) || e) + ') — click Verify again and re-enter the password');
+           });
+      return signin.then(function (u) {
+        return { D: D, fs: D.getFirestore(app), uid: (u && u.uid) || null, sim: s };
       });
+    });
+  }
+  function verifyFromSim(s) {
+    if (!lastRows) return Promise.reject(new Error('the roster has not loaded yet'));
+    if (!(CFG.sims[s.key] && CFG.sims[s.key].active)) {
+      return Promise.reject(new Error('activate ' + s.title + ' first — while it is off the roster shows no column for it, so a change here would be invisible'));
+    }
+    return simFirestore(s).then(function (ctx) {
+      return Promise.all([
+        window.SIMP_VERIFY[s.verify.adapter](ctx),
+        /* Decide from a FRESH roster read, never from the live-snapshot
+           cache (a dead streaming channel would make this destructive
+           pass act on a stale view). */
+        P.firebase().then(function (F) { return F.listStudents(); })
+      ]);
     }).then(function (r) {
-      var rosterRows = r[2] || lastRows;
-      var codeById = {};
-      r[1].forEach(function (d) { codeById[d.id] = String(d.data().code || '').toUpperCase(); });
-      var doneById = {};   // normalized student ID -> {ts, session}
-      r[0].forEach(function (d) {
-        var x = d.data();
-        var cs = x.completedSessions || {};
-        var sids = Object.keys(cs);
-        if (!sids.length && x.status !== 'done') return;   // not completed
-        var pid = String(x.participantId || '').trim().toLowerCase();
-        if (!pid) return;
-        var best = { ts: Number(x.updatedAt) || 0, session: null };
-        sids.forEach(function (sid) {
-          var ts = Number(cs[sid]) || 0;
-          if (ts >= best.ts) best = { ts: ts, session: sid === '_none' ? null : (codeById[sid] || null) };
-        });
-        if (!doneById[pid] || best.ts > doneById[pid].ts) doneById[pid] = best;
-      });
-      /* SAFETY: a read that returned no participants at all means something
-         went wrong (wrong project, empty result, permissions) — never treat
-         that as "nobody completed anything" and revoke the whole class. */
-      if (!r[0].size) throw new Error('Answer Arena returned no participants at all — nothing was changed. Check you signed in to the right project.');
-      if (!Object.keys(doneById).length) throw new Error('Answer Arena lists no COMPLETED participant with a student ID — nothing was changed (a sync from here would have removed every ✓).');
+      var read = r[0] || {};
+      var doneById = read.doneById || {};       // normalized student ID -> {ts, session}
+      var rosterRows = r[1] || lastRows;
+      /* SAFETY: a read that returned no participant records at all means
+         something went wrong (wrong project, empty result, permissions) —
+         never treat that as "nobody completed anything" and revoke the whole
+         class. */
+      if (!read.records) throw new Error(s.title + ' returned no participant records at all — nothing was changed. Check you signed in to the right project.');
+      if (!Object.keys(doneById).length) throw new Error(s.title + ' lists no COMPLETED participant with a student ID — nothing was changed (a sync from here would have removed every ✓).');
 
       var byPid = {};
       rosterRows.forEach(function (row) {
@@ -595,24 +624,24 @@
       Object.keys(doneById).forEach(function (pid) {
         var rows = byPid[pid];
         if (!rows) { unmatched.push(pid); return; }
-        if (rows.some(function (row) { return rowCompleted(row, 'answerarena'); })) { already++; return; }
+        if (rows.some(function (row) { return rowCompleted(row, s.key); })) { already++; return; }
         stamps.push({ uids: rows.map(function (row) { return row.uid; }).filter(Boolean), mark: doneById[pid] });
       });
 
-      /* TWO-WAY: a roster ✓ whose student is no longer a completed Arena
-         participant (deleted there so they may retake it) must be REVOKED —
-         the Arena is the ground truth. Two stamps are never auto-revoked:
-         one the instructor set BY HAND (that override exists precisely for
-         students the automatic join cannot match), and one still matched in
-         the Arena. */
+      /* TWO-WAY: a roster ✓ whose student is no longer a completed participant
+         over there (deleted so they may retake it) must be REVOKED — the
+         simulation's own records are the ground truth. Two stamps are never
+         auto-revoked: one the instructor set BY HAND (that override exists
+         precisely for students the automatic join cannot match), and one still
+         matched in the simulation. */
       var revokes = [], seenKey = {}, stampedTotal = 0;
       rosterRows.forEach(function (row) {
-        var c = row.completed && row.completed.answerarena;
+        var c = row.completed && row.completed[s.key];
         if (!c || c.revoked) return;
         stampedTotal++;
         if (c.src === 'manual') return;
         var pid = String(row.studentId || '').trim().toLowerCase();
-        if (pid && doneById[pid]) return;              // still completed in the arena
+        if (pid && doneById[pid]) return;              // still completed over there
         var k = pid || ('uid:' + row.uid);
         if (seenKey[k]) return;
         seenKey[k] = 1;
@@ -623,50 +652,50 @@
       });
 
       var tail = (unmatched.length
-        ? ' · ' + unmatched.length + ' completed arena ID(s) not in this roster: ' +
+        ? ' · ' + unmatched.length + ' completed ' + s.title + ' ID(s) not in this roster: ' +
           unmatched.slice(0, 10).join(', ') + (unmatched.length > 10 ? '…' : '')
         : '');
 
       /* The join is by student ID typed into two different forms, so it can
-         be lossy (a typo, a leading zero). Unmatched arena IDs are direct
-         evidence that it is lossy RIGHT NOW — so refuse a mass removal in
-         that state rather than unlocking students who really did finish. */
+         be lossy (a typo, a leading zero). Unmatched IDs are direct evidence
+         that it is lossy RIGHT NOW — so refuse a mass removal in that state
+         rather than unlocking students who really did finish. */
       var cancelled = 0;
       if (revokes.length && unmatched.length && revokes.length > Math.max(3, stampedTotal * 0.25)) {
         throw new Error('refusing to remove ' + revokes.length + ' of ' + stampedTotal +
-          ' ✓ marks while ' + unmatched.length + ' completed Arena ID(s) do not match this roster — ' +
+          ' ✓ marks while ' + unmatched.length + ' completed ' + s.title + ' ID(s) do not match this roster — ' +
           'that pattern means the student-ID join is failing, not that everyone was deleted. ' +
           'Nothing was changed; fix the mismatched IDs (or remove the ✓ by clicking the cells).');
       }
       if (revokes.length && !window.confirm(
-            'Answer Arena no longer lists ' + revokes.length + ' student(s) as completed:\n\n' +
+            s.title + ' no longer lists ' + revokes.length + ' student(s) as completed:\n\n' +
             revokes.slice(0, 15).map(function (x) { return '• ' + x.who; }).join('\n') +
             (revokes.length > 15 ? '\n• …' : '') +
             '\n\nRemove their ✓ so they can take it again?\n' +
             '(Marks you set by hand are never removed.)' +
-            (unmatched.length ? '\n\nNote: ' + unmatched.length + ' completed Arena ID(s) do not match anyone in this roster.' : ''))) {
+            (unmatched.length ? '\n\nNote: ' + unmatched.length + ' completed ' + s.title + ' ID(s) do not match anyone in this roster.' : ''))) {
         cancelled = revokes.length;
         revokes.length = 0;
       }
 
       if (!stamps.length && !revokes.length) {
         return cancelled
-          ? cancelled + ' proposed removal(s) were cancelled — the roster still differs from Answer Arena' + tail
-          : 'Checked ' + Object.keys(doneById).length + ' completed Arena participant(s) — the roster already matches' + tail;
+          ? cancelled + ' proposed removal(s) were cancelled — the roster still differs from ' + s.title + tail
+          : 'Checked ' + Object.keys(doneById).length + ' completed ' + s.title + ' participant(s) — the roster already matches' + tail;
       }
       return P.firebase().then(function (F) {
         /* allSettled: one failed row must not hide the rest of the run. */
-        return Promise.allSettled(stamps.map(function (s) {
-          return F.stampCompleted(s.uids, 'answerarena', { ts: s.mark.ts, session: s.mark.session, src: 'arena' });
-        }).concat(revokes.map(function (s) {
-          return F.revokeCompletion(s.rows, 'answerarena');
+        return Promise.allSettled(stamps.map(function (st) {
+          return F.stampCompleted(st.uids, s.key, { ts: st.mark.ts, session: st.mark.session, src: 'verify' });
+        }).concat(revokes.map(function (rv) {
+          return F.revokeCompletion(rv.rows, s.key);
         })));
       }).then(function (rs) {
         var failed = rs.filter(function (x) { return x.status === 'rejected'; }).length;
         var bits = [];
         if (stamps.length) bits.push('stamped ✓ for ' + stamps.length + ' student(s)');
-        if (revokes.length) bits.push('removed the ✓ from ' + revokes.length + ' student(s) no longer in Answer Arena (they can retake it)');
-        return 'Synced with Answer Arena’s own records: ' + bits.join(' · ') +
+        if (revokes.length) bits.push('removed the ✓ from ' + revokes.length + ' student(s) no longer in ' + s.title + ' (they can retake it)');
+        return 'Synced with ' + s.title + '’s own records: ' + bits.join(' · ') +
           (already ? ' · ' + already + ' already matched' : '') +
           (cancelled ? ' · ' + cancelled + ' removal(s) cancelled' : '') +
           (failed ? ' · ⚠ ' + failed + ' write(s) FAILED — click Verify again' : '') + tail +
@@ -674,16 +703,33 @@
       });
     });
   }
-  $('btn-verify-arena').onclick = function () {
-    var btn = this;
-    $('verify-note').textContent = 'Reading Answer Arena’s records…';
-    btn.disabled = true;
-    verifyFromArena().then(function (msg) {
-      $('verify-note').textContent = msg;
-    }, function (e) {
-      $('verify-note').textContent = 'Verify failed: ' + ((e && e.message) || e);
-    }).then(function () { btn.disabled = false; });
-  };
+  /* One button per ACTIVE verifiable simulation, rebuilt on every roster
+     render — which is also what a config change triggers, so ticking a
+     simulation Active (or off) adds/removes its button by itself. */
+  function renderVerifyButtons() {
+    var box = $('verify-btns');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!roster.length) return;
+    verifiableSims().forEach(function (s) {
+      var b = document.createElement('button');
+      b.className = 'btn ghost';
+      b.textContent = '⟲ Verify from ' + s.title;
+      b.title = 'Reconcile the ' + s.title + ' column against that simulation’s own records — matched on ' +
+        ((s.verify && s.verify.idNote) || 'the university student ID') +
+        '. Read-only there; only this roster is updated.';
+      b.onclick = function () {
+        $('verify-note').textContent = 'Reading ' + s.title + '’s records…';
+        b.disabled = true;
+        verifyFromSim(s).then(function (msg) {
+          $('verify-note').textContent = msg;
+        }, function (e) {
+          $('verify-note').textContent = 'Verify from ' + s.title + ' failed: ' + ((e && e.message) || e);
+        }).then(function () { b.disabled = false; });
+      };
+      box.appendChild(b);
+    });
+  }
 
   /* ---------- boot ---------- */
   P.watchConfig(function (c) {

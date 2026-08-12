@@ -84,6 +84,25 @@
   // Tiny non-crypto hash, only to avoid storing local test passwords in plain text.
   function hash(s) { var h = 5381, i = s.length; while (i) h = (h * 33) ^ s.charCodeAt(--i); return (h >>> 0).toString(36); }
 
+  /* ---- Which sessions a participant doc touches -------------------------
+     A participant is not owned by one session: `sessionId` is the CURRENT
+     one, `playedSessions` / `completedSessions` are maps of every session
+     they started / finished. Both backends' deleteSessionData() use these to
+     decide whether removing a session empties a participant record entirely
+     (then the whole record goes) or only part of it (then just that
+     session's rows go). Keep the two implementations in step. */
+  function sessionKeysOf(p) {
+    var set = {};
+    if (p && p.sessionId) set[p.sessionId] = 1;
+    ['playedSessions', 'completedSessions'].forEach(function (k) {
+      if (p && p[k]) Object.keys(p[k]).forEach(function (s) { if (s) set[s] = 1; });
+    });
+    return Object.keys(set);
+  }
+  function touchesSession(p, sid) { return sessionKeysOf(p).indexOf(sid) >= 0; }
+  function onlySession(p, sid) { var ks = sessionKeysOf(p); return ks.length === 1 && ks[0] === sid; }
+  function rowSid(r) { return (r && r.sessionId) || '_none'; }
+
   /* ================================================================
      LOCAL backend (localStorage)
      ================================================================ */
@@ -229,6 +248,28 @@
     this.getSurvey = function (u, sid) { var d = db(); var p = d.participants[u] || {}; return Promise.resolve(clone((p.surveys && p.surveys[sid || '_none']) || (sid == null ? p.survey : null) || null)); };
     this.listSurveys = function (u) { var d = db(); var p = d.participants[u] || {}; var out = []; if (p.surveys) Object.keys(p.surveys).forEach(function (k) { out.push(clone(p.surveys[k])); }); if (p.survey) out.push(Object.assign({ sessionId: '_legacy' }, clone(p.survey))); return Promise.resolve(out); };
     this.deleteParticipant = function (u) { var d = db(); delete d.participants[u]; write(d); return Promise.resolve(); };
+    // Erase everything one session recorded (see the Firebase twin for the
+    // full reasoning): its responses/events/survey/draft on every participant
+    // who played it, plus its entries in their played/completed maps; a
+    // participant who played nothing else goes entirely.
+    this.deleteSessionData = function (sid) {
+      var d = db(), key = sid || '_none', removed = 0, cleaned = 0;
+      Object.keys(d.participants).forEach(function (u) {
+        var p = d.participants[u];
+        if (!touchesSession(p, key)) return;
+        if (onlySession(p, key)) { delete d.participants[u]; removed++; return; }
+        p.responses = (p.responses || []).filter(function (r) { return rowSid(r) !== key; });
+        p.events = (p.events || []).filter(function (e) { return rowSid(e) !== key; });
+        if (p.surveys) delete p.surveys[key];
+        if (p.playedSessions) delete p.playedSessions[key];
+        if (p.completedSessions) delete p.completedSessions[key];
+        if (p.draftResponse && rowSid(p.draftResponse) === key) p.draftResponse = null;
+        if (p.sessionId === key) p.sessionId = null;
+        cleaned++;
+      });
+      write(d);
+      return Promise.resolve({ participantsRemoved: removed, participantsCleaned: cleaned });
+    };
   }
 
   /* ================================================================
@@ -392,6 +433,51 @@
           return Promise.all(sn.docs.map(function (d) { return F().deleteDoc(d.ref); }));
         });
       })).then(function () { return F().deleteDoc(F().doc(D(), 'participants', u)); });
+    };
+    /* Remove ALL data one session recorded, without touching the other
+       sessions the same people played. Participants are not owned by a
+       session (one anonymous identity can take part in several), so this
+       walks every participant who played `sid` and:
+         - deletes their responses/events tagged with it, its survey doc and
+           an unsubmitted draft belonging to it;
+         - drops its entries from playedSessions/completedSessions (and
+           clears `sessionId` when it still points at it);
+         - deletes the participant record OUTRIGHT when this was the only
+           session they ever touched — the record exists only because of it.
+       Sub-collection docs survive a deleted parent in Firestore, so this must
+       run BEFORE deleteSession(); the admin's Delete does exactly that, which
+       is also why a failure leaves the session listed and the action
+       retryable. Errors are never swallowed (same rule as deleteParticipant).
+       Deletes run one participant at a time to stay gentle on quota. */
+    this.deleteSessionData = function (sid) {
+      var self = this, key = sid || '_none', removed = 0, cleaned = 0;
+      return self.listParticipants().then(function (all) {
+        var parts = all.filter(function (p) { return touchesSession(p, key); });
+        return parts.reduce(function (chain, p) {
+          return chain.then(function () {
+            var u = p._id;
+            if (onlySession(p, key)) { removed++; return self.deleteParticipant(u); }
+            var jobs = ['responses', 'events'].map(function (n) {
+              return F().getDocs(F().collection(D(), 'participants', u, n)).then(function (sn) {
+                return Promise.all(sn.docs.filter(function (x) { return rowSid(x.data()) === key; })
+                  .map(function (x) { return F().deleteDoc(x.ref); }));
+              });
+            });
+            jobs.push(F().deleteDoc(F().doc(D(), 'participants', u, 'survey', key)));
+            return Promise.all(jobs).then(function () {
+              // Dotted paths + deleteField() need updateDoc: setDoc(merge)
+              // would create a field literally named "playedSessions.<id>".
+              var patch = { updatedAt: F().serverTimestamp() };
+              patch['playedSessions.' + key] = F().deleteField();
+              patch['completedSessions.' + key] = F().deleteField();
+              if (p.sessionId === key) patch.sessionId = null;
+              if (p.draftResponse && rowSid(p.draftResponse) === key) patch.draftResponse = null;
+              cleaned++;
+              return F().updateDoc(F().doc(D(), 'participants', u), patch);
+            });
+          });
+        }, Promise.resolve());
+      }).then(function () { return { participantsRemoved: removed, participantsCleaned: cleaned }; });
     };
   }
 
