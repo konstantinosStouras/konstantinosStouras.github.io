@@ -472,16 +472,19 @@
           }).then(function (snap) { return snap.exists() ? snap.data() : null; });
         },
         /* Admin-only: stamp a VERIFIED completion onto roster docs — the
-           "Verify from Answer Arena" reconciliation, for students whose own
-           browser never mirrored the marker (platform tab closed, direct
-           URL, another browser). The student's page pulls it down live via
-           its own-doc watch. */
+           "Verify from <simulation>" reconciliation (one per active
+           simulation that keeps identifiable participant records), for
+           students whose own browser never mirrored the marker (platform tab
+           closed, direct URL, another browser). The student's page pulls it
+           down live via its own-doc watch. */
         stampCompleted: function (uids, simKey, mark) {
           /* Dotted path REPLACES the nested entry. A deep merge would fuse the
              new mark into an existing tombstone ({revoked:1,rts}) and the row
-             would still read as revoked. src records who stamped it ('arena'
-             = the reconciliation, 'manual' = the instructor by hand) so the
-             reconciliation can never undo a manual override. */
+             would still read as revoked. src records who stamped it ('verify'
+             = a reconciliation from the simulation's own records — 'arena' in
+             legacy rows, when Answer Arena was the only verifiable one —,
+             'manual' = the instructor by hand) so a reconciliation can never
+             undo a manual override. */
           var entry = { ts: Number(mark.ts) || 0, session: mark.session || null };
           if (mark.src) entry.src = mark.src;
           return Promise.all((uids || []).map(function (uid) {

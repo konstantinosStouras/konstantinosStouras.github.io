@@ -278,8 +278,11 @@
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeWhoMenu(); });
   $('wm-edit').onclick = function () { closeWhoMenu(); showRegister(true); };
+  /* No confirmation dialog (per the owner): logging out only forgets the
+     saved details in THIS browser — the class registration is kept and the
+     student can log back in with their student ID + e-mail — so the prompt
+     was noise on a shared machine where the next student is already waiting. */
   $('wm-logout').onclick = function () {
-    if (!confirm('Log out? Your saved details are removed from this browser (your class registration is kept) — the next student can then register here.')) return;
     var b = this;
     b.disabled = true; b.textContent = 'Logging out…';
     P.logout().then(function () { location.reload(); });

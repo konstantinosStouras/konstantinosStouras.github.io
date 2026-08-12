@@ -31,6 +31,32 @@
      adminAuth     'firebase' — email/password against the app's OWN Firebase
                    project; 'open' — URL param only; null — no admin panel
      adminNote     shown in the platform admin panel's consoles section
+     verify        how the roster's completion ✓ for this simulation is
+                   reconciled against the simulation's OWN records — present
+                   only for simulations that store an IDENTIFIABLE participant
+                   record (one carrying the university student ID, the join key
+                   to the platform roster). The admin panel renders one
+                   "⟲ Verify from <title>" button per ACTIVE simulation that
+                   has this block; simulations without one are deliberately
+                   un-verifiable:
+                     problem-solving — writes to a Google Sheet, no identity
+                     ssc             — team/firm decisions, no student ID
+                     newsvendor      — cross-origin, another project entirely
+                     jagged          — collects nothing at all
+                   Fields:
+                     adapter       key in window.SIMP_VERIFY (admin/verify.js)
+                                   — the function that reads that project and
+                                   returns who completed it, by student ID
+                     configGlobal  window global holding the app's PUBLIC
+                                   Firebase web config, when the app publishes
+                                   one as its own file (Answer Arena)
+                     config        inline PUBLIC web config, for apps whose
+                                   config is buried in their bundle/source —
+                                   KEEP IN SYNC with the file named beside it
+                                   (a Firebase web config is not a secret;
+                                   access is governed by the Security Rules)
+                     idNote        what the join key is on that side, shown in
+                                   the button's tooltip
 */
 window.SIMP_CATALOG = [
   {
@@ -38,6 +64,19 @@ window.SIMP_CATALOG = [
     path: '/lab/ideasearchlab/join',
     blurb: 'Team ideation experiment: individual brainstorming, a group round and a survey — with optional AI assistance.',
     session: 'inapp',
+    verify: {
+      adapter: 'ideasearchlab',
+      /* PUBLIC web config — keep in sync with _ideasearchlab-src/src/firebase.js */
+      config: {
+        apiKey: 'AIzaSyAPaJwdXmJhn8WVQDxwFZx5N5kX2loL5zY',
+        authDomain: 'ideasearchlab.firebaseapp.com',
+        projectId: 'ideasearchlab',
+        storageBucket: 'ideasearchlab.firebasestorage.app',
+        messagingSenderId: '368057681732',
+        appId: '1:368057681732:web:35d8aba8d387abc364f911'
+      },
+      idNote: 'the student ID carried over from the platform launch (participant.platform.studentId), on participants who reached status “done” (survey submitted) in the sessions this admin account created'
+    },
     adminUrl: '/lab/ideasearchlab/admin/', adminAuth: 'firebase',
     adminNote: 'Instructor account on the “ideasearchlab” Firebase project. Students get a silent throwaway login (no account screen); their join code arrives pre-filled and the registration auto-submits from the platform data, consent statements included (carried from the platform launch, stamped consentVia on the participant record).'
   },
@@ -46,6 +85,19 @@ window.SIMP_CATALOG = [
     path: '/lab/portfoliofit/',
     blurb: 'Fit project shapes into a limited portfolio under time pressure — training, main game and survey.',
     session: 'prefill', sessionParam: 'session',
+    verify: {
+      adapter: 'portfoliofit',
+      /* PUBLIC web config — keep in sync with lab/portfoliofit/experiment.js */
+      config: {
+        apiKey: 'AIzaSyDO0KqhebMC2xsijmibhL_52wGfioMb0HQ',
+        authDomain: 'stouras-portfoliofit-86127.firebaseapp.com',
+        projectId: 'stouras-portfoliofit-86127',
+        storageBucket: 'stouras-portfoliofit-86127.firebasestorage.app',
+        messagingSenderId: '346443957980',
+        appId: '1:346443957980:web:d5987b2a470a401e7d5619'
+      },
+      idNote: 'the University Student ID from its registration form (participants.studentId), on players whose record reached status “done” (survey submitted)'
+    },
     adminUrl: '/lab/portfoliofit/?admin', adminAuth: 'firebase',
     adminNote: 'Opens with ?admin; email/password on the “stouras-portfoliofit” Firebase project. Its in-game registration form auto-fills from the platform registration (prefill drop-in wired).'
   },
@@ -54,6 +106,12 @@ window.SIMP_CATALOG = [
     path: '/lab/answerarena/',
     blurb: 'Compare two answers to everyday work tasks and pick the one you prefer.',
     session: 'prefill', sessionParam: 's', optionalSession: true,
+    verify: {
+      adapter: 'answerarena',
+      /* the arena publishes its own config file, loaded by the admin page */
+      configGlobal: 'ARENA_FIREBASE',
+      idNote: 'the University Student ID typed into its intake form (participants.participantId), on participants with a completed session'
+    },
     adminUrl: '/lab/answerarena/?admin', adminAuth: 'firebase',
     adminNote: 'Opens with ?admin (same store pattern as Sustainable Supply Chains). Without a session code students play the default config. Its intake form auto-fills from the platform registration.'
   },
@@ -94,6 +152,19 @@ window.SIMP_CATALOG = [
         STUDY_ID: 'simulation-platform',
         SESSION_ID: pid + '-' + Date.now().toString(36)
       };
+    },
+    verify: {
+      adapter: 'search-v2',
+      /* PUBLIC web config — keep in sync with lab/search-v2/firebase-config.js */
+      config: {
+        apiKey: 'AIzaSyB5uF8XwqI8fyTuIBwQ_OPkg-VqU98H0uc',
+        authDomain: 'search-with-ai-456d7.firebaseapp.com',
+        projectId: 'search-with-ai-456d7',
+        storageBucket: 'search-with-ai-456d7.firebasestorage.app',
+        messagingSenderId: '9761548035',
+        appId: '1:9761548035:web:13d1cda30bbe35aeec2b36'
+      },
+      idNote: 'the student ID the platform sends as PROLIFIC_PID (events.pid), on every logged “session_end” event'
     },
     adminUrl: '/lab/search-v2/admin/', adminAuth: 'firebase',
     adminNote: 'Email/password per ADMIN_EMAILS in lab/search-v2/firebase-config.js. The launch link mirrors its canonical Prolific link, with the student ID as PROLIFIC_PID.'
