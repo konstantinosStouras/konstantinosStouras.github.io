@@ -2129,8 +2129,8 @@ those stamps split the export's Timing sheet into writing-vs-selecting and
 ideation-vs-voting. Sessions created before the split carry only the old
 `individualPhaseDuration`/`groupPhaseDuration` and keep running UNSPLIT — one
 clock across both stages, expiring straight into the auto-submit exactly as
-before (the admin edit form migrates them into the per-stage fields on open, so
-saving can't drop a countdown).
+before (`migratePhaseTimers` fills the per-stage fields from them wherever a
+stored `phaseConfig` is read, so a legacy session never loses its countdown).
 
 **Admin "Test round" (no data logged).** Every session card in `/admin` has a
 **🧪 Test round** button that opens the whole participant flow (Welcome →
@@ -2171,6 +2171,25 @@ instructor download ONE session's research workbook straight from its card —
 ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export data**
 button (calling the same `exportSessionWorkbook` builder the control room uses, so
 the file is identical), matching what Answer Arena's session cards already had.
+
+**Session cards look and behave the same in both admins** (owner request
+2026-08). *Alignment:* ideasearchlab's cards used a mix of global
+`btn-primary`/`btn-ghost` (bigger padding) and borderless text buttons, so its
+Active/Completed rows sat at ragged heights and "⬇ Export data" wrapped onto two
+lines; every card button now uses ONE pill family — `.sBtn` + a variant
+(`.sBtnPrimary` Open · `.exportBtn` solid green · `.sBtnSec` 🧪 Test round ·
+`.closeBtn` · `.deleteBtn` red-outlined, no longer `margin-left:auto`) in
+`Admin.module.css`, mirroring Answer Arena's `.aa-btn … sm` set (same height,
+radius, weight, colour roles, `white-space: nowrap`). Keep the two in sync — a
+new card button must be added as `.sBtn` + a variant, never a bare
+`btn-primary`/`btn-ghost`. *No editing a session that exists:* the **Edit**
+button (ideasearchlab) and **Edit name** (Answer Arena) were REMOVED — a session
+may already have participants playing in it, so its configuration is fixed at
+creation. ideasearchlab's whole edit path went with it (`editingSession` state,
+`startEdit`/`saveEdit`/`cancelEdit`, the form's Edit-Session title/badge and its
+"Save Changes / Cancel" actions; the per-section **Save** buttons now only
+confirm the value is captured for the session about to be created), and Answer
+Arena's inline `editMode` rename form; name a session on its Create card.
 
 ### 🧪 Test round — EVERY class simulation that can have one has one
 

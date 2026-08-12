@@ -527,16 +527,18 @@
     if (st === 'closed') {
       // Closed: review (export), reopen, or remove. Joining is disabled, so no
       // Open/Copy.
-      actions.push(el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['Export data']));
+      actions.push(el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['⬇ Export data']));
       actions.push(el('button', { class: 'aa-btn sec sm', title: TEST_ROUND_HINT, on: { click: function () { launchTestRound(s); } } }, ['🧪 Test round']));
       actions.push(el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.updateSession(s.id, { status: 'open' }).then(function () { toast('Reopened.'); refresh(); }); } } }, ['Reopen']));
       actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Permanently delete session ' + s.code + '? (Participant data is kept.)')) Store.deleteSession(s.id).then(function () { toast('Deleted.'); refresh(); }); } } }, ['Delete']));
     } else {
       actions.push(el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']));
       actions.push(el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']));
-      actions.push(el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['Export data']));
+      actions.push(el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['⬇ Export data']));
       actions.push(el('button', { class: 'aa-btn sec sm', title: TEST_ROUND_HINT, on: { click: function () { launchTestRound(s); } } }, ['🧪 Test round']));
-      actions.push(el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit name']));
+      // No rename/edit here (nor in the ideasearchlab admin): a session that
+      // exists may already have participants playing in it, so it is never
+      // changed after creation — name it on the Create card.
       // "Delete" a running session = close it (participants can no longer join).
       actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Close session ' + s.code + '? Participants will no longer be able to join.')) Store.updateSession(s.id, { status: 'closed' }).then(function () { toast('Closed.'); refresh(); }); } } }, ['Close']));
     }
@@ -548,15 +550,6 @@
         if (!parts.length) { toast('No participants in this session yet.'); return; }
         exportExcel(parts, { sessionId: s.id, sessionCode: s.code });
       }).catch(function (e) { toast('Export failed: ' + ((e && e.code) || 'error')); });
-    }
-    function editMode() {
-      box.innerHTML = '';
-      var ename = el('input', { type: 'text', value: s.name || '' });
-      box.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Name (' + s.code + ')' }), ename]));
-      box.appendChild(el('div', { class: 'aa-row' }, [
-        el('button', { class: 'aa-btn sm', on: { click: function () { Store.updateSession(s.id, { name: ename.value.trim() }).then(function () { toast('Saved.'); refresh(); }); } } }, ['Save']),
-        el('button', { class: 'aa-btn sec sm', on: { click: refresh } }, ['Cancel'])
-      ]));
     }
     return box;
   }
