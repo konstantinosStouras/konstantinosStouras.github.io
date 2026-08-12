@@ -101,6 +101,58 @@
   var msgEl;
   function toast(t) { if (!msgEl) { msgEl = el('div', { class: 'aa-msg' }); document.body.appendChild(msgEl); } msgEl.textContent = t; msgEl.classList.add('show'); setTimeout(function () { msgEl.classList.remove('show'); }, 1900); }
 
+  /* ---- 🧪 Test round: rehearse the participant flow, saving NOTHING ----
+     Seeds the sandbox namespace (see ARENA_PREVIEW in arena-store.js) with the
+     current configuration + the session being rehearsed, then opens the
+     participant app at ?preview=1&key=… in a new tab. The sandbox runs on the
+     LOCAL backend in its own localStorage namespace, so Firebase is never
+     touched: no participant doc, no responses, no events, nothing to clean up.
+     Mirrors the ideasearchlab admin's 🧪 Test round button.
+     `session` = the session card's session, or null to rehearse the default
+     (code-less) configuration with the currently-saved settings. */
+  var TEST_ROUND_HINT = 'Play this session’s whole participant flow in a private sandbox: '
+    + 'the intake is pre-filled with random test data and nothing is saved '
+    + '— no participant record, no responses, no events.';
+  function launchTestRound(session) {
+    var P = window.ARENA_PREVIEW;
+    if (!P || !P.seed) { toast('Test round is unavailable — please reload the page.'); return; }
+    var pinned = session && session.taskSetId;
+    var loadSet = (pinned && Store.loadTaskSet) ? Store.loadTaskSet(pinned) : Store.loadActiveTasks();
+    loadSet.catch(function () { return null; }).then(function (set) {
+      var tasks = (set && set.tasks) || [];
+      var payload = {
+        config: {
+          texts: cfg.texts, settings: cfg.settings,
+          registrationQuestions: cfg.registrationQuestions,
+          surveyQuestions: cfg.surveyQuestions
+        },
+        session: session ? Object.assign({}, session) : null,
+        taskSet: { id: (set && set.id) || 'preview-set', name: (set && set.name) || 'Test round set', tasks: tasks }
+      };
+      // localStorage holds ~5 MB, and a real task set of full model answers can
+      // exceed that. Try the whole set, then progressively fewer comparisons,
+      // so a big set degrades to a shorter rehearsal instead of an unseeded
+      // (and therefore misleading) sandbox.
+      var attempts = [tasks, tasks.slice(0, 40), tasks.slice(0, 15), tasks.slice(0, 5), []];
+      var used = null;
+      for (var i = 0; i < attempts.length; i++) {
+        payload.taskSet.tasks = attempts[i];
+        if (P.seed(payload)) { used = attempts[i].length; break; }
+      }
+      if (used === null) { toast('Could not start the test round (browser storage is full).'); return; }
+      window.open(P.launchUrl(session), '_blank');
+      if (used === 0 && tasks.length) {
+        // Even 5 comparisons of full model answers wouldn't fit: the sandbox
+        // falls back to the built-in sample comparisons.
+        toast('Test round opened with the built-in sample comparisons (this task set is too big for the sandbox). Nothing is saved.');
+      } else if (used < tasks.length) {
+        toast('Test round opened — task set trimmed to ' + used + ' comparisons to fit the sandbox. Nothing is saved.');
+      } else {
+        toast('Test round opened in a new tab. Nothing you do there is saved.');
+      }
+    });
+  }
+
   function injectStyles() {
     var css = ''
       + '#aa-root{--bg:#181818;--panel:#242424;--ink:#ececec;--muted:#9a978f;--line:#383838;--field:#2e2e2e;--fieldline:#474747;--accent:#e67e22;--accentd:#cf6f17;--qbg:#202020;position:fixed;inset:0;z-index:10000;background:var(--bg);overflow:auto;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);}'
@@ -476,12 +528,14 @@
       // Closed: review (export), reopen, or remove. Joining is disabled, so no
       // Open/Copy.
       actions.push(el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['Export data']));
+      actions.push(el('button', { class: 'aa-btn sec sm', title: TEST_ROUND_HINT, on: { click: function () { launchTestRound(s); } } }, ['🧪 Test round']));
       actions.push(el('button', { class: 'aa-btn sec sm', on: { click: function () { Store.updateSession(s.id, { status: 'open' }).then(function () { toast('Reopened.'); refresh(); }); } } }, ['Reopen']));
       actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Permanently delete session ' + s.code + '? (Participant data is kept.)')) Store.deleteSession(s.id).then(function () { toast('Deleted.'); refresh(); }); } } }, ['Delete']));
     } else {
       actions.push(el('button', { class: 'aa-btn sm', on: { click: function () { window.open(joinUrl, '_blank'); } } }, ['Open']));
       actions.push(el('button', { class: 'aa-btn sec sm', on: { click: function () { copy(joinUrl); } } }, ['Copy link']));
       actions.push(el('button', { class: 'aa-btn green sm', on: { click: exportSession } }, ['Export data']));
+      actions.push(el('button', { class: 'aa-btn sec sm', title: TEST_ROUND_HINT, on: { click: function () { launchTestRound(s); } } }, ['🧪 Test round']));
       actions.push(el('button', { class: 'aa-btn sec sm', on: { click: editMode } }, ['Edit name']));
       // "Delete" a running session = close it (participants can no longer join).
       actions.push(el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Close session ' + s.code + '? Participants will no longer be able to join.')) Store.updateSession(s.id, { status: 'closed' }).then(function () { toast('Closed.'); refresh(); }); } } }, ['Close']));
@@ -527,7 +581,15 @@
     ]));
     var err = el('div', { class: 'aa-err' });
     var btn = el('button', { class: 'aa-btn', on: { click: create } }, ['Create Session']);
-    card.appendChild(el('div', { class: 'aa-row' }, [btn]));
+    // Rehearse the settings above WITHOUT creating a session (the sandbox plays
+    // the default, code-less configuration). Nothing is saved anywhere.
+    var testBtn = el('button', {
+      class: 'aa-btn sec',
+      title: 'Play the whole participant flow with the settings above in a private sandbox. '
+        + 'No session is created and nothing is saved — the intake is pre-filled with random test data.',
+      on: { click: function () { launchTestRound(null); } }
+    }, ['🧪 Test round (nothing saved)']);
+    card.appendChild(el('div', { class: 'aa-row' }, [btn, testBtn]));
     card.appendChild(err);
     var codeBox = el('div', { style: 'margin-top:10px;' });    card.appendChild(codeBox);
     var summary = el('div', { style: 'margin-top:16px;' });    card.appendChild(summary);

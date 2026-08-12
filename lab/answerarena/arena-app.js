@@ -24,6 +24,12 @@
 
   var D = window.ARENA_DEFAULTS || {};
   var Store = window.ArenaStore;
+  // TEST ROUND: the admin's 🧪 button opens this app at ?preview=1&key=… against
+  // an isolated sandbox store (see ARENA_PREVIEW in arena-store.js). Everything
+  // here is normal play EXCEPT: a banner says nothing is saved, the intake
+  // arrives pre-filled with random test data, and a real Simulation-Platform
+  // handoff sitting in this browser is ignored.
+  var isPreview = !!(window.ARENA_PREVIEW && window.ARENA_PREVIEW.on);
   var cfg = mergeCfg({});                                // effective config (defaults + saved)
   var S = { phase: 'boot', user: null, p: null, tasks: [], order: [], flips: [], idx: 0, choice: null, session: null, condition: null, shownAt: 0, draft: null, spent: 0, showCost: false, costEl: null };
 
@@ -221,7 +227,58 @@
   }
 
   /* ===================== REGISTRATION / LOGIN ===================== */
-  function buildField(q) {
+  /* ---- TEST-ROUND random intake data ----------------------------------
+     A test round is for rehearsing the flow, not for retyping demographics,
+     so in preview every intake field arrives filled in with a random
+     plausible answer and the consents ticked (the tester can still change
+     anything, then press Start). Preview-only — nothing is saved there.
+     The ideasearchlab sandbox does the same via
+     `randomRegistrationAnswers` in _ideasearchlab-src/src/utils/testData.js
+     — keep the two in sync. */
+  var TEST_FIRST = ['Alex', 'Sam', 'Robin', 'Jamie', 'Casey', 'Riley', 'Jordan', 'Morgan', 'Avery', 'Quinn'];
+  var TEST_LAST = ['Taylor', 'Walsh', 'Byrne', 'Okoye', 'Novak', 'Costa', 'Meyer', 'Haddad', 'Lindqvist', 'Moreau'];
+  var TEST_WORDS = ['Pilot', 'Trial', 'Sandbox', 'Rehearsal', 'Dry run', 'Check'];
+  function pickOne(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function intBetween(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+  function previewAnswers(qs) {
+    var first = pickOne(TEST_FIRST), last = pickOne(TEST_LAST);
+    var person = {
+      name: first + ' ' + last,
+      email: (first + '.' + last).toLowerCase() + '+test@example.com',
+      studentId: String(intBetween(10000000, 99999999))
+    };
+    var out = {};
+    (qs || []).forEach(function (q) {
+      var label = String(q.label || ''), id = String(q.id || '');
+      if (q.type === 'checkbox') { out[q.id] = 'Yes'; return; }         // consents ticked
+      if (q.type === 'select' || q.type === 'radio') {
+        var opts = (q.options || []).filter(Boolean);
+        if (opts.length) out[q.id] = pickOne(opts);
+        return;
+      }
+      if (q.type === 'country') {
+        var cs = (window.ARENA_COUNTRIES || []).filter(Boolean);
+        if (cs.length) out[q.id] = pickOne(cs);
+        return;
+      }
+      if (q.type === 'number') {
+        var lo = q.min != null ? Number(q.min) : 0;
+        var hi = q.max != null ? Number(q.max) : Math.max(lo + 10, 10);
+        out[q.id] = String(intBetween(lo, Math.max(lo, hi)));
+        return;
+      }
+      // Free text: answer what the field is actually asking for.
+      if (/student\s*id|participant\s*id/i.test(label) || /studentid|participantid/i.test(id)) out[q.id] = person.studentId;
+      else if (/e-?mail/i.test(label) || /email/i.test(id)) out[q.id] = person.email;
+      else if (/name/i.test(label) || /name/i.test(id)) out[q.id] = person.name;
+      else if (/^age\b/i.test(label)) out[q.id] = String(intBetween(18, 45));
+      else out[q.id] = pickOne(TEST_WORDS) + ' answer';
+    });
+    return out;
+  }
+
+  // `preset` (test rounds only) pre-fills the rendered control with a value.
+  function buildField(q, preset) {
     var field = el('div', { class: 'a-field' });
     var isCheck = q.type === 'checkbox';
     // A consent-style checkbox carries its (often long) label next to the box,
@@ -248,6 +305,18 @@
       input = el('input', attrs);
     }
     field.appendChild(input);
+    // Apply a test-round preset to whichever control was rendered.
+    if (preset != null && preset !== '') {
+      if (q.type === 'radio') {
+        var r = input.querySelector('input[value="' + String(preset).replace(/"/g, '\\"') + '"]');
+        if (r) r.checked = true;
+      } else if (isCheck) {
+        var box = input.querySelector('input');
+        if (box) box.checked = true;
+      } else {
+        input.value = preset;
+      }
+    }
     return { q: q, node: input, read: function () {
       if (q.type === 'radio') { var s = input.querySelector('input:checked'); return s ? s.value : ''; }
       if (isCheck) { var cb = input.querySelector('input'); return cb && cb.checked ? 'Yes' : ''; }
@@ -261,6 +330,9 @@
   // Consent checkboxes are carried as ticked too (the platform's terms cover
   // them — per the study owner), stamped consentVia on the participant doc.
   function simpHandoff() {
+    // A test round rehearses the standalone flow with its own random data, so a
+    // real platform launch still in this browser must not answer its intake.
+    if (isPreview) return null;
     try {
       var h = JSON.parse(localStorage.getItem('simp:handoff:v1') || 'null');
       if (!h || h.sim !== 'answerarena' || !h.profile) return null;
@@ -309,7 +381,9 @@
     var shown = qs.filter(function (q) { return !(q.id in pre); });
     var carriedConsent = qs.some(function (q) { return q.type === 'checkbox' && (q.id in pre); });
     if (!shown.length) { finishRegister(pre, qs, null, carriedConsent); return; }   // fully covered → silent
-    var fields = shown.map(function (q) { var f = buildField(q); form.appendChild(f.node.closest ? f.node.parentNode : f.node); return f; });
+    // Test round: hand every visible field a random plausible answer.
+    var seeded = isPreview ? previewAnswers(shown) : {};
+    var fields = shown.map(function (q) { var f = buildField(q, seeded[q.id]); form.appendChild(f.node.closest ? f.node.parentNode : f.node); return f; });
     var err = el('div', { class: 'a-err' });
     var submit = el('button', { class: 'a-btn', on: { click: doRegister } }, ['Start']);
     form.appendChild(err);
@@ -889,8 +963,18 @@
   }
 
   /* ============================ BOOT ============================= */
+  // A constant, unmissable reminder that this tab is a throwaway sandbox
+  // (mirrors the ideasearchlab PreviewRibbon).
+  function showPreviewRibbon() {
+    if (!isPreview || document.getElementById('a-preview-ribbon')) return;
+    document.body.appendChild(el('div', { id: 'a-preview-ribbon', class: 'a-ribbon', html:
+      '<span aria-hidden="true">🧪 </span><b>Test mode</b> — this is a private sandbox. '
+      + 'Nothing you do here is saved, and the intake was filled with random test data.' }));
+  }
+
   function boot() {
     if (!Store) { setScreen(overlayWrap(card('Setup needed', [el('p', { text: 'arena-store.js failed to load.' })]))); return; }
+    showPreviewRibbon();
     // Save the in-progress answer if the participant leaves or closes the tab.
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushDraftNow(); });
     window.addEventListener('pagehide', flushDraftNow);

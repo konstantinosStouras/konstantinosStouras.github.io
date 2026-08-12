@@ -7,6 +7,8 @@ import { useSession } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'
 import { getRegistration, COUNTRIES } from '../data/formDefaults'
 import { markTiming, readTiming, clearTiming } from '../utils/timing'
+import { isPreview } from '../utils/preview'
+import { randomRegistrationAnswers } from '../utils/testData'
 import RichText from '../components/RichText'
 import HeaderControls from '../components/HeaderControls'
 import styles from './Registration.module.css'
@@ -37,6 +39,20 @@ export default function Registration() {
   // Timing: stamp when the Registration page first opened (client-side, since
   // the participant doc doesn't exist until submit).
   useEffect(() => { markTiming(sessionId, 'registrationOpenedAt') }, [sessionId])
+
+  // TEST ROUND: arrive with random demographics filled in and the consents
+  // ticked, so rehearsing the flow doesn't mean retyping the form every time.
+  // Preview-only (nothing is saved there), and it never overwrites something
+  // the tester already typed.
+  const previewFilled = useRef(false)
+  useEffect(() => {
+    if (!isPreview() || previewFilled.current || fields.length === 0) return
+    previewFilled.current = true
+    const random = randomRegistrationAnswers(fields, COUNTRIES)
+    setForm(prev => ({ ...random, ...prev }))
+    setConsents(Object.fromEntries(consentStatements.map((_, i) => [i, true])))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields.length, consentStatements.length])
 
   // A student arriving from stouras.com/simulation already registered there —
   // fill this form from the handoff and, when every required field is

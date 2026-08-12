@@ -68,6 +68,8 @@ Served (`lab/answerarena/`):
 | `arena-app.js` | Participant phase machine, comparison UI, 2x2 assignment, session join, resume. |
 | `admin.js` | Admin panel (`?admin`): Sessions, Tasks (Excel upload), Content, Registration, Survey, 2x2 & Settings, Participants + Excel export. |
 | `CLAUDE.md` | This file. |
+| `tools/admin-guard.mjs` | Offline test: a deleted participant can never reach an export. |
+| `tools/preview-guard.mjs` | Offline test: the 🧪 Test round sandbox is isolated + pre-filled. |
 
 Backend (`_lab-arena-firebase/`, underscore-prefixed so it is not published):
 `firestore.rules`, `firestore.indexes.json`, `firebase.json`, `.firebaserc`,
@@ -230,8 +232,8 @@ no status picker. The right column has two cards: **Active sessions** and a
 separate **Closed sessions** card (shown only when there are closed ones). Each
 card shows a session's code + status, participant count + **2x2 conditions**
 (right) and created date (left). A running session offers Open / Copy link /
-Export data / Edit name / **Close**; a closed session (no joins) offers Export
-data / **Reopen** / permanently **Delete**. Per-session
+Export data / **🧪 Test round** / Edit name / **Close**; a closed session (no joins)
+offers Export data / **🧪 Test round** / **Reopen** / permanently **Delete**. Per-session
 participant counts include anyone who **played** it - started (`playedSessions`),
 is on it (`sessionId`), or completed it (`completedSessions`).
 
@@ -301,6 +303,57 @@ continuously as a `draftResponse` on the participant doc (debounced on change,
 and flushed on `visibilitychange`/`pagehide`). The export adds the draft as a
 Responses row with `submitted = no (draft)`.
 
+## 6b. Test round (🧪) — rehearse the flow, saving NOTHING
+
+Every session card carries a **🧪 Test round** button (and the "Create a
+session" card has **🧪 Test round (nothing saved)**, which rehearses the
+currently-saved settings without creating a session). It opens the participant
+app in a new tab at **`?preview=1&key=stouras[&s=CODE]`** and the whole flow —
+welcome, tour, intake, training, comparisons, survey, thank-you — runs end to
+end while writing **nothing**: no participant doc, no responses, no events, no
+session count, nothing to clean up afterwards. Mirrors the ideasearchlab admin's
+Test round button and sustainable-supply-chains' `?preview=1` sandbox.
+
+How the isolation works (`ARENA_PREVIEW` in **arena-store.js**):
+
+- `previewOn` is resolved once from the URL (`preview=1` **and** `key=stouras`,
+  so a stray `?preview=1` is not a sandbox). When it is on, the store is
+  **always** `LocalBackend` — even when `ARENA_FB_READY` is true — so the
+  Firebase SDK is not even fetched.
+- `LocalBackend(prefix)` namespaces its whole store; the sandbox uses
+  `arena:preview:` (`…:db` / `…:uid`), so the normal offline data (`arena:db`,
+  `arena:uid`) is untouched and a rehearsal can never be mistaken for real
+  local-mode data.
+- The admin's `launchTestRound(session)` (admin.js) writes a **seed** to
+  `arena:preview:seed` first — the effective `cfg` (texts/settings/registration/
+  survey questions), the session being rehearsed (forced `status:'open'`) and its
+  task set (the session's pinned `taskSetId` when the backend exposes
+  `loadTaskSet`, else the active set) — then opens `ARENA_PREVIEW.launchUrl()`.
+  `seedFrom()` applies it once per launch, keyed on the seed's `ts`: a **reload
+  keeps** the sandbox's progress, a **new launch resets** it. A task set too big
+  for localStorage (~5 MB; real sets hold full model answers) is retried
+  progressively trimmed (40 → 15 → 5 comparisons) and the toast says so, rather
+  than leaving an unseeded sandbox.
+- **The intake arrives pre-filled with random test data** — `previewAnswers(qs)`
+  in arena-app.js gives every question a random plausible answer (a random
+  option for select/radio/country, a value inside `min`/`max` for numbers,
+  digits for a Student-ID field, a test address for e-mail, a name for a name
+  field) and **ticks the consents**; `buildField(q, preset)` applies it to
+  whichever control was rendered. The tester can still edit anything before
+  pressing Start. The ideasearchlab sandbox does the same via
+  `randomRegistrationAnswers` (`_ideasearchlab-src/src/utils/testData.js`) —
+  keep the two in sync.
+- A constant `.a-ribbon` banner ("Test mode — … nothing you do here is saved")
+  is appended on boot, and a **real Simulation-Platform handoff is ignored**
+  (`simpHandoff()` returns null in preview, and `SIMP_EXPECT` is switched off in
+  index.html for `?preview=1`), so a launch still sitting in this browser can't
+  silently answer the sandbox's intake.
+
+Offline test: `node lab/answerarena/tools/preview-guard.mjs` (Playwright, no
+network — asserts the local backend + namespace isolation, the untouched
+`arena:db`, the ribbon, a fully pre-filled intake, and that the flag is inert
+without the key).
+
 ## 7. Gotchas to carry forward
 
 - **The registration form mirrors the ideasearchlab admin's registration form**
@@ -344,7 +397,9 @@ Responses row with `submitted = no (draft)`.
   (`auth/operation-not-allowed`) and the intake shows "Anonymous play is not
   enabled yet." **Email/Password** must stay enabled for the admin login.
 - `arena-config.js` placeholders => local mode; real config => Firebase. The
-  switch is automatic (`ARENA_FB_READY`).
+  switch is automatic (`ARENA_FB_READY`) — **except in a test round**
+  (`?preview=1&key=…`), which always uses the local backend in its own
+  namespace so a rehearsal cannot write to the live project.
 - Firestore **rejects nested arrays**; the response docs avoid them. If you add
   array-of-array data, JSON-stringify it.
 - Sessions are public-read on purpose (pre-auth code check). Don't put anything
