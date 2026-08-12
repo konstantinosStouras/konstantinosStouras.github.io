@@ -22,6 +22,7 @@
   var LS_SYNCED  = 'simp:profile-synced:v1'; // updatedAt of the last profile mirrored to Firestore
   var LS_COMPLETED = 'simp:completed:v1';  // {simKey:{ts,session}} — written by each sim's done screen (via prefill.js's simpMarkCompleted)
   var LS_RECOVERY = 'simp:recovery-synced:v1'; // updatedAt of the last profile mirrored to the e-mail recovery doc
+  var LS_REVOKED = 'simp:revoked:v1';      // {simKey: <ms>} tombstones seen from the roster — see revokeCompletion
 
   /* ---------- catalog ---------- */
   function catalog() { return window.SIMP_CATALOG || []; }
@@ -60,17 +61,22 @@
      registration up by e-mail (Firebase mode only). Resolves to the profile
      (with any play-once completion markers restored into this browser) or
      null when no registration exists for that e-mail. */
-  function recoverByEmail(email) {
+  function recoverByEmail(email, studentId) {
     if (!CONFIGURED) return Promise.resolve(null);
     return fb().then(function (F) { return F.getRecovery(email); }).then(function (rec) {
       if (!rec) return null;
-      if (rec.completed) {
-        try {
-          var m = completed();
-          Object.keys(rec.completed).forEach(function (k) { if (!m[k]) m[k] = rec.completed[k]; });
-          localStorage.setItem(LS_COMPLETED, JSON.stringify(m));
-        } catch (e) {}
+      /* When a student ID is supplied it must ALSO match — logging back in
+         takes both the e-mail and the university ID used at registration, so
+         knowing a classmate's e-mail alone is not enough to assume their
+         identity. Compared trimmed + case-insensitively. */
+      if (studentId != null && String(studentId).trim() !== '') {
+        var a = String(studentId).trim().toLowerCase();
+        var b = String(rec.studentId || '').trim().toLowerCase();
+        if (a !== b) return null;
       }
+      /* Restores completions AND honours revocation tombstones, so a student
+         cannot dodge a revoked completion by restoring on another browser. */
+      if (rec.completed) applyRosterCompletions(rec);
       var p = {};
       Object.keys(rec).forEach(function (k) { if (k !== 'completed' && k !== 'emailKey') p[k] = rec[k]; });
       return p;
@@ -84,13 +90,80 @@
     try { return JSON.parse(localStorage.getItem(LS_COMPLETED) || '{}'); }
     catch (e) { return {}; }
   }
+  /* Revocation tombstones seen from the roster: {simKey: <ms revoked at>}.
+     A completion is REVOKED when the instructor removes it — either by hand
+     or because the reconciliation found the student is no longer a completed
+     participant in the simulation's own backend (e.g. deleted from Answer
+     Arena so they may retake it). The tombstone lives INSIDE the roster's
+     already-allowed `completed` map ({revoked:1, rts}), so no Firestore rules
+     change is needed; this local copy stops the browser re-pushing a marker
+     the instructor has just removed. */
+  function revokedLocal() {
+    try { return JSON.parse(localStorage.getItem(LS_REVOKED) || '{}'); }
+    catch (e) { return {}; }
+  }
+  function isTombstone(e) { return !!(e && e.revoked); }
+  /* A tombstone carries `rts` = the INSTRUCTOR's clock, which must never be
+     compared with a marker's `ts` = the STUDENT's clock (a laptop minutes
+     fast would defeat every revocation; minutes slow would erase a genuine
+     retake). So `rts` is used ONLY as an identity — "is this a tombstone I
+     have not seen before?" — and the moment one is first seen we stamp
+     `seenAt` from THIS browser's clock. Every later decision compares
+     marker.ts against seenAt: one clock, monotonic within the browser. */
+  function tombRts(rv, k) { var e = rv[k]; return typeof e === 'number' ? e : (e ? Number(e.rts) || 0 : 0); }
+  function tombSeen(rv, k) { var e = rv[k]; return typeof e === 'number' ? e : (e ? Number(e.seenAt) || 0 : 0); }
+  /* The markers this browser may legitimately push up: a completion that was
+     revoked at or after it happened is NOT pushed (it would resurrect the ✓
+     the instructor just removed). A genuine RETAKE writes a newer marker,
+     which beats the tombstone and syncs normally. */
+  function pushableMarkers() {
+    var m = completed(), rv = revokedLocal(), out = {};
+    Object.keys(m).forEach(function (k) {
+      var ts = Number(m[k] && m[k].ts) || 0;
+      if (ts <= tombSeen(rv, k)) return;   // superseded by a revocation we have seen
+      out[k] = m[k];
+    });
+    return out;
+  }
+  /* Apply a roster doc's completion record to this browser: pull down
+     completions verified centrally, and honour tombstones by forgetting a
+     revoked completion (which unlocks the card so the student can retake).
+     Returns true when the local markers changed. */
+  function applyRosterCompletions(data) {
+    var rc = (data && data.completed) || null;
+    if (!rc) return false;
+    var changed = false;
+    try {
+      var m = completed(), rv = revokedLocal();
+      Object.keys(rc).forEach(function (k) {
+        var e = rc[k] || {};
+        if (isTombstone(e)) {
+          var rts = Number(e.rts) || 0;
+          if (rts > tombRts(rv, k)) { rv[k] = { rts: rts, seenAt: Date.now() }; changed = true; }
+          /* Forget only a completion recorded BEFORE we saw this revocation —
+             a retake finished afterwards has a newer ts and must survive.
+             Both timestamps come from this browser's clock (see tombSeen). */
+          if (m[k] && (Number(m[k].ts) || 0) <= tombSeen(rv, k)) { delete m[k]; changed = true; }
+          return;
+        }
+        if (!m[k]) { m[k] = { ts: Number(e.ts) || 0, session: e.session || null }; changed = true; }
+      });
+      if (changed) {
+        /* Tombstones FIRST: if the second write fails (quota), the guard that
+           stops a revoked marker being re-pushed is already in place. */
+        localStorage.setItem(LS_REVOKED, JSON.stringify(rv));
+        localStorage.setItem(LS_COMPLETED, JSON.stringify(m));
+      }
+    } catch (e) { return false; }
+    return changed;
+  }
   /* Mirror the local completion markers onto the student's roster doc so the
      admin can track who answered which simulation (Firebase mode; a silent
      no-op otherwise). The student page calls this at load and whenever a sim
      tab stamps a completion (the storage event). Non-fatal by design. */
   function syncCompleted() {
     if (!CONFIGURED) return Promise.resolve();
-    var m = completed();
+    var m = pushableMarkers();
     if (!Object.keys(m).length) return Promise.resolve();
     return fb().then(function (F) { return F.saveCompleted(m); }).catch(function () {});
   }
@@ -103,6 +176,7 @@
     clearProfile();
     try { localStorage.removeItem(LS_HANDOFF); } catch (e) {}
     try { localStorage.removeItem(LS_COMPLETED); } catch (e) {}   // next student starts fresh
+    try { localStorage.removeItem(LS_REVOKED); } catch (e) {}
     if (!CONFIGURED) return Promise.resolve();
     return fb().then(function (F) { return F.adminSignOut(); }).catch(function () {});
   }
@@ -319,21 +393,32 @@
            switch (a replay can't be earned by changing browsers). */
         saveCompleted: function (m) {
           return ensureAnon().then(function (u) {
-            var clean = {};
+            var clean = {}, patch = {};
             Object.keys(m || {}).forEach(function (k) {
+              /* src names the LAST writer. Written on every push through a
+                 dotted path, which REPLACES the whole nested entry — a deep
+                 merge would fuse {ts,session} into a tombstone
+                 ({revoked:1,rts,ts,session}), leaving the row reading as
+                 revoked forever even after a genuine retake. */
               var v = m[k] || {};
-              clean[k] = { ts: Number(v.ts) || 0, session: v.session || null };
+              clean[k] = { ts: Number(v.ts) || 0, session: v.session || null, src: 'client' };
+              patch['completed.' + k] = clean[k];
             });
-            /* uid included so the write also passes the CREATE rule when the
-               profile sync hasn't made the doc yet (a race at page load). */
-            var main = D.setDoc(D.doc(fs, PATHS.students + '/' + u.uid),
-              { uid: u.uid, completed: clean }, { merge: true });
+            if (!Object.keys(patch).length) return;
+            var ref = D.doc(fs, PATHS.students + '/' + u.uid);
+            /* uid included in the fallback so the write also passes the CREATE
+               rule when the profile sync hasn't made the doc yet. */
+            var main = D.updateDoc(ref, patch).catch(function () {
+              return D.setDoc(ref, { uid: u.uid, completed: clean }, { merge: true });
+            });
             var p = getProfile();
             if (!p || !p.email) return main;
             return main.then(function () {
               return emailKeyOf(p.email).then(function (key) {
-                return D.setDoc(D.doc(fs, PATHS.recovery + '/' + key),
-                  { completed: clean }, { merge: true });
+                var rref = D.doc(fs, PATHS.recovery + '/' + key);
+                return D.updateDoc(rref, patch).catch(function () {
+                  return D.setDoc(rref, { completed: clean }, { merge: true });
+                });
               }).catch(function () {});
             });
           });
@@ -348,6 +433,17 @@
               Object.keys(p).forEach(function (k) { if (p[k] != null && p[k] !== '') doc[k] = p[k]; });
               return D.setDoc(D.doc(fs, PATHS.recovery + '/' + key), doc, { merge: true });
             });
+          });
+        },
+        /* One fresh read of the whole roster (admin-only per the rules). The
+           reconciliation decides from THIS, never from the live-snapshot
+           cache, whose streaming channel can be stale on the very networks
+           the long-polling fallback exists for. */
+        listStudents: function () {
+          return D.getDocs(D.collection(fs, PATHS.students)).then(function (qs) {
+            var out = [];
+            qs.forEach(function (d) { out.push(d.data()); });
+            return out;
           });
         },
         /* Admin-side backfill: write the e-mail recovery doc for every roster
@@ -381,20 +477,60 @@
            URL, another browser). The student's page pulls it down live via
            its own-doc watch. */
         stampCompleted: function (uids, simKey, mark) {
-          return Promise.all((uids || []).map(function (uid) {
-            var patch = { completed: {} };
-            patch.completed[simKey] = { ts: Number(mark.ts) || 0, session: mark.session || null };
-            return D.setDoc(D.doc(fs, PATHS.students + '/' + uid), patch, { merge: true });
-          }));
-        },
-        /* Admin-only: remove a completion stamp (the manual override's other
-           direction — e.g. an accidental click). */
-        unstampCompleted: function (uids, simKey) {
+          /* Dotted path REPLACES the nested entry. A deep merge would fuse the
+             new mark into an existing tombstone ({revoked:1,rts}) and the row
+             would still read as revoked. src records who stamped it ('arena'
+             = the reconciliation, 'manual' = the instructor by hand) so the
+             reconciliation can never undo a manual override. */
+          var entry = { ts: Number(mark.ts) || 0, session: mark.session || null };
+          if (mark.src) entry.src = mark.src;
           return Promise.all((uids || []).map(function (uid) {
             var patch = {};
-            patch['completed.' + simKey] = D.deleteField();
-            return D.updateDoc(D.doc(fs, PATHS.students + '/' + uid), patch).catch(function () {});
+            patch['completed.' + simKey] = entry;
+            return D.updateDoc(D.doc(fs, PATHS.students + '/' + uid), patch)
+              .catch(function () {
+                var p = { completed: {} }; p.completed[simKey] = entry;
+                return D.setDoc(D.doc(fs, PATHS.students + '/' + uid), p, { merge: true });
+              });
           }));
+        },
+        /* Admin-only: REVOKE a completion — the student no longer counts as
+           having done it and may retake it. Writes a TOMBSTONE rather than
+           deleting the field, because the student's own browser holds a
+           play-once marker in localStorage: a bare delete cannot tell that
+           browser to forget it (and it would be re-pushed on the next sync,
+           resurrecting the ✓). The tombstone lives inside the existing
+           `completed` map, so the deployed Firestore rules already allow it. */
+        revokeCompletion: function (rows, simKey) {
+          var tomb = { revoked: 1, rts: Date.now() };
+          var patch = {};
+          patch['completed.' + simKey] = tomb;
+          var list = (rows || []).map(function (r) {
+            return (typeof r === 'string') ? { uid: r } : (r || {});
+          }).filter(function (r) { return r.uid; });
+          /* The completion map is replicated on the e-mail RECOVERY doc too
+             (that is what a student restores when they log in on another
+             browser), so the tombstone must be written to BOTH — otherwise a
+             revoked completion comes back the moment they log in elsewhere.
+             allSettled: one failed row must not hide the rest. */
+          var jobs = [];
+          list.forEach(function (r) {
+            jobs.push(D.updateDoc(D.doc(fs, PATHS.students + '/' + r.uid), patch));
+            if (r.email) {
+              jobs.push(emailKeyOf(r.email).then(function (key) {
+                var rref = D.doc(fs, PATHS.recovery + '/' + key);
+                return D.updateDoc(rref, patch).catch(function () {
+                  var p = { completed: {} }; p.completed[simKey] = tomb;
+                  return D.setDoc(rref, p, { merge: true });
+                });
+              }));
+            }
+          });
+          return Promise.allSettled(jobs).then(function (rs) {
+            var bad = rs.filter(function (x) { return x.status === 'rejected'; });
+            if (bad.length === rs.length && rs.length) throw (bad[0].reason || new Error('revoke failed'));
+            return { failed: bad.length };
+          });
         },
         /* Approve / revoke a student (admin-only per the rules): only approved
            students can launch the active simulations — the owner's guard
@@ -421,28 +557,34 @@
               last = approved;
               cb(approved, exists);
             };
-            var un = D.onSnapshot(ref, function (snap) {
-              /* The roster doc is the VERIFIED record: merge any centrally
-                 stamped completions (e.g. the admin's "Verify from Answer
-                 Arena") down into this browser's play-once markers, so the
-                 student's cards read correctly wherever they log in. */
-              if (snap.exists() && snap.data().completed) {
-                try {
-                  var rc = snap.data().completed, m = completed(), changed = false;
-                  Object.keys(rc).forEach(function (k) { if (!m[k]) { m[k] = rc[k]; changed = true; } });
-                  if (changed) {
-                    localStorage.setItem(LS_COMPLETED, JSON.stringify(m));
-                    last = undefined;   // force the cb so the page re-renders its cards
-                  }
-                } catch (e) {}
-              }
-              emit(snap.exists() ? !!snap.data().approved : false, snap.exists());
-            }, function () { emit(false, false); });
+            /* The roster doc is the VERIFIED record: pull centrally stamped
+               completions down into this browser's play-once markers (so the
+               cards read correctly wherever the student logs in) and honour
+               revocations (so a completion the instructor removed unlocks the
+               card for a retake). */
+            var firstApplied = false;
+            var apply = function (snap) {
+              var data = snap.exists() ? snap.data() : null;
+              if (data && applyRosterCompletions(data)) last = undefined;   // force a re-render
+              emit(!!(data && data.approved), !!data);
+              /* Only push local markers up AFTER the first roster snapshot has
+                 been applied. Pushing at page load would race the download and
+                 could re-assert a completion the instructor has just revoked
+                 (the push is immediate; the snapshot is a round-trip away). */
+              if (!firstApplied) { firstApplied = true; syncCompleted(); }
+            };
+            var un = D.onSnapshot(ref, apply, function () { emit(false, false); });
+            /* Poll fallback for networks whose streaming channel is dead.
+               Fast while the student is waiting to be approved, slow (and
+               visible-tab only) afterwards — but NEVER stopped, because a
+               completion can be verified or revoked at any time and must
+               still reach this page. */
+            var tick = 0;
             var timer = (D.getDoc ? setInterval(function () {
-              if (last === true) { clearInterval(timer); timer = null; return; }
-              D.getDoc(ref).then(function (snap) {
-                emit(snap.exists() ? !!snap.data().approved : false, snap.exists());
-              }).catch(function () {});
+              if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+              tick++;
+              if (last === true && (tick % 6)) return;   // approved → ~every 30 s
+              D.getDoc(ref).then(apply).catch(function () {});
             }, 5000) : null);
             return function () { un(); if (timer) clearInterval(timer); };
           });

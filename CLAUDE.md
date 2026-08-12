@@ -2375,9 +2375,28 @@ The admin's **"⟲ Verify from Answer Arena"** button (`verifyFromArena` in
 admin/admin.js; arena-config.js loaded on the admin page) is the
 ground-truth reconciliation for markers the client side missed: it signs
 into the ARENA project with the locker credentials, reads participants
-(+ sessions for id→code), joins `participantId` ↔ roster studentId, and
-`stampCompleted`s (admin write) every match — add-only, whole roster at
-once; its outcome (stamped count + unmatched arena IDs, i.e. student-ID
+(+ sessions for id→code) and a FRESH roster read (never the snapshot
+cache), joins `participantId` ↔ roster studentId, and `stampCompleted`s
+(admin write) every match — and, TWO-WAY, **revokes** a ✓ whose student is
+no longer a completed arena participant (deleted there so they may retake
+it; arena's `deleteParticipant` hard-deletes the doc + its subcollections,
+so they simply vanish). A revocation is a TOMBSTONE inside the
+already-allowed `completed` map (`{revoked:1,rts}` — no rules republish),
+written to the roster doc AND the e-mail recovery replica (else logging in
+elsewhere resurrects it); the student's browser stamps `seenAt` from its
+OWN clock on first sight and compares markers against that, so instructor/
+student clock skew can neither defeat a revocation nor destroy a retake
+(a retake's newer marker survives). Every writer replaces its entry via a
+dotted path and records `src` (`arena`/`manual`/`client`) — a deep merge
+would fuse a marker into a tombstone and the row would read revoked
+forever. Guards: never auto-revoke a `manual` mark; refuse when arena
+returns no participants or no completed participants; refuse a mass
+removal while student-ID joins are failing; always confirm, listing names;
+`allSettled` so one failed write can't hide the rest; the button is
+disabled while Answer Arena is inactive (its column would be invisible).
+The student page pushes local markers only AFTER its first roster snapshot
+(pushing at load raced a fresh revocation).
+Its outcome its outcome (stamped count + unmatched arena IDs, i.e. student-ID
 typos) prints in `#verify-note` beside the button. For those stragglers
 the roster's ✓/— cells are CLICKABLE (confirm-guarded manual override —
 stamp or `unstampCompleted` via deleteField; flows to the student live).
@@ -2397,9 +2416,11 @@ cross-origin newsvendor's copy chips. Students **log out** from the header (clea
 browser AND signs out the anonymous uid, so on a shared machine the next
 registration gets its own roster doc instead of overwriting); the roster view
 collapses duplicate re-registrations by student ID, newest kept, and the
-admin panel has its own Sign out. **Returning students:** same browser =
+admin panel has its own Sign out. **Returning students** (Log in / Register choice on entry): same browser =
 auto-signed-in (localStorage + persisted anon auth); a NEW device/cleared
-browser restores the registration by e-mail from
+browser presses **Log in** and gives the university student ID + e-mail —
+BOTH must match (`recoverByEmail(email, studentId)`) — restoring the
+registration from
 `simPlatformRecovery/{sha256(email)}` (mirrored on every profile sync +
 completion sync; get-by-exact-key only, list denied, `approved` NOT in the
 field set so approval never rides through recovery — the instructor

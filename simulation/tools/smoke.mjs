@@ -154,7 +154,8 @@ try {
   // ---- 1. Student page: one-time registration --------------------------
   await page.goto(BASE + '/simulation/');
   ok(await page.isVisible('#s-register'), 'first visit shows the registration form');
-  ok(await page.isHidden('#recover-box'), 'the e-mail recovery box stays hidden in LOCAL mode (no central roster to recover from)');
+  ok(await page.isHidden('#s-welcome'), 'LOCAL mode skips the Log in / Register choice (no central roster to log in against)');
+  ok(await page.isHidden('#recover-box'), 'the "log in instead" nudge stays hidden in LOCAL mode');
   await page.fill('#f-name', 'Test Student');
   await page.fill('#f-email', 'test@example.com');
   await page.fill('#f-sid', 'S123');
