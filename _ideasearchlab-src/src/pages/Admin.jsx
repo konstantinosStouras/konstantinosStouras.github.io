@@ -14,8 +14,9 @@ import { DEFAULT_REGISTRATION, DEFAULT_SURVEY_QUESTIONS } from '../data/formDefa
 import RichTextEditor from '../components/RichTextEditor'
 import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
 import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
-import { exportSessionWorkbook } from '../utils/sessionExport'
+import { exportSessionWorkbook, conditionOf } from '../utils/sessionExport'
 import { joinLinkFor } from '../utils/joinLink'
+import { getPhaseSequence } from '../utils/phaseSequence'
 import {
   INDIVIDUAL_TIMER_KEYS, GROUP_TIMER_KEYS,
   individualTimers, groupTimers, formatDuration, migratePhaseTimers,
@@ -23,6 +24,11 @@ import {
 import styles from './Admin.module.css'
 
 const ADMIN_EMAIL = 'admin@admin.com'
+
+// The two WORKING phases, as named on a session card. Keyed by the status
+// getPhaseSequence emits, so the card's phase line is built from the real
+// sequence (waiting/survey/done carry no label and drop out).
+const PHASE_META_LABEL = { individual: 'Individual', group: 'Group' }
 
 // The per-stage countdowns the "Phase Timers" section manages.
 const PHASE_TIMER_FIELDS = [...INDIVIDUAL_TIMER_KEYS, ...GROUP_TIMER_KEYS]
@@ -1178,7 +1184,16 @@ function SessionCard({ session, participantCount, onOpen, onClose, onDelete, joi
   }
 
   const pc = session.phaseConfig || {}
-  const phases = [pc.individualPhaseActive && 'Individual', pc.groupPhaseActive && 'Group'].filter(Boolean).join(' + ')
+  // Name the working phases IN THE ORDER participants move through them, read
+  // from the very sequence the flow itself walks (getPhaseSequence honours
+  // phaseOrder), so the card can never disagree with what the session does.
+  // The old "Individual + Group" left the order unsaid — and read exactly the
+  // same for a group_first session, whose real order is the reverse.
+  const phases = getPhaseSequence(pc).map(s => PHASE_META_LABEL[s]).filter(Boolean).join(' → ')
+  // The session's AI-timing condition, from the SAME conditionOf() that stamps
+  // every Excel/CSV export and drives the Data Analytics regressions — so the
+  // card and the data can never encode a session differently.
+  const cond = conditionOf(session)
   const created = session.createdAt?.seconds
     ? new Date(session.createdAt.seconds * 1000)
     : null
@@ -1198,6 +1213,17 @@ function SessionCard({ session, participantCount, onOpen, onClose, onDelete, joi
         <div className={styles.sessionCardRight}>
           <span className={styles.participantCount}>{participantCount} participants</span>
           <span className={styles.phasesMeta}>{phases}</span>
+          {/* The session's condition encoding (None / Solo / Group / Both) —
+              which stage(s) the admin gave the AI assistant. Same encoding as
+              every Excel/CSV export, so a card can be read straight into the
+              analysis. */}
+          <span
+            className={styles.condMeta}
+            title={`Condition ${cond.placement} = ${cond.paperName} — the AI assistant is present in ${cond.aiPresentIn}. This is the encoding used in every Excel/CSV export and in the Data Analytics regressions.`}
+          >
+            <span className={`${styles.condTag} ${styles['cond_' + cond.placement]}`}>{cond.placement}</span>
+            <span className={styles.condWhere}>AI in {cond.aiPresentIn}</span>
+          </span>
         </div>
       </div>
       {session.name && <div className={styles.sessionName}>{session.name}</div>}
