@@ -14,6 +14,7 @@ import NudgeBanner from '../components/NudgeBanner'
 import HeaderControls from '../components/HeaderControls'
 import { getContent } from '../data/defaultContent'
 import { getNextPhase } from '../utils/phaseSequence'
+import { groupTimers, minutesOf } from '../utils/phaseTimers'
 import RichText from '../components/RichText'
 import { Done } from './Survey'
 import styles from './GroupPhase.module.css'
@@ -180,6 +181,9 @@ export default function GroupPhase() {
   const [subPhase, setSubPhase] = useState('ideation')
   const [votesLocked, setVotesLocked] = useState(false)
   const subPhaseInit = useRef(false)
+  // Mirrors subPhase for callbacks that must not re-fire once the stage moved
+  // (the expired ideation timer keeps ticking at 0).
+  const subPhaseRef = useRef('ideation')
 
   // Chat state
   const [messages, setMessages] = useState([])
@@ -193,11 +197,19 @@ export default function GroupPhase() {
   // "individual ideas" to show — the group ideation list becomes the primary
   // workspace instead of an empty left column.
   const individualActive = pc.individualPhaseActive !== false
-  const durationMinutes = pc.groupPhaseDuration
-    ? Math.round(pc.groupPhaseDuration / 60)
-    : 15
+  // The group phase runs in two stages, each with its own admin-allocated
+  // countdown: ideation (add ideas) then voting (pick the group's ideas).
+  const timers = groupTimers(pc)
+  const durationMinutes = minutesOf(timers.total) ?? 15
+  // Per-stage minutes for the instructions/brief copy; a stage left on manual
+  // falls back to a sensible figure so the sentence still reads properly.
+  const ideationMinutes = minutesOf(timers.first) ?? durationMinutes
+  const votingMinutes = minutesOf(timers.second) ?? 5
   const c = getContent(session).group
-  const contentVars = { minutes: durationMinutes, votes: MAX_VOTES, aiModel }
+  const contentVars = {
+    minutes: durationMinutes, ideationMinutes, votingMinutes,
+    votes: MAX_VOTES, aiModel,
+  }
 
   const isVoting = subPhase === 'voting'
   // The session status that follows the group phase ('survey' for individual-
@@ -259,7 +271,10 @@ export default function GroupPhase() {
         if (data.groupStage || data.groupStartedAt) setStarted(true)
         if (!subPhaseInit.current) {
           subPhaseInit.current = true
-          if (data.votesSubmitted || data.groupStage === 'voting') setSubPhase('voting')
+          if (data.votesSubmitted || data.groupStage === 'voting') {
+            subPhaseRef.current = 'voting'
+            setSubPhase('voting')
+          }
         }
         const status = data.status
         if (status === 'survey') navigate(`/session/${sessionId}/survey`)
@@ -401,13 +416,23 @@ export default function GroupPhase() {
   // ── Switch sub-phase and share it with the group ────
   function goToStage(stage) {
     setSubPhase(stage)
+    subPhaseRef.current = stage
     if (!sessionId || !user) return
     const updates = { groupStage: stage }
     // Timing: stamp the first move into voting so the export can split the
-    // group phase into "time adding ideas" vs "time voting".
+    // group phase into "time adding ideas" vs "time voting" — and so the
+    // voting countdown has its own anchor.
     if (stage === 'voting' && !groupVotingStartedAt) updates.groupVotingStartedAt = serverTimestamp()
     updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid), updates)
       .catch(err => console.warn('Could not save stage:', err.message))
+  }
+
+  // Ideation time is up (split timers only): move the group on to voting
+  // instead of ending the whole phase. Guarded so the expired timer's repeated
+  // ticks can't re-write the stage every second.
+  function autoAdvanceToVoting() {
+    if (subPhaseRef.current === 'voting' || votesLocked) return
+    goToStage('voting')
   }
 
   // ── Submit / lock votes ─────────────────────────────
@@ -458,6 +483,38 @@ export default function GroupPhase() {
       console.error('Auto-submit votes error:', err)
     }
   }, [votesLocked, sessionId, user, groupVotingStartedAt])
+
+  // ── Which countdown is live right now ───────────────
+  // Split sessions run two clocks: the ideation clock until the group moves on
+  // to voting, then the voting clock — which stays the live one even if a
+  // member steps back to ideation. A legacy (unsplit) session keeps its single
+  // clock across both sub-phases, expiring straight into the auto-submit as
+  // before.
+  function timerProps() {
+    const onExpireVotes = votesLocked ? undefined : autoSubmitVotes
+    if (!timers.split) {
+      return {
+        phaseStartedAt: groupStartedAt,
+        durationSeconds: timers.total,
+        onExpire: onExpireVotes,
+        onTick: handleTimerTick,
+      }
+    }
+    if (groupVotingStartedAt) {
+      return {
+        phaseStartedAt: groupVotingStartedAt,
+        durationSeconds: timers.second,
+        onExpire: onExpireVotes,
+        onTick: handleTimerTick,
+      }
+    }
+    return {
+      phaseStartedAt: groupStartedAt,
+      durationSeconds: timers.first,
+      onExpire: votesLocked ? undefined : autoAdvanceToVoting,
+      onTick: handleTimerTick,
+    }
+  }
 
   // ── Submit new group idea ───────────────────────────
   async function submitGroupIdea(e) {
@@ -788,8 +845,15 @@ export default function GroupPhase() {
       if (crossed(60)) fire('v60', '1 minute left — make sure you place your votes for the group.')
       else if (crossed(30)) fire('v30', '30 seconds left — quickly place your votes!')
     } else {
-      if (crossed(300)) fire('i300', '5 minutes left — keep generating ideas, and vote for the ones to take into the next phase.')
-      else if (crossed(120)) fire('i120', '2 minutes left — wrap up your ideas and move on to voting.')
+      // With split timers the countdown shown here is the ideation stage's own,
+      // and running out of it moves the group into voting (with its own clock).
+      if (crossed(300)) {
+        fire('i300', timers.split
+          ? '5 minutes left to add ideas — the voting stage has its own time after this.'
+          : '5 minutes left — keep generating ideas, and vote for the ones to take into the next phase.')
+      } else if (crossed(120)) {
+        fire('i120', '2 minutes left — wrap up your ideas and move on to voting.')
+      }
     }
   }
 
@@ -818,7 +882,7 @@ export default function GroupPhase() {
           <span className={styles.wordmark}>Ideation Challenge</span>
           <div className={styles.instrTimer}>
             <PhaseTimer
-              durationSeconds={pc.groupPhaseDuration}
+              durationSeconds={timers.first || timers.total}
               preview
             />
           </div>
@@ -851,12 +915,7 @@ export default function GroupPhase() {
             {memberChips}
           </div>
           <div className={styles.topRight}>
-            <PhaseTimer
-              phaseStartedAt={groupStartedAt}
-              durationSeconds={pc.groupPhaseDuration}
-              onExpire={votesLocked ? undefined : autoSubmitVotes}
-              onTick={handleTimerTick}
-            />
+            <PhaseTimer {...timerProps()} />
             <div className={styles.voteCounter}>
               <span className={styles.voteNum}>{myVoteCount}</span>
               <span className={styles.voteDen}>/ {requiredVotes}</span>
@@ -936,15 +995,13 @@ export default function GroupPhase() {
           {memberChips}
         </div>
         <div className={styles.topRight}>
-          <PhaseTimer
-            phaseStartedAt={groupStartedAt}
-            durationSeconds={pc.groupPhaseDuration}
-            onExpire={votesLocked ? undefined : autoSubmitVotes}
-            onTick={handleTimerTick}
-          />
+          <PhaseTimer {...timerProps()} />
           <button
             className={styles.proceedBtn}
             onClick={() => goToStage('voting')}
+            title={timers.split && timers.second
+              ? `Move your group on to voting (${votingMinutes} minute${votingMinutes === 1 ? '' : 's'})`
+              : 'Move your group on to voting'}
           >
             Proceed to Voting
           </button>

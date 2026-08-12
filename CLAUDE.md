@@ -2112,6 +2112,26 @@ the app, edit `_ideasearchlab-src/`, then run `ideasearchlab-deploy-update.bat`
 `_ideasearchlab-src/README-SELF-CONTAINED.md`. The old standalone
 `github.com/konstantinosStouras/ideasearchlab` repo is retired and safe to delete.
 
+**Both phases are timed PER STAGE (idea generation vs selection/voting).** Each
+working phase is played in two stages and the admin panel's "Phase Timers"
+section allocates a separate countdown to each: the individual phase runs
+**idea generation** ("Proceed to Selection") then **idea selection**
+(double-click the ones that carry forward, then Finish & Submit), and the group
+phase runs **ideation** ("Proceed to Voting") then **voting**
+(`phaseConfig.individualGenerationDuration`/`individualSelectionDuration` and
+`groupIdeationDuration`/`groupVotingDuration`, resolved in
+`_ideasearchlab-src/src/utils/phaseTimers.js`). A stage's timer running out
+moves the participant to the NEXT stage; only the second stage's expiry submits
+(auto-picking a selection / locking whatever votes exist). Each stage's clock is
+per-participant and anchored where they entered it (`individualStartedAt` /
+`individualSelectionStartedAt`, `groupStartedAt` / `groupVotingStartedAt`), and
+those stamps split the export's Timing sheet into writing-vs-selecting and
+ideation-vs-voting. Sessions created before the split carry only the old
+`individualPhaseDuration`/`groupPhaseDuration` and keep running UNSPLIT — one
+clock across both stages, expiring straight into the auto-submit exactly as
+before (the admin edit form migrates them into the per-stage fields on open, so
+saving can't drop a countdown).
+
 **Admin "Test round" (no data logged).** Every session card in `/admin` has a
 **🧪 Test round** button that opens the whole participant flow (Welcome →
 Registration → Individual → Group → Survey → Done) in a throwaway sandbox tab
