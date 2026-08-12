@@ -296,10 +296,19 @@
     };
     this.getSurvey = function (u, sid) { return F().getDoc(F().doc(D(), 'participants', u, 'survey', sid || '_none')).then(function (s) { return s.exists() ? s.data() : null; }); };
     this.listSurveys = function (u) { return F().getDocs(F().collection(D(), 'participants', u, 'survey')).then(function (sn) { var a = []; sn.forEach(function (d) { a.push(Object.assign({ id: d.id }, d.data())); }); return a; }); };
+    /* Remove a participant and ALL of their data. The sub-collections go
+       first, then the participant doc — and a failure is never swallowed:
+       Firestore keeps sub-collection documents alive under a deleted parent,
+       so a half-delete would leave the student's raw answers orphaned in the
+       database (invisible in this panel, since it lists `participants`, yet
+       still there). Surfacing the error lets the admin retry instead of
+       believing the data is gone. */
     this.deleteParticipant = function (u) {
       var names = ['responses', 'events', 'survey'];
       return Promise.all(names.map(function (n) {
-        return F().getDocs(F().collection(D(), 'participants', u, n)).then(function (sn) { return Promise.all(sn.docs.map(function (d) { return F().deleteDoc(d.ref); })); }).catch(function () {});
+        return F().getDocs(F().collection(D(), 'participants', u, n)).then(function (sn) {
+          return Promise.all(sn.docs.map(function (d) { return F().deleteDoc(d.ref); }));
+        });
       })).then(function () { return F().deleteDoc(F().doc(D(), 'participants', u)); });
     };
   }

@@ -98,17 +98,40 @@ Then:
   existed had none and could not log back in by e-mail until then). Delete removes the row's
   roster doc(s), including any collapsed duplicate re-registrations, via the
   rules' `allow delete: if isAdmin()`; the student's own browser profile is
-  untouched, so they can simply register again. **Returning students:** on
-  the SAME browser nothing is ever asked again (registration + identity
-  persist — closing the window loses nothing). On a NEW device or a cleared
-  browser, the registration screen shows an **"Already registered before?"**
-  box: typing the registered e-mail restores the whole profile (and the
-  play-once completion markers, so a replay can't be earned by switching
-  devices) from `simPlatformRecovery/{sha256(email)}` — a mirror written on
-  every profile sync, fetchable only by exact key (listing denied), with
-  `approved` deliberately NOT in its field set: approval never rides
-  through recovery, so a recovered device waits for the instructor's
-  (one-click, live) approval again. A student's **Log out**
+  untouched, so they can simply register again. **Returning students —
+  Log in / Register:** the student page opens on a two-button choice.
+  On the SAME browser nothing is ever asked again (registration + identity
+  persist — closing the window loses nothing, they land straight on the
+  cards). On a NEW device or a cleared browser they press **Log in** and
+  give the **university student ID + e-mail** they registered with — BOTH
+  must match, so knowing a classmate's e-mail is not enough to assume their
+  identity. That restores the whole profile and their completion history
+  (including revocations) from `simPlatformRecovery/{sha256(email)}` — a
+  mirror written on every profile/completion sync, fetchable only by exact
+  key (listing denied), with `approved` deliberately NOT in its field set:
+  approval never rides through recovery, so a recovered device waits for the
+  instructor's (one-click, live) approval again. LOCAL mode has no central
+  roster, so it goes straight to the registration form.
+
+  **Revoking a completion (a student may retake a simulation).** Removing a
+  student from a simulation's own backend (e.g. deleting them in the Answer
+  Arena admin) is the ground truth: the next **⟲ Verify from Answer Arena**
+  removes their ✓ and their card unlocks so they can play again. Mechanics:
+  a revocation is a TOMBSTONE inside the already-allowed `completed` map
+  (`{revoked:1, rts}`) — never a bare delete, because the student's browser
+  holds its own play-once marker that a delete cannot reach and that would
+  be re-pushed on the next sync. It is written to the roster doc AND the
+  e-mail recovery replica, so logging in elsewhere cannot resurrect it. The
+  student's browser stamps `seenAt` from its OWN clock the first time it
+  sees a tombstone and compares markers against that — the instructor's
+  clock is never compared with the student's, so device clock skew can
+  neither defeat a revocation nor destroy a genuine retake (a retake
+  finished afterwards has a newer marker and survives). Every writer
+  replaces its entry through a dotted path and records `src`
+  (`arena`/`manual`/`client`); the sync never auto-revokes a `manual` mark,
+  refuses to run when Answer Arena returns no participants or no completed
+  participants at all, refuses a mass removal while student-ID joins are
+  failing, and always asks for confirmation listing the names. A student's **Log out**
   (header button) clears the browser and signs out the anonymous uid, so on a
   shared machine the next registration gets its own roster doc instead of
   overwriting the previous student's; the roster view collapses duplicate

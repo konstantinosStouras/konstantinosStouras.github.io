@@ -22,22 +22,48 @@
 
 <main class="wrap">
 
+  <!-- Entry choice (Firebase mode): log in as a returning student, or register.
+       LOCAL mode has no central roster to log in against, so it goes straight
+       to the registration form. -->
+  <section id="s-welcome" class="card" hidden>
+    <h2>Welcome</h2>
+    <p class="hint">Registered already — on this or any other device? <strong>Log in</strong> with the
+    university student ID and e-mail you used. First time here? <strong>Register</strong> once and every
+    simulation your instructor activates will be ready for you.</p>
+    <div class="choice-row">
+      <button id="btn-go-login" class="btn ghost">Log in</button>
+      <button id="btn-go-register" class="btn">Register</button>
+    </div>
+  </section>
+
+  <!-- Returning student log-in: university ID + e-mail from their registration -->
+  <section id="s-login" class="card" hidden>
+    <h2>Log in</h2>
+    <p class="hint">Enter the <strong>university student ID</strong> and <strong>e-mail</strong> you used when
+    you registered. Your details and your completed simulations come back with you.</p>
+    <div class="fgrid" style="margin-top:14px">
+      <div class="field"><label for="l-sid">University student ID <span class="req">*</span></label><input id="l-sid" maxlength="40" autocomplete="off"></div>
+      <div class="field"><label for="l-email">E-mail <span class="req">*</span></label><input id="l-email" type="email" autocomplete="email" maxlength="120"></div>
+    </div>
+    <p id="l-err" class="err"></p>
+    <div class="actions">
+      <button id="btn-login" class="btn">Log in</button>
+      <button id="btn-login-cancel" class="btn ghost">Back</button>
+      <span class="hint">Never registered? <a href="#" id="lnk-register">Register instead</a>.</span>
+    </div>
+  </section>
+
   <!-- One-time registration -->
   <section id="s-register" class="card" hidden>
     <h2 id="reg-title">Register to get started</h2>
     <p class="hint">You only do this once — your details are saved in this browser and passed on to each
     simulation, so you won't have to retype them. All fields are required.</p>
     <!-- Returning student on a NEW device / cleared browser (Firebase mode):
-         restore the whole registration by e-mail instead of retyping it.
-         Same-browser returns never see this — they're signed in already. -->
+         they log in instead of retyping the form. Same-browser returns never
+         see any of this — they are signed in already. -->
     <div id="recover-box" class="recover" hidden>
-      <strong>Already registered before?</strong> If you registered on another device
-      (or cleared this browser), enter the same e-mail to restore your details:
-      <div class="rec-row">
-        <input id="r-email" type="email" placeholder="you@example.com" autocomplete="email" maxlength="120">
-        <button id="btn-recover" class="btn ghost small" type="button">Restore my registration</button>
-      </div>
-      <span id="r-err" class="err"></span>
+      <strong>Already registered before?</strong> If you registered on this or another device, don't fill
+      this in again — <button id="btn-to-login" class="btn ghost small" type="button">Log in instead</button>
     </div>
     <div class="fgrid" style="margin-top:14px">
       <div class="field"><label for="f-name">Full name <span class="req">*</span></label><input id="f-name" autocomplete="name" maxlength="80"></div>
@@ -209,43 +235,71 @@
   fillSelect('f-industry', INDUSTRIES);
 
   /* ---------- registration ---------- */
+  /* Entry: the Log in / Register choice. Only in Firebase mode — LOCAL mode
+     has no central roster to log in against, so it opens the form directly. */
+  function hideAll() {
+    ['s-welcome', 's-login', 's-register', 's-sims'].forEach(function (id) { $(id).hidden = true; });
+  }
+  function showWelcome() {
+    if (!P.configured) { showRegister(false); return; }
+    hideAll();
+    $('s-welcome').hidden = false;
+  }
+  function showLogin() {
+    hideAll();
+    $('l-err').textContent = '';
+    $('s-login').hidden = false;
+    $('l-sid').focus();
+  }
+  $('btn-go-login').onclick = showLogin;
+  $('btn-go-register').onclick = function () { showRegister(false); };
+  $('btn-login-cancel').onclick = showWelcome;
+  $('lnk-register').onclick = function (e) { e.preventDefault(); showRegister(false); };
+  $('btn-to-login').onclick = showLogin;
+  $('btn-login').onclick = function () {
+    var sid = $('l-sid').value.trim();
+    var em = $('l-email').value.trim();
+    $('l-err').textContent = '';
+    if (!sid) { $('l-err').textContent = 'Enter the university student ID you registered with.'; $('l-sid').focus(); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { $('l-err').textContent = 'Enter the e-mail you registered with.'; $('l-email').focus(); return; }
+    var b = this; b.disabled = true; b.textContent = 'Logging in…';
+    P.recoverByEmail(em, sid).then(function (p) {
+      b.disabled = false; b.textContent = 'Log in';
+      if (!p) {
+        $('l-err').textContent = 'No registration matches that student ID and e-mail. Check both, or register if this is your first time.';
+        return;
+      }
+      P.saveProfile(p);
+      showSims();
+    }).catch(function (e) {
+      b.disabled = false; b.textContent = 'Log in';
+      $('l-err').textContent = (e && e.code && String(e.code).indexOf('permission-denied') >= 0)
+        ? 'The platform needs a settings update — please tell your instructor ("republish the Firestore rules").'
+        : 'Could not log you in just now — please check your connection and try again.';
+    });
+  };
+
   function showRegister(editing) {
     var p = P.getProfile() || {};
     FIELDS.forEach(function (f) { $(f[1]).value = p[f[0]] != null ? p[f[0]] : ''; });
     $('reg-title').textContent = editing ? 'Edit your details' : 'Register to get started';
     $('btn-cancel').hidden = !editing;
     $('reg-err').textContent = '';
-    /* the e-mail recovery box: only for FRESH registrations in Firebase mode
-       (an edit already has the profile; LOCAL mode has nothing central). */
+    /* the "log in instead" nudge: only on a FRESH registration in Firebase
+       mode (an edit already has the profile; LOCAL mode has nothing central) */
     $('recover-box').hidden = editing || !P.configured;
-    $('r-err').textContent = '';
+    hideAll();
     $('s-register').hidden = false;
-    $('s-sims').hidden = true;
     $('f-name').focus();
   }
-  $('btn-recover').onclick = function () {
-    var em = $('r-email').value.trim();
-    $('r-err').textContent = '';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { $('r-err').textContent = 'Enter the e-mail you registered with.'; return; }
-    var b = this; b.disabled = true; b.textContent = 'Looking up…';
-    P.recoverByEmail(em).then(function (p) {
-      b.disabled = false; b.textContent = 'Restore my registration';
-      if (!p) { $('r-err').textContent = 'No registration found for that e-mail — please fill in the form below.'; return; }
-      P.saveProfile(p);
-      showSims();
-    }).catch(function (e) {
-      b.disabled = false; b.textContent = 'Restore my registration';
-      $('r-err').textContent = (e && e.code && String(e.code).indexOf('permission-denied') >= 0)
-        ? 'The platform needs a settings update — please tell your instructor ("republish the Firestore rules").'
-        : 'Could not look that up just now — please try again, or fill in the form below.';
-    });
-  };
   function showSims() {
     var p = P.getProfile();
     $('s-register').hidden = true;
     $('s-sims').hidden = false;
+    /* Markers stamped while this page was closed are pushed by the roster
+       watch, AFTER its first snapshot — pushing here would race a revocation
+       the instructor made in the meantime (see watchApproval). */
     startApprovalWatch();
-    P.syncCompleted();   // catch up markers stamped while this page was closed
     $('who').hidden = !p;
     if (p) {
       $('who').innerHTML = 'Registered as <strong></strong> (<span></span>) ';
@@ -478,7 +532,9 @@
 
   /* ---------- boot ---------- */
   P.watchConfig(function (c) { CFG = c; if (!$('s-sims').hidden) render(); else if (P.getProfile()) showSims(); });
-  if (P.getProfile()) showSims(); else showRegister(false);
+  /* Signed in on this browser → straight to the cards. Otherwise the Log in /
+     Register choice (which falls through to the form in LOCAL mode). */
+  if (P.getProfile()) showSims(); else showWelcome();
   P.syncProfile();   /* joins the Firestore roster once Firebase is configured */
 })();
 </script>

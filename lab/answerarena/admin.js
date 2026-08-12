@@ -646,7 +646,7 @@
           ]),
           el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'registered ' + fmtTs(p.createdAt) + '  ·  ' + Object.keys(p.completedSessions || {}).length + ' session(s) completed' + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
           el('div', { class: 'aa-row', style: 'margin-top:6px;' }, [
-            el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete "' + (p.email || p._id) + '" and all their data?')) Store.deleteParticipant(p._id).then(function () { toast('Deleted.'); load(); }); } } }, ['Delete'])
+            el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete "' + (p.participantId || p.email || p._id) + '" and all their data?\n\nTheir answers are removed from the database, so they no longer appear in any data export — and they can take the study again.')) Store.deleteParticipant(p._id).then(function () { toast('Deleted — their data is gone from every export.'); load(); }, function (e) { toast('Delete FAILED: ' + ((e && e.code) || e) + ' — their data is still there; please try again.'); load(); }); } } }, ['Delete'])
           ])
         ]));
       });

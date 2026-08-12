@@ -252,13 +252,24 @@
   function activeSims() {
     return P.catalog().filter(function (s) { return CFG.sims[s.key] && CFG.sims[s.key].active; });
   }
-  function rowCompleted(r, key) { return !!(r.completed && r.completed[key]); }
+  /* A revoked completion is a TOMBSTONE inside the same map ({revoked:1,rts})
+     — the student no longer counts as having done it (and may retake it). */
+  function rowCompleted(r, key) {
+    var c = r.completed && r.completed[key];
+    return !!(c && !c.revoked);
+  }
   function completedTip(r, key) {
     var c = r.completed && r.completed[key];
+    if (c && c.revoked) {
+      var rd = c.rts ? new Date(Number(c.rts)) : null;
+      return 'Completion removed' + (rd && !isNaN(rd) ? ' ' + rd.toISOString().slice(0, 16).replace('T', ' ') : '') +
+             ' — the student can take it again';
+    }
     if (!c) return 'Not answered yet';
     var d = c.ts ? new Date(Number(c.ts)) : null;
     return 'Completed' + (d && !isNaN(d) ? ' ' + d.toISOString().slice(0, 16).replace('T', ' ') : '') +
-           (c.session ? ' · session ' + c.session : '');
+           (c.session ? ' · session ' + c.session : '') +
+           (c.src === 'manual' ? ' · marked by you' : c.src === 'arena' ? ' · verified from Answer Arena' : '');
   }
   function cycleGlyph(v) { return v === 'yes' ? ' ✓' : v === 'no' ? ' —' : ''; }
   function renderRoster(rows) {
@@ -267,11 +278,12 @@
        second device) mints a new uid, so collapse by student ID keeping the
        most recent record. uidsByKey remembers EVERY uid behind a displayed
        row, so deleting it also removes its collapsed duplicates. */
-    var seen = {}, uidsByKey = {};
+    var seen = {}, uidsByKey = {}, rowsByKey = {};
     var keyOf = function (r) { return (r.studentId || '').trim().toLowerCase() || ('uid:' + r.uid); };
     rows.forEach(function (r) {
       var k = keyOf(r);
       (uidsByKey[k] = uidsByKey[k] || []).push(r.uid);
+      (rowsByKey[k] = rowsByKey[k] || []).push(r);
     });
     roster = rows.sort(function (a, b) {
       return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '');
@@ -397,14 +409,17 @@
           if (!window.confirm(q)) return;
           td.textContent = '…';
           var uids = uidsByKey[keyOf(r)] || [r.uid];
+          /* Revoking also writes the e-mail recovery replica, so it needs the
+             address as well as the uid (see revokeCompletion). */
+          var rowsFor = (rowsByKey[keyOf(r)] || [r]).map(function (x) { return { uid: x.uid, email: x.email }; });
           P.firebase().then(function (F) {
             return done
-              ? F.unstampCompleted(uids, s.key)
-              : F.stampCompleted(uids, s.key, { ts: new Date().getTime(), session: (CFG.sims[s.key] && CFG.sims[s.key].sessionId) || null });
+              ? F.revokeCompletion(rowsFor, s.key)
+              : F.stampCompleted(uids, s.key, { ts: new Date().getTime(), session: (CFG.sims[s.key] && CFG.sims[s.key].sessionId) || null, src: 'manual' });
           }).then(function () {
             r.completed = r.completed || {};
-            if (done) delete r.completed[s.key];
-            else r.completed[s.key] = { ts: new Date().getTime(), session: (CFG.sims[s.key] && CFG.sims[s.key].sessionId) || null };
+            if (done) r.completed[s.key] = { revoked: 1, rts: new Date().getTime() };
+            else r.completed[s.key] = { ts: new Date().getTime(), session: (CFG.sims[s.key] && CFG.sims[s.key].sessionId) || null, src: 'manual' };
             renderRoster(lastRows);   // instant; the live snapshot confirms
           }, function (e) {
             td.textContent = done ? '✓' : '—';
@@ -500,6 +515,9 @@
      page pulls the ✓ down live via its own-doc watch. Only ever ADDS. */
   function verifyFromArena() {
     if (!lastRows) return Promise.reject(new Error('the roster has not loaded yet'));
+    if (!(CFG.sims.answerarena && CFG.sims.answerarena.active)) {
+      return Promise.reject(new Error('activate Answer Arena first — while it is off the roster shows no column for it, so a change here would be invisible'));
+    }
     var creds = null;
     try {
       creds = JSON.parse(sessionStorage.getItem(P.KEYS.adminCreds) ||
@@ -536,10 +554,15 @@
         var fs = D.getFirestore(app);
         return Promise.all([
           D.getDocs(D.collection(fs, 'participants')),
-          D.getDocs(D.collection(fs, 'sessions'))
+          D.getDocs(D.collection(fs, 'sessions')),
+          /* Decide from a FRESH roster read, never from the live-snapshot
+             cache (a dead streaming channel would make this destructive
+             pass act on a stale view). */
+          P.firebase().then(function (F) { return F.listStudents(); })
         ]);
       });
     }).then(function (r) {
+      var rosterRows = r[2] || lastRows;
       var codeById = {};
       r[1].forEach(function (d) { codeById[d.id] = String(d.data().code || '').toUpperCase(); });
       var doneById = {};   // normalized student ID -> {ts, session}
@@ -557,8 +580,14 @@
         });
         if (!doneById[pid] || best.ts > doneById[pid].ts) doneById[pid] = best;
       });
+      /* SAFETY: a read that returned no participants at all means something
+         went wrong (wrong project, empty result, permissions) — never treat
+         that as "nobody completed anything" and revoke the whole class. */
+      if (!r[0].size) throw new Error('Answer Arena returned no participants at all — nothing was changed. Check you signed in to the right project.');
+      if (!Object.keys(doneById).length) throw new Error('Answer Arena lists no COMPLETED participant with a student ID — nothing was changed (a sync from here would have removed every ✓).');
+
       var byPid = {};
-      lastRows.forEach(function (row) {
+      rosterRows.forEach(function (row) {
         var k = String(row.studentId || '').trim().toLowerCase();
         if (k) (byPid[k] = byPid[k] || []).push(row);
       });
@@ -566,23 +595,82 @@
       Object.keys(doneById).forEach(function (pid) {
         var rows = byPid[pid];
         if (!rows) { unmatched.push(pid); return; }
-        if (rows.some(function (row) { return row.completed && row.completed.answerarena; })) { already++; return; }
+        if (rows.some(function (row) { return rowCompleted(row, 'answerarena'); })) { already++; return; }
         stamps.push({ uids: rows.map(function (row) { return row.uid; }).filter(Boolean), mark: doneById[pid] });
       });
+
+      /* TWO-WAY: a roster ✓ whose student is no longer a completed Arena
+         participant (deleted there so they may retake it) must be REVOKED —
+         the Arena is the ground truth. Two stamps are never auto-revoked:
+         one the instructor set BY HAND (that override exists precisely for
+         students the automatic join cannot match), and one still matched in
+         the Arena. */
+      var revokes = [], seenKey = {}, stampedTotal = 0;
+      rosterRows.forEach(function (row) {
+        var c = row.completed && row.completed.answerarena;
+        if (!c || c.revoked) return;
+        stampedTotal++;
+        if (c.src === 'manual') return;
+        var pid = String(row.studentId || '').trim().toLowerCase();
+        if (pid && doneById[pid]) return;              // still completed in the arena
+        var k = pid || ('uid:' + row.uid);
+        if (seenKey[k]) return;
+        seenKey[k] = 1;
+        var group = byPid[pid] || [row];
+        revokes.push({ rows: group.map(function (x) { return { uid: x.uid, email: x.email }; })
+                                  .filter(function (x) { return x.uid; }),
+                       who: row.name || row.studentId || row.uid });
+      });
+
       var tail = (unmatched.length
         ? ' · ' + unmatched.length + ' completed arena ID(s) not in this roster: ' +
           unmatched.slice(0, 10).join(', ') + (unmatched.length > 10 ? '…' : '')
         : '');
-      if (!stamps.length) {
-        return 'Checked ' + Object.keys(doneById).length + ' completed Arena participant(s) — every match already shows ✓' + tail;
+
+      /* The join is by student ID typed into two different forms, so it can
+         be lossy (a typo, a leading zero). Unmatched arena IDs are direct
+         evidence that it is lossy RIGHT NOW — so refuse a mass removal in
+         that state rather than unlocking students who really did finish. */
+      var cancelled = 0;
+      if (revokes.length && unmatched.length && revokes.length > Math.max(3, stampedTotal * 0.25)) {
+        throw new Error('refusing to remove ' + revokes.length + ' of ' + stampedTotal +
+          ' ✓ marks while ' + unmatched.length + ' completed Arena ID(s) do not match this roster — ' +
+          'that pattern means the student-ID join is failing, not that everyone was deleted. ' +
+          'Nothing was changed; fix the mismatched IDs (or remove the ✓ by clicking the cells).');
+      }
+      if (revokes.length && !window.confirm(
+            'Answer Arena no longer lists ' + revokes.length + ' student(s) as completed:\n\n' +
+            revokes.slice(0, 15).map(function (x) { return '• ' + x.who; }).join('\n') +
+            (revokes.length > 15 ? '\n• …' : '') +
+            '\n\nRemove their ✓ so they can take it again?\n' +
+            '(Marks you set by hand are never removed.)' +
+            (unmatched.length ? '\n\nNote: ' + unmatched.length + ' completed Arena ID(s) do not match anyone in this roster.' : ''))) {
+        cancelled = revokes.length;
+        revokes.length = 0;
+      }
+
+      if (!stamps.length && !revokes.length) {
+        return cancelled
+          ? cancelled + ' proposed removal(s) were cancelled — the roster still differs from Answer Arena' + tail
+          : 'Checked ' + Object.keys(doneById).length + ' completed Arena participant(s) — the roster already matches' + tail;
       }
       return P.firebase().then(function (F) {
-        return Promise.all(stamps.map(function (s) {
-          return F.stampCompleted(s.uids, 'answerarena', s.mark);
-        }));
-      }).then(function () {
-        return 'Stamped ✓ for ' + stamps.length + ' student(s) from Answer Arena’s own records (' +
-          already + ' already had it)' + tail + ' — the roster and the students’ own pages update live.';
+        /* allSettled: one failed row must not hide the rest of the run. */
+        return Promise.allSettled(stamps.map(function (s) {
+          return F.stampCompleted(s.uids, 'answerarena', { ts: s.mark.ts, session: s.mark.session, src: 'arena' });
+        }).concat(revokes.map(function (s) {
+          return F.revokeCompletion(s.rows, 'answerarena');
+        })));
+      }).then(function (rs) {
+        var failed = rs.filter(function (x) { return x.status === 'rejected'; }).length;
+        var bits = [];
+        if (stamps.length) bits.push('stamped ✓ for ' + stamps.length + ' student(s)');
+        if (revokes.length) bits.push('removed the ✓ from ' + revokes.length + ' student(s) no longer in Answer Arena (they can retake it)');
+        return 'Synced with Answer Arena’s own records: ' + bits.join(' · ') +
+          (already ? ' · ' + already + ' already matched' : '') +
+          (cancelled ? ' · ' + cancelled + ' removal(s) cancelled' : '') +
+          (failed ? ' · ⚠ ' + failed + ' write(s) FAILED — click Verify again' : '') + tail +
+          ' — the roster and the students’ own pages update live.';
       });
     });
   }
