@@ -110,6 +110,82 @@ await pg.waitForFunction(() => window.__deleted.length > 0, null, { timeout: 800
 const gone = await pg.evaluate(() => window.__deleted);
 ok(gone.length === 1 && gone[0] === 'ACC_OLD', 'deleting one account removes ONLY that account (' + gone.join(',') + ')');
 
+/* ---- Session cards: Close Session (grey, keeps data) vs Delete (destroys) --
+   An ACTIVE card must offer both, in that order, with Close styled neutrally
+   — it only stops new joins — and Delete styled danger. Delete must erase the
+   session's DATA first and the session doc second, so a failed purge leaves
+   the session listed instead of orphaning rows under a vanished session. */
+const order = await pg.evaluate(() => {
+  window.__calls = [];
+  window.ArenaStore.deleteSessionData = (id) => { window.__calls.push('data:' + id); return Promise.resolve({ participantsRemoved: 1 }); };
+  window.ArenaStore.deleteSession = (id) => { window.__calls.push('session:' + id); return Promise.resolve(); };
+  window.ArenaStore.updateSession = (id, patch) => { window.__calls.push('update:' + id + ':' + JSON.stringify(patch)); return Promise.resolve(); };
+  const card = window.__arenaSessionCard({ id: 's1', code: 'SGP', status: 'open' }, { s1: 3 }, () => {});
+  card.id = 'test-session-card';
+  document.body.appendChild(card);
+  return [...card.querySelectorAll('button')].map(b => b.textContent.trim() + '|' + b.className);
+});
+const closeI = order.findIndex(b => b.startsWith('Close Session|'));
+const delI = order.findIndex(b => b.startsWith('Delete|'));
+ok(closeI >= 0, 'the active card has a "Close Session" button');
+ok(closeI >= 0 && /\bsec\b/.test(order[closeI]) && !/danger/.test(order[closeI]), 'Close Session is the neutral (grey) style, not danger');
+ok(delI === closeI + 1, 'Delete sits directly after Close Session (got ' + order.map(b => b.split('|')[0]).join(', ') + ')');
+ok(delI >= 0 && /danger/.test(order[delI]), 'Delete is the danger (red) style');
+// Close only flips the status — data untouched.
+await pg.evaluate(() => {
+  window.__calls = [];
+  [...document.querySelectorAll('#test-session-card button')].find(b => b.textContent.trim() === 'Close Session').click();
+});
+await pg.waitForFunction(() => window.__calls.length > 0, null, { timeout: 8000 });
+const closeCalls = await pg.evaluate(() => window.__calls);
+ok(closeCalls.length === 1 && closeCalls[0] === 'update:s1:{"status":"closed"}', 'Close Session only marks it closed, deleting nothing (' + closeCalls.join(',') + ')');
+// Delete purges the data, then the session doc.
+await pg.evaluate(() => {
+  window.__calls = [];
+  [...document.querySelectorAll('#test-session-card button')].find(b => b.textContent.trim() === 'Delete').click();
+});
+await pg.waitForFunction(() => window.__calls.length >= 2, null, { timeout: 8000 });
+const delCalls = await pg.evaluate(() => window.__calls);
+ok(delCalls[0] === 'data:s1' && delCalls[1] === 'session:s1', 'Delete erases the session DATA first, then the session (' + delCalls.join(' -> ') + ')');
+
+/* ---- The store's own deleteSessionData semantics (local backend) --------
+   Someone who played ONLY the deleted session goes entirely; someone who also
+   played another session keeps that other session's responses/events/survey.
+   Run on a fresh page so the real store is used (the one above is stubbed). */
+const pg2 = await ctx.newPage();
+await pg2.goto(BASE + '/lab/answerarena/?preview=1&key=stouras');   // namespaced sandbox store
+await pg2.waitForFunction(() => !!(window.ArenaStore && window.ArenaStore.deleteSessionData), null, { timeout: 8000 });
+const purge = await pg2.evaluate(async () => {
+  const S = window.ArenaStore;
+  await S.setParticipant('SOLO', { uid:'SOLO', sessionId:'s1', playedSessions:{s1:1}, completedSessions:{s1:1} });
+  await S.setParticipant('BOTH', { uid:'BOTH', sessionId:'s1', playedSessions:{s1:1,s2:1}, completedSessions:{s2:1},
+    draftResponse:{ sessionId:'s1', taskId:'t9' } });
+  await S.addResponse('SOLO', { sessionId:'s1', taskId:'t1' });
+  await S.addResponse('BOTH', { sessionId:'s1', taskId:'t1' });
+  await S.addResponse('BOTH', { sessionId:'s2', taskId:'t2' });
+  await S.addEvent('BOTH', { sessionId:'s1', type:'pick' });
+  await S.addEvent('BOTH', { sessionId:'s2', type:'pick' });
+  await S.saveSurvey('BOTH', 's1', { q:'a' });
+  await S.saveSurvey('BOTH', 's2', { q:'b' });
+  const res = await S.deleteSessionData('s1');
+  const ids = (await S.listParticipants()).map(p => p._id);
+  const both = await S.getParticipant('BOTH');
+  return { res, ids,
+    resp: (await S.listResponses('BOTH')).map(r => r.sessionId),
+    ev: (await S.listEvents('BOTH')).map(e => e.sessionId),
+    surveys: (await S.listSurveys('BOTH')).map(s => s.sessionId),
+    played: Object.keys(both.playedSessions || {}), draft: both.draftResponse, cur: both.sessionId };
+});
+ok(!purge.ids.includes('SOLO'), 'a participant who played ONLY the deleted session is removed entirely');
+ok(purge.ids.includes('BOTH'), 'a participant who also played another session is kept');
+ok(purge.res.participantsRemoved === 1, 'the purge reports the removed record (' + purge.res.participantsRemoved + ')');
+ok(JSON.stringify(purge.resp) === '["s2"]', 'only the deleted session\'s responses are gone (' + purge.resp.join(',') + ')');
+ok(JSON.stringify(purge.ev) === '["s2"]', 'only the deleted session\'s events are gone (' + purge.ev.join(',') + ')');
+ok(JSON.stringify(purge.surveys) === '["s2"]', 'only the deleted session\'s survey is gone (' + purge.surveys.join(',') + ')');
+ok(JSON.stringify(purge.played) === '["s2"]', 'the session is dropped from playedSessions (' + purge.played.join(',') + ')');
+ok(!purge.draft, 'an unsubmitted draft belonging to the deleted session is cleared');
+ok(purge.cur === null, 'the participant no longer points at the deleted session as their current one');
+
 await br.close(); srv.close();
-console.log(fails ? `\nARENA ADMIN GUARD FAILED (${fails})` : '\nARENA ADMIN GUARD OK — export excludes deleted accounts; duplicates are individually removable');
+console.log(fails ? `\nARENA ADMIN GUARD FAILED (${fails})` : '\nARENA ADMIN GUARD OK — export excludes deleted accounts; duplicates are individually removable; Close keeps data, Delete purges it first');
 process.exit(fails ? 1 : 0);

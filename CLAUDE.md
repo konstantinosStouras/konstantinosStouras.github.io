@@ -2231,6 +2231,16 @@ creation. ideasearchlab's whole edit path went with it (`editingSession` state,
 "Save Changes / Cancel" actions; the per-section **Save** buttons now only
 confirm the value is captured for the session about to be created), and Answer
 Arena's inline `editMode` rename form; name a session on its Create card.
+*Two distinct endings, in the same order and colours in both admins:* a grey
+**Close Session** that only stops new joins (the card moves to Closed/Completed
+sessions, data kept) and, directly after it, a red **Delete** that removes the
+session for good. Answer Arena's active card was the odd one out — a single red
+"Close" and no Delete — and now matches (`lab/answerarena/CLAUDE.md` §6): its
+Delete also **erases the session's data** (`Store.deleteSessionData` runs before
+`deleteSession`, so a failed purge leaves the session listed and retryable),
+deleting each player's responses/events/survey/draft for that session and the
+participant records that exist only because of it, while anyone who also played
+another session keeps that session's data.
 
 ### 🧪 Test round — EVERY class simulation that can have one has one
 
