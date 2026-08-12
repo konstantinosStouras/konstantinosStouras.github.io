@@ -2185,6 +2185,24 @@ rather than auto-joining (the Simulation-Platform handoff stays the only silent
 path, its code deliberately never shown). Offline test:
 `node _ideasearchlab-src/tools/join-link-guard.mjs`.
 
+**Every ideasearchlab session card states its CONDITION ENCODING** (owner
+2026-08). The card's right-hand meta block used to say only "0 participants" +
+"Individual + Group"; it now carries a third line — the None / Solo / Group /
+Both chip plus "AI in <neither stage | solo stage only | group stage only |
+both stages>", on ACTIVE and COMPLETED cards alike (one shared `SessionCard`
+renders both lists, so they cannot drift). It is computed by **`conditionOf()`
+imported from `src/utils/sessionExport.js`** — the SAME function that stamps
+every Excel/CSV export and feeds the Data Analytics regressions, so a card and
+its data can never encode a session differently (that also means the card
+inherits the export's phase gating: an AI flag on a phase the session does not
+run does not count). Chip colours mirror `.cond0…3` in
+`DataAnalytics.module.css` (None grey · Solo accent · Group blue · Both green)
+— keep the two palettes in sync. In the same change the **phase line became
+order-aware**: "Individual → Group" / "Group → Individual", built from
+`getPhaseSequence(phaseConfig)` itself, because "Individual + Group" read
+identically for a `group_first` session and left the admin guessing which order
+they had chosen.
+
 **Both working phases end on a 15-second summary of what the participant just
 produced** (owner 2026-08). The individual phase already held its "Your ideas are
 submitted" card for `CONFIRM_HOLD_MS`; the group phase now does the same once

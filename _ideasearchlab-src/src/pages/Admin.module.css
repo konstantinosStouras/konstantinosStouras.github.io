@@ -130,6 +130,23 @@
 
 .participantCount { font-size: 13px; font-weight: 600; color: var(--ink); }
 .phasesMeta { font-size: 11px; color: var(--muted); }
+
+/* ── Condition encoding on a session card ──────────────────────────────────
+   Which stage(s) the admin gave the AI assistant, in the None/Solo/Group/Both
+   encoding that stamps every Excel/CSV export. The chip colours mirror
+   `.cond0…3` in DataAnalytics.module.css (None grey · Solo accent · Group blue
+   · Both green) — keep the two palettes in sync so one session reads the same
+   on its card and in the analytics tables. */
+.condMeta { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.condTag {
+  font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--border); white-space: nowrap;
+}
+.condWhere { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.cond_None  { background: rgba(122,118,112,0.15); color: var(--muted); }
+.cond_Solo  { background: rgba(200,86,42,0.14); color: var(--accent); }
+.cond_Group { background: rgba(42,120,200,0.16); color: #2a78c8; }
+.cond_Both  { background: rgba(60,160,90,0.18); color: #2f9e54; }
 .sessionCardActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 /* ── Session-card action buttons ───────────────────────────────────────────
