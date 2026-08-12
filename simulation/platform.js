@@ -350,6 +350,18 @@
             });
           }).then(function (snap) { return snap.exists() ? snap.data() : null; });
         },
+        /* Admin-only: stamp a VERIFIED completion onto roster docs — the
+           "Verify from Answer Arena" reconciliation, for students whose own
+           browser never mirrored the marker (platform tab closed, direct
+           URL, another browser). The student's page pulls it down live via
+           its own-doc watch. */
+        stampCompleted: function (uids, simKey, mark) {
+          return Promise.all((uids || []).map(function (uid) {
+            var patch = { completed: {} };
+            patch.completed[simKey] = { ts: Number(mark.ts) || 0, session: mark.session || null };
+            return D.setDoc(D.doc(fs, PATHS.students + '/' + uid), patch, { merge: true });
+          }));
+        },
         /* Approve / revoke a student (admin-only per the rules): only approved
            students can launch the active simulations — the owner's guard
            against class links being passed to students who are not in the
@@ -376,6 +388,20 @@
               cb(approved, exists);
             };
             var un = D.onSnapshot(ref, function (snap) {
+              /* The roster doc is the VERIFIED record: merge any centrally
+                 stamped completions (e.g. the admin's "Verify from Answer
+                 Arena") down into this browser's play-once markers, so the
+                 student's cards read correctly wherever they log in. */
+              if (snap.exists() && snap.data().completed) {
+                try {
+                  var rc = snap.data().completed, m = completed(), changed = false;
+                  Object.keys(rc).forEach(function (k) { if (!m[k]) { m[k] = rc[k]; changed = true; } });
+                  if (changed) {
+                    localStorage.setItem(LS_COMPLETED, JSON.stringify(m));
+                    last = undefined;   // force the cb so the page re-renders its cards
+                  }
+                } catch (e) {}
+              }
               emit(snap.exists() ? !!snap.data().approved : false, snap.exists());
             }, function () { emit(false, false); });
             var timer = (D.getDoc ? setInterval(function () {
