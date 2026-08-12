@@ -2343,7 +2343,12 @@ browser-local draft published by committing the panel's downloaded
 config.json; the maintainer key gates the panel) and profiles stay
 client-side; a configured Firebase project (rules in `firestore.rules`,
 admin e-mails in `SIMP_ADMIN_EMAILS` — keep in sync with `isAdmin()`; setup
-walkthrough in `simulation/_FIREBASE-SETUP.md`) makes
+walkthrough in `simulation/_FIREBASE-SETUP.md`; live updates hardened for
+stream-hostile networks — `experimentalAutoDetectLongPolling`, ONE memoized
+anonymous sign-in per page load (concurrent sign-ins minted two uids: roster
+doc under one, approval watch on the other — the "unlock only after refresh"
+bug), a 5 s own-doc poll while unapproved + a 10 s roster `count()` poll with
+refetch-on-change, and an optimistic Approve-row repaint) makes
 activation live (`simPlatform/config` doc) and adds a roster
 (`simPlatformStudents/{uid}`, anonymous auth, every registration field
 compulsory; LIVE in the admin panel — auto-loads and updates via

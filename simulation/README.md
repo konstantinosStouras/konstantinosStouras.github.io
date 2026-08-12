@@ -47,6 +47,17 @@ Then:
 
 - Activation toggles are **live**: Save publishes instantly to every student
   (one `simPlatform/config` doc, `onSnapshot` on the student page).
+- **Live updates are hardened against broken streaming networks** (campus
+  proxies / antivirus HTTPS inspection deliver the FIRST snapshot but never
+  push again — "it only updates after a refresh"): Firestore is initialised
+  with `experimentalAutoDetectLongPolling`, one **memoized** anonymous
+  sign-in per page load (two concurrent sign-ins used to mint two uids,
+  landing the roster doc under one identity while the approval watch
+  listened to the other's), and polling fallbacks — the student's approval
+  watch re-checks its own doc every 5 s while unapproved, and the admin
+  roster polls a cheap `count()` every 10 s and refetches on change, so a
+  new registration appears within seconds even with a dead stream. The
+  Approve button also repaints its row locally on success.
 - Registrations are mirrored to `simPlatformStudents/{uid}` (anonymous auth),
   giving the admin panel a **live roster with CSV export** — it loads by
   itself when the panel opens and updates the moment a student registers

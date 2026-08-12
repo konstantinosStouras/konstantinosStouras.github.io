@@ -162,20 +162,40 @@
       var A = m[1], D = m[2];
       var app = m[0].initializeApp(cfg, 'simp');
       var auth = A.getAuth(app);
-      var fs = D.getFirestore(app);
+      /* Some networks (campus proxies, antivirus HTTPS inspection) silently
+         break the SDK's streaming Listen channel: the FIRST snapshot arrives
+         but live pushes never do — "it only updates after a refresh". The
+         auto-detect option makes the SDK probe the channel and fall back to
+         long-polling, which those middleboxes pass through. */
+      var fs;
+      try {
+        fs = D.initializeFirestore
+          ? D.initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
+          : D.getFirestore(app);
+      } catch (e) { fs = D.getFirestore(app); }
       var confRef = D.doc(fs, PATHS.config);
+      var anonP = null;
       function ensureAnon() {
         // Wait for the restored auth state before deciding — auth.currentUser
         // is null while Firebase is still restoring a previous session, and
         // signing in anonymously at that moment would mint a NEW uid (and a
         // duplicate roster doc) on every visit.
-        return new Promise(function (res, rej) {
+        // MEMOIZED: concurrent callers on one page load (the profile sync and
+        // the approval watch fire together right after registration) must
+        // share ONE sign-in — two concurrent signInAnonymously calls mint TWO
+        // uids, landing the roster doc under one identity while the approval
+        // watch listens to the other's doc, so the instructor's Approve never
+        // reached the page until a refresh reunified them.
+        if (anonP) return anonP;
+        anonP = new Promise(function (res, rej) {
           var un = A.onAuthStateChanged(auth, function (u) {
             un();
             if (u) res(u);
-            else A.signInAnonymously(auth).then(function (cred) { res(cred.user); }, rej);
+            else A.signInAnonymously(auth).then(function (cred) { res(cred.user); },
+              function (e) { anonP = null; rej(e); });   // allow a retry after a failure
           });
         });
+        return anonP;
       }
       return {
         auth: auth,
@@ -197,13 +217,35 @@
           });
         },
         /* Live roster (admin-only per the rules): cb(rows) now and on every
-           change; cb(null) on a permission error. Returns unsubscribe. */
+           change; cb(null) on a permission error. Returns unsubscribe.
+           Belt & braces: where the streaming channel is dead (see the
+           initializeFirestore note) a cheap count() poll every 10 s spots a
+           new registration and refetches once — so a student appears within
+           seconds of registering even without a working stream. */
         watchStudents: function (cb) {
-          return D.onSnapshot(D.collection(fs, PATHS.students), function (qs) {
+          var col = D.collection(fs, PATHS.students);
+          var lastN = -1;
+          var fetchAll = function () {
+            return D.getDocs(col).then(function (qs) {
+              lastN = qs.size;
+              var out = [];
+              qs.forEach(function (d) { out.push(d.data()); });
+              cb(out);
+            });
+          };
+          var un = D.onSnapshot(col, function (qs) {
+            lastN = qs.size;
             var out = [];
             qs.forEach(function (d) { out.push(d.data()); });
             cb(out);
           }, function () { cb(null); });
+          var timer = ((D.getCountFromServer && D.getDocs) ? setInterval(function () {
+            if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+            D.getCountFromServer(col).then(function (s) {
+              if (s.data().count !== lastN) return fetchAll();
+            }).catch(function () {});
+          }, 10000) : null);
+          return function () { un(); if (timer) clearInterval(timer); };
         },
         /* Delete roster docs (admin-only per the rules — test registrations
            etc.). Takes the uids backing one displayed student row, so a
@@ -224,13 +266,30 @@
           }));
         },
         /* Live approval state of THIS student's own roster doc. cb(approved,
-           exists) now and on every change — the student page unlocks itself
-           the moment the instructor approves. */
+           exists) now and on every CHANGE — the student page unlocks itself
+           the moment the instructor approves. Belt & braces: alongside the
+           snapshot listener, a cheap own-doc poll runs every 5 s while still
+           unapproved, so the unlock lands within seconds even where the
+           streaming channel is dead (see the initializeFirestore note). */
         watchApproval: function (cb) {
           return ensureAnon().then(function (u) {
-            return D.onSnapshot(D.doc(fs, PATHS.students + '/' + u.uid), function (snap) {
-              cb(snap.exists() ? !!snap.data().approved : false, snap.exists());
-            }, function () { cb(false, false); });
+            var ref = D.doc(fs, PATHS.students + '/' + u.uid);
+            var last;
+            var emit = function (approved, exists) {
+              if (approved === last) return;
+              last = approved;
+              cb(approved, exists);
+            };
+            var un = D.onSnapshot(ref, function (snap) {
+              emit(snap.exists() ? !!snap.data().approved : false, snap.exists());
+            }, function () { emit(false, false); });
+            var timer = (D.getDoc ? setInterval(function () {
+              if (last === true) { clearInterval(timer); timer = null; return; }
+              D.getDoc(ref).then(function (snap) {
+                emit(snap.exists() ? !!snap.data().approved : false, snap.exists());
+              }).catch(function () {});
+            }, 5000) : null);
+            return function () { un(); if (timer) clearInterval(timer); };
           });
         }
       };

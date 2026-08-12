@@ -265,14 +265,23 @@
         appr.disabled = true; appr.textContent = '…';
         P.firebase().then(function (F) {
           return F.approveStudents(uidsByKey[keyOf(r)] || [r.uid], !r.approved);
-        }).catch(function (e) {
+        }).then(function () {
+          /* Repaint the row locally too — the live snapshot normally does it,
+             but on a network with a dead streaming channel the click would
+             otherwise look like it did nothing. */
+          r.approved = !r.approved;
+          appr.disabled = false;
+          appr.className = r.approved ? 'btn small' : 'btn ghost small';
+          appr.textContent = r.approved ? '✓ Approved' : 'Approve';
+          appr.title = r.approved ? 'Click to revoke — the student can no longer launch simulations.'
+                                  : 'Click to let this student play the active simulations.';
+        }, function (e) {
           appr.disabled = false; appr.textContent = r.approved ? '✓ Approved' : 'Approve';
           $('roster-count').textContent = 'Approval failed: ' +
             ((e && e.code && String(e.code).indexOf('permission-denied') >= 0)
               ? 'permission denied — republish the updated firestore.rules' + RULES_HINT
               : ((e && e.message) || e));
         });
-        /* success needs no handler — the live snapshot repaints the row */
       };
       tr.children[5].appendChild(appr);
       /* Delete a registration (e.g. a test row). Removes the roster doc(s)
