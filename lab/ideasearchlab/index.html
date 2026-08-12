@@ -28,8 +28,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/lab/ideasearchlab/assets/index-DgnPp8t2.js"></script>
-    <link rel="stylesheet" crossorigin href="/lab/ideasearchlab/assets/index-DymXbyPh.css">
+    <script type="module" crossorigin src="/lab/ideasearchlab/assets/index-MSh-iKgB.js"></script>
+    <link rel="stylesheet" crossorigin href="/lab/ideasearchlab/assets/index-x-7hVMuz.css">
   </head>
   <body>
     <div id="root"></div>
@@ -37,7 +37,9 @@
          Full Name / Email on the account screen and the study registration
          form from the student's saved platform details. Passwords are never
          touched; consent checkboxes are never auto-ticked. -->
-    <script>window.SIMP_EXPECT = location.pathname.indexOf('/admin') >= 0 ? '__off__' : 'ideasearchlab';</script>
+    <!-- Off on the admin views and in a test round (?preview=1), where the
+         sandbox fills the registration form with its own random data. -->
+    <script>window.SIMP_EXPECT = (location.pathname.indexOf('/admin') >= 0 || /[?&]preview=1\b/.test(location.search)) ? '__off__' : 'ideasearchlab';</script>
     <script src="/simulation/prefill.js" defer></script>
   </body>
 </html>

@@ -29,6 +29,51 @@
   var SDK = window.ARENA_FB_SDK || '10.12.2';
   var FB_BASE = 'https://www.gstatic.com/firebasejs/' + SDK + '/';
 
+  /* ================================================================
+     TEST ROUND ("preview") — a throwaway sandbox that writes NOTHING
+     ----------------------------------------------------------------
+     Opened by the admin's 🧪 Test round button as
+     ?preview=1&key=stouras[&s=CODE]: the whole participant flow runs
+     against an ISOLATED localStorage namespace with the LOCAL backend, so
+     Firebase is never touched — no participant docs, no responses, no
+     events, nothing to clean up afterwards. Mirrors the ideasearchlab
+     sandbox (src/utils/preview.js) and sustainable-supply-chains' ?preview=1.
+
+     The admin seeds it before opening the tab (ARENA_PREVIEW.SEED_KEY:
+     the effective config + the session + its task set). A page RELOAD keeps
+     the sandbox's progress; a NEW launch (a fresh seed stamp) wipes it.
+     ================================================================ */
+  var PREVIEW_KEY = 'stouras';
+  var PREVIEW_PREFIX = 'arena:preview:';
+  var PREVIEW_SEED_KEY = 'arena:preview:seed';
+  var previewOn = (function () {
+    try {
+      var p = new URLSearchParams(location.search);
+      return p.get('preview') === '1' && p.get('key') === PREVIEW_KEY;
+    } catch (e) { return false; }
+  })();
+  window.ARENA_PREVIEW = {
+    on: previewOn,
+    KEY: PREVIEW_KEY,
+    PREFIX: PREVIEW_PREFIX,
+    SEED_KEY: PREVIEW_SEED_KEY,
+    // The URL the admin opens for a test round of `session` (or of the default
+    // configuration when no session is given).
+    launchUrl: function (session) {
+      var base = location.origin + location.pathname + '?preview=1&key=' + PREVIEW_KEY;
+      return session && session.code ? (base + '&s=' + encodeURIComponent(session.code)) : base;
+    },
+    // Hand the sandbox everything it needs, then it is self-contained.
+    seed: function (payload) {
+      try {
+        localStorage.setItem(PREVIEW_SEED_KEY, JSON.stringify(
+          Object.assign({ ts: Date.now() }, payload || {})
+        ));
+        return true;
+      } catch (e) { return false; }
+    }
+  };
+
   function uid() { return 'x' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
   function clone(o) { return JSON.parse(JSON.stringify(o || null)); }
   function code6() {
@@ -42,8 +87,13 @@
   /* ================================================================
      LOCAL backend (localStorage)
      ================================================================ */
-  function LocalBackend() {
-    var KEY = 'arena:db';
+  function LocalBackend(prefix) {
+    // `prefix` namespaces the whole store, so the TEST-ROUND sandbox
+    // ('arena:preview:') can never read or write the normal offline data
+    // ('arena:').
+    var NS = prefix || 'arena:';
+    var KEY = NS + 'db';
+    var UID_KEY = NS + 'uid';
     var authCb = null, cur = null;
 
     function read() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
@@ -57,8 +107,40 @@
       d.participants = d.participants || {}; // uid -> doc (with .responses/.events/.survey inline)
       return d;
     }
-    function sessionUid() { try { return localStorage.getItem('arena:uid') || null; } catch (e) { return null; } }
-    function setSessionUid(u) { try { if (u) localStorage.setItem('arena:uid', u); else localStorage.removeItem('arena:uid'); } catch (e) {} }
+    function sessionUid() { try { return localStorage.getItem(UID_KEY) || null; } catch (e) { return null; } }
+    function setSessionUid(u) { try { if (u) localStorage.setItem(UID_KEY, u); else localStorage.removeItem(UID_KEY); } catch (e) {} }
+
+    // Wipe this namespace and (re)seed it from the admin's test-round payload:
+    // the effective config, the session being rehearsed (forced open) and its
+    // task set. Called once per launch — a reload reuses the same seed stamp
+    // and therefore keeps the sandbox's progress.
+    this.seedFrom = function (seed) {
+      var d = {
+        users: {}, config: {}, taskSets: {}, sessions: {}, participants: {},
+        _seedTs: (seed && seed.ts) || 0
+      };
+      if (seed && seed.config) d.config = clone(seed.config) || {};
+      // An EMPTY task set is treated as "no set", so the sandbox falls back to
+      // the built-in sample comparisons rather than offering none at all.
+      if (seed && seed.taskSet && seed.taskSet.tasks && seed.taskSet.tasks.length) {
+        var tsId = seed.taskSet.id || 'preview-set';
+        d.taskSets[tsId] = Object.assign(clone(seed.taskSet), { id: tsId });
+        d.config.activeTaskSetId = tsId;
+      } else {
+        delete d.config.activeTaskSetId;   // fall back to the built-in default set
+      }
+      if (seed && seed.session && seed.session.code) {
+        var sid = seed.session.id || 's_preview';
+        d.sessions[sid] = Object.assign(clone(seed.session), {
+          id: sid, status: 'open', count: 0,
+          taskSetId: d.config.activeTaskSetId || null
+        });
+      }
+      write(d);
+      setSessionUid(null);
+      cur = null;
+    };
+    this.seededTs = function () { return db()._seedTs || 0; };
 
     this.mode = 'local';
     this.init = function () {
@@ -313,8 +395,23 @@
     };
   }
 
-  // Pick the backend. Firebase if a real config is present, else local.
-  var backend = (window.ARENA_FB_READY) ? new FirebaseBackend() : new LocalBackend();
+  // Pick the backend. A TEST ROUND always gets the local one in its own
+  // namespace (so a configured Firebase project is never touched); otherwise
+  // Firebase if a real config is present, else local.
+  var backend;
+  if (previewOn) {
+    backend = new LocalBackend(PREVIEW_PREFIX);
+    // Apply the admin's seed once per launch. A reload carries the same stamp,
+    // so the sandbox keeps whatever the tester has done so far.
+    try {
+      var seed = JSON.parse(localStorage.getItem(PREVIEW_SEED_KEY) || 'null');
+      if (seed && seed.ts && seed.ts !== backend.seededTs()) backend.seedFrom(seed);
+      else if (!seed && !backend.seededTs()) backend.seedFrom({ ts: 1 });
+    } catch (e) { backend.seedFrom({ ts: 1 }); }
+  } else {
+    backend = (window.ARENA_FB_READY) ? new FirebaseBackend() : new LocalBackend();
+  }
+  backend.isPreview = previewOn;
   // Expose a couple of constants the app/admin reuse.
   backend.ADMIN_EMAIL = ADMIN_EMAIL;
   backend.isAdminEmail = function (e) { return String(e || '').toLowerCase() === String(ADMIN_EMAIL).toLowerCase(); };

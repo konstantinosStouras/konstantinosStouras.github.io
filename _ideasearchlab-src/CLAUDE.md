@@ -292,6 +292,21 @@ sessions/{sessionId}/aiMessages/{messageId}: {
 - Each form section has a small 11px hint text (sectionHint class) below the section heading
 - cardSubtitle class used under card titles for descriptive text
 - **Session details (create form)**: a "Session details" section near the bottom of the create form (just above the Create button; shown only when creating, not editing) with an optional **Session name** (`e.g. Spring MBA 2026`, stored as `session.name` and shown in the Active/Completed session cards) and an optional **Session ID** custom code. The custom code is a **single word of capital letters and digits** (no spaces/dashes): both the create input and JoinSession input live-normalise with `.toUpperCase().replace(/[^A-Z0-9]/g,'')`, it's validated `^[A-Z0-9]{3,40}$`, and checked for uniqueness via `getDocs(where('code','==',code))` before `addDoc`. Identical normalisation on both ends guarantees the shared code is always typable back in. Blank ID falls back to the auto-generated short code. JoinSession's code input is `maxLength={40}` / min length 3.
+- **Per-session Excel export from the session list** (`SessionCard`): every card in
+  **Active Sessions AND Completed Sessions** carries a green **⬇ Export data** button
+  that downloads that session's full research workbook right there, without opening
+  the control room (mirrors the Answer Arena admin, where each session card has its
+  own Export data). It calls the SAME shared builder as the control room's "Download
+  Excel" — `exportSessionWorkbook(session)` from `src/utils/sessionExport.js` — so the
+  two can never produce different files. The button shows "Preparing…" while it
+  fetches and prints an inline error under the card if the fetch/write fails
+  (`.exportBtn` / `.sessionExportError` in Admin.module.css). The cards hold full
+  session docs (`{id, ...data}` from the instructor's own sessions query), which is
+  all the builder needs.
+- **Test rounds pre-fill the registration form with random data** — see the "Admin
+  Test round" note in the main repo's CLAUDE.md; the generator is
+  `src/utils/testData.js` (`randomRegistrationAnswers`), applied by Registration.jsx
+  only when `isPreview()`.
 - After creating a session, a vivid code box appears (createdCodeBox) below the Create button and above Setup Summary, showing the session code with a dashed accent border. No auto-navigation -- admin opens the session from the right panel.
 - Code box hint text: "Share this code before your session begins. Participants join at: stouras.com/lab/ideasearchlab" (with clickable link)
 - joinHint class shows at the bottom of the Active Sessions panel

@@ -2149,6 +2149,28 @@ single-participant preview); `AuthContext` supplies a synthetic user, the sessio
 config is handed over via `localStorage`, and `<PreviewRibbon/>` shows a constant
 "nothing is saved" banner. All participant pages import Firestore/Functions from
 `../utils/db` instead of directly, so the swap is transparent in normal use.
+**A test round arrives with the registration form already filled in with RANDOM
+data and the consents ticked** (owner request 2026-08 — rehearsing shouldn't mean
+retyping demographics): `randomRegistrationAnswers` in
+`_ideasearchlab-src/src/utils/testData.js` answers each field by what it asks for
+(a random option for a select/country, a value inside `min`/`max` for a number,
+digits for a Student-ID, a test address for an e-mail, a name for a name field),
+applied by Registration.jsx ONLY when `isPreview()` and never over a value the
+tester already typed. A real Simulation-Platform handoff is **ignored** in preview
+(`platformHandoff()` returns null; `SIMP_EXPECT` is switched off for
+`?preview=1`), so a launch still sitting in this browser can't silently
+auto-submit the sandbox's form. **`/lab/answerarena` has the same two things** —
+a 🧪 Test round button on every session card (and on its Create-a-session card)
+plus a randomly pre-filled intake — implemented for its vanilla-JS store as
+`ARENA_PREVIEW` + a namespaced `LocalBackend` (`lab/answerarena/CLAUDE.md` §6b;
+offline test `node lab/answerarena/tools/preview-guard.mjs`); the two random
+fillers are deliberate twins — keep them in sync.
+
+**Excel export per session, from the session list.** Both admins let the
+instructor download ONE session's research workbook straight from its card —
+ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export data**
+button (calling the same `exportSessionWorkbook` builder the control room uses, so
+the file is identical), matching what Answer Arena's session cards already had.
 
 The retired static prototype `lab/brainstorming/` (an older Google-Sheets-backed
 version of the same Ideation Challenge, superseded by `lab/ideasearchlab/`) was

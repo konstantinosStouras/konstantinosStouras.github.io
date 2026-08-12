@@ -16,12 +16,17 @@
 // in the registration data.
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { COUNTRIES } from '../data/formDefaults'
+import { isPreview } from './preview'
 
 const HANDOFF_KEY = 'simp:handoff:v1'
 const MAX_AGE_MS = 6 * 60 * 60 * 1000   // a handoff older than 6 h is stale
 
 // The launch handoff written by stouras.com/simulation (same origin), or null.
+// A TEST ROUND ignores it: the sandbox rehearses the standalone flow (with its
+// own random test data), so a real platform launch still sitting in this
+// browser's localStorage must not silently answer the sandbox's forms.
 export function platformHandoff() {
+  if (isPreview()) return null
   try {
     const h = JSON.parse(localStorage.getItem(HANDOFF_KEY) || 'null')
     if (!h || h.sim !== 'ideasearchlab' || !h.profile) return null

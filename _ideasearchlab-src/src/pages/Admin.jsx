@@ -14,6 +14,7 @@ import { DEFAULT_REGISTRATION, DEFAULT_SURVEY_QUESTIONS, getRegistration, getSur
 import RichTextEditor from '../components/RichTextEditor'
 import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
 import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
+import { exportSessionWorkbook } from '../utils/sessionExport'
 import {
   INDIVIDUAL_TIMER_KEYS, GROUP_TIMER_KEYS,
   individualTimers, groupTimers, formatDuration, migratePhaseTimers,
@@ -1229,6 +1230,26 @@ export default function Admin() {
 }
 
 function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDelete, canEdit }) {
+  // Per-session Excel download, straight from the session list (the same
+  // workbook the control room's "Download Excel" produces — one shared builder,
+  // so the two can never drift). Mirrors the Answer Arena admin, where every
+  // session card carries its own Export data button.
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
+  async function exportData() {
+    if (exporting) return
+    setExporting(true)
+    setExportError('')
+    try {
+      await exportSessionWorkbook(session)
+    } catch (err) {
+      console.error('Session export failed:', err)
+      setExportError('Export failed — please try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const pc = session.phaseConfig || {}
   const phases = [pc.individualPhaseActive && 'Individual', pc.groupPhaseActive && 'Group'].filter(Boolean).join(' + ')
   const created = session.createdAt?.seconds
@@ -1260,8 +1281,18 @@ function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDel
           joiners until you press Close Session.
         </div>
       )}
+      {exportError && <div className={styles.sessionExportError}>{exportError}</div>}
       <div className={styles.sessionCardActions}>
         <button className="btn-primary" style={{ padding: '6px 18px', fontSize: 13 }} onClick={onOpen}>Open</button>
+        <button
+          className={styles.exportBtn}
+          type="button"
+          onClick={exportData}
+          disabled={exporting}
+          title="Download this session's full research workbook (participants, ideas, survey, timing, chat, AI usage, groups)"
+        >
+          {exporting ? 'Preparing…' : '⬇ Export data'}
+        </button>
         <button
           className="btn-ghost"
           style={{ padding: '6px 18px', fontSize: 13 }}

@@ -151,6 +151,18 @@
 }
 .closeBtn:hover { color: #2e9e5b; border-color: #2e9e5b; background: rgba(46,158,91,0.08); }
 
+/* "Export data" — download this session's research workbook straight from its
+   card in the session list (green, like the Answer Arena admin's export). */
+.exportBtn {
+  background: none; border: 1px solid #2e9e5b; color: #2e9e5b;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: 6px 14px; border-radius: var(--radius);
+  transition: color 0.15s, border-color 0.15s, background 0.15s, opacity 0.15s;
+}
+.exportBtn:hover:not(:disabled) { background: rgba(46,158,91,0.1); }
+.exportBtn:disabled { opacity: 0.55; cursor: default; }
+.sessionExportError { margin-top: 8px; font-size: 12px; color: #c0392b; }
+
 /* Destructive "Delete all" action for a whole list (sessions / users). */
 .bulkDeleteBtn {
   display: inline-flex;
