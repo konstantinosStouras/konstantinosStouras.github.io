@@ -87,12 +87,22 @@ const constOf = (t, name, sep) => {
   const m = t.match(new RegExp('^\\s*' + name + '\\s*' + sep + '\\s*([^#\\n]+)', 'm'));
   return m ? m[1].trim() : null;
 };
-for (const name of ['CONF_LEVEL', 'ALPHA', 'EQUIV_MARGIN', 'CONF95']) {
+for (const name of ['CONF_LEVEL', 'ALPHA', 'EQUIV_MARGIN']) {
   const a = constOf(py, name, '='), b = constOf(r, name, '<-');
   ok(a != null && a === b, name + ' matches in both templates (' + a + ' vs ' + b + ')');
 }
 
-/* ---- 4. the verdict buckets exist, in the order the owner asked for ------- */
+/* ---- 4. printed confidence labels are DERIVED, never spelled out --------- */
+// Sections 1 and 8 build every "95%" from CONF_PCT/ALPHA_PCT, so the prose can
+// never claim a confidence the tests did not use. A hard-coded percentage there
+// is exactly the drift that survives a change of CONF_LEVEL.
+for (const [lang, t] of [['Python', py], ['R', r]]) {
+  ok(!/\b99%/.test(t), lang + ' carries no stale 99% label');
+  ok((t.match(/CONF_PCT/g) || []).length >= 8,
+    lang + ' builds its confidence labels from CONF_PCT (' + (t.match(/CONF_PCT/g) || []).length + ' uses)');
+}
+
+/* ---- 5. the verdict buckets exist, in the order the owner asked for ------- */
 for (const [lang, t] of [['Python', py], ['R', r]]) {
   const order = ['1a. HAIKU', '1b. OPUS', '1c. USERS ARE INDIFFERENT', '1d. NOT DECIDED YET',
     '1e. BY TASK TYPE', '1f. BY DOMAIN'];

@@ -488,7 +488,7 @@ Four sections:
    read them. Both embed a `TASK_META` map (task_id → **complexity** Simple/Complex
    + **domain**, the 30-task study list) and join it onto each row (a non-blank
    exported `task_complexity`/`task_domain` overrides it). They then print, in
-   order: **(1) the 99%-confidence classification** (below); **(2) summary
+   order: **(1) the 95%-confidence classification** (below); **(2) summary
    statistics** per task, per domain and per task type
    (mean/SD/n + Opus win-rate); **(3) the main hypothesis test** with Haiku as the
    baseline (H0: mean graded preference = 0) two ways — task-level (each task = one
@@ -502,17 +502,17 @@ Four sections:
    one-way ANOVA across domains; **(7) regressions** of preference on complexity and
    on domain (cluster-robust); **(8) the 95%-confident sets** (below).
 
-   **Section 1 — what we can say at 99% confidence** (the headline, printed first
+   **Section 1 — what we can say at 95% confidence** (the headline, printed first
    because it is what the study is *for*). Every task, then every task type, then
    every domain is placed in exactly one of four buckets, in the order
    **1a Haiku preferred · 1b Opus preferred · 1c indifferent · 1d not decided yet**,
    followed by **1e by task type** and **1f by domain**. The three claims are NOT
    symmetric and each gets its own test (`decide`, shared by both languages, in
-   Python `st.t` / in R `qt`/`pt`, verified to agree to 3 dp on five synthetic
+   Python `st.t` / in R `qt`/`pt`, verified to agree to 3 dp on six synthetic
    exports): a **direction** needs the two-sided t-test of the mean graded
-   preference vs 0 to clear `ALPHA` = 0.01 (equivalently, the 99% CI sits entirely
+   preference vs 0 to clear `ALPHA` = 0.05 (equivalently, the 95% CI sits entirely
    on one side of 0); **indifference is a positive claim** and needs an
-   **equivalence test** — TOST, two one-sided t-tests each at 1%, i.e. the 98% CI
+   **equivalence test** — TOST, two one-sided t-tests each at 5%, i.e. the 90% CI
    inside `EQUIV_MARGIN` = ±0.5 scale points — because a merely non-significant
    test is evidence of nothing; and what clears neither is **"not decided yet"**,
    the *absence* of a finding rather than a finding of equality. A direction beats
@@ -527,29 +527,33 @@ Four sections:
    sampling) is not; both are printed and the difference is stated. Constants
    `CONF_LEVEL` / `ALPHA` / `EQUIV_MARGIN` sit at the top of each template and are
    the one place to retune the confidence level or the margin — **keep the two
-   copies identical** (`templates-guard.mjs` checks it). Degenerate data follows the
+   copies identical** (`templates-guard.mjs` checks it). **Every printed label is
+   built from `CONF_PCT`/`ALPHA_PCT`, derived from those numbers**, so the prose can
+   never claim a confidence the tests did not use; the guard also fails on a
+   hard-coded percentage in §1/§8. `CONF_LEVEL` governs **sections 1 and 8 only** —
+   sections 2–7 are the classical report and keep their own fixed 95% intervals and
+   p<0.05 thresholds, so at the default (0.95) the whole report agrees. Degenerate data follows the
    existing conventions: all-ties → *indifferent* (proven, p_equiv = 0), a constant
    non-zero task → decisive, n<2 → undecided; displayed intervals are clipped to the
    bounded [−3, +3] scale (`clip3`, display only — verdicts come from p-values, so
    clipping can never flip one).
 
-   **Section 8 — the 95%-confident sets** (printed last, per the owner). The same
-   three tests as section 1 at the **5%** level instead of the 1% one, so `decide`
-   takes the confidence as an argument (`CONF_LEVEL` for §1, `CONF95` for §8 —
-   keep both in sync across the two languages, `templates-guard.mjs` checks it).
-   It prints exactly three sets — **8a people prefer Haiku · 8b people prefer Opus ·
-   8c people are indifferent** — where "ground truth" means the preference of the
-   POPULATION the students are drawn from, which is what a confidence interval is a
-   claim about. **The tasks that reach no 95% verdict are deliberately NOT listed**
-   (only counted): no verdict is an absence of evidence, not a third kind of answer,
-   and printing them beside the three sets invites reading them as a finding. Because
-   a stricter bar can only classify fewer tasks, **§1's 99% sets are subsets of these**
-   — asserted in the output and verified on every fixture. There is no §8 figure: the
-   picture of the same classification is Figure 1, at 99%.
+   **Section 8 — the confident sets** (printed last, per the owner). The bottom line
+   of §1 restated as three lists of task ids you can act on — **8a people prefer
+   Haiku · 8b people prefer Opus · 8c people are indifferent** — where "ground truth"
+   means the preference of the POPULATION the students are drawn from, which is what
+   a confidence interval is a claim about. It is a **recap at the same `CONF_LEVEL`,
+   not a second analysis** (it reuses §1's own `c99` table), so the two can never
+   disagree, and it prints ids rather than repeating §1a–c's tables. **The tasks that
+   reach no verdict are deliberately NOT listed** (only counted): no verdict is an
+   absence of evidence, not a third kind of answer, and printing them beside the
+   three sets invites reading them as a finding. Verified on every fixture that §8's
+   sets equal §1a/1b/1c's and are disjoint. There is no §8 figure: the picture of the
+   same classification is Figure 1.
 
    **Seven figures**, in this order (the harvest order the
-   Insights section relies on): **(1)** the 99% verdict per task — bar = the task's
-   mean, whisker = its **99% CI**, colour = the verdict (blue Haiku / orange Opus /
+   Insights section relies on): **(1)** the verdict per task — bar = the task's
+   mean, whisker = its **`CONF_LEVEL` CI**, colour = the verdict (blue Haiku / orange Opus /
    **green = proven indifferent** / pale grey = not decided), with the ±margin
    indifference zone shaded (Python) or dotted (R); **(2)** responses-per-task
    (sample balance);
@@ -567,7 +571,7 @@ Four sections:
    runner-up, hence the other two; exact, so small/lopsided tasks are not
    over-called the way the earlier z-test was, e.g. 5-0-0 came out "certain";
    empty → a "not enough data" note; note this is the **choice-count** view at
-   95%, while Figure 1 is the **graded-preference** view at 99% — they answer
+   95%, while Figure 1 is the **graded-preference** view (mean + equivalence) — they answer
    different questions and may disagree);
    **(7)** by-domain / by-type means ± 95% CI. A plain-language **`INSIGHTS`** block
    ends each script and now also contains a **`## Figure N — …` heading + guide for
@@ -575,13 +579,14 @@ Four sections:
 
    The Python version uses numpy / pandas / scipy; the R version computes the
    **same numbers** with base R (`t.test`, `lm`, `anova`, `tapply`, `binom.test`);
-   they are verified to agree — the Section-1 verdicts, means, 99% CIs and both
-   p-values were checked task-by-task and group-by-group across five synthetic
-   exports (full 60-task, built-in-30-task, all-ties, n=1-per-task and
-   single-student), and `node lab/answerarena/tools/templates-guard.mjs` keeps the
-   two in step offline (section numbers 1..N in the same order in both, figure
-   guides contiguous 1..N with identical titles and no reference to a figure
-   nobody draws, and identical `CONF_LEVEL`/`ALPHA`/`EQUIV_MARGIN`). Numerical
+   they are verified to agree — the Section-1 verdicts, means, CIs and both
+   p-values were checked task-by-task and group-by-group across six synthetic
+   exports (full 60-task, built-in-30-task, all-ties, n=1-per-task, single-student
+   and narrow-spread), and `node lab/answerarena/tools/templates-guard.mjs` keeps the
+   two in step offline (section numbers 1..N in the same order in both, figure guides
+   contiguous 1..N with identical titles and no reference to a figure nobody draws,
+   identical `CONF_LEVEL`/`ALPHA`/`EQUIV_MARGIN`, §8's three buckets with no fourth,
+   and no hard-coded confidence percentage in §1/§8). Numerical
    agreement itself needs Pyodide/CPython + WebR/Rscript, so it stays a manual
    step. **Neither needs statsmodels** — the cluster-robust
    vcov (CR1, else HC3) is done by hand (`ols_robust` in Python, the same algebra
