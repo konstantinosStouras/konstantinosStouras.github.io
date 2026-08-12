@@ -28,6 +28,19 @@ function pickRandomStable(arr, n) {
   return [...arr].sort((a, b) => hashStr(a.id) - hashStr(b.id)).slice(0, n)
 }
 
+// How long the submission-confirmation screen is guaranteed to stay on screen
+// before this page follows a status change to the next phase.
+//
+// Why it exists: the backend flips a participant to the group phase the moment
+// EVERY member of their group has `individualComplete`. For whoever submits
+// last that is the same instant they submit — and in a solo group (groupSize
+// 1, how the app is usually tested) it is always the case — so the summary of
+// which ideas carry into the group phase flashed past within one Firestore
+// round-trip. The hold keeps the flow fully automatic (no click, so nobody can
+// stall their group by walking away); it only refuses to leave before the
+// screen has been readable, counting the remaining seconds down in the note.
+const CONFIRM_HOLD_MS = 15000
+
 export default function IndividualPhase() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
@@ -41,6 +54,13 @@ export default function IndividualPhase() {
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+  // Submission-confirmation hold (see CONFIRM_HOLD_MS). `submittedAtRef` is
+  // stamped when this participant's submit lands, `pendingPathRef` parks a
+  // phase change that arrived before the hold elapsed, and `holdLeft` is the
+  // seconds still to run (0 = not holding), shown in the waiting note.
+  const submittedAtRef = useRef(0)
+  const pendingPathRef = useRef(null)
+  const [holdLeft, setHoldLeft] = useState(0)
   const [groupMembers, setGroupMembers] = useState([])
   const [groupId, setGroupId] = useState(null)
   const [started, setStarted] = useState(false)
@@ -135,14 +155,50 @@ export default function IndividualPhase() {
         // participant already pressed Start in an earlier visit, so a reload
         // doesn't reset their place or restart their timer.
         if (data.individualStartedAt) setStarted(true)
+        // Restore the submission-confirmation view after a reload, so someone
+        // who refreshes while waiting for their group sees the summary of what
+        // they are carrying forward again rather than the workspace they have
+        // already submitted.
+        if (data.individualComplete) setDone(true)
         const status = data.status
-        if (status === 'group') navigate(`/session/${sessionId}/group`)
-        else if (status === 'survey') navigate(`/session/${sessionId}/survey`)
+        // A phase change arriving within CONFIRM_HOLD_MS of this participant's
+        // own submit is parked until the hold elapses (the countdown effect
+        // below performs the navigation), so the confirmation screen is never
+        // flashed past. 'done' is not held: that one means the instructor
+        // closed the session, which should take effect at once.
+        const goNext = path => {
+          const since = submittedAtRef.current
+          const left = since ? CONFIRM_HOLD_MS - (Date.now() - since) : 0
+          if (left <= 0) { navigate(path); return }
+          pendingPathRef.current = path
+          setHoldLeft(Math.ceil(left / 1000))
+        }
+        if (status === 'group') goNext(`/session/${sessionId}/group`)
+        else if (status === 'survey') goNext(`/session/${sessionId}/survey`)
         else if (status === 'done') navigate(`/session/${sessionId}/done`)
       }
     )
     return unsub
   }, [sessionId, user, navigate])
+
+  // Runs the confirmation hold down and then makes the parked move. Ticks
+  // faster than 1 s so the displayed second is never stale, and recomputes
+  // from the stamped submit time rather than decrementing, so a backgrounded
+  // tab (where intervals are throttled) still leaves on time.
+  const holding = holdLeft > 0
+  useEffect(() => {
+    if (!holding) return
+    const id = setInterval(() => {
+      const left = CONFIRM_HOLD_MS - (Date.now() - submittedAtRef.current)
+      if (left > 0) { setHoldLeft(Math.ceil(left / 1000)); return }
+      clearInterval(id)
+      setHoldLeft(0)
+      const path = pendingPathRef.current
+      pendingPathRef.current = null
+      if (path) navigate(path)
+    }, 250)
+    return () => clearInterval(id)
+  }, [holding, navigate])
 
   useEffect(() => {
     if (!sessionId || !groupId) return
@@ -266,6 +322,9 @@ export default function IndividualPhase() {
   async function markDone(selectionOverride) {
     if (done) return
     setDone(true)
+    // Anchors the confirmation hold. Stamped before the write, so the status
+    // change it triggers can never beat it and slip past the hold.
+    submittedAtRef.current = Date.now()
     const selection = selectionOverride instanceof Set ? selectionOverride : selectedIds
     try {
       // 1. Mark participant as done (critical, should always succeed)
@@ -294,6 +353,7 @@ export default function IndividualPhase() {
     } catch (err) {
       console.error('Failed to submit:', err)
       setDone(false)
+      submittedAtRef.current = 0
     }
   }
 
@@ -463,9 +523,11 @@ export default function IndividualPhase() {
             </div>
 
             <div className={styles.confirmWait}>
-              {(groupSize === 1 || !groupPhaseActive)
-                ? 'Your ideas are saved. Please wait for the session to advance.'
-                : `${doneCount} of ${groupSize} group members have submitted. Waiting for the rest of your group...`}
+              {holdLeft > 0
+                ? `Your ideas are saved. ${groupPhaseActive ? 'The group phase' : 'The next step'} starts in ${holdLeft}s...`
+                : (groupSize === 1 || !groupPhaseActive)
+                  ? 'Your ideas are saved. Please wait for the session to advance.'
+                  : `${doneCount} of ${groupSize} group members have submitted. The group phase will start automatically as soon as the rest of your group get here.`}
             </div>
           </div>
         </div>
