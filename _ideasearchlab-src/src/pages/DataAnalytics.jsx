@@ -543,7 +543,10 @@ export default function DataAnalytics() {
       values: Object.fromEntries(cols.map(c => [c.key, r[c.name]])),
     }))
     const { rows: next, matched, unmatched, kept } = matchUploadedKpisIntoRows(rows, entries, keys)
-    setRows(next)
+    // Recompute, like every other KPI-writing path. Filling `usefulness` from an
+    // upload while `overall_quality` kept the value it had when only `novelty`
+    // was known left a stale mean in the exported dataset.
+    setRows(recomputeOverall(next))
     const names = cols.map(c => c.label).join(', ')
     setKpiUploadMsg(
       `Loaded ${keys.length} KPI${keys.length === 1 ? '' : 's'} (${names}) from “${fileName}” onto ${matched} idea${matched === 1 ? '' : 's'}` +

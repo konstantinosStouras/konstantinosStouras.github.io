@@ -16,7 +16,7 @@ function spaFallback() {
         tag: 'script',
         injectTo: 'head-prepend',
         children:
-          '(function(){var p=new URLSearchParams(window.location.search).get("redirect");if(p){window.history.replaceState(null,null,decodeURIComponent(p));}}());',
+          '(function(){try{var p=new URLSearchParams(window.location.search).get("redirect");if(!p)return;var d=decodeURIComponent(p);if(d.charAt(0)!=="/"||d.charAt(1)==="/"||d.indexOf("/lab/ideasearchlab")!==0)return;window.history.replaceState(null,null,d);}catch(e){}}());',
       }]
     },
     closeBundle() {
@@ -31,5 +31,10 @@ export default defineConfig({
   base: '/lab/ideasearchlab/',
   build: {
     outDir: 'dist',
+    // Vite's default 'modules' target claims safari14, but the emitted CSS uses
+    // flexbox `gap` throughout, which Safari only gained in 14.1 — so the build
+    // was declaring compatibility it did not have. State the real floor.
+    target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14.1'],
+    cssTarget: ['edge88', 'firefox78', 'chrome87', 'safari14.1'],
   },
 })

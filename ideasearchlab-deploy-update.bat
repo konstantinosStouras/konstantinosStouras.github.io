@@ -30,7 +30,12 @@ call npm run build || (echo ERROR: build failed & pause & exit /b 1)
 
 echo.
 echo [2/5] Copying build into lab\ideasearchlab ...
-if exist "%OUT_DIR%\assets" rmdir /s /q "%OUT_DIR%\assets"
+REM Deliberately NOT deleting the old assets. Vite content-hashes every filename,
+REM so old and new bundles coexist harmlessly — and GitHub Pages serves index.html
+REM with a 10-minute cache, so a student who loaded the app before a mid-class
+REM redeploy would otherwise request a bundle that no longer exists and get a
+REM blank page that a normal reload does not fix. Prune assets\ by hand between
+REM classes if it grows.
 xcopy /e /i /y "%SRC_DIR%\dist\*" "%OUT_DIR%\" >nul || (echo ERROR: copy failed & pause & exit /b 1)
 
 echo.

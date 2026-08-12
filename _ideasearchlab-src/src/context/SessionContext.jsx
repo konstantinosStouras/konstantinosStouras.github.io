@@ -6,6 +6,7 @@ const SessionContext = createContext(null)
 export function SessionProvider({ sessionId, children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!sessionId) { setLoading(false); return }
@@ -21,12 +22,14 @@ export function SessionProvider({ sessionId, children }) {
         setLoading(false)
       },
       (err) => {
-        // Without this handler a listener error (a denied read, an auth token
-        // that failed to refresh) left `loading` true forever and every page
-        // under this provider sat on its loading state with no way out. Clear
-        // it so the pages can render their own ended/error state instead.
+        // A listener error is NOT the same as "the instructor deleted the
+        // session", though both used to resolve to `session === null` — so a
+        // token that failed to refresh, or one permission-denied blip, showed a
+        // mid-phase student the "all done, your responses have been recorded"
+        // screen (which also stamped their platform card Completed). Record it
+        // as an error and KEEP the last known session.
         console.error('Session listener error:', err)
-        setSession(null)
+        setError(err)
         setLoading(false)
       }
     )
@@ -35,7 +38,7 @@ export function SessionProvider({ sessionId, children }) {
   }, [sessionId])
 
   return (
-    <SessionContext.Provider value={{ session, loading }}>
+    <SessionContext.Provider value={{ session, loading, error }}>
       {children}
     </SessionContext.Provider>
   )
@@ -50,7 +53,9 @@ export function useSession() {
 // the snapshot resolved to null). Stays false while the session is still
 // loading so pages can show their own loading state first.
 export function useSessionEnded() {
-  const { session, loading } = useContext(SessionContext)
+  const { session, loading, error } = useContext(SessionContext)
+  // An unreadable session is not a finished one.
+  if (error) return false
   return !loading && (!session || session.status === 'done')
 }
 

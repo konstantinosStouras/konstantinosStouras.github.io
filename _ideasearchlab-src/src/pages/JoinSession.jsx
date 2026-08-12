@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { collection, query, where, getDocs, doc, getDoc, db } from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import { platformHandoff } from '../utils/simplatform'
 import { joinCodeFromSearch, normalizeJoinCode } from '../utils/joinLink'

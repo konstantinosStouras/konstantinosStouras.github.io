@@ -32,6 +32,8 @@ export const updateDoc = P ? pv.updateDoc : realFs.updateDoc
 export const deleteDoc = P ? pv.deleteDoc : realFs.deleteDoc
 export const writeBatch = P ? pv.writeBatch : realFs.writeBatch
 export const serverTimestamp = P ? pv.serverTimestamp : realFs.serverTimestamp
+export const arrayUnion = P ? pv.arrayUnion : realFs.arrayUnion
+export const arrayRemove = P ? pv.arrayRemove : realFs.arrayRemove
 
 export const getFunctions = P ? pv.getFunctions : realFn.getFunctions
 export const httpsCallable = P ? pv.httpsCallable : realFn.httpsCallable

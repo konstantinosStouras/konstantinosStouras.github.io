@@ -112,7 +112,7 @@ export default function App() {
         <Route path="/session/:sessionId/done" element={
           <RequireStudent>
             <SessionWrapper>
-              <Done />
+              <Done completed />
             </SessionWrapper>
           </RequireStudent>
         } />

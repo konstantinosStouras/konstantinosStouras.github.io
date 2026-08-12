@@ -450,6 +450,9 @@
   align-items: center;
 }
 .ideaPill:hover .deleteBtn { opacity: 1; }
+/* Keyboard focus reveals them too — otherwise tabbing moved focus onto an
+   invisible, unconfirmed Delete. */
+.ideaPill:focus-within .editBtn, .ideaPill:focus-within .deleteBtn { opacity: 1; }
 .deleteBtn:hover { color: #c0392b; background: rgba(192,57,43,0.08); }
 
 /* A touch device has no hover, so an opacity-0-until-hover control is simply

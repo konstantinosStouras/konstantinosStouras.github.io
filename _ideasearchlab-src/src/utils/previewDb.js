@@ -33,6 +33,23 @@ function ts() {
 }
 export function serverTimestamp() { return ts() }
 
+// Array sentinels, mirroring Firestore's. GroupPhase votes with these so two
+// rapid taps compose instead of racing a whole-array replace.
+export function arrayUnion(...values) { return { __arrayUnion: values } }
+export function arrayRemove(...values) { return { __arrayRemove: values } }
+function applySentinel(cur, val) {
+  if (val && val.__arrayUnion) {
+    const base = Array.isArray(cur) ? cur.slice() : []
+    val.__arrayUnion.forEach(v => { if (!base.includes(v)) base.push(v) })
+    return base
+  }
+  if (val && val.__arrayRemove) {
+    const base = Array.isArray(cur) ? cur.slice() : []
+    return base.filter(v => !val.__arrayRemove.includes(v))
+  }
+  return val
+}
+
 // ── refs ──────────────────────────────────────────────────────────────────
 // collection()/doc() are called as collection(db, ...segments); the first arg
 // (the db handle) is ignored and the remaining segments form the path. Segments
@@ -134,8 +151,9 @@ function applyPatch(obj, patch) {
       const parts = k.split('.')
       let o = obj
       for (let i = 0; i < parts.length - 1; i++) { if (o[parts[i]] == null || typeof o[parts[i]] !== 'object') o[parts[i]] = {}; o = o[parts[i]] }
-      o[parts[parts.length - 1]] = patch[k]
-    } else obj[k] = patch[k]
+      const leaf = parts[parts.length - 1]
+      o[leaf] = applySentinel(o[leaf], patch[k])
+    } else obj[k] = applySentinel(obj[k], patch[k])
   }
 }
 

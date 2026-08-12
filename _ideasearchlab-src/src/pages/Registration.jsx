@@ -17,7 +17,7 @@ export default function Registration() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { session } = useSession()
+  const { session, loading: sessionLoading } = useSession()
   const c = getContent(session).registration
   // Non-phase pages show [AI] lines when either phase's AI is enabled.
   const aiOn = !!(session?.aiConfig?.individualAI || session?.aiConfig?.groupAI)
@@ -125,8 +125,13 @@ export default function Registration() {
       demographics,
       consentGiven: true,
       consentTimestamp: new Date().toISOString(),
-      timing,
     }
+    // DOTTED paths, and never a null over a real value. Writing `timing` as a
+    // whole map REPLACES it, so a second pass through this form (a back
+    // navigation, a second tab, or the recovery route for a lost consent write)
+    // destroyed timing.individualOpenedAt / groupOpenedAt / surveyOpenedAt —
+    // blanking those columns in the export's Timing sheet.
+    Object.entries(timing).forEach(([k, v]) => { if (v != null) payload['timing.' + k] = v })
     // The login is a throwaway (synthetic e-mail), so record the student's
     // REAL identity from the platform registration alongside the demographics.
     const h = platformHandoff()
@@ -164,6 +169,10 @@ export default function Registration() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    // getRegistration(null) returns the DEFAULT field set, so submitting before
+    // the session arrived built `demographics` from the wrong field ids and
+    // `session.code` threw — swallowed into a generic "try again".
+    if (!session) { setError('Still loading the session — one moment.'); return }
     const validationError = validate()
     if (validationError) { setError(validationError); return }
     setError('')
@@ -221,6 +230,13 @@ export default function Registration() {
   }
 
   // Silent path: the platform data is being submitted invisibly.
+  // Until the session doc arrives, getRegistration(null) renders the DEFAULT
+  // form — a session with a customised registration briefly showed the wrong
+  // fields, and the platform pre-fill made that form instantly submittable.
+  if (sessionLoading && !session) {
+    return <div className={styles.loading}>Loading session...</div>
+  }
+
   if (auto === 'submitting') {
     return (
       <div className={styles.page}>

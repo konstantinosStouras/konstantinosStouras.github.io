@@ -250,6 +250,22 @@ exports.sendAIMessage = functions.https.onCall(async (data, context) => {
   if (!sessionSnap.exists) throw new HttpsError('not-found', 'Session not found.')
   const session = sessionSnap.data()
 
+  // The caller must be a participant of THIS session and must own the scope they
+  // are writing into. Without this, any signed-in user (accounts are minted
+  // silently for every visitor) could pass another group's deterministic id —
+  // g0, g1, … — and have the model read back that group's private transcript,
+  // write an assistant turn into their panel, and spend the instructor's API key.
+  const callerSnap = await db.collection('sessions').doc(sessionId)
+    .collection('participants').doc(context.auth.uid).get()
+  if (!callerSnap.exists) {
+    throw new HttpsError('permission-denied', 'Not a participant of this session.')
+  }
+  const caller = callerSnap.data()
+  const ownScope = scope === 'individual' ? context.auth.uid : caller.groupId
+  if (!ownScope || scopeId !== ownScope) {
+    throw new HttpsError('permission-denied', 'That is not your conversation.')
+  }
+
   if (scope === 'individual' && !session.aiConfig?.individualAI) {
     throw new HttpsError('permission-denied', 'AI not enabled for individual phase.')
   }
@@ -273,12 +289,25 @@ exports.sendAIMessage = functions.https.onCall(async (data, context) => {
     content: d.data().text,
   }))
 
-  history.push({ role: 'user', content: userMessage })
+  // The client awaits its own addDoc before calling this, so the message is
+  // already the last row of `history` — pushing it again sent the question to
+  // the model twice, inflating the billed input tokens (and therefore the
+  // export's AI-usage cost columns) on every single turn.
+  if (history[history.length - 1]?.content !== userMessage) {
+    history.push({ role: 'user', content: userMessage })
+  }
+
+  // The window must OPEN on a user turn: history strictly alternates, so a plain
+  // slice lands on an assistant turn once the conversation passes contextWindow
+  // messages — which Anthropic rejects outright, so the assistant went silent
+  // for the rest of that participant's session with the prompt already logged.
+  const window = history.slice(-config.contextWindow)
+  while (window.length && window[0].role !== 'user') window.shift()
 
   // Time the provider call so we can report how long each AI reply took.
   const genStart = Date.now()
   const { text: assistantText, inputTokens, outputTokens } =
-    await callLLM(history.slice(-config.contextWindow), config)
+    await callLLM(window, config)
   const generationMs = Date.now() - genStart
 
   await db

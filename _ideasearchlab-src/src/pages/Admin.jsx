@@ -491,6 +491,25 @@ export default function Admin() {
         return
       }
 
+      // Normalise the order against the phases that are actually on. The select
+      // is hidden when only one phase is active but keeps its last value, so
+      // "Group first" + Group Phase off wrote a session whose participants were
+      // placed into a phase that is not in its own sequence — and which
+      // advancePhase then refused to leave.
+      const pc = config.phaseConfig || {}
+      const normalizedConfig = {
+        ...config,
+        phaseConfig: {
+          ...pc,
+          phaseOrder: (pc.individualPhaseActive && pc.groupPhaseActive)
+            ? (pc.phaseOrder || 'individual_first')
+            : 'individual_first',
+          groupSize: pc.groupPhaseActive
+            ? Math.max(1, Math.floor(Number(pc.groupSize)) || 3)
+            : (pc.groupSize ?? 3),
+        },
+      }
+
       await addDoc(collection(db, 'sessions'), {
         code,
         name: newName.trim() || null,
@@ -499,7 +518,7 @@ export default function Admin() {
         status: 'waiting',
         joinCount: 0, // monotonic join counter -> deterministic, race-free grouping
         createdAt: serverTimestamp(),
-        ...config,
+        ...normalizedConfig,
       })
       setLastCreatedCode(code)
       setNewName('')
@@ -513,8 +532,19 @@ export default function Admin() {
   }
 
 
+  // Firestore does NOT cascade: deleting the session document on its own left
+  // every participant record, idea, group, chat message and AI message behind in
+  // the database — unreachable from the app (the instructor check can no longer
+  // resolve without the parent) and impossible to export or purge. The callable
+  // deletes the subcollections too. If it isn't deployed yet, fall back to the
+  // old behaviour rather than leaving the instructor unable to delete anything.
   async function deleteSession(sessionId) {
-    await deleteDoc(doc(db, 'sessions', sessionId))
+    try {
+      await httpsCallable(functions, 'deleteSessionDeep')({ sessionId })
+    } catch (err) {
+      console.error('Deep delete unavailable, falling back:', err)
+      await deleteDoc(doc(db, 'sessions', sessionId))
+    }
     setDeleteConfirm(null)
   }
 
@@ -539,9 +569,9 @@ export default function Admin() {
     setBulkBusy(true)
     try {
       if (bulkConfirm === 'active') {
-        await Promise.allSettled(activeSessions.map(s => deleteDoc(doc(db, 'sessions', s.id))))
+        await Promise.allSettled(activeSessions.map(s => deleteSession(s.id)))
       } else if (bulkConfirm === 'completed') {
-        await Promise.allSettled(completedSessions.map(s => deleteDoc(doc(db, 'sessions', s.id))))
+        await Promise.allSettled(completedSessions.map(s => deleteSession(s.id)))
       } else if (bulkConfirm === 'users') {
         await httpsCallable(functions, 'deleteAllRegisteredUsers')()
         await loadUsers()
@@ -1064,7 +1094,11 @@ export default function Admin() {
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <h3 className={styles.modalTitle}>Delete Session?</h3>
-            <p className={styles.modalDesc}>This permanently deletes the session and all its data. Cannot be undone.</p>
+            <p className={styles.modalDesc}>
+              This permanently deletes the session and everything in it — every participant record
+              (names, e-mails, demographics, survey answers), every idea, the group chat and the AI
+              transcripts. Export the data first if you still need it. Cannot be undone.
+            </p>
             <div className={styles.modalActions}>
               <button className="btn-primary" style={{ background: '#c0392b' }} onClick={() => deleteSession(deleteConfirm)}>Delete permanently</button>
               <button className="btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
@@ -1084,7 +1118,7 @@ export default function Admin() {
             <p className={styles.modalDesc}>
               {bulkConfirm === 'users'
                 ? 'This permanently deletes every registered account except the admin. It cannot be undone. (Requires the deleteAllRegisteredUsers Cloud Function to be deployed.)'
-                : 'This permanently deletes all of these sessions and their data. It cannot be undone.'}
+                : 'This permanently deletes all of these sessions and everything in them — participant records, ideas, chat and AI transcripts. Export anything you still need first. It cannot be undone.'}
             </p>
             <div className={styles.modalActions}>
               <button className="btn-primary" style={{ background: '#c0392b' }} onClick={runBulkDelete} disabled={bulkBusy}>
@@ -1400,7 +1434,18 @@ function NumberField({ label, value, min, max, onChange, disabled, nullable }) {
     <div className={styles.field}>
       <label className={styles.label}>{label}</label>
       <input className="input-field" type="number" value={value ?? ''} min={min} max={max} disabled={disabled}
-        onChange={e => onChange(e.target.value === '' ? null : parseInt(e.target.value))} />
+        onChange={e => {
+          // `min`/`max` are HTML attributes only — there is no form submit to
+          // validate them, so a typed 0 in "Participants per group" reached the
+          // session doc, where `Math.floor(index / 0)` produced group ids of
+          // gNaN/gInfinity and put the whole class in one group.
+          if (e.target.value === '') return onChange(null)
+          const n = parseInt(e.target.value, 10)
+          if (!Number.isFinite(n)) return onChange(null)
+          const lo = min != null ? Number(min) : -Infinity
+          const hi = max != null ? Number(max) : Infinity
+          onChange(Math.min(hi, Math.max(lo, n)))
+        }} />
     </div>
   )
 }

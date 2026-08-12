@@ -35,7 +35,10 @@ export default function PhaseTimer({ phaseStartedAt, durationSeconds, onExpire, 
     function tick() {
       const startMs = phaseStartedAt.toMillis ? phaseStartedAt.toMillis() : phaseStartedAt.seconds * 1000
       const endMs = startMs + durationSeconds * 1000
-      const left = Math.max(0, Math.round((endMs - Date.now()) / 1000))
+      // Clamped at BOTH ends: a device clock running slow made `left` exceed the
+      // duration, and the SVG ring's dasharray then went negative (invalid, so
+      // the ring silently disappeared).
+      const left = Math.max(0, Math.min(durationSeconds, Math.round((endMs - Date.now()) / 1000)))
       setRemaining(left)
       if (onTickRef.current) onTickRef.current(left)
       if (left === 0 && onExpire) onExpire()
@@ -43,7 +46,16 @@ export default function PhaseTimer({ phaseStartedAt, durationSeconds, onExpire, 
 
     tick()
     const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
+    // A backgrounded tab's interval is throttled hard (and suspended outright on
+    // iPadOS), so a student who switched apps came back to a deadline that had
+    // passed minutes earlier. Re-evaluate the moment the tab is visible again.
+    document.addEventListener('visibilitychange', tick)
+    window.addEventListener('focus', tick)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', tick)
+      window.removeEventListener('focus', tick)
+    }
   }, [phaseStartedAt, durationSeconds, onExpire])
 
   if (remaining === null) return null
@@ -54,7 +66,12 @@ export default function PhaseTimer({ phaseStartedAt, durationSeconds, onExpire, 
   const urgent = remaining <= 60
 
   return (
-    <div className={`${styles.timer} ${urgent ? styles.urgent : ''}`}>
+    <div
+      className={`${styles.timer} ${urgent ? styles.urgent : ''}`}
+      role="timer"
+      aria-live={urgent ? 'assertive' : 'off'}
+      aria-label={`${mins} minutes ${remaining % 60} seconds left in this stage`}
+    >
       <svg className={styles.ring} viewBox="0 0 36 36">
         <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.15" />
         <circle

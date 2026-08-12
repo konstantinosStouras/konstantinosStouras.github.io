@@ -28,6 +28,14 @@ service cloud.firestore {
       return isSessionInstructor(sessionId) || isSessionParticipant(sessionId);
     }
 
+    // The caller's own group within a session ('' when they have none). Every
+    // participant-facing read below is scoped through this, so one student can
+    // no longer read another group's chat — or another student's demographics
+    // and survey answers, which the consent statement calls anonymous.
+    function myGroup(sessionId) {
+      return get(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid)).data.get('groupId', '');
+    }
+
     // ── Global Settings ───────────────────────────────────────────────────
     // Admin-only: settings/ai holds provider API keys. Participants never
     // read settings client-side; Cloud Functions use the Admin SDK (which
@@ -49,7 +57,11 @@ service cloud.firestore {
 
     match /sessions/{sessionId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      // Sessions are created from the admin panel only. Any signed-in user could
+      // previously mint one — invisible in the panel (which filters on
+      // instructorId) but fully live: joinable by code, and able to spend the
+      // instructor's LLM key through the normal AI path.
+      allow create: if isAdmin()
         && request.resource.data.instructorId == request.auth.uid;
       allow update: if isSessionInstructor(sessionId);
       allow delete: if isAdmin();
@@ -57,25 +69,41 @@ service cloud.firestore {
       // ── Participants ──────────────────────────────────────────────────────
 
       match /participants/{participantId} {
+        // Own doc, own group, or the instructor. The participant doc holds real
+        // name, e-mail, platform student id, demographics and surveyAnswers, and
+        // the old rule let ANY participant of the session read all of them.
         allow read: if isSessionInstructor(sessionId)
-          || isSessionParticipant(sessionId)
-          || isOwner(participantId);
+          || isOwner(participantId)
+          || (isSessionParticipant(sessionId)
+              && resource.data.get('groupId', '') != ''
+              && resource.data.get('groupId', '') == myGroup(sessionId));
         allow create: if isSignedIn() && isOwner(participantId);
+        // A participant may edit their own doc, but not the fields that decide
+        // who they are or how their ballot counts: `groupId` is what the server
+        // tally queries on, and `votedFor` was unbounded, so one devtools line
+        // could move a student into another group and stuff its ballot (the
+        // tally counts duplicates), deciding that group's finalIdeas.
         allow update: if isSessionInstructor(sessionId)
-          || isOwner(participantId);
+          || (isOwner(participantId)
+              && request.resource.data.get('groupId', '') == resource.data.get('groupId', '')
+              && request.resource.data.get('anonymousLabel', '') == resource.data.get('anonymousLabel', '')
+              && request.resource.data.get('removed', false) == resource.data.get('removed', false)
+              && request.resource.data.get('votedFor', []).size() <= 3);
         allow delete: if false;
       }
 
       // ── Groups ────────────────────────────────────────────────────────────
 
       match /groups/{groupId} {
-        allow read: if isSessionMember(sessionId);
+        allow read: if isSessionInstructor(sessionId) || groupId == myGroup(sessionId);
         allow write: if false;
 
-        // Group chat: members can read and post, never edit or delete.
+        // Group chat: a member of THIS group can read and post, never edit or
+        // delete. The old rule was session-wide, so any participant could read
+        // — and post into — every other group's discussion.
         match /messages/{messageId} {
-          allow read: if isSessionMember(sessionId);
-          allow create: if isSessionParticipant(sessionId)
+          allow read: if isSessionInstructor(sessionId) || groupId == myGroup(sessionId);
+          allow create: if groupId == myGroup(sessionId)
             && request.resource.data.authorId == request.auth.uid;
           allow update, delete: if false;
         }
@@ -85,8 +113,13 @@ service cloud.firestore {
 
       match /ideas/{ideaId} {
         allow read: if isSessionMember(sessionId);
+        // An idea may only be filed against the author's own group (or no group,
+        // which is how an individual-phase idea is written). Without this a
+        // participant could inject an idea straight into another group's ballot.
         allow create: if isSessionParticipant(sessionId)
-          && request.resource.data.authorId == request.auth.uid;
+          && request.resource.data.authorId == request.auth.uid
+          && (request.resource.data.get('groupId', null) == null
+              || request.resource.data.get('groupId', '') == myGroup(sessionId));
         // Authors can edit their own ideas (title, description, selected flag).
         allow update: if request.auth.uid == resource.data.authorId;
         allow delete: if request.auth.uid == resource.data.authorId;
@@ -94,11 +127,18 @@ service cloud.firestore {
 
       // ── AI Messages ───────────────────────────────────────────────────────
 
+      // AI conversations are private to their scope: a participant's own
+      // individual chat, or their group's. The old rule was session-wide, and
+      // the client compounded it by subscribing to the whole collection.
       match /aiMessages/{messageId} {
-        allow read: if isSessionMember(sessionId);
+        allow read: if isSessionInstructor(sessionId)
+          || resource.data.get('scopeId', '') == request.auth.uid
+          || resource.data.get('scopeId', '') == myGroup(sessionId);
         allow create: if isSessionParticipant(sessionId)
           && request.resource.data.role == 'user'
-          && request.resource.data.authorId == request.auth.uid;
+          && request.resource.data.authorId == request.auth.uid
+          && (request.resource.data.get('scopeId', '') == request.auth.uid
+              || request.resource.data.get('scopeId', '') == myGroup(sessionId));
         allow update, delete: if false;
       }
     }

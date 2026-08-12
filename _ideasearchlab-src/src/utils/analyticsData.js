@@ -304,8 +304,15 @@ export const DEFAULT_REFERENCE_SET = [
 
 /** Map a session's AI configuration to its condition encoding (None/Solo/Group/Both). */
 export function conditionForSession(session) {
+  // Gated on the phase actually being ACTIVE, exactly like `conditionOf` in
+  // sessionExport.js. Without the gate, a group-only session that still carried
+  // `aiConfig.individualAI: true` was tagged "Both" here and "Group" in the
+  // workbook — the same ideas in two different cells of the 2x2, from one page.
   const ai = session?.aiConfig || {}
-  return conditionFromFlags(!!ai.individualAI, !!ai.groupAI)
+  const pc = session?.phaseConfig || {}
+  const indivOn = pc.individualPhaseActive !== false
+  const groupOn = pc.groupPhaseActive !== false
+  return conditionFromFlags(!!ai.individualAI && indivOn, !!ai.groupAI && groupOn)
 }
 
 /** Overall quality = mean of novelty and usefulness when both are present.
@@ -319,11 +326,11 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null
 }
 export function overallQuality(novelty, usefulness) {
-  const n = numOrNull(novelty)
-  const u = numOrNull(usefulness)
+  // The mean of the two, or nothing. Returning a lone novelty (or usefulness)
+  // score as "overall quality" mixed two different definitions into one column
+  // that the summary tiles, the per-condition table and the regressions all read.
+  const n = numOrNull(novelty), u = numOrNull(usefulness)
   if (n != null && u != null) return (n + u) / 2
-  if (n != null) return n
-  if (u != null) return u
   return null
 }
 
@@ -426,7 +433,11 @@ export function recomputeOverall(rows) {
 // ── CSV (de)serialisation ───────────────────────────────────────────────────
 
 function csvEscape(value) {
-  const s = value == null ? '' : String(value)
+  let s = value == null ? '' : String(value)
+  // Excel and LibreOffice evaluate a cell that opens with = + - @ even inside
+  // quotes, so an idea described as "- A fabric that changes colour" opened as
+  // #NAME? and its text was gone from the analysed dataset.
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
   if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"'
   return s
 }

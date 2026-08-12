@@ -135,11 +135,16 @@ export default function Survey() {
     }
   }
 
-  if (submitted) return <Done />
+  if (submitted) return <Done completed />
 
   // Instructor closed (status 'done') or deleted the session: show the same
   // end message instead of leaving the participant on an orphaned survey.
-  if (ended) return <Done />
+  // The instructor closing the session must not throw away a questionnaire that
+  // is already half-filled: participants can still write their own doc, so keep
+  // the form live with a banner and let them press Submit. Only an untouched
+  // survey goes straight to the end screen.
+  const hasDraft = Object.keys(answers).length > 0
+  if (ended && !hasDraft) return <Done />
 
   // Group visible questions into sections
   const sections = []
@@ -171,6 +176,13 @@ export default function Survey() {
           <RichText html={c.body} aiOn={aiOn} />
         </div>
 
+        {ended && (
+          <p className="error-msg" role="alert">
+            This session has been closed by the instructor — press Submit to save the answers
+            you have already given.
+          </p>
+        )}
+
         <form onSubmit={submitSurvey} className={styles.form}>
           {sections.map((sec, si) => (
             <div key={si} className={styles.sectionCard}>
@@ -189,7 +201,7 @@ export default function Survey() {
                     key={q.id}
                     className={`${styles.question} ${qi > 0 ? styles.questionBorder : ''}`}
                   >
-                    <div className={styles.qLabel}>
+                    <div className={styles.qLabel} id={`${q.id}-label`}>
                       {q.text}
                       {q.required !== false && <span className={styles.req}> *</span>}
                     </div>
@@ -197,7 +209,7 @@ export default function Survey() {
                     {/* ── likert5: numbered boxes ── */}
                     {q.type === 'likert5' && (
                       <div className={styles.scaleWrap}>
-                        <div className={styles.boxScale}>
+                        <div className={styles.boxScale} role="radiogroup" aria-labelledby={`${q.id}-label`}>
                           {[1, 2, 3, 4, 5].map(n => (
                             <label
                               key={n}
@@ -268,7 +280,7 @@ export default function Survey() {
                     {/* ── radio: pill buttons ── */}
                     {q.type === 'radio' && (
                       <div className={styles.radioWrap}>
-                        <div className={styles.radioRow}>
+                        <div className={styles.radioRow} role="radiogroup" aria-labelledby={`${q.id}-label`}>
                           {(q.options || []).map(opt => (
                             <label key={opt} className={styles.radioLabel}>
                               <input
@@ -308,6 +320,7 @@ export default function Survey() {
                         value={answers[q.id] || ''}
                         onChange={e => setAnswer(q.id, e.target.value)}
                         placeholder="Type your answer..."
+                        aria-labelledby={`${q.id}-label`}
                         rows={3}
                       />
                     )}
@@ -335,7 +348,7 @@ export default function Survey() {
   )
 }
 
-export function Done() {
+export function Done({ completed = false }) {
   // Rendered inside SessionWrapper (both from Survey and the /done route), so
   // the session's custom completion text and AI flags are available.
   const { session } = useSession()
@@ -345,9 +358,16 @@ export function Done() {
   // "✓ Completed" and blocks a second play). simpMarkCompleted is defined by
   // /simulation/prefill.js only on a genuine platform launch, so standalone
   // participants never stamp it; the preview sandbox is excluded explicitly.
+  //
+  // Only on a GENUINE completion. This screen is also what every phase page
+  // renders when the instructor closes the session, so students who were still
+  // mid-phase got their platform card stamped "✓ Completed" and locked out of a
+  // retake — and the instructor's Verify pass, which reads the real participant
+  // records, then proposed revoking the very ticks this had just written.
   useEffect(() => {
+    if (!completed) return
     try { if (!isPreview() && window.simpMarkCompleted) window.simpMarkCompleted() } catch { /* ignore */ }
-  }, [])
+  }, [completed])
   return (
     <div className={styles.donePage}>
       <div className={styles.doneControls}>

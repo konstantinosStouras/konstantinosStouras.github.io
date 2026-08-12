@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   collection, addDoc, onSnapshot, query, where, orderBy,
-  serverTimestamp, doc, updateDoc, db
+  serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, db
 } from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import { useSession, useSessionEnded, useAIModelLabel } from '../context/SessionContext'
@@ -227,6 +227,7 @@ export default function GroupPhase() {
   // from the doc on reload.
   const [subPhase, setSubPhase] = useState('ideation')
   const [votesLocked, setVotesLocked] = useState(false)
+  const [voteError, setVoteError] = useState('')
   const subPhaseInit = useRef(false)
   // Voting-confirmation hold (see CONFIRM_HOLD_MS): once the WHOLE group has
   // submitted its votes, everyone is shown the group's final selected ideas for
@@ -311,9 +312,18 @@ export default function GroupPhase() {
       doc(db, 'sessions', sessionId, 'participants', user.uid),
       snap => {
         if (!snap.exists()) return
-        const data = snap.data()
+        // `estimate` fills a still-pending serverTimestamp with a local value.
+        // Read as 'none' (the default) it comes back NULL, so for one round-trip
+        // after pressing Start or Proceed the new stage had no anchor: the page
+        // fell back to the previous stage's clock, which had just expired and
+        // therefore read 0:00 on a screen the participant had just entered.
+        const data = snap.data({ serverTimestamps: 'estimate' })
         setGroupId(data.groupId)
-        if (data.votesSubmitted) setVotesLocked(true)
+        // Two-way. A rejected submit is rolled back by the SDK, and with a
+        // one-way latch the UI kept its green "Votes submitted" badge and its
+        // hidden Submit button — the ballot was never recorded, and because the
+        // group's advance waits for every member, the whole group froze.
+        setVotesLocked(!!data.votesSubmitted)
         setGroupStartedAt(data.groupStartedAt || null)
         setGroupVotingStartedAt(data.groupVotingStartedAt || null)
         // Timing: record when this participant first entered the group phase
@@ -376,8 +386,14 @@ export default function GroupPhase() {
   // never stall. The backend still tallies the group's finalIdeas when its
   // trigger fires (and the instructor's Force advance remains a backstop).
   const selfAdvancedRef = useRef(false)
+  const [advanceRetry, setAdvanceRetry] = useState(0)
   useEffect(() => {
     if (selfAdvancedRef.current) return
+    // `nextAfterGroup` is derived from the session's phase config, and
+    // SessionWrapper does not gate on loading — so without this guard a
+    // group_first participant whose session doc had not arrived yet was written
+    // straight to 'survey', skipping the individual phase entirely.
+    if (!session) return
     if (!votesLocked || !sessionId || !user || !groupId) return
     if (members.length === 0 || !members.every(m => m.votesSubmitted)) return
     // Stamp the group's completion BEFORE the write that advances us, so the
@@ -392,11 +408,15 @@ export default function GroupPhase() {
       doc(db, 'sessions', sessionId, 'participants', user.uid),
       { status: nextAfterGroup }
     ).catch(err => {
-      // Allow a retry on the next members snapshot if the write failed.
+      // Retry on a TIMER, not on the next members snapshot: by this point every
+      // member has submitted, so no further snapshot is coming and the effect's
+      // deps never change again — one failed write stranded the participant on
+      // the result card with no way forward and no survey collected.
+      setTimeout(() => { selfAdvancedRef.current = false; setAdvanceRetry(n => n + 1) }, 3000)
       selfAdvancedRef.current = false
       console.warn('Self-advance after group voting failed:', err.message)
     })
-  }, [votesLocked, members, sessionId, user, groupId, nextAfterGroup])
+  }, [votesLocked, members, sessionId, user, groupId, nextAfterGroup, session, advanceRetry])
 
   // Runs the voting-confirmation hold down and then makes the parked move.
   // Recomputes from the stamped completion time rather than decrementing, so a
@@ -446,13 +466,24 @@ export default function GroupPhase() {
     return unsub
   }, [sessionId, groupId])
 
-  // ── Listen to all ideas for this group ──────────────
+  // ── Listen to this group's ideas ────────────────────
+  // SCOPED, and keyed on a stable member string. This used to subscribe to the
+  // session's ENTIRE ideas collection and filter in JS — every student streamed
+  // every other group's ideas (~450 docs x 70 students on a real class) — and
+  // its dependency was the `members` ARRAY, replaced on every field change of
+  // every group-mate, so a single vote toggle tore the listener down and
+  // re-delivered the lot. That churn is what made the ideas list re-render (and
+  // a tap land on the wrong card) while people were voting.
+  const memberKey = members.map(m => m.id).sort().join(',')
   useEffect(() => {
-    if (!sessionId || !groupId || members.length === 0) return
-    const memberIds = members.map(m => m.id)
+    if (!sessionId || !groupId || !memberKey) return
+    const memberIds = memberKey.split(',')
 
     const unsub = onSnapshot(
-      collection(db, 'sessions', sessionId, 'ideas'),
+      query(
+        collection(db, 'sessions', sessionId, 'ideas'),
+        where('authorId', 'in', memberIds.slice(0, 30))
+      ),
       snap => {
         const all = snap.docs.map(d => ({ id: d.id, ...d.data() }))
 
@@ -466,13 +497,16 @@ export default function GroupPhase() {
           return pickRandomStable(mine, ideasCarried)
         })
 
+        // A group idea is authored by a member of this group, so the same
+        // scoped query carries both kinds.
         const groupIdeas = all.filter(i => i.phase === 'group' && i.groupId === groupId)
 
         setIdeas({ individual: individualIdeas, group: groupIdeas })
-      }
+      },
+      err => console.error('Group ideas listener error:', err)
     )
     return unsub
-  }, [sessionId, groupId, members, ideasCarried])
+  }, [sessionId, groupId, memberKey, ideasCarried])
 
   // ── Listen to chat messages ─────────────────────────
   useEffect(() => {
@@ -502,20 +536,25 @@ export default function GroupPhase() {
   }, [isVoting, votesLocked])
 
   // ── Toggle vote on double-click ─────────────────────
+  // A vote is a single-element edit, not a whole-array replace. `myVotes` comes
+  // from the members snapshot, so replacing the array meant two taps closer
+  // together than one Firestore round-trip both read the same stale array and
+  // the second silently erased the first — and two tabs of the same student
+  // clobbered each other's ballots outright. arrayUnion/arrayRemove compose.
+  // `lastToggleRef` swallows the second of a rapid double-fire on the same idea,
+  // so the double-click the hint still endorses is exactly one toggle.
+  const lastToggleRef = useRef({ id: null, at: 0 })
   const toggleVote = useCallback(async (ideaId) => {
     if (!isVoting || votesLocked || !sessionId || !user) return
+    const now = Date.now()
+    if (lastToggleRef.current.id === ideaId && now - lastToggleRef.current.at < 400) return
+    lastToggleRef.current = { id: ideaId, at: now }
     const isVoted = myVotes.includes(ideaId)
-    let newVotes
-    if (isVoted) {
-      newVotes = myVotes.filter(id => id !== ideaId)
-    } else {
-      if (myVotes.length >= MAX_VOTES) return
-      newVotes = [...myVotes, ideaId]
-    }
+    if (!isVoted && myVotes.length >= MAX_VOTES) return
     try {
       await updateDoc(
         doc(db, 'sessions', sessionId, 'participants', user.uid),
-        { votedFor: newVotes }
+        { votedFor: isVoted ? arrayRemove(ideaId) : arrayUnion(ideaId) }
       )
     } catch (err) {
       console.error('Vote toggle error:', err)
@@ -557,7 +596,14 @@ export default function GroupPhase() {
     try {
       await updateDoc(
         doc(db, 'sessions', sessionId, 'participants', user.uid),
-        { votesSubmitted: true, votedAt: serverTimestamp() }
+        {
+          votesSubmitted: true,
+          votedAt: serverTimestamp(),
+          // What the UI actually demanded of this ballot. Recomputing it at
+          // export time counted ideas that were never in the voting pool, so a
+          // complete ballot came back as "partial".
+          votesRequired: requiredVotes,
+        }
       )
       setVotesLocked(true)
       // Advancing to the next phase is handled by the self-heal effect below
@@ -565,6 +611,7 @@ export default function GroupPhase() {
       // frozen waiting on a single backend round-trip.
     } catch (err) {
       console.error('Submit votes error:', err)
+      setVoteError('Your votes could not be submitted — check your connection and press Submit Votes again.')
     }
   }
 
@@ -574,7 +621,6 @@ export default function GroupPhase() {
   // tallies and advances the group once everyone is locked.
   const autoSubmitVotes = useCallback(async () => {
     if (votesLocked || !sessionId || !user) return
-    setVotesLocked(true)
     setSubPhase('voting')
     try {
       await updateDoc(
@@ -582,12 +628,21 @@ export default function GroupPhase() {
         {
           votesSubmitted: true,
           votedAt: serverTimestamp(),
+          // What the UI actually demanded of this ballot. Recomputing it at
+          // export time counted ideas that were never in the voting pool, so a
+          // complete ballot came back as "partial".
+          votesRequired: requiredVotes,
           groupStage: 'voting',
           // If the timer expired during ideation, stamp the voting start now so
           // the ideation/voting split still has a boundary.
           ...(groupVotingStartedAt ? {} : { groupVotingStartedAt: serverTimestamp() }),
         }
       )
+      // Lock only once the write has landed. Locking first meant a rejected
+      // write left the green "Votes submitted" badge up with no retry control
+      // and no timer left to fire — and since the group's advance waits on every
+      // member's `votesSubmitted`, every other member froze with it.
+      setVotesLocked(true)
     } catch (err) {
       console.error('Auto-submit votes error:', err)
     }
@@ -1069,7 +1124,7 @@ export default function GroupPhase() {
               ))}
             </div>
 
-            <div className={styles.confirmWait}>
+            <div className={styles.confirmWait} role="status" aria-live="polite" aria-atomic="true">
               {holdLeft > 0
                 ? `Your group's ideas are saved. ${nextAfterGroup === 'individual' ? 'The individual phase' : 'The survey'} starts in ${holdLeft}s...`
                 : 'Your group\'s ideas are saved. Please wait for the session to advance.'}

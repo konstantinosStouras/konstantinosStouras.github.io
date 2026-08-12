@@ -21,6 +21,12 @@ const db = admin.firestore()
  * the session doc (counter + config) and the single target group doc.
  */
 async function assignToGroup(sessionRef, uid, name, email) {
+  // maxAttempts is raised well above the default 5: every join in the class is
+  // serialised through this one session document (the joinCount counter), and
+  // Firestore sustains roughly one write per second per document. A 70-student
+  // class joining inside a minute puts the transaction well into contention, and
+  // on the default the tail of the class got an opaque ABORTED — surfaced to the
+  // student as "Something went wrong. Please try again."
   return db.runTransaction(async (tx) => {
     // ── All reads first (Firestore transactions forbid reads after writes) ──
     const sessionSnap = await tx.get(sessionRef)
@@ -139,7 +145,7 @@ async function assignToGroup(sessionRef, uid, name, email) {
     tx.update(sessionRef, sessionUpdates)
 
     return sessionUpdates.status || session.status
-  })
+  }, { maxAttempts: 20 })
 }
 
 /**
@@ -339,7 +345,39 @@ async function reconcileGroupAfterRemoval(sessionRef, groupId) {
  * Validates a session code and registers the participant, then places them in
  * a group atomically (see assignToGroup). Called from the Registration page.
  */
-exports.joinSession = functions.https.onCall(async (data, context) => {
+/**
+ * deleteSessionDeep
+ * Deletes a session AND its subcollections. `deleteDoc` on the session document
+ * removes only that document — Firestore does not cascade — so the old client
+ * delete left every participant record (real names, e-mails, student ids,
+ * demographics, survey answers), every idea, group, chat message and AI message
+ * behind in the database, permanently: with the parent gone, `isSessionInstructor`
+ * can no longer resolve, so the data is unreachable from the app and cannot be
+ * exported or purged. The confirm dialog meanwhile promised it was all deleted.
+ */
+exports.deleteSessionDeep = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) throw new HttpsError('unauthenticated', 'Must be logged in.')
+    const { sessionId } = data || {}
+    if (!sessionId) throw new HttpsError('invalid-argument', 'sessionId is required.')
+
+    const sessionRef = db.collection('sessions').doc(sessionId)
+    const snap = await sessionRef.get()
+    if (!snap.exists) return { success: true, alreadyGone: true }
+    const isInstructor = snap.data().instructorId === context.auth.uid
+    const isAdminUser = context.auth.token.email === 'admin@admin.com'
+    if (!isInstructor && !isAdminUser) {
+      throw new HttpsError('permission-denied', 'Only the instructor can delete this session.')
+    }
+
+    // recursiveDelete walks every subcollection at any depth, so this covers
+    // participants, ideas, aiMessages, groups AND groups/*/messages.
+    await db.recursiveDelete(sessionRef)
+    return { success: true }
+  })
+
+exports.joinSession = functions.runWith({ timeoutSeconds: 120 }).https.onCall(async (data, context) => {
   if (!context.auth) throw new HttpsError('unauthenticated', 'Must be logged in.')
 
   const { code } = data

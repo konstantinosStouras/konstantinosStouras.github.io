@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <script>(function(){var p=new URLSearchParams(window.location.search).get("redirect");if(p){window.history.replaceState(null,null,decodeURIComponent(p));}}());</script>
+    <script>(function(){try{var p=new URLSearchParams(window.location.search).get("redirect");if(!p)return;var d=decodeURIComponent(p);if(d.charAt(0)!=="/"||d.charAt(1)==="/"||d.indexOf("/lab/ideasearchlab")!==0)return;window.history.replaceState(null,null,d);}catch(e){}}());</script>
 
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -27,9 +27,10 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/lab/ideasearchlab/assets/index-DWy06WY2.js"></script>
-    <link rel="stylesheet" crossorigin href="/lab/ideasearchlab/assets/index-QXtn0uw9.css">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet" /></noscript>
+    <script type="module" crossorigin src="/lab/ideasearchlab/assets/index-CRhbaSAQ.js"></script>
+    <link rel="stylesheet" crossorigin href="/lab/ideasearchlab/assets/index-MR8-ZGsa.css">
   </head>
   <body>
     <div id="root"></div>

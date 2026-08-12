@@ -33,6 +33,14 @@ export function formatTimestamp(ts) {
   if (!seconds) return String(ts)
   return new Date(seconds * 1000).toISOString().replace('T', ' ').slice(0, 19)
 }
+// Only ballots the server tally would have counted. `detachParticipant` clears
+// `groupId` but leaves `votedFor` intact, and the tally queries by groupId — so
+// a removed member's votes were invisible to the tally and visible to the
+// export, which is how an idea ended up with a recorded voter and no share of
+// the group's final picks.
+export function countedFor(participants) {
+  return participants.filter(p => !p.removed && p.groupId)
+}
 function countVotes(ideaId, participantList) {
   let count = 0
   participantList.forEach(p => { if ((p.votedFor || []).includes(ideaId)) count++ })
@@ -195,6 +203,15 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     const gid = i.groupId || authorGroupId[i.authorId]
     if (gid) groupPoolCount[gid] = (groupPoolCount[gid] || 0) + 1
   })
+  // Prefer the value the CLIENT actually enforced (persisted at submit). The
+  // recomputation counts every idea whose author is in the group — including the
+  // individual ideas that were never carried forward — so it ran high, and
+  // complete ballots exported as "partial (1/3)" against a requirement the
+  // participant was never held to.
+  const requiredVotesFrom = p =>
+    (Number.isFinite(Number(p && p.votesRequired)) && Number(p.votesRequired) > 0)
+      ? Number(p.votesRequired)
+      : Math.max(1, Math.min(3, groupPoolCount[p && p.groupId] || 3))
   const requiredVotesFor = gid => Math.max(1, Math.min(3, groupPoolCount[gid] || 3))
   // One definition of "did this person actually vote", used by the Participants
   // and Votes sheets alike so the two can never disagree.
@@ -204,19 +221,23 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     if (votesCast === 0) return 'empty (submitted, no votes)'
     return votesCast < required ? `partial (${votesCast}/${required})` : 'voted'
   }
+  // A removed participant keeps their group in `removedFromGroupId`; reading only
+  // `groupId` blanked the Group UID that the About sheet designates as the triad
+  // clustering key, silently dropping their rows from any clustered analysis.
+  const groupOf = p => p.groupId || p.removedFromGroupId || ''
   const participantRows = participants.map(p => {
     const demo = p.demographics || {}
     const votedFor = p.votedFor || []
     const votesCast = votedFor.length
-    const required = requiredVotesFor(p.groupId)
+    const required = requiredVotesFrom(p)
     const ballotStatus = ballotStatusOf(p, required)
     const row = {
       'Participant ID': p.id,
       'Name': p.name || '',
       'Email': p.email || '',
       'Anonymous Label': p.anonymousLabel || '',
-      'Group ID': p.groupId || '',
-      'Group UID': p.groupId ? `${sessionCode}:${p.groupId}` : '',
+      'Group ID': groupOf(p),
+      'Group UID': groupOf(p) ? `${sessionCode}:${groupOf(p)}` : '',
       'Status': p.status || '',
       'Individual Complete': p.individualComplete ? 'Yes' : 'No',
       'Votes Submitted': p.votesSubmitted ? 'Yes' : 'No',
@@ -225,15 +246,36 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
       'Voted For (idea IDs)': votedFor.join(', '),
       'Voted For (titles)': votedFor.map(id => ideaTitleById[id] || id).join(' | '),
       'Consent Given': p.consentGiven ? 'Yes' : 'No',
+      // HOW consent was given. A platform-launched student never sees the
+      // statements (the platform's terms cover them), and without this column
+      // their row is indistinguishable from someone who ticked both boxes.
+      'Consent Via': p.consentVia || (p.consentGiven ? 'in-app form' : ''),
       'Consent Timestamp': p.consentTimestamp || '',
+      // The login is a synthetic throwaway address, so these are the only real
+      // identifiers a platform-launched participant has.
+      'Platform Name': p.platform?.name || '',
+      'Platform Email': p.platform?.email || '',
+      'Platform Student ID': p.platform?.studentId || '',
+      'Removed': p.removed ? 'Yes' : 'No',
       'Joined At': formatTimestamp(p.joinedAt),
     }
-    demoKeys.forEach(k => { row[labelById[k] || k] = demo[k] ?? '' })
+    // A registration question labelled "Name", "Status" or — worst — "Condition"
+    // used to REPLACE the fixed column of that name, silently. Disambiguate
+    // instead of overwriting.
+    const taken = new Set([...Object.keys(row), 'Session Code', 'Condition',
+      'Condition (paper name)', 'AI present in', 'AI Solo (0/1)', 'AI Group (0/1)'])
+    demoKeys.forEach(k => {
+      let header = labelById[k] || k
+      if (taken.has(header)) header = `${header} (${k})`
+      taken.add(header)
+      row[header] = demo[k] ?? ''
+    })
     return row
   }).map(stamp)
   sheets.push({ name: 'Participants', kind: 'json', rows: participantRows })
 
   // ── Ideas (primary unit of analysis) ──
+  const countedParticipants = countedFor(participants)
   const ideaRows = ideas.map(idea => ({
     'Idea ID': idea.id,
     'Stage': idea.phase === 'group' ? 'group' : (idea.phase === 'individual' ? 'individual (solo)' : (idea.phase || '')),
@@ -247,9 +289,9 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     'Description': idea.description || '',
     'Full Text': idea.text || '',
     'Carried to Group': idea.selected ? 'Yes' : 'No',
-    'Vote Count': countVotes(idea.id, participants),
-    'Voted By (labels)': votersOf(idea.id, participants).map(v => v.anonymousLabel || v.id).join(', '),
-    'Voted By (IDs)': votersOf(idea.id, participants).map(v => v.id).join(', '),
+    'Vote Count': countVotes(idea.id, countedParticipants),
+    'Voted By (labels)': votersOf(idea.id, countedParticipants).map(v => v.anonymousLabel || v.id).join(', '),
+    'Voted By (IDs)': votersOf(idea.id, countedParticipants).map(v => v.id).join(', '),
     'Final Group Pick': finalIdeaIds.has(idea.id) ? 'Yes' : 'No',
     'Final Pick Rank': finalIdeaRank[idea.id] || '',
     'Created At': formatTimestamp(idea.createdAt),
@@ -274,7 +316,7 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
   const voteRows = []
   participants.forEach(p => {
     const votedFor = p.votedFor || []
-    const required = requiredVotesFor(p.groupId)
+    const required = requiredVotesFrom(p)
     votedFor.forEach((ideaId, i) => {
       const idea = ideaById[ideaId]
       const gid = p.groupId || (idea && (idea.groupId || authorGroupId[idea.authorId])) || ''
@@ -296,6 +338,9 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
         'Votes Cast (this ballot)': votedFor.length,
         'Required Votes': required,
         'Ballot Status': ballotStatusOf(p, required),
+        // A removed member's ballot is kept for the record but is NOT what the
+        // server tallied — the two used to disagree with no way to tell.
+        'Counted in tally': (!p.removed && p.groupId) ? 'Yes' : 'No',
         'Votes Submitted': p.votesSubmitted ? 'Yes' : 'No',
         'Votes Submitted At': formatTimestamp(p.votedAt),
       })
@@ -358,7 +403,10 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
       .sort((a, b) => (a.anonymousLabel || '').localeCompare(b.anonymousLabel || '', undefined, { numeric: true }))
       .map(p => {
         const t = p.timing || {}
-        const myIdeas = ideas.filter(i => i.authorId === p.id).sort((a, b) => (toMs(a.createdAt) || 0) - (toMs(b.createdAt) || 0))
+        // Individual-phase ideas only: these columns sit between "Individual
+        // started" and "Individual submitted", so counting group ideas made
+        // "Ideas count" and "Last idea At" describe a later phase entirely.
+        const myIdeas = ideas.filter(i => i.authorId === p.id && i.phase !== 'group').sort((a, b) => (toMs(a.createdAt) || 0) - (toMs(b.createdAt) || 0))
         const myPrompts = aiMessages.filter(m => m.authorId === p.id && m.role === 'user').sort((a, b) => (toMs(a.timestamp) || 0) - (toMs(b.timestamp) || 0))
         const myReplies = aiMessages.filter(m => m.role === 'assistant' && m.scope === 'individual' && m.scopeId === p.id)
         return {
@@ -513,7 +561,10 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     const groupRows = groups.map(g => ({
       'Group ID': g.id,
       'Members': (g.members || []).join(', '),
-      'Member Labels': g.memberLabels ? Object.entries(g.memberLabels).map(([uid, label]) => `${label}`).join(', ') : '',
+      // In the SAME order as Members. Iterating the label map instead meant the
+      // two columns lined up only by luck, so reading the Groups sheet on its
+      // own assigned every label to the wrong member.
+      'Member Labels': (g.members || []).map(uid => (g.memberLabels || {})[uid] || '').join(', '),
       'Status': g.status || '',
       'Final Ideas': (g.finalIdeas || []).join(', '),
       'Final Ideas (titles)': (g.finalIdeas || []).map(id => {
@@ -634,6 +685,11 @@ export function mergeSessionSheets(sources, aboutMeta = []) {
   for (const src of sources) {
     for (const sheet of src.sheets || []) {
       if (sheet.name === 'About') continue                 // replaced by aggregate About
+      // These two are REBUILT by the caller from the live scored rows. Letting an
+      // imported copy through meant re-importing a previously downloaded
+      // aggregate produced two sheets of the same name, and `book_append_sheet`
+      // threw ("Worksheet with name |Rankings| already exists!") — no file at all.
+      if (sheet.name === 'Rankings' || sheet.name === 'Pool KPIs by condition') continue
       if (sheet.name === 'AI Pricing') { if (!pricing) pricing = sheet.rows; continue }
       const rows = sheet.rows || []
       if (!rows.length) continue
