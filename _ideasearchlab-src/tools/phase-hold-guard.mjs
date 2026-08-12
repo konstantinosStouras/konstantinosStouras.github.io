@@ -20,6 +20,12 @@
  * Both holds park the phase change rather than delaying the write, so the test
  * also checks the app actually advances once each hold elapses — a hold that
  * never releases would strand a whole class.
+ *
+ * It also pins the HEADER CONTROLS (theme toggle + account menu) to the right
+ * edge on EVERY screen of the flow. They are the one piece of furniture present
+ * throughout, so they must not move between steps — and they did: the phase
+ * headers relied on the timer's `margin-left: auto` to push them right, so the
+ * two confirmation screens (correctly timer-less) left them beside the wordmark.
  */
 const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs';
 const { chromium } = await import(PW);
@@ -60,6 +66,21 @@ await p.addInitScript(() => {
 });
 const btn = t => p.getByRole('button', { name: t }).first();
 const clickIf = async (t, ms=500) => { const b = btn(t); if (await b.count() && await b.isVisible().catch(()=>false)) { await b.click(); await p.waitForTimeout(ms); return true; } return false; };
+// Right edge of the header controls, and how far it sits from the viewport's
+// right edge — the number that must not change from screen to screen.
+const controlsRight = () => p.evaluate(() => {
+  const el = document.querySelector('[class*="_controls_"]');
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { right: Math.round(r.right), gap: Math.round(window.innerWidth - r.right), top: Math.round(r.top) };
+});
+const seenControls = [];
+const noteControls = async where => {
+  const c = await controlsRight();
+  if (c) seenControls.push({ where, ...c });
+  return c;
+};
+
 const headerClock = () => p.evaluate(() => {
   const h = document.querySelector('header') || document.body;
   const m = (h.innerText || '').match(/\b\d{1,2}:\d{2}\b/); return m ? m[0] : null;
@@ -68,11 +89,15 @@ const headerClock = () => p.evaluate(() => {
 try {
   await p.goto(B + 'session/PREVIEW/welcome?preview=1&key=stouras', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(1200);
+  await noteControls('welcome');
   await clickIf(/agree|continue/i, 1200);
   await clickIf(/skip/i, 900);
+  await noteControls('registration');
   await clickIf(/continue|submit|join|start/i, 1600);
   console.log('\n=== INDIVIDUAL PHASE ===', p.url().split('/').pop());
+  await noteControls('individual instructions');
   await clickIf(/^start$/i, 1200);
+  await noteControls('individual workspace');
 
   // Write 3 ideas
   for (const [t, d] of [['Alpha jacket','turns blue at 37C'],['Beta shirt','heat map panels'],['Gamma cap','colour shift brim']]) {
@@ -82,6 +107,7 @@ try {
     await p.waitForTimeout(500);
   }
   await clickIf(/Proceed to Selection/i, 900);
+  await noteControls('individual selection');
   const clockDuringSelection = await headerClock();
   console.log('  (selection stage header clock:', clockDuringSelection + ')');
 
@@ -92,6 +118,7 @@ try {
 
   console.log('\n--- Individual confirmation screen ---');
   await p.screenshot({ path: SHOT('individual-confirm') });
+  await noteControls('individual confirmation');
   const body1 = await p.innerText('body');
   check('the submission summary is shown', /Your ideas are submitted/i.test(body1), body1.slice(0,120));
   check('it lists the carried ideas', /CARRIED TO GROUP|Carried to group/i.test(body1));
@@ -105,9 +132,12 @@ try {
   await p.waitForTimeout(16000);
   console.log('\n=== GROUP PHASE ===', p.url().split('/').pop());
   check('it advanced to the group phase after the hold', /\/group/.test(p.url()), p.url());
+  await noteControls('group instructions');
   await clickIf(/^start$/i, 1500);
+  await noteControls('group ideation');
   await clickIf(/Proceed to Voting/i, 1500);
   await clickIf(/Got it/i, 800);   // "Reach consensus" modal
+  await noteControls('group voting');
   await p.screenshot({ path: SHOT('voting') });
 
   // Vote for the required number of ideas, then submit
@@ -120,6 +150,7 @@ try {
 
   console.log('\n--- Group result screen ---');
   await p.screenshot({ path: SHOT('group-result') });
+  await noteControls('group result');
   const body2 = await p.innerText('body');
   check('the group result summary is shown', /Your group has voted/i.test(body2), body2.slice(0,160));
   check('it lists the selected ideas with their votes', /\d+ votes?/i.test(body2));
@@ -129,8 +160,18 @@ try {
   check('NO phase timer is left ticking in the header', clock2 === null, `header shows "${clock2}"`);
 
   await p.waitForTimeout(16500);
+  await noteControls('survey');
   console.log('\n=== AFTER HOLD ===', p.url().split('/').pop());
   check('it advanced past the group phase after the hold', !/\/group$/.test(p.url()), p.url());
+  console.log('\n--- Header controls (theme + account) across the flow ---');
+  for (const c of seenControls) console.log(`      ${c.where.padEnd(26)} right=${String(c.right).padStart(5)}  gap=${c.gap}`);
+  const gaps = [...new Set(seenControls.map(c => c.gap))];
+  check(`the controls stay hard right on all ${seenControls.length} screens`,
+    seenControls.length >= 8 && gaps.length === 1,
+    `distinct right-edge gaps: ${gaps.join(', ')} — they move between steps`);
+  const offscreenish = seenControls.filter(c => c.gap > 120);
+  check('they are never left stranded beside the wordmark', offscreenish.length === 0,
+    offscreenish.map(c => `${c.where} gap=${c.gap}`).join('; '));
 } catch (e) {
   console.log('  [error]', e.message); fails++;
   await p.screenshot({ path: SHOT('error') }).catch(()=>{});

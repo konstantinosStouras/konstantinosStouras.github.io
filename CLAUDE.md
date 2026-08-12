@@ -2215,7 +2215,13 @@ their stage's work is done, and the only countdown that still governs anything i
 the hold printed on the card (the individual one used to leave the selection
 stage's clock ticking there, and its expiry re-fired `autoFinish`). Offline test:
 `node _ideasearchlab-src/tools/phase-hold-guard.mjs` (Playwright over the Test-round
-sandbox — nothing is saved).
+sandbox — nothing is saved). That guard also pins the **header controls** (theme
+toggle + account menu) to the same right edge on all 11 screens of the flow: they
+are present throughout, so they must not shift between steps, and two things
+moved them — the phase headers pushed them right only via the timer's
+`margin-left: auto` (so the timer-less confirmation screens stranded them beside
+the wordmark), and the workspace top bars padded 28px against the page headers'
+40px. Any new screen must land them 40px from the right.
 
 **Session cards look and behave the same in both admins** (owner request
 2026-08). *Alignment:* ideasearchlab's cards used a mix of global
