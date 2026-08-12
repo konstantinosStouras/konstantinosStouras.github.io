@@ -2359,7 +2359,16 @@ admin delete) and a per-row **Approve** toggle — the play gate (per the
 owner, against class links shared with out-of-class students): an
 unapproved student sees NO simulation cards (approval overrides the
 active toggles; `startApprovalWatch`/`apprBlocked` in index.html, live
-own-doc onSnapshot unlock, waiting-note banner; LOCAL mode ungated), a
+own-doc onSnapshot unlock, waiting-note banner; LOCAL mode ungated)
+**EXCEPT the ones they have already COMPLETED, which are always shown**:
+logging out and back in mints a new anonymous account (approval never
+rides through recovery), so a returning approved student would otherwise
+lose sight of finished work until re-approved. It grants nothing — a
+completed card cannot be launched (it opens the already-completed notice),
+so approval still gates every actual play — and the waiting note shows
+only while something is genuinely still locked (`pending > 0` in
+`render()`), so a student who finished everything active is not told to
+wait, and the "no simulations active" empty state cannot appear beside it. A
 student can never self-approve (the rules pin `approved` to admin-only
 writes — REPUBLISH firestore.rules when adopting), and Approve writes all
 uids behind a roster row like Delete. The roster also tracks **who answered
@@ -2421,9 +2430,13 @@ cross-origin newsvendor's copy chips. Students **log out** from the header (clea
 browser AND signs out the anonymous uid, so on a shared machine the next
 registration gets its own roster doc instead of overwriting); the roster view
 collapses duplicate re-registrations by student ID, newest kept, and the
-admin panel has its own Sign out. **Returning students** (**Log in** / **Register** pill buttons at the TOP
-RIGHT of the header — `#hero-auth`/`setHeroAuth`, shown on every entry
-screen while signed out, replaced by the "Registered as …" row once in;
+admin panel has its own Sign out. **The account corner (top right of the header)** holds EITHER the
+signed-out **Log in** / **Register** pills (`#hero-auth`/`setHeroAuth`,
+shown on every entry screen) OR — once signed in — the student's **name
+chip** ALONE (`#who-chip`; the pills never sit beside it), whose click
+opens the account menu (`#who-menu`: "Signed in as …", **Edit details**,
+**Log out**; closes on outside-click/Escape). **Returning students** (same
+corner;
 `showSims` calls `hideAll()` so the login card cannot linger behind the
 cards): same browser =
 auto-signed-in (localStorage + persisted anon auth); a NEW device/cleared

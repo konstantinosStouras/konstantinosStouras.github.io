@@ -298,8 +298,13 @@ try {
      'a completion under the CURRENT pinned session gates the card');
 
   // ---- 7. Student log out ----------------------------------------------
+  // Log out lives behind the name chip's account menu (top right).
+  ok(await page.isVisible('#who-chip'), 'the signed-in student is shown as a name chip at the top right');
+  await page.click('#who-chip');
+  await page.waitForSelector('#who-menu:not([hidden])');
+  ok(await page.isVisible('#wm-edit'), 'the account menu offers Edit details');
   page.once('dialog', d => d.accept());
-  await page.click('#who button:nth-of-type(2)');
+  await page.click('#wm-logout');
   await page.waitForSelector('#s-register:not([hidden])');
   ok(await page.evaluate(() => localStorage.getItem('simp:profile:v1')) === null,
      'Log out clears the saved registration and returns to the form');
