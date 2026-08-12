@@ -9,8 +9,8 @@ import { httpsCallable } from 'firebase/functions'
 import { db, auth, functions } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { DEFAULT_CONTENT, CONTENT_SCHEMA, getContent, getEffectiveDefaults } from '../data/defaultContent'
-import { DEFAULT_REGISTRATION, DEFAULT_SURVEY_QUESTIONS, getRegistration, getSurveyQuestions } from '../data/formDefaults'
+import { DEFAULT_CONTENT, CONTENT_SCHEMA, getEffectiveDefaults } from '../data/defaultContent'
+import { DEFAULT_REGISTRATION, DEFAULT_SURVEY_QUESTIONS } from '../data/formDefaults'
 import RichTextEditor from '../components/RichTextEditor'
 import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
 import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
@@ -136,7 +136,6 @@ export default function Admin() {
   const [newName, setNewName] = useState('')      // optional human-friendly session name
   const [newCode, setNewCode] = useState('')      // optional custom Session ID (blank = auto)
   const [createError, setCreateError] = useState('')
-  const [editingSession, setEditingSession] = useState(null)
   const [config, setConfig] = useState(freshConfig)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [closeConfirm, setCloseConfirm] = useState(null)
@@ -144,14 +143,11 @@ export default function Admin() {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [customDefaults, setCustomDefaults] = useState(null)
   const [defaultFeedback, setDefaultFeedback] = useState(null) // { key, text }
-  const editingRef = useRef(null)
   const defaultsSeededRef = useRef(false)
 
-  useEffect(() => { editingRef.current = editingSession }, [editingSession])
-
   // Admin-saved page-content defaults (settings/contentDefaults). The first
-  // snapshot seeds the create form (unless a session edit is in progress);
-  // later updates only feed the reset/save-default actions.
+  // snapshot seeds the create form; later updates only feed the reset/
+  // save-default actions.
   useEffect(() => {
     const unsub = onSnapshot(
       doc(db, 'settings', 'contentDefaults'),
@@ -160,7 +156,7 @@ export default function Admin() {
         setCustomDefaults(data)
         if (!defaultsSeededRef.current) {
           defaultsSeededRef.current = true
-          if (data && !editingRef.current) {
+          if (data) {
             setConfig(c => ({
               ...c,
               phaseConfig: (data.ideaParameters || data.phaseTimers)
@@ -348,62 +344,23 @@ export default function Admin() {
     }
   }
 
-  // "Save" for a content page: commit the current text. When editing a session
-  // it writes to that session immediately; in create mode the text is already
-  // captured and will be used when the session is created.
+  // "Save" for a content page: commit the current text. An existing session is
+  // never edited (its configuration is frozen at creation), so this only
+  // confirms the text is captured for the session about to be created.
   async function saveContentGroup(groupKey) {
-    try {
-      if (editingSession) {
-        await updateDoc(doc(db, 'sessions', editingSession.id), {
-          contentConfig: config.contentConfig,
-        })
-        flashDefaultFeedback(groupKey, 'Saved to this session.')
-      } else {
-        flashDefaultFeedback(groupKey, 'Saved — used when you create the session.')
-      }
-    } catch (err) {
-      console.error('Could not save:', err)
-      flashDefaultFeedback(groupKey, 'Could not save (check Firestore rules).')
-    }
+    flashDefaultFeedback(groupKey, 'Saved — used when you create the session.')
   }
 
   // "Save" for the registration / survey builders (same Save semantics).
   async function saveBuilder(key) {
-    const { configKey } = BUILDER_DEFAULTS[key]
-    try {
-      if (editingSession) {
-        await updateDoc(doc(db, 'sessions', editingSession.id), {
-          [configKey]: config[configKey],
-        })
-        flashDefaultFeedback(key, 'Saved to this session.')
-      } else {
-        flashDefaultFeedback(key, 'Saved — used when you create the session.')
-      }
-    } catch (err) {
-      console.error('Could not save:', err)
-      flashDefaultFeedback(key, 'Could not save (check Firestore rules).')
-    }
+    flashDefaultFeedback(key, 'Saved — used when you create the session.')
   }
 
   // ── Idea Parameters: Save / Make this the default / Restore built-in ──
-  // "Save" commits the current idea parameters. When editing a session it
-  // writes them to that session immediately; in create mode the values are
-  // already captured and will be used when the session is created.
+  // "Save" commits the current idea parameters for the session about to be
+  // created (an existing session's parameters are never edited).
   async function saveIdeaParams() {
-    try {
-      if (editingSession) {
-        await updateDoc(doc(db, 'sessions', editingSession.id), {
-          phaseConfig: config.phaseConfig,
-        })
-      }
-      flashDefaultFeedback('ideaParameters', editingSession
-        ? 'Saved to this session.'
-        : 'Saved — used when you create the session.')
-    } catch (err) {
-      console.error('Could not save idea parameters:', err)
-      flashDefaultFeedback('ideaParameters', 'Could not save (check Firestore rules).')
-      throw err
-    }
+    flashDefaultFeedback('ideaParameters', 'Saved — used when you create the session.')
   }
 
   // Persist the current idea parameters as the default for every new session.
@@ -449,24 +406,10 @@ export default function Admin() {
   }
 
   // ── Phase Timers: Save / Make this the default / Restore built-in ──
-  // "Save" commits the current timer durations. When editing a session it writes
-  // them to that session immediately; in create mode the values are already
-  // captured and will be used when the session is created.
+  // "Save" commits the current timer durations for the session about to be
+  // created (an existing session's timers are never edited).
   async function savePhaseTimers() {
-    try {
-      if (editingSession) {
-        await updateDoc(doc(db, 'sessions', editingSession.id), {
-          phaseConfig: config.phaseConfig,
-        })
-      }
-      flashDefaultFeedback('phaseTimers', editingSession
-        ? 'Saved to this session.'
-        : 'Saved — used when you create the session.')
-    } catch (err) {
-      console.error('Could not save phase timers:', err)
-      flashDefaultFeedback('phaseTimers', 'Could not save (check Firestore rules).')
-      throw err
-    }
+    flashDefaultFeedback('phaseTimers', 'Saved — used when you create the session.')
   }
 
   // Persist the current phase timers as the default for every new session.
@@ -562,39 +505,6 @@ export default function Admin() {
     }
   }
 
-  async function saveEdit() {
-    if (!editingSession) return
-    await updateDoc(doc(db, 'sessions', editingSession.id), {
-      phaseConfig: config.phaseConfig,
-      aiConfig: config.aiConfig,
-      contentConfig: config.contentConfig,
-      registrationConfig: config.registrationConfig,
-      surveyConfig: config.surveyConfig,
-    })
-    setEditingSession(null)
-    setConfig(freshConfig(customDefaults))
-  }
-
-  function startEdit(session) {
-    setLastCreatedCode(null)
-    setEditingSession(session)
-    // getContent merges saved overrides over defaults so every field is populated.
-    setConfig({
-      // A session created before the per-stage split carries only the old
-      // single-phase durations; fill the per-stage fields from them so the
-      // form shows real values (saving a blank would drop its countdowns).
-      phaseConfig: migratePhaseTimers(session.phaseConfig, DEFAULT_CONFIG.phaseConfig),
-      aiConfig: session.aiConfig,
-      contentConfig: getContent(session),
-      registrationConfig: getRegistration(session),
-      surveyConfig: { questions: getSurveyQuestions(session) },
-    })
-  }
-
-  function cancelEdit() {
-    setEditingSession(null)
-    setConfig(freshConfig(customDefaults))
-  }
 
   async function deleteSession(sessionId) {
     await deleteDoc(doc(db, 'sessions', sessionId))
@@ -779,14 +689,11 @@ export default function Admin() {
         <div className={styles.columns}>
           <div className={styles.leftCol}>
             <div className="card">
-              <h2 className={styles.cardTitle}>
-                {editingSession ? `Edit Session \u2014 ${editingSession.code}` : 'Create New Session'}
-                {editingSession && <span className={styles.editBadge}>editing</span>}
-              </h2>
+              <h2 className={styles.cardTitle}>Create New Session</h2>
               <p className={styles.cardSubtitle}>
-                {editingSession
-                  ? 'Adjust the configuration for this session. Changes apply immediately on save.'
-                  : 'Configure the session structure, timers, and AI assistance before launching.'}
+                Configure the session structure, timers, and AI assistance before launching.
+                A session's configuration is fixed once it is created \u2014 participants may
+                already be playing in it \u2014 so set it up here.
               </p>
 
               <div className={`${styles.section} ${styles.aiBox}`}>
@@ -981,46 +888,37 @@ export default function Admin() {
                 </Collapsible>
               </div>
 
-              {!editingSession && (
-                <div className={styles.section}>
-                  <h3 className={styles.subTitle}>Session details</h3>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Session name</label>
-                    <input
-                      className="input-field"
-                      value={newName}
-                      onChange={e => setNewName(e.target.value)}
-                      placeholder="e.g. Spring MBA 2026"
-                    />
-                  </div>
-                  <div className={styles.field} style={{ marginTop: 12 }}>
-                    <label className={styles.label}>Session ID</label>
-                    <input
-                      className="input-field"
-                      value={newCode}
-                      onChange={e => { setNewCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); setCreateError('') }}
-                      placeholder="(OPTIONAL) CUSTOM CODE"
-                      maxLength={40}
-                      spellCheck={false}
-                      autoComplete="off"
-                    />
-                    <p className={styles.sectionHint}>Leave blank to auto-generate a short code. Single word — capital letters and digits only, no spaces or dashes (3–40 chars).</p>
-                    {createError && <p className="error-msg">{createError}</p>}
-                  </div>
+              <div className={styles.section}>
+                <h3 className={styles.subTitle}>Session details</h3>
+                <div className={styles.field}>
+                  <label className={styles.label}>Session name</label>
+                  <input
+                    className="input-field"
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    placeholder="e.g. Spring MBA 2026"
+                  />
                 </div>
-              )}
+                <div className={styles.field} style={{ marginTop: 12 }}>
+                  <label className={styles.label}>Session ID</label>
+                  <input
+                    className="input-field"
+                    value={newCode}
+                    onChange={e => { setNewCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); setCreateError('') }}
+                    placeholder="(OPTIONAL) CUSTOM CODE"
+                    maxLength={40}
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                  <p className={styles.sectionHint}>Leave blank to auto-generate a short code. Single word — capital letters and digits only, no spaces or dashes (3–40 chars).</p>
+                  {createError && <p className="error-msg">{createError}</p>}
+                </div>
+              </div>
 
               <div className={styles.formActions}>
-                {editingSession ? (
-                  <>
-                    <button className="btn-primary" onClick={saveEdit}>Save Changes</button>
-                    <button className="btn-ghost" onClick={cancelEdit}>Cancel</button>
-                  </>
-                ) : (
-                  <button className="btn-primary" onClick={createSession} disabled={creating || (!pc.individualPhaseActive && !pc.groupPhaseActive)}>
-                    {creating ? 'Creating...' : 'Create Session'}
-                  </button>
-                )}
+                <button className="btn-primary" onClick={createSession} disabled={creating || (!pc.individualPhaseActive && !pc.groupPhaseActive)}>
+                  {creating ? 'Creating...' : 'Create Session'}
+                </button>
               </div>
 
               {lastCreatedCode && (
@@ -1081,10 +979,8 @@ export default function Admin() {
                   {activeSessions.map(s => (
                     <SessionCard key={s.id} session={s} participantCount={countFor(s.id)}
                       onOpen={() => navigate(`/admin/session/${s.id}`)}
-                      onEdit={() => startEdit(s)}
                       onClose={() => setCloseConfirm(s.id)}
-                      onDelete={() => setDeleteConfirm(s.id)}
-                      canEdit={s.status === 'waiting'} />
+                      onDelete={() => setDeleteConfirm(s.id)} />
                   ))}
                 </div>
               )}
@@ -1105,8 +1001,7 @@ export default function Admin() {
                   {completedSessions.map(s => (
                     <SessionCard key={s.id} session={s} participantCount={countFor(s.id)}
                       onOpen={() => navigate(`/admin/session/${s.id}`)}
-                      onDelete={() => setDeleteConfirm(s.id)}
-                      canEdit={false} />
+                      onDelete={() => setDeleteConfirm(s.id)} />
                   ))}
                 </div>
               </div>
@@ -1229,7 +1124,7 @@ export default function Admin() {
   )
 }
 
-function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDelete, canEdit }) {
+function SessionCard({ session, participantCount, onOpen, onClose, onDelete }) {
   // Per-session Excel download, straight from the session list (the same
   // workbook the control room's "Download Excel" produces — one shared builder,
   // so the two can never drift). Mirrors the Answer Arena admin, where every
@@ -1282,10 +1177,14 @@ function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDel
         </div>
       )}
       {exportError && <div className={styles.sessionExportError}>{exportError}</div>}
+      {/* One pill family for every action (styles.sBtn + a variant), matching the
+          Answer Arena admin's session cards. A session is never editable once it
+          exists — participants may already be playing in it — so there is no
+          Edit button; the configuration is fixed at creation. */}
       <div className={styles.sessionCardActions}>
-        <button className="btn-primary" style={{ padding: '6px 18px', fontSize: 13 }} onClick={onOpen}>Open</button>
+        <button className={`${styles.sBtn} ${styles.sBtnPrimary}`} type="button" onClick={onOpen}>Open</button>
         <button
-          className={styles.exportBtn}
+          className={`${styles.sBtn} ${styles.exportBtn}`}
           type="button"
           onClick={exportData}
           disabled={exporting}
@@ -1294,16 +1193,15 @@ function SessionCard({ session, participantCount, onOpen, onEdit, onClose, onDel
           {exporting ? 'Preparing…' : '⬇ Export data'}
         </button>
         <button
-          className="btn-ghost"
-          style={{ padding: '6px 18px', fontSize: 13 }}
+          className={`${styles.sBtn} ${styles.sBtnSec}`}
+          type="button"
           onClick={() => launchTestRound(session)}
           title="Play this session's whole participant flow in a private sandbox. Nothing is saved: no participant records, no AI cost, no data logged."
         >
           🧪 Test round
         </button>
-        {canEdit && <button className="btn-ghost" style={{ padding: '6px 18px', fontSize: 13 }} onClick={onEdit}>Edit</button>}
-        {onClose && <button className={styles.closeBtn} onClick={onClose}>Close Session</button>}
-        <button className={styles.deleteBtn} onClick={onDelete}>Delete</button>
+        {onClose && <button className={`${styles.sBtn} ${styles.closeBtn}`} type="button" onClick={onClose}>Close Session</button>}
+        <button className={`${styles.sBtn} ${styles.deleteBtn}`} type="button" onClick={onDelete}>Delete</button>
       </div>
     </div>
   )

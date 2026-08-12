@@ -232,8 +232,14 @@ no status picker. The right column has two cards: **Active sessions** and a
 separate **Closed sessions** card (shown only when there are closed ones). Each
 card shows a session's code + status, participant count + **2x2 conditions**
 (right) and created date (left). A running session offers Open / Copy link /
-Export data / **🧪 Test round** / Edit name / **Close**; a closed session (no joins)
-offers Export data / **🧪 Test round** / **Reopen** / permanently **Delete**. Per-session
+⬇ Export data / **🧪 Test round** / **Close**; a closed session (no joins)
+offers ⬇ Export data / **🧪 Test round** / **Reopen** / permanently **Delete**.
+**A session is never edited once it exists** — the old "Edit name" button and its
+inline `editMode` rename form were removed (owner 2026-08: participants may
+already be playing in it), the same rule as the ideasearchlab admin, which lost
+its Edit button in the same change; name a session on the Create card. The
+`.aa-btn … sm` pill set here is the reference the ideasearchlab cards were
+aligned to (`.sBtn` + variants in its `Admin.module.css`) — keep the two in sync. Per-session
 participant counts include anyone who **played** it - started (`playedSessions`),
 is on it (`sessionId`), or completed it (`completedSessions`).
 
