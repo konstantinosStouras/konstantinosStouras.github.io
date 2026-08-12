@@ -13,7 +13,14 @@
 <body>
 
 <header class="hero">
-  <div class="wrap">
+  <div class="wrap hero-wrap">
+    <!-- Signed-out entry buttons, top-right (like the /fun games). Shown on
+         every entry screen so a student can switch between them; replaced by
+         the "Registered as …" row once they are in. -->
+    <div id="hero-auth" class="hero-auth" hidden>
+      <button id="btn-go-login" class="btn ghost">Log in</button>
+      <button id="btn-go-register" class="btn">Register</button>
+    </div>
     <div class="brand">🎓 <a href="./">Simulation Platform</a></div>
     <p class="tag">Register once, then play the simulations your instructor has activated for today's class.</p>
     <div id="who" class="who" hidden></div>
@@ -27,13 +34,10 @@
        to the registration form. -->
   <section id="s-welcome" class="card" hidden>
     <h2>Welcome</h2>
-    <p class="hint">Registered already — on this or any other device? <strong>Log in</strong> with the
-    university student ID and e-mail you used. First time here? <strong>Register</strong> once and every
+    <p class="hint">Use the buttons at the <strong>top right</strong> of this page.
+    Registered already — on this or any other device? <strong>Log in</strong> with the university
+    student ID and e-mail you used. First time here? <strong>Register</strong> once and every
     simulation your instructor activates will be ready for you.</p>
-    <div class="choice-row">
-      <button id="btn-go-login" class="btn ghost">Log in</button>
-      <button id="btn-go-register" class="btn">Register</button>
-    </div>
   </section>
 
   <!-- Returning student log-in: university ID + e-mail from their registration -->
@@ -240,14 +244,24 @@
   function hideAll() {
     ['s-welcome', 's-login', 's-register', 's-sims'].forEach(function (id) { $(id).hidden = true; });
   }
+  /* The top-right Log in / Register pair belongs to the signed-OUT state: it
+     shows on every entry screen (so the student can switch between them) and
+     is replaced by the "Registered as …" row once they are in. LOCAL mode has
+     no central roster to log in against, so it stays hidden there. */
+  function setHeroAuth(on) { $('hero-auth').hidden = !(on && P.configured); }
   function showWelcome() {
     if (!P.configured) { showRegister(false); return; }
     hideAll();
+    setHeroAuth(true);
     $('s-welcome').hidden = false;
   }
   function showLogin() {
     hideAll();
+    setHeroAuth(true);
     $('l-err').textContent = '';
+    /* blank on every open — a shared machine must not leave the previous
+       student's ID/e-mail sitting in the form */
+    $('l-sid').value = ''; $('l-email').value = '';
     $('s-login').hidden = false;
     $('l-sid').focus();
   }
@@ -289,12 +303,16 @@
        mode (an edit already has the profile; LOCAL mode has nothing central) */
     $('recover-box').hidden = editing || !P.configured;
     hideAll();
+    setHeroAuth(!editing && !P.getProfile());
     $('s-register').hidden = false;
     $('f-name').focus();
   }
   function showSims() {
     var p = P.getProfile();
-    $('s-register').hidden = true;
+    /* hideAll (not just the register card): once the student is in, the
+       entry screens — including the Log in form they just used — must go. */
+    hideAll();
+    setHeroAuth(false);
     $('s-sims').hidden = false;
     /* Markers stamped while this page was closed are pushed by the roster
        watch, AFTER its first snapshot — pushing here would race a revocation

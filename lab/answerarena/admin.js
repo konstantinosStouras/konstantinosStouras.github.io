@@ -618,7 +618,17 @@
   function buildUsersCard() {
     var card = el('div', { class: 'aa-card' });
     var all = [];
-    card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:8px;' }, [el('h3', { text: 'Registered users' }), el('button', { class: 'aa-btn green sm', on: { click: function () { if (all.length) exportExcel(all); else toast('No users yet.'); } } }, ['Export to Excel'])]));
+    card.appendChild(el('div', { class: 'aa-h', style: 'margin-bottom:8px;' }, [el('h3', { text: 'Registered users' }), el('button', { class: 'aa-btn green sm', on: { click: function () {
+      /* Re-read the participants at EXPORT time, so the file can only ever
+         contain accounts that still exist. A deletion made meanwhile (here,
+         in another tab, or one that silently failed) is reflected instead of
+         being served from a stale in-memory list. */
+      Store.listParticipants().then(function (fresh) {
+        all = fresh.sort(function (a, b) { return tsMs(a.createdAt) - tsMs(b.createdAt); });
+        render();
+        if (all.length) exportExcel(all); else toast('No users yet.');
+      }).catch(function (e) { toast('Export failed: ' + ((e && e.code) || 'error')); });
+    } } }, ['Export to Excel'])]));
     var search = el('input', { type: 'text', placeholder: 'Search by Participant ID, e-mail or account ID...' });
     card.appendChild(el('div', { class: 'aa-field' }, [search]));
     var listWrap = el('div', {}, [el('p', { class: 'aa-note', text: 'Loading...' })]);
@@ -632,9 +642,29 @@
           || (p.email || '').toLowerCase().indexOf(q) >= 0
           || (p._id || '').toLowerCase().indexOf(q) >= 0;
       });
-      listWrap.innerHTML = '';
-      listWrap.appendChild(el('p', { class: 'aa-note', text: rows.length + ' of ' + all.length + ' user' + (all.length === 1 ? '' : 's') }));
+      /* GROUP BY STUDENT, not by account. A student who registers twice (a
+         reload, a second device, a re-take) gets a second anonymous account
+         = a second participant doc with the same Participant ID. Listing one
+         card per doc meant Delete removed only ONE of them, so the student's
+         other account — and all of its answers — stayed in the database and
+         kept showing up in the Excel export. One card per student now, and
+         Delete removes every account behind it. */
+      var groups = [], byKey = {};
       rows.forEach(function (p) {
+        var k = String(p.participantId || '').trim().toLowerCase() || (' id:' + p._id);
+        if (!byKey[k]) { byKey[k] = { rows: [] }; groups.push(byKey[k]); }
+        byKey[k].rows.push(p);
+      });
+      listWrap.innerHTML = '';
+      listWrap.appendChild(el('p', { class: 'aa-note',
+        text: groups.length + ' of ' + all.length + ' user' + (all.length === 1 ? '' : 's') +
+              (groups.length !== rows.length ? ' · ' + (rows.length - groups.length) + ' duplicate account(s) folded in' : '') }));
+      groups.forEach(function (g) {
+        // Show the most recent account; Delete covers all of them.
+        var list = g.rows.slice().sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+        var p = list[0], ids = list.map(function (x) { return x._id; });
+        var doneN = 0;
+        list.forEach(function (x) { doneN += Object.keys(x.completedSessions || {}).length; });
         var c = p.condition || {};
         listWrap.appendChild(el('div', { class: 'aa-q' }, [
           el('div', { class: 'row', style: 'justify-content:space-between;align-items:flex-start;' }, [
@@ -644,9 +674,21 @@
             ]),
             el('span', { class: 'aa-note', text: p.status || '' })
           ]),
-          el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'registered ' + fmtTs(p.createdAt) + '  ·  ' + Object.keys(p.completedSessions || {}).length + ' session(s) completed' + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
+          el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'registered ' + fmtTs(p.createdAt) + '  ·  ' + doneN + ' session(s) completed' + (ids.length > 1 ? '  ·  ' + ids.length + ' accounts' : '') + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
           el('div', { class: 'aa-row', style: 'margin-top:6px;' }, [
-            el('button', { class: 'aa-btn danger sm', on: { click: function () { if (window.confirm('Delete "' + (p.participantId || p.email || p._id) + '" and all their data?\n\nTheir answers are removed from the database, so they no longer appear in any data export — and they can take the study again.')) Store.deleteParticipant(p._id).then(function () { toast('Deleted — their data is gone from every export.'); load(); }, function (e) { toast('Delete FAILED: ' + ((e && e.code) || e) + ' — their data is still there; please try again.'); load(); }); } } }, ['Delete'])
+            el('button', { class: 'aa-btn danger sm', on: { click: function () {
+              if (!window.confirm('Delete "' + (p.participantId || p.email || p._id) + '" and all their data?' +
+                    (ids.length > 1 ? '\n\nThis student has ' + ids.length + ' accounts (they registered more than once) — ALL of them are removed.' : '') +
+                    '\n\nTheir answers are removed from the database, so they no longer appear in any data export — and they can take the study again.')) return;
+              /* allSettled: if one account fails to delete, say so instead of
+                 reporting success while its data is still exportable. */
+              Promise.allSettled(ids.map(function (id) { return Store.deleteParticipant(id); })).then(function (rs) {
+                var bad = rs.filter(function (x) { return x.status === 'rejected'; });
+                if (bad.length) toast('Delete FAILED for ' + bad.length + ' of ' + ids.length + ' account(s) — their data is still there; please try again.');
+                else toast('Deleted ' + (ids.length > 1 ? ids.length + ' accounts' : '') + ' — their data is gone from every export.');
+                load();
+              });
+            } } }, ['Delete'])
           ])
         ]));
       });
