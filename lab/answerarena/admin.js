@@ -1746,7 +1746,7 @@
   // SHADOW the current template (daLoadSaved returns the saved copy) — that is how
   // an old, now-broken script kept running and looked like "Python won't run".
   // On a version change we drop the saved code so the fixed template loads fresh.
-  var DA_TPL_VERSION = '2026-07-08-ci-review';
+  var DA_TPL_VERSION = '2026-08-12-conf95';
   function daMigrateTemplates() {
     try {
       if (localStorage.getItem('aa-da:ver') === DA_TPL_VERSION) return;
@@ -1848,6 +1848,105 @@
     var se = 100 * Math.sqrt(sumVar) / k;                 // delta-method SE, in percent
     return { mean: mean, lo: Math.max(0, mean - z * se), hi: Math.min(100, mean + z * se), k: k };
   }
+  // log-gamma (Lanczos) - only needed by daChiSqUpper below.
+  function daLogGamma(z) {
+    var g = [76.18009172947146, -86.50532032941677, 24.01409824083091,
+             -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+    var x = z, y = z, tmp = x + 5.5, ser = 1.000000000190015;
+    tmp -= (x + 0.5) * Math.log(tmp);
+    for (var j = 0; j < 6; j++) ser += g[j] / ++y;
+    return -tmp + Math.log(2.5066282746310005 * ser / x);
+  }
+  // Upper-tail probability of a chi-square with `dfree` df = the regularised
+  // incomplete gamma Q(df/2, x/2): series below a+1, continued fraction above (the
+  // standard split). Used only by the randomization-balance diagnostic, so an
+  // approximation good to ~1e-10 is far more than enough.
+  function daChiSqUpper(x, dfree) {
+    if (!isFinite(x) || x < 0 || !isFinite(dfree) || dfree < 1) return NaN;
+    if (x === 0) return 1;                                // no dispersion at all
+    var a = dfree / 2, xx = x / 2, gln = daLogGamma(a), i;
+    if (xx < a + 1) {                                     // series for P(a,x)
+      var ap = a, sum = 1 / a, del = sum;
+      for (i = 0; i < 500; i++) {
+        ap++; del *= xx / ap; sum += del;
+        if (Math.abs(del) < Math.abs(sum) * 1e-13) break;
+      }
+      return Math.max(0, Math.min(1, 1 - sum * Math.exp(-xx + a * Math.log(xx) - gln)));
+    }
+    var b = xx + 1 - a, c = 1e300, d = 1 / b, h = d;      // continued fraction for Q(a,x)
+    for (i = 1; i < 500; i++) {
+      var an = -i * (i - a);
+      b += 2; d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300;
+      c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300;
+      d = 1 / d; var dl = d * c; h *= dl;
+      if (Math.abs(dl - 1) < 1e-13) break;
+    }
+    return Math.max(0, Math.min(1, h * Math.exp(-xx + a * Math.log(xx) - gln)));
+  }
+  // From the aggregate Responses sheet: how many students answered each task -
+  // the randomization-balance view. Each student sees a random subset of the task
+  // set, so the counts are never identical; the question is whether they are as
+  // even as random assignment alone would make them. Drafts are excluded, exactly
+  // like daProvisionData, so both blocks describe the same rows.
+  function daBalanceData(sheetMap) {
+    var resp = (sheetMap && sheetMap.Responses) || [];
+    var byTask = {}, perStudent = {};
+    resp.forEach(function (r) {
+      var sub = r.submitted;
+      if (sub != null && sub !== '' && String(sub).toLowerCase() !== 'yes') return;   // skip drafts
+      var t = String(r.task_id == null ? '' : r.task_id).trim(); if (!t) return;
+      var o = byTask[t] || (byTask[t] = { n: 0, dec: 0, tie: 0, st: {}, cx: '', dm: '' });
+      o.n++;                                              // every submitted response counts
+      var cm = String(r.chosen_model == null ? '' : r.chosen_model).trim().toLowerCase();
+      if (cm === 'frontier' || cm === 'baseline') o.dec++;      // decisive = a model was chosen
+      else if (cm === 'tie') o.tie++;
+      var a = String(r.account_id == null ? '' : r.account_id).trim();
+      if (a) { o.st[a] = true; perStudent[a] = (perStudent[a] || 0) + 1; }
+      if (!o.cx) {                                        // resolve complexity/domain once per task
+        var meta = DA_TASK_META[t] || {};
+        var dc = r.task_complexity == null ? '' : String(r.task_complexity).trim();
+        var dd = r.task_domain == null ? '' : String(r.task_domain).trim();
+        o.cx = (dc && dc.toLowerCase() !== 'nan') ? dc : (meta.c || '(unknown)');
+        o.dm = (dd && dd.toLowerCase() !== 'nan') ? dd : (meta.d || '(unknown)');
+      }
+    });
+    var tasks = Object.keys(byTask).map(function (t) {
+      var o = byTask[t];
+      return { task: t, n: o.n, dec: o.dec, tie: o.tie, students: Object.keys(o.st).length, cx: o.cx, dm: o.dm };
+    }).sort(function (a, b) { return (b.n - a.n) || (a.task < b.task ? -1 : 1); });
+    var k = tasks.length;
+    if (!k) return null;
+    var counts = tasks.map(function (t) { return t.n; });
+    var total = counts.reduce(function (s, v) { return s + v; }, 0);
+    var mean = total / k;
+    var srt = counts.slice().sort(function (a, b) { return a - b; });
+    var median = k % 2 ? srt[(k - 1) / 2] : (srt[k / 2 - 1] + srt[k / 2]) / 2;
+    var ss = counts.reduce(function (s, v) { return s + (v - mean) * (v - mean); }, 0);
+    var sd = k > 1 ? Math.sqrt(ss / (k - 1)) : 0;
+    var freq = {};                                        // count value -> the tasks that got it
+    tasks.forEach(function (t) { (freq[t.n] = freq[t.n] || []).push(t.task); });
+    var mode = srt[0], modeN = 0;                         // most common count (lowest value wins a tie)
+    Object.keys(freq).map(Number).sort(function (a, b) { return a - b; }).forEach(function (v) {
+      if (freq[v].length > modeN) { modeN = freq[v].length; mode = v; }
+    });
+    // How uneven SHOULD the counts be? If every student really drew a uniform
+    // random subset, student i's m_i answers give each task an independent
+    // q_i = m_i/k chance of being picked, so a task's count has variance
+    // sum_i q_i(1-q_i). Comparing the observed spread with that expectation is
+    // what turns "the bars are uneven" into "the bars are uneven BY THE RIGHT
+    // AMOUNT". (Slightly conservative: it ignores the mild negative correlation
+    // from sampling a student's subset without replacement.)
+    var expVar = 0;
+    Object.keys(perStudent).forEach(function (a) { var q = perStudent[a] / k; expVar += q * (1 - q); });
+    var chi = expVar > 0 ? ss / expVar : NaN;             // dispersion statistic ~ chi2(k-1)
+    return { tasks: tasks, k: k, total: total, mean: mean, median: median, mode: mode, modeN: modeN,
+             min: srt[0], max: srt[k - 1], sd: sd, expSd: Math.sqrt(expVar), chi: chi,
+             p: (k > 1 && expVar > 0) ? daChiSqUpper(chi, k - 1) : NaN,
+             freq: freq, nStudents: Object.keys(perStudent).length,
+             // A student answering the same task twice would inflate a count without
+             // adding a person - worth saying out loud rather than silently averaging.
+             repeats: tasks.filter(function (t) { return t.students > 0 && t.students < t.n; }).length };
+  }
   // From the aggregate Responses sheet: per-task over/indifference/under rates
   // (% Opus / % tie / % Haiku) + Wilson CIs, plus the group averages (by task type
   // and by domain) as equal-weight means across tasks with delta-method CIs
@@ -1941,6 +2040,136 @@
     });
     return svg;
   }
+  var DA_BAL = { dec: '#4a6fa5', tie: '#9a978f', mark: '#e67e22' };
+  // Chart A - the DISTRIBUTION of responses per task: one row per response count,
+  // one dot per task that got exactly that many, with the median / mode / fewest /
+  // most rows called out. It answers "how even was the random assignment?" in the
+  // shape of the data itself, which a per-task bar chart (chart B) cannot show.
+  function daDistChart(bal) {
+    // Rows are equal-width buckets of the response count, aimed at ~14 rows so the
+    // shape is readable: width 1 (one row per exact count, like a tally) whenever
+    // the observed range is short enough, wider buckets when it is not. Empty rows
+    // INSIDE the range are kept - a gap is part of the shape.
+    var rows = [], span = bal.max - bal.min + 1, w = Math.max(1, Math.ceil(span / 14));
+    for (var lo = bal.min; lo <= bal.max; lo += w) {
+      var hi = Math.min(bal.max, lo + w - 1), ids = [];
+      for (var q = lo; q <= hi; q++) if (bal.freq[q]) ids = ids.concat(bal.freq[q]);
+      rows.push({ lo: lo, hi: hi, label: lo === hi ? String(lo) : (lo + '–' + hi), tasks: ids });
+    }
+    // The median ROW is the middle task's own count (the median itself can fall
+    // between two integers when the task count is even; the note prints the exact value).
+    var medRow = bal.tasks.map(function (t) { return t.n; }).sort(function (a, b) { return a - b; })[Math.floor((bal.k - 1) / 2)];
+    var W = 760, rowH = 22, top = 10, bottom = 10, labelW = 46, dotX = labelW + 14;
+    var H = top + rows.length * rowH + bottom;
+    var maxRow = rows.reduce(function (m, r) { return Math.max(m, r.tasks.length); }, 1);
+    var pitch = Math.max(3.5, Math.min(13, 300 / maxRow));   // dots never run past ~300px
+    var rad = Math.max(1.8, Math.min(4.2, pitch * 0.36));
+    var cntX = dotX + maxRow * pitch + 8, annoX = cntX + 46;
+    var svg = svgEl('svg', { width: '100%', viewBox: '0 0 ' + W + ' ' + H, style: 'max-width:' + W + 'px;display:block;' });
+    rows.forEach(function (r, i) {
+      var y = top + i * rowH + rowH / 2;
+      var inRow = function (x) { return x >= r.lo && x <= r.hi; };
+      svg.appendChild(svgEl('text', { x: labelW, y: y + 4, 'text-anchor': 'end', 'font-size': '11.5',
+        style: 'fill:var(--ink);font-variant-numeric:tabular-nums;' }, [r.label]));
+      r.tasks.forEach(function (id, j) {
+        var dot = svgEl('circle', { cx: dotX + j * pitch + rad, cy: y, r: rad, fill: DA_BAL.dec });
+        dot.appendChild(svgEl('title', { text: id + ': ' + r.label + (r.lo === 1 && r.hi === 1 ? ' response' : ' responses') }));
+        svg.appendChild(dot);
+      });
+      if (r.tasks.length) {
+        var cnt = svgEl('text', { x: cntX, y: y + 4, 'font-size': '10', style: 'fill:var(--muted);' },
+          [r.tasks.length + (r.tasks.length === 1 ? ' task' : ' tasks')]);
+        cnt.appendChild(svgEl('title', { text: r.tasks.join(', ') }));
+        svg.appendChild(cnt);
+      }
+      var marks = [];
+      if (inRow(medRow)) marks.push('median');
+      if (inRow(bal.mode)) marks.push('mode');
+      if (inRow(bal.min)) marks.push(daIdList(bal.freq[bal.min]) + ' (fewest)');
+      if (inRow(bal.max) && bal.max !== bal.min) marks.push(daIdList(bal.freq[bal.max]) + ' (most)');
+      if (marks.length) {
+        svg.appendChild(svgEl('text', { x: annoX, y: y + 4, 'font-size': '11', style: 'fill:var(--muted);' },
+          ['← ' + marks.join(' · ')]));
+      }
+    });
+    return svg;
+  }
+  // "T205, T229" - at most three ids so a long tie does not run off the chart.
+  function daIdList(ids) {
+    ids = ids || [];
+    return ids.length <= 3 ? ids.join(', ') : (ids.slice(0, 3).join(', ') + ' +' + (ids.length - 3));
+  }
+  // Chart B - one bar per task, descending: the whole bar is every response the
+  // task got, the darker part the DECISIVE ones (a model was chosen, ties
+  // excluded). The dashed line is the mean, so a glance shows who is under-served.
+  function daTaskCountChart(bal) {
+    var tasks = bal.tasks, W = 760, bandH = 17, top = 22, bottom = 22, labelW = 196;
+    var plotL = labelW, plotR = W - 52, plotW = plotR - plotL;
+    var max = Math.max(1, tasks.reduce(function (m, t) { return Math.max(m, t.n); }, 0));
+    var H = top + tasks.length * bandH + bottom;
+    var xs = function (v) { return plotL + Math.max(0, Math.min(max, v)) / max * plotW; };
+    var svg = svgEl('svg', { width: '100%', viewBox: '0 0 ' + W + ' ' + H, style: 'max-width:' + W + 'px;display:block;' });
+    var lx = plotL;                                        // legend
+    [['dec', 'decisive (a model was chosen)'], ['tie', 'ties / unclassified']].forEach(function (e) {
+      svg.appendChild(svgEl('rect', { x: lx, y: 4, width: '11', height: '11', rx: '2', fill: DA_BAL[e[0]] }));
+      svg.appendChild(svgEl('text', { x: lx + 15, y: 13, 'font-size': '10.5', style: 'fill:var(--ink);' }, [e[1]]));
+      lx += 15 + e[1].length * 6 + 16;
+    });
+    tasks.forEach(function (t, i) {
+      var y = top + i * bandH, h = bandH - 4;
+      var lbl = t.task + (t.dm && t.dm !== '(unknown)' ? ' · ' + t.dm : '');
+      if (lbl.length > 34) lbl = lbl.slice(0, 33) + '…';
+      var lt = svgEl('text', { x: plotL - 7, y: y + h - 1, 'text-anchor': 'end', 'font-size': '10.5', style: 'fill:var(--ink);' }, [lbl]);
+      lt.appendChild(svgEl('title', { text: t.task + ' · ' + t.dm + ' · ' + t.cx + ' — ' + t.n + (t.n === 1 ? ' response' : ' responses')
+        + ' from ' + t.students + (t.students === 1 ? ' student' : ' students') + ', ' + t.dec + ' decisive' }));
+      svg.appendChild(lt);
+      svg.appendChild(svgEl('rect', { x: plotL, y: y, width: Math.max(0, xs(t.n) - plotL), height: h, rx: '2', fill: DA_BAL.tie }));
+      svg.appendChild(svgEl('rect', { x: plotL, y: y, width: Math.max(0, xs(t.dec) - plotL), height: h, rx: '2', fill: DA_BAL.dec }));
+      svg.appendChild(svgEl('text', { x: xs(t.n) + 4, y: y + h - 1, 'font-size': '9.5', style: 'fill:var(--muted);' }, [t.n + ' · ' + t.dec + ' dec']));
+    });
+    svg.appendChild(svgEl('line', { x1: xs(bal.mean), y1: top - 4, x2: xs(bal.mean), y2: H - bottom + 2,
+      'stroke-dasharray': '4 3', style: 'stroke:' + DA_BAL.mark + ';stroke-width:2;' }));
+    svg.appendChild(svgEl('text', { x: xs(bal.mean), y: H - bottom + 14, 'text-anchor': 'middle', 'font-size': '10',
+      style: 'fill:' + DA_BAL.mark + ';' }, ['mean ' + bal.mean.toFixed(1)]));
+    return svg;
+  }
+  // Render the randomization-balance block (distribution + per-task counts).
+  function renderBalance(container, sheetMap) {
+    container.innerHTML = '';
+    var bal = daBalanceData(sheetMap);
+    if (!bal) return;                                      // no per-task Responses to plot
+    // Is the unevenness just randomness? Compare the observed spread with the
+    // spread random assignment alone produces (see daBalanceData). Read BOTH
+    // tails: too wide means some tasks were reachable less often than others,
+    // too narrow means the counts are more even than a random draw can be (a
+    // deliberately balanced allocation - or stacked/duplicated data).
+    var verdict;
+    if (bal.expSd === 0) {
+      verdict = 'Every student answered every task, so there is <b>no randomness here to judge</b> — the counts can only be equal.';
+    } else if (!isFinite(bal.p) || bal.k < 5 || bal.total < 20) {
+      verdict = 'There is <b>too little data to judge the spread</b> yet.';
+    } else if (bal.p < 0.05) {
+      verdict = 'The spread is <b>wider than random assignment alone explains</b> (dispersion test p = ' + daP(bal.p) + ') — worth checking that every task really was in every session\'s task set.';
+    } else if (1 - bal.p < 0.05) {
+      verdict = 'The counts are <b>more even than a random draw would be</b> (dispersion test p = ' + daP(1 - bal.p) + ' in the other tail) — fine if the allocation is deliberately balanced, but check for stacked or duplicated sources.';
+    } else {
+      verdict = 'The spread is <b>consistent with random assignment</b> (dispersion test p = ' + daP(bal.p) + '), i.e. as even as chance allows.';
+    }
+    container.appendChild(el('div', { class: 'aa-sub', style: 'margin:20px 0 4px;', text: 'Randomization balance — how many students answered each task' }));
+    container.appendChild(el('p', { class: 'aa-note', html:
+      'Each student sees a <b>random subset</b> of the tasks, so the counts are never identical — the question is whether they are as even as chance alone would make them. ' +
+      '<b>' + bal.total + '</b> submitted responses from <b>' + bal.nStudents + '</b> students over <b>' + bal.k + '</b> tasks: ' +
+      'fewest <b>' + bal.min + '</b>, median <b>' + (Math.round(bal.median * 10) / 10) + '</b>, mean <b>' + bal.mean.toFixed(1) + '</b>, most <b>' + bal.max + '</b> ' +
+      '(SD ' + bal.sd.toFixed(1) + ' vs ' + bal.expSd.toFixed(1) + ' expected under the randomization). ' + verdict +
+      (bal.repeats ? ' <b>Note:</b> ' + bal.repeats + ' task(s) hold more responses than distinct students — the same student answered one twice, or two sources were stacked.' : '') })
+    );
+    container.appendChild(el('div', { class: 'aa-sub2', text: 'Distribution of responses per task (each dot is one task)' }));
+    container.appendChild(el('div', { class: 'aa-provscroll' }, [daDistChart(bal)]));
+    container.appendChild(el('div', { class: 'aa-sub2', text: 'Per task, in descending order (' + bal.k + ' tasks)' }));
+    container.appendChild(el('div', { class: 'aa-provscroll' }, [daTaskCountChart(bal)]));
+  }
+  // p-value for prose: 3 significant digits, "<0.001" below that.
+  function daP(p) { return p < 0.001 ? '<0.001' : (Math.round(p * 1000) / 1000).toFixed(3); }
   // Render the three provisioning charts into `container` from the aggregate.
   function renderProvisioning(container, sheetMap) {
     container.innerHTML = '';
@@ -1972,7 +2201,7 @@
     wrap.appendChild(headerRow());
     wrap.appendChild(el('div', { class: 'aa-card' }, [
       el('h3', { text: 'Data analytics' }),
-      el('p', { class: 'aa-note', html: 'Load your session data (or import an already-exported Excel), consolidate it into a single workbook, then run Python or R on it — compiled entirely in your browser (nothing is uploaded). Each comparison asked a blind participant which answer they preferred (Haiku vs Opus, unlabelled) and how strongly, so the bundled scripts test whether people are <b>indifferent</b> or actually <b>prefer one model</b>. Four steps:' })
+      el('p', { class: 'aa-note', html: 'Load your session data (or import an already-exported Excel), consolidate it into a single workbook, then run Python or R on it — compiled entirely in your browser (nothing is uploaded). Each comparison asked a blind participant which answer they preferred (Haiku vs Opus, unlabelled) and how strongly, so the bundled scripts open by classifying every task, task type and domain into <b>Haiku preferred</b> / <b>Opus preferred</b> / <b>indifferent</b> / <b>not decided yet</b> — each claim held to <b>95% confidence</b>. Four steps:' })
     ]));
     daRefs = {};   // this render's sections register their live refreshers here
     wrap.appendChild(buildDaSection1());
@@ -2174,20 +2403,23 @@
     card.appendChild(el('div', { class: 'aa-row', style: 'margin-top:12px;' }, [dl]));
     var hint = el('p', { class: 'aa-note', text: 'Load data in Section 1 first.' });
     card.appendChild(hint);
-    var charts = el('div', {});
+    var balance = el('div', {});     // randomization balance (responses per task)
+    card.appendChild(balance);
+    var charts = el('div', {});      // model-provisioning charts
     card.appendChild(charts);
     daRefs.updateSec2 = update;
     update();
     function statBox(v, l) { return el('div', { class: 'aa-statbox' }, [el('b', { text: String(v) }), el('span', { text: l })]); }
     function update() {
       var m = daState.sheetMap;
-      stats.innerHTML = ''; charts.innerHTML = '';
+      stats.innerHTML = ''; charts.innerHTML = ''; balance.innerHTML = '';
       if (!m) { dl.setAttribute('disabled', 'true'); hint.style.display = 'block'; return; }
       hint.style.display = 'none'; dl.removeAttribute('disabled');
       stats.appendChild(statBox((m.Responses || []).length, 'Responses'));
       stats.appendChild(statBox((m.Participants || []).length, 'Participants'));
       stats.appendChild(statBox((m.Sessions || []).length, 'Sessions'));
       stats.appendChild(statBox((m['Task summary'] || []).length, 'Tasks with data'));
+      renderBalance(balance, m);           // how evenly the tasks were handed out
       renderProvisioning(charts, m);       // over / indifference / under-provisioning plots
     }
     function download() {
@@ -2211,7 +2443,7 @@
   function buildDaSection3() {
     var card = el('div', { class: 'aa-card' });
     card.appendChild(el('div', { class: 'aa-sechead' }, [el('span', { class: 'aa-secnum', text: '3' }), el('h3', { text: 'Process with Python or R', style: 'margin:0;' })]));
-    card.appendChild(el('p', { class: 'aa-note', html: 'Pick a table from the aggregate above, then run <b>Python</b> (Pyodide: numpy / pandas / scipy / matplotlib) or <b>R</b> (WebR, base R) on it — compiled entirely in your browser (the first run downloads the runtime, ~10–30&nbsp;s). The table is handed to your code as the string <code>DATA_CSV</code> (Python) or the file <code>/tmp/data.csv</code> (R). Text output appears below; the <b>plots are shown in the “Insights gained” section</b>, each next to an explanation of how to read it.' }));
+    card.appendChild(el('p', { class: 'aa-note', html: 'Pick a table from the aggregate above, then run <b>Python</b> (Pyodide: numpy / pandas / scipy / matplotlib) or <b>R</b> (WebR, base R) on it — compiled entirely in your browser (the first run downloads the runtime, ~10–30&nbsp;s). The table is handed to your code as the string <code>DATA_CSV</code> (Python) or the file <code>/tmp/data.csv</code> (R). Both bundled scripts <b>open with the 95%-confidence verdict</b> — which tasks Haiku is preferred on, which Opus, which ones users are provably indifferent about, and which are not decided yet, then the same for task type and domain — before the rest of the analysis. Text output appears below; the <b>plots are shown in the “Insights gained” section</b>, each next to an explanation of how to read it.' }));
 
     var tableSel = el('select', {});
     card.appendChild(el('div', { class: 'aa-field' }, [el('label', { text: 'Analysis table (from Section 2)' }), tableSel]));
@@ -2598,14 +2830,21 @@
     '  submitted         \'yes\' for a real (non-draft) answer',
     '',
     'What it prints, in order:',
-    '  1. Summary statistics per task, per domain, and per task type (Simple/Complex).',
-    '  2. The main hypothesis test: is Opus equally preferred to the Haiku baseline,',
+    '  1. THE HEADLINE, at 95% confidence: which tasks we can be confident Haiku is',
+    '     preferred on, which Opus, which ones users are (provably) INDIFFERENT on,',
+    '     and which are still undecided - then the same for task type and domain,',
+    '     averaged across tasks. This is the first thing printed after loading.',
+    '  2. Summary statistics per task, per domain, and per task type (Simple/Complex).',
+    '  3. The main hypothesis test: is Opus equally preferred to the Haiku baseline,',
     '     or do users prefer one? (two ways, both accounting for the design).',
-    '  3. A per-task recommendation (which model wins each task, with a p-value).',
-    '  4. By task type and 5. by domain, each vs the baseline + comparisons between',
+    '  4. A per-task recommendation (which model wins each task, with a p-value).',
+    '  5. By task type and 6. by domain, each vs the baseline + comparisons between',
     '     groups, with CONFIDENCE INTERVALS THAT WEIGHT EACH TASK EQUALLY so that',
     '     tasks with more responses do not dominate (the fix for unequal response n).',
-    '  6. Regressions of preference on complexity and on domain (cluster-robust SEs).',
+    '  7. Regressions of preference on complexity and on domain (cluster-robust SEs).',
+    '  8. The bottom line again, as three lists of task ids: where people prefer Haiku,',
+    '     where they prefer Opus, where they are indifferent - with the unclassifiable',
+    '     tasks deliberately left out.',
     '  Then plots, then a plain-language INSIGHTS block.',
     '',
     'Method note. This Python version uses numpy / pandas / scipy (its own idiomatic',
@@ -2646,6 +2885,36 @@
     '',
     '# Two systems compared; never shown to students. o1/baseline = Haiku, o2/frontier = Opus.',
     'OPUS, HAIKU = "frontier", "baseline"',
+    '',
+    '# ── The confidence level, and the three claims it governs ────────────────────',
+    '# Section 1 answers the practical question - for THIS task, is the frontier model',
+    '# needed? - and Section 8 restates its answer as three sets. BOTH run at the ONE',
+    '# level set here. THREE different claims are possible and each needs its own test:',
+    '#   "Haiku preferred" / "Opus preferred": the two-sided t-test of that task\'s mean',
+    '#       graded preference against 0 is significant at the ALPHA level -',
+    '#       equivalently, its confidence interval sits entirely on one side of 0.',
+    '#   "Indifferent": a merely NON-significant test is NOT evidence of indifference',
+    '#       (it can just mean too little data), so indifference is established with a',
+    '#       positive EQUIVALENCE test - TOST, two one-sided t-tests each at the ALPHA',
+    '#       level, which is significant exactly when the 1-2*ALPHA CI lies inside the',
+    '#       margin.',
+    '#   "Not decided yet": neither claim reached the level - more responses are needed.',
+    'CONF_LEVEL = 0.95                # confidence demanded by EVERY verdict in this script',
+    'ALPHA = 1 - CONF_LEVEL           # 0.05 - the level each of those tests is run at',
+    '# Every printed label is built from those two numbers rather than spelling the',
+    '# percentage out, so the text can never end up claiming a confidence the tests did',
+    '# not actually use. Change CONF_LEVEL alone and the whole script follows.',
+    'CONF_PCT = "%.0f%%" % (100 * CONF_LEVEL)     # "95%"',
+    'ALPHA_PCT = "%.0f%%" % (100 * ALPHA)         # "5%"',
+    '# Scope: CONF_LEVEL governs Sections 1 and 8 (the verdicts). Sections 2-7 are the',
+    '# classical report and carry their own fixed 95% intervals and p<0.05 thresholds,',
+    '# so at the default they all agree; raise CONF_LEVEL and only 1 and 8 move.',
+    'EQUIV_MARGIN = 0.5               # scale points. |true mean| below this counts as',
+    '                                 # "no practical preference": half a step on a scale',
+    '                                 # whose smallest expressible preference is 1 ("X is',
+    '                                 # slightly better"). It is a JUDGEMENT CALL, not a',
+    '                                 # fact - widen it and indifference is easier to',
+    '                                 # prove, narrow it and it is stricter.',
     '',
     '',
     '# ── Small statistics helpers (each documented) ───────────────────────────────',
@@ -2735,6 +3004,99 @@
     '    return {"beta": beta, "se": se, "t": t, "p": p, "n": n, "df": dfree, "clustered": clustered}',
     '',
     '',
+    'def clip3(v):',
+    '    """Keep a DISPLAYED interval on the bounded [-3, +3] preference scale: a CI',
+    '    cannot meaningfully extend past the ends of the scale, and a task or group',
+    '    with very few observations would otherwise show absurd whiskers. Display',
+    '    only - every verdict is decided from p-values, so this can never flip one."""',
+    '    return v if (v is None or np.isnan(v)) else max(-3.0, min(3.0, float(v)))',
+    '',
+    '',
+    'def sample_stats(x):',
+    '    """(n, mean, sd, se) of a 1-D sample, with NaN spread when n < 2 (a single',
+    '    answer pins no interval). Feeds `decide` below."""',
+    '    x = np.asarray(x, float); x = x[~np.isnan(x)]',
+    '    n = len(x)',
+    '    if n == 0:',
+    '        return (0, np.nan, np.nan, np.nan)',
+    '    m = float(np.mean(x))',
+    '    if n < 2:',
+    '        return (n, m, np.nan, np.nan)',
+    '    sd = float(np.std(x, ddof=1))',
+    '    return (n, m, sd, sd / np.sqrt(n))',
+    '',
+    '',
+    'def decide(m, se, dfree, conf=CONF_LEVEL):',
+    '    """Classify ONE estimate - a mean `m` with standard error `se` and `dfree`',
+    '    degrees of freedom - into exactly one of the four verdicts, at confidence',
+    '    `conf`, which defaults to CONF_LEVEL - the one level the whole script uses.',
+    '    Returns a dict with the interval, both p-values and the verdict:',
+    '      p_diff   two-sided t-test of the mean vs 0   -> "opus"/"haiku" if < 1-conf',
+    '      p_equiv  TOST equivalence vs +/-EQUIV_MARGIN -> "indifferent" if < 1-conf',
+    '    A DIRECTION beats equivalence when both fire (a real but tiny preference is',
+    '    flagged `small` instead, so it is never silently reported as indifference).',
+    '    Nothing testable (n<2, no spread estimate) stays "undecided" - that bucket is',
+    '    "we cannot say yet", which is exactly what too little data means."""',
+    '    alpha = 1 - conf                     # the level each test below is run at',
+    '    out = {"mean": m, "se": se, "df": dfree, "lo": np.nan, "hi": np.nan,',
+    '           "p_diff": np.nan, "p_equiv": np.nan, "verdict": "undecided", "small": False}',
+    '    if not (np.isfinite(m) and np.isfinite(se) and np.isfinite(dfree)) or dfree < 1:',
+    '        return out                       # nothing to test (e.g. a task with one answer)',
+    '    if se == 0:',
+    '        # Zero spread: every graded answer identical, so the sample pins the mean',
+    '        # exactly. Same convention as onesample_t - all-equal-to-0 is EXACTLY the',
+    '        # null (p=1), all-equal-to-something-else is decisive (p=0); and the mean',
+    '        # is inside (or outside) the margin with certainty.',
+    '        out["lo"] = out["hi"] = m',
+    '        out["p_diff"] = 1.0 if m == 0 else 0.0',
+    '        out["p_equiv"] = 0.0 if abs(m) < EQUIV_MARGIN else 1.0',
+    '    else:',
+    '        tc = float(st.t.ppf(0.5 + conf / 2, dfree))         # t critical value at `conf`',
+    '        out["lo"], out["hi"] = m - tc * se, m + tc * se     # the interval at `conf`',
+    '        out["p_diff"] = float(2 * st.t.sf(abs(m / se), dfree))',
+    '        lo_p = float(st.t.sf((m + EQUIV_MARGIN) / se, dfree))   # H0: mean <= -margin',
+    '        hi_p = float(st.t.cdf((m - EQUIV_MARGIN) / se, dfree))  # H0: mean >= +margin',
+    '        out["p_equiv"] = max(lo_p, hi_p)                        # TOST = the worse leg',
+    '    if out["p_diff"] < alpha and m > 0:',
+    '        out["verdict"] = "opus"',
+    '    elif out["p_diff"] < alpha and m < 0:',
+    '        out["verdict"] = "haiku"',
+    '    elif out["p_equiv"] < alpha:',
+    '        out["verdict"] = "indifferent"',
+    '    out["small"] = bool(out["verdict"] in ("opus", "haiku") and out["p_equiv"] < alpha)',
+    '    return out',
+    '',
+    '',
+    'def group_estimate(nv, mv, sv):',
+    '    """Average a GROUP (one task type, one domain) ACROSS ITS TASKS - each task',
+    '    weighted equally, so a task that got more responses cannot dominate - and give',
+    '    the standard error of that average.',
+    '    The error pools only the WITHIN-task sampling error: Var = (1/k^2) * sum of',
+    '    each task mean\'s variance (sd^2/n), with Welch-Satterthwaite degrees of',
+    '    freedom. That is the right variance because these tasks ARE the whole study',
+    '    (fixed, not a random sample of tasks) - the same reasoning as the delta-method',
+    '    CIs on the Section-2 charts. Sections 5/6 report the other view (a t-test',
+    '    ACROSS the task means, which also allows for task sampling and so is wider).',
+    '    `nv`/`mv`/`sv` are the group\'s per-task n, mean and sd. A task with n<2 has no',
+    '    variance estimate and is skipped (`k` vs `k_all` says how many were used).',
+    '    Caveat, as in Section 2: it treats responses as independent across the group\'s',
+    '    tasks, though one student answers several of them."""',
+    '    nv = np.asarray(nv, float); mv = np.asarray(mv, float); sv = np.asarray(sv, float)',
+    '    keep = (nv >= 2) & np.isfinite(sv) & np.isfinite(mv)',
+    '    k, k_all = int(keep.sum()), len(nv)',
+    '    n_resp = int(np.nansum(nv))',
+    '    if k == 0:',
+    '        return {"k": 0, "k_all": k_all, "n_resp": n_resp, "mean": np.nan, "se": np.nan, "df": np.nan}',
+    '    m = float(np.mean(mv[keep]))                              # equal-weight task mean',
+    '    u = sv[keep] ** 2 / nv[keep]                              # variance of each task mean',
+    '    var = float(np.sum(u)) / (k * k)                          # variance of that average',
+    '    if var <= 0:                                              # every task perfectly constant',
+    '        return {"k": k, "k_all": k_all, "n_resp": n_resp, "mean": m, "se": 0.0, "df": float(max(k - 1, 1))}',
+    '    nu = nv[keep] - 1                                         # each task\'s own df',
+    '    dfree = float(np.sum(u) ** 2 / np.sum(u ** 2 / nu))       # Welch-Satterthwaite',
+    '    return {"k": k, "k_all": k_all, "n_resp": n_resp, "mean": m, "se": float(np.sqrt(var)), "df": dfree}',
+    '',
+    '',
     'def design(frame, cat_col):',
     '    """Build a regression design matrix [intercept | dummy columns] from a',
     '    categorical column, dropping the alphabetically-first level as the reference',
@@ -2790,7 +3152,156 @@
     '    print("\\nNo comparisons in the selected table - pick the Responses table (one row per comparison) in Section 3.")',
     'else:',
     '    # =====================================================================',
-    '    # 1. SUMMARY STATISTICS  (per task, per domain, per task type)',
+    '    # 1. WHAT WE CAN SAY WITH CONFIDENCE  (the headline, printed first)',
+    '    # =====================================================================',
+    '    # One verdict per task, then the same averaged across each task type and each',
+    '    # domain. See the CONF_LEVEL / EQUIV_MARGIN block at the top for the rules.',
+    '    C99_LABEL = {"haiku": "Haiku preferred", "opus": "Opus preferred",',
+    '                 "indifferent": "Indifferent", "undecided": "Not decided yet"}',
+    '    c99_rows = []',
+    '    for t, g in df.groupby("task_id"):',
+    '        nn, m, sd, se = sample_stats(g["pref"].values)          # this task\'s graded answers',
+    '        d = decide(m, se, (nn - 1) if nn >= 2 else np.nan)      # t df = n-1',
+    '        c99_rows.append({"task_id": t, "complexity": g["complexity"].iloc[0],',
+    '                         "domain": g["domain"].iloc[0], "n": nn, "sd": sd, "mean_pref": m,',
+    '                         "ci_lo": clip3(d["lo"]), "ci_hi": clip3(d["hi"]), "p_diff": d["p_diff"],',
+    '                         "p_equiv": d["p_equiv"], "verdict": d["verdict"], "small": d["small"]})',
+    '    c99 = pd.DataFrame(c99_rows, columns=["task_id", "complexity", "domain", "n", "sd",',
+    '                       "mean_pref", "ci_lo", "ci_hi", "p_diff", "p_equiv", "verdict", "small"])',
+    '    # Why an undecided task is undecided - the two reasons look identical in a table',
+    '    # of p-values but mean very different things to whoever collects more data.',
+    '    c99["why"] = np.where(c99["n"] < 2, "n<2: nothing to test",',
+    '                          # (built by concatenation: CONF_PCT ends in a literal "%",',
+    '                          # which the % operator would read as a format specifier)',
+    '                          CONF_PCT + " CI still spans 0, and too wide to prove |mean| < " + ("%.2f" % EQUIV_MARGIN))',
+    '',
+    '    print("\\n" + "=" * 74)',
+    '    print("1. WHAT WE CAN SAY WITH " + CONF_PCT + " CONFIDENCE")',
+    '    print("=" * 74)',
+    '    print("   Every verdict below is made at the " + ALPHA_PCT + " level (" + CONF_PCT + " confidence)")',
+    '    print("   on the graded")',
+    '    print("   preference (-3 = Haiku much better .. 0 = equivalent .. +3 = Opus much better):")',
+    '    print("     Haiku preferred   the task\'s " + CONF_PCT + " CI for the mean lies entirely BELOW 0")',
+    '    print("     Opus preferred    ... lies entirely ABOVE 0")',
+    '    print("     Indifferent       an EQUIVALENCE test (TOST: two one-sided t-tests at " + ALPHA_PCT + ")")',
+    '    print("                       places the true mean inside +/-%.2f scale points. A merely" % EQUIV_MARGIN)',
+    '    print("                       non-significant result is NOT indifference, so proving")',
+    '    print("                       \\"users do not mind\\" needs this separate, positive test.")',
+    '    print("     Not decided yet   neither claim reached " + CONF_PCT + " - more responses are needed.")',
+    '',
+    '    def c99_block(key, title, gloss):',
+    '        """Print one verdict bucket (the four are exhaustive and mutually exclusive)."""',
+    '        sub = c99[c99["verdict"] == key].copy()',
+    '        # Strongest evidence first: most positive for Opus, most negative for Haiku,',
+    '        # closest to 0 (i.e. most convincingly equal) first for indifferent.',
+    '        if key == "haiku":',
+    '            sub = sub.sort_values("mean_pref", ascending=True)',
+    '        elif key == "indifferent":',
+    '            sub = sub.assign(_abs=sub["mean_pref"].abs()).sort_values("_abs", ascending=True)',
+    '        else:                                    # opus, and undecided (biggest lean first)',
+    '            sub = sub.sort_values("mean_pref", ascending=False)',
+    '        print("\\n" + "-" * 74)',
+    '        print("%s  -  %d of %d tasks" % (title, len(sub), len(c99)))',
+    '        print("   %s" % gloss)',
+    '        print("-" * 74)',
+    '        if not len(sub):',
+    '            print("   (none)")',
+    '            return sub',
+    '        cols = ["task_id", "complexity", "domain", "n", "mean_pref", "ci_lo", "ci_hi", "p_diff", "p_equiv"]',
+    '        if key == "undecided":',
+    '            cols = cols + ["why"]',
+    '        print(sub[cols].to_string(index=False, float_format=lambda x: "%.3f" % x))',
+    '        if key in ("opus", "haiku") and bool(sub["small"].any()):',
+    '            tiny = ", ".join(sub.loc[sub["small"], "task_id"].astype(str))',
+    '            print("   Note - %s: the winner is statistically clear yet the gap is SMALLER" % tiny)',
+    '            print("   than the +/-%.2f indifference margin, i.e. real but practically slight." % EQUIV_MARGIN)',
+    '        return sub',
+    '',
+    '    c99_haiku = c99_block("haiku", "1a. HAIKU (the smaller model) is preferred, at " + CONF_PCT + " confidence",',
+    '                          "Buying the frontier model here is over-provisioning: users liked the small one MORE.")',
+    '    c99_opus = c99_block("opus", "1b. OPUS (the frontier model) is preferred, at " + CONF_PCT + " confidence",',
+    '                         "Serving these with the small model is under-provisioning: users noticed the difference.")',
+    '    c99_ind = c99_block("indifferent", "1c. USERS ARE INDIFFERENT, at " + CONF_PCT + " confidence (equivalence test)",',
+    '                        "Proven equivalence, not just a null result - so the cheaper model is the right call.")',
+    '    c99_und = c99_block("undecided", "1d. NOT DECIDED YET at " + CONF_PCT + " confidence",',
+    '                        "Not a finding: the data cannot yet separate a preference from indifference.")',
+    '    print("\\n   Summary: Haiku %d | Opus %d | indifferent %d | undecided %d  (of %d tasks)."',
+    '          % (len(c99_haiku), len(c99_opus), len(c99_ind), len(c99_und), len(c99)))',
+    '',
+    '    # --- the same, averaged across the tasks of each task type / each domain -----',
+    '    def group99(col):',
+    '        """One row per group: the equal-weight average of its task means, its',
+    '        interval and verdict, plus how its own tasks split across the four buckets."""',
+    '        out = []',
+    '        for key, g in c99.groupby(col):',
+    '            est = group_estimate(g["n"].values, g["mean_pref"].values, g["sd"].values)',
+    '            d = decide(est["mean"], est["se"], est["df"])',
+    '            tal = g["verdict"].value_counts()',
+    '            out.append({col: key, "n_tasks": est["k_all"], "n_resp": est["n_resp"],',
+    '                        "mean_pref": est["mean"], "ci_lo": clip3(d["lo"]), "ci_hi": clip3(d["hi"]),',
+    '                        "p_diff": d["p_diff"], "p_equiv": d["p_equiv"],',
+    '                        "verdict": C99_LABEL[d["verdict"]] + (" (small gap)" if d["small"] else ""),',
+    '                        "t_haiku": int(tal.get("haiku", 0)), "t_opus": int(tal.get("opus", 0)),',
+    '                        "t_indiff": int(tal.get("indifferent", 0)), "t_undec": int(tal.get("undecided", 0))})',
+    '        return pd.DataFrame(out, columns=[col, "n_tasks", "n_resp", "mean_pref", "ci_lo", "ci_hi",',
+    '                            "p_diff", "p_equiv", "verdict", "t_haiku", "t_opus", "t_indiff", "t_undec"])',
+    '',
+    '    type99 = group99("complexity")',
+    '    dom99 = group99("domain").sort_values("mean_pref", ascending=False)',
+    '    print("\\n" + "-" * 74)',
+    '    print("1e. BY TASK TYPE, at " + CONF_PCT + " confidence (averaged across that type\'s tasks)")',
+    '    print("-" * 74)',
+    '    print(type99.to_string(index=False, float_format=lambda x: "%.3f" % x))',
+    '    print("\\n" + "-" * 74)',
+    '    print("1f. BY DOMAIN, at " + CONF_PCT + " confidence (averaged across that domain\'s tasks)")',
+    '    print("-" * 74)',
+    '    print(dom99.to_string(index=False, float_format=lambda x: "%.3f" % x))',
+    '    print("\\n   Group rows average the TASK means (so a task with many responses cannot")',
+    '    print("   dominate) and their intervals pool only the within-task sampling error,")',
+    '    print("   because these tasks are the whole study rather than a sample of tasks - the")',
+    '    print("   same reasoning as the charts in Section 2. Sections 5 and 6 report the other")',
+    '    print("   view (a t-test ACROSS task means, which also allows for task sampling and is")',
+    '    print("   therefore wider), so the two differ on purpose. The last four columns count")',
+    '    print("   that group\'s own tasks in each of the four verdicts above. A verdict marked")',
+    '    print("   \\"(small gap)\\" is statistically clear yet lands INSIDE the +/-%.2f indifference" % EQUIV_MARGIN)',
+    '    print("   margin - a real preference, but too small to be worth paying for.")',
+    '',
+    '    # Figure 1: the verdict for every task. Bar = the task\'s mean graded preference,',
+    '    # whisker = its CONF_LEVEL CI, colour = the verdict, and the shaded band is the',
+    '    # +/-EQUIV_MARGIN indifference zone a task must fit INSIDE (at that confidence)',
+    '    # to be called indifferent. Blocks in the printed order.',
+    '    from matplotlib.patches import Patch                 # legend swatches',
+    '    C99_COL = {"haiku": "#3d7bd6", "opus": "#e67e22", "indifferent": "#2e9e6b", "undecided": "#c9c5bd"}',
+    '    C99_RANK = {"haiku": 0, "opus": 1, "indifferent": 2, "undecided": 3}',
+    '    cf = c99.copy()',
+    '    cf["rank"] = cf["verdict"].map(C99_RANK)',
+    '    cf = cf.sort_values(["rank", "mean_pref"])',
+    '    fig99, ax99 = plt.subplots(figsize=(9.5, max(4, 0.32 * len(cf) + 1.4)))',
+    '    ax99.axvspan(-EQUIV_MARGIN, EQUIV_MARGIN, color="#2e9e6b", alpha=0.10, lw=0)  # indifference zone',
+    '    y99 = np.arange(len(cf))',
+    '    ax99.barh(y99, cf["mean_pref"].values, color=[C99_COL.get(v, "#c9c5bd") for v in cf["verdict"]])',
+    '    # Whiskers only where an interval exists (a 1-answer task has none); errorbar',
+    '    # rejects negative lengths, so substitute 0 rather than a NaN.',
+    '    e_lo = np.where(np.isfinite(cf["ci_lo"].values), cf["mean_pref"].values - cf["ci_lo"].values, 0.0)',
+    '    e_hi = np.where(np.isfinite(cf["ci_hi"].values), cf["ci_hi"].values - cf["mean_pref"].values, 0.0)',
+    '    ax99.errorbar(cf["mean_pref"].values, y99, xerr=[e_lo, e_hi], fmt="none",',
+    '                  ecolor="#444444", elinewidth=1, capsize=2.5)',
+    '    ax99.set_yticks(y99); ax99.set_yticklabels(cf["task_id"].values, fontsize=8)',
+    '    ax99.invert_yaxis()                                  # first sorted row at the TOP',
+    '    ax99.axvline(0, color="#111", lw=1)',
+    '    for xv in (-EQUIV_MARGIN, EQUIV_MARGIN):',
+    '        ax99.axvline(xv, color="#2e9e6b", ls=":", lw=1)',
+    '    ax99.set_xlabel("mean graded preference with its " + CONF_PCT + " CI  (<0 Haiku .. >0 Opus)")',
+    '    ax99.set_title("What we can say at " + CONF_PCT + " confidence, per task")',
+    '    ax99.legend(handles=[Patch(color=C99_COL["haiku"], label="Haiku preferred"),',
+    '                         Patch(color=C99_COL["opus"], label="Opus preferred"),',
+    '                         Patch(color=C99_COL["indifferent"], label="Indifferent (proven)"),',
+    '                         Patch(color=C99_COL["undecided"], label="Not decided yet")],',
+    '                loc="lower right", fontsize=8.5)',
+    '    fig99.tight_layout()',
+    '',
+    '    # =====================================================================',
+    '    # 2. SUMMARY STATISTICS  (per task, per domain, per task type)',
     '    # =====================================================================',
     '    # Per-task table: how many responses, how many chose each side, the mean and',
     '    # SD of the graded preference, and the Opus win-rate among decisive choices.',
@@ -2811,12 +3322,12 @@
     '',
     '    task_tbl = per_task_table()',
     '    print("\\n" + "-" * 74)',
-    '    print("1. SUMMARY STATISTICS")',
+    '    print("2. SUMMARY STATISTICS")',
     '    print("-" * 74)',
-    '    print("\\n1a. Per task (sorted by mean preference; >0 favours Opus):")',
+    '    print("\\n2a. Per task (sorted by mean preference; >0 favours Opus):")',
     '    print(task_tbl.to_string(index=False, float_format=lambda x: "%.2f" % x))',
     '',
-    '    # Figure: responses per task - HOW BALANCED is the sample? Each student saw a',
+    '    # Figure 2: responses per task - HOW BALANCED is the sample? Each student saw a',
     '    # random 15-of-30 subset, so tasks get different response counts; the dashed',
     '    # line marks the mean count. This is why the CIs later weight tasks equally.',
     '    rc = task_tbl.sort_values("n")                          # ascending by count',
@@ -2842,13 +3353,13 @@
     '                        "mean_pref": m, "sd": sd, "opus_win_pct": (100 * opus / dec) if dec else np.nan})',
     '        return pd.DataFrame(out)',
     '',
-    '    print("\\n1b. Per task type (response level):")',
+    '    print("\\n2b. Per task type (response level):")',
     '    print(group_summary("complexity").to_string(index=False, float_format=lambda x: "%.2f" % x))',
-    '    print("\\n1c. Per domain (response level):")',
+    '    print("\\n2c. Per domain (response level):")',
     '    print(group_summary("domain").sort_values("mean_pref", ascending=False).to_string(index=False, float_format=lambda x: "%.2f" % x))',
     '',
     '    # =====================================================================',
-    '    # 2. THE MAIN HYPOTHESIS TEST  (Haiku baseline: equally preferred or not?)',
+    '    # 3. THE MAIN HYPOTHESIS TEST  (Haiku baseline: equally preferred or not?)',
     '    # =====================================================================',
     '    # H0: mean graded preference = 0  (Opus is judged EQUAL to the Haiku baseline).',
     '    # H1: mean != 0                    (students prefer one model). Sign = winner.',
@@ -2889,7 +3400,7 @@
     '    p_win = binom_two_sided(opus_all, dec_all)',
     '',
     '    print("\\n" + "-" * 74)',
-    '    print("2. MAIN TEST - is Opus equally preferred to the Haiku baseline?")',
+    '    print("3. MAIN TEST - is Opus equally preferred to the Haiku baseline?")',
     '    print("-" * 74)',
     '    print("   H0: mean graded preference = 0 (equal to baseline).  H1: != 0.")',
     '    # Label (B) honestly: with a single student in the graded rows the fit fell',
@@ -2910,7 +3421,7 @@
     '          % (p_win, (100 * ties_all / n_cls) if n_cls else float("nan")))',
     '',
     '    # =====================================================================',
-    '    # 3. PER-TASK RECOMMENDATION  (which model wins each question?)',
+    '    # 4. PER-TASK RECOMMENDATION  (which model wins each question?)',
     '    # =====================================================================',
     '    # For every task we test its own responses against 0 and turn the result into',
     '    # a recommendation: a model "wins" a task only if the mean clearly leans that',
@@ -2943,14 +3454,14 @@
     '    # keep the arithmetic honest: opus + haiku + none + na = all tasks',
     '    na_txt = (", and %d had too little graded data to test" % n_na_tasks) if n_na_tasks else ""',
     '    print("\\n" + "-" * 74)',
-    '    print("3. PER-TASK RECOMMENDATION  (one-sample t-test of each task vs baseline)")',
+    '    print("4. PER-TASK RECOMMENDATION  (one-sample t-test of each task vs baseline)")',
     '    print("-" * 74)',
     '    print(rec_tbl.to_string(index=False, float_format=lambda x: "%.3f" % x))',
     '    print("\\n   Significant winners: Opus on %d tasks, Haiku on %d; %d show no clear preference%s."',
     '          % (n_opus_tasks, n_haiku_tasks, n_none_tasks, na_txt))',
     '',
     '    # =====================================================================',
-    '    # 4. BY TASK TYPE  (Simple vs Complex) - CIs weight each task equally',
+    '    # 5. BY TASK TYPE  (Simple vs Complex) - CIs weight each task equally',
     '    # =====================================================================',
     '    # To respect unequal responses per task we work with the 30 TASK MEANS: within',
     '    # each type we t-test the task means vs 0 (is that type\'s preference non-zero?)',
@@ -2958,7 +3469,6 @@
     '    tm = df.groupby("task_id").agg(pref=("pref", "mean"), complexity=("complexity", "first"),',
     '                                   domain=("domain", "first")).reset_index()',
     '    tm = tm.dropna(subset=["pref"])                      # drop tasks with no graded responses',
-    '    clip3 = lambda v: v if np.isnan(v) else max(-3.0, min(3.0, v))   # keep CIs on-scale',
     '    def by_group(frame, col):',
     '        out = []',
     '        for key, g in frame.groupby(col):',
@@ -2974,7 +3484,7 @@
     '',
     '    type_tbl = by_group(tm, "complexity")',
     '    print("\\n" + "-" * 74)',
-    '    print("4. BY TASK TYPE  (task-level: each task weighted equally, so unequal")',
+    '    print("5. BY TASK TYPE  (task-level: each task weighted equally, so unequal")',
     '    print("   response counts do not bias the estimate)")',
     '    print("-" * 74)',
     '    print(type_tbl.to_string(index=False, float_format=lambda x: "%.4f" % x))',
@@ -2988,11 +3498,11 @@
     '              "difference = %+.3f, p = %.4g" % (float(np.mean(comp) - np.mean(simp)), p_sc))',
     '',
     '    # =====================================================================',
-    '    # 5. BY DOMAIN  - each domain vs baseline + an ANOVA across domains',
+    '    # 6. BY DOMAIN  - each domain vs baseline + an ANOVA across domains',
     '    # =====================================================================',
     '    dom_tbl = by_group(tm, "domain").sort_values("mean_pref", ascending=False)',
     '    print("\\n" + "-" * 74)',
-    '    print("5. BY DOMAIN  (task-level; sorted by mean preference)")',
+    '    print("6. BY DOMAIN  (task-level; sorted by mean preference)")',
     '    print("-" * 74)',
     '    print(dom_tbl.to_string(index=False, float_format=lambda x: "%.4f" % x))',
     '    # One-way ANOVA: do the domains differ in their (task-level) mean preference?',
@@ -3005,7 +3515,7 @@
     '              % (len(dom_groups), tm["domain"].nunique(), float(np.ravel(fA.statistic)[0]), p_anova))',
     '',
     '    # =====================================================================',
-    '    # 6. REGRESSIONS  (preference on complexity, and on domain)',
+    '    # 7. REGRESSIONS  (preference on complexity, and on domain)',
     '    # =====================================================================',
     '    # Response-level OLS with SEs clustered on the student. The intercept is the',
     '    # reference group\'s mean preference (its p-value tests "= baseline"); each',
@@ -3013,7 +3523,7 @@
     '    reg = df.dropna(subset=["pref"]).copy()',
     '    gcl = reg["account_id"].values if ("account_id" in reg.columns and reg["account_id"].nunique() > 1) else None',
     '    print("\\n" + "-" * 74)',
-    '    print("6. REGRESSIONS  (response level; %s)"',
+    '    print("7. REGRESSIONS  (response level; %s)"',
     '          % ("SEs clustered on student" if gcl is not None else "HC3 robust SEs - no repeated students"))',
     '    print("-" * 74)',
     '    for label, col in [("pref ~ complexity", "complexity"), ("pref ~ domain", "domain")]:',
@@ -3027,11 +3537,67 @@
     '        print(ct.to_string(float_format=lambda x: "%.4f" % x))',
     '',
     '    # =====================================================================',
+    '    # 8. THE CONFIDENT SETS  (the answer, on one screen)',
+    '    # =====================================================================',
+    '    # The bottom line of Section 1, restated as the three sets of task ids you can',
+    '    # act on. Same tasks, same tests, same CONF_LEVEL - this is a recap, not a',
+    '    # second analysis, so it lists ids rather than repeating those tables.',
+    '    # "Ground truth" here means the preference of the POPULATION these students are',
+    '    # drawn from - what everyone would say, not just the students who happened to',
+    '    # answer - which is exactly what a confidence interval is a claim about.',
+    '    # Tasks that reach no verdict are DELIBERATELY NOT LISTED: "we cannot say yet"',
+    '    # is not a fourth kind of task, it is the absence of an answer, and printing',
+    '    # them beside the three sets invites reading them as a finding.',
+    '    def id_lines(sub, width=66):',
+    '        """The set\'s task ids, comma-separated and wrapped, so a long set stays',
+    '        readable in a console. Empty -> a single explicit line."""',
+    '        ids = list(sub["task_id"].astype(str))',
+    '        if not ids:',
+    '            return ["(none reach this confidence)"]',
+    '        out, line = [], ""',
+    '        for i, tid in enumerate(ids):',
+    '            piece = tid + ("," if i < len(ids) - 1 else "")',
+    '            if line and len(line) + 1 + len(piece) > width:',
+    '                out.append(line); line = piece',
+    '            else:',
+    '                line = (line + " " + piece).strip()',
+    '        if line:',
+    '            out.append(line)',
+    '        return out',
+    '',
+    '    print("\\n" + "=" * 74)',
+    '    print("8. THE " + CONF_PCT + "-CONFIDENT SETS  (the answer, on one screen)")',
+    '    print("=" * 74)',
+    '    print("   The tasks whose true (population) preference we can name with " + CONF_PCT)',
+    '    print("   confidence - the same verdicts as Section 1, listed as sets. Tasks that")',
+    '    print("   reach no verdict are NOT listed: that is an absence of evidence, not a")',
+    '    print("   third kind of answer. Their per-task numbers are in Sections 1a-1c.")',
+    '    for key, title, gloss in [',
+    '            ("haiku", "8a. GROUND TRUTH = PEOPLE PREFER HAIKU",',
+    '             "The whole interval sits below 0: the smaller model\'s answer won."),',
+    '            ("opus", "8b. GROUND TRUTH = PEOPLE PREFER OPUS",',
+    '             "The whole interval sits above 0: the frontier model\'s answer won."),',
+    '            ("indifferent", "8c. GROUND TRUTH = PEOPLE ARE INDIFFERENT",',
+    '             "An equivalence test puts the true gap inside +/-%.2f - proven, not just unproven." % EQUIV_MARGIN)]:',
+    '        sub = c99[c99["verdict"] == key]',
+    '        print("\\n" + "-" * 74)',
+    '        print("%s  -  %d tasks" % (title, len(sub)))',
+    '        print("   %s" % gloss)',
+    '        print("-" * 74)',
+    '        for ln in id_lines(sub):',
+    '            print("   " + ln)',
+    '    n_set = len(c99_haiku) + len(c99_opus) + len(c99_ind)',
+    '    print("\\n   %d of the %d tasks are classified at %s: %d Haiku, %d Opus, %d indifferent."',
+    '          % (n_set, len(c99), CONF_PCT, len(c99_haiku), len(c99_opus), len(c99_ind)))',
+    '    print("   The remaining %d reach no verdict and are deliberately not listed."',
+    '          % (len(c99) - n_set))',
+    '',
+    '    # =====================================================================',
     '    # PLOTS',
     '    # =====================================================================',
     '    col_for = lambda v: "#e67e22" if v > 0 else ("#3d7bd6" if v < 0 else "#9a978f")  # Opus/Haiku/tie colours',
     '',
-    '    # Figure 1: distribution of the 7-point graded preference + outcome shares.',
+    '    # Figure 3: distribution of the 7-point graded preference + outcome shares.',
     '    fig1, ax = plt.subplots(1, 2, figsize=(11, 4.3))',
     '    pv = df["pref"].dropna()',
     '    # Snap to the -3..3 scale before counting so a non-integer value from an',
@@ -3047,7 +3613,7 @@
     '    ax[1].set_ylabel("responses"); ax[1].set_title("Who was preferred (n=%d)" % n_cls)',
     '    fig1.tight_layout()',
     '',
-    '    # Figure 2: per-task mean +/- 95% CI (sorted). The CI whiskers are WIDER for',
+    '    # Figure 4: per-task mean +/- 95% CI (sorted). The CI whiskers are WIDER for',
     '    # tasks with fewer responses - the visual proof we account for unequal n.',
     '    ts = task_tbl.sort_values("mean_pref")',
     '    fig2, ax2 = plt.subplots(figsize=(9, max(4, 0.32 * len(ts) + 1)))',
@@ -3062,9 +3628,9 @@
     '    ax2.set_title("Per-task preference (CI widens when a task got fewer responses)")',
     '    fig2.tight_layout()',
     '',
-    '    # Figure 2b: WHICH MODEL EACH TASK\'S USERS PREFER, ranked Haiku (top) ->',
+    '    # Figure 5: WHICH MODEL EACH TASK\'S USERS PREFER, ranked Haiku (top) ->',
     '    # indifferent (middle) -> Opus (bottom). The winner is the per-task',
-    '    # recommendation from Section 3 (the one-sample t-test): "Haiku" / "Opus" when',
+    '    # recommendation from Section 4 (the one-sample t-test): "Haiku" / "Opus" when',
     '    # the lean is significant, else "no clear preference" (indifferent). The bar is',
     '    # the mean graded preference and the colour is the winner.',
     '    from matplotlib.patches import Patch                # legend swatches',
@@ -3085,7 +3651,7 @@
     '                        Patch(color="#e67e22", label="Opus")], loc="lower right", fontsize=9)',
     '    figW.tight_layout()',
     '',
-    '    # Figure 2c: CONFIDENT per-task provisioning. Classify each task\'s CHOICES as',
+    '    # Figure 6: CONFIDENT per-task provisioning (95%). Classify each task\'s CHOICES as',
     '    # over- (chose Opus) / indifferent (tie) / under-provision (chose Haiku) by the',
     '    # DOMINANT category, but keep it ONLY when that category is significantly larger',
     '    # than the runner-up — an EXACT binomial test on the top-two counts: under H0',
@@ -3128,7 +3694,7 @@
     '                 ha="center", va="center", fontsize=12); axC.axis("off")',
     '    figC.tight_layout()',
     '',
-    '    # Figure 3: by domain and by type, task-level means +/- 95% CI.',
+    '    # Figure 7: by domain and by type, task-level means +/- 95% CI.',
     '    fig3, ax3 = plt.subplots(1, 2, figsize=(12, 4.6))',
     '    d = dom_tbl.iloc[::-1]                                      # smallest at bottom',
     '    yy3 = np.arange(len(d))',
@@ -3162,6 +3728,33 @@
     '    overall = verdict(mA, pA)',
     '    print("\\n\\nINSIGHTS")',
     '    print("=" * 74)',
+    '    fmt2 = lambda v: ("%+.2f" % v) if np.isfinite(v) else "n/a"   # NaN-safe display',
+    '    note("## Headline - what we can say at " + CONF_PCT + " confidence")',
+    '    note("- Of the **%d tasks**, at %s confidence users **prefer Haiku on %d**, **prefer Opus on "',
+    '         "%d**, are **provably indifferent on %d**, and **%d are not decided yet**."',
+    '         % (len(c99), CONF_PCT, len(c99_haiku), len(c99_opus), len(c99_ind), len(c99_und)))',
+    '    note("- The three claims are not symmetric. **\\"Indifferent\\" is a positive finding**: an "',
+    '         "equivalence test (TOST) placed the true mean preference inside +/-%.2f scale points, so "',
+    '         "those tasks can be served by the cheaper model on purpose. **\\"Not decided yet\\" is the "',
+    '         "absence of a finding** - neither a preference nor equivalence reached %s, so those tasks "',
+    '         "simply need more responses." % (EQUIV_MARGIN, CONF_PCT))',
+    '    for _, r in type99.iterrows():',
+    '        note("- **%s** tasks, averaged across their %d tasks: mean **%s** (%s CI [%s, %s]) -> "',
+    '             "**%s** (of those tasks: %d Haiku, %d Opus, %d indifferent, %d undecided)."',
+    '             % (r["complexity"], r["n_tasks"], fmt2(r["mean_pref"]), CONF_PCT, fmt2(r["ci_lo"]), fmt2(r["ci_hi"]),',
+    '                r["verdict"], r["t_haiku"], r["t_opus"], r["t_indiff"], r["t_undec"]))',
+    '    dom_call = dom99[dom99["verdict"] != "Not decided yet"]',
+    '    if len(dom_call):',
+    '        for _, r in dom_call.iterrows():',
+    '            note("- Domain **%s**: mean **%s** (%s CI [%s, %s]) -> **%s**."',
+    '                 % (r["domain"], fmt2(r["mean_pref"]), CONF_PCT, fmt2(r["ci_lo"]), fmt2(r["ci_hi"]), r["verdict"]))',
+    '        if len(dom99) > len(dom_call):',
+    '            note("- The remaining %d domain(s) cannot be called either way at %s yet."',
+    '                 % (len(dom99) - len(dom_call), CONF_PCT))',
+    '    else:',
+    '        note("- **No domain** can be called either way at " + CONF_PCT + " yet (each holds only a handful of "',
+    '             "tasks, so a domain-level claim needs more responses than a single task does).")',
+    '    note("")',
     '    note("## Overall recommendation")',
     '    if np.isnan(mA):',
     '        note("- Not enough graded data to draw a conclusion yet.")',
@@ -3215,35 +3808,57 @@
     '    n_under = sum(1 for c in conf if c["cat"] == "under")   # confident Haiku tasks',
     '    n_ind = sum(1 for c in conf if c["cat"] == "ind")       # confident tie tasks',
     '    note("")',
+    '    note("## The confident sets (Section 8)")',
+    '    note("- Section 8 is the bottom line as three lists of task ids you can act on: **%d where "',
+    '         "people prefer Haiku**, **%d where people prefer Opus**, **%d where people are provably "',
+    '         "indifferent** - %d of the %d tasks. The other %d are left unlisted on purpose: no "',
+    '         "verdict is not a verdict."',
+    '         % (len(c99_haiku), len(c99_opus), len(c99_ind), n_set, len(c99), len(c99) - n_set))',
+    '    note("- It is a recap of Section 1 at the same %s confidence, not a second analysis, so the "',
+    '         "two can never disagree. Change CONF_LEVEL at the top and both move together."',
+    '         % CONF_PCT)',
+    '    note("")',
     '    note("## How to read the figures below")',
-    '    note("All six figures come from the analysis above - nothing new is computed. Each one is shown "',
+    '    note("All seven figures come from the analysis above - nothing new is computed. Each one is shown "',
     '         "here with a short guide to reading it, so the plots live in one place with their explanation.")',
     '    note("")',
-    '    note("## Figure 1 - Sample balance: how many students answered each task")',
+    '    note("## Figure 1 - What we can say at " + CONF_PCT + " confidence, per task")',
+    '    note("- The picture of Section 1. Each bar is one task\'s **average** graded preference (left = "',
+    '         "Haiku, right = Opus) and its whisker is the **%s confidence interval** for that average. "',
+    '         "The **colour is the verdict**, and the blocks run in the same order as the tables: blue = "',
+    '         "**Haiku preferred** (interval entirely below 0), orange = **Opus preferred** (entirely "',
+    '         "above 0), green = **indifferent** (an equivalence test placed the interval inside the "',
+    '         "shaded +/-%.2f band), pale grey = **not decided yet**." % (CONF_PCT, EQUIV_MARGIN))',
+    '    note("- The shaded band is the indifference zone. A **green** task\'s whole interval fits inside "',
+    '         "it, which is what proves \\"users do not mind\\"; a **grey** task\'s interval both crosses 0 "',
+    '         "*and* pokes out of the band, so it is consistent with a real preference AND with none - "',
+    '         "that is why grey is not a result, just a request for more responses.")',
+    '    note("")',
+    '    note("## Figure 2 - Sample balance: how many students answered each task")',
     '    note("- One bar per task = the number of real (submitted) responses it got; the dashed line is the "',
     '         "average. Because each student saw a random 15 of the 30 tasks, the bars are uneven. **This is "',
     '         "exactly why the confidence intervals below are task-weighted and why some are wider than "',
     '         "others** - a task with fewer responses carries less certainty.")',
     '    note("")',
-    '    note("## Figure 2 - Overall: how strongly, and who was preferred")',
+    '    note("## Figure 3 - Overall: how strongly, and who was preferred")',
     '    note("- Left: the spread of the -3..+3 graded preference across every response (negative = Haiku, "',
     '         "0 = equivalent, positive = Opus); the dashed line is the overall mean. Right: the raw count of "',
     '         "responses that picked Opus, called it a tie, or picked Haiku. Read them together - a mean near "',
     '         "0 with many -3 and +3 votes means students *disagreed strongly*, not that everyone was "',
     '         "indifferent.")',
     '    note("")',
-    '    note("## Figure 3 - Per-task preference with 95% confidence intervals")',
+    '    note("## Figure 4 - Per-task preference with 95% confidence intervals")',
     '    note("- Each dot is one task\'s mean graded preference; the whisker is its 95% confidence interval. "',
     '         "A task whose whisker **crosses the 0 line has no statistically clear preference**; one whose "',
     '         "whisker sits entirely on one side does. Whiskers widen for tasks with fewer responses "',
-    '         "(Figure 1) - that is the correct handling of unequal response counts.")',
+    '         "(Figure 2) - that is the correct handling of unequal response counts.")',
     '    note("")',
-    '    note("## Figure 4 - What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
+    '    note("## Figure 5 - What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
     '    note("- **Two different things are drawn here - do not confuse them.** The **bar length** is the "',
     '         "task\'s *average* graded preference (left = leaned Haiku, right = leaned Opus). The **colour** "',
-    '         "is the *statistical verdict* (same test as Figure 3): blue = students significantly preferred "',
+    '         "is the *statistical verdict* (same test as Figure 4): blue = students significantly preferred "',
     '         "Haiku, orange = significantly preferred Opus, **grey = no statistically clear preference** "',
-    '         "(its 95% interval still includes 0, i.e. its Figure-3 whisker crosses zero).")',
+    '         "(its 95% interval still includes 0, i.e. its Figure-4 whisker crosses zero).")',
     '    note("- That is why a **long grey bar** can appear (a task whose average is sizeable yet still "',
     '         "grey): on average those students leaned one way, but either few of them answered or they "',
     '         "disagreed a lot, so we cannot rule out that the true preference is zero. **Grey does NOT mean "',
@@ -3253,7 +3868,7 @@
     '         "sure. In short: **the bar shows the direction and size of the average; the colour shows "',
     '         "whether we are confident about it.**")',
     '    note("")',
-    '    note("## Figure 5 - Tasks we can classify with 95% confidence (over / indifferent / under-provisioning)")',
+    '    note("## Figure 6 - Tasks we can classify with 95% confidence (over / indifferent / under-provisioning)")',
     '    note("- In the provisioning frame: **over-provisioning = students preferred Opus** (the larger "',
     '         "model), **under-provisioning = students preferred Haiku** (the smaller model), **indifferent "',
     '         "= a genuine tie**. A task appears here **only if one of the three categories is statistically "',
@@ -3268,13 +3883,13 @@
     '        note("- **No task clears the bar with the current data**, so the figure says so rather than "',
     '             "showing a classification we are not sure of. More responses per task would resolve the "',
     '             "borderline ones.")',
-    '    note("- Figures 4 and 5 ask *different* questions and can disagree. Figure 4 tests whether a task\'s "',
-    '         "**average strength** of preference (on the -3..+3 scale) differs from 0; Figure 5 tests whether "',
+    '    note("- Figures 5 and 6 ask *different* questions and can disagree. Figure 5 tests whether a task\'s "',
+    '         "**average strength** of preference (on the -3..+3 scale) differs from 0; Figure 6 tests whether "',
     '         "one of the three **choice categories** (Opus / tie / Haiku) is a significant plurality of the "',
-    '         "picks. So a task can be grey in Figure 4 yet still be confidently classified in Figure 5, or "',
+    '         "picks. So a task can be grey in Figure 5 yet still be confidently classified in Figure 6, or "',
     '         "the reverse - the two views are complementary, not a contradiction.")',
     '    note("")',
-    '    note("## Figure 6 - By domain and by task type, with confidence intervals")',
+    '    note("## Figure 7 - By domain and by task type, with confidence intervals")',
     '    note("- Left: each domain\'s task-weighted mean preference with its 95% interval; right: the same for "',
     '         "Simple vs Complex tasks. A bar/whisker that clears the 0 line marks a group that reliably leans "',
     '         "to one model. This is the aggregated view behind the \\"By task type\\" and \\"By domain\\" "',
@@ -3325,6 +3940,36 @@
     '',
     'OPUS <- "frontier"; HAIKU <- "baseline"   # never shown to students',
     '',
+    '# -- The confidence level, and the three claims it governs -------------------',
+    '# Section 1 answers the practical question - for THIS task, is the frontier model',
+    '# needed? - and Section 8 restates its answer as three sets. BOTH run at the ONE',
+    '# level set here. THREE different claims are possible and each needs its own test:',
+    '#   "Haiku preferred" / "Opus preferred": the two-sided t-test of that task\'s mean',
+    '#       graded preference against 0 is significant at the ALPHA level -',
+    '#       equivalently, its confidence interval sits entirely on one side of 0.',
+    '#   "Indifferent": a merely NON-significant test is NOT evidence of indifference',
+    '#       (it can just mean too little data), so indifference is established with a',
+    '#       positive EQUIVALENCE test - TOST, two one-sided t-tests each at the ALPHA',
+    '#       level, which is significant exactly when the 1-2*ALPHA CI lies inside the',
+    '#       margin.',
+    '#   "Not decided yet": neither claim reached the level - more responses are needed.',
+    'CONF_LEVEL <- 0.95          # confidence demanded by EVERY verdict in this script',
+    'ALPHA <- 1 - CONF_LEVEL     # 0.05 - the level each of those tests is run at',
+    '# Every printed label is built from those two numbers rather than spelling the',
+    '# percentage out, so the text can never end up claiming a confidence the tests did',
+    '# not actually use. Change CONF_LEVEL alone and the whole script follows.',
+    'CONF_PCT <- sprintf("%.0f%%", 100 * CONF_LEVEL)    # "95%"',
+    'ALPHA_PCT <- sprintf("%.0f%%", 100 * ALPHA)        # "5%"',
+    '# Scope: CONF_LEVEL governs Sections 1 and 8 (the verdicts). Sections 2-7 are the',
+    '# classical report and carry their own fixed 95% intervals and p<0.05 thresholds,',
+    '# so at the default they all agree; raise CONF_LEVEL and only 1 and 8 move.',
+    'EQUIV_MARGIN <- 0.5         # scale points. |true mean| below this counts as "no',
+    '                            # practical preference": half a step on a scale whose',
+    '                            # smallest expressible preference is 1 ("X is slightly',
+    '                            # better"). A JUDGEMENT CALL, not a fact - widen it and',
+    '                            # indifference is easier to prove, narrow it and it is',
+    '                            # stricter. Keep it identical to the Python version.',
+    '',
     '# -- Statistics helpers (each documented) ------------------------------------',
     '# Mean + t-based confidence interval; the interval widens as n shrinks (so tasks',
     '# with fewer responses get wider CIs). Returns a list; NA spread when n < 2.',
@@ -3360,6 +4005,73 @@
     '# plots) - rounding p to 4 dp BEFORE the p<0.05 filter could flip a borderline',
     '# verdict relative to the Python version, which never rounds its stored values.',
     'round_df <- function(d, digits) { for (nm in names(d)) if (is.numeric(d[[nm]])) d[[nm]] <- round(d[[nm]], digits); d }',
+    '',
+    '# -- Section-1 helpers: the three tests behind every verdict -----------------',
+    '# (n, mean, sd, se) of a sample; NA spread when n < 2 (one answer pins no interval).',
+    'sample_stats <- function(x) {',
+    '  x <- x[!is.na(x)]; n <- length(x)',
+    '  if (n == 0) return(list(n = 0, mean = NA_real_, sd = NA_real_, se = NA_real_))',
+    '  m <- mean(x)',
+    '  if (n < 2) return(list(n = n, mean = m, sd = NA_real_, se = NA_real_))',
+    '  s <- sd(x); list(n = n, mean = m, sd = s, se = s / sqrt(n))',
+    '}',
+    '# Classify ONE estimate (mean, standard error, degrees of freedom) into exactly one',
+    '# of the four verdicts, at confidence `conf`, which defaults to CONF_LEVEL - the',
+    '# one level the whole script uses. Same rules as the Python `decide`:',
+    '#   p_diff  two-sided t-test of the mean vs 0   -> "opus"/"haiku" when < 1-conf',
+    '#   p_equiv TOST equivalence vs +/-EQUIV_MARGIN -> "indifferent" when < 1-conf',
+    '# A DIRECTION beats equivalence when both fire (the estimate is then flagged',
+    '# `small` - real but practically slight - instead of being called indifferent).',
+    'decide <- function(m, se, dfree, conf = CONF_LEVEL) {',
+    '  alpha <- 1 - conf                       # the level each test below is run at',
+    '  out <- list(mean = m, se = se, df = dfree, lo = NA_real_, hi = NA_real_,',
+    '              p_diff = NA_real_, p_equiv = NA_real_, verdict = "undecided", small = FALSE)',
+    '  if (length(m) != 1 || length(se) != 1 || length(dfree) != 1) return(out)',
+    '  if (is.na(m) || is.na(se) || is.na(dfree)) return(out)',
+    '  if (!is.finite(m) || !is.finite(se) || !is.finite(dfree) || dfree < 1) return(out)',
+    '  if (se == 0) {',
+    '    # Zero spread: every graded answer identical, so the sample pins the mean',
+    '    # exactly. Same convention as onesample_t - all-equal-to-0 is EXACTLY the null',
+    '    # (p=1), all-equal-to-anything-else is decisive (p=0) - and the mean is inside',
+    '    # (or outside) the indifference margin with certainty.',
+    '    out$lo <- m; out$hi <- m',
+    '    out$p_diff <- if (m == 0) 1 else 0',
+    '    out$p_equiv <- if (abs(m) < EQUIV_MARGIN) 0 else 1',
+    '  } else {',
+    '    tc <- qt(0.5 + conf / 2, dfree)                       # t critical value at `conf`',
+    '    out$lo <- m - tc * se; out$hi <- m + tc * se          # the interval at `conf`',
+    '    out$p_diff <- 2 * pt(-abs(m / se), dfree)',
+    '    lo_p <- pt((m + EQUIV_MARGIN) / se, dfree, lower.tail = FALSE)  # H0: mean <= -margin',
+    '    hi_p <- pt((m - EQUIV_MARGIN) / se, dfree)                      # H0: mean >= +margin',
+    '    out$p_equiv <- max(lo_p, hi_p)                        # TOST = the worse leg',
+    '  }',
+    '  if (out$p_diff < alpha && m > 0) out$verdict <- "opus"',
+    '  else if (out$p_diff < alpha && m < 0) out$verdict <- "haiku"',
+    '  else if (out$p_equiv < alpha) out$verdict <- "indifferent"',
+    '  out$small <- out$verdict %in% c("opus", "haiku") && out$p_equiv < alpha',
+    '  out',
+    '}',
+    '# Average a GROUP (one task type, one domain) ACROSS ITS TASKS - each task weighted',
+    '# equally, so a task with more responses cannot dominate - and give the standard',
+    '# error of that average. It pools only the WITHIN-task sampling error:',
+    '# Var = (1/k^2) * sum(sd^2/n) with Welch-Satterthwaite df, which is right because',
+    '# these tasks ARE the whole study (fixed, not a random sample of tasks) - the same',
+    '# reasoning as the delta-method CIs on the Section-2 charts. Sections 5/6 report',
+    '# the other view (a t-test ACROSS task means, wider because it also allows for task',
+    '# sampling). nv/mv/sv are the group\'s per-task n, mean and sd; a task with n<2 has',
+    '# no variance estimate and is skipped (k vs k_all says how many were used).',
+    'group_estimate <- function(nv, mv, sv) {',
+    '  keep <- !is.na(nv) & nv >= 2 & !is.na(sv) & is.finite(sv) & !is.na(mv)',
+    '  k <- sum(keep); k_all <- length(nv); n_resp <- sum(nv, na.rm = TRUE)',
+    '  if (k == 0) return(list(k = 0, k_all = k_all, n_resp = n_resp, mean = NA_real_, se = NA_real_, df = NA_real_))',
+    '  m <- mean(mv[keep])                                     # equal-weight task mean',
+    '  u <- sv[keep]^2 / nv[keep]                              # variance of each task mean',
+    '  v <- sum(u) / (k * k)                                   # variance of that average',
+    '  if (v <= 0) return(list(k = k, k_all = k_all, n_resp = n_resp, mean = m, se = 0, df = max(k - 1, 1)))',
+    '  nu <- nv[keep] - 1                                      # each task\'s own df',
+    '  list(k = k, k_all = k_all, n_resp = n_resp, mean = m, se = sqrt(v),',
+    '       df = sum(u)^2 / sum(u^2 / nu))                     # Welch-Satterthwaite',
+    '}',
     '',
     '# OLS with a ROBUST covariance done by hand (mirrors the Python helper): CR1',
     '# cluster-robust SEs when `groups` varies (repeated measures), else HC3; p-values',
@@ -3457,7 +4169,135 @@
     '  cat("\\nNo comparisons in the selected table - pick the Responses table (one row per comparison) in Section 3.\\n")',
     '} else {',
     '  # ===========================================================================',
-    '  # 1. SUMMARY STATISTICS (per task, per domain, per task type)',
+    '  # 1. WHAT WE CAN SAY WITH CONFIDENCE (the headline, printed first)',
+    '  # ===========================================================================',
+    '  # One verdict per task, then the same averaged across each task type and each',
+    '  # domain. See the CONF_LEVEL / EQUIV_MARGIN block at the top for the rules.',
+    '  c99_label <- c(haiku = "Haiku preferred", opus = "Opus preferred",',
+    '                 indifferent = "Indifferent", undecided = "Not decided yet")',
+    '  c99 <- do.call(rbind, lapply(split(df, df$task_id), function(g) {',
+    '    s99 <- sample_stats(g$pref)                          # this task\'s graded answers',
+    '    d99 <- decide(s99$mean, s99$se, if (s99$n >= 2) s99$n - 1 else NA_real_)   # t df = n-1',
+    '    data.frame(task_id = g$task_id[1], complexity = g$complexity[1], domain = g$domain[1],',
+    '               n = s99$n, sd = s99$sd, mean_pref = s99$mean,',
+    '               ci_lo = clip3(d99$lo), ci_hi = clip3(d99$hi),',
+    '               p_diff = d99$p_diff, p_equiv = d99$p_equiv,',
+    '               verdict = d99$verdict, small = d99$small, stringsAsFactors = FALSE)',
+    '  }))',
+    '  # Why an undecided task is undecided - the two reasons look identical in a table',
+    '  # of p-values but mean very different things to whoever collects more data.',
+    '  c99$why <- ifelse(c99$n < 2, "n<2: nothing to test",',
+    '                    sprintf("%s CI still spans 0, and too wide to prove |mean| < %.2f", CONF_PCT, EQUIV_MARGIN))',
+    '',
+    '  cat("\\n", strrep("=", 74), "\\n1. WHAT WE CAN SAY WITH ", CONF_PCT, " CONFIDENCE\\n", strrep("=", 74), "\\n", sep = "")',
+    '  cat(sprintf("   Every verdict below is made at the %s level (%s confidence) on the graded\\n", ALPHA_PCT, CONF_PCT))',
+    '  cat("   preference (-3 = Haiku much better .. 0 = equivalent .. +3 = Opus much better):\\n")',
+    '  cat(sprintf("     Haiku preferred   the task\'s %s CI for the mean lies entirely BELOW 0\\n", CONF_PCT))',
+    '  cat("     Opus preferred    ... lies entirely ABOVE 0\\n")',
+    '  cat(sprintf("     Indifferent       an EQUIVALENCE test (TOST: two one-sided t-tests at %s)\\n", ALPHA_PCT))',
+    '  cat(sprintf("                       places the true mean inside +/-%.2f scale points. A merely\\n", EQUIV_MARGIN))',
+    '  cat("                       non-significant result is NOT indifference, so proving\\n")',
+    '  cat("                       \\"users do not mind\\" needs this separate, positive test.\\n")',
+    '  cat(sprintf("     Not decided yet   neither claim reached %s - more responses are needed.\\n", CONF_PCT))',
+    '',
+    '  # Print one verdict bucket (the four are exhaustive and mutually exclusive).',
+    '  c99_block <- function(key, title, gloss) {',
+    '    sb <- c99[c99$verdict == key, , drop = FALSE]',
+    '    # Strongest evidence first: most positive for Opus, most negative for Haiku,',
+    '    # closest to 0 (i.e. most convincingly equal) first for indifferent.',
+    '    ord <- if (key == "haiku") order(sb$mean_pref) else if (key == "indifferent") order(abs(sb$mean_pref)) else order(-sb$mean_pref)',
+    '    sb <- sb[ord, , drop = FALSE]',
+    '    cat("\\n", strrep("-", 74), "\\n", sprintf("%s  -  %d of %d tasks", title, nrow(sb), nrow(c99)),',
+    '        "\\n   ", gloss, "\\n", strrep("-", 74), "\\n", sep = "")',
+    '    if (nrow(sb) == 0) { cat("   (none)\\n"); return(invisible(sb)) }',
+    '    cols <- c("task_id", "complexity", "domain", "n", "mean_pref", "ci_lo", "ci_hi", "p_diff", "p_equiv")',
+    '    if (key == "undecided") cols <- c(cols, "why")',
+    '    print(round_df(sb[, cols], 3), row.names = FALSE)   # 3 dp display, like Python',
+    '    if (key %in% c("opus", "haiku") && any(sb$small)) {',
+    '      cat(sprintf("   Note - %s: the winner is statistically clear yet the gap is SMALLER\\n",',
+    '                  paste(sb$task_id[sb$small], collapse = ", ")))',
+    '      cat(sprintf("   than the +/-%.2f indifference margin, i.e. real but practically slight.\\n", EQUIV_MARGIN))',
+    '    }',
+    '    invisible(sb)',
+    '  }',
+    '  c99_haiku <- c99_block("haiku", paste0("1a. HAIKU (the smaller model) is preferred, at ", CONF_PCT, " confidence"),',
+    '                         "Buying the frontier model here is over-provisioning: users liked the small one MORE.")',
+    '  c99_opus <- c99_block("opus", paste0("1b. OPUS (the frontier model) is preferred, at ", CONF_PCT, " confidence"),',
+    '                        "Serving these with the small model is under-provisioning: users noticed the difference.")',
+    '  c99_ind <- c99_block("indifferent", paste0("1c. USERS ARE INDIFFERENT, at ", CONF_PCT, " confidence (equivalence test)"),',
+    '                       "Proven equivalence, not just a null result - so the cheaper model is the right call.")',
+    '  c99_und <- c99_block("undecided", paste0("1d. NOT DECIDED YET at ", CONF_PCT, " confidence"),',
+    '                       "Not a finding: the data cannot yet separate a preference from indifference.")',
+    '  cat(sprintf("\\n   Summary: Haiku %d | Opus %d | indifferent %d | undecided %d  (of %d tasks).\\n",',
+    '              nrow(c99_haiku), nrow(c99_opus), nrow(c99_ind), nrow(c99_und), nrow(c99)))',
+    '',
+    '  # --- the same, averaged across the tasks of each task type / each domain ----',
+    '  # One row per group: the equal-weight average of its task means, its interval',
+    '  # and verdict, plus how that group\'s own tasks split across the four buckets.',
+    '  group99 <- function(col) {',
+    '    out <- do.call(rbind, lapply(split(c99, c99[[col]]), function(g) {',
+    '      est <- group_estimate(g$n, g$mean_pref, g$sd)',
+    '      dg <- decide(est$mean, est$se, est$df)',
+    '      d2 <- data.frame(key = g[[col]][1], n_tasks = est$k_all, n_resp = est$n_resp,',
+    '                       mean_pref = est$mean, ci_lo = clip3(dg$lo), ci_hi = clip3(dg$hi),',
+    '                       p_diff = dg$p_diff, p_equiv = dg$p_equiv,',
+    '                       verdict = paste0(unname(c99_label[dg$verdict]), if (dg$small) " (small gap)" else ""),',
+    '                       t_haiku = sum(g$verdict == "haiku"), t_opus = sum(g$verdict == "opus"),',
+    '                       t_indiff = sum(g$verdict == "indifferent"), t_undec = sum(g$verdict == "undecided"),',
+    '                       stringsAsFactors = FALSE)',
+    '      names(d2)[1] <- col; d2',
+    '    }))',
+    '    if (is.null(out)) {                                  # EMPTY input: 0-row frame, columns intact',
+    '      out <- data.frame(key = character(0), n_tasks = integer(0), n_resp = integer(0),',
+    '                        mean_pref = numeric(0), ci_lo = numeric(0), ci_hi = numeric(0),',
+    '                        p_diff = numeric(0), p_equiv = numeric(0), verdict = character(0),',
+    '                        t_haiku = integer(0), t_opus = integer(0), t_indiff = integer(0),',
+    '                        t_undec = integer(0), stringsAsFactors = FALSE)',
+    '      names(out)[1] <- col',
+    '    }',
+    '    out',
+    '  }',
+    '  type99 <- group99("complexity")',
+    '  dom99 <- group99("domain"); dom99 <- dom99[order(-dom99$mean_pref), , drop = FALSE]',
+    '  cat("\\n", strrep("-", 74), "\\n1e. BY TASK TYPE, at ", CONF_PCT, " confidence (averaged across that type\'s tasks)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  print(round_df(type99, 3), row.names = FALSE)',
+    '  cat("\\n", strrep("-", 74), "\\n1f. BY DOMAIN, at ", CONF_PCT, " confidence (averaged across that domain\'s tasks)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  print(round_df(dom99, 3), row.names = FALSE)',
+    '  cat("\\n   Group rows average the TASK means (so a task with many responses cannot\\n")',
+    '  cat("   dominate) and their intervals pool only the within-task sampling error,\\n")',
+    '  cat("   because these tasks are the whole study rather than a sample of tasks - the\\n")',
+    '  cat("   same reasoning as the charts in Section 2. Sections 5 and 6 report the other\\n")',
+    '  cat("   view (a t-test ACROSS task means, which also allows for task sampling and is\\n")',
+    '  cat("   therefore wider), so the two differ on purpose. The last four columns count\\n")',
+    '  cat("   that group\'s own tasks in each of the four verdicts above. A verdict marked\\n")',
+    '  cat(sprintf("   \\"(small gap)\\" is statistically clear yet lands INSIDE the +/-%.2f indifference\\n", EQUIV_MARGIN))',
+    '  cat("   margin - a real preference, but too small to be worth paying for.\\n")',
+    '',
+    '  # Figure 1: the verdict for every task. Bar = the task\'s mean graded preference,',
+    '  # whisker = its CONF_LEVEL CI, colour = the verdict, and the dotted lines mark the',
+    '  # +/-EQUIV_MARGIN indifference zone a task must fit INSIDE (at that confidence) to',
+    '  # be called indifferent. Blocks in the printed order.',
+    '  c99_col <- c(haiku = "#3d7bd6", opus = "#e67e22", indifferent = "#2e9e6b", undecided = "#c9c5bd")',
+    '  c99_rank <- c(haiku = 0, opus = 1, indifferent = 2, undecided = 3)',
+    '  cf <- c99[order(c99_rank[c99$verdict], c99$mean_pref), , drop = FALSE]',
+    '  ri99 <- rev(seq_len(nrow(cf)))                    # barplot draws the first bar at the BOTTOM',
+    '  op99 <- par(mar = c(4.5, 5, 3, 1))',
+    '  # Explicit finite xlim: with choices-only data every mean is NA and barplot would',
+    '  # otherwise crash ("need finite \'xlim\' values").',
+    '  xl99 <- range(c(cf$ci_lo, cf$ci_hi, cf$mean_pref, -1, 1), na.rm = TRUE, finite = TRUE)',
+    '  bp99 <- barplot(cf$mean_pref[ri99], names.arg = cf$task_id[ri99], horiz = TRUE, las = 1,',
+    '                  col = unname(c99_col[cf$verdict[ri99]]), cex.names = 0.6, xlim = xl99,',
+    '                  xlab = paste0("mean graded preference with its ", CONF_PCT, " CI  (<0 Haiku .. >0 Opus)"),',
+    '                  main = paste0("What we can say at ", CONF_PCT, " confidence, per task"))',
+    '  abline(v = c(-EQUIV_MARGIN, EQUIV_MARGIN), col = "#2e9e6b", lty = 3)   # indifference zone',
+    '  segments(cf$ci_lo[ri99], bp99, cf$ci_hi[ri99], bp99, col = "#444444")  # the CIs',
+    '  abline(v = 0, col = "#111111")',
+    '  legend("bottomright", legend = c("Haiku preferred", "Opus preferred", "Indifferent (proven)", "Not decided yet"),',
+    '         fill = unname(c99_col[c("haiku", "opus", "indifferent", "undecided")]), cex = 0.75)',
+    '  par(op99)',
+    '',
+    '  # ===========================================================================',
+    '  # 2. SUMMARY STATISTICS (per task, per domain, per task type)',
     '  # ===========================================================================',
     '  # Per-task table: counts of each choice, mean/SD/CI of the graded preference,',
     '  # and the Opus win-rate among decisive (non-tie) choices.',
@@ -3472,11 +4312,11 @@
     '               ci_lo = ci$lo, ci_hi = ci$hi, stringsAsFactors = FALSE)',
     '  }))',
     '  per_task <- per_task[order(-per_task$mean_pref), ]',
-    '  cat("\\n", strrep("-", 74), "\\n1. SUMMARY STATISTICS\\n", strrep("-", 74), "\\n", sep = "")',
-    '  cat("\\n1a. Per task (sorted by mean preference; >0 favours Opus):\\n")',
+    '  cat("\\n", strrep("-", 74), "\\n2. SUMMARY STATISTICS\\n", strrep("-", 74), "\\n", sep = "")',
+    '  cat("\\n2a. Per task (sorted by mean preference; >0 favours Opus):\\n")',
     '  print(round_df(per_task, 2), row.names = FALSE)   # 2 dp display, like Python',
     '',
-    '  # Figure: responses per task - HOW BALANCED is the sample? Each student saw a',
+    '  # Figure 2: responses per task - HOW BALANCED is the sample? Each student saw a',
     '  # random 15-of-30 subset, so tasks get different response counts; the dashed line',
     '  # marks the mean count. This is why the CIs later weight tasks equally.',
     '  rc <- per_task[order(per_task$n), ]                      # ascending by count',
@@ -3498,12 +4338,12 @@
     '      names(d)[1] <- col; d',
     '    }))',
     '  }',
-    '  cat("\\n1b. Per task type (response level):\\n"); print(group_summary("complexity"), row.names = FALSE)',
-    '  ds <- group_summary("domain"); cat("\\n1c. Per domain (response level):\\n")',
+    '  cat("\\n2b. Per task type (response level):\\n"); print(group_summary("complexity"), row.names = FALSE)',
+    '  ds <- group_summary("domain"); cat("\\n2c. Per domain (response level):\\n")',
     '  print(ds[order(-ds$mean_pref), ], row.names = FALSE)',
     '',
     '  # ===========================================================================',
-    '  # 2. MAIN HYPOTHESIS TEST (Haiku baseline: equally preferred, or not?)',
+    '  # 3. MAIN HYPOTHESIS TEST (Haiku baseline: equally preferred, or not?)',
     '  # ===========================================================================',
     '  # H0: mean graded preference = 0.  H1: != 0 (sign = the winner). Two ways:',
     '  #   (A) TASK-LEVEL: average within each task, then one-sample t-test of the 30',
@@ -3529,7 +4369,7 @@
     '  n_cls <- opus_all + ties_all + haiku_all               # rows with a recognised choice',
     '  dec_all <- opus_all + haiku_all; win_all <- if (dec_all) opus_all / dec_all else NA',
     '  p_win <- binom_two_sided(opus_all, dec_all)',
-    '  cat("\\n", strrep("-", 74), "\\n2. MAIN TEST - is Opus equally preferred to the Haiku baseline?\\n", strrep("-", 74), "\\n", sep = "")',
+    '  cat("\\n", strrep("-", 74), "\\n3. MAIN TEST - is Opus equally preferred to the Haiku baseline?\\n", strrep("-", 74), "\\n", sep = "")',
     '  cat("   H0: mean graded preference = 0 (equal to baseline).  H1: != 0.\\n")',
     '  # Label (B) honestly: with a single student in the graded rows the fit fell',
     '  # back to HC3, so do not claim the SEs were clustered.',
@@ -3547,7 +4387,7 @@
     '  cat(sprintf("   exact binomial test vs 50/50: p = %.4g   (ties were %.0f%% of the classified answers).\\n", p_win, if (n_cls > 0) 100 * ties_all / n_cls else NA))',
     '',
     '  # ===========================================================================',
-    '  # 3. PER-TASK RECOMMENDATION (which model wins each question?)',
+    '  # 4. PER-TASK RECOMMENDATION (which model wins each question?)',
     '  # ===========================================================================',
     '  # A model "wins" a task only if its mean clearly leans that way AND the one-sample',
     '  # t-test is significant (p<0.05); otherwise "no clear preference".',
@@ -3564,12 +4404,12 @@
     '  n_na <- sum(rec$recommendation == "n/a (too few)")',
     '  # keep the arithmetic honest: opus + haiku + none + na = all tasks',
     '  na_txt <- if (n_na > 0) sprintf(", and %d had too little graded data to test", n_na) else ""',
-    '  cat("\\n", strrep("-", 74), "\\n3. PER-TASK RECOMMENDATION  (one-sample t-test of each task vs baseline)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  cat("\\n", strrep("-", 74), "\\n4. PER-TASK RECOMMENDATION  (one-sample t-test of each task vs baseline)\\n", strrep("-", 74), "\\n", sep = "")',
     '  print(round_df(rec, 3), row.names = FALSE)         # 3 dp display, like Python',
     '  cat(sprintf("\\n   Significant winners: Opus on %d tasks, Haiku on %d; %d show no clear preference%s.\\n", n_opus, n_haiku, n_none, na_txt))',
     '',
     '  # ===========================================================================',
-    '  # 4. BY TASK TYPE (Simple vs Complex) - task-level CIs (weight tasks equally)',
+    '  # 5. BY TASK TYPE (Simple vs Complex) - task-level CIs (weight tasks equally)',
     '  # ===========================================================================',
     '  # Work from the 30 task means: within each type, t-test vs 0, and compare the two',
     '  # types with a Welch two-sample t-test on the task means.',
@@ -3596,7 +4436,7 @@
     '    out',
     '  }',
     '  type_tbl <- by_group(tm, "complexity")',
-    '  cat("\\n", strrep("-", 74), "\\n4. BY TASK TYPE  (task-level: each task weighted equally, so unequal\\n   response counts do not bias the estimate)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  cat("\\n", strrep("-", 74), "\\n5. BY TASK TYPE  (task-level: each task weighted equally, so unequal\\n   response counts do not bias the estimate)\\n", strrep("-", 74), "\\n", sep = "")',
     '  print(round_df(type_tbl, 4), row.names = FALSE)    # 4 dp display, like Python',
     '  simp <- tm$pref[tm$complexity == "Simple"]; comp <- tm$pref[tm$complexity == "Complex"]',
     '  p_sc <- NA',
@@ -3608,10 +4448,10 @@
     '  }',
     '',
     '  # ===========================================================================',
-    '  # 5. BY DOMAIN - each domain vs baseline + a one-way ANOVA across domains',
+    '  # 6. BY DOMAIN - each domain vs baseline + a one-way ANOVA across domains',
     '  # ===========================================================================',
     '  dom_tbl <- by_group(tm, "domain"); dom_tbl <- dom_tbl[order(-dom_tbl$mean_pref), ]',
-    '  cat("\\n", strrep("-", 74), "\\n5. BY DOMAIN  (task-level; sorted by mean preference)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  cat("\\n", strrep("-", 74), "\\n6. BY DOMAIN  (task-level; sorted by mean preference)\\n", strrep("-", 74), "\\n", sep = "")',
     '  print(round_df(dom_tbl, 4), row.names = FALSE)     # 4 dp display, like Python',
     '  # One-way ANOVA on the task means (domains with >=2 tasks), matching Python\'s f_oneway.',
     '  dcount <- table(tm$domain); keep <- names(dcount)[dcount >= 2]',
@@ -3624,11 +4464,11 @@
     '  }',
     '',
     '  # ===========================================================================',
-    '  # 6. REGRESSIONS (preference on complexity, and on domain)',
+    '  # 7. REGRESSIONS (preference on complexity, and on domain)',
     '  # ===========================================================================',
     '  # Response-level OLS, SEs clustered on the student. Intercept = reference group\'s',
     '  # mean preference (its p tests "= baseline"); slopes = differences from reference.',
-    '  cat("\\n", strrep("-", 74), "\\n6. REGRESSIONS  (response level; SEs clustered on student)\\n", strrep("-", 74), "\\n", sep = "")',
+    '  cat("\\n", strrep("-", 74), "\\n7. REGRESSIONS  (response level; SEs clustered on student)\\n", strrep("-", 74), "\\n", sep = "")',
     '  for (spec in list(c("pref ~ complexity", "complexity"), c("pref ~ domain", "domain"))) {',
     '    col <- spec[2]; if (length(unique(regdat[[col]])) < 2) next',
     '    ref <- sort(unique(as.character(regdat[[col]])))[1]          # dropped level = reference',
@@ -3640,10 +4480,55 @@
     '  }',
     '',
     '  # ===========================================================================',
+    '  # 8. THE CONFIDENT SETS (the answer, on one screen)',
+    '  # ===========================================================================',
+    '  # The bottom line of Section 1, restated as the three sets of task ids you can',
+    '  # act on. Same tasks, same tests, same CONF_LEVEL - this is a recap, not a second',
+    '  # analysis, so it lists ids rather than repeating those tables. "Ground truth"',
+    '  # here means the preference of the POPULATION these students are drawn from -',
+    '  # what everyone would say, not just the students who happened to answer - which',
+    '  # is exactly what a confidence interval is a claim about. Tasks that reach no',
+    '  # verdict are DELIBERATELY NOT LISTED: "we cannot say yet" is not a fourth kind',
+    '  # of task, it is the absence of an answer.',
+    '  # The set\'s task ids, comma-separated and wrapped, so a long set stays readable.',
+    '  id_lines <- function(ids, width = 66) {',
+    '    if (!length(ids)) return("(none reach this confidence)")',
+    '    pieces <- paste0(ids, c(rep(",", max(0, length(ids) - 1)), ""))',
+    '    out <- character(0); line <- ""',
+    '    for (pc in pieces) {',
+    '      if (nchar(line) && nchar(line) + 1 + nchar(pc) > width) { out <- c(out, line); line <- pc }',
+    '      else line <- trimws(paste(line, pc))',
+    '    }',
+    '    if (nchar(line)) out <- c(out, line)',
+    '    out',
+    '  }',
+    '  cat("\\n", strrep("=", 74), "\\n8. THE ", CONF_PCT, "-CONFIDENT SETS  (the answer, on one screen)\\n", strrep("=", 74), "\\n", sep = "")',
+    '  cat(sprintf("   The tasks whose true (population) preference we can name with %s\\n", CONF_PCT))',
+    '  cat("   confidence - the same verdicts as Section 1, listed as sets. Tasks that\\n")',
+    '  cat("   reach no verdict are NOT listed: that is an absence of evidence, not a\\n")',
+    '  cat("   third kind of answer. Their per-task numbers are in Sections 1a-1c.\\n")',
+    '  s8 <- list(c("haiku", "8a. GROUND TRUTH = PEOPLE PREFER HAIKU",',
+    '               "The whole interval sits below 0: the smaller model\'s answer won."),',
+    '             c("opus", "8b. GROUND TRUTH = PEOPLE PREFER OPUS",',
+    '               "The whole interval sits above 0: the frontier model\'s answer won."),',
+    '             c("indifferent", "8c. GROUND TRUTH = PEOPLE ARE INDIFFERENT",',
+    '               sprintf("An equivalence test puts the true gap inside +/-%.2f - proven, not just unproven.", EQUIV_MARGIN)))',
+    '  for (sp in s8) {',
+    '    ids <- c99$task_id[c99$verdict == sp[1]]',
+    '    cat("\\n", strrep("-", 74), "\\n", sprintf("%s  -  %d tasks", sp[2], length(ids)),',
+    '        "\\n   ", sp[3], "\\n", strrep("-", 74), "\\n", sep = "")',
+    '    for (ln in id_lines(ids)) cat("   ", ln, "\\n", sep = "")',
+    '  }',
+    '  n_set <- nrow(c99_haiku) + nrow(c99_opus) + nrow(c99_ind)',
+    '  cat(sprintf("\\n   %d of the %d tasks are classified at %s: %d Haiku, %d Opus, %d indifferent.\\n",',
+    '              n_set, nrow(c99), CONF_PCT, nrow(c99_haiku), nrow(c99_opus), nrow(c99_ind)))',
+    '  cat(sprintf("   The remaining %d reach no verdict and are deliberately not listed.\\n", nrow(c99) - n_set))',
+    '',
+    '  # ===========================================================================',
     '  # PLOTS',
     '  # ===========================================================================',
     '  colf <- function(v) ifelse(v > 0, "#e67e22", ifelse(v < 0, "#3d7bd6", "#9a978f"))',
-    '  # Figure 1: distribution of graded preference + who-was-preferred shares.',
+    '  # Figure 3: distribution of graded preference + who-was-preferred shares.',
     '  op <- par(mfrow = c(1, 2))',
     '  # Snap to the -3..3 scale before counting so a non-integer value from an',
     '  # imported table still shows in the histogram (means/tests use it as-is).',
@@ -3656,7 +4541,7 @@
     '  barplot(c(opus_all, ties_all, haiku_all), names.arg = c("Opus", "Tie", "Haiku"),',
     '          col = c("#e67e22", "#9a978f", "#3d7bd6"), ylab = "responses", main = sprintf("Who was preferred (n=%d)", n_cls))',
     '  par(op)',
-    '  # Figure 2: per-task mean +/- 95% CI (sorted); whiskers widen with fewer responses.',
+    '  # Figure 4: per-task mean +/- 95% CI (sorted); whiskers widen with fewer responses.',
     '  ts <- per_task[order(per_task$mean_pref), ]',
     '  op2 <- par(mar = c(4.5, 5, 3, 1))',
     '  # x-range covers every CI whisker (a fixed range used to clip wide ones).',
@@ -3667,9 +4552,9 @@
     '  axis(2, at = seq_len(nrow(ts)), labels = ts$task_id, las = 1, cex.axis = 0.6)',
     '  segments(ts$ci_lo, seq_len(nrow(ts)), ts$ci_hi, seq_len(nrow(ts)), col = "#888888")',
     '  abline(v = 0, col = "#111111"); par(op2)',
-    '  # Figure 2b: WHICH MODEL EACH TASK\'S USERS PREFER, ranked Haiku (top) ->',
+    '  # Figure 5: WHICH MODEL EACH TASK\'S USERS PREFER, ranked Haiku (top) ->',
     '  # indifferent (middle) -> Opus (bottom). The winner is the per-task recommendation',
-    '  # from Section 3 (the one-sample t-test): "Haiku"/"Opus" when the lean is',
+    '  # from Section 4 (the one-sample t-test): "Haiku"/"Opus" when the lean is',
     '  # significant, else "no clear preference". Bar = mean preference, colour = winner.',
     '  rankw <- ifelse(rec$recommendation == "Haiku", 0, ifelse(rec$recommendation == "Opus", 2, 1))',
     '  colw <- ifelse(rec$recommendation == "Haiku", "#3d7bd6", ifelse(rec$recommendation == "Opus", "#e67e22", "#9a978f"))',
@@ -3686,7 +4571,7 @@
     '  abline(v = 0)',
     '  legend("bottomright", legend = c("Haiku", "Indifferent", "Opus"), fill = c("#3d7bd6", "#9a978f", "#e67e22"), cex = 0.8)',
     '  par(opW)',
-    '  # Figure 2c: CONFIDENT per-task provisioning. Classify each task\'s CHOICES as',
+    '  # Figure 6: CONFIDENT per-task provisioning (95%). Classify each task\'s CHOICES as',
     '  # over- (chose Opus) / indifferent (tie) / under-provision (chose Haiku) by the',
     '  # DOMINANT category, keeping it ONLY when that category is significantly larger',
     '  # than the runner-up — an EXACT binomial test on the top-two counts: under H0 the',
@@ -3723,7 +4608,7 @@
     '    plot.new(); text(0.5, 0.5, "No task reaches a 95%-confident\\nover / indifferent / under classification\\nwith the current data.", cex = 1.1)',
     '  }',
     '  par(opC)',
-    '  # Figure 3: by domain (horizontal) and by task type, task-level mean +/- 95% CI.',
+    '  # Figure 7: by domain (horizontal) and by task type, task-level mean +/- 95% CI.',
     '  # Each panel is guarded: with no graded data it says so instead of erroring.',
     '  op3 <- par(mfrow = c(1, 2), mar = c(4.5, 10, 3, 1))',
     '  dd <- dom_tbl[order(dom_tbl$mean_pref), ]',
@@ -3751,6 +4636,21 @@
     '  verdict <- function(m, p) if (is.na(p)) "not enough data" else if (p >= 0.05) "no clear preference (indifferent)" else if (m > 0) "prefer Opus" else "prefer Haiku"',
     '  overall <- verdict(ciA$mean, tA$p)',
     '  cat("\\n\\nINSIGHTS\\n"); cat(strrep("=", 74), "\\n")',
+    '  fmt2 <- function(v) if (length(v) != 1 || is.na(v) || !is.finite(v)) "n/a" else sprintf("%+.2f", v)   # NA-safe display',
+    '  add(paste0("## Headline - what we can say at ", CONF_PCT, " confidence"))',
+    '  add(sprintf("- Of the **%d tasks**, at %s confidence users **prefer Haiku on %d**, **prefer Opus on %d**, are **provably indifferent on %d**, and **%d are not decided yet**.", nrow(c99), CONF_PCT, nrow(c99_haiku), nrow(c99_opus), nrow(c99_ind), nrow(c99_und)))',
+    '  add(sprintf("- The three claims are not symmetric. **\\"Indifferent\\" is a positive finding**: an equivalence test (TOST) placed the true mean preference inside +/-%.2f scale points, so those tasks can be served by the cheaper model on purpose. **\\"Not decided yet\\" is the absence of a finding** - neither a preference nor equivalence reached %s, so those tasks simply need more responses.", EQUIV_MARGIN, CONF_PCT))',
+    '  for (i in seq_len(nrow(type99))) { rr <- type99[i, ]',
+    '    add(sprintf("- **%s** tasks, averaged across their %d tasks: mean **%s** (%s CI [%s, %s]) -> **%s** (of those tasks: %d Haiku, %d Opus, %d indifferent, %d undecided).", rr$complexity, rr$n_tasks, fmt2(rr$mean_pref), CONF_PCT, fmt2(rr$ci_lo), fmt2(rr$ci_hi), rr$verdict, rr$t_haiku, rr$t_opus, rr$t_indiff, rr$t_undec)) }',
+    '  dom_call <- dom99[dom99$verdict != "Not decided yet", , drop = FALSE]',
+    '  if (nrow(dom_call)) {',
+    '    for (i in seq_len(nrow(dom_call))) { rr <- dom_call[i, ]',
+    '      add(sprintf("- Domain **%s**: mean **%s** (%s CI [%s, %s]) -> **%s**.", rr$domain, fmt2(rr$mean_pref), CONF_PCT, fmt2(rr$ci_lo), fmt2(rr$ci_hi), rr$verdict)) }',
+    '    if (nrow(dom99) > nrow(dom_call)) add(sprintf("- The remaining %d domain(s) cannot be called either way at %s yet.", nrow(dom99) - nrow(dom_call), CONF_PCT))',
+    '  } else {',
+    '    add(paste0("- **No domain** can be called either way at ", CONF_PCT, " yet (each holds only a handful of tasks, so a domain-level claim needs more responses than a single task does)."))',
+    '  }',
+    '  add("")',
     '  add("## Overall recommendation")',
     '  if (is.na(ciA$mean)) {',
     '    add("- Not enough graded data to draw a conclusion yet.")',
@@ -3785,26 +4685,32 @@
     '  # ---- The figures, each with a plain-language guide (the Insights section',
     '  # ---- drops the matching plot in right under each "## Figure N" heading). ----',
     '  n_over <- sum(cf_cat == "over"); n_under <- sum(cf_cat == "under"); n_ind <- sum(cf_cat == "ind")',
+    '  add(""); add("## The confident sets (Section 8)")',
+    '  add(sprintf("- Section 8 is the bottom line as three lists of task ids you can act on: **%d where people prefer Haiku**, **%d where people prefer Opus**, **%d where people are provably indifferent** - %d of the %d tasks. The other %d are left unlisted on purpose: no verdict is not a verdict.", nrow(c99_haiku), nrow(c99_opus), nrow(c99_ind), n_set, nrow(c99), nrow(c99) - n_set))',
+    '  add(sprintf("- It is a recap of Section 1 at the same %s confidence, not a second analysis, so the two can never disagree. Change CONF_LEVEL at the top and both move together.", CONF_PCT))',
     '  add(""); add("## How to read the figures below")',
-    '  add("All six figures come from the analysis above - nothing new is computed. Each one is shown here with a short guide to reading it, so the plots live in one place with their explanation.")',
-    '  add(""); add("## Figure 1 - Sample balance: how many students answered each task")',
+    '  add("All seven figures come from the analysis above - nothing new is computed. Each one is shown here with a short guide to reading it, so the plots live in one place with their explanation.")',
+    '  add(""); add(paste0("## Figure 1 - What we can say at ", CONF_PCT, " confidence, per task"))',
+    '  add(sprintf("- The picture of Section 1. Each bar is one task\'s **average** graded preference (left = Haiku, right = Opus) and its whisker is the **%s confidence interval** for that average. The **colour is the verdict**, and the blocks run in the same order as the tables: blue = **Haiku preferred** (interval entirely below 0), orange = **Opus preferred** (entirely above 0), green = **indifferent** (an equivalence test placed the interval inside the +/-%.2f band marked by the dotted lines), pale grey = **not decided yet**.", CONF_PCT, EQUIV_MARGIN))',
+    '  add("- The dotted lines mark the indifference zone. A **green** task\'s whole interval fits inside it, which is what proves \\"users do not mind\\"; a **grey** task\'s interval both crosses 0 *and* pokes out of the zone, so it is consistent with a real preference AND with none - that is why grey is not a result, just a request for more responses.")',
+    '  add(""); add("## Figure 2 - Sample balance: how many students answered each task")',
     '  add("- One bar per task = the number of real (submitted) responses it got; the dashed line is the average. Because each student saw a random 15 of the 30 tasks, the bars are uneven. **This is exactly why the confidence intervals below are task-weighted and why some are wider than others** - a task with fewer responses carries less certainty.")',
-    '  add(""); add("## Figure 2 - Overall: how strongly, and who was preferred")',
+    '  add(""); add("## Figure 3 - Overall: how strongly, and who was preferred")',
     '  add("- Left: the spread of the -3..+3 graded preference across every response (negative = Haiku, 0 = equivalent, positive = Opus); the dashed line is the overall mean. Right: the raw count of responses that picked Opus, called it a tie, or picked Haiku. Read them together - a mean near 0 with many -3 and +3 votes means students *disagreed strongly*, not that everyone was indifferent.")',
-    '  add(""); add("## Figure 3 - Per-task preference with 95% confidence intervals")',
-    '  add("- Each dot is one task\'s mean graded preference; the whisker is its 95% confidence interval. A task whose whisker **crosses the 0 line has no statistically clear preference**; one whose whisker sits entirely on one side does. Whiskers widen for tasks with fewer responses (Figure 1) - that is the correct handling of unequal response counts.")',
-    '  add(""); add("## Figure 4 - What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
-    '  add("- **Two different things are drawn here - do not confuse them.** The **bar length** is the task\'s *average* graded preference (left = leaned Haiku, right = leaned Opus). The **colour** is the *statistical verdict* (same test as Figure 3): blue = students significantly preferred Haiku, orange = significantly preferred Opus, **grey = no statistically clear preference** (its 95% interval still includes 0, i.e. its Figure-3 whisker crosses zero).")',
+    '  add(""); add("## Figure 4 - Per-task preference with 95% confidence intervals")',
+    '  add("- Each dot is one task\'s mean graded preference; the whisker is its 95% confidence interval. A task whose whisker **crosses the 0 line has no statistically clear preference**; one whose whisker sits entirely on one side does. Whiskers widen for tasks with fewer responses (Figure 2) - that is the correct handling of unequal response counts.")',
+    '  add(""); add("## Figure 5 - What each task\'s users prefer (Haiku -> indifferent -> Opus)")',
+    '  add("- **Two different things are drawn here - do not confuse them.** The **bar length** is the task\'s *average* graded preference (left = leaned Haiku, right = leaned Opus). The **colour** is the *statistical verdict* (same test as Figure 4): blue = students significantly preferred Haiku, orange = significantly preferred Opus, **grey = no statistically clear preference** (its 95% interval still includes 0, i.e. its Figure-4 whisker crosses zero).")',
     '  add("- That is why a **long grey bar** can appear (a task whose average is sizeable yet still grey): on average those students leaned one way, but either few of them answered or they disagreed a lot, so we cannot rule out that the true preference is zero. **Grey does NOT mean everyone clicked \\"equivalent\\"** - it means \\"not distinguishable from indifference at 95% confidence.\\" A task turns grey either because opinions genuinely split (some strongly Opus, some strongly Haiku, cancelling out in the average) OR because too few students answered to be sure. In short: **the bar shows the direction and size of the average; the colour shows whether we are confident about it.**")',
-    '  add(""); add("## Figure 5 - Tasks we can classify with 95% confidence (over / indifferent / under-provisioning)")',
+    '  add(""); add("## Figure 6 - Tasks we can classify with 95% confidence (over / indifferent / under-provisioning)")',
     '  add("- In the provisioning frame: **over-provisioning = students preferred Opus** (the larger model), **under-provisioning = students preferred Haiku** (the smaller model), **indifferent = a genuine tie**. A task appears here **only if one of the three categories is statistically dominant** - an exact binomial test shows the leading choice significantly beats the runner-up (and therefore the third) at 95%. Tasks that do not clear that bar are omitted as \\"not enough evidence to classify.\\"")',
     '  if (length(cf_task)) {',
     '    add(sprintf("- Of the %d tasks, **%d clear the bar**: %d over-provisioning (Opus), %d under-provisioning (Haiku), %d indifferent. Each bar\'s length is the winning choice\'s share of that task\'s responses.", nt, length(cf_task), n_over, n_under, n_ind))',
     '  } else {',
     '    add("- **No task clears the bar with the current data**, so the figure says so rather than showing a classification we are not sure of. More responses per task would resolve the borderline ones.")',
     '  }',
-    '  add("- Figures 4 and 5 ask *different* questions and can disagree. Figure 4 tests whether a task\'s **average strength** of preference (on the -3..+3 scale) differs from 0; Figure 5 tests whether one of the three **choice categories** (Opus / tie / Haiku) is a significant plurality of the picks. So a task can be grey in Figure 4 yet still be confidently classified in Figure 5, or the reverse - the two views are complementary, not a contradiction.")',
-    '  add(""); add("## Figure 6 - By domain and by task type, with confidence intervals")',
+    '  add("- Figures 5 and 6 ask *different* questions and can disagree. Figure 5 tests whether a task\'s **average strength** of preference (on the -3..+3 scale) differs from 0; Figure 6 tests whether one of the three **choice categories** (Opus / tie / Haiku) is a significant plurality of the picks. So a task can be grey in Figure 5 yet still be confidently classified in Figure 6, or the reverse - the two views are complementary, not a contradiction.")',
+    '  add(""); add("## Figure 7 - By domain and by task type, with confidence intervals")',
     '  add("- Left: each domain\'s task-weighted mean preference with its 95% interval; right: the same for Simple vs Complex tasks. A bar/whisker that clears the 0 line marks a group that reliably leans to one model. This is the aggregated view behind the \\"By task type\\" and \\"By domain\\" bullets above.")',
     '  for (s in INS) cat(s, "\\n")',
     '  cat("\\nDone.\\n")',
