@@ -615,6 +615,8 @@
   }
 
   /* ---- RIGHT: registered users ---- */
+  /* Exposed (function reference only) for the offline admin-guard test. */
+  window.__arenaBuildUsersCard = function () { return buildUsersCard(); };
   function buildUsersCard() {
     var card = el('div', { class: 'aa-card' });
     var all = [];
@@ -659,6 +661,29 @@
       listWrap.appendChild(el('p', { class: 'aa-note',
         text: groups.length + ' of ' + all.length + ' user' + (all.length === 1 ? '' : 's') +
               (groups.length !== rows.length ? ' · ' + (rows.length - groups.length) + ' duplicate account(s) folded in' : '') }));
+      /* Delete a chosen set of accounts, then re-read and report what (if
+         anything) survived. Used by both the whole-student Delete and the
+         per-account Delete rows below. */
+      function removeAccounts(ids, gkey, what) {
+        return Promise.allSettled(ids.map(function (id) { return Store.deleteParticipant(id); })).then(function (rs) {
+          var bad = rs.filter(function (x) { return x.status === 'rejected'; });
+          return Store.listParticipants().then(function (fresh) {
+            all = fresh.sort(function (a, b) { return tsMs(a.createdAt) - tsMs(b.createdAt); });
+            var stillThere = ids.filter(function (id) {
+              return all.some(function (x) { return x._id === id; });
+            });
+            if (stillThere.length) {
+              toast('STILL PRESENT: ' + stillThere.length + ' account(s) could not be removed (' +
+                    stillThere.join(', ') + ')' + (bad.length ? ' — ' + bad.length + ' delete(s) were rejected' : '') + '. Please try again.');
+            } else {
+              var left = gkey ? all.filter(function (x) { return String(x.participantId || '').trim().toLowerCase() === gkey; }) : [];
+              toast('Deleted ' + what + ' — verified gone, so it cannot appear in any export.' +
+                    (left.length ? ' ' + left.length + ' other account(s) for this student remain.' : ''));
+            }
+            render();
+          });
+        }).catch(function (e) { toast('Delete error: ' + ((e && e.code) || e)); load(); });
+      }
       groups.forEach(function (g) {
         // Show the most recent account; Delete covers all of them.
         var list = g.rows.slice().sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
@@ -677,35 +702,34 @@
           ]),
           el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'registered ' + fmtTs(p.createdAt) + '  ·  ' + doneN + ' session(s) completed' + (ids.length > 1 ? '  ·  ' + ids.length + ' accounts' : '') + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
           /* The account IDs are the export's own account_id column, so a row
-             in the spreadsheet can be matched to the card that removes it. */
-          el('div', { class: 'aa-note', style: 'margin-top:2px;opacity:.75;', text: 'account_id: ' + ids.join(', ') }),
+             in the spreadsheet can be matched to the card that removes it.
+             With more than one account the accounts are listed INDIVIDUALLY,
+             each with its own Delete — a student who registered twice has two
+             separate anonymous accounts, and the instructor needs to remove a
+             specific stale one while KEEPING the account they actually played
+             (grouping them under one card otherwise hides that choice). */
+          ids.length > 1
+            ? el('div', { style: 'margin-top:6px;' }, [el('div', { class: 'aa-note', style: 'opacity:.75;', text: 'This student has ' + ids.length + ' separate accounts — delete the ones that should not count:' })].concat(
+                list.map(function (x) {
+                  var xc = Object.keys(x.completedSessions || {}).length;
+                  return el('div', { class: 'aa-row', style: 'justify-content:space-between;align-items:center;gap:8px;margin-top:4px;padding:6px 8px;border:1px solid rgba(255,255,255,.10);border-radius:8px;' }, [
+                    el('span', { class: 'aa-note', style: 'min-width:0;overflow-wrap:anywhere;',
+                      text: x._id + '  ·  registered ' + fmtTs(x.createdAt) + '  ·  ' + xc + ' session(s)  ·  ' + (x.status || '') }),
+                    el('button', { class: 'aa-btn danger sm', on: { click: function () {
+                      if (!window.confirm('Delete ONLY this account?\n\n' + x._id + '\nregistered ' + fmtTs(x.createdAt) + ' · ' + xc + ' session(s) completed' +
+                            '\n\nIts answers are removed from the database, so they no longer appear in any data export. The student\'s other account(s) are kept.')) return;
+                      removeAccounts([x._id], gkey, 'account ' + x._id);
+                    } } }, ['Delete'])
+                  ]);
+                })))
+            : el('div', { class: 'aa-note', style: 'margin-top:2px;opacity:.75;', text: 'account_id: ' + ids.join(', ') }),
           el('div', { class: 'aa-row', style: 'margin-top:6px;' }, [
             el('button', { class: 'aa-btn danger sm', on: { click: function () {
               if (!window.confirm('Delete "' + (p.participantId || p.email || p._id) + '" and all their data?' +
                     (ids.length > 1 ? '\n\nThis student has ' + ids.length + ' accounts (they registered more than once) — ALL of them are removed.' : '') +
                     '\n\nTheir answers are removed from the database, so they no longer appear in any data export — and they can take the study again.')) return;
-              /* allSettled: if one account fails to delete, say so instead of
-                 reporting success while its data is still exportable. */
-              Promise.allSettled(ids.map(function (id) { return Store.deleteParticipant(id); })).then(function (rs) {
-                var bad = rs.filter(function (x) { return x.status === 'rejected'; });
-                /* VERIFY, never assume: re-read and check nothing is left under
-                   this Participant ID. A delete that silently half-worked used
-                   to leave an account behind that kept appearing in exports. */
-                return Store.listParticipants().then(function (fresh) {
-                  all = fresh.sort(function (a, b) { return tsMs(a.createdAt) - tsMs(b.createdAt); });
-                  var left = gkey ? all.filter(function (x) { return String(x.participantId || '').trim().toLowerCase() === gkey; }) : [];
-                  if (left.length) {
-                    toast('STILL PRESENT: ' + left.length + ' account(s) for ' + (p.participantId || '') +
-                          ' could not be removed (' + left.map(function (x) { return x._id; }).join(', ') +
-                          ')' + (bad.length ? ' — ' + bad.length + ' delete(s) were rejected' : '') + '. Please try again.');
-                  } else {
-                    toast('Deleted ' + (ids.length > 1 ? ids.length + ' accounts' : '') +
-                          ' — verified gone from the database, so they cannot appear in any export.');
-                  }
-                  render();
-                });
-              }).catch(function (e) { toast('Delete error: ' + ((e && e.code) || e)); load(); });
-            } } }, ['Delete'])
+              removeAccounts(ids, gkey, ids.length > 1 ? ids.length + ' accounts' : 'the account');
+            } } }, [ids.length > 1 ? 'Delete all ' + ids.length + ' accounts' : 'Delete'])
           ])
         ]));
       });
@@ -1209,7 +1233,7 @@
   // opts.sessionId (optional) restricts the export to one session: only the
   // users who played it, and only their data for that session.
   /* Exposed (function reference only, no data) so the offline export-guard
-     test can drive the real builder — see tools/export-guard.mjs. */
+     test can drive the real builder — see tools/admin-guard.mjs. */
   window.__arenaExportExcel = function (parts, opts) { return exportExcel(parts, opts); };
   function exportExcel(parts, opts) {
     opts = opts || {};

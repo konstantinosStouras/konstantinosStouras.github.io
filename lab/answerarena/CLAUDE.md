@@ -554,14 +554,18 @@ swallowed, because Firestore keeps sub-collection docs alive under a deleted
 parent and a half-delete used to orphan a student's answers while the UI said
 "Deleted." The **Registered users list is grouped by student** (one card per
 Participant ID, showing each account's `account_id` — the export's own join
-key — and "N accounts" when they registered more than once), so Delete removes
+key — and "N accounts" when they registered more than once), so its Delete removes
 **every account behind that student**, then **re-reads and verifies** nothing
-is left under that Participant ID before reporting success. On top of that,
+is left under that Participant ID before reporting success. When there IS more
+than one account the card **lists them individually** (account id · registered
+· sessions · status) each with **its own Delete**, because a student who
+registered twice needs the stale account removed while the one they actually
+played is KEPT — folding them under a single button would hide that choice. On top of that,
 `exportExcel` **intersects `parts` with a fresh `listParticipants()` read**, so
 no caller — a stale in-memory array, a list captured before a deletion, a
 future caller that forgets to re-read — can leak a removed account into a
 file; it fails open (keeps the caller's list) if that read errors. Offline
-test: `node lab/answerarena/tools/export-guard.mjs`.
+test: `node lab/answerarena/tools/admin-guard.mjs`.
 
 **Gotchas:** the runtimes need network access to jsDelivr on first Run (blocked
 in some sandboxes → a visible "Failed to load … (CDN / network / CSP?)" error,
