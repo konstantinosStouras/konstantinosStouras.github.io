@@ -7,8 +7,11 @@
 /* Left panel */
 .left {
   flex: 1;
-  background: var(--ink);
-  color: var(--paper);
+  /* Pinned brand surface, not the inverse of the page — see the --login-hero-*
+     tokens in globals.css. `var(--ink)`/`var(--paper)` swap under dark mode,
+     which turned this half of the screen cream. */
+  background: var(--login-hero-bg);
+  color: var(--login-hero-fg);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -36,7 +39,7 @@
   font-size: clamp(40px, 5vw, 64px);
   line-height: 1.1;
   margin-bottom: 24px;
-  color: var(--paper);
+  color: var(--login-hero-fg);
 }
 
 .headline em {
@@ -47,7 +50,7 @@
 .sub {
   font-size: 15px;
   line-height: 1.7;
-  color: rgba(245, 242, 235, 0.6);
+  color: var(--login-hero-dim);
   max-width: 340px;
 }
 
@@ -57,7 +60,7 @@
   bottom: -80px;
   width: 400px;
   height: 400px;
-  color: var(--paper);
+  color: var(--login-hero-fg);
   pointer-events: none;
 }
 

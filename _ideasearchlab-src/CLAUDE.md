@@ -564,6 +564,34 @@ session+author with `|`; session codes `[A-Z0-9]` and Firebase UIDs never contai
 
 **DemoTour (`pages/DemoTour.jsx`):** the pre-registration walkthrough. `SceneVoting` must destructure `clock` (it renders a mock timer) — a missing destructure threw a render-time ReferenceError that blanked the whole app near the tour's end and forced a refresh. A small `SceneBoundary` error boundary now wraps each dynamic scene: if any scene throws it shows a quiet placeholder and the tour keeps auto-advancing (Skip/Start stay usable), instead of unmounting the React root to a blank page.
 
+**Theme inversion — the one pattern to watch.** Two surfaces were painted
+`background: var(--ink); color: var(--paper)`, i.e. always the INVERSE of the
+page. That reads as intended in light mode but *flips* under
+`[data-theme="dark"]`, because `--ink`/`--paper` swap: the surface turns light
+while everything around it goes dark. Both are fixed, in the two ways such a
+surface can be fixed — and which one applies is a design question, not a
+mechanical one:
+- **The AI assistant panel** (`AIChat.module.css`) is a full pane, so it must
+  FOLLOW the theme: light panel in light mode, dark in dark mode. It paints
+  from `--ai-*` tokens declared under both `:root` and `[data-theme="dark"]`
+  (see the split-screen note above).
+- **The `/login` branding hero** (`Login.module.css` `.left`) is a brand panel
+  whose whole job is to contrast with the sign-in form beside it; making it
+  light in light mode would leave a light hero next to a light form and erase
+  the design. So it is PINNED to the branded dark surface in both themes via
+  `--login-hero-bg` / `--login-hero-fg` / `--login-hero-dim`, declared in
+  `:root` only and deliberately **not** re-declared under `[data-theme="dark"]`
+  — a dark override is exactly what made it flip. Light mode renders
+  identically to before (the token values are the old light-mode
+  `--ink`/`--paper`); in dark mode the hero sits a step below the form side's
+  `--paper`, so the two halves stay distinct. `.sub`'s hardcoded
+  `rgba(245,242,235,0.6)` and the `.decoration` SVG's `currentColor` went to
+  the same tokens, since both assumed a dark backdrop.
+
+Still deliberately inverted, and fine: the small `.role` instructor chips
+(Admin / AISettings / DataAnalytics) and GroupPhase's `.timeNudgeCard` toast —
+each is a small contrast element that stays legible whichever way it lands.
+
 **To deploy any frontend change:**
 ```
 cd C:\Users\User\Documents\GitHub\ideasearchlab
