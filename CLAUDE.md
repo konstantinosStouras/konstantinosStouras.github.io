@@ -2537,14 +2537,37 @@ load + on the completion storage event; `completed` is student-writable in
 the rules — it grants nothing), and the roster's `completed` map flows BACK
 DOWN via the own-doc watch (merge in `watchApproval`, forced re-render), so
 a centrally stamped ✓ reaches the student's card live wherever they log in.
-The admin's **"⟲ Verify from Answer Arena"** button (`verifyFromArena` in
-admin/admin.js; arena-config.js loaded on the admin page) is the
-ground-truth reconciliation for markers the client side missed: it signs
-into the ARENA project with the locker credentials, reads participants
-(+ sessions for id→code) and a FRESH roster read (never the snapshot
-cache), joins `participantId` ↔ roster studentId, and `stampCompleted`s
+The admin's **"⟲ Verify from …" buttons — ONE PER ACTIVE SIMULATION THAT
+KEEPS AN IDENTIFIABLE PARTICIPANT RECORD** (`renderVerifyButtons`/
+`verifyFromSim` in admin/admin.js, rebuilt on every roster render so the row
+follows the activation toggles exactly like the roster's columns) are the
+ground-truth reconciliation for markers the client side missed. A simulation
+opts in with a **`verify` block in `catalog.js`** (`adapter` name, its PUBLIC
+Firebase web config — inline, or `configGlobal` for Answer Arena which
+publishes `arena-config.js`, loaded on the admin page —, and an `idNote` for
+the button tooltip) plus **one reader in `simulation/admin/verify.js`**
+(`window.SIMP_VERIFY[adapter](ctx) → {records, doneById}`); everything else —
+the shared-locker sign-in into that project's own Firebase app
+(`simFirestore`, named app `verify-<key>`), the roster join, the guards, the
+stamping and revoking — is GENERIC, so a fifth simulation is those two edits
+and nothing more. Currently wired: **answerarena** (`participants.participantId`
++ sessions for id→code), **ideasearchlab** (`sessions/*/participants/*` of the
+sessions this admin created — `platform.studentId`, done = `status:'done'` OR,
+in a CLOSED session, `votesSubmitted`/`individualComplete`, because closing a
+session ends everyone on the same Done screen WITHOUT setting their status and
+counting only the survey would propose revoking that whole class),
+**portfoliofit** (`participants.studentId`, `status:'done'`) and **search-v2**
+(no participant docs at all: `events` filtered to `event=='session_end'`,
+identity `pid` = the student ID the platform sends as `PROLIFIC_PID`, plus a
+`limit(1)` probe so "the read came back empty" is distinguishable from
+"nobody has finished yet"). Deliberately NOT verifiable (no button, nothing to
+reconcile against): **problem-solving** (Google Sheet, no identity), **ssc**
+(firm decisions, no student ID), **newsvendor** (cross-origin project),
+**jagged** (collects nothing). Each run reads a FRESH roster (never the
+snapshot cache), joins the simulation's student ID ↔ roster studentId, and
+`stampCompleted`s
 (admin write) every match — and, TWO-WAY, **revokes** a ✓ whose student is
-no longer a completed arena participant (deleted there so they may retake
+no longer a completed participant THERE (deleted so they may retake
 it; arena's `deleteParticipant` hard-deletes the doc + its subcollections,
 so they simply vanish — and the arena's participant list is GROUPED BY
 STUDENT, so Delete removes EVERY account a student registered under, not
@@ -2558,17 +2581,25 @@ elsewhere resurrects it); the student's browser stamps `seenAt` from its
 OWN clock on first sight and compares markers against that, so instructor/
 student clock skew can neither defeat a revocation nor destroy a retake
 (a retake's newer marker survives). Every writer replaces its entry via a
-dotted path and records `src` (`arena`/`manual`/`client`) — a deep merge
+dotted path and records `src` (`verify`/`manual`/`client`, plus the legacy
+`arena` from when Answer Arena was the only verifiable one) — a deep merge
 would fuse a marker into a tombstone and the row would read revoked
-forever. Guards: never auto-revoke a `manual` mark; refuse when arena
-returns no participants or no completed participants; refuse a mass
-removal while student-ID joins are failing; always confirm, listing names;
-`allSettled` so one failed write can't hide the rest; the button is
-disabled while Answer Arena is inactive (its column would be invisible).
+forever. Guards: never auto-revoke a `manual` mark; refuse when the
+simulation returns no participant records (`records === 0`, the adapters'
+contract — indistinguishable from a wrong project/permissions, and treating
+it as "nobody completed anything" would revoke the whole class) or no
+completed participants; refuse a mass removal while student-ID joins are
+failing; always confirm, listing names; `allSettled` so one failed write
+can't hide the rest; an inactive simulation has no button at all (its column
+would be invisible) and `verifyFromSim` re-checks that anyway.
 The student page pushes local markers only AFTER its first roster snapshot
 (pushing at load raced a fresh revocation).
-Its outcome its outcome (stamped count + unmatched arena IDs, i.e. student-ID
-typos) prints in `#verify-note` beside the button. For those stragglers
+Each run's outcome (stamped count + unmatched IDs, i.e. student-ID
+typos) prints in the shared `#verify-note` beside the buttons. Offline drift
+guard: `node simulation/tools/verify-guard.mjs` (catalog ↔ adapter pairing
+both ways, a real web config per verifiable sim, the copied configs still
+matching the apps' own files, and the four no-identity sims still declaring
+no `verify` block). For those stragglers
 the roster's ✓/— cells are CLICKABLE (confirm-guarded manual override —
 stamp or `unstampCompleted` via deleteField; flows to the student live).
 The admin panel also AUTO-BACKFILLS the e-mail recovery docs once per
@@ -2585,7 +2616,11 @@ code so nobody dead-ends; ideasearchlab's JoinSession silently
 auto-joins), leaving the dialog only for unpinned codes and the
 cross-origin newsvendor's copy chips. Students **log out** from the header (clears the
 browser AND signs out the anonymous uid, so on a shared machine the next
-registration gets its own roster doc instead of overwriting); the roster view
+registration gets its own roster doc instead of overwriting) — with **no
+confirmation dialog** (per the owner): it only forgets the details in THIS
+browser, the class registration is kept and they can log back in with their
+student ID + e-mail, so the prompt was pure friction on the shared machine the
+feature exists for; the roster view
 collapses duplicate re-registrations by student ID, newest kept, and the
 admin panel has its own Sign out. **The account corner (top right of the header)** holds EITHER the
 signed-out **Log in** / **Register** pills (`#hero-auth`/`setHeroAuth`,

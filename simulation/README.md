@@ -89,15 +89,36 @@ Then:
   centrally stamped completion into the local markers, so a ✓ shows on the
   student's card wherever they log in. Client-side markers can still miss a
   student (platform tab closed at the moment of finishing, a direct URL,
-  another browser) — the **"⟲ Verify from Answer Arena"** button beside
-  Export CSV is the ground-truth reconciliation: it reads the ARENA project's
-  own participant records with the shared admin credentials from the locker
-  (arena stores the UCD student ID as `participantId` — the join key),
-  matches them to the roster by student ID, and stamps `completed.answerarena`
-  (with the session code) onto every matching student — add-only, applied to
-  the whole roster in one click, live everywhere; its outcome (incl. arena
-  IDs it could not match — usually a student ID typed differently in the two
-  forms) prints beside the button. For those, the ✓/— cells are **clickable**:
+  another browser) — the **"⟲ Verify from …"** buttons beside Export CSV are
+  the ground-truth reconciliation. **There is one button per ACTIVE
+  simulation that keeps an identifiable participant record** (one carrying
+  the university student ID, the join key to this roster), so the row of
+  buttons follows the activation toggles exactly like the roster's columns
+  do: today that is **Answer Arena**, the **Ideation Challenge**,
+  **PortfolioFit** and **Search for Knowledge**. Simulations that collect no
+  identifiable participant data get no button, because there is nothing to
+  reconcile against: *Problem Solving* writes to a Google Sheet, *Sustainable
+  Supply Chains* records firm decisions rather than students, *Newsvendor* is
+  hosted cross-origin in another project, and *Trust the AI?* stores nothing
+  at all. Each button reads that simulation's OWN project with the shared
+  admin credentials from the locker, matches its completed participants to
+  the roster by student ID, and stamps `completed.<simKey>` (with the session
+  code) onto every match — applied to the whole roster in one click, live
+  everywhere; its outcome (incl. IDs it could not match — usually a student
+  ID typed differently in the two forms) prints beside the buttons. Where
+  each simulation keeps that identity:
+  Answer Arena `participants.participantId`; the Ideation Challenge
+  `sessions/*/participants/*.platform.studentId` (the sessions this admin
+  account created); PortfolioFit `participants.studentId`; Search for
+  Knowledge `events.pid` — the student ID the platform sends as
+  `PROLIFIC_PID` — on its `session_end` events.
+  **Adding a simulation to this is two edits:** a `verify` block in
+  `catalog.js` (adapter name + the app's public Firebase web config + a note
+  on what the join key is) and one reader in `admin/verify.js` returning who
+  completed it by student ID; the sign-in, roster join, safety guards,
+  stamping and revoking are all generic. `node simulation/tools/verify-guard.mjs`
+  checks the two halves still fit (and that the copied web configs still
+  match the apps' own files). For those, the ✓/— cells are **clickable**:
   a confirm-guarded manual mark/unmark, the instructor's final word. Opening
   the roster also **auto-backfills the e-mail recovery docs** for every
   registered student (students who registered before the recovery feature
@@ -124,8 +145,9 @@ Then:
 
   **Revoking a completion (a student may retake a simulation).** Removing a
   student from a simulation's own backend (e.g. deleting them in the Answer
-  Arena admin) is the ground truth: the next **⟲ Verify from Answer Arena**
-  removes their ✓ and their card unlocks so they can play again. Mechanics:
+  Arena admin) is the ground truth: the next **⟲ Verify from …** for that
+  simulation removes their ✓ and their card unlocks so they can play again.
+  Mechanics:
   a revocation is a TOMBSTONE inside the already-allowed `completed` map
   (`{revoked:1, rts}`) — never a bare delete, because the student's browser
   holds its own play-once marker that a delete cannot reach and that would
@@ -137,13 +159,16 @@ Then:
   neither defeat a revocation nor destroy a genuine retake (a retake
   finished afterwards has a newer marker and survives). Every writer
   replaces its entry through a dotted path and records `src`
-  (`arena`/`manual`/`client`); the sync never auto-revokes a `manual` mark,
-  refuses to run when Answer Arena returns no participants or no completed
-  participants at all, refuses a mass removal while student-ID joins are
-  failing, and always asks for confirmation listing the names. A student's **Log out**
-  (header button) clears the browser and signs out the anonymous uid, so on a
-  shared machine the next registration gets its own roster doc instead of
-  overwriting the previous student's; the roster view collapses duplicate
+  (`verify`/`manual`/`client` — plus the legacy `arena`, from when Answer
+  Arena was the only verifiable simulation); the sync never auto-revokes a
+  `manual` mark, refuses to run when the simulation returns no participant
+  records or no completed participants at all, refuses a mass removal while
+  student-ID joins are failing, and always asks for confirmation listing the
+  names. A student's **Log out** (account menu) clears the browser and signs
+  out the anonymous uid, so on a shared machine the next registration gets
+  its own roster doc instead of overwriting the previous student's — it asks
+  no confirmation (their class registration is kept and they can log back in
+  with their student ID + e-mail); the roster view collapses duplicate
   re-registrations by student ID (newest kept). The admin panel has its own
   **Sign out**.
 
