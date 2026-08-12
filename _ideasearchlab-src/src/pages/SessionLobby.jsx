@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { collection, onSnapshot, doc, db } from '../utils/db'
+import { collection, onSnapshot, query, where, doc, db } from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import { useSession, useSessionEnded } from '../context/SessionContext'
 import { getContent } from '../data/defaultContent'
@@ -18,20 +18,40 @@ export default function SessionLobby() {
   const [participants, setParticipants] = useState([])
   const [myStatus, setMyStatus] = useState(null)
 
-  // Listen to participants list
+  // This participant's own doc — the routing signal, and where their group id
+  // comes from. Kept separate from the group listener below so routing still
+  // works before a group is known.
+  const [myGroupId, setMyGroupId] = useState(null)
   useEffect(() => {
-    if (!sessionId) return
+    if (!sessionId || !user) return
     const unsub = onSnapshot(
-      collection(db, 'sessions', sessionId, 'participants'),
-      (snap) => {
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        setParticipants(list)
-        const me = list.find(p => p.id === user?.uid)
-        if (me) setMyStatus(me.status)
-      }
+      doc(db, 'sessions', sessionId, 'participants', user.uid),
+      snap => {
+        if (!snap.exists()) return
+        const data = snap.data()
+        setMyStatus(data.status)
+        setMyGroupId(data.groupId || null)
+      },
+      err => console.error('Lobby participant listener error:', err)
     )
     return unsub
   }, [sessionId, user])
+
+  // The waiting count is about THIS participant's group, so the listener is
+  // scoped to it. It used to stream the whole session's participants, which at
+  // class scale is thousands of reads per waiting student — and, worse, computed
+  // "your group is full" from the SESSION total, so with 70 students everyone
+  // (including the lone member of the last, undersized group) was told their
+  // group of 3 was full and would start soon. It never did.
+  useEffect(() => {
+    if (!sessionId || !myGroupId) return
+    const unsub = onSnapshot(
+      query(collection(db, 'sessions', sessionId, 'participants'), where('groupId', '==', myGroupId)),
+      snap => setParticipants(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => console.error('Lobby group listener error:', err)
+    )
+    return unsub
+  }, [sessionId, myGroupId])
 
   // React to phase/status changes
   useEffect(() => {
@@ -64,6 +84,7 @@ export default function SessionLobby() {
   }
 
   const waitingCount = participants.filter(p => p.status === 'waiting').length
+  // Members of THIS group, not of the whole session.
   const totalCount = participants.length
   const c = getContent(session).lobby
   // Non-phase pages show [AI] lines when either phase's AI is enabled.

@@ -7,17 +7,16 @@ admin.initializeApp()
 const session = require('./session')
 const grouping = require('./grouping')
 const ai = require('./ai')
-const voting = require('./voting')
 const users = require('./users')
 
 exports.joinSession = session.joinSession
 exports.advancePhase = session.advancePhase
 exports.removeParticipant = session.removeParticipant
+exports.deleteSessionDeep = session.deleteSessionDeep
 exports.autoGroupParticipants = grouping.autoGroupParticipants
 exports.handleStragglers = grouping.handleStragglers
 exports.sendAIMessage = ai.sendAIMessage
 exports.saveAISettings = ai.saveAISettings
-exports.submitVote = voting.submitVote
 exports.onParticipantUpdated = session.onParticipantUpdated
 exports.listRegisteredUsers = users.listRegisteredUsers
 exports.deleteAllRegisteredUsers = users.deleteAllRegisteredUsers

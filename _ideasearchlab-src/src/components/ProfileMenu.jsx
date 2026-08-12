@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { isPreview } from '../utils/preview'
 import { useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { auth } from '../firebase'
@@ -64,7 +65,18 @@ export default function ProfileMenu() {
           <div className={styles.menuDivider} />
           <button
             className={`${styles.menuItem} ${styles.menuItemDanger}`}
-            onClick={() => { setOpen(false); signOut(auth) }}
+            onClick={() => {
+              setOpen(false)
+              // A test round must never touch the real auth session — this used
+              // to sign the instructor out of their own /admin tabs.
+              if (isPreview()) return
+              // Signing out mid-session mints a NEW throwaway account, so the
+              // participant doc is gone and every subsequent write is rejected
+              // silently. Warn, then leave the session properly.
+              const inSession = /\/session\//.test(window.location.pathname)
+              if (inSession && !window.confirm('Log out and leave this session? Your work so far is saved, but you will need your session code to rejoin.')) return
+              signOut(auth).then(() => navigate('/join')).catch(() => navigate('/join'))
+            }}
             role="menuitem"
           >
             Log out

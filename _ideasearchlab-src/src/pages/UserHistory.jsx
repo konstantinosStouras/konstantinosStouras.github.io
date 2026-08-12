@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { collection, getDocs, doc, getDoc, db } from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import ProfileMenu from '../components/ProfileMenu'
 import ThemeToggle from '../components/ThemeToggle'

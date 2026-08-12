@@ -132,7 +132,12 @@ export default function IndividualPhase() {
       doc(db, 'sessions', sessionId, 'participants', user.uid),
       snap => {
         if (!snap.exists()) return
-        const data = snap.data()
+        // `estimate` fills a still-pending serverTimestamp with a local value.
+        // Read as 'none' (the default) it comes back NULL, so for one round-trip
+        // after pressing Start or Proceed the new stage had no anchor: the page
+        // fell back to the previous stage's clock, which had just expired and
+        // therefore read 0:00 on a screen the participant had just entered.
+        const data = snap.data({ serverTimestamps: 'estimate' })
         setGroupId(data.groupId)
         setIndividualStartedAt(data.individualStartedAt || null)
         setSelectionStartedAt(data.individualSelectionStartedAt || null)
@@ -553,7 +558,7 @@ export default function IndividualPhase() {
               })}
             </div>
 
-            <div className={styles.confirmWait}>
+            <div className={styles.confirmWait} role="status" aria-live="polite" aria-atomic="true">
               {holdLeft > 0
                 ? `Your ideas are saved. ${groupPhaseActive ? 'The group phase' : 'The next step'} starts in ${holdLeft}s...`
                 : (groupSize === 1 || !groupPhaseActive)

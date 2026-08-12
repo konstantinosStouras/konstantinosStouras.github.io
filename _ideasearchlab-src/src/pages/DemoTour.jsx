@@ -116,7 +116,7 @@ function SceneJoin() {
         <div className={`input-field ${styles.codeBox}`}>
           <Typed text="DEMO-2026" speed={140} />
         </div>
-        <button className={`btn-primary ${styles.fullBtn}`}>Join Session</button>
+        <button tabIndex={-1} aria-hidden="true" className={`btn-primary ${styles.fullBtn}`}>Join Session</button>
       </div>
     </div>
   )
@@ -133,7 +133,7 @@ function SceneWelcome() {
         <div className={styles.phaseRow}><b>Phase 1</b> — Individual Ideation</div>
         <div className={styles.phaseRow}><b>Phase 2</b> — Group Ideation</div>
         <div className={styles.phaseRow}><b>Phase 3</b> — Voting &amp; Final Selection</div>
-        <button className={`btn-primary ${styles.agreeBtn}`}>I agree and continue</button>
+        <button tabIndex={-1} aria-hidden="true" className={`btn-primary ${styles.agreeBtn}`}>I agree and continue</button>
       </div>
     </div>
   )
@@ -165,7 +165,7 @@ function SceneAddIdea({ clock }) {
         <div className={`input-field ${styles.addArea}`}>
           {desc}{!done && <span className={styles.caret} />}
         </div>
-        <button className={`btn-primary ${styles.addBtn} ${done ? styles.addBtnReady : ''}`}>+ Add idea</button>
+        <button tabIndex={-1} aria-hidden="true" className={`btn-primary ${styles.addBtn} ${done ? styles.addBtnReady : ''}`}>+ Add idea</button>
       </div>
     </MockPhaseChrome>
   )
@@ -266,7 +266,7 @@ function SceneGroup() {
         <div className={styles.addGroupBox}>
           <div className={`input-field ${styles.addInputSm}`}>New idea title…</div>
           <div className={`input-field ${styles.addAreaSm}`}>Describe it together…</div>
-          <button className={`btn-primary ${styles.addBtnSm}`}>+ Add</button>
+          <button tabIndex={-1} aria-hidden="true" className={`btn-primary ${styles.addBtnSm}`}>+ Add</button>
         </div>
       </div>
       <div className={styles.groupCol}>

@@ -33,11 +33,58 @@ if (!String.prototype.at) {
   })
 }
 
+/**
+ * There was no error boundary anywhere above the participant flow, and React 18
+ * unmounts the entire root on an uncaught render error — so one unexpected data
+ * shape (a survey question with no options, a group doc that hasn't been created
+ * yet) left a student staring at a blank white page mid-session, with a reload
+ * reproducing it every time. A student should always get a way forward.
+ */
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { failed: false } }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch(error, info) { console.error('Unhandled render error:', error, info) }
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24, background: 'var(--paper, #f5f2eb)', color: 'var(--ink, #1a1815)',
+        fontFamily: 'system-ui, sans-serif', textAlign: 'center',
+      }}>
+        <div style={{ maxWidth: 460 }}>
+          <h1 style={{ fontSize: 22, marginBottom: 12 }}>Something went wrong</h1>
+          <p style={{ fontSize: 15, lineHeight: 1.6, marginBottom: 20 }}>
+            Your work so far has been saved. Reload this page to carry on — if it happens
+            again, tell your instructor.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '12px 28px', fontSize: 15, borderRadius: 22, border: 'none',
+              background: 'var(--accent, #c8562a)', color: '#fff', cursor: 'pointer',
+            }}
+          >
+            Reload
+          </button>
+        </div>
+      </div>
+    )
+  }
+}
+
+// Nothing reported a rejected write, so an unhandled rejection vanished entirely.
+window.addEventListener('unhandledrejection', e => {
+  console.error('Unhandled promise rejection:', e.reason)
+})
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter basename="/lab/ideasearchlab">
       <ThemeProvider>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>
