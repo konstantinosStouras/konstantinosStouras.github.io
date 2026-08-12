@@ -5,6 +5,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '../firebase'
 import { getPhaseSequence } from '../utils/phaseSequence'
 import { getRegistration, getSurveyQuestions } from '../data/formDefaults'
+import { individualTimers, groupTimers, formatDuration } from '../utils/phaseTimers'
 import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/aiPricing'
 import * as XLSX from 'xlsx-js-style'
 import { exportSessionWorkbook } from '../utils/sessionExport'
@@ -205,6 +206,10 @@ export default function AdminSession() {
 
   const indivActive = session.phaseConfig?.individualPhaseActive !== false
   const groupActive = session.phaseConfig?.groupPhaseActive !== false
+  // Per-stage countdowns (generation/selection, ideation/voting). A session
+  // created before the split reports split:false — one clock for both stages.
+  const indivTimers = individualTimers(session.phaseConfig)
+  const groupTimersCfg = groupTimers(session.phaseConfig)
   const regLabelById = Object.fromEntries(getRegistration(session).fields.map(f => [f.id, f.label]))
 
   // Write a nudge timestamp on the participant doc; their phase page shows a
@@ -284,8 +289,8 @@ export default function AdminSession() {
     if (status === 'waiting') return 'Auto-advances when a group forms'
     if (status === 'individual') return 'Auto-advances when all groups complete'
     if (status === 'group') {
-      return session.phaseConfig?.groupPhaseDuration
-        ? 'Auto-advances when all votes are in or the timer expires'
+      return groupTimers(session.phaseConfig).total
+        ? 'Auto-advances when all votes are in or the voting timer expires'
         : 'Auto-advances when all members submit their votes'
     }
     return null
@@ -466,6 +471,14 @@ export default function AdminSession() {
                                   <DetailRow label="Email" value={p.email || '—'} />
                                   <DetailRow label="Joined" value={formatTimestamp(p.joinedAt) || '—'} />
                                   {indivActive && <DetailRow label="Individual ideas" value={p.individualComplete ? 'Submitted ✓' : 'Not yet'} />}
+                                  {indivActive && (
+                                    <DetailRow
+                                      label="Individual stage"
+                                      value={p.individualComplete
+                                        ? 'submitted'
+                                        : (p.individualStage || (p.individualStartedAt ? 'generation' : '—'))}
+                                    />
+                                  )}
                                   {groupActive && <DetailRow label="Group stage" value={p.groupStage || (p.votesSubmitted ? 'voting' : '—')} />}
                                   {groupActive && <DetailRow label="Votes" value={p.votesSubmitted ? `Submitted (${(p.votedFor || []).length})` : `${(p.votedFor || []).length} selected`} />}
                                   <DetailRow label="Survey" value={p.surveyCompletedAt || p.surveyAnswers ? 'Completed ✓' : 'Not yet'} />
@@ -531,7 +544,20 @@ export default function AdminSession() {
               <ConfigRow label="Group size" value={session.phaseConfig?.groupSize ?? 'N/A'} />
               <ConfigRow label="Max ideas (individual)" value={session.phaseConfig?.maxIdeasIndividual ?? 'N/A'} />
               <ConfigRow label="Ideas carried to group" value={session.phaseConfig?.ideasCarriedToGroup ?? 'N/A'} />
-              <ConfigRow label="Group phase timer" value={session.phaseConfig?.groupPhaseDuration ? `${Math.round(session.phaseConfig.groupPhaseDuration / 60)} min` : 'Manual'} />
+              {/* Per-stage timers: each phase is timed separately for generating
+                  ideas and for selecting/voting on them. */}
+              <ConfigRow label="Timer — idea generation" value={formatDuration(indivTimers.first)} />
+              {session.phaseConfig?.groupPhaseActive && (
+                <ConfigRow
+                  label="Timer — idea selection"
+                  value={indivTimers.split ? formatDuration(indivTimers.second) : 'Shared with generation'}
+                />
+              )}
+              <ConfigRow label="Timer — group ideation" value={formatDuration(groupTimersCfg.first)} />
+              <ConfigRow
+                label="Timer — group voting"
+                value={groupTimersCfg.split ? formatDuration(groupTimersCfg.second) : 'Shared with ideation'}
+              />
               <ConfigRow label="AI (individual)" value={session.aiConfig?.individualAI ? 'On' : 'Off'} />
               <ConfigRow label="AI (group)" value={session.aiConfig?.groupAI ? 'On' : 'Off'} />
             </div>
@@ -898,9 +924,14 @@ function participantStageLabel(p) {
   const status = typeof p === 'string' ? p : p?.status
   if (typeof p === 'object' && p) {
     if (status === 'individual') {
-      return p.individualStartedAt
-        ? 'individual — writing ideas'
-        : 'individual — reading instructions'
+      if (!p.individualStartedAt) return 'individual — reading instructions'
+      // The individual phase has two stages, each with its own timer: writing
+      // ideas, then selecting the ones that carry into the group phase.
+      if (p.individualStage === 'generation') return 'individual — writing ideas'
+      if (p.individualStage === 'selection' || p.individualSelectionStartedAt) {
+        return 'individual — selecting ideas'
+      }
+      return 'individual — writing ideas'
     }
     if (status === 'group') {
       if (p.votesSubmitted) return 'group — votes submitted'

@@ -1,6 +1,7 @@
 import { useState, useEffect, Component } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSession, useAIModelLabel } from '../context/SessionContext'
+import { individualTimers, groupTimers } from '../utils/phaseTimers'
 import HeaderControls from '../components/HeaderControls'
 import styles from './DemoTour.module.css'
 
@@ -394,9 +395,14 @@ export default function DemoTour() {
   const groupActive = pc.groupPhaseActive !== false
   const ideasCarried = pc.ideasCarriedToGroup || 3
   const votes = Math.max(1, Math.min(3, ideasCarried))
-  // Mock timers mirror the admin-allocated phase durations (seconds → m:ss).
-  const indivClock = fmtClock(pc.individualPhaseDuration)
-  const groupClock = fmtClock(pc.groupPhaseDuration)
+  // Mock timers mirror the admin-allocated STAGE durations (seconds → m:ss):
+  // each phase times generating ideas separately from selecting/voting on them.
+  const indivT = individualTimers(pc)
+  const groupT = groupTimers(pc)
+  const indivClock = fmtClock(indivT.first || indivT.total)
+  const selectClock = fmtClock(indivT.second || indivT.total)
+  const groupClock = fmtClock(groupT.first || groupT.total)
+  const voteClock = fmtClock(groupT.second || groupT.total)
   // Friendly model name without the long provider prefix for the input hint.
   const aiModel = (aiModelLabel || '').replace(/^[^’']*(?:’s|'s)\s*/, '') || aiModelLabel || ''
 
@@ -411,14 +417,14 @@ export default function DemoTour() {
     if (ai.individualAI) {
       steps.push({ id: 'ai-ind', caption: 'If enabled, a private AI assistant helps you brainstorm and refine. Only you can see this chat.', dur: 8000, Comp: SceneAI, props: { phase: 'individual', aiModel } })
     }
-    steps.push({ id: 'select', caption: `Pick your best ${ideasCarried} ideas (double-click) — these carry into the group phase.`, dur: 6200, Comp: SceneSelect, props: { ideasCarried, clock: indivClock } })
+    steps.push({ id: 'select', caption: `When the ideas are in, a separate selection step opens with its own timer: pick your best ${ideasCarried} (double-click) — these carry into the group phase.`, dur: 6200, Comp: SceneSelect, props: { ideasCarried, clock: selectClock } })
   }
   if (groupActive) {
     steps.push({ id: 'group', caption: 'Now you team up: see everyone’s carried ideas, add new group ideas, and chat. Everyone stays anonymous (p1, p2, p3) — your name is never shown to peers.', dur: 8000, Comp: SceneGroup, props: {} })
     if (ai.groupAI) {
       steps.push({ id: 'ai-grp', caption: 'If enabled, the group shares one AI assistant — everyone sees the same conversation.', dur: 8000, Comp: SceneAI, props: { phase: 'group', aiModel } })
     }
-    steps.push({ id: 'vote', caption: `Each member votes for ${votes} ideas. Talk it through — it matters that the group agrees on the same ones.`, dur: 6600, Comp: SceneVoting, props: { votes, clock: groupClock } })
+    steps.push({ id: 'vote', caption: `Then the group voting step opens, again with its own timer: each member votes for ${votes} ideas. Talk it through — it matters that the group agrees on the same ones.`, dur: 6600, Comp: SceneVoting, props: { votes, clock: voteClock } })
     steps.push({ id: 'final', caption: 'The most-voted ideas become your group’s final selection.', dur: 5600, Comp: SceneFinal, props: { votes } })
   }
   steps.push({ id: 'survey', caption: 'Finally, a short survey about your experience — just a few minutes to wrap up.', dur: 5600, Comp: SceneSurvey, props: {} })

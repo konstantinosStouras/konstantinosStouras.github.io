@@ -326,6 +326,12 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
           'Last idea At': fmtMs(myIdeas[myIdeas.length - 1]?.createdAt),
           'Ideas count': myIdeas.length,
           'All idea times': myIdeas.map(i => fmtMs(i.createdAt)).filter(Boolean).join(' ; '),
+          // The individual phase is played in two separately-timed stages:
+          // generating ideas, then selecting the ones that carry forward.
+          'Individual generation time — writing ideas (s)': durSec(p.individualStartedAt, p.individualSelectionStartedAt),
+          'Proceeded to selection At': fmtMs(p.individualSelectionStartedAt),
+          'Individual selection time (s)': durSec(p.individualSelectionStartedAt, p.individualSubmittedAt),
+          'Individual submitted At': fmtMs(p.individualSubmittedAt),
           'Group entered At': fmtMs(t.groupOpenedAt),
           'Group instructions read (s)': durSec(t.groupOpenedAt, p.groupStartedAt),
           'Group started At': fmtMs(p.groupStartedAt),

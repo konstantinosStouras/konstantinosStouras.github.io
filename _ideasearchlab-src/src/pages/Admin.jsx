@@ -14,9 +14,16 @@ import { DEFAULT_REGISTRATION, DEFAULT_SURVEY_QUESTIONS, getRegistration, getSur
 import RichTextEditor from '../components/RichTextEditor'
 import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
 import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
+import {
+  INDIVIDUAL_TIMER_KEYS, GROUP_TIMER_KEYS,
+  individualTimers, groupTimers, formatDuration, migratePhaseTimers,
+} from '../utils/phaseTimers'
 import styles from './Admin.module.css'
 
 const ADMIN_EMAIL = 'admin@admin.com'
+
+// The per-stage countdowns the "Phase Timers" section manages.
+const PHASE_TIMER_FIELDS = [...INDIVIDUAL_TIMER_KEYS, ...GROUP_TIMER_KEYS]
 
 // Open a session's exact configuration in a throwaway TEST sandbox (a new tab
 // running ?preview=1): the whole participant flow works end to end but reads and
@@ -43,9 +50,15 @@ const DEFAULT_CONFIG = {
     phaseOrder: 'individual_first',
     maxIdeasIndividual: 5,
     ideasCarriedToGroup: 3,
-    individualPhaseDuration: 600,
-    groupPhaseDuration: 900,
-    votingDuration: 300,
+    // Each working phase is timed per STAGE: the participants first generate
+    // ideas, then select/vote on them, and each stage gets its own countdown
+    // (see src/utils/phaseTimers.js). Blank (null) = no countdown for that
+    // stage. The old single-phase individualPhaseDuration / groupPhaseDuration
+    // are still read for sessions created before the split.
+    individualGenerationDuration: 600,
+    individualSelectionDuration: 180,
+    groupIdeationDuration: 900,
+    groupVotingDuration: 300,
     groupSize: 3,
   },
   aiConfig: {
@@ -65,6 +78,13 @@ const DEFAULT_CONFIG = {
   surveyConfig: { questions: JSON.parse(JSON.stringify(DEFAULT_SURVEY_QUESTIONS)) },
 }
 
+// A phase-timers default saved before the per-stage split holds only the old
+// single-phase durations; map them onto the per-stage fields so the saved
+// default keeps applying instead of being silently ignored.
+function timerDefaults(saved) {
+  return migratePhaseTimers(saved || {}, DEFAULT_CONFIG.phaseConfig)
+}
+
 // A fresh config with an independent copy of the defaults, so resetting the
 // form after create/edit never shares object references with prior state.
 // Admin-saved defaults (settings/contentDefaults) merge over the built-in
@@ -72,7 +92,7 @@ const DEFAULT_CONFIG = {
 // surveyQuestions builder defaults.
 function freshConfig(customDefaults) {
   return {
-    phaseConfig: { ...DEFAULT_CONFIG.phaseConfig, ...(customDefaults?.ideaParameters || {}), ...(customDefaults?.phaseTimers || {}) },
+    phaseConfig: { ...DEFAULT_CONFIG.phaseConfig, ...(customDefaults?.ideaParameters || {}), ...timerDefaults(customDefaults?.phaseTimers) },
     aiConfig: { ...DEFAULT_CONFIG.aiConfig },
     contentConfig: getEffectiveDefaults(customDefaults),
     registrationConfig: customDefaults?.registrationForm
@@ -143,7 +163,7 @@ export default function Admin() {
             setConfig(c => ({
               ...c,
               phaseConfig: (data.ideaParameters || data.phaseTimers)
-                ? { ...c.phaseConfig, ...(data.ideaParameters || {}), ...(data.phaseTimers || {}) }
+                ? { ...c.phaseConfig, ...(data.ideaParameters || {}), ...(data.phaseTimers ? timerDefaults(data.phaseTimers) : {}) }
                 : c.phaseConfig,
               contentConfig: getEffectiveDefaults(data),
               registrationConfig: data.registrationForm
@@ -450,11 +470,13 @@ export default function Admin() {
 
   // Persist the current phase timers as the default for every new session.
   async function savePhaseTimersAsDefault() {
-    const { individualPhaseDuration, groupPhaseDuration } = config.phaseConfig
+    const pcNow = config.phaseConfig
+    const phaseTimers = {}
+    PHASE_TIMER_FIELDS.forEach(k => { phaseTimers[k] = pcNow[k] ?? null })
     try {
       await setDoc(
         doc(db, 'settings', 'contentDefaults'),
-        { phaseTimers: { individualPhaseDuration, groupPhaseDuration } },
+        { phaseTimers },
         { merge: true }
       )
       flashDefaultFeedback('phaseTimers', 'Saved — new sessions will start with these.')
@@ -473,14 +495,11 @@ export default function Admin() {
         { phaseTimers: deleteField() },
         { merge: true }
       )
-      setConfig(c => ({
-        ...c,
-        phaseConfig: {
-          ...c.phaseConfig,
-          individualPhaseDuration: DEFAULT_CONFIG.phaseConfig.individualPhaseDuration,
-          groupPhaseDuration: DEFAULT_CONFIG.phaseConfig.groupPhaseDuration,
-        },
-      }))
+      setConfig(c => {
+        const restored = { ...c.phaseConfig }
+        PHASE_TIMER_FIELDS.forEach(k => { restored[k] = DEFAULT_CONFIG.phaseConfig[k] })
+        return { ...c, phaseConfig: restored }
+      })
       flashDefaultFeedback('phaseTimers', 'Built-in defaults restored.')
     } catch (err) {
       console.error('Could not restore phase timers:', err)
@@ -560,7 +579,10 @@ export default function Admin() {
     setEditingSession(session)
     // getContent merges saved overrides over defaults so every field is populated.
     setConfig({
-      phaseConfig: session.phaseConfig,
+      // A session created before the per-stage split carries only the old
+      // single-phase durations; fill the per-stage fields from them so the
+      // form shows real values (saving a blank would drop its countdowns).
+      phaseConfig: migratePhaseTimers(session.phaseConfig, DEFAULT_CONFIG.phaseConfig),
       aiConfig: session.aiConfig,
       contentConfig: getContent(session),
       registrationConfig: getRegistration(session),
@@ -727,10 +749,13 @@ export default function Admin() {
   if (pc.individualPhaseActive) phases.push('Individual')
   if (pc.groupPhaseActive) phases.push('Group Ideation', 'Group Voting')
   const phaseStr = pc.phaseOrder === 'group_first' ? [...phases].reverse().join(' \u2192 ') : phases.join(' \u2192 ')
+  const indivT = individualTimers(pc)
+  const groupT = groupTimers(pc)
   const timers = [
-    pc.individualPhaseActive && pc.individualPhaseDuration && `${Math.round(pc.individualPhaseDuration / 60)}min individual`,
-    pc.groupPhaseActive && pc.groupPhaseDuration && `${Math.round(pc.groupPhaseDuration / 60)}min group ideation`,
-    pc.groupPhaseActive && pc.votingDuration && `${Math.round(pc.votingDuration / 60)}min group voting`,
+    pc.individualPhaseActive && indivT.first && `${formatDuration(indivT.first)} idea generation`,
+    pc.individualPhaseActive && pc.groupPhaseActive && indivT.second && `${formatDuration(indivT.second)} idea selection`,
+    pc.groupPhaseActive && groupT.first && `${formatDuration(groupT.first)} group ideation`,
+    pc.groupPhaseActive && groupT.second && `${formatDuration(groupT.second)} group voting`,
   ].filter(Boolean)
 
   return (
@@ -835,10 +860,41 @@ export default function Admin() {
 
               <div className={styles.section}>
                 <h3 className={styles.subTitle}>Phase Timers (minutes &amp; seconds, blank = manual)</h3>
-                <p className={styles.sectionHint}>Set a countdown for each phase as minutes and seconds, or leave both blank to advance manually from the host control room.</p>
+                <p className={styles.sectionHint}>
+                  Each phase runs in two stages with its own countdown: participants first
+                  generate ideas, then choose the ones that move on. Set each stage
+                  separately, or leave a stage blank to let participants move on themselves
+                  (and advance manually from the host control room). When a stage&rsquo;s time
+                  runs out, participants move straight to the next stage — the individual
+                  selection and group voting stages auto-submit.
+                </p>
                 <div className={styles.grid2}>
-                  <DurationField label="Individual" seconds={pc.individualPhaseDuration} onChange={v => setPhase('individualPhaseDuration', v)} disabled={!pc.individualPhaseActive} />
-                  <DurationField label="Group (ideation + voting)" seconds={pc.groupPhaseDuration} onChange={v => setPhase('groupPhaseDuration', v)} disabled={!pc.groupPhaseActive} />
+                  <DurationField
+                    label="Individual — idea generation"
+                    seconds={pc.individualGenerationDuration}
+                    onChange={v => setPhase('individualGenerationDuration', v)}
+                    disabled={!pc.individualPhaseActive}
+                  />
+                  <DurationField
+                    label="Individual — idea selection"
+                    seconds={pc.individualSelectionDuration}
+                    onChange={v => setPhase('individualSelectionDuration', v)}
+                    disabled={!pc.individualPhaseActive || !pc.groupPhaseActive}
+                  />
+                </div>
+                <div className={styles.grid2} style={{ marginTop: 12 }}>
+                  <DurationField
+                    label="Group — ideation"
+                    seconds={pc.groupIdeationDuration}
+                    onChange={v => setPhase('groupIdeationDuration', v)}
+                    disabled={!pc.groupPhaseActive}
+                  />
+                  <DurationField
+                    label="Group — voting"
+                    seconds={pc.groupVotingDuration}
+                    onChange={v => setPhase('groupVotingDuration', v)}
+                    disabled={!pc.groupPhaseActive}
+                  />
                 </div>
                 <div className={styles.contentBtnRow} style={{ marginTop: 16 }}>
                   <ConfirmButton

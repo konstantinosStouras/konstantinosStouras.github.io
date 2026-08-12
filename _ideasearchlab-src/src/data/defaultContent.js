@@ -12,6 +12,9 @@
  *
  * {placeholders} are filled in by the pages, e.g. {minutes}, {maxIdeas},
  * {ideasCarried}, {votes}, {aiModel}, {needed}, {neededPlural}.
+ * Per-stage timers add {genMinutes}/{selMinutes} (individual: writing vs
+ * selecting ideas) and {ideationMinutes}/{votingMinutes} (group: ideation vs
+ * voting); {minutes} stays the whole phase's total.
  * {aiModel} resolves to the friendly name of the AI model configured in the
  * admin AI panel (via the settings/aiPublic mirror), with a default fallback.
  */
@@ -54,12 +57,12 @@ export const DEFAULT_CONTENT = {
       '<h2>Instructions</h2>' +
       "<p>In this phase you work <strong>completely on your own</strong> — please do not communicate or collaborate with others.</p>" +
       '<p>Your goal: generate ideas for the <strong>smart materials and wearable technology</strong> market. You will design a <strong>completely new product using a fabric that changes color when it reaches 37°C (body temperature)</strong>. Consider what users currently have and what unmet needs remain.</p>' +
-      "<p>You have <strong>{minutes} minutes</strong> — a timer is shown at the top, and you'll move on automatically when it ends. Work efficiently: the ideas you create here are the ones you'll bring into the group phase.</p>" +
+      "<p>This phase has two timed steps: <strong>{genMinutes} minutes to write your ideas</strong>, then <strong>{selMinutes} minutes to choose the best {ideasCarried}</strong> to carry into the group phase. A timer for the current step is shown at the top, and you'll move on automatically when it ends — so work efficiently.</p>" +
       '<h3>Your task</h3>' +
       '<ul>' +
       '<li>Generate original product ideas, big or small</li>' +
       '<li>Give each one a clear <strong>title</strong> and a short <strong>description</strong></li>' +
-      '<li>Double-click your best <strong>{ideasCarried} ideas</strong> to carry them into the group phase</li>' +
+      '<li>When your ideas are in, click <strong>Proceed to Selection</strong> and double-click your best <strong>{ideasCarried} ideas</strong> to carry them into the group phase</li>' +
       '</ul>',
     brief:
       '<p>Design a <strong>completely new product using a fabric that changes color when it reaches 37°C (body temperature)</strong>, for the <strong>smart materials and wearable technology</strong> market. Consider what users currently have and what unmet needs remain.</p>' +
@@ -74,7 +77,7 @@ export const DEFAULT_CONTENT = {
       '<li><strong>Overall Quality:</strong> Is it well-structured and relevant?</li>' +
       '</ul>' +
       '<p>[AI] A <strong>private</strong> AI assistant, powered by {aiModel}, is available on the right to help you brainstorm, develop, refine, and select your ideas. Your conversation is yours alone — only you can see it.</p>' +
-      "<p>When you're done, <strong>double-click</strong> your best <strong>{ideasCarried} ideas</strong> to select them. These will be carried forward to the group phase.</p>",
+      "<p>When you're done writing ideas, click <strong>Proceed to Selection</strong> — that step has its own time — and <strong>double-click</strong> your best <strong>{ideasCarried} ideas</strong> to select them. These will be carried forward to the group phase.</p>",
   },
 
   group: {
@@ -89,7 +92,7 @@ export const DEFAULT_CONTENT = {
       "<li>Build on each other's ideas, and generate brand-new ideas together as a team</li>" +
       '<li>Agree on your group&rsquo;s <strong>{votes} best ideas</strong> and vote for them</li>' +
       '</ul>' +
-      "<p>You have <strong>{minutes} minutes</strong> for this phase. A timer is shown at the top, and you'll move on automatically when it ends — so collaborate efficiently.</p>" +
+      "<p>This phase has two timed steps: <strong>{ideationMinutes} minutes of group ideation</strong>, then <strong>{votingMinutes} minutes to vote</strong> for the ideas that represent your group. A timer for the current step is shown at the top, and you'll move on automatically when it ends — so collaborate efficiently.</p>" +
       "<p>If your group's selected idea ranks among the <strong>top five across all groups</strong>, every member wins a <strong>€50 Amazon voucher</strong>.</p>" +
       '<p>Work as one team — great ideas grow through collaboration! ☘️</p>',
     brief:
@@ -144,11 +147,11 @@ export const CONTENT_SCHEMA = [
     { key: 'body', label: 'Lobby text (the live join counter stays automatic)', type: 'area' },
   ] },
   { key: 'individual', label: 'Individual phase', fields: [
-    { key: 'instructions', label: 'Instructions screen (before Start)', type: 'area', hint: 'Keep {minutes} where you want the duration.' },
+    { key: 'instructions', label: 'Instructions screen (before Start)', type: 'area', hint: 'Use {genMinutes} / {selMinutes} for the idea-writing and idea-selection steps ({minutes} = both together).' },
     { key: 'brief', label: 'Task brief (inside the workspace)', type: 'area', hint: 'Keep {maxIdeas} and {ideasCarried}. Lines starting with [AI] only show when AI is on.' },
   ] },
   { key: 'group', label: 'Group phase', fields: [
-    { key: 'instructions', label: 'Instructions screen (before Start)', type: 'area', hint: 'Keep {minutes} where you want the duration.' },
+    { key: 'instructions', label: 'Instructions screen (before Start)', type: 'area', hint: 'Use {ideationMinutes} / {votingMinutes} for the ideation and voting steps ({minutes} = both together).' },
     { key: 'brief', label: 'Task brief (inside the workspace)', type: 'area', hint: 'Keep {votes} for the number of votes. Lines starting with [AI] only show when AI is on.' },
   ] },
   { key: 'survey', label: 'Survey', fields: [

@@ -122,11 +122,16 @@ at each step are called out in **bold**.
 as **anonymous labels p1, p2, p3** — never by real name. Group chat, idea
 authorship within the group, and votes were all under these anonymous labels.
 
-**Timing.** Each phase had a countdown **timer** (per participant, starting when
-that person pressed **Start**). Defaults: **Individual = 10 minutes**, **Group =
-15 minutes** (the group's 15-minute clock covered *both* the group ideation and the
-group voting sub-phases — there was a single group timer, not two). When a timer ran
-out, the participant was **moved on automatically**, submitting whatever they had.
+**Timing.** Each phase is played in **two timed stages**, and **each stage has its
+own countdown** allocated by the instructor (per participant, starting when that
+person pressed **Start**, or when they moved into the second stage). Defaults:
+**Individual = 10 minutes to write ideas + 3 minutes to select** the ones that carry
+forward; **Group = 15 minutes of ideation + 5 minutes of voting**. When a stage's
+timer ran out, the participant was **moved on automatically**: the first stage's
+expiry moves them into the second stage (writing ideas -> selecting them, group
+ideation -> voting), and the second stage's expiry **submits** whatever they had.
+(Sessions created before the stages were timed separately ran one clock across both
+stages of a phase, expiring straight into that submission.)
 As the group clock wound down, **self-dismissing on-screen reminders** popped up
 ("5 minutes left… keep generating ideas and vote", "2 minutes left", and in voting
 "1 minute left", "30 seconds left — place your votes").
@@ -180,29 +185,37 @@ participant pressed **Start** and entered a workspace with:
   and a **description**. They could **edit** or **delete** their own ideas.
 - A **counter** showing how many of the allowed ideas (default **up to 5**) they had
   used.
-- A **timer** (default **10 minutes**).
+- A **timer** for the current stage (defaults: **10 minutes** to write ideas, then
+  **3 minutes** to select them).
 
-**The core individual decisions:**
+**The core individual decisions — one per stage:**
 
-1. **Generate ideas** — invent as many strong, original product concepts as they
-   could, within the cap, framed by the brief and criteria. Working **alone** was
-   explicitly required ("do not communicate or collaborate with others" in this
-   phase).
-2. **Select the ones to carry forward** — before finishing, they **chose their best
-   3 ideas** (default) to take into the group phase. Only these carried-in ideas
-   represented them in the group.
+1. **Generate ideas** (*"Individual Ideation Phase"*) — invent as many strong,
+   original product concepts as they could, within the cap, framed by the brief and
+   criteria. Working **alone** was explicitly required ("do not communicate or
+   collaborate with others" in this phase). Adding, editing and deleting ideas all
+   happen here; selection is not yet possible. They then pressed **Proceed to
+   Selection** (or the generation timer ran out, which moved them on).
+2. **Select the ones to carry forward** (*"Individual Selection Phase"*, its own
+   timer) — they **chose their best 3 ideas** (default) to take into the group
+   phase, double-clicking to select. The list is read-only here apart from
+   selecting, with a "Back to adding ideas" link if they want more time on ideas
+   (the selection clock keeps running). Only these carried-in ideas represented
+   them in the group.
 
-If the timer expired before they finished, the system **auto-submitted** whatever
-existed and auto-selected the most recent ideas up to the carry limit, so no one
-could stall their group by never finishing.
+If the **selection** timer expired before they finished, the system
+**auto-submitted** whatever existed and auto-selected ideas up to the carry limit,
+so no one could stall their group by never finishing.
 
 ---
 
 ## 6. The Group phase (in detail)
 
 The group phase had **two sub-phases the participants moved through themselves**:
-**group ideation**, then **group voting**. Both ran under the **same single group
-timer** (default 15 minutes total).
+**group ideation**, then **group voting** — each with **its own timer** (defaults:
+15 minutes of ideation, then 5 minutes of voting). Running out of ideation time
+moved the group into voting; running out of voting time locked in whatever votes
+each member had.
 
 ### 6a. Group ideation sub-phase
 
@@ -230,8 +243,9 @@ shared workspace:
 
 ### 6b. Group voting sub-phase
 
-When ready, members entered voting (the group could move at slightly different
-moments; the shared timer kept ticking). Each member saw:
+When ready, members entered voting — each member's **voting timer starts when they
+move into it** (the group could move at slightly different moments), and it stays the
+live clock even if someone steps back to ideation. Each member saw:
 
 - The **full merged list of all ideas** (carried-in **and** group-generated),
   sortable by current vote tally, each tagged as an "individual" or "group" idea.
@@ -253,8 +267,8 @@ moments; the shared timer kept ticking). Each member saw:
    timer expired), the group's **top-voted ideas became its final selection** (the
    group's official entry, eligible for the €50 prize).
 
-If the timer expired, whatever votes a member had at that moment were locked in for
-them, so the group always finished on schedule.
+If the **voting** timer expired, whatever votes a member had at that moment were
+locked in for them, so the group always finished on schedule.
 
 ---
 
@@ -361,8 +375,10 @@ These are the shipped defaults (each was instructor-adjustable per session):
 | New group ideas per member | ~2 (asked) | Each member contributed a couple of brand-new team ideas. |
 | Votes per member | 3 | Each member voted for 3 final ideas (adapts down if fewer ideas exist). |
 | Group's final picks | top-voted ideas | The most-voted ideas became the group's official entry. |
-| Individual timer | 10 minutes | Per-participant countdown for solo ideation. |
-| Group timer | 15 minutes | Single countdown covering group ideation **and** voting. |
+| Individual — idea generation timer | 10 minutes | Per-participant countdown for writing ideas alone. |
+| Individual — idea selection timer | 3 minutes | Separate countdown for picking the ideas to carry forward. |
+| Group — ideation timer | 15 minutes | Countdown for adding and discussing ideas as a team. |
+| Group — voting timer | 5 minutes | Separate countdown for casting the group's votes. |
 | Individual AI | on/off per condition | Private assistant, if enabled. |
 | Group AI | on/off per condition | Shared assistant, if enabled. |
 | Prize | €50 Amazon voucher | To every member of a group whose idea ranks top-5 across ~50 groups. |
@@ -374,8 +390,9 @@ These are the shipped defaults (each was instructor-adjustable per session):
 A subject joins with a code, consents, gives demographics, and is placed in an
 anonymous group of three. **Alone (default 10 min)** they invent up to five new
 product concepts for a fixed design brief (default: a product using fabric that
-changes colour at body temperature), then **pick their best three** to carry
-forward. **As a group (default 15 min)** they pool those up-to-nine ideas, chat
+changes colour at body temperature), then in a separately-timed step
+(**default 3 min**) **pick their best three** to carry
+forward. **As a group (default 15 min of ideation, then 5 min of voting)** they pool those up-to-nine ideas, chat
 anonymously, **invent new team ideas**, evaluate everything on novelty / feasibility
 / financial value / overall quality, and then **each vote for three ideas**, pushed
 to reach **consensus**; the group's **top-voted ideas** become its official entry,

@@ -138,6 +138,38 @@
 .topRight { display: flex; align-items: center; gap: 16px; }
 .doneBtn { padding: 9px 20px; font-size: 13px; }
 
+/* "Proceed to Selection" — moves from writing ideas to choosing the ones that
+   carry forward (mirrors the group phase's "Proceed to Voting"). */
+.proceedBtn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 20px;
+  background: var(--accent);
+  color: white;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+.proceedBtn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+.proceedBtn:active:not(:disabled) { transform: translateY(0); }
+.proceedBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Inline "Back to adding ideas" link inside the selection bar. */
+.backLink {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font-body);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.backLink:hover { opacity: 0.8; }
+
 .waitingBanner {
   background: #e8f5e9;
   border: 1px solid #a5d6a7;

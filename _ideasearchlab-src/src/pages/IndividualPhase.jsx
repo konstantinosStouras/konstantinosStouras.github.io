@@ -12,6 +12,7 @@ import PhaseTimer from '../components/PhaseTimer'
 import NudgeBanner from '../components/NudgeBanner'
 import HeaderControls from '../components/HeaderControls'
 import { getContent } from '../data/defaultContent'
+import { individualTimers, minutesOf } from '../utils/phaseTimers'
 import RichText from '../components/RichText'
 import { Done } from './Survey'
 import styles from './IndividualPhase.module.css'
@@ -51,18 +52,39 @@ export default function IndividualPhase() {
   const [editTitle, setEditTitle] = useState('')
   const [editDesc, setEditDesc] = useState('')
 
+  // Stage within the individual phase: 'generation' (write ideas) then
+  // 'selection' (pick the ones that carry into the group phase). Each stage
+  // has its own admin-allocated countdown. Mirrored to the participant doc as
+  // `individualStage` so the instructor sees where each participant is, and
+  // restored from it on reload.
+  const [stage, setStage] = useState('generation')
+  const [selectionStartedAt, setSelectionStartedAt] = useState(null)
+  const stageInit = useRef(false)
+  const stageRef = useRef('generation')
+
   const pc = session?.phaseConfig || {}
   const maxIdeas = pc.maxIdeasIndividual || 5
   const aiEnabled = session?.aiConfig?.individualAI
-  const durationMinutes = pc.individualPhaseDuration
-    ? Math.round(pc.individualPhaseDuration / 60)
-    : 10
+  const timers = individualTimers(pc)
+  const durationMinutes = minutesOf(timers.total) ?? 10
+  // Per-stage minutes for the instructions/brief copy. A stage left on manual
+  // (no countdown) falls back to a sensible figure so the sentence still reads
+  // properly, the same way {minutes} has always fallen back to 10.
+  const genMinutes = minutesOf(timers.first) ?? durationMinutes
+  const selMinutes = minutesOf(timers.second) ?? 3
   const ideasCarried = pc.ideasCarriedToGroup || 3
   const groupPhaseActive = pc.groupPhaseActive !== false
   const c = getContent(session).individual
-  // Shared placeholder values so {minutes}, {maxIdeas} and {ideasCarried} all
-  // resolve on both the instructions screen and the workspace task brief.
-  const contentVars = { minutes: durationMinutes, maxIdeas, ideasCarried, aiModel }
+  // Shared placeholder values so {minutes}, {genMinutes}, {selMinutes},
+  // {maxIdeas} and {ideasCarried} all resolve on both the instructions screen
+  // and the workspace task brief.
+  const contentVars = { minutes: durationMinutes, genMinutes, selMinutes, maxIdeas, ideasCarried, aiModel }
+
+  // There is only something to select when ideas carry forward into a group
+  // phase; an individual-only session finishes straight from the generation
+  // stage (as it always did).
+  const selectionStage = groupPhaseActive
+  const isSelecting = selectionStage && stage === 'selection'
 
   useEffect(() => {
     if (!sessionId || !user) return
@@ -91,6 +113,16 @@ export default function IndividualPhase() {
         const data = snap.data()
         setGroupId(data.groupId)
         setIndividualStartedAt(data.individualStartedAt || null)
+        setSelectionStartedAt(data.individualSelectionStartedAt || null)
+        // Restore the stage once, so a reload puts the participant back where
+        // they were instead of reopening the generation stage.
+        if (!stageInit.current) {
+          stageInit.current = true
+          if (data.individualStage === 'selection' || data.individualSelectionStartedAt) {
+            stageRef.current = 'selection'
+            setStage('selection')
+          }
+        }
         // Timing: record when this participant first entered the individual
         // phase (the instructions screen), once. individualStartedAt (Start) −
         // individualOpenedAt = how long they read the instructions.
@@ -152,6 +184,35 @@ export default function IndividualPhase() {
     }
   }
 
+  // ── Stage transitions ───────────────────────────────
+  // Move on to choosing which ideas carry forward. Stamps
+  // individualSelectionStartedAt once — the anchor for the selection
+  // countdown (and the ideas-vs-selection split in the export's Timing sheet).
+  function goToSelection() {
+    if (!selectionStage || stageRef.current === 'selection' || done) return
+    stageRef.current = 'selection'
+    setStage('selection')
+    setEditingId(null) // an idea left open in the editor isn't editable here
+    if (!sessionId || !user) return
+    const updates = { individualStage: 'selection' }
+    if (!selectionStartedAt) updates.individualSelectionStartedAt = serverTimestamp()
+    updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid), updates)
+      .catch(err => console.warn('Could not save individual stage:', err.message))
+  }
+
+  // Step back to the ideas list. The selection countdown, once started, keeps
+  // running — it is the live clock from then on (same rule as the group
+  // phase's "Back to ideation").
+  function backToGeneration() {
+    if (done) return
+    stageRef.current = 'generation'
+    setStage('generation')
+    if (!sessionId || !user) return
+    updateDoc(doc(db, 'sessions', sessionId, 'participants', user.uid),
+      { individualStage: 'generation' })
+      .catch(err => console.warn('Could not save individual stage:', err.message))
+  }
+
   function toggleSelect(ideaId) {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -210,7 +271,12 @@ export default function IndividualPhase() {
       // 1. Mark participant as done (critical, should always succeed)
       await updateDoc(
         doc(db, 'sessions', sessionId, 'participants', user.uid),
-        { individualComplete: true, status: 'waiting_for_group' }
+        {
+          individualComplete: true,
+          status: 'waiting_for_group',
+          // Timing: closes the selection stage in the export's Timing sheet.
+          individualSubmittedAt: serverTimestamp(),
+        }
       )
 
       // 2. Try to mark selected ideas in Firestore (non-critical)
@@ -244,6 +310,39 @@ export default function IndividualPhase() {
       setSelectedIds(selection)
     }
     markDone(selection)
+  }
+
+  // ── Which countdown is live right now ───────────────
+  // Split sessions run two clocks: the generation clock until the participant
+  // moves on, then the selection clock — which stays the live one even if they
+  // step back to their ideas. A legacy (unsplit) session keeps its single
+  // clock across both stages, expiring straight into the auto-submit as before.
+  function timerProps() {
+    if (!timers.split) {
+      return {
+        phaseStartedAt: individualStartedAt,
+        durationSeconds: timers.total,
+        onExpire: done ? undefined : autoFinish,
+      }
+    }
+    if (selectionStartedAt) {
+      return {
+        phaseStartedAt: selectionStartedAt,
+        durationSeconds: timers.second,
+        onExpire: done ? undefined : autoFinish,
+      }
+    }
+    return {
+      phaseStartedAt: individualStartedAt,
+      durationSeconds: timers.first,
+      // Generation time is up: move on to choosing the ideas that carry
+      // forward — but with no selection stage, or nothing written to select
+      // from, submit instead so a participant is never parked on a stage they
+      // cannot complete.
+      onExpire: done
+        ? undefined
+        : (selectionStage && ideas.length > 0 ? goToSelection : autoFinish),
+    }
   }
 
   // Automatic nudge: this participant is the bottleneck — every other group
@@ -288,7 +387,7 @@ export default function IndividualPhase() {
           <span className={styles.wordmark}>Ideation Challenge</span>
           <div className={styles.instrTimer}>
             <PhaseTimer
-              durationSeconds={pc.individualPhaseDuration}
+              durationSeconds={timers.first || timers.total}
               preview
             />
           </div>
@@ -327,10 +426,7 @@ export default function IndividualPhase() {
         <header className={styles.instrHeader}>
           <span className={styles.wordmark}>Ideation Challenge</span>
           <div className={styles.instrTimer}>
-            <PhaseTimer
-              phaseStartedAt={individualStartedAt}
-              durationSeconds={pc.individualPhaseDuration}
-            />
+            <PhaseTimer {...timerProps()} />
           </div>
           <HeaderControls />
         </header>
@@ -381,23 +477,39 @@ export default function IndividualPhase() {
   const atMax = ideas.length >= maxIdeas
   const hasSelection = selectedIds.size > 0
   const canFinish = ideas.length > 0 && (!groupPhaseActive || hasSelection) && !done
+  // Ideas are written in the generation stage only; the selection stage is for
+  // choosing which of them carry forward.
+  const canAddIdeas = !done && !isSelecting
 
   const mainPanel = (
     <div className={styles.main}>
       <div className={styles.topBar}>
         <div className={styles.topLeft}>
-          <h1 className={styles.phaseTitle}>Individual Phase</h1>
+          <h1 className={styles.phaseTitle}>
+            {!selectionStage
+              ? 'Individual Phase'
+              : isSelecting ? 'Individual Selection Phase' : 'Individual Ideation Phase'}
+          </h1>
           <span className={styles.ideaCount}>{ideas.length} / {maxIdeas} ideas</span>
         </div>
         <div className={styles.topRight}>
-          <PhaseTimer
-            phaseStartedAt={individualStartedAt}
-            durationSeconds={pc.individualPhaseDuration}
-            onExpire={done ? undefined : autoFinish}
-          />
-          <button className={`btn-primary ${styles.doneBtn}`} onClick={() => markDone()} disabled={!canFinish}>
-            {done ? 'Waiting for group...' : 'Finish & Submit'}
-          </button>
+          <PhaseTimer {...timerProps()} />
+          {selectionStage && !isSelecting ? (
+            <button
+              className={styles.proceedBtn}
+              onClick={goToSelection}
+              disabled={ideas.length === 0}
+              title={ideas.length === 0
+                ? 'Add at least one idea first'
+                : `Move on to choosing the ${ideasCarried} ideas you carry into the group phase`}
+            >
+              Proceed to Selection
+            </button>
+          ) : (
+            <button className={`btn-primary ${styles.doneBtn}`} onClick={() => markDone()} disabled={!canFinish}>
+              {done ? 'Waiting for group...' : 'Finish & Submit'}
+            </button>
+          )}
           <HeaderControls />
         </div>
       </div>
@@ -481,13 +593,37 @@ export default function IndividualPhase() {
         </div>
       </div>
 
-      {/* Selection indicator */}
-      {groupPhaseActive && ideas.length > 0 && !done && (
+      {/* Generation stage hint: what happens when the ideas are in */}
+      {selectionStage && !isSelecting && !done && (
+        <div className={styles.selectionBar}>
+          <span className={styles.selectionLabel}>
+            Write your ideas first — you&rsquo;ll choose your best <strong>{ideasCarried}</strong> in the next step
+          </span>
+          <span className={styles.selectionHint}>
+            {timers.split && timers.second
+              ? `The selection step has its own ${selMinutes} minute${selMinutes === 1 ? '' : 's'}`
+              : 'Click "Proceed to Selection" when you are ready'}
+          </span>
+        </div>
+      )}
+
+      {/* Selection stage indicator */}
+      {isSelecting && ideas.length > 0 && !done && (
         <div className={styles.selectionBar}>
           <span className={styles.selectionLabel}>
             Selected ideas: <strong>{selectedIds.size} / {ideasCarried}</strong>
           </span>
-          <span className={styles.selectionHint}>Double-click an idea to select or deselect it</span>
+          <span className={styles.selectionHint}>
+            Double-click an idea to select or deselect it
+            {!atMax && (
+              <>
+                {' · '}
+                <button className={styles.backLink} onClick={backToGeneration} type="button">
+                  Back to adding ideas
+                </button>
+              </>
+            )}
+          </span>
         </div>
       )}
 
@@ -536,13 +672,16 @@ export default function IndividualPhase() {
             <div
               key={idea.id}
               className={`${styles.ideaPill} ${isSelected ? styles.ideaPillSelected : ''}`}
-              onDoubleClick={() => !done && toggleSelect(idea.id)}
+              onDoubleClick={() => !done && isSelecting && toggleSelect(idea.id)}
+              title={isSelecting && !done
+                ? (isSelected ? 'Double-click to deselect' : 'Double-click to select this idea')
+                : undefined}
             >
               <div className={styles.pillTop}>
                 <h3 className={styles.pillTitle}>{idea.title || idea.text}</h3>
                 <div className={styles.pillActions}>
                   {isSelected && <span className={styles.selectedBadge}>Selected</span>}
-                  {!done && (
+                  {canAddIdeas && (
                     <>
                       <button
                         className={styles.editBtn}
@@ -579,7 +718,7 @@ export default function IndividualPhase() {
           )
         })}
 
-        {!done && !atMax && (
+        {canAddIdeas && !atMax && (
           <form onSubmit={submitIdea} className={styles.addPill}>
             <input
               className={styles.addTitleInput}
@@ -612,12 +751,20 @@ export default function IndividualPhase() {
           </form>
         )}
 
-        {atMax && !done && (
+        {atMax && canAddIdeas && (
           <div className={styles.maxReached}>
             Maximum ideas reached.
-            {groupPhaseActive
-              ? ` Double-click to select your top ${ideasCarried}, then click Finish & Submit.`
+            {selectionStage
+              ? ` Click "Proceed to Selection" to choose your top ${ideasCarried}.`
               : ' Review your ideas above and click Finish when ready.'}
+          </div>
+        )}
+
+        {isSelecting && !done && (
+          <div className={styles.maxReached}>
+            {ideas.length === 0
+              ? 'You have no ideas to select from.'
+              : `Double-click to select your top ${ideasCarried}, then click Finish & Submit.`}
           </div>
         )}
       </div>
