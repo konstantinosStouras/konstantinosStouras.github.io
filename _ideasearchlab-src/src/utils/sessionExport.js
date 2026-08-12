@@ -22,7 +22,7 @@ import * as XLSX from 'xlsx-js-style'
 
 // Canonical tab order, used when merging several sessions into one workbook.
 export const SHEET_ORDER = [
-  'About', 'Participants', 'Ideas', 'Survey', 'Timing',
+  'About', 'Participants', 'Ideas', 'Votes', 'Survey', 'Timing',
   'Group Chat', 'AI Chat', 'AI Usage', 'AI Pricing', 'Groups', 'Conditions',
 ]
 
@@ -37,6 +37,13 @@ function countVotes(ideaId, participantList) {
   let count = 0
   participantList.forEach(p => { if ((p.votedFor || []).includes(ideaId)) count++ })
   return count
+}
+// Everyone who voted for this idea. Votes live as a `votedFor` array on the
+// VOTER's participant doc, so the idea -> voters direction has to be derived by
+// scanning the ballots; without it the workbook could only be read one voter at
+// a time (feedback 2026-08: "we can't see who is voting for each idea").
+function votersOf(ideaId, participantList) {
+  return participantList.filter(p => (p.votedFor || []).includes(ideaId))
 }
 // Accept a Firestore Timestamp ({seconds}/{_seconds}) or a client epoch-ms number.
 function toMs(v) {
@@ -159,7 +166,8 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     ['WHERE EACH MEASURE LIVES'],
     ['Dependent variables (idea creativity)', '"Ideas" sheet, one row per idea. Empty rater columns Novelty (rater 1..3) / Usefulness (rater 1..3) for blind expert scoring — aggregate across raters, then Overall Quality = mean(Novelty, Usefulness). Also Stage, Carried to Group, Vote Count, Final Group Pick, and Exclude (Yes/No) + Exclusion reason for the pre-registered "drop nonsensical/empty ideas" screen.'],
     ['Selected ideas (group level)', '"Ideas" sheet → filter Final Group Pick = Yes (the ideas each group locked in after voting). "Groups" sheet lists them per group as titles.'],
-    ['Vote completeness (read this before vote analysis)', '"Participants" sheet → Ballot Status + Votes Cast. A "submitted" ballot can hold ZERO votes (auto-submitted at timer expiry), so do NOT treat Votes Submitted = Yes as "actually voted". Ballot Status = voted / partial (n/required) / empty (submitted, no votes) / not submitted; treat empty + not submitted as non-votes, partial as fewer than the required votes. "Voted For (titles)" lists each ballot\'s chosen ideas by name.'],
+    ['Who voted for which idea', '"Votes" sheet: one row per cast vote (voter x idea), with the voter\'s id/label, the idea, whether it was their own, and whether it became the group\'s Final Group Pick. The same ballots also read idea-first in "Ideas" (Vote Count + Voted By (labels)/(IDs)) and voter-first in "Participants" (Voted For (idea IDs)/(titles)). A participant who cast no vote has NO row in "Votes" by construction — use "Participants" → Ballot Status as the census of who did and did not vote.'],
+    ['Vote completeness (read this before vote analysis)', '"Participants" sheet → Ballot Status + Votes Cast. A "submitted" ballot can hold ZERO votes (auto-submitted at timer expiry), so do NOT treat Votes Submitted = Yes as "actually voted". Ballot Status = voted / partial (n/required) / empty (submitted, no votes) / not submitted; treat empty + not submitted as non-votes, partial as fewer than the required votes. "Voted For (titles)" lists each ballot\'s chosen ideas by name. If many ballots are empty, check "Timing" → Group voting time (s): ~0 with Proceeded to voting At == Votes submitted At means the group phase timer expired while the group was still in ideation and the ballot was auto-submitted, i.e. those participants never reached the voting screen.'],
     ['Mechanism — prompt behaviour', '"AI Chat" sheet (Role = user → prompts: count = intensity; prompt text → semantic diversity, by Author ID/Scope). "AI Usage" sheet aggregates prompts/replies per participant & per group (filter Row Type = scope to drop TOTAL/AVG summary rows).'],
     ['Mechanism — idea diversity / search breadth', '"Ideas" sheet Full Text, grouped by author / condition → compute semantic dispersion.'],
     ['Moderators', 'the "Survey" sheet holds the moderator items — the default questionnaire now includes them: Big-Five personality (2 items/trait), cognitive diversity (group level), and the divergent-thinking "creative uses for a brick" task. (Sessions created before this was added, or with a custom survey, only have them if the instructor included them — confirm the columns are present for your session.) Domain-expertise proxies: Survey items on prior product/innovation experience + Participants occupation / work experience.'],
@@ -188,16 +196,20 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     if (gid) groupPoolCount[gid] = (groupPoolCount[gid] || 0) + 1
   })
   const requiredVotesFor = gid => Math.max(1, Math.min(3, groupPoolCount[gid] || 3))
+  // One definition of "did this person actually vote", used by the Participants
+  // and Votes sheets alike so the two can never disagree.
+  const ballotStatusOf = (p, required) => {
+    const votesCast = (p.votedFor || []).length
+    if (!p.votesSubmitted) return 'not submitted'
+    if (votesCast === 0) return 'empty (submitted, no votes)'
+    return votesCast < required ? `partial (${votesCast}/${required})` : 'voted'
+  }
   const participantRows = participants.map(p => {
     const demo = p.demographics || {}
     const votedFor = p.votedFor || []
     const votesCast = votedFor.length
     const required = requiredVotesFor(p.groupId)
-    const ballotStatus = !p.votesSubmitted
-      ? 'not submitted'
-      : votesCast === 0 ? 'empty (submitted, no votes)'
-        : votesCast < required ? `partial (${votesCast}/${required})`
-          : 'voted'
+    const ballotStatus = ballotStatusOf(p, required)
     const row = {
       'Participant ID': p.id,
       'Name': p.name || '',
@@ -236,6 +248,8 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     'Full Text': idea.text || '',
     'Carried to Group': idea.selected ? 'Yes' : 'No',
     'Vote Count': countVotes(idea.id, participants),
+    'Voted By (labels)': votersOf(idea.id, participants).map(v => v.anonymousLabel || v.id).join(', '),
+    'Voted By (IDs)': votersOf(idea.id, participants).map(v => v.id).join(', '),
     'Final Group Pick': finalIdeaIds.has(idea.id) ? 'Yes' : 'No',
     'Final Pick Rank': finalIdeaRank[idea.id] || '',
     'Created At': formatTimestamp(idea.createdAt),
@@ -249,6 +263,45 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     'Usefulness (rater 3)': '',
   })).map(stamp)
   sheets.push({ name: 'Ideas', kind: 'json', rows: ideaRows })
+
+  // ── Votes (one row per cast vote) ──
+  // The same ballots as the Participants sheet's "Voted For" columns, in LONG
+  // form: voter x idea, one row each. This is the sheet that answers "who voted
+  // for each idea" — including which members backed the ideas the group ended up
+  // selecting (Final Group Pick). Participants who cast no vote have no row here
+  // by construction; the Participants sheet's Ballot Status is the census of who
+  // did and didn't vote, so use that for the denominator.
+  const voteRows = []
+  participants.forEach(p => {
+    const votedFor = p.votedFor || []
+    const required = requiredVotesFor(p.groupId)
+    votedFor.forEach((ideaId, i) => {
+      const idea = ideaById[ideaId]
+      const gid = p.groupId || (idea && (idea.groupId || authorGroupId[idea.authorId])) || ''
+      voteRows.push({
+        'Voter ID': p.id,
+        'Voter Name': p.name || '',
+        'Voter Label': p.anonymousLabel || '',
+        'Group ID': gid,
+        'Group UID': gid ? `${sessionCode}:${gid}` : '',
+        'Idea ID': ideaId,
+        'Idea Title': (idea && idea.title) || ideaTitleById[ideaId] || '',
+        'Idea Stage': idea ? (idea.phase === 'group' ? 'group' : (idea.phase === 'individual' ? 'individual (solo)' : (idea.phase || ''))) : '',
+        'Idea Author ID': (idea && idea.authorId) || '',
+        'Idea Author Label': (idea && (authorLabel[idea.authorId] || idea.anonymousLabel)) || '',
+        'Voted For Own Idea': idea && idea.authorId === p.id ? 'Yes' : 'No',
+        'Final Group Pick': finalIdeaIds.has(ideaId) ? 'Yes' : 'No',
+        'Final Pick Rank': finalIdeaRank[ideaId] || '',
+        'Ballot Position': i + 1,
+        'Votes Cast (this ballot)': votedFor.length,
+        'Required Votes': required,
+        'Ballot Status': ballotStatusOf(p, required),
+        'Votes Submitted': p.votesSubmitted ? 'Yes' : 'No',
+        'Votes Submitted At': formatTimestamp(p.votedAt),
+      })
+    })
+  })
+  sheets.push({ name: 'Votes', kind: 'json', rows: voteRows.map(stamp) })
 
   // ── Survey ──
   const surveyParticipants = participants.filter(p => p.surveyAnswers)
@@ -631,6 +684,7 @@ function buildAggregateAbout(entries) {
     ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea: Novelty / Usefulness / Quality columns for blind expert rating, plus the objective KPIs — Obj. Novelty / Obj. Distinctiveness / Obj. Score — computed in Section 3.1).'],
     ['Selected ideas (group level)', '"Ideas" sheet → Final Group Pick = Yes; "Groups" sheet lists them as titles.'],
     ['Vote completeness', '"Participants" sheet → Ballot Status + Votes Cast (a submitted ballot can hold zero votes).'],
+    ['Who voted for which idea', '"Votes" sheet: one row per cast vote (voter x idea), stacked across every session.'],
     ['Mechanisms', '"AI Chat" / "AI Usage" (prompt behaviour & tokens); "Ideas" Full Text (idea diversity).'],
     ['Moderators', '"Survey" sheet (Big-Five, cognitive diversity, divergent-thinking task) + occupation / experience.'],
     ['Controls', '"Participants" sheet — Age, Gender (+ other demographics).'],
