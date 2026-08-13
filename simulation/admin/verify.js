@@ -116,12 +116,24 @@ window.SIMP_VERIFY = (function () {
               'sign in with the instructor account that created the class sessions');
           }
           return Promise.all(sessions.map(function (s) {
-            return c.D.getDocs(c.D.collection(c.fs, 'sessions', s.id, 'participants'))
-              .then(function (ps) { return { s: s, ps: ps }; });
+            return Promise.all([
+              c.D.getDocs(c.D.collection(c.fs, 'sessions', s.id, 'participants')),
+              /* Closing a session ends everyone on the same Done screen without
+                 setting a status, so those participants have to be judged by
+                 what they actually DID — and half that evidence (their ideas)
+                 lives outside the participant doc. Read only for such sessions,
+                 so an open class costs nothing extra. */
+              s.closed ? c.D.getDocs(c.D.collection(c.fs, 'sessions', s.id, 'ideas')) : null
+            ]).then(function (r) { return { s: s, ps: r[0], ideas: r[1] }; });
           }));
         }).then(function (rs) {
           var done = {}, records = 0;
           rs.forEach(function (r) {
+            var authored = {};
+            if (r.ideas) r.ideas.forEach(function (d) {
+              var a = d.data().authorId;
+              if (a) authored[a] = 1;
+            });
             r.ps.forEach(function (d) {
               records++;
               var x = d.data();
@@ -134,9 +146,20 @@ window.SIMP_VERIFY = (function () {
                  offered to REVOKE their ✓ (session SGP1, 2026-08-13). Fixed at
                  the source in the app's functions/phaseGuard.js; read the
                  survey here so already-written records verify correctly too. */
-              var finished = x.status === 'done' ||
-                x.surveyCompletedAt || x.surveyAnswers ||
-                (r.s.closed && (x.votesSubmitted || x.individualComplete));
+              var finished = x.status === 'done' || !!x.surveyCompletedAt || !!x.surveyAnswers;
+              /* A CLOSED session ends everyone on that same Done screen without
+                 setting a status, so its participants are judged by whether they
+                 demonstrably TOOK PART: an idea of their own, or a vote cast.
+                 Deliberately NOT `votesSubmitted`/`individualComplete` on their
+                 own — the phase timers auto-submit BOTH with nothing in them
+                 (autoFinish submits zero ideas, autoSubmitVotes locks an empty
+                 ballot), so a student who opened the page and idled was ticked
+                 as complete here while the app's own admin showed no
+                 contribution from them. The platform's ✓ and what the Ideation
+                 Challenge shows have to mean the same thing. */
+              if (!finished && r.s.closed) {
+                finished = !!authored[d.id] || ((x.votedFor || []).length > 0);
+              }
               if (!finished) return;
               var id = pid(x.platform && x.platform.studentId);
               if (!id) return;                                    // joined outside the platform

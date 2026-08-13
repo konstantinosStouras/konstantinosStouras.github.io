@@ -802,4 +802,21 @@ handoff) → welcome → tour → SILENT registration → lobby/phases.
   and the function only exists on a genuine platform launch), so the
   platform's card shows "✓ Completed" and blocks a second play of the same
   run. Rebuild-sensitive — the platform smoke's marker preflight checks the
-  shipped bundle still carries the call.
+  shipped bundle still carries the call. **Only on `<Done completed />`** —
+  the same screen is what EVERY phase page renders when the instructor closes
+  the session (`useSessionEnded`), so an unguarded stamp ticked students who
+  were still mid-phase (and blocked their retake). The instructor-side
+  reconciliation applies the matching rule: a CLOSED session's participants
+  count as complete only with a submitted survey or demonstrable
+  participation (an idea they authored, or a vote cast) — never on
+  `votesSubmitted`/`individualComplete` alone, which the phase timers set with
+  empty content.
+- **"0 ideas" in the Submitted-Ideas panel says what the participant DID do.**
+  That list is individual-phase only, so someone who wrote only group ideas,
+  voted, or completed the survey read as a no-show ("No ideas submitted") —
+  while the platform correctly ticked them, which is exactly the mismatch the
+  owner reported (2026-08). Each participant now carries a **finished ✓** chip
+  when their survey is in (`participantIsDone`), and the empty line reads
+  "No individual ideas — 2 group ideas · 3 votes cast · survey submitted." or,
+  when there really is nothing, "No ideas submitted, and nothing else recorded
+  for this participant."
