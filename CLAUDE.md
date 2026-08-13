@@ -2560,7 +2560,19 @@ bug), a 5 s own-doc poll while unapproved + a 10 s roster `count()` poll with
 refetch-on-change, and an optimistic Approve-row repaint) makes
 activation live (`simPlatform/config` doc) and adds a roster
 (`simPlatformStudents/{uid}`, anonymous auth, every registration field
-compulsory; LIVE in the admin panel — auto-loads and updates via
+compulsory — and ENFORCED (owner 2026-08): an incomplete registration
+raises a pop-up naming the missing details (on approval arriving, else on
+the next visit), banners the card list and **cannot launch a simulation**
+(`profileComplete`/`missingFields`/`openRegPrompt` in index.html); the
+selects' blank first entry became a **disabled placeholder** so nothing
+empty is selectable, and **every `<option>` now carries an explicit
+`value`** — without one an option's value IS its text, so a student
+browsing with page translation on saved `大学本科生` as their level, which
+the roster showed and the edit form (English values) then matched to
+nothing and rendered EMPTY; a legacy translated answer is treated as
+unanswered and asked again. Offline test
+`node simulation/tools/registration-guard.mjs`;
+LIVE in the admin panel — auto-loads and updates via
 onSnapshot, no manual load) with CSV export, a per-row **Delete**
 (confirm-guarded; removes the row's doc(s) incl. collapsed duplicate
 re-registrations — for test registrations etc.; rules already allow

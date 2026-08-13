@@ -121,6 +121,12 @@ h2 { font-size: 1.25rem; margin: 26px 0 4px; }
   font: inherit; background: #fbfcff; color: inherit;
 }
 .field input:focus, .field select:focus { outline: 2px solid #7b93e8; border-color: #7b93e8; }
+/* A required answer that is still missing — blank, or (pre-fix) saved from a
+   translated option label that matches no option, which the student must pick
+   again. Marked rather than silently empty, so "complete your details" points
+   at something. */
+.field .needs-answer { border-color: #e0a3a3; background: #fff7f7; }
+.field .needs-answer:focus { border-color: #7b93e8; }
 .hint { color: #6a7492; font-size: .85rem; }
 .err { color: #c0392b; font-size: .9rem; min-height: 1.2em; margin: 8px 0 0; }
 .btn {

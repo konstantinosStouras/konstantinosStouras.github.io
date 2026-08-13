@@ -80,6 +80,12 @@
     <!-- Returning student on a NEW device / cleared browser (Firebase mode):
          they log in instead of retyping the form. Same-browser returns never
          see any of this — they are signed in already. -->
+    <!-- Shown when an EXISTING registration is missing answers (blank fields, or
+         an answer saved from a translated option label that no longer matches). -->
+    <p id="reg-missing" class="appr-note" hidden>
+      ⚠️ <strong>Some details are missing.</strong> The fields marked in red still need an answer —
+      please complete them so your instructor has a full registration for you.
+    </p>
     <div id="recover-box" class="recover" hidden>
       <strong>Already registered before?</strong> If you registered on this or another device, don't fill
       this in again — <button id="btn-to-login" class="btn ghost small" type="button">Log in instead</button>
@@ -88,23 +94,34 @@
       <div class="field"><label for="f-name">Full name <span class="req">*</span></label><input id="f-name" autocomplete="name" maxlength="80"></div>
       <div class="field"><label for="f-email">E-mail <span class="req">*</span></label><input id="f-email" type="email" autocomplete="email" maxlength="120"></div>
       <div class="field"><label for="f-sid">University student ID <span class="req">*</span></label><input id="f-sid" maxlength="40" autocomplete="off"></div>
+      <!-- EVERY option carries an explicit value="…" — never rely on the option's
+           TEXT. A student browsing with the browser's page translation on gets the
+           labels rewritten in the DOM ("Undergraduate" → "大学本科生"), and a
+           value-less option makes `select.value` return that translated text, which
+           was then saved as the answer: the roster showed Chinese, and the edit form
+           (whose option values are English) could not match it back, so the field
+           looked EMPTY. With explicit values the student may read the labels in any
+           language while the stored answer stays canonical.
+           The first option is a DISABLED placeholder, not a blank choice: nothing
+           empty can be picked, and the required check still catches an untouched
+           field instead of silently recording the first real option. -->
       <div class="field"><label for="f-age">Age <span class="req">*</span></label>
-        <select id="f-age"><option value=""></option></select></div>
+        <select id="f-age"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-gender">Gender <span class="req">*</span></label>
-        <select id="f-gender"><option value=""></option><option>Male</option><option>Female</option><option>Non-binary</option><option>Prefer not to say</option><option>Other</option></select></div>
+        <select id="f-gender"><option value="" disabled selected hidden>Choose…</option><option value="Male">Male</option><option value="Female">Female</option><option value="Non-binary">Non-binary</option><option value="Prefer not to say">Prefer not to say</option><option value="Other">Other</option></select></div>
       <div class="field"><label for="f-nationality">Nationality (Country) <span class="req">*</span></label>
-        <select id="f-nationality"><option value=""></option></select></div>
+        <select id="f-nationality"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-country">Country of residence <span class="req">*</span></label>
-        <select id="f-country"><option value=""></option></select></div>
+        <select id="f-country"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-level">Level of study <span class="req">*</span></label>
-        <select id="f-level"><option value=""></option><option>Undergraduate</option><option>Postgraduate (Masters)</option><option>Postgraduate (PhD)</option><option>MBA</option><option>Other</option></select></div>
+        <select id="f-level"><option value="" disabled selected hidden>Choose…</option><option value="Undergraduate">Undergraduate</option><option value="Postgraduate (Masters)">Postgraduate (Masters)</option><option value="Postgraduate (PhD)">Postgraduate (PhD)</option><option value="MBA">MBA</option><option value="Other">Other</option></select></div>
       <div class="field"><label for="f-workexp">Work experience (years) <span class="req">*</span></label><input id="f-workexp" type="number" min="0" max="50"></div>
       <div class="field"><label for="f-occupation">Occupation <span class="req">*</span></label>
-        <select id="f-occupation"><option value=""></option></select></div>
+        <select id="f-occupation"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-industry">Industry <span class="req">*</span></label>
-        <select id="f-industry"><option value=""></option></select></div>
+        <select id="f-industry"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-english">English fluency <span class="req">*</span></label>
-        <select id="f-english"><option value=""></option><option>Native speaker</option><option>Fluent</option><option>Advanced</option><option>Intermediate</option><option>Basic</option></select></div>
+        <select id="f-english"><option value="" disabled selected hidden>Choose…</option><option value="Native speaker">Native speaker</option><option value="Fluent">Fluent</option><option value="Advanced">Advanced</option><option value="Intermediate">Intermediate</option><option value="Basic">Basic</option></select></div>
     </div>
     <p id="reg-err" class="err"></p>
     <div class="actions">
@@ -122,6 +139,13 @@
     <!-- Instructor approval gate (Firebase mode): until the instructor
          approves this student in the admin roster, NO simulation cards are
          shown (approval overrides the active toggles, per the owner). -->
+    <!-- Registration still incomplete: the student can see the cards but cannot
+         start anything until every detail is filled in. -->
+    <div id="reg-note" class="appr-note" hidden>
+      ⚠️ <strong>Your registration is incomplete.</strong>
+      Some of your details are missing, so you cannot start a simulation yet.
+      <button id="reg-note-go" class="btn small" type="button">Complete my details</button>
+    </div>
     <div id="appr-note" class="appr-note" hidden>
       ⏳ <strong>Waiting for your instructor's approval.</strong>
       You are registered — today's simulations appear here the moment your
@@ -163,6 +187,21 @@
 
 <!-- Shown instead of the launch dialog for a simulation this student already
      completed (the sims record completion; see prefill.js's simpMarkCompleted). -->
+<!-- Complete-your-registration prompt. Raised when an approved student's
+     registration is missing answers — on the spot if the approval lands while
+     they are on the page, otherwise the next time they open it. They cannot
+     start a simulation until it is complete. -->
+<div id="regmodal" class="modal" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="rm-title">
+    <h3 id="rm-title">Please complete your registration</h3>
+    <p id="rm-body" class="bl"></p>
+    <div class="actions">
+      <button id="rm-go" class="btn">Complete my details</button>
+      <button id="rm-close" class="btn ghost">Not now</button>
+    </div>
+  </div>
+</div>
+
 <div id="donemodal" class="modal" hidden>
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="dm-title">
     <h3 id="dm-title">Thank you for playing!</h3>
@@ -240,10 +279,14 @@
     'Hospitality & Tourism', 'Insurance', 'Legal Services', 'Logistics & Transportation',
     'Marketing & Advertising', 'Non-profit & NGO', 'Technology & Software',
     'Telecommunications', 'Other'];
+  /* Options ALWAYS carry an explicit value. Setting only textContent makes the
+     option's value BE its text — which the browser's page translation rewrites,
+     so a translated label became the saved answer (see the form markup). */
   function fillSelect(id, list) {
     var el = $(id);
     list.forEach(function (v) {
       var o = document.createElement('option');
+      o.value = v;
       o.textContent = v;
       el.appendChild(o);
     });
@@ -331,9 +374,41 @@
     });
   };
 
+  /* ---------- registration completeness ----------
+     A registration counts as complete only when every field holds an answer the
+     form itself offers. Two ways it can fail: the student left something blank
+     (the fields the instructor sees empty in the roster), or the answer was
+     saved from a TRANSLATED option label before the explicit value="…" fix — a
+     string no select can match, which therefore has to be picked again. */
+  function fieldAnswered(f, p) {
+    var v = (p[f[0]] != null ? String(p[f[0]]) : '').trim();
+    if (!v) return false;
+    var el = $(f[1]);
+    if (el.tagName !== 'SELECT') return true;
+    for (var i = 0; i < el.options.length; i++) {
+      if (el.options[i].value && el.options[i].value === v) return true;
+    }
+    return false;                       /* stale/translated answer → ask again */
+  }
+  function missingFields(p) {
+    if (!p) return FIELDS.slice();
+    return FIELDS.filter(function (f) { return !fieldAnswered(f, p); });
+  }
+  function profileComplete(p) { return missingFields(p).length === 0; }
+
   function showRegister(editing) {
     var p = P.getProfile() || {};
-    FIELDS.forEach(function (f) { $(f[1]).value = p[f[0]] != null ? p[f[0]] : ''; });
+    FIELDS.forEach(function (f) {
+      var el = $(f[1]);
+      var v = p[f[0]] != null ? String(p[f[0]]) : '';
+      /* An unmatchable saved answer must not be written into the select: it
+         would silently blank the field with no explanation. Leave the
+         placeholder showing and mark the field, so it reads as "answer this". */
+      el.value = (el.tagName === 'SELECT' && v && !fieldAnswered(f, p)) ? '' : v;
+      el.classList.toggle('needs-answer', !fieldAnswered(f, p) && !!P.getProfile());
+    });
+    var missed = P.getProfile() ? missingFields(p) : [];
+    $('reg-missing').hidden = missed.length === 0;
     $('reg-title').textContent = editing ? 'Edit your details' : 'Register to get started';
     $('btn-cancel').hidden = !editing;
     $('reg-err').textContent = '';
@@ -343,7 +418,8 @@
     hideAll();
     setHeroAuth(!editing && !P.getProfile());
     $('s-register').hidden = false;
-    $('f-name').focus();
+    /* Land on the first thing that still needs an answer, not always the name. */
+    $(missed.length ? missed[0][1] : 'f-name').focus();
   }
   function showSims() {
     var p = P.getProfile();
@@ -356,6 +432,10 @@
        watch, AFTER its first snapshot — pushing here would race a revocation
        the instructor made in the meantime (see watchApproval). */
     startApprovalWatch();
+    /* An approved (or ungated, LOCAL-mode) student with details missing is
+       asked for them on arrival; while approval is still pending the watch
+       raises it instead, the moment the approval lands. */
+    if (!apprBlocked()) maybeRegPrompt();
     $('who').hidden = !p;
     if (p) {
       $('who-name').textContent = p.name || p.studentId || 'Account';
@@ -441,7 +521,14 @@
       el.querySelector('.bl').textContent = s.blurb;
       if (c.note) el.querySelector('.note').textContent = c.note;
       el.querySelector('.pill').textContent = badge[0];
-      el.onclick = function () { done ? openDoneModal(s) : openModal(s); };
+      el.onclick = function () {
+        if (done) { openDoneModal(s); return; }
+        /* Play is gated on a COMPLETE registration (per the owner): the study
+           data is worth nothing without the demographics, and a student who
+           has already started is far harder to get them from. */
+        if (regIncomplete()) { openRegPrompt(); return; }
+        openModal(s);
+      };
       cards.appendChild(el);
     });
     /* The waiting note is about what is STILL LOCKED, so it goes only when
@@ -449,6 +536,9 @@
        simulation has nothing pending and should not be told to wait. */
     $('appr-note').hidden = !(blocked && pending > 0);
     $('appr-note-some').hidden = !(blocked && pending > 0 && shown > 0);
+    /* The incomplete-registration banner is about being unable to START, so it
+       is shown whenever something launchable is on screen. */
+    $('reg-note').hidden = !(regIncomplete() && shown > 0);
     $('empty').hidden = shown > 0 || (blocked && pending > 0);
     var src = $('cfg-src');
     if (CFG.source === 'draft') { src.textContent = 'local draft — visible only in this browser'; src.hidden = false; }
@@ -545,6 +635,41 @@
      (own-doc onSnapshot). LOCAL mode has no roster, so no gate. */
   var APPR = { active: false, ok: false, started: false };
   function apprBlocked() { return APPR.active && !APPR.ok; }
+
+  /* ---------- incomplete registration ----------
+     Many students left demographic fields blank (and, before the explicit
+     option values, some answers were saved as translated labels that match
+     nothing) — so the instructor approved people whose registration carries no
+     usable data. They are now asked to finish it, and cannot start a
+     simulation until they have. The prompt is raised the moment their approval
+     arrives (they are on the page waiting for it, which is when they will
+     actually act on it) and otherwise once per visit. */
+  var regPrompted = false;
+  function regIncomplete() { return !!P.getProfile() && !profileComplete(P.getProfile()); }
+  function openRegPrompt() {
+    var missed = missingFields(P.getProfile() || {});
+    if (!missed.length) return;
+    $('rm-body').textContent =
+      'Your instructor needs your full registration before you play. ' +
+      missed.length + ' detail' + (missed.length === 1 ? '' : 's') +
+      ' still need' + (missed.length === 1 ? 's' : '') + ' an answer: ' +
+      missed.map(function (f) { return fieldLabel(f[1]); }).join(', ') + '.';
+    $('regmodal').hidden = false;
+  }
+  function maybeRegPrompt() {
+    if (regPrompted || !regIncomplete()) return;
+    regPrompted = true;
+    openRegPrompt();
+  }
+  function fieldLabel(inputId) {
+    var lab = document.querySelector('label[for="' + inputId + '"]');
+    return lab ? lab.textContent.replace('*', '').trim() : inputId;
+  }
+  $('rm-go').onclick = function () { $('regmodal').hidden = true; showRegister(true); };
+  $('rm-close').onclick = function () { $('regmodal').hidden = true; };
+  $('regmodal').addEventListener('click', function (e) { if (e.target === this) $('regmodal').hidden = true; });
+  $('reg-note-go').onclick = function () { showRegister(true); };
+
   function startApprovalWatch() {
     if (APPR.started || !P.configured || !P.getProfile()) return;
     APPR.started = true;
@@ -554,6 +679,8 @@
       F.watchApproval(function (approved) {
         APPR.ok = !!approved;
         render();
+        /* Just approved with details missing → ask for them now. */
+        if (APPR.ok) maybeRegPrompt();
       });
     }).catch(function () { APPR.active = false; render(); });
   }

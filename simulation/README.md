@@ -47,6 +47,30 @@ plain `.wrap`.
 - Student registrations stay in each student's browser (localStorage) — they
   still flow into every simulation at launch, but there is no central roster.
 
+**The registration must be COMPLETE before a student can play.** Every field is
+required, and the student page enforces it rather than hoping: an incomplete
+registration raises a pop-up naming exactly which details are missing (the
+moment the instructor's approval arrives, since that is when the student is
+watching, otherwise on their next visit), shows a banner over the cards, and
+clicking a simulation opens the prompt instead of launching it. The Edit-details
+form marks the offending fields in red.
+
+**Two things caused the empty fields the roster kept showing.** (1) The selects
+offered a **blank first option**, so a student could leave a field unanswered
+and still save; the first entry is now a **disabled placeholder** ("Choose…") —
+nothing empty is selectable, and an untouched field is still caught rather than
+silently recording the first real option. (2) Every `<option>` now carries an
+explicit `value="…"`. Without one, an option's value IS its text — and a student
+browsing with the browser's page translation on has that text rewritten in the
+DOM, so `select.value` returned e.g. `大学本科生` and *that* was saved as the
+answer: the roster showed Chinese, and re-opening the profile (whose option
+values are English) matched nothing and rendered the field **empty**. With
+explicit values the student may read the labels in any language while the stored
+answer stays canonical. An older profile still carrying a translated answer is
+treated as unanswered — the pop-up asks for it again — since nothing else can
+map it back. Offline test: `node simulation/tools/registration-guard.mjs`
+(Playwright; translates the labels in-page exactly the way a translator does).
+
 **FIREBASE mode (recommended for live class use):** create a free Firebase
 project, enable **Anonymous** + **Email/Password** auth and **Firestore**,
 deploy `firestore.rules` (keep its `isAdmin()` list in sync with
