@@ -128,8 +128,13 @@
         simulation's own backend — the ground truth — and fixes the column for students whose browser never
         reported back. Simulations that collect no identifiable data (Problem Solving, Sustainable Supply
         Chains, Newsvendor, Trust the AI?) have nothing to reconcile against, so they show no button.</p>
+        <p class="hint"><strong>Approve all</strong> / <strong>Revoke all</strong> set the approval of every
+        student shown in one click — with a column filter on they act only on the rows displayed (so you can,
+        say, filter to the students who have answered a simulation and approve just those).</p>
         <div class="actions" style="margin-top:0">
           <button id="btn-csv" class="btn ghost" hidden>Export CSV</button>
+          <button id="btn-approve-all" class="btn ghost" hidden>✓ Approve all</button>
+          <button id="btn-unapprove-all" class="btn ghost" hidden>Revoke all approvals</button>
           <span id="verify-btns" class="actions" style="margin:0;gap:8px"></span>
           <span id="roster-count" class="hint">Loading roster…</span>
           <span id="verify-note" class="hint"></span>

@@ -84,6 +84,15 @@ Then:
   something is genuinely still locked. The student page shows a "waiting for your
   instructor's approval" note and unlocks itself live (own-doc `onSnapshot`)
   the moment Approve is clicked; clicking `✓ Approved` again revokes.
+  **Whole classes are handled in one click** by the **✓ Approve all** /
+  **Revoke all approvals** buttons beside Export CSV (each carries the number
+  of students it would change, is disabled when there is nothing to do, and
+  confirms first): they act on the rows **currently shown**, so the column
+  filters below double as a selector — filter to the students who answered a
+  simulation and approve just those; with no filter on, that is the whole
+  roster. Only rows that would actually change are written (every uid behind
+  a collapsed row, like the per-row toggle), and the table repaints locally on
+  success, since the live snapshot can be slow on a stream-hostile network.
   Students can never approve themselves — the rules pin `approved` to
   admin-only writes (**republish `firestore.rules` when adopting this**).
   LOCAL mode has no roster and therefore no gate. The roster also carries

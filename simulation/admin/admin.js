@@ -468,6 +468,60 @@
     renderVerifyButtons();
     var approvedN = roster.filter(function (r) { return r.approved; }).length;
     var filtered = visible.length !== roster.length;
+
+    /* Bulk approval (owner request): approve — or revoke — a whole class in one
+       click instead of one row at a time. It acts on the rows CURRENTLY SHOWN,
+       so the column filters double as a selector (filter to the students who
+       answered a simulation, then approve just those); with no filter on, that
+       is the whole roster. Only rows that would actually CHANGE are written,
+       and the rows are repainted locally like the per-row toggle, since the
+       live snapshot can be slow (or dead) on a stream-hostile network. */
+    function wireBulkApproval(id, approved) {
+      var btn = $(id);
+      if (!btn) return;
+      btn.hidden = roster.length === 0;
+      var targets = visible.filter(function (r) { return !!r.approved !== approved; });
+      var scope = filtered ? ' shown (column filters are on)' : '';
+      btn.disabled = targets.length === 0;
+      btn.textContent = (approved ? '✓ Approve all' : 'Revoke all approvals') +
+        (targets.length ? ' (' + targets.length + ')' : '');
+      btn.title = targets.length === 0
+        ? (approved ? 'Every student' + scope + ' is already approved.'
+                    : 'No student' + scope + ' is approved.')
+        : (approved
+            ? 'Approve the ' + targets.length + ' student(s)' + scope + ' still waiting — they can then launch the active simulations.'
+            : 'Revoke approval for the ' + targets.length + ' approved student(s)' + scope + ' — they can no longer launch simulations.');
+      btn.onclick = function () {
+        if (!targets.length) return;
+        var q = approved
+          ? 'Approve all ' + targets.length + ' student(s)' + scope + ' who are still waiting? They will be able to launch the active simulations.'
+          : 'Revoke approval for all ' + targets.length + ' approved student(s)' + scope + '? They will see no simulations until approved again.';
+        if (!window.confirm(q)) return;
+        btn.disabled = true;
+        btn.textContent = approved ? 'Approving…' : 'Revoking…';
+        var uids = [];
+        targets.forEach(function (r) {
+          (uidsByKey[keyOf(r)] || [r.uid]).forEach(function (u) { uids.push(u); });
+        });
+        P.firebase().then(function (F) {
+          return F.approveStudents(uids, approved);
+        }).then(function () {
+          targets.forEach(function (r) { r.approved = approved; });
+          renderRoster(lastRows);   // instant; the live snapshot confirms
+          $('roster-count').textContent = (approved ? 'Approved ' : 'Revoked approval for ') +
+            targets.length + ' student(s). ' + $('roster-count').textContent;
+        }, function (e) {
+          renderRoster(lastRows);
+          $('roster-count').textContent = (approved ? 'Bulk approval' : 'Bulk revoke') + ' failed: ' +
+            ((e && e.code && String(e.code).indexOf('permission-denied') >= 0)
+              ? 'permission denied — republish the updated firestore.rules' + RULES_HINT
+              : ((e && e.message) || e));
+        });
+      };
+    }
+    wireBulkApproval('btn-approve-all', true);
+    wireBulkApproval('btn-unapprove-all', false);
+
     $('roster-count').textContent = roster.length === 0
       ? 'No registrations yet — students appear here the moment they register.'
       : roster.length + ' student' + (roster.length === 1 ? '' : 's') +
