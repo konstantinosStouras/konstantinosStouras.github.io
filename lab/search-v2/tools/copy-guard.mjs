@@ -348,6 +348,10 @@ await ap.click('#content-editors .accordion[data-g="quiz"] .acc-head');
 const quizPrompts = await ap.$$eval('#ce-quiz [data-ce-act="qprompt"]', els => els.map(e => e.value));
 ok(quizPrompts.length === CP.QUIZ.common.length + CP.QUIZ.ai.length, `all ${quizPrompts.length} Quick-check questions are listed`);
 ok(quizPrompts[0] === CP.QUIZ.common[0].prompt, 'the first question is shown verbatim: “' + quizPrompts[0].slice(0, 46) + '…”');
+// Reading the question is the whole point of this section, so no box may clip it.
+const clipped = await ap.$$eval('#ce-quiz textarea[data-ce-act="qprompt"]',
+  els => els.filter(e => e.scrollHeight > e.clientHeight + 2).length);
+ok(clipped === 0, 'no question box clips its text (they grow to fit)');
 const optVals = await ap.$$eval('#ce-quiz [data-ce-act="qopt"]', els => els.map(e => e.value));
 ok(CP.QUIZ.common[0].options.every(o => optVals.includes(o)), 'its answer options are all editable');
 const checked = await ap.$$eval('#ce-quiz [data-ce-act="qcorrect"]', els => els.filter(e => e.checked).length);

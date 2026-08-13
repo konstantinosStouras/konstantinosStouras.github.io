@@ -192,16 +192,32 @@
       var body = '';
       g.fields.forEach(function (f) { body += fieldHTML(f); });
       html += '<div class="accordion" data-g="' + esc(g.id) + '" title="' + esc(g.help || '') + '">' +
+        // .acc-head is a flex row, so a plain space between the title and the
+        // suffix would collapse at the flex-item boundary — hence the &nbsp;.
         '<button type="button" class="acc-head">' + esc(g.title) +
-          (g.ai ? ' <span class="muted small">· With-AI phase only</span>' : '') +
+          (g.ai ? '<span class="muted small">&nbsp;· With-AI phase only</span>' : '') +
           '<span class="ce-count" id="ce-count-' + esc(g.id) + '"></span><span class="chev">▾</span></button>' +
         '<div class="acc-body">' + body + '</div></div>';
     });
     $('content-editors').innerHTML = html;
 
     var heads = $('content-editors').querySelectorAll('.acc-head');
-    for (var i = 0; i < heads.length; i++) heads[i].addEventListener('click', function () { this.parentNode.classList.toggle('open'); });
+    for (var i = 0; i < heads.length; i++) heads[i].addEventListener('click', function () {
+      this.parentNode.classList.toggle('open');
+      autoGrow(this.parentNode);   // a hidden textarea has no scrollHeight to size against
+    });
     wireContentDelegates();
+  }
+
+  // Question boxes grow to fit their text: the whole point of this section is
+  // being able to READ the exact question, so it must never be clipped.
+  function autoGrow(scope) {
+    var els = (scope || $('content-editors')).querySelectorAll('textarea[data-ce-act]');
+    for (var i = 0; i < els.length; i++) {
+      if (!els[i].offsetParent) continue;             // inside a closed accordion
+      els[i].style.height = 'auto';
+      els[i].style.height = (els[i].scrollHeight + 2) + 'px';
+    }
   }
 
   function fieldHTML(f) {
@@ -340,7 +356,7 @@
     var grp = el.getAttribute('data-g'), i = +el.getAttribute('data-i'), o = +el.getAttribute('data-o');
     var q = (grp && QUIZ_DRAFT[grp]) ? QUIZ_DRAFT[grp][i] : null;
     switch (act) {
-      case 'qprompt': q.prompt = el.value; return markContentCounts();       // no re-render: keep focus
+      case 'qprompt': q.prompt = el.value; autoGrow(el.parentNode); return markContentCounts(); // no re-render: keep focus
       case 'qopt': q.options[o] = el.value; return markContentCounts();
       case 'qcorrect': q.correct = o; markContentCounts(); return;
       case 'qoptadd': q.options.push(''); break;
@@ -348,7 +364,7 @@
       case 'qdel': QUIZ_DRAFT[grp].splice(i, 1); break;
       case 'qadd': QUIZ_DRAFT[grp].push({ id: grp + '-' + (Date.now().toString(36)), prompt: '', options: ['', ''], correct: 0 }); break;
       case 'qreset': QUIZ_DRAFT = defaultQuizDraft(); break;
-      case 'sprompt': SURVEY_DRAFT[i].prompt = el.value; return markContentCounts();
+      case 'sprompt': SURVEY_DRAFT[i].prompt = el.value; autoGrow(el.parentNode); return markContentCounts();
       case 'stype': SURVEY_DRAFT[i].type = el.value === 'text' ? 'text' : 'likert'; return markContentCounts();
       case 'sai': SURVEY_DRAFT[i].ai = el.checked; return markContentCounts();
       case 'sdel': SURVEY_DRAFT.splice(i, 1); break;
@@ -357,6 +373,7 @@
       default: return;
     }
     if (act.charAt(0) === 'q') renderQuizEditor(); else renderSurveyEditor();
+    autoGrow();
     markContentCounts();
   }
   // The whole section is event-delegated (the structured editors re-render, so
@@ -560,6 +577,7 @@
     SURVEY_DRAFT = content.survey ? CP.normalizeSurvey(content.survey, CP.SURVEY) : defaultSurveyDraft();
     renderQuizEditor();
     renderSurveyEditor();
+    autoGrow();
     refreshContentPlaceholders();
     markContentCounts();
   }
