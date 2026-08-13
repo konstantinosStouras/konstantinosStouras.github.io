@@ -334,6 +334,25 @@ export default function AdminSession() {
   Object.values(ideasByAuthorId).forEach(list =>
     list.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0))
   )
+  // Group-phase ideas per author, so "0 ideas" in the INDIVIDUAL-phase list
+  // below can say what the participant did elsewhere instead of reading as
+  // "this person did nothing" (the Simulation Platform ticks them as complete
+  // off the survey, and the two must tell the instructor the same story).
+  const groupIdeaCountByAuthor = ideas.reduce((acc, i) => {
+    if (i.phase === 'group' && i.authorId) acc[i.authorId] = (acc[i.authorId] || 0) + 1
+    return acc
+  }, {})
+  // What this participant contributed beyond the individual phase, in the order
+  // the study runs. Empty = they really did leave nothing behind.
+  function contributionBits(p) {
+    const bits = []
+    const g = groupIdeaCountByAuthor[p.id] || 0
+    if (g) bits.push(`${g} group idea${g === 1 ? '' : 's'}`)
+    const v = (p.votedFor || []).length
+    if (v) bits.push(`${v} vote${v === 1 ? '' : 's'} cast`)
+    if (hasCompletedSurvey(p)) bits.push('survey submitted')
+    return bits
+  }
   // Any author with no matching current participant (e.g. later removed/deleted)
   // is shown under a trailing bucket so their ideas are never silently dropped.
   const memberIds = new Set(participants.map(p => p.id))
@@ -632,6 +651,11 @@ export default function AdminSession() {
                                 <span className={styles.ideaSummaryCount}>
                                   {list.length} idea{list.length === 1 ? '' : 's'}
                                 </span>
+                                {participantIsDone(p) && (
+                                  <span className={styles.ideaDoneTag} title="Submitted the survey — they finished the study">
+                                    finished ✓
+                                  </span>
+                                )}
                               </span>
                               <span className={styles.ideaUserActions}>
                                 <button
@@ -656,7 +680,16 @@ export default function AdminSession() {
                               </span>
                             </div>
                             {list.length === 0 ? (
-                              <div className={styles.ideaNone}>No ideas submitted.</div>
+                              /* "No ideas submitted" alone reads as "did not take
+                                 part", which is wrong for someone who wrote only
+                                 group ideas, voted, or completed the survey —
+                                 exactly the participants the platform ticks. Say
+                                 which it is. */
+                              <div className={styles.ideaNone}>
+                                {contributionBits(p).length
+                                  ? `No individual ideas — ${contributionBits(p).join(' · ')}.`
+                                  : 'No ideas submitted, and nothing else recorded for this participant.'}
+                              </div>
                             ) : list.map(idea => (
                               <div key={idea.id} className={styles.ideaSummaryItem}>
                                 <div className={styles.ideaSummaryText}>

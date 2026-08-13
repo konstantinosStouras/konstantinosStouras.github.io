@@ -2632,9 +2632,16 @@ sessions this admin created — `platform.studentId`, done = `status:'done'` OR
 **a stored survey** (`surveyCompletedAt`/`surveyAnswers` — the survey is the
 last step, and `status` could be rewritten behind a finished participant; see
 the phase-guard note in `_ideasearchlab-src/CLAUDE.md`) OR,
-in a CLOSED session, `votesSubmitted`/`individualComplete`, because closing a
-session ends everyone on the same Done screen WITHOUT setting their status and
-counting only the survey would propose revoking that whole class),
+in a CLOSED session — which ends everyone on the same Done screen WITHOUT
+setting their status, so counting only the survey would propose revoking that
+whole class — **demonstrable participation: an idea they authored (the reason
+a closed session's `ideas` collection is read, and only then) or a vote cast**.
+Deliberately NOT `votesSubmitted`/`individualComplete` on their own, which is
+what it used to accept: both phase timers auto-submit with NOTHING in them
+(`autoFinish` submits zero ideas, `autoSubmitVotes` locks an empty ballot), so
+a student who opened the page and idled was ticked here while the Ideation
+Challenge's own admin showed no contribution from them — the platform's ✓ and
+what that app shows must mean the same thing (owner 2026-08)),
 **portfoliofit** (`participants.studentId`, `status:'done'`) and **search-v2**
 (no participant docs at all: `events` filtered to `event=='session_end'`,
 identity `pid` = the student ID the platform sends as `PROLIFIC_PID`, plus a

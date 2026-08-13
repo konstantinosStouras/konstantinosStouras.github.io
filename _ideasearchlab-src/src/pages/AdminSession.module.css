@@ -480,6 +480,19 @@
   color: var(--ink);
 }
 .ideaSummaryCount { font-size: 12px; color: var(--muted); font-weight: 400; }
+/* "finished ✓" beside a participant's idea count — they submitted the survey,
+   i.e. exactly what the Simulation Platform ticks them for, even when they
+   wrote no individual ideas. */
+.ideaDoneTag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #2e7d32;
+  border: 1px solid rgba(46, 125, 50, 0.35);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
 .ideaSummaryItem {
   display: flex;
   align-items: flex-start;

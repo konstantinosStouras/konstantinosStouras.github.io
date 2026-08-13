@@ -4,6 +4,11 @@
   var P = window.SimPlatform;
   var $ = function (id) { return document.getElementById(id); };
   var ADMIN_KEY = 'stouras';                 // local-mode gate, same key as the other lab admin panels
+  /* Run work that nothing on screen waits for after the page has settled. */
+  var whenIdle = function (fn) {
+    if (window.requestIdleCallback) window.requestIdleCallback(fn, { timeout: 4000 });
+    else setTimeout(fn, 1200);
+  };
   var CRED_KEY = P.KEYS.adminCreds;          // 'simp:admin-creds'
   var CFG = { sims: {}, source: null };
 
@@ -38,13 +43,30 @@
   }
   if (P.configured) {
     $('s-gate').hidden = false;
-    $('gate-fb').hidden = false;
+    /* Nothing here can be decided until the Firebase SDK (three modules from
+       Google's CDN) has loaded and reported the signed-in user — and the admin
+       is normally signed in already, so painting the sign-in form first showed
+       a state they were never in for the whole of that wait. Show what is
+       actually happening instead, and reveal the form only once we know they
+       are signed out — or after a moment, so a genuinely signed-out admin can
+       start typing rather than watch a message. (The page's <head> preloads the
+       SDK, which is what shortens the wait itself.) */
+    $('gate-wait').hidden = false;
+    var authSettled = false;
+    var formTimer = setTimeout(function () { if (!authSettled) $('gate-fb').hidden = false; }, 1200);
+    var settleGate = function (signedIn) {
+      authSettled = true;
+      clearTimeout(formTimer);
+      $('gate-wait').hidden = true;
+      $('gate-fb').hidden = !!signedIn;
+    };
     P.firebase().then(function (F) {
       F.onAuth(function (u) {
         var ok = u && u.email && (window.SIMP_ADMIN_EMAILS || []).indexOf(u.email) >= 0;
+        settleGate(ok);
         if (ok) openAdmin();
       });
-    });
+    }, function () { settleGate(false); });
     $('g-signin').onclick = function () {
       $('g-err').textContent = '';
       P.firebase().then(function (F) {
@@ -593,9 +615,14 @@
              have none and could not log back in by e-mail until now. */
           if (!recoveryBackfilled && rows.length) {
             recoveryBackfilled = true;
-            F.backfillRecovery(rows).then(function (n) {
-              $('backfill-note').textContent = 'E-mail login enabled for ' + n + ' registered student(s) (recovery records up to date).';
-            }).catch(function () { recoveryBackfilled = false; });
+            /* One write per student — a whole class of them. Held until the
+               browser is idle so it never competes with painting the roster
+               (nothing on screen depends on it). */
+            whenIdle(function () {
+              F.backfillRecovery(rows).then(function (n) {
+                $('backfill-note').textContent = 'E-mail login enabled for ' + n + ' registered student(s) (recovery records up to date).';
+              }).catch(function () { recoveryBackfilled = false; });
+            });
           }
         }
         else $('roster-count').textContent = 'Roster unavailable: permission denied' + RULES_HINT;

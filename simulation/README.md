@@ -71,6 +71,21 @@ treated as unanswered — the pop-up asks for it again — since nothing else ca
 map it back. Offline test: `node simulation/tools/registration-guard.mjs`
 (Playwright; translates the labels in-page exactly the way a translator does).
 
+**Load time.** Both pages sit behind the Firebase SDK — three ES modules on
+Google's CDN — and nothing can be decided until it has loaded and reported who
+is signed in. Left alone the browser only learns those modules exist when
+`platform.js` RUNS, i.e. after every local script has been fetched and parsed,
+so connection setup and download happen in series with the page. Each page's
+`<head>` therefore carries a `preconnect` + `modulepreload` for them (and a
+`preconnect` for the auth/Firestore API hosts), which starts the work during
+HTML parsing. **Keep those URLs in step with the loader in `platform.js`** — the
+smoke test fails the build if they drift, because a stale version downloads the
+SDK twice. The admin gate also shows "Checking your sign-in…" rather than a
+sign-in form the (already signed-in) admin was never going to use, revealing the
+form after a moment if the answer is slow, and the e-mail-recovery backfill —
+one write per student — is deferred to browser idle so it never competes with
+painting the roster.
+
 **FIREBASE mode (recommended for live class use):** create a free Firebase
 project, enable **Anonymous** + **Email/Password** auth and **Firestore**,
 deploy `firestore.rules` (keep its `isAdmin()` list in sync with

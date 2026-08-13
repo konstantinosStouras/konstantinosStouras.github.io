@@ -114,6 +114,32 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
   }
   if (markerFails) { console.error(`\nMARKER PREFLIGHT FAILED — ${markerFails} file(s).`); process.exit(1); }
   console.log('  ok — completion markers present in all five instrumented sims (+ built bundle)');
+
+  /* Both pages <head>-preload the Firebase SDK so its download overlaps the
+     page instead of starting when platform.js runs. The URL is duplicated
+     there, and a stale version would quietly fetch the SDK TWICE (preload one
+     copy, import another) — slower than not preloading at all. */
+  const sdkBase = (readFileSync(join(ROOT, 'simulation/platform.js'), 'utf8')
+    .match(/var U = '(https:\/\/www\.gstatic\.com\/firebasejs\/[^']+)'/) || [])[1];
+  let preloadFails = 0;
+  if (!sdkBase) { console.error('PRELOAD FAIL — could not read the SDK base URL from platform.js'); preloadFails++; }
+  else {
+    for (const page of ['simulation/index.html', 'simulation/admin/index.html']) {
+      const html = readFileSync(join(ROOT, page), 'utf8');
+      for (const mod of ['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js']) {
+        if (!html.includes(`<link rel="modulepreload" href="${sdkBase}${mod}"`)) {
+          console.error(`PRELOAD FAIL — ${page} does not preload ${sdkBase}${mod}`);
+          preloadFails++;
+        }
+      }
+      if (!html.includes('<link rel="preconnect" href="https://www.gstatic.com"')) {
+        console.error(`PRELOAD FAIL — ${page} lost the gstatic preconnect`);
+        preloadFails++;
+      }
+    }
+  }
+  if (preloadFails) { console.error(`\nPRELOAD PREFLIGHT FAILED — ${preloadFails} problem(s).`); process.exit(1); }
+  console.log('  ok — both pages preload the same Firebase SDK version platform.js loads');
 }
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
