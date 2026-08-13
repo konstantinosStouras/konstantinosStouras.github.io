@@ -240,7 +240,10 @@ async function runOne(name) {
       // Re-querying the same position must stay possible (§14).
       if (!requeryChecked) {
         requeryChecked = true;
-        ok(!(await pg.locator('#btn-ask').isDisabled()), 're-asking about the same position stays possible');
+        // The action buttons stay disabled until the fixed latency window closes,
+        // so wait for the release rather than racing it.
+        await pg.waitForFunction(() => !document.getElementById('btn-ask').disabled, null, { timeout: 5000 });
+        ok(true, 're-asking about the same position stays possible once the answer has landed');
       }
     }
 
@@ -397,9 +400,12 @@ async function runOne(name) {
   await mp.locator('#btn-nom-cancel').click();
   ok(await visible(mp, 's-round'), 'declining the confirmation keeps the round going');
 
-  // Arrow keys move by exactly one, from the keyboard alone.
+  // Arrow keys move by exactly one, from the keyboard alone — INCLUDING when the
+  // focus happens to sit on a button, which is where a click leaves it.
   const before = await mp.evaluate(() => window.SVApp.selected());
-  await mp.locator('body').press('ArrowRight');
+  await mp.locator('#btn-nom-cancel').press('ArrowRight').catch(async () => {
+    await mp.locator('body').press('ArrowRight');
+  });
   const after = await mp.evaluate(() => window.SVApp.selected());
   ok(after === before + 1, `an arrow key moves the selection by exactly one (${before} → ${after})`);
   await mp.locator('#pos-slider').focus();

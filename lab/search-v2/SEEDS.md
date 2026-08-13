@@ -16,6 +16,18 @@ staying out of it are what stop a participant reading the answers.
 
 ---
 
+## Where the seed lives
+
+In **server mode** (score-bearing actions in Cloud Functions, the default
+recommendation) `generatorSeed` lives on the run document, which the Security
+Rules make **admin-only** — a participant cannot read it, so they cannot
+regenerate the pool. The Functions read it with the Admin SDK and never send a
+mapping to the browser.
+
+In **client mode** the browser necessarily derives the pool from the same seed, so
+there is nothing to hide and the run document stays readable. Which mode a run
+uses is a locked run parameter, recorded on its row in the log below.
+
 ## The generator
 
 `mulberry32`, implemented identically in `pool.js` (JavaScript, canonical) and in

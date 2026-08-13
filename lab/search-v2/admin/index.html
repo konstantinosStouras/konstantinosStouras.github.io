@@ -411,6 +411,15 @@
                   <div class="field"><label>Gate on the other questions</label>
                     <div class="seg" id="p-ops-gateOther"><button data-v="record">Record attempts</button><button data-v="block">Block</button></div></div>
                 </div>
+                <div class="field"><label>Score-bearing actions <span class="defval">· where the AI’s answer, the reveal and the score are computed</span></label>
+                  <div class="seg" id="p-ops-compute"><button data-v="client">In the browser</button><button data-v="server">On the server (Cloud Functions)</button></div>
+                  <div class="hint"><b>On the server</b> is the brief’s §17.2 architecture and needs the Blaze
+                  plan: the client sends a position, the server holds the mapping and returns one number, so the
+                  prize mapping never reaches the browser. Deploy first &mdash;
+                  <span class="mono">cd lab/search-v2 &amp;&amp; firebase deploy --only functions</span> &mdash; and set this
+                  BEFORE the run’s first participant. It locks with everything else, because mixing the two
+                  inside one run would put two kinds of row in one dataset.</div>
+                </div>
                 <div class="row2">
                   <div class="field"><label>Roster mode</label>
                     <div class="seg" id="p-ops-rosterMode"><button data-v="open">Open &mdash; a class platform ID enrols itself</button><button data-v="roster">Roster only</button></div>

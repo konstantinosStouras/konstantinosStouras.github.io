@@ -46,12 +46,20 @@ service cloud.firestore {
     }
 
     // ---- runs: the immutable parameter sets -------------------------------
-    // A participant may `get` the run their code points at (they need its
-    // parameters and specs to play) but may never list the collection and may
-    // never write. Admin writes are refused once the run is locked, EXCEPT for
-    // the operational fields, which the brief keeps editable for a run's life.
+    // In SERVER mode (score-bearing actions in Cloud Functions) the run document
+    // is ADMIN-ONLY: it carries `generatorSeed`, and the whole integrity property
+    // of §17.2 is that the client cannot derive the mapping. The Admin SDK inside
+    // the Functions bypasses these rules, so the server still reads it.
+    //
+    // In LOCAL mode the client necessarily computes from the same seed, so there
+    // is nothing to hide and the participant reads the run directly.
+    //
+    // Either way a participant may never LIST the collection and never write, and
+    // admin writes to the parameters are refused once the run is locked — which a
+    // Function does on the first claimed code. Editing a live run is impossible,
+    // not discouraged (§17b).
     match /runs/{runId} {
-      allow get:   if isSignedIn();
+      allow get:   if isAdmin() || (isSignedIn() && resource.data.serverMode != true);
       allow list:  if isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin() && (
@@ -59,6 +67,21 @@ service cloud.firestore {
         || request.resource.data.params == resource.data.params
       );
       allow delete: if isAdmin() && resource.data.locked != true;
+    }
+
+    // The redacted, client-readable copy of a run: costs, caps, round counts and
+    // the operational flags. NO seeds, NO specs, NO anchors — so it is safe to
+    // read in server mode, and it is what the participant's app boots from.
+    match /runPublic/{runId} {
+      allow get:   if isSignedIn();
+      allow list:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // The mapping pool, if a future run ever uploads one instead of deriving it.
+    // Only the Admin SDK inside a Function may touch it (§17.4).
+    match /mappings/{document=**} {
+      allow read, write: if false;
     }
 
     // code → runId lookup. Holds ONLY the target run id, so exposing it leaks
@@ -110,6 +133,15 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update: if isAdmin() || isSignedIn();
       allow delete: if isAdmin();
+
+      // The per-round server state — what has been queried and revealed, and the
+      // computed score. Written ONLY by the Admin SDK inside the Functions; a
+      // client that could read it would learn the answers, and a client that
+      // could write it would set its own score.
+      match /rounds/{roundIndex} {
+        allow read:  if isAdmin();
+        allow write: if false;
+      }
     }
 
     // ---- audit -------------------------------------------------------------

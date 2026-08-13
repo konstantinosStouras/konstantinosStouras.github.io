@@ -31,6 +31,7 @@ window.SVFirebase = (function () {
   var PATHS = window.FIREBASE_PATHS || {};
   var C = {
     runs: PATHS.runs || 'runs',
+    runPublic: PATHS.runPublic || 'runPublic',
     runCodes: PATHS.runCodes || 'runCodes',
     runCounts: PATHS.runCounts || 'runCounts',
     roster: PATHS.roster || 'roster',
@@ -42,7 +43,7 @@ window.SVFirebase = (function () {
   var VER = window.FIREBASE_SDK_VERSION || '10.12.2';
   var configured = !!(cfg.apiKey && cfg.apiKey.indexOf('PASTE_') !== 0 && cfg.projectId && cfg.projectId.indexOf('PASTE_') !== 0);
 
-  var sdk = null, app = null, auth = null, db = null, ready = null;
+  var sdk = null, app = null, auth = null, db = null, fns = null, ready = null;
 
   function isConfigured() { return configured; }
   function paths() { return C; }
@@ -53,8 +54,9 @@ window.SVFirebase = (function () {
     return Promise.all([
       import(base + 'firebase-app.js'),
       import(base + 'firebase-auth.js'),
-      import(base + 'firebase-firestore.js')
-    ]).then(function (m) { sdk = { app: m[0], auth: m[1], fs: m[2] }; return sdk; });
+      import(base + 'firebase-firestore.js'),
+      import(base + 'firebase-functions.js')
+    ]).then(function (m) { sdk = { app: m[0], auth: m[1], fs: m[2], fn: m[3] }; return sdk; });
   }
 
   function init() {
@@ -64,6 +66,16 @@ window.SVFirebase = (function () {
       app = s.app.initializeApp(cfg);
       auth = s.auth.getAuth(app);
       db = s.fs.getFirestore(app);
+      fns = s.fn.getFunctions(app, window.FIREBASE_REGION || 'us-central1');
+      // Emulator hosts, when tools/emulator-test.mjs sets them. Never set in
+      // production, so this block is inert on the live site.
+      if (window.SV_EMULATORS) {
+        try {
+          s.fs.connectFirestoreEmulator(db, '127.0.0.1', window.SV_EMULATORS.firestore);
+          s.fn.connectFunctionsEmulator(fns, '127.0.0.1', window.SV_EMULATORS.functions);
+          s.auth.connectAuthEmulator(auth, 'http://127.0.0.1:' + window.SV_EMULATORS.auth, { disableWarnings: true });
+        } catch (e) {}
+      }
       return true;
     });
     return ready;
@@ -97,6 +109,42 @@ window.SVFirebase = (function () {
         .then(function (s) { return s.exists() ? Object.assign({ id: s.id }, s.data()) : null; });
     }).catch(function () { return null; });
     return withTimeout(go, 6000, null);
+  }
+
+  // In SERVER mode the run document itself is admin-only (it holds the seeds the
+  // whole integrity property rests on), so a participant reads this redacted
+  // copy instead: costs, caps, round counts and the operational flags, with no
+  // seeds and no specs anywhere in it.
+  function getRunPublic(id) {
+    if (!configured || !id) return Promise.resolve(null);
+    return init().then(ensureAuth)
+      .then(function () { return sdk.fs.getDoc(sdk.fs.doc(db, C.runPublic, id)); })
+      .then(function (s) { return s.exists() ? Object.assign({ id: s.id }, s.data()) : null; })
+      .catch(function () { return null; });
+  }
+  // In server mode the run document is unreadable to a participant, so the
+  // code → id hop has to work off the public copy instead.
+  function getRunPublicByCode(code) {
+    if (!configured || !code) return Promise.resolve(null);
+    return init().then(ensureAuth).then(function () {
+      return sdk.fs.getDoc(sdk.fs.doc(db, C.runCodes, String(code).toUpperCase()));
+    }).then(function (snap) {
+      var id = snap.exists() ? (snap.data() || {}).id : null;
+      return id ? getRunPublic(id) : null;
+    }).catch(function () { return null; });
+  }
+  function putRunPublic(id, obj) {
+    return init().then(function () { return sdk.fs.setDoc(sdk.fs.doc(db, C.runPublic, id), obj, { merge: true }); });
+  }
+
+  // Callable Cloud Functions (§17.2). Rejects with the server's message, which
+  // the caller turns into something a participant can act on — it NEVER falls
+  // back to computing locally, because that would void the run's integrity.
+  function callable(name, data) {
+    if (!configured) return Promise.reject(new Error('firebase not configured'));
+    return init().then(ensureAuth).then(function () {
+      return sdk.fn.httpsCallable(fns, name)(data);
+    }).then(function (res) { return res.data; });
   }
 
   function getRun(id) {
@@ -381,6 +429,8 @@ window.SVFirebase = (function () {
     isConfigured: isConfigured, init: init, paths: paths, uid: uid,
     signInAnon: signInAnon,
     getRunByCode: getRunByCode, getRun: getRun,
+    getRunPublic: getRunPublic, getRunPublicByCode: getRunPublicByCode,
+    putRunPublic: putRunPublic, callable: callable,
     claimCode: claimCode, assignSequence: assignSequence,
     saveParticipant: saveParticipant, getParticipant: getParticipant,
     writeEvent: writeEvent,

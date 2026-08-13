@@ -23,3 +23,6 @@ lit/data-workingpapers/**/*.tmp-*
 # Python bytecode from the local generator scripts
 __pycache__/
 *.pyc
+lab/search-v2/_functions/functions/node_modules/
+lab/search-v2/*-debug.log
+lab/search-v2/.firebase/

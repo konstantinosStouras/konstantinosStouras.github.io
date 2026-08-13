@@ -526,6 +526,20 @@ head('14 · the run parameters are self-consistent');
   ok(P.ops.gateOther === 'record', 'the other questions record attempts rather than blocking');
 }
 
+// ======================================================================
+head('15 · the Cloud Functions engine copies are identical to the originals');
+// ======================================================================
+{
+  // Firebase deploys only the functions directory, so the engine has to exist
+  // inside it. A drifted copy would have the SERVER computing against a
+  // different pool from the one this exporter joins against — silently.
+  const { spawnSync } = require('child_process');
+  const path = require('path');
+  const r = spawnSync('node', [path.join(__dirname, 'sync-engine.mjs'), '--check'], { encoding: 'utf8' });
+  ok(r.status === 0, 'the vendored engine matches lab/search-v2/{config,pool,specs,ai}.js',
+    (r.stderr || r.stdout || '').trim());
+}
+
 console.log('\n' + (fails
   ? 'SELFTEST FAILED — ' + fails + ' of ' + checks + ' checks'
   : 'SELFTEST OK — all ' + checks + ' checks passed'));
