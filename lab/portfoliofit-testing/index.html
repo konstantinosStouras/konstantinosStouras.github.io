@@ -26,12 +26,19 @@
   <meta name="twitter:description" content="Pick the right projects and pack them to maximise net value before the timer runs out." />
   <meta name="twitter:image" content="https://www.stouras.com/lab/portfoliofit-testing/og-image.jpg" />
 
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23e67e22'/%3E%3Crect%20x='14'%20y='14'%20width='72'%20height='72'%20rx='12'%20fill='%23fff8ee'/%3E%3Crect%20x='26'%20y='26'%20width='48'%20height='48'%20rx='8'%20fill='%232ecc71'/%3E%3Ctext%20x='50'%20y='69'%20font-size='44'%20font-weight='800'%20text-anchor='middle'%20fill='%23ffffff'%20font-family='Arial,Helvetica,sans-serif'%3E%24%3C/text%3E%3C/svg%3E" />
-  <link rel="alternate icon" type="image/png" href="/images/KIS_favicon.png" />
+  <!-- The game's own favicon: a 4x4 frame perfectly packed by four of its
+       polyomino pieces, in the piece colours from pf-defaults.js. Deliberately
+       NOT /images/KIS_favicon.png (the personal-site icon) — a browser without
+       SVG-favicon support must fall back to THIS app's PNG, not to the site's.
+       Same artwork as the live /lab/portfoliofit/, on the LIGHT board: the two
+       share a page title, so the board is what tells their tabs apart. Both sets
+       come from lab/portfoliofit/tools/make-favicon.mjs — never edit just one. -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="favicon-32.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%23e67e22'/%3E%3Crect%20x='14'%20y='14'%20width='72'%20height='72'%20rx='12'%20fill='%23fff8ee'/%3E%3Crect%20x='26'%20y='26'%20width='48'%20height='48'%20rx='8'%20fill='%232ecc71'/%3E%3Ctext%20x='50'%20y='69'%20font-size='44'%20font-weight='800'%20text-anchor='middle'%20fill='%23ffffff'%20font-family='Arial,Helvetica,sans-serif'%3E%24%3C/text%3E%3C/svg%3E" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
