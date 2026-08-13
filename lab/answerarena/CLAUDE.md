@@ -68,7 +68,7 @@ Served (`lab/answerarena/`):
 | `arena-app.js` | Participant phase machine, comparison UI, 2x2 assignment, session join, resume. |
 | `admin.js` | Admin panel (`?admin`): Sessions, Tasks (Excel upload), Content, Registration, Survey, 2x2 & Settings, Participants + Excel export. |
 | `CLAUDE.md` | This file. |
-| `tools/admin-guard.mjs` | Offline test: a deleted participant can never reach an export; session Close vs Delete (see §6). |
+| `tools/admin-guard.mjs` | Offline test: a deleted participant can never reach an export; session Close vs Delete; a finished participant is never shown/restamped "playing" (see §6). |
 | `tools/preview-guard.mjs` | Offline test: the 🧪 Test round sandbox is isolated + pre-filled. |
 
 Backend (`_lab-arena-firebase/`, underscore-prefixed so it is not published):
@@ -307,6 +307,34 @@ in `completedSessions`. `markCompleted()` adds the current sid on the thank-you
 screen. Responses, events and survey docs are all tagged/keyed by `sid`, and the
 survey is stored per session (`survey/{sid}`). Admin session counts include any
 participant currently in or having completed that session.
+
+**A finished participant is never restamped "playing"** (owner report 2026-08:
+the Registered-users list showed students as `playing` who had completed their
+session). `status` is a **live cursor** the app overwrites on every entry
+(`registered` → `playing` → `survey` → `done`), and three paths used to move it
+backwards, each also filing a phantom play:
+- **Re-entry without the code.** A returning identity opening the plain URL
+  resolved to the code-less default play `'_none'`, which was not in
+  `completedSessions`, so `routeParticipant` started a fresh play and wrote
+  `status:'playing'`. It now shows `showAlreadyDone(true)` ("already completed
+  this study") when the participant has completed **any** session — the same
+  play-once rule as the thank-you screen having no "Start over".
+- **A code that does not resolve.** `resolveTargetSession` swallowed an unknown
+  code / a failed lookup and returned null, silently downgrading the visit to
+  `'_none'` — wrong session in the data. It now records `S.codeUnresolved` and
+  `routeParticipant` shows `showCodeProblem(code)` (Try again · Continue
+  without a code) instead of playing anything.
+- **Records already written that way** stay in the database, so the admin
+  DERIVES the truth with `participantStatus(p)` (admin.js): nothing completed →
+  the raw cursor; the session they point at is completed, or they point at
+  `'_none'` while having really completed a session → **done**; pointing at
+  another, unfinished session → the raw cursor (genuinely mid-play). It drives
+  the Registered-users badge (hover = `statusTitle`, which explains any
+  correction) and the export's **`status`** column, with the raw value kept
+  beside it as **`recorded_status`** (both documented in Conventions).
+Covered by `node lab/answerarena/tools/admin-guard.mjs` (the six
+`participantStatus` cases + a returning participant landing on
+already-completed with their record untouched).
 
 **Decision log.** Every pick and every satisfaction-rating change emits an
 **event** (`participants/{uid}/events`: `{ type, value, taskId, idx, sessionId,
