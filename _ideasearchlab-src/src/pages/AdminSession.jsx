@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { doc, collection, onSnapshot, getDocs, orderBy, query, where, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -9,6 +9,7 @@ import { individualTimers, groupTimers, formatDuration } from '../utils/phaseTim
 import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/aiPricing'
 import * as XLSX from 'xlsx-js-style'
 import { exportSessionWorkbook } from '../utils/sessionExport'
+import { participantIsDone, hasCompletedSurvey, healFinishedParticipants } from '../utils/participantStatus'
 import styles from './AdminSession.module.css'
 
 export default function AdminSession() {
@@ -28,6 +29,8 @@ export default function AdminSession() {
   const [messageText, setMessageText] = useState('')
   const [messageSending, setMessageSending] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState(() => new Set()) // group buckets drilled open
+  const [healed, setHealed] = useState(0)          // participants whose finished-status was repaired
+  const healedRef = useRef(false)
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'sessions', sessionId), snap => {
@@ -39,7 +42,20 @@ export default function AdminSession() {
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'sessions', sessionId, 'participants'),
-      snap => setParticipants(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      snap => {
+        const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        setParticipants(rows)
+        // Repair, once per visit, any participant whose completed survey is
+        // contradicted by their status — the group-advance demotion described
+        // in functions/phaseGuard.js. Without it the instructor keeps reading
+        // a finished student as still working, and the Simulation Platform's
+        // verification offers to revoke their ✓.
+        if (healedRef.current) return
+        healedRef.current = true
+        healFinishedParticipants(sessionId, rows)
+          .then(n => { if (n) setHealed(n) })
+          .catch(() => { healedRef.current = false })
+      }
     )
     return unsub
   }, [sessionId])
@@ -733,6 +749,12 @@ export default function AdminSession() {
               <span className={styles.statLabel}>Surveys</span>
             </div>
           </div>
+          {healed > 0 && (
+            <p className={styles.healNote}>
+              Marked {healed} participant{healed === 1 ? '' : 's'} as finished — they had completed the
+              survey but their status still said otherwise.
+            </p>
+          )}
         </div>
 
         {/* Advance control */}
@@ -923,6 +945,10 @@ const PARTICIPANT_STAGE_LABELS = {
 function participantStageLabel(p) {
   const status = typeof p === 'string' ? p : p?.status
   if (typeof p === 'object' && p) {
+    // The survey is the last step, so a stored survey IS the end of the study —
+    // read it before `status`, which a group-wide advance may have rewritten
+    // behind them (see functions/phaseGuard.js).
+    if (hasCompletedSurvey(p)) return 'finished'
     if (status === 'individual') {
       if (!p.individualStartedAt) return 'individual — reading instructions'
       // The individual phase has two stages, each with its own timer: writing

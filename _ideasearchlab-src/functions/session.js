@@ -2,6 +2,9 @@ const functionsV1 = require('firebase-functions/v1')
 const functions = functionsV1.region('europe-west1')
 const { HttpsError } = functionsV1.https
 const admin = require('firebase-admin')
+// Never move a participant BACKWARDS when a group advances together — see
+// functions/phaseGuard.js for the bug this exists to prevent.
+const { statusPhaseIndex, shouldSetStatus } = require('./phaseGuard')
 
 const db = admin.firestore()
 
@@ -295,7 +298,10 @@ async function reconcileGroupAfterRemoval(sessionRef, groupId) {
     if (!active.every(m => m.individualComplete)) return
     const memberIds = active.map(m => m.id)
     const batch = db.batch()
-    active.forEach(m => batch.update(sessionRef.collection('participants').doc(m.id), { status: 'group' }))
+    active.forEach(m => {
+      if (!shouldSetStatus(m, 'group', sequence)) return
+      batch.update(sessionRef.collection('participants').doc(m.id), { status: 'group' })
+    })
     const allSnap = await sessionRef.collection('participants').get()
     const allMoved = allSnap.docs.every(d => {
       if (d.data().removed || memberIds.includes(d.id)) return true
@@ -325,7 +331,10 @@ async function reconcileGroupAfterRemoval(sessionRef, groupId) {
       finalIdeas: topIdeas,
       votingCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
-    active.forEach(m => batch.update(sessionRef.collection('participants').doc(m.id), { status: nextPhase }))
+    active.forEach(m => {
+      if (!shouldSetStatus(m, nextPhase, sequence)) return
+      batch.update(sessionRef.collection('participants').doc(m.id), { status: nextPhase })
+    })
 
     const laterPhases = sequence.slice(groupIndex + 1)
     const allSnap = await sessionRef.collection('participants').get()
@@ -650,6 +659,11 @@ async function finishGroupVoting(sessionId, triggeringUid, after) {
 
   const memberIds = members.map(m => m.id)
   members.forEach(m => {
+    // Only members who are still BEHIND this phase. The last member of a group
+    // can submit their votes minutes after a faster member already finished the
+    // survey, and this write used to demote that finished participant from
+    // 'done' back to 'survey' (see phaseGuard.js — session SGP1, g13/g5).
+    if (!shouldSetStatus(m, nextPhase, sequence)) return
     batch.update(sessionRef.collection('participants').doc(m.id), { status: nextPhase })
   })
 
@@ -672,18 +686,6 @@ async function finishGroupVoting(sessionId, triggeringUid, after) {
   await batch.commit()
 }
 
-
-/**
- * Map a participant status to its index in the phase sequence, collapsing the
- * sub-statuses that aren't themselves sequence entries. Unknown statuses return
- * -1 so they never count as "reached this phase".
- */
-function statusPhaseIndex(status, sequence) {
-  const norm = status === 'waiting_for_group' ? 'individual'
-    : status === 'voting' ? 'group'
-    : status
-  return sequence.indexOf(norm)
-}
 
 /**
  * maybeAdvanceSession

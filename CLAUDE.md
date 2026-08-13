@@ -2616,7 +2616,10 @@ the shared-locker sign-in into that project's own Firebase app
 stamping and revoking — is GENERIC, so a fifth simulation is those two edits
 and nothing more. Currently wired: **answerarena** (`participants.participantId`
 + sessions for id→code), **ideasearchlab** (`sessions/*/participants/*` of the
-sessions this admin created — `platform.studentId`, done = `status:'done'` OR,
+sessions this admin created — `platform.studentId`, done = `status:'done'` OR
+**a stored survey** (`surveyCompletedAt`/`surveyAnswers` — the survey is the
+last step, and `status` could be rewritten behind a finished participant; see
+the phase-guard note in `_ideasearchlab-src/CLAUDE.md`) OR,
 in a CLOSED session, `votesSubmitted`/`individualComplete`, because closing a
 session ends everyone on the same Done screen WITHOUT setting their status and
 counting only the survey would propose revoking that whole class),

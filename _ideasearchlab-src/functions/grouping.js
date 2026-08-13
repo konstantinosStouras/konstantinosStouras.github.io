@@ -2,6 +2,8 @@ const functionsV1 = require('firebase-functions/v1')
 const functions = functionsV1.region('europe-west1')
 const { HttpsError } = functionsV1.https
 const admin = require('firebase-admin')
+// A group-wide advance must never move a participant backwards (phaseGuard.js).
+const { shouldSetStatus, isFinishedParticipant } = require('./phaseGuard')
 
 const db = admin.firestore()
 
@@ -45,7 +47,9 @@ exports.autoGroupParticipants = functions.firestore
     // waiting for the rest of their group.
     if (individualActive && (!groupActive || phaseOrder === 'group_first')) {
       const batch = db.batch()
-      batch.update(change.after.ref, { status: 'survey' })
+      // …unless they already finished the study (a late individualComplete
+      // write must not pull someone back out of 'done' — see phaseGuard.js).
+      if (!isFinishedParticipant(after)) batch.update(change.after.ref, { status: 'survey' })
 
       const allSnap = await sessionRef.collection('participants').get()
       const allMoved = allSnap.docs.every(d =>
@@ -87,7 +91,12 @@ exports.autoGroupParticipants = functions.firestore
     const batch = db.batch()
     const groupMemberIds = members.map(m => m.id)
 
+    // individual_first, so the sequence is individual → group → survey → done:
+    // move only the members still behind the group phase. A member who has
+    // already moved on (or finished) keeps their status.
+    const sequence = ['waiting', 'individual', 'group', 'survey', 'done']
     members.forEach(m => {
+      if (!shouldSetStatus(m, 'group', sequence)) return
       batch.update(sessionRef.collection('participants').doc(m.id), {
         status: 'group',
       })

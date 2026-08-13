@@ -125,7 +125,17 @@ window.SIMP_VERIFY = (function () {
             r.ps.forEach(function (d) {
               records++;
               var x = d.data();
+              /* The survey is the LAST step of the study, so a stored survey is
+                 completion whatever `status` says. It can say otherwise: a
+                 group-wide advance (the last member of a group submitting their
+                 votes, minutes after a faster member already finished) used to
+                 rewrite every member's status, demoting a finished participant
+                 from 'done' back to 'survey' — and this reconciliation then
+                 offered to REVOKE their ✓ (session SGP1, 2026-08-13). Fixed at
+                 the source in the app's functions/phaseGuard.js; read the
+                 survey here so already-written records verify correctly too. */
               var finished = x.status === 'done' ||
+                x.surveyCompletedAt || x.surveyAnswers ||
                 (r.s.closed && (x.votesSubmitted || x.individualComplete));
               if (!finished) return;
               var id = pid(x.platform && x.platform.studentId);
