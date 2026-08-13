@@ -10,6 +10,14 @@ body {
 }
 a { color: #3b5bdb; }
 .wrap { max-width: 1060px; margin: 0 auto; padding: 0 20px; }
+/* The ADMIN panel is a dense control surface, not a reading column: the roster
+   alone runs to a dozen columns (name, ID, e-mail, level, registered, approved,
+   one per active simulation, then Delete). At the student page's 1060px the
+   actions column fell off the right edge into `.roster-wrap`'s horizontal
+   scroll, so the Delete button was unreachable without knowing to scroll. It
+   therefore uses the window width, capped so it stays readable on a very wide
+   monitor. Applied via a modifier so the student page keeps its narrow column. */
+.wrap.wide { max-width: 1680px; padding: 0 28px; }
 
 /* Header */
 .hero { background: linear-gradient(135deg, #1e2749 0%, #2b3a67 100%); color: #fff; padding: 30px 0 26px; }
@@ -144,6 +152,14 @@ table.simtab th, table.simtab td { text-align: left; padding: 9px 10px; border-b
 table.simtab th { font-size: .8rem; text-transform: uppercase; letter-spacing: .4px; color: #6a7492; }
 table.simtab input[type="text"] { width: 100%; min-width: 90px; padding: 6px 8px; border: 1px solid #c9d1e4; border-radius: 7px; font: inherit; }
 table.simtab .ti { font-weight: 600; white-space: nowrap; }
+/* An e-mail address has no spaces, so by default it sets the column's minimum
+   width and pushes everything after it (including the actions column) out past
+   the right edge. `anywhere` breaks such a value only when the cell genuinely
+   cannot fit, so names, levels and dates are unaffected. */
+table.simtab td { overflow-wrap: anywhere; }
+/* The actions column is the exception: its button must stay on one line, and it
+   is the column that must never be the one clipped. */
+table.simtab td:last-child { overflow-wrap: normal; white-space: nowrap; }
 .switch { position: relative; display: inline-block; width: 40px; height: 22px; vertical-align: middle; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .switch .sl { position: absolute; inset: 0; background: #c6cddf; border-radius: 999px; transition: .15s; }
