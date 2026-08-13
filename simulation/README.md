@@ -55,6 +55,27 @@ watching, otherwise on their next visit), shows a banner over the cards, and
 clicking a simulation opens the prompt instead of launching it. The Edit-details
 form marks the offending fields in red.
 
+**Answers already saved in a student's display language are repaired**
+(`answers.js`). The damage did not need a fresh registration: merely opening
+*Edit your details* and pressing Save re-read every select, so one visit with
+translation on converted a perfectly good English profile into Chinese — which
+is why the same students' details reached the Ideation Challenge in clean
+English at 05:34 on 2026-08-13 and were Chinese on the roster afterwards.
+`canon(field, value)` maps such an answer back to the option it came from
+(exact → case/space-folded → ASCII-skeleton, so "18-24岁" is still `18-24` →
+a per-FIELD alias table, so "其他" resolves to *Other* inside Gender and inside
+Industry without ever colliding). Anything it cannot recognise returns empty —
+**never a guess** — and is left exactly as stored, which shows the field as
+unanswered and puts it back in front of the student. The repair runs in two
+places: the student page heals its own profile silently at load (the save
+mirrors it onto the roster + recovery docs), and the admin panel repairs the
+roster at idle for the class that may never open the page again, reporting
+"Repaired N registrations…". A value it could not map is flagged `⚠` in the
+roster's Level column. `answers.js` is also the single source of truth for
+every dropdown (the form builds all eight from it, and carries no hardcoded
+`<option>` list — the smoke test fails the build on either drift). Offline
+test: `node simulation/tools/answers-guard.mjs`.
+
 **Two things caused the empty fields the roster kept showing.** (1) The selects
 offered a **blank first option**, so a student could leave a field unanswered
 and still save; the first entry is now a **disabled placeholder** ("Choose…") —

@@ -119,20 +119,20 @@
       <div class="field"><label for="f-age">Age <span class="req">*</span></label>
         <select id="f-age"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-gender">Gender <span class="req">*</span></label>
-        <select id="f-gender"><option value="" disabled selected hidden>Choose…</option><option value="Male">Male</option><option value="Female">Female</option><option value="Non-binary">Non-binary</option><option value="Prefer not to say">Prefer not to say</option><option value="Other">Other</option></select></div>
+        <select id="f-gender"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-nationality">Nationality (Country) <span class="req">*</span></label>
         <select id="f-nationality"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-country">Country of residence <span class="req">*</span></label>
         <select id="f-country"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-level">Level of study <span class="req">*</span></label>
-        <select id="f-level"><option value="" disabled selected hidden>Choose…</option><option value="Undergraduate">Undergraduate</option><option value="Postgraduate (Masters)">Postgraduate (Masters)</option><option value="Postgraduate (PhD)">Postgraduate (PhD)</option><option value="MBA">MBA</option><option value="Other">Other</option></select></div>
+        <select id="f-level"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-workexp">Work experience (years) <span class="req">*</span></label><input id="f-workexp" type="number" min="0" max="50"></div>
       <div class="field"><label for="f-occupation">Occupation <span class="req">*</span></label>
         <select id="f-occupation"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-industry">Industry <span class="req">*</span></label>
         <select id="f-industry"><option value="" disabled selected hidden>Choose…</option></select></div>
       <div class="field"><label for="f-english">English fluency <span class="req">*</span></label>
-        <select id="f-english"><option value="" disabled selected hidden>Choose…</option><option value="Native speaker">Native speaker</option><option value="Fluent">Fluent</option><option value="Advanced">Advanced</option><option value="Intermediate">Intermediate</option><option value="Basic">Basic</option></select></div>
+        <select id="f-english"><option value="" disabled selected hidden>Choose…</option></select></div>
     </div>
     <p id="reg-err" class="err"></p>
     <div class="actions">
@@ -225,6 +225,7 @@
 
 <script src="./firebase-config.js"></script>
 <script>window.SIMP_BASE = '.';</script>
+<script src="./answers.js"></script>
 <script src="./catalog.js"></script>
 <script src="./platform.js"></script>
 <script>
@@ -239,57 +240,23 @@
     ['country', 'f-country'], ['levelOfStudy', 'f-level'], ['workExperience', 'f-workexp'],
     ['occupation', 'f-occupation'], ['industry', 'f-industry'], ['englishFluency', 'f-english']
   ];
+  /* profile field -> its select on the form (the two the platform asks that
+     are free text — name/email/studentId/workExperience — are not here). */
+  var SELECT_FOR = {
+    age: 'f-age', gender: 'f-gender', nationality: 'f-nationality',
+    country: 'f-country', levelOfStudy: 'f-level', occupation: 'f-occupation',
+    industry: 'f-industry', englishFluency: 'f-english'
+  };
   var CFG = { sims: {}, source: null };
   var current = null;   // sim shown in the launch dialog
 
-  /* ---------- standardized choice lists ---------- */
-  /* The sims' SHARED country list — byte-identical to ideasearchlab's
-     formDefaults.js COUNTRIES / answerarena's ARENA_COUNTRIES, so a saved
-     choice always matches their selects. Keep in sync. */
-  var COUNTRIES = [
-    'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda',
-    'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain',
-    'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia',
-    'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso',
-    'Burundi', 'Cabo Verde', 'Cambodia', 'Cameroon', 'Canada', 'Central African Republic',
-    'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo (DRC)', 'Congo (Republic)',
-    'Costa Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Djibouti',
-    'Dominica', 'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea',
-    'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon',
-    'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea',
-    'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India', 'Indonesia',
-    'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Ivory Coast', 'Jamaica', 'Japan', 'Jordan',
-    'Kazakhstan', 'Kenya', 'Kiribati', 'Kosovo', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia',
-    'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg',
-    'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands',
-    'Mauritania', 'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia',
-    'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal',
-    'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea',
-    'North Macedonia', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine', 'Panama',
-    'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar',
-    'Romania', 'Russia', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia',
-    'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe',
-    'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia',
-    'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Korea', 'South Sudan',
-    'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria', 'Taiwan',
-    'Tajikistan', 'Tanzania', 'Thailand', 'Timor-Leste', 'Togo', 'Tonga',
-    'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine',
-    'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay', 'Uzbekistan',
-    'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe'];
-  /* Age bands and occupation set — byte-identical to the sims' registration
-     forms (formDefaults.js / pf-defaults.js / arena-data.js). Keep in sync. */
-  var AGE_BANDS = ['18-24', '25-34', '35-44', '45-54', '55-64', '65+'];
-  var OCCUPATIONS = ['Student', 'Employed full-time', 'Employed part-time',
-    'Self-employed', 'Unemployed', 'Retired', 'Other'];
-  /* Platform-only field (no sim asks it today); sims map an added "Industry"
-     question onto it by label. */
-  var INDUSTRIES = ['Agriculture & Food', 'Banking & Financial Services',
-    'Construction & Real Estate', 'Consulting', 'Consumer Goods & Retail',
-    'Education & Research', 'Energy & Utilities', 'Engineering & Manufacturing',
-    'Entertainment & Media', 'Government & Public Sector', 'Healthcare & Pharmaceuticals',
-    'Hospitality & Tourism', 'Insurance', 'Legal Services', 'Logistics & Transportation',
-    'Marketing & Advertising', 'Non-profit & NGO', 'Technology & Software',
-    'Telecommunications', 'Other'];
+  /* ---------- standardized choice lists ----------
+     One source of truth for every dropdown: simulation/answers.js, which also
+     knows how to map an answer saved in the student's display language back to
+     its catalogue value. Its sets must stay identical to the sims' own
+     registration forms (formDefaults.js / pf-defaults.js / arena-data.js) —
+     simulation/tools/smoke.mjs fails the build if they drift. */
+  var A = window.SIMP_ANSWERS;
   /* Options ALWAYS carry an explicit value. Setting only textContent makes the
      option's value BE its text — which the browser's page translation rewrites,
      so a translated label became the saved answer (see the form markup). */
@@ -302,11 +269,9 @@
       el.appendChild(o);
     });
   }
-  fillSelect('f-nationality', COUNTRIES);
-  fillSelect('f-country', COUNTRIES);
-  fillSelect('f-age', AGE_BANDS);
-  fillSelect('f-occupation', OCCUPATIONS);
-  fillSelect('f-industry', INDUSTRIES);
+  Object.keys(A.sets).forEach(function (field) {
+    fillSelect(SELECT_FOR[field], A.sets[field]);
+  });
 
   /* ---------- registration ---------- */
   /* Entry: the Log in / Register choice. Only in Firebase mode — LOCAL mode
@@ -718,6 +683,18 @@
   };
 
   /* ---------- boot ---------- */
+  /* Repair a profile whose answers were saved in the student's display
+     language (see answers.js): "大学本科生" becomes "Undergraduate" again,
+     silently, and the save mirrors it onto the roster + recovery docs. Only
+     answers that can be recognised for certain are touched; anything else is
+     left alone and shows up as unanswered, which puts it back in front of the
+     student. Runs before the first render so nothing paints the old value. */
+  (function healStoredAnswers() {
+    var p = P.getProfile();
+    if (!p) return;
+    var r = A.healProfile(p);
+    if (r.fixed.length) P.saveProfile(r.profile);
+  })();
   P.watchConfig(function (c) { CFG = c; if (!$('s-sims').hidden) render(); else if (P.getProfile()) showSims(); });
   /* Signed in on this browser → straight to the cards. Otherwise the Log in /
      Register choice (which falls through to the form in LOCAL mode). */

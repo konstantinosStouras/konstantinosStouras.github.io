@@ -380,7 +380,18 @@
       tr.children[0].textContent = r.name || '';
       tr.children[1].textContent = r.studentId || '';
       tr.children[2].textContent = r.email || '';
+      /* Level is the one demographic column here, so it is also where a
+         still-broken answer has to be visible: a value the repair could not
+         map (an unlisted language, say) is flagged rather than shown as if it
+         were a normal answer. The student is asked to pick it again on their
+         next visit. */
       tr.children[3].textContent = r.levelOfStudy || '';
+      if (r.levelOfStudy && window.SIMP_ANSWERS && !window.SIMP_ANSWERS.isCanonical('levelOfStudy', r.levelOfStudy)) {
+        tr.children[3].textContent = r.levelOfStudy + ' ⚠';
+        tr.children[3].title = 'Not one of the registration options — saved while this student’s browser was ' +
+          'translating the page. They are asked to choose it again next time they open the platform.';
+        tr.children[3].style.color = '#b25e00';
+      }
       tr.children[4].textContent = (r.createdAt || '').slice(0, 10);
       /* Approval gate: only approved students can launch the active sims (the
          in-class guard — a shared link is useless to a classmate the admin
@@ -605,6 +616,33 @@
         (dropped ? ' (' + dropped + ' duplicate registration' + (dropped === 1 ? '' : 's') + ' collapsed)' : '');
   }
   var recoveryBackfilled = false;
+  var answersHealed = false;
+  /* Write back every roster row whose stored answers can be mapped to their
+     catalogue value. Admin-only per the rules (`allow update: if isAdmin()`),
+     one merge write per repaired student, and idempotent — a repaired row no
+     longer matches. Reports what it did beside the roster count. */
+  function healRosterAnswers(rows) {
+    var A = window.SIMP_ANSWERS;
+    if (!A) return;
+    var jobs = [];
+    (rows || []).forEach(function (r) {
+      var h = A.healProfile(r);
+      if (!h.fixed.length) return;
+      var patch = {};
+      h.fixed.forEach(function (f) { patch[f] = h.profile[f]; });
+      jobs.push({ uid: r.uid, patch: patch });
+    });
+    if (!jobs.length) return;
+    P.firebase().then(function (F) {
+      return Promise.allSettled(jobs.map(function (j) { return F.updateStudent(j.uid, j.patch); }));
+    }).then(function (res) {
+      var ok = res.filter(function (x) { return x.status === 'fulfilled'; }).length;
+      if (ok) {
+        $('heal-note').textContent = 'Repaired ' + ok + ' registration' + (ok === 1 ? '' : 's') +
+          ' whose answers had been saved in the student’s display language (e.g. "大学本科生" → "Undergraduate").';
+      }
+    }).catch(function () { answersHealed = false; });
+  }
   function startRoster() {
     P.firebase().then(function (F) {
       F.watchStudents(function (rows) {
@@ -613,6 +651,16 @@
           /* Auto-backfill the e-mail recovery docs once per panel open —
              students who registered before the recovery feature existed
              have none and could not log back in by e-mail until now. */
+          /* Repair answers saved in a student's display language (answers.js):
+             a roster row reading "大学本科生" becomes "Undergraduate" again.
+             The student's own page heals itself on their next visit, but a
+             class that has finished playing may never open it again — and the
+             instructor is looking at the roster NOW. Once per panel open, at
+             idle, and only rows whose value is recognised for certain. */
+          if (!answersHealed && rows.length) {
+            answersHealed = true;
+            whenIdle(function () { healRosterAnswers(rows); });
+          }
           if (!recoveryBackfilled && rows.length) {
             recoveryBackfilled = true;
             /* One write per student — a whole class of them. Held until the

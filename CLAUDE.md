@@ -2569,8 +2569,22 @@ empty is selectable, and **every `<option>` now carries an explicit
 `value`** — without one an option's value IS its text, so a student
 browsing with page translation on saved `大学本科生` as their level, which
 the roster showed and the edit form (English values) then matched to
-nothing and rendered EMPTY; a legacy translated answer is treated as
-unanswered and asked again. Offline test
+nothing and rendered EMPTY — and it did NOT need a re-registration: opening
+Edit-details and pressing Save re-read every select, so ONE visit with
+translation on rewrote a good English profile (proven by the SGP1 export,
+which carries those same students in clean English at 05:34 on 2026-08-13).
+Already-saved translated answers are REPAIRED by **`simulation/answers.js`**
+— the single source of truth for all eight answer sets (the form builds every
+dropdown from it and carries no hardcoded `<option>`; smoke fails the build on
+drift) plus `canon(field,value)`: exact → case/space-folded → ASCII-skeleton
+("18-24岁" → `18-24`) → a per-FIELD alias table (so "其他" resolves inside
+Gender and inside Industry without colliding), and **'' rather than a guess**
+for anything unrecognised, which is left as stored and asked again. It runs on
+the student page at load (`healStoredAnswers`, the save mirrors it to the
+roster + recovery docs) AND in the admin roster at idle (`healRosterAnswers`
+→ `updateStudent`, admin-only per the rules, reporting "Repaired N
+registrations"; an unmappable Level is flagged `⚠`). Offline tests
+`node simulation/tools/answers-guard.mjs` +
 `node simulation/tools/registration-guard.mjs`;
 LIVE in the admin panel — auto-loads and updates via
 onSnapshot, no manual load) with CSV export, a per-row **Delete**

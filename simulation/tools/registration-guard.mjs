@@ -136,7 +136,7 @@ check('a complete registration shows no incomplete banner',
   await page.locator('#reg-note').isHidden())
 check('…and no complete-your-registration pop-up', await page.locator('#regmodal').isHidden())
 
-/* ── 3. a legacy profile with a translated answer reads as INCOMPLETE ─── */
+/* ── 3. a translated answer is REPAIRED, an unmappable one is asked again ─ */
 const page2 = await browser.newPage({ viewport: { width: 1280, height: 900 } })
 page2.on('dialog', d => d.accept())
 await page2.addInitScript(() => {
@@ -144,18 +144,32 @@ await page2.addInitScript(() => {
      level saved as a translated label (and the industry left blank). */
   localStorage.setItem('simp:profile:v1', JSON.stringify({
     name: 'JiaQing Li', email: 'jiaqing@example.com', studentId: '25241164',
-    age: '18-24', gender: 'Female', nationality: 'China', country: 'China',
-    levelOfStudy: '大学本科生', workExperience: '0', occupation: 'Student',
-    industry: '', englishFluency: 'Advanced',
+    age: '18-24岁', gender: '女', nationality: '中国', country: '中国',
+    levelOfStudy: '大学本科生', workExperience: '0', occupation: '学生',
+    industry: 'Sonstiges (unmapped)', englishFluency: '高级',
     updatedAt: new Date(0).toISOString(),
   }))
 })
 await page2.goto(base + 'simulation/', { waitUntil: 'domcontentloaded' })
 await page2.waitForSelector('#s-sims:not([hidden])')
 await page2.waitForSelector('#regmodal:not([hidden])')
+/* Everything a translator rewrote is put back on its own — level, gender,
+   nationality/country, occupation, fluency, and the decorated age band —
+   without asking the student anything. */
+const healed0 = await page2.evaluate(() => JSON.parse(localStorage.getItem('simp:profile:v1')))
+check('the translated level is repaired to its catalogue value',
+  healed0.levelOfStudy === 'Undergraduate', healed0.levelOfStudy)
+check('…gender, country, nationality, occupation and fluency too',
+  healed0.gender === 'Female' && healed0.country === 'China' && healed0.nationality === 'China' &&
+  healed0.occupation === 'Student' && healed0.englishFluency === 'Advanced',
+  JSON.stringify([healed0.gender, healed0.country, healed0.nationality, healed0.occupation, healed0.englishFluency]))
+check('a decorated age band ("18-24岁") keeps its option', healed0.age === '18-24', healed0.age)
+check('an answer nothing can map is left EXACTLY as it was, never guessed',
+  healed0.industry === 'Sonstiges (unmapped)', healed0.industry)
+
 const body = await page2.locator('#rm-body').textContent()
-check('the pop-up is raised for an incomplete registration', true)
-check('it names the missing details', /Level of study/.test(body) && /Industry/.test(body), body)
+check('the pop-up is raised for the answer that could not be repaired', true)
+check('it names only that detail', /Industry/.test(body) && !/Level of study/.test(body), body)
 await page2.click('#rm-close')
 check('the incomplete banner stays on the cards',
   await page2.locator('#reg-note').isVisible())
@@ -176,13 +190,14 @@ if (await cards.count()) {
 /* Completing the details clears the gate. */
 await page2.click('#rm-go')
 await page2.waitForSelector('#s-register:not([hidden])')
-check('the edit form flags the two fields that need an answer',
-  await page2.locator('#f-level.needs-answer').count() === 1 &&
-  await page2.locator('#f-industry.needs-answer').count() === 1)
-check('the unmatchable saved answer is not written into the select',
-  await page2.locator('#f-level').inputValue() === '')
+check('the edit form flags only the field that still needs an answer',
+  await page2.locator('#f-industry.needs-answer').count() === 1 &&
+  await page2.locator('#f-level.needs-answer').count() === 0)
+check('the repaired level is selected in the form',
+  await page2.locator('#f-level').inputValue() === 'Undergraduate')
+check('the unmappable saved answer is not written into the select',
+  await page2.locator('#f-industry').inputValue() === '')
 check('the "some details are missing" note is shown', await page2.locator('#reg-missing').isVisible())
-await page2.selectOption('#f-level', 'Undergraduate')
 await page2.selectOption('#f-industry', 'Technology & Software')
 await page2.click('#btn-save')
 await page2.waitForSelector('#s-sims:not([hidden])')
