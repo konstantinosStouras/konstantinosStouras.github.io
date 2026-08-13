@@ -5,8 +5,12 @@
   },
   "functions": {
     "source": "_functions/functions",
-    "runtime": "nodejs20",
-    "predeploy": ["node tools/check-project.mjs", "node tools/sync-engine.mjs"]
+    "runtime": "nodejs22",
+    "predeploy": [
+      "node tools/check-project.mjs",
+      "npm install --prefix _functions/functions --no-audit --no-fund",
+      "node tools/sync-engine.mjs"
+    ]
   },
   "emulators": {
     "auth": { "port": 9099 },

@@ -3,7 +3,7 @@
   "description": "Score-bearing actions for 'Search With and Without Generative AI' (design brief §17.2): queryAI, reveal and nominate as callable Functions, so the prize mapping never reaches the browser.",
   "version": "1.0.0",
   "private": true,
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "main": "index.js",
   "scripts": {
     "lint": "node --check index.js"

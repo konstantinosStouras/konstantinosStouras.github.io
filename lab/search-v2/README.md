@@ -246,6 +246,14 @@ the deploy** when the project the CLI resolved is not the `default` in
 someone else's rules. Run it on its own to see where this folder points:
 `node tools/check-project.mjs`.
 
+The Functions' `node_modules` is not in the repository, and the CLI needs
+`firebase-functions` resolvable *locally* to work out what to deploy — a fresh
+clone otherwise fails with "Couldn't find firebase-functions package in your
+source code". `npm install --prefix _functions/functions` therefore runs as a
+predeploy step too, so the first deploy on a new machine works with no separate
+step. The runtime is **nodejs22**: Node 20 was deprecated on 2026-04-30 and is
+decommissioned on 2026-10-30, after which it cannot be deployed at all.
+
 **On Windows, this file is `svfirebase.js` and must never be renamed to
 `firebase.js`.** CMD searches the current directory before PATH and `.JS` is in
 the default `PATHEXT`, so a `firebase.js` here makes `firebase` run *that file*
@@ -381,7 +389,6 @@ recorded here because an appendix will need them.
 | Deviation | Why |
 |---|---|
 | Mapping pool of **600**, not 200 | measured: ~2% of pairings pass the §9 filter, so 200 cannot give 16 seeded specs a distinct curve each. See `SEEDS.md` |
-| Score-bearing actions are computed **client-side**, not in Cloud Functions | the Blaze plan is not available for this deployment. See "what this build does and does not guarantee" |
 | Reveal cap **20** | §7, §17b and §20b all say 20; the §20c table says 30. The three-to-one reading wins |
 | Mean anchor gap read as **J/K** | §17b writes the formula `100/(K+1)` but quotes 25.0 for K = 4, and the SD beside it, 14.43, is `σ·√25/2`. The values are right and the formula is a slip |
 | The AI instructions come **before** the first AI round, warm-up included | §13 orders them warm-up → AI instructions for block 1 (steps 3–4) but AI instructions → warm-up for block 2 (steps 7–8). Block 1's order would put an unexplained "Ask the AI" button in front of a participant; block 2's order is followed in both |
