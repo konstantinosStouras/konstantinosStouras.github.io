@@ -110,6 +110,29 @@ await pg.waitForFunction(() => window.__deleted.length > 0, null, { timeout: 800
 const gone = await pg.evaluate(() => window.__deleted);
 ok(gone.length === 1 && gone[0] === 'ACC_OLD', 'deleting one account removes ONLY that account (' + gone.join(',') + ')');
 
+/* ---- Status shown for someone who finished --------------------------------
+   `status` is a live cursor: a student who completed a session and later
+   re-opened the app was restamped 'playing', so the panel listed finished
+   students as still playing. The badge must report what they actually did,
+   while someone genuinely mid-play in another session still reads 'playing'. */
+const st = await pg.evaluate(() => {
+  const f = window.__arenaParticipantStatus;
+  return {
+    stale: f({ status:'playing', sessionId:'_none', completedSessions:{ s1:1 } }),
+    same: f({ status:'playing', sessionId:'s1', completedSessions:{ s1:1 } }),
+    other: f({ status:'playing', sessionId:'s2', completedSessions:{ s1:1 } }),
+    fresh: f({ status:'playing', sessionId:'s1', completedSessions:{} }),
+    reg: f({ status:'registered', sessionId:'', completedSessions:{} }),
+    done: f({ status:'done', sessionId:'s1', completedSessions:{ s1:1 } }),
+  };
+});
+ok(st.stale === 'done', 'a finished student who re-entered the code-less default play reads "done" (got ' + st.stale + ')');
+ok(st.same === 'done', 'a stale "playing" on a session they completed reads "done" (got ' + st.same + ')');
+ok(st.other === 'playing', 'someone genuinely playing ANOTHER session still reads "playing" (got ' + st.other + ')');
+ok(st.fresh === 'playing', 'a real in-progress player is untouched (got ' + st.fresh + ')');
+ok(st.reg === 'registered', 'a registered-but-never-played account is untouched (got ' + st.reg + ')');
+ok(st.done === 'done', 'a plain done record stays done (got ' + st.done + ')');
+
 /* ---- Session cards: Close Session (grey, keeps data) vs Delete (destroys) --
    An ACTIVE card must offer both, in that order, with Close styled neutrally
    — it only stops new joins — and Delete styled danger. Delete must erase the
@@ -186,6 +209,31 @@ ok(JSON.stringify(purge.played) === '["s2"]', 'the session is dropped from playe
 ok(!purge.draft, 'an unsubmitted draft belonging to the deleted session is cleared');
 ok(purge.cur === null, 'the participant no longer points at the deleted session as their current one');
 
+/* ---- The app must not restamp a finished participant as "playing" --------
+   Where the stale status came from: a returning student re-opening the app
+   WITHOUT their session code was dropped into a fresh code-less default play,
+   which wrote status:'playing' over their 'done'. They must land on the
+   already-completed screen instead, with the record untouched. (The test-round
+   sandbox is used purely as an isolated harness for the participant app.) */
+const pg3 = await ctx.newPage();
+await pg3.goto(BASE + '/lab/answerarena/?preview=1&key=stouras');
+await pg3.waitForFunction(() => !!(window.ArenaStore && window.ArenaStore.setParticipant), null, { timeout: 8000 });
+await pg3.evaluate(async () => {
+  await window.ArenaStore.setParticipant('RETURNER', { uid:'RETURNER', status:'done', sessionId:'s_preview',
+    playedSessions:{ s_preview:1 }, completedSessions:{ s_preview: Date.now() }, registration:{}, condition:{} });
+  localStorage.setItem('arena:preview:uid', 'RETURNER');   // returning anonymous identity
+});
+await pg3.reload();
+await pg3.waitForFunction(() => /already completed/i.test(document.body.textContent || ''), null, { timeout: 8000 });
+const after = await pg3.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('arena:preview:db') || '{}');
+  const p = (db.participants || {}).RETURNER || {};
+  return { status: p.status, sessionId: p.sessionId, order: !!p.order };
+});
+ok(after.status === 'done', 'a returning finished participant is NOT restamped "playing" (status ' + after.status + ')');
+ok(after.sessionId === 's_preview', 'their record still points at the session they played (' + after.sessionId + ')');
+ok(!after.order, 'no phantom code-less play was started for them');
+
 await br.close(); srv.close();
-console.log(fails ? `\nARENA ADMIN GUARD FAILED (${fails})` : '\nARENA ADMIN GUARD OK — export excludes deleted accounts; duplicates are individually removable; Close keeps data, Delete purges it first');
+console.log(fails ? `\nARENA ADMIN GUARD FAILED (${fails})` : '\nARENA ADMIN GUARD OK — export excludes deleted accounts; duplicates are individually removable; Close keeps data, Delete purges it first; a finished participant never reads "playing"');
 process.exit(fails ? 1 : 0);

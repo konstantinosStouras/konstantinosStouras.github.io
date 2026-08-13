@@ -711,7 +711,39 @@
   }
 
   /* ---- RIGHT: registered users ---- */
+  /* What a participant ACTUALLY did — which is not always what their last
+     `status` write says. `status` is a live cursor the app overwrites on every
+     entry ('registered' → 'playing' → 'survey' → 'done'), so a student who
+     finished and later re-opened the app WITHOUT their session code used to be
+     dropped into a fresh code-less default play and restamped 'playing'; the
+     panel then listed finished students as still playing. arena-app.js no
+     longer does that, but records already written that way stay in the
+     database, so the truth is derived here from what they completed:
+       - nothing completed  → the raw cursor IS the truth (registered/playing/…)
+       - the session they point at is one they completed → done
+       - they point at the code-less default play ('_none') while having really
+         completed a session → that pointer is the stray re-entry → done
+       - otherwise (pointing at ANOTHER, unfinished session) → the raw cursor,
+         because that participant genuinely has work in progress. */
+  function participantStatus(p) {
+    var raw = (p && p.status) || '';
+    var done = Object.keys((p && p.completedSessions) || {});
+    if (!done.length) return raw;
+    var cur = (p && p.sessionId) || '';
+    if (!cur || cur === '_none' || done.indexOf(cur) >= 0) return 'done';
+    return raw;
+  }
+  // Spell the difference out on hover, so a corrected badge is never a mystery.
+  function statusTitle(p) {
+    var raw = (p && p.status) || '(none)', shown = participantStatus(p);
+    var done = Object.keys((p && p.completedSessions) || {}).length;
+    if (shown === raw) return done + ' session(s) completed';
+    return 'Recorded status: "' + raw + '" — shown as "' + shown + '" because '
+      + done + ' session(s) were completed and the record points at '
+      + (((p && p.sessionId) || '') === '_none' ? 'the code-less default play (a later re-entry)' : 'a session they completed') + '.';
+  }
   /* Exposed (function reference only) for the offline admin-guard test. */
+  window.__arenaParticipantStatus = participantStatus;
   window.__arenaBuildUsersCard = function () { return buildUsersCard(); };
   function buildUsersCard() {
     var card = el('div', { class: 'aa-card' });
@@ -794,7 +826,7 @@
               el('b', { text: p.participantId || '(no participant ID)' }),
               el('div', { class: 'aa-note', style: 'margin-top:2px;', text: p.email || '(no e-mail)' })
             ]),
-            el('span', { class: 'aa-note', text: p.status || '' })
+            el('span', { class: 'aa-note', text: participantStatus(p), title: statusTitle(p) })
           ]),
           el('div', { class: 'aa-note', style: 'margin-top:4px;', text: 'registered ' + fmtTs(p.createdAt) + '  ·  ' + doneN + ' session(s) completed' + (ids.length > 1 ? '  ·  ' + ids.length + ' accounts' : '') + (c.enabled ? '  ·  cell ' + c.transparency + '/' + c.incentive : '') }),
           /* The account IDs are the export's own account_id column, so a row
@@ -809,8 +841,8 @@
                 list.map(function (x) {
                   var xc = Object.keys(x.completedSessions || {}).length;
                   return el('div', { class: 'aa-row', style: 'justify-content:space-between;align-items:center;gap:8px;margin-top:4px;padding:6px 8px;border:1px solid rgba(255,255,255,.10);border-radius:8px;' }, [
-                    el('span', { class: 'aa-note', style: 'min-width:0;overflow-wrap:anywhere;',
-                      text: x._id + '  ·  registered ' + fmtTs(x.createdAt) + '  ·  ' + xc + ' session(s)  ·  ' + (x.status || '') }),
+                    el('span', { class: 'aa-note', style: 'min-width:0;overflow-wrap:anywhere;', title: statusTitle(x),
+                      text: x._id + '  ·  registered ' + fmtTs(x.createdAt) + '  ·  ' + xc + ' session(s)  ·  ' + participantStatus(x) }),
                     el('button', { class: 'aa-btn danger sm', on: { click: function () {
                       if (!window.confirm('Delete ONLY this account?\n\n' + x._id + '\nregistered ' + fmtTs(x.createdAt) + ' · ' + xc + ' session(s) completed' +
                             '\n\nIts answers are removed from the database, so they no longer appear in any data export. The student\'s other account(s) are kept.')) return;
@@ -1409,7 +1441,12 @@
           var completed = Object.keys(p.completedSessions || {});
           var base = {
             participant_id: p.participantId || '', account_id: uid, email: p.email || '',
-            status: p.status || '', current_session_id: p.sessionId || '',
+            // `status` is the DERIVED one (see participantStatus): the raw
+            // cursor calls a finished student "playing" once they re-open the
+            // app, which reads as a drop-out in the analysis. The raw value is
+            // kept beside it so nothing is lost.
+            status: participantStatus(p), recorded_status: p.status || '',
+            current_session_id: p.sessionId || '',
             current_session_code: sessCode(p.sessionId, sessById),
             // How far they got: size of their assigned set (most recent session) and
             // how many comparisons they actually submitted (filled in below). A
@@ -1650,7 +1687,8 @@
     add('Participants', 'participant_id', "The participant's own ID (e.g. a Prolific ID) if they entered one; blank otherwise. NOT a reliable key - use account_id.");
     add('Participants', 'account_id', 'Unique, always-present participant ID (Firebase anonymous UID). The key to join every other sheet on.');
     add('Participants', 'email', "Legacy column - players take part anonymously, so this is blank (kept for older accounts).");
-    add('Participants', 'status', 'Where the participant is in the flow: registered, playing, survey, or done.');
+    add('Participants', 'status', 'Where the participant is in the flow: registered, playing, survey, or done. DERIVED: anyone who completed the session they point at (or who has completed a session and later re-entered the code-less default play) counts as done, whatever the last raw write says.');
+    add('Participants', 'recorded_status', 'The raw status value stored on the participant record. It is a live cursor the app rewrites on every entry, so a finished participant who re-opened the app can read "playing" here; use the derived status column instead, and completed_session_ids for the detail.');
     add('Participants', 'current_session_id', 'Internal ID of the session the participant is currently in.');
     add('Participants', 'current_session_code', 'Join code of the session the participant is currently in.');
     add('Participants', 'comparisons_assigned', 'How many comparisons this participant was assigned in their most recent session (their shuffled set size); blank if they never started.');

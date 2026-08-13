@@ -899,12 +899,30 @@
   // Shown when a participant opens a session they have already finished. A user
   // can take part in many sessions, but each session only once. Final screen -
   // no "Start over" (it minted a fresh anonymous identity, enabling a replay).
-  function showAlreadyDone() {
+  function showAlreadyDone(returning) {
     S.phase = 'done';
     if (window.simpMarkCompleted) window.simpMarkCompleted();   // keep the platform card in step
     setScreen(overlayWrap(card('Already completed', [
-      el('p', { html: 'You have already completed this session, so it cannot be taken again. Thank you for taking part!' })
+      el('p', { html: returning
+        ? 'You have already completed this study, so it cannot be taken again. Thank you for taking part!'
+        : 'You have already completed this session, so it cannot be taken again. Thank you for taking part!' })
     ], 'a-done')));
+  }
+
+  // A session code was given (a ?s=CODE link or a typed code) that does not
+  // resolve - unknown/deleted, or the database could not be reached. Offer a
+  // retry rather than starting an untracked default play behind their back.
+  function showCodeProblem(code) {
+    S.phase = 'welcome';
+    setScreen(overlayWrap(card('Session code problem', [
+      el('p', { html: 'We could not open the session for code <b>' + esc(String(code).toUpperCase()) + '</b>. '
+        + 'It may be mistyped, removed, or the connection dropped.' }),
+      el('p', { class: 'a-meta', text: 'Please try again, or check the code with the organiser.' }),
+      el('div', { class: 'a-row' }, [
+        el('button', { class: 'a-btn', on: { click: function () { location.reload(); } } }, ['Try again']),
+        el('button', { class: 'a-btn a-ghost', on: { click: function () { location.href = location.pathname; } } }, ['Continue without a code'])
+      ])
+    ])));
   }
 
   /* ============================ PLUMBING ========================= */
@@ -925,8 +943,13 @@
     if (!c) return Promise.resolve(null);
     return Store.getSessionByCode(String(c).toUpperCase()).then(function (sess) {
       if (sess) S.session = sess;   // status is checked in routeParticipant
+      // A code WAS given but nothing came back (unknown code, or the session
+      // was deleted). Remember it: falling through to the code-less default
+      // play would silently record the visit under "_none" instead of the
+      // session the link named.
+      else S.codeUnresolved = c;
       return S.session || null;
-    }).catch(function () { return null; });
+    }).catch(function () { S.codeUnresolved = c; return null; });
   }
 
   // Route a signed-in participant for the resolved target session: block one
@@ -935,10 +958,22 @@
   function routeParticipant() {
     if (!S.p) S.p = { uid: S.user.uid, email: (S.user && S.user.email) || null, status: 'registered', completedSessions: {} };
     if (S.session && (S.session.status === 'closed' || S.session.status === 'waiting')) { showSessionUnavailable(S.session.status); return; }
+    // A session code was given but could not be resolved. Never quietly fall
+    // back to the code-less default play: it would file this visit under
+    // "_none" (wrong session in the data) and restamp the participant.
+    if (S.codeUnresolved) { showCodeProblem(S.codeUnresolved); return; }
     var sid = curSid();
     // Each session - including the default no-code play (keyed '_none') - can be
     // taken only once per anonymous identity.
     if (S.p.completedSessions && S.p.completedSessions[sid]) { showAlreadyDone(); return; }
+    /* A participant who has ALREADY finished a session and comes back WITHOUT
+       a code (a bookmark, the browser's back button, the site's plain URL) is
+       a returning visitor, not someone starting the default configuration:
+       dropping them into a fresh "_none" play recorded a phantom play AND
+       rewrote their status from "done" back to "playing", which is why the
+       admin listed finished students as still playing. Each user plays once
+       (the same rule as the thank-you screen having no "Start over"). */
+    if (sid === '_none' && Object.keys(S.p.completedSessions || {}).length) { showAlreadyDone(true); return; }
     var sameSession = S.p.sessionId === sid;
     if (sameSession && S.p.status === 'survey') { S.condition = S.p.condition || null; showSurvey(); return; }
     S.condition = (sameSession && S.p.condition) ? S.p.condition : assignCondition();
