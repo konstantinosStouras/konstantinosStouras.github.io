@@ -121,11 +121,21 @@ those specs use, on the app's `--ink` board. The `alternate icon` used to point
 at `/images/KIS_favicon.png`, the personal-site icon, which is what a
 non-SVG browser actually displayed — **do not reintroduce a `/images/` fallback**;
 a fallback must stay inside this app's directory. The icons are generated, not
-hand-written — re-render all three with
+hand-written — re-render them with
 `node lab/portfoliofit/tools/make-favicon.mjs` (emits the SVG from the piece
 cells, asserting they still tile the frame, then rasterises the two PNGs through
 Playwright's Chromium; `--svg-only` skips that), and keep its `PIECES` colours in
 step with `pf-defaults.js` if that palette ever moves.
+
+**`lab/portfoliofit-testing/` carries its own set, and that one generator emits
+both.** The testing twin is a separate served directory that keeps its own copies
+of shared assets (its `og-image.jpg` is byte-identical to this app's), and copies
+drift — so `make-favicon.mjs` writes BOTH apps' icons from the same `PIECES`,
+and its `TARGETS` is the only place to add a third. The two differ in exactly one
+thing: the board behind the pieces — this app's dark `--ink`, the twin's light
+`--bg`. That is deliberate, not decoration: the two share a `<title>`, so without
+it their tabs are indistinguishable, and board lightness is the one difference
+that still reads at 16px. Never hand-edit one app's icon files.
 
 Backend (`_portfoliofit-lab-firebase/`, underscore-prefixed so Jekyll does **not**
 publish it; versioned in the repo, deployed manually to the lab project):

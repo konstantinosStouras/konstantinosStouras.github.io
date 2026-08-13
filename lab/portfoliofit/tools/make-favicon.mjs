@@ -2,15 +2,23 @@
    PortfolioFit — favicon generator (offline; no network)
        node lab/portfoliofit/tools/make-favicon.mjs
 
-   Writes the three icon files index.html declares:
-       lab/portfoliofit/favicon.svg           the modern icon
-       lab/portfoliofit/favicon-32.png        the `alternate icon` fallback
-       lab/portfoliofit/apple-touch-icon.png  180x180, home screen
+   Writes the three icon files each app's index.html declares, for BOTH copies
+   of the game — the live one and its testing twin:
+       lab/portfoliofit/…          favicon.svg, favicon-32.png, apple-touch-icon.png
+       lab/portfoliofit-testing/…  the same three
+
+   ONE generator for both on purpose: lab/portfoliofit-testing/ keeps its own
+   copies of shared assets (og-image.jpg is byte-identical there), and copies
+   drift. Emitting both from this file means they cannot.
 
    The artwork IS the game: a 4x4 frame perfectly packed by four of its own
    polyominoes — the shipped "easy" solution in pf-defaults.js (I3/S/L5/T) —
-   in the piece colours those specs use, on the app's --ink board. Keep PIECES
-   in step with pf-defaults.js if that palette ever moves.
+   in the piece colours those specs use. Keep PIECES in step with
+   pf-defaults.js if that palette ever moves. The two apps differ ONLY in the
+   board behind the pieces: the live game gets the app's dark --ink board, the
+   testing twin the light --bg one. That is the whole point of the variant —
+   the two share a `<title>`, so without it their tabs are indistinguishable,
+   and board lightness is the one difference that still reads at 16px.
 
    Rasterising needs Playwright's Chromium (paths overridable via PW/CHROMIUM,
    same convention as preview-guard.mjs). Pass --svg-only to skip it.
@@ -19,7 +27,13 @@ import { writeFile } from 'node:fs/promises';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const LAB = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/* --- the two apps ------------------------------------------------------- */
+const TARGETS = [
+  { dir: 'portfoliofit',         board: '#2b2b2b', edge: '#f6f3ee' },  // --ink
+  { dir: 'portfoliofit-testing', board: '#f6f3ee', edge: '#2b2b2b' },  // --bg
+];
 
 /* --- the packing ------------------------------------------------------- */
 /* (row, col) cells; together they tile the 4x4 frame with no cell left over. */
@@ -62,16 +76,19 @@ function pieceShape(p) {
   return `  <g fill="${p.color}">\n    ${parts.join('\n    ')}\n  </g>`;
 }
 
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="PortfolioFit — a frame packed with project pieces">
+const svgFor = (t) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="PortfolioFit — a frame packed with project pieces">
   <title>PortfolioFit</title>
-  <rect width="100" height="100" rx="21" fill="#2b2b2b"/>
-  <rect x="${n(M - 3)}" y="${n(M - 3)}" width="${n(100 - 2 * (M - 3))}" height="${n(100 - 2 * (M - 3))}" rx="10" fill="none" stroke="#f6f3ee" stroke-opacity=".22" stroke-width="1.6"/>
+  <rect width="100" height="100" rx="21" fill="${t.board}"/>
+  <rect x="${n(M - 3)}" y="${n(M - 3)}" width="${n(100 - 2 * (M - 3))}" height="${n(100 - 2 * (M - 3))}" rx="10" fill="none" stroke="${t.edge}" stroke-opacity=".22" stroke-width="1.6"/>
 ${PIECES.map(pieceShape).join('\n')}
 </svg>
 `;
 
-await writeFile(join(APP, 'favicon.svg'), svg);
-console.log('wrote favicon.svg');
+for (const t of TARGETS) {
+  t.svg = svgFor(t);
+  await writeFile(join(LAB, t.dir, 'favicon.svg'), t.svg);
+  console.log(`wrote ${t.dir}/favicon.svg`);
+}
 
 if (process.argv.includes('--svg-only')) process.exit(0);
 
@@ -80,11 +97,13 @@ const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs'
 const { chromium } = await import(PW);
 const br = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' });
 const pg = await br.newPage();
-for (const [file, size] of [['favicon-32.png', 32], ['apple-touch-icon.png', 180]]) {
-  await pg.setViewportSize({ width: size, height: size });
-  await pg.setContent(`<html><body style="margin:0;background:transparent">
-    <div style="width:${size}px;height:${size}px">${svg}</div></body></html>`);
-  await writeFile(join(APP, file), await (await pg.$('div')).screenshot({ omitBackground: true }));
-  console.log(`wrote ${file} (${size}px)`);
+for (const t of TARGETS) {
+  for (const [file, size] of [['favicon-32.png', 32], ['apple-touch-icon.png', 180]]) {
+    await pg.setViewportSize({ width: size, height: size });
+    await pg.setContent(`<html><body style="margin:0;background:transparent">
+      <div style="width:${size}px;height:${size}px">${t.svg}</div></body></html>`);
+    await writeFile(join(LAB, t.dir, file), await (await pg.$('div')).screenshot({ omitBackground: true }));
+    console.log(`wrote ${t.dir}/${file} (${size}px)`);
+  }
 }
 await br.close();
