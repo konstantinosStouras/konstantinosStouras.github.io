@@ -15,6 +15,7 @@ import RichTextEditor from '../components/RichTextEditor'
 import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
 import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
 import { exportSessionWorkbook, conditionOf } from '../utils/sessionExport'
+import { participantIsDone, healFinishedParticipants } from '../utils/participantStatus'
 import { joinLinkFor, normalizeJoinCode } from '../utils/joinLink'
 import { getPhaseSequence } from '../utils/phaseSequence'
 import {
@@ -151,6 +152,7 @@ export default function Admin() {
   const [customDefaults, setCustomDefaults] = useState(null)
   const [defaultFeedback, setDefaultFeedback] = useState(null) // { key, text }
   const defaultsSeededRef = useRef(false)
+  const healedSessionsRef = useRef(new Set())   // sessions whose finished-status was already repaired
 
   // Admin-saved page-content defaults (settings/contentDefaults). The first
   // snapshot seeds the create form; later updates only feed the reset/
@@ -198,10 +200,15 @@ export default function Admin() {
     if (sessions.length === 0) return
     const unsubs = sessions.map(s =>
       onSnapshot(collection(db, 'sessions', s.id, 'participants'), snap => {
-        setParticipantsBySession(prev => ({
-          ...prev,
-          [s.id]: snap.docs.map(d => ({ id: d.id, ...d.data() })),
-        }))
+        const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        setParticipantsBySession(prev => ({ ...prev, [s.id]: rows }))
+        // Repair a participant whose completed survey is contradicted by their
+        // status — a group-wide advance used to rewrite the whole group when its
+        // LAST member submitted votes, demoting anyone already finished (see
+        // functions/phaseGuard.js). Once per session per visit; idempotent.
+        if (healedSessionsRef.current.has(s.id)) return
+        healedSessionsRef.current.add(s.id)
+        healFinishedParticipants(s.id, rows).catch(() => healedSessionsRef.current.delete(s.id))
       })
     )
     return () => unsubs.forEach(u => u())
@@ -638,7 +645,9 @@ export default function Admin() {
         map[p.id].push({
           sessionId: sid,
           code: sess?.code || sid,
-          status: p.status,
+          // A completed survey IS the end of the study, so it wins over a
+          // status a group-wide advance may have rewritten (phaseGuard.js).
+          status: participantIsDone(p) ? 'done' : p.status,
           joinedAt: p.joinedAt,
           anonymousLabel: p.anonymousLabel,
           surveyCompletedAt: p.surveyCompletedAt,

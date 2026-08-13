@@ -431,6 +431,14 @@
   font-style: italic;
 }
 
+/* Shown when opening the control room repaired a finished participant whose
+   status had been rewritten by a group-wide advance (functions/phaseGuard.js). */
+.healNote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #2e7d32;
+}
+
 .doneBar {
   text-align: center;
   padding: 18px;

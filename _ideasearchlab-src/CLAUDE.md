@@ -633,6 +633,35 @@ session+author with `|`; session codes `[A-Z0-9]` and Firebase UIDs never contai
 - On submit, writes status: 'done', surveyAnswers, surveyCompletedAt to participant doc directly (no Cloud Function)
 - onParticipantUpdated in session.js re-syncs session status via maybeAdvanceSession (capped at 'survey'; sessions close only by instructor action)
 
+**A finished participant is NEVER dragged back (`functions/phaseGuard.js`).** A
+group advances TOGETHER — `finishGroupVoting`, `autoGroupParticipants` and
+`reconcileGroupAfterRemoval` each wrote `{ status: nextPhase }` onto EVERY
+member — but members reach the survey individually (the GroupPhase self-heal,
+or Force advance) and the survey is short, so a fast participant can be `done`
+minutes before the slowest member of their group submits their votes. When that
+last vote landed, the trigger rewrote the whole group to 'survey' and DEMOTED
+the finished one. Observed in session SGP1 (2026-08-13): zhangqiong finished
+their survey at 06:01:34, g13's last member voted at 06:04:29, and the doc was
+left carrying a complete `surveyAnswers`+`surveyCompletedAt` beside
+`status: 'survey'` — the admin read them as still working and the Simulation
+Platform's "Verify from Ideation Challenge" offered to REVOKE their ✓ (same for
+Zhang Pan in g5, 25 s apart). Every group-wide write now goes through
+`shouldSetStatus(participant, nextPhase, sequence)`, which applies two rules:
+a participant who has **completed the survey is terminal** (the survey is the
+last step, so a stored survey IS completion whatever `status` says), and
+otherwise nobody moves **backwards** in that session's own phase sequence
+(individual_first and group_first order the phases differently, hence the
+sequence argument rather than a global rank table). **Needs
+`firebase deploy --only functions`.** The readers ship with the Pages bundle and
+carry the same truth: `src/utils/participantStatus.js`
+(`hasCompletedSurvey`/`participantIsDone`), `participantStageLabel` reads it
+before `status`, the Registered-Users panel shows such a session as `done`, and
+`healFinishedParticipants` REPAIRS the already-written records — Admin.jsx runs
+it once per session per visit, AdminSession.jsx once per control-room open
+(reporting "Marked N participant(s) as finished"). The platform's own
+`simulation/admin/verify.js` counts a stored survey as done for the same reason.
+Offline test: `node _ideasearchlab-src/tools/phase-guard.mjs`.
+
 **SPA routing:** 404.html at root of konstantinosStouras.github.io catches unknown paths and redirects to /lab/ideasearchlab/?redirect=... The inject step in deploy.yml injects a script into index.html that reads the redirect param and restores the URL.
 **Split-screen UI:** main app on left, AI chat on right, draggable divider. When AI is off the left panel fills full width. **The AI panel follows the chosen theme** (owner report 2026-08: in dark mode the assistant stayed cream-coloured). It used to be painted `background: var(--ink); color: var(--paper)` — i.e. always the INVERSE of the page, which reads as a dark sidebar in light mode but flips to a *light* panel in dark mode, since `--ink`/`--paper` swap. `AIChat.module.css` now paints from its own `--ai-*` tokens (defined in `src/styles/globals.css` under BOTH `:root` and `[data-theme="dark"]`, beside the palette): `--ai-panel-bg`, `--ai-line`, `--ai-bar-bg`, `--ai-bubble-bg`/`-border`, `--ai-field-bg`/`-border`, `--ai-dim`/`--ai-faint`, `--ai-grip`, `--ai-scroll-thumb`, `--ai-code-bg`, `--ai-pre-bg`, `--ai-quote-line`/`-fg`, `--ai-badge-bg`/`-fg`, `--ai-sent-fg`. Every hardcoded `rgba(255,255,255,…)`/`rgba(245,242,235,…)` overlay in that stylesheet (which silently assumed a dark backdrop) was replaced by one of them, and its text colours are now `var(--ink)`. **Add new AI-panel colours as `--ai-*` token pairs, never as a bare white/black overlay** — an overlay tuned for one theme is invisible in the other. The whole-panel `background`/`color` also carry `var(--theme-transition)` so toggling fades like the rest of the app. Note when screenshotting a theme switch: that 0.2 s transition means a capture taken immediately after flipping `data-theme` shows the old colours mid-fade. The AI chat input (AIChat.jsx) **auto-grows** with its content — height is set in JS from the textarea's `scrollHeight` on every change (min-height 52px, auto-grow capped ~240px then scrolls), so a long message stays fully visible instead of scrolling inside a 2-row box. It also has a **draggable top handle** (`.resizeHandle`): dragging it up/down sets an explicit `userHeight` that overrides the auto-grow (kept sticky until dragged again, clamped 52px–min(460, 60vh)). The textarea is wrapped in a flex-column `.inputWrap` (handle on top, textarea below); the CSS `max-height` was removed so height is fully JS-controlled. The input is **never disabled while the AI is thinking**, so participants can keep typing their next question during a reply; submitting is still gated on `sending` (send button + `handleKeyDown`) so requests don't overlap. **Scroll stick-to-bottom:** the message list only auto-scrolls to the newest message when the user is already at/near the bottom (`stickRef`, set from an `onScroll` distance check; instant `scrollTop = scrollHeight`, not smooth `scrollIntoView`). So scrolling up to re-read a long reply no longer gets yanked back down when a snapshot re-fires; sending a message forces stick back on so the user sees their message + the reply.
 
