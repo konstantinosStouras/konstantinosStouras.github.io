@@ -308,6 +308,35 @@
     });
   }
 
+  // The client-readable copy of a run (§17.4). Everything the participant's app
+  // needs to render the study, and NOTHING it could reconstruct the mapping
+  // from: no generatorSeed, no specSeed, no specs, no anchors, no filter.
+  function publicDoc(run, p, id) {
+    return {
+      id: id || null,
+      name: run.name, code: run.code, status: run.status,
+      serverMode: (p.ops.compute === 'server'),
+      ops: clone(p.ops),
+      params: {
+        env: {
+          positions: p.env.positions, prizeMin: p.env.prizeMin, prizeMax: p.env.prizeMax,
+          stepBound: p.env.stepBound
+        },
+        costs: clone(p.costs),
+        ai: {
+          sparseK: p.ai.sparseK, denseK: p.ai.denseK,
+          answerRounding: p.ai.answerRounding, allowRequery: p.ai.allowRequery
+        },
+        rounds: {
+          warmupPerBlock: p.rounds.warmupPerBlock, scoredPerBlock: p.rounds.scoredPerBlock,
+          openPerBlock: p.rounds.openPerBlock, seededPerBlock: p.rounds.seededPerBlock
+        },
+        ops: clone(p.ops)
+      },
+      updatedAt: Date.now()
+    };
+  }
+
   function newRunDoc(p, name, code) {
     var params = clone(p);
     params.ops.runName = name;
@@ -317,6 +346,7 @@
     return {
       name: name, code: String(code || '').toUpperCase(),
       status: 'draft', locked: false, createdAt: Date.now(),
+      serverMode: (params.ops.compute === 'server'),
       params: params, ops: params.ops, assign: params.assign,
       specSeed: specSeed, specsJson: JSON.stringify(specs),
       poolChecksum: X.checksum(JSON.stringify(pool)),
@@ -332,7 +362,13 @@
       list.unshift(obj); saveLocalRuns(list);
       return Promise.resolve(obj.id);
     }
-    return FB.createRun(obj).then(function (id) { FB.audit(id, 'create_run', obj.name); return id; });
+    return FB.createRun(obj).then(function (id) {
+      FB.audit(id, 'create_run', obj.name);
+      // The redacted copy travels with every run, so a run switched to server
+      // mode later is never left without one.
+      return FB.putRunPublic(id, publicDoc(obj, Specs.withDefaults(obj.params), id))
+        .then(function () { return id; }, function () { return id; });
+    });
   }
   function persist(id, patch) {
     if (LOCAL) {
@@ -384,11 +420,15 @@
     ['ops', 'runName', 'txt'], ['ops', 'entryOpen', 'seg'], ['ops', 'windowFrom', 'txt'], ['ops', 'windowTo', 'txt'],
     ['ops', 'minViewport', 'num'], ['ops', 'resumeWindowH', 'num'], ['ops', 'allowResume', 'seg'],
     ['ops', 'idleWarnMin', 'num'], ['ops', 'exitSurvey', 'seg'], ['ops', 'debrief', 'seg'],
-    ['ops', 'gateQ2', 'seg'], ['ops', 'gateOther', 'seg'], ['ops', 'rosterMode', 'seg'], ['ops', 'completionCode', 'txt']
+    ['ops', 'gateQ2', 'seg'], ['ops', 'gateOther', 'seg'], ['ops', 'rosterMode', 'seg'],
+    ['ops', 'compute', 'seg'], ['ops', 'completionCode', 'txt']
   ];
   // Only the `ops` group and the entrant override stay editable once a run has an
   // entrant (§17b). Everything else is a parameter that touches the task.
   function isUnlockedField(group, key) {
+    // `compute` lives in Operations for convenience but is NOT operational: it
+    // decides where the score comes from, so it locks with the task parameters.
+    if (group === 'ops' && key === 'compute') return false;
     return group === 'ops' || (group === 'assign' && key === 'nextEntrantOverride');
   }
   var MIXES = [
@@ -562,8 +602,14 @@
         seeds: { generatorSeed: currentParams.env.generatorSeed, specSeed: specSeed }
       };
     }
+    patch.serverMode = (currentParams.ops.compute === 'server');
     persist(editingId, patch).then(function () {
-      if (!LOCAL) FB.audit(editingId, 'save_run', name);
+      if (!LOCAL) {
+        FB.audit(editingId, 'save_run', name);
+        FB.putRunPublic(editingId, publicDoc(
+          { name: name, code: code, status: (run && run.status) || 'draft' },
+          currentParams, editingId)).catch(function () {});
+      }
       note('save-note', 'Saved.');
       loadRuns();
     }).catch(function (e) { note('save-note', 'Could not save: ' + esc(String(e && e.message || e)), true); });

@@ -72,6 +72,9 @@ lab/search-v2/
   firebase.js         Firestore + Auth for the layout of §17.3
   firebase-config.js  the project config (public by design — see below)
   firestore.rules     the Security Rules that do the enforcing (§17.4)
+  backend.js          local vs server: where the score-bearing actions run
+  _functions/functions/index.js   the callables of §17.2 (deploy with firebase)
+  firebase.json, .firebaserc      deploy + emulator config
   SEEDS.md            every random seed, and why the pool size differs from the brief
   admin/index.html    the admin panel — six screens (§17b)
   admin/admin.js
@@ -115,12 +118,15 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 201 checks, no browser
+node lab/search-v2/tools/selftest.js         # 202 checks, no browser
 node lab/search-v2/tools/smoke.mjs           # 137 checks, a whole session
 node lab/search-v2/tools/admin-smoke.mjs     #  55 checks, the admin panel
 node lab/search-v2/tools/platform-guard.mjs  #  26 checks, the platform contract
 node lab/search-v2/tools/layout-guard.mjs    #  89 checks, five window sizes
 node lab/search-v2/tools/preview-guard.mjs   #  the sandbox writes nothing
+node lab/search-v2/tools/emulator-test.mjs   #  37 checks against the REAL Functions
+                                             #  and Rules (needs Java + firebase-tools;
+                                             #  skips cleanly without them)
 python3 lab/search-v2/tools/generate_rounds.py --validate
 ```
 
@@ -182,22 +188,52 @@ change once the run is locked, so editing a live run is impossible rather than
 merely discouraged. The roster is never listable, so codes cannot be enumerated.
 A participant reads and writes only their own record.
 
-**What does not.** §17.2 asks for `queryAI`, `reveal` and `nominate` to be Cloud
-Functions, so the mapping never reaches the browser. Cloud Functions need the
-Blaze plan, and this is a GitHub Pages site on the free tier, so **the client
-computes the AI's answer and reads the true prize locally**, from a pool it
-regenerates from the run's seed. A determined participant with developer tools
-could therefore read a round's prizes.
+**Score-bearing actions (§17.2).** `claimCode`, `startRound`, `act` (query or
+reveal), `nominate` and `debriefRound` are **callable Cloud Functions** in
+`_functions/functions/`. The client sends a position; the server holds the
+mapping, computes the answer or the truth, charges the cost, appends the
+authoritative event and returns **one number**. The three properties the brief
+demands are enforced and tested against the real emulator:
 
-That is stated plainly rather than papered over. What mitigates it: the truth
-lives in a closure and is never on `window` or in the DOM; only the current
-round's mapping is ever materialised; blur, visibility changes and window focus
-are logged, so a participant who leaves the tab mid-round is visible in the data;
-and the study is run in a supervised class setting through the Simulation
-Platform. What would close it: deploy the three callable Functions and switch
-`firebase.js` to call them — the client already never computes a score, and the
-event log already carries a client `event_id` for idempotent retries, so the
-change is confined to one module.
+- **Identical response** whether or not the queried position was one of the AI's
+  private anchors — the same keys, the same payload shape, and every handler
+  padded to a fixed duration so the clock cannot leak it either. Measured: a
+  median 267 ms at an anchor and 267 ms in a gap.
+- **Idempotent on `actionId`** — a retried reveal after a dropped connection
+  returns the recorded answer and charges nothing further, while a *different*
+  action id on an already-open position is refused outright.
+- **`nominate` computes the score.** A client total is never trusted.
+
+In server mode the run document is **admin-only** (it holds `generatorSeed`) and
+the participant boots from `runPublic/{runId}`, a redacted copy with no seeds and
+no specs in it. The server's per-round state is unreadable to everyone but the
+admin. The mapping never reaches the browser at all.
+
+**Which mode a run uses is a locked run parameter** — *Score-bearing actions* in
+the admin's Operations group, set before the first participant. The two are never
+mixed inside a run, and a server-mode failure is **never** silently downgraded to
+computing locally: the participant sees "we could not reach the study server" and
+can reload. Falling back would quietly void the property the run was configured
+for and put two kinds of row in one dataset.
+
+**Client mode** remains for a project without Functions deployed, for the admin's
+test round, and for running with no Firebase at all. There the client computes
+from a pool it regenerates from the run's seed, so a determined participant with
+developer tools could read a round's prizes — which is why server mode is the
+default recommendation now that the plan supports it.
+
+### Deploying the Functions
+
+```bash
+cd lab/search-v2
+node tools/sync-engine.mjs          # refresh the engine copies (also a predeploy step)
+firebase deploy --only functions
+firebase deploy --only firestore:rules
+```
+
+Then set *Score-bearing actions* to **On the server** for the run, before its
+first participant. `tools/emulator-test.mjs` runs the whole thing against the
+Firestore + Functions + Auth emulator first.
 
 The Firebase config that ships with the client (API key, project id) is not a
 secret and is not meant to be one. Security comes from the Rules and from Auth.

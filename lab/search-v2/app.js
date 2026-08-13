@@ -23,14 +23,16 @@
   var CFG = window.CONFIG, L = window.Logger, Pool = window.SVPool,
       Specs = window.SVSpecs, Ai = window.SVAi, Content = window.SVContent;
 
-  // ---- closure-only secrets. NEVER exposed. --------------------------------
-  var POOL = null;          // the frozen mapping pool, generated from the run seed
-  var truth = null;         // the current round's mapping
-  var privAnchors = [];     // the current round's K private AI anchors
+  // Where the score-bearing actions are computed (backend.js). In SERVER mode
+  // this app never sees a mapping at all; in LOCAL mode the backend holds it in
+  // its own closure, so the truth is not a variable in this file either.
+  var B = null;
 
   // ---- runtime -------------------------------------------------------------
   var S = null;             // persisted participant state
-  var RUN = null;           // the run document (parameters + specs)
+  var RUN = null;           // the run document (parameters + specs); null in server mode
+  var PUB = null;           // the redacted, client-readable copy of the run
+  var SERVER_MODE = false;  // score-bearing actions computed by Cloud Functions
   var P = null;             // resolved parameters (defaults merged)
   var PLAN = null;          // the participant's 28-round plan
   var SPECS = null;
@@ -89,7 +91,7 @@
   }
   function currentK() {
     var r = currentRound();
-    return (r && r.spec) ? r.spec.ai_k : P.ai.sparseK;
+    return (r && r.ai_k) ? r.ai_k : P.ai.sparseK;
   }
 
   // ---- persistence ---------------------------------------------------------
@@ -139,12 +141,20 @@
     var runCode = (pr.code || '').trim().toUpperCase() || null;
 
     if (window.SVFirebase && SVFirebase.isConfigured() && !PREVIEW && runCode) {
-      SVFirebase.getRunByCode(runCode).then(function (run) {
-        applyRun(run, runCode);
-        afterRun(pr, runCode);
-      }, function () { applyRun(null, runCode); afterRun(pr, runCode); });
+      // Read both: the run document (readable only while the run is NOT in
+      // server mode) and its redacted public copy (always readable). Whichever
+      // arrives decides the mode, and a run that is unreachable falls back to the
+      // built-in defaults rather than stranding the participant.
+      SVFirebase.getRunByCode(runCode).then(function (found) {
+        var id = found ? found.id : null;
+        var pubP = id ? SVFirebase.getRunPublic(id) : SVFirebase.getRunPublicByCode(runCode);
+        return pubP.then(function (pub) {
+          applyRun(found, runCode, pub);
+          afterRun(pr, runCode);
+        });
+      }).catch(function () { applyRun(null, runCode, null); afterRun(pr, runCode); });
     } else {
-      applyRun(null, runCode);
+      applyRun(null, runCode, null);
       afterRun(pr, runCode);
     }
   }
@@ -152,18 +162,29 @@
   // A missing or unreachable run NEVER strands a participant: the built-in
   // defaults are the recommended parameter set, so the study runs either way and
   // the rows carry run_id = null, which the export reports honestly.
-  function applyRun(run, runCode) {
+  function applyRun(run, runCode, pub) {
     RUN = run || null;
-    P = Specs.withDefaults(run ? run.params : null);
-    if (run && run.ops) { Object.keys(run.ops).forEach(function (k) { P.ops[k] = run.ops[k]; }); }
+    PUB = pub || null;
+    // In server mode the run document is admin-only — it holds the seeds — so the
+    // parameters come from the redacted public copy instead.
+    var src = run ? run.params : (pub ? pub.params : null);
+    P = Specs.withDefaults(src);
+    var ops = (run && run.ops) || (pub && pub.ops);
+    if (ops) Object.keys(ops).forEach(function (k) { P.ops[k] = ops[k]; });
     if (runCode) P.ops.runCode = runCode;
 
-    POOL = Pool.buildPool(P.env, P.env.generatorSeed);
+    SERVER_MODE = !!((pub && pub.serverMode) || (run && run.serverMode));
+
     SPECS = null;
-    if (run && run.specsJson) {
+    if (!SERVER_MODE && run && run.specsJson) {
       try { SPECS = JSON.parse(run.specsJson); } catch (e) { SPECS = null; }
     }
-    if (!SPECS || !SPECS.length) SPECS = Specs.buildSpecs(POOL, P, (run && run.specSeed) || null);
+    B = window.SVBackend.create({
+      serverMode: SERVER_MODE,
+      runId: (run && run.id) || (pub && pub.id) || null,
+      params: P, specs: SPECS, specSeed: (run && run.specSeed) || null
+    });
+    SPECS = B.specs;
   }
 
   function afterRun(pr, runCode) {
@@ -279,9 +300,12 @@
       S.sequence = (ov === 'A' || ov === 'B') ? ov
         : (Pool.hashSeed('seq:' + (S.runId || '') + ':' + S.code) % 2 ? 'B' : 'A');
     }
-    PLAN = Specs.sessionPlan(SPECS, S.code, S.sequence, P);
-    S.shuffleSeed = PLAN.shuffleSeed;
-    S.roundOrder = PLAN.roundOrder;
+    PLAN = { rounds: B.plan(S.code, S.sequence) };
+    if (B.mode === 'local') {
+      var ord = Specs.orderForParticipant(SPECS, S.code, P);
+      S.shuffleSeed = ord.shuffleSeed;
+      S.roundOrder = ord.order;
+    }
 
     var ua = L.uaFamilies(navigator.userAgent);
     L.init({
@@ -398,8 +422,6 @@
   function restoreRoundContext() {
     var r = currentRound();
     if (!r || !S.lastResult || !S.round) return false;
-    truth = POOL[r.spec.mapping_index];
-    privAnchors = r.spec.ai_anchors.slice();
     if (!chart) {
       chart = window.SVChart.create($('plot'), {
         positions: P.env.positions,
@@ -607,44 +629,65 @@
   function startRound() {
     var r = currentRound();
     if (!r) { goto(P.ops.exitSurvey ? 'survey' : (P.ops.debrief ? 'debrief' : 'done')); return; }
-    var spec = r.spec;
-
-    truth = POOL[spec.mapping_index];
-    privAnchors = (P.ai.markAnchors || P.ai.drawCurve) ? spec.ai_anchors.slice() : spec.ai_anchors.slice();
-
-    S.round = {
-      open: true,
-      startedAt: Date.now(),
-      queries: [], reveals: [],
-      decisionIdx: 0,
-      sliderMoves: 0, movesSinceAction: 0, lastSliderT: null,
-      instrReopens: 0, blurEvents: 0, blurMs: 0,
-      capHit: null
-    };
-    sel = Math.round((P.env.positions + 1) / 2);
-    L.resetActionClock();
-    L.setContext({
-      block: r.block, condition: r.condition, scored: r.scored,
-      round_index: r.round_index, spec_id: spec.spec_id,
-      seed_shape: spec.seed_shape, ai_density: spec.ai_density,
-      mapping_index: spec.mapping_index, phase: 'round'
-    });
-    L.log('round_start', {
-      info: JSON.stringify({
-        pre_opened: spec.pre_opened, ai_k: spec.ai_k,
-        interrupted: (S.interruptedRounds || []).indexOf(S.roundPtr) >= 0
-      })
-    });
-    save();
-    buildRoundUI();
-    renderRound();
-    show('s-round');
+    show('s-loading');
+    B.startRound(S.code, S.sequence, r.round_index).then(function (d) {
+      // The descriptor the backend hands back is the ONLY thing this file learns
+      // about the round: which spec it is, the pre-opened positions AND THEIR
+      // VALUES (the participant can see those anyway), and how many positions the
+      // AI knows. Never the mapping, never the anchors.
+      r.spec_id = d.spec_id;
+      r.condition = d.condition || r.condition;
+      r.scored = (d.scored != null) ? d.scored : r.scored;
+      r.seed_shape = d.seed_shape;
+      r.ai_density = d.ai_density;
+      r.ai_k = d.ai_k;
+      S.round = {
+        open: true,
+        startedAt: Date.now(),
+        preOpened: d.pre_opened || [],
+        queries: [], reveals: [],
+        decisionIdx: 0,
+        sliderMoves: 0, movesSinceAction: 0, lastSliderT: null,
+        instrReopens: 0, blurEvents: 0, blurMs: 0,
+        capHit: null
+      };
+      sel = Math.round((P.env.positions + 1) / 2);
+      L.resetActionClock();
+      L.setContext({
+        block: r.block, condition: r.condition, scored: r.scored,
+        round_index: r.round_index, spec_id: d.spec_id,
+        seed_shape: d.seed_shape, ai_density: d.ai_density, phase: 'round'
+      });
+      L.log('round_start', {
+        info: JSON.stringify({
+          pre_opened: (d.pre_opened || []).map(function (x) { return x.pos; }),
+          ai_k: d.ai_k, mode: B.mode,
+          interrupted: !!d.interrupted || (S.interruptedRounds || []).indexOf(S.roundPtr) >= 0
+        })
+      });
+      save();
+      buildRoundUI();
+      renderRound();
+      show('s-round');
+    }, serverProblem);
   }
 
-  function preOpenedPairs() {
-    var r = currentRound();
-    return r.spec.pre_opened.map(function (p) { return { pos: p, val: truth[p - 1] }; });
+  // A server-mode failure is NEVER downgraded to computing locally: that would
+  // silently void the integrity property the run was configured for, and would
+  // put two kinds of row into one dataset. The participant is told instead.
+  function serverProblem(err) {
+    var msg = String((err && err.message) || err || '');
+    L.log('server_error', { info: msg.slice(0, 500) });
+    $('closed-title').textContent = 'We could not reach the study server';
+    $('closed-body').innerHTML =
+      '<p class="muted">Your progress is saved. Please check your connection and reload this page — ' +
+      'you will pick up where you left off.</p>' +
+      '<p class="muted small">If it keeps happening, tell the person running the session.</p>' +
+      '<div style="margin-top:14px;"><button class="btn btn-green" onclick="location.reload()">Try again</button></div>';
+    show('s-closed');
   }
+
+  function preOpenedPairs() { return (S.round && S.round.preOpened) || []; }
   function revealedPairs() { return S.round.reveals.map(function (x) { return { pos: x.pos, val: x.val }; }); }
   function knownPairs() { return preOpenedPairs().concat(revealedPairs()).sort(function (a, b) { return a.pos - b.pos; }); }
   function askedPairs() {
@@ -655,12 +698,9 @@
     return Object.keys(byPos).map(function (p) { return { pos: +p, val: byPos[p] }; })
       .sort(function (a, b) { return a.pos - b.pos; });
   }
-  function aiAnchorsNow() {
-    var r = currentRound();
-    return Ai.anchorSet(privAnchors, r.spec.pre_opened, S.round.reveals.map(function (x) { return x.pos; }), truth);
-  }
   function isRevealed(p) {
-    if (currentRound().spec.pre_opened.indexOf(p) >= 0) return true;
+    var pre = preOpenedPairs();
+    for (var j = 0; j < pre.length; j++) if (pre[j].pos === p) return true;
     for (var i = 0; i < S.round.reveals.length; i++) if (S.round.reveals[i].pos === p) return true;
     return false;
   }
@@ -683,13 +723,13 @@
   }
 
   function buildRoundUI() {
-    var r = currentRound(), spec = r.spec;
+    var r = currentRound();
     var aiOn = (r.condition === 'AI_ON');
 
     $('round-label').textContent = (r.scored ? 'Round ' + scoredOrdinal(r) : 'Practice round') +
       ' · Part ' + r.block + (r.scored ? '' : ' (not scored)');
     $('round-sub').textContent = aiOn
-      ? 'The AI knows ' + spec.ai_k + ' of the ' + P.env.positions + ' positions exactly, and will answer about any position you ask.'
+      ? 'The AI knows ' + currentK() + ' of the ' + P.env.positions + ' positions exactly, and will answer about any position you ask.'
       : 'No AI in this part.';
     $('round-sub').className = 'round-sub' + (aiOn ? ' ai' : '');
 
@@ -735,8 +775,10 @@
     $('btn-nominate').onclick = openNominate;
     $('btn-instr-open').onclick = openSummary;
 
-    $('testview').style.display = DEBUG ? '' : 'none';
-    if (DEBUG) buildTestView();
+    // The testing overlays need the truth, so they exist only in LOCAL mode —
+    // which is what the admin sandbox always runs in.
+    $('testview').style.display = (DEBUG && B.canSeeTruth) ? '' : 'none';
+    if (DEBUG && B.canSeeTruth) buildTestView();
   }
 
   function scoredOrdinal(r) {
@@ -771,18 +813,16 @@
 
   function renderRound() {
     var r = currentRound(), aiOn = (r.condition === 'AI_ON');
+    var peek = (DEBUG && B.canSeeTruth) ? B.peek() : null;
     chart.render({
       selected: sel,
       preOpened: preOpenedPairs(),
       revealed: revealedPairs(),
       asked: aiOn ? askedPairs() : [],
-      showTruth: DEBUG && tv.truth,
-      truth: truth,
-      showAiCurve: DEBUG && tv.curve,
-      aiCurve: (DEBUG && tv.curve) ? aiCurveArray() : null,
-      showAnchors: DEBUG && tv.anchors,
-      anchors: (DEBUG && tv.anchors) ? privAnchors.map(function (p) { return { pos: p, val: truth[p - 1] }; }) : null,
-      tag: DEBUG ? (r.spec.spec_id + ' · ' + r.spec.seed_shape + ' · ' + r.spec.ai_density) : null
+      showTruth: !!(peek && tv.truth), truth: peek ? peek.truth : null,
+      showAiCurve: !!(peek && tv.curve), aiCurve: peek ? peek.curve : null,
+      showAnchors: !!(peek && tv.anchors), anchors: peek ? peek.privateAnchors : null,
+      tag: DEBUG ? ((r.spec_id || '?') + ' · ' + (r.seed_shape || '?') + ' · ' + (r.ai_density || '?')) : null
     });
 
     // Left panel: everything touched this round, plus the two counts and costs
@@ -830,12 +870,6 @@
     if (DEBUG) updateTestView();
   }
 
-  function aiCurveArray() {
-    var anchors = aiAnchorsNow(), out = [];
-    for (var p = 1; p <= P.env.positions; p++) out.push(Ai.aiAnswerRaw(anchors, p));
-    return out;
-  }
-
   // The information state at the instant BEFORE an action (§16.3). The two most
   // important fields are the two anchor sets: the AI knows things the participant
   // does not, so both are stored, in full, even though the reveal history is
@@ -848,7 +882,10 @@
       queries_so_far: S.round.queries.length,
       reveals_so_far: S.round.reveals.length,
       n_reveals_before: S.round.reveals.length,
-      ai_anchors_before: L.encodePairs(aiAnchorsNow()),
+      // In SERVER mode the client does not know the AI's anchors — by design —
+      // so the authoritative row the Function writes carries them, and this one
+      // carries the timing and the scanning that only the browser can see.
+      ai_anchors_before: B.canSeeTruth ? L.encodePairs(B.peek().anchors) : null,
       participant_known_before: L.encodePairs(knownPairs()),
       participant_queried_before: L.encodePairs(askedPairs()),
       best_true_known_before: bestTrueKnown(),
@@ -868,45 +905,65 @@
     busy = true;
     $('plot').classList.add('working');
     renderRound();
-    setTimeout(function () {
+    var started = Date.now(), released = false;
+    function release() {
+      if (released) return;
+      released = true;
       busy = false;
       $('plot').classList.remove('working');
-      fn();
-    }, LATENCY_MS);
+      // Re-render AFTER clearing `busy`: the buttons are disabled while an action
+      // is in flight, and without this they would stay that way, because the
+      // caller's own render ran while the gate was still closed.
+      if (S && S.round && S.round.open) renderRound();
+    }
+    // The work starts immediately; the RELEASE waits until at least LATENCY_MS
+    // has passed, so a fast answer and a slow one look identical on screen. In
+    // server mode the Function pads to its own fixed duration as well.
+    fn(function () {
+      var left = LATENCY_MS - (Date.now() - started);
+      if (left > 0) setTimeout(release, left); else release();
+    });
   }
 
   function doAsk() {
     if (busy || currentRound().condition !== 'AI_ON') return;
     if (S.round.queries.length >= P.costs.queryCap) return;
-    var pos = sel, dc = decisionContext();
-    var anchors = aiAnchorsNow();
-    var answer = Ai.aiAnswer(anchors, pos, P.ai.answerRounding);
-    withLatency(function () {
-      S.round.queries.push({ pos: pos, val: answer, t: Date.now() - S.round.startedAt });
-      S.round.decisionIdx++;
-      S.round.movesSinceAction = 0;
-      L.markAction();
-      L.log('decision', Object.assign(dc, { action: 'query', position: pos, value: answer, already_queried: null }));
-      save();
-      renderRound();
-      flashAnswer('The AI says <b>' + answer + '</b> at position ' + pos + '.', 'ask');
-    });
+    act('query', sel);
   }
 
   function doReveal() {
     if (busy || isRevealed(sel)) return;
     if (S.round.reveals.length >= P.costs.revealCap) return;
-    var pos = sel, dc = decisionContext(), already = wasQueried(pos);
-    var val = truth[pos - 1];
-    withLatency(function () {
-      S.round.reveals.push({ pos: pos, val: val, t: Date.now() - S.round.startedAt });
-      S.round.decisionIdx++;
-      S.round.movesSinceAction = 0;
-      L.markAction();
-      L.log('decision', Object.assign(dc, { action: 'reveal', position: pos, value: val, already_queried: already }));
-      save();
-      renderRound();
-      flashAnswer('Position ' + pos + ' holds <b>' + val + '</b>.', 'reveal');
+    act('reveal', sel);
+  }
+
+  // One paid action. The backend returns exactly one number, after the same
+  // fixed delay whichever action it was — so neither the wire nor the clock can
+  // tell an exact AI answer from an invented one (§17.2).
+  function act(action, pos) {
+    var dc = decisionContext();
+    var already = (action === 'reveal') ? wasQueried(pos) : null;
+    var actionId = uuid();
+    withLatency(function (done) {
+      B.act(action, pos, actionId, S.code, currentRound().round_index).then(function (res) {
+        var value = res.value;
+        var at = Date.now() - S.round.startedAt;
+        if (action === 'query') S.round.queries.push({ pos: pos, val: value, t: at });
+        else S.round.reveals.push({ pos: pos, val: value, t: at });
+        S.round.decisionIdx++;
+        S.round.movesSinceAction = 0;
+        L.markAction();
+        L.log('decision', Object.assign(dc, {
+          action: action, position: pos, value: value,
+          already_queried: already, event_id: actionId
+        }));
+        save();
+        done();
+        renderRound();
+        flashAnswer(action === 'query'
+          ? 'The AI says <b>' + value + '</b> at position ' + pos + '.'
+          : 'Position ' + pos + ' holds <b>' + value + '</b>.', action === 'query' ? 'ask' : 'reveal');
+      }, function (err) { done(); serverProblem(err); });
     });
   }
 
@@ -942,21 +999,25 @@
     var dc = decisionContext();
     var capHit = (S.round.reveals.length >= P.costs.revealCap) ? 'reveal'
       : (S.round.queries.length >= P.costs.queryCap) ? 'query' : null;
-    withLatency(function () {
+    var actionId = uuid();
+    withLatency(function (done) {
       var r = currentRound();
-      var trueVal = truth[pos - 1];
-      var cost = spend();
-      var raw = trueVal - cost;
-      var score = P.costs.scoreFloor ? Math.max(0, raw) : raw;
+      B.nominate(pos, actionId, S.code, r.round_index).then(function (res) {
+      // THE SCORE COMES FROM THE BACKEND, never from arithmetic here (§17.2).
+      var trueVal = res.trueValue;
+      var cost = res.totalCost;
+      var raw = res.raw_score;
+      var score = res.score;
 
       L.markAction();
       L.log('decision', Object.assign(dc, {
-        action: 'stop', position: pos, value: null, cap_hit: capHit
+        action: 'stop', position: pos, value: null, cap_hit: capHit, event_id: actionId
       }));
 
-      var nomType = isRevealed(pos) ? 'verified' : (wasQueried(pos) ? 'queried_only' : 'untouched');
+      var nomType = res.nominationType ||
+        (isRevealed(pos) ? 'verified' : (wasQueried(pos) ? 'queried_only' : 'untouched'));
       var result = {
-        round_index: r.round_index, spec_id: r.spec.spec_id, block: r.block,
+        round_index: r.round_index, spec_id: r.spec_id, block: r.block,
         condition: r.condition, scored: r.scored,
         n_queries: S.round.queries.length, n_reveals: S.round.reveals.length,
         total_cost: cost, nominated_position: pos, nominated_true_value: trueVal,
@@ -984,7 +1045,9 @@
       S.lastResult = result;
       S.round.open = false;
       save();
+      done();
       showInterstitial(result);
+      }, function (err) { done(); serverProblem(err); });
     });
   }
 
@@ -1038,7 +1101,6 @@
     S.roundPtr++;
     S.round = null;
     S.lastResult = null;
-    truth = null;
     L.clearContext();
     save();
     if (S.roundPtr >= PLAN.rounds.length) {
@@ -1217,9 +1279,15 @@
   // ======================================================================
   function showDebrief() {
     $('debrief-body').innerHTML = prose(tokens(Content.DEBRIEF));
-    // One of the participant's OWN rounds, redrawn with the true prizes beside
-    // what the AI told them. Prefer a scored AI round they actually asked in.
-    var pick = pickDebriefRound();
+    $('debrief-plot').innerHTML = '';
+    $('debrief-caption').innerHTML = '';
+    $('debrief-round').textContent = '';
+    $('btn-debrief').onclick = function () { goto('done'); };
+    show('s-debrief');
+    pickDebriefRound().then(renderDebriefPlot, function () {});
+  }
+
+  function renderDebriefPlot(pick) {
     var host = $('debrief-plot');
     host.innerHTML = '';
     if (pick) {
@@ -1238,51 +1306,47 @@
         '<span class="lg"><i class="sw ask"></i> the answers you paid for</span>' +
         '<span class="lg"><i class="sw rev"></i> what you revealed</span>';
       $('debrief-round').textContent = 'Your round ' + pick.round_index + ' (part ' + pick.block + ').';
-    } else {
-      $('debrief-caption').innerHTML = '';
-      $('debrief-round').textContent = '';
     }
-    $('btn-debrief').onclick = function () { goto('done'); };
-    show('s-debrief');
   }
 
+  // Which of the participant's OWN rounds to redraw: the AI round where they
+  // asked most, because that is the one where the discrepancies are visible.
+  // The TRUTH for it comes from the backend — in server mode from a Function
+  // that serves it only for a round that is already finished.
   function pickDebriefRound() {
     var infoByRound = {};
     L.getEvents().forEach(function (e) {
       if (e.event === 'round_end' && e.round_index != null) infoByRound[e.round_index] = e;
     });
     var candidates = PLAN.rounds.filter(function (r) {
-      var e = infoByRound[r.round_index];
-      return e && r.condition === 'AI_ON' && r.scored;
+      return infoByRound[r.round_index] && r.condition === 'AI_ON' && r.scored;
     });
-    if (!candidates.length) {
-      candidates = PLAN.rounds.filter(function (r) { return infoByRound[r.round_index]; });
-    }
-    if (!candidates.length) return null;
-    // The most instructive one: the round where they asked most.
+    if (!candidates.length) candidates = PLAN.rounds.filter(function (r) { return infoByRound[r.round_index]; });
+    if (!candidates.length) return Promise.resolve(null);
+
     var best = null, bestQ = -1;
     candidates.forEach(function (r) {
-      var e = infoByRound[r.round_index];
-      var nq = e.n_queries || 0;
+      var nq = infoByRound[r.round_index].n_queries || 0;
       if (nq > bestQ) { bestQ = nq; best = r; }
     });
     if (!best) best = candidates[candidates.length - 1];
+
     var ev = infoByRound[best.round_index], inf = {};
     try { inf = JSON.parse(ev.info || '{}'); } catch (e) {}
-    var map = POOL[best.spec.mapping_index];
-    var revealed = L.decodePairs(inf.reveals);
-    var asked = L.decodePairs(inf.queries);
-    var anchors = Ai.anchorSet(best.spec.ai_anchors, best.spec.pre_opened,
-      revealed.map(function (x) { return x.pos; }), map);
-    var curve = [];
-    for (var p = 1; p <= P.env.positions; p++) curve.push(Ai.aiAnswerRaw(anchors, p));
-    return {
-      round_index: best.round_index, block: best.block, truth: map, curve: curve,
-      anchors: best.spec.ai_anchors.map(function (p) { return { pos: p, val: map[p - 1] }; }),
-      pre: best.spec.pre_opened.map(function (p) { return { pos: p, val: map[p - 1] }; }),
-      revealed: revealed, asked: asked,
-      nominated: ev.nominated_position != null ? { pos: ev.nominated_position, val: ev.nominated_true_value } : null
-    };
+    var revealed = L.decodePairs(inf.reveals), asked = L.decodePairs(inf.queries);
+
+    return Promise.resolve(B.debriefRound(S.code, S.sequence, best.round_index, revealed))
+      .then(function (d) {
+        if (!d) return null;
+        return {
+          round_index: d.round_index, block: d.block, truth: d.truth, curve: d.curve,
+          anchors: d.anchors, pre: d.pre,
+          revealed: d.revealed && d.revealed.length ? d.revealed : revealed,
+          asked: d.asked && d.asked.length ? d.asked : asked,
+          nominated: d.nominated || (ev.nominated_position != null
+            ? { pos: ev.nominated_position, val: ev.nominated_true_value } : null)
+        };
+      }, function () { return null; });
   }
 
   function showDone() {
@@ -1423,8 +1487,13 @@
     window.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && $('ov-summary').classList.contains('show')) { closeSummary(); return; }
       if (!S || S.phase !== 'round' || !S.round || !S.round.open) return;
+      // Only controls that HANDLE arrow keys themselves are left alone. A button
+      // does not — and excluding it here meant that after any click the focus sat
+      // on that button and the arrow keys silently stopped working, which is
+      // exactly the state a keyboard user ends up in.
       var tag = (e.target && e.target.tagName) || '';
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
+      if (tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (tag === 'INPUT') return;
       if (e.key === 'ArrowLeft') { setSel(sel - 1, 'arrow'); e.preventDefault(); }
       else if (e.key === 'ArrowRight') { setSel(sel + 1, 'arrow'); e.preventDefault(); }
     });
@@ -1467,13 +1536,15 @@
   }
   function updateTestView() {
     var el = $('tv-readout');
-    if (!el) return;
-    var anchors = aiAnchorsNow();
+    if (!el || !B.canSeeTruth) return;
+    var peek = B.peek();
+    if (!peek) return;
+    var anchors = peek.anchors;
     var sd = Ai.aiSd(anchors, sel, CFG.sigma(P.env.stepBound));
     var sStar = CFG.sStar(P.costs.revealCost);
     var g = Ai.geometry(anchors, sel, P.env.positions);
     el.innerHTML = '<b>at ' + sel + ':</b> AI says ' + Ai.aiAnswer(anchors, sel, P.ai.answerRounding) +
-      ' · truth ' + truth[sel - 1] +
+      ' · truth ' + peek.truth[sel - 1] +
       ' · AI s.d. ' + (sd == null ? '—' : sd.toFixed(2)) +
       ' (s* = ' + sStar.toFixed(2) + ' → ' + (sd > sStar ? 'verification pays' : 'trust') + ')' +
       ' · ' + g.choice_region + (g.gap_width != null ? ' g=' + g.gap_width : '') +
@@ -1488,10 +1559,13 @@
       quiz: {}, survey: {}, results: [], roundPtr: 0, totalScore: 0, phaseMs: {}, phase: 'consent',
       startedAt: Date.now(), resumptions: 0
     };
-    PLAN = Specs.sessionPlan(SPECS, 'PREVIEW', S.sequence, P);
+    // A rehearsal is ALWAYS local — it must reach no Function and write nothing.
+    B = window.SVBackend.create({ serverMode: false, params: P, specs: SPECS });
+    SPECS = B.specs;
+    PLAN = { rounds: B.plan('PREVIEW', S.sequence) };
     if (pr.spec) {
-      var only = PLAN.rounds.filter(function (r) { return r.spec_id === pr.spec; });
-      if (only.length) { PLAN.rounds = only; PLAN.rounds[0].round_index = 1; SPEC_LOCAL = pr.spec; }
+      var only = PLAN.rounds.filter(function (r) { return r.spec.spec_id === pr.spec; });
+      if (only.length) { PLAN.rounds = only; SPEC_LOCAL = pr.spec; }
     }
     if (pr.round) {
       var n = parseInt(pr.round, 10);
