@@ -2223,6 +2223,34 @@ moved them — the phase headers pushed them right only via the timer's
 the wordmark), and the workspace top bars padded 28px against the page headers'
 40px. Any new screen must land them 40px from the right.
 
+**A phase page never draws its instructions screen before it knows where the
+participant is** (owner report 2026-08: refreshing on the "Your ideas are
+submitted" summary flashed the "Individual Ideation Phase" instructions, Start
+button and all). `started` and `done` are both restored FROM the participant
+document, so until its first `onSnapshot` lands they are both false — exactly the
+state that renders the instructions. Both phase pages now gate on a
+`participantLoaded` flag (set inside the snapshot handler BEFORE the
+`snap.exists()` bail, so a participant with no doc still stops loading), returning
+a "Restoring your session…" state ahead of the `!started` branch. That ORDERING is
+the whole fix, pinned by `node _ideasearchlab-src/tools/phase-restore-guard.mjs`
+— a source check, not a browser one: reproducing it at runtime needs a
+participant who submitted in a PREVIOUS page load, and the Test-round sandbox's
+store lives in memory for the tab's lifetime, so a reload wipes the very document
+whose absence is the bug.
+
+**Group voting shows where the group's votes are, and says so when they
+disagree** (owner 2026-08). Each idea with votes carries a filled **"N votes of
+M"** chip and an accent left edge on the card; the current top three are deepened
+and stamped `#1`/`#2`/`#3` (the set that becomes the group's picks), and a live
+line above the list reports how many ideas carry votes and how many the group
+agrees on. When two or more members have cast a COMPLETE ballot and still no idea
+has more than one vote, an advisory is raised **unprompted** (it used to wait for
+Submit Votes, i.e. until minds were made up) — modal plus a persistent amber
+banner — explaining *consensus* in plain words ("simply agreeing together…") for
+the many participants who are not native English speakers. Details, including the
+90-second cooldown that keeps it advice rather than nagging, are in
+`_ideasearchlab-src/CLAUDE.md`.
+
 **Session cards look and behave the same in both admins** (owner request
 2026-08). *Alignment:* ideasearchlab's cards used a mix of global
 `btn-primary`/`btn-ghost` (bigger padding) and borderless text buttons, so its

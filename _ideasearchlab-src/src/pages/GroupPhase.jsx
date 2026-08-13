@@ -21,6 +21,10 @@ import styles from './GroupPhase.module.css'
 
 const MAX_VOTES = 3
 
+// Shortest gap between two UNPROMPTED "your group hasn't agreed" reminders, so a
+// group whose votes keep drifting apart is advised rather than nagged.
+const DIVERGE_COOLDOWN_MS = 90000
+
 // How long the group's final-ideas summary is held on screen once every member
 // has voted, before the phase change is allowed through (owner 2026-08). The
 // twin of IndividualPhase's CONFIRM_HOLD_MS — and for the same reason: the
@@ -67,12 +71,23 @@ function pickRandomStable(arr, n) {
 function IdeaPill({
   idea, variant, label, isMe, isVoting, votesLocked,
   voteCount, votedByMe, canVote, onVote, showPhaseTag,
+  rank = 0, memberCount = 0,
 }) {
+  // An idea the group has put votes on is the thing everyone is trying to read
+  // off this list, so it is marked on the CARD, not just in a small tag: a tinted
+  // accent edge for anything with votes, stronger for the ones currently in the
+  // group's top three (the set that becomes the group's picks).
+  const hasVotes = isVoting && voteCount > 0
+  const votesTitle = memberCount
+    ? `${voteCount} of ${memberCount} group member${memberCount === 1 ? '' : 's'} voted for this idea`
+    : `${voteCount} vote${voteCount === 1 ? '' : 's'}`
   return (
     <div
       className={[
         styles.ideaPill,
         variant === 'group' ? styles.ideaPillGroup : '',
+        hasVotes ? styles.ideaPillHasVotes : '',
+        hasVotes && rank > 0 ? styles.ideaPillLeading : '',
         isVoting && votedByMe ? styles.ideaPillVoted : '',
         isVoting && !canVote && !votedByMe ? styles.ideaPillMaxed : '',
         isVoting ? styles.ideaPillClickable : '',
@@ -92,9 +107,22 @@ function IdeaPill({
               {idea.phase === 'group' ? 'group' : 'individual'}
             </span>
           )}
-          {isVoting && voteCount > 0 && (
-            <span className={`${styles.voteBadge} ${votedByMe ? styles.voteBadgeMine : ''}`}>
-              Votes: {voteCount}
+          {hasVotes && (
+            <span
+              className={`${styles.voteBadge} ${votedByMe ? styles.voteBadgeMine : ''}`}
+              title={votesTitle}
+            >
+              <span className={styles.voteBadgeNum}>{voteCount}</span>
+              {' '}vote{voteCount === 1 ? '' : 's'}
+              {memberCount > 1 && <span className={styles.voteBadgeOf}> of {memberCount}</span>}
+            </span>
+          )}
+          {hasVotes && rank > 0 && (
+            <span
+              className={styles.leadTag}
+              title={`Currently #${rank} — the top ${MAX_VOTES} ideas become your group's picks`}
+            >
+              #{rank}
             </span>
           )}
         </div>
@@ -193,6 +221,10 @@ export default function GroupPhase() {
   const [newDesc, setNewDesc] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [started, setStarted] = useState(false)
+  // Has the participant's own document arrived yet? Until it has, `started` is
+  // false and the page rendered the INSTRUCTIONS screen — so a refresh mid-phase
+  // flashed a Start button at someone already working (or already voted).
+  const [participantLoaded, setParticipantLoaded] = useState(false)
   const [groupStartedAt, setGroupStartedAt] = useState(null)
   const [groupVotingStartedAt, setGroupVotingStartedAt] = useState(null)
   const groupOpenedWrittenRef = useRef(false)
@@ -305,12 +337,22 @@ export default function GroupPhase() {
   const consensusMeasurable = members.length >= 2 && votersCount >= 2
   const consensusReached = maxAgreement >= 2
 
+  // The same signal, but strict enough to interrupt people with UNPROMPTED:
+  // two or more members have cast a COMPLETE ballot and still no idea has more
+  // than one vote. Half-finished ballots look like disagreement while members
+  // are simply still clicking, and warning then would be noise.
+  const fullBallots = members.filter(m => (m.votedFor || []).length >= requiredVotes).length
+  const votesDiverging = members.length >= 2 && fullBallots >= 2 && !consensusReached
+
   // ── Get groupId and react to status changes ─────────
   useEffect(() => {
     if (!sessionId || !user) return
     const unsub = onSnapshot(
       doc(db, 'sessions', sessionId, 'participants', user.uid),
       snap => {
+        // Mark the first snapshot even when the doc is missing, so the page can
+        // stop showing its loading state either way.
+        setParticipantLoaded(true)
         if (!snap.exists()) return
         // `estimate` fills a still-pending serverTimestamp with a local value.
         // Read as 'none' (the default) it comes back NULL, so for one round-trip
@@ -535,6 +577,31 @@ export default function GroupPhase() {
     }
   }, [isVoting, votesLocked])
 
+  // ── Consensus reminder, UNPROMPTED: the group's ballots disagree ──
+  // The warning used to appear only when someone pressed Submit Votes — by
+  // which point they had already made up their mind. Raise it while there is
+  // still time to talk: as soon as two members have voted in full and no idea
+  // has more than one vote. Re-arms if the group converges and drifts apart
+  // again, and never twice within DIVERGE_COOLDOWN_MS, so it advises instead of
+  // nagging.
+  const divergeSeen = useRef(0)
+  // Every route to the warning stamps the cooldown, including the ones the
+  // participant took themselves (the banner's "What should we do?", the submit
+  // gate) — otherwise closing a manually-opened modal left the ref unstamped and
+  // the effect below re-opened it on the very next render.
+  function openConsensusWarn() {
+    divergeSeen.current = Date.now()
+    setConsensusMode('warn')
+    setShowConsensus(true)
+  }
+  useEffect(() => {
+    if (!isVoting || votesLocked || showConsensus) return
+    if (!votesDiverging) { divergeSeen.current = 0; return }   // converged: re-arm
+    if (divergeSeen.current && Date.now() - divergeSeen.current < DIVERGE_COOLDOWN_MS) return
+    openConsensusWarn()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVoting, votesLocked, votesDiverging, showConsensus])
+
   // ── Toggle vote on double-click ─────────────────────
   // A vote is a single-element edit, not a whole-array replace. `myVotes` comes
   // from the members snapshot, so replacing the array meant two taps closer
@@ -589,8 +656,7 @@ export default function GroupPhase() {
     // Re-show the consensus reminder if the group's votes are diverging — unless
     // the participant chose to submit anyway from that reminder.
     if (!force && consensusMeasurable && !consensusReached) {
-      setConsensusMode('warn')
-      setShowConsensus(true)
+      openConsensusWarn()
       return
     }
     try {
@@ -762,10 +828,21 @@ export default function GroupPhase() {
     .map(id => allIdeasForVoting.find(i => i.id === id))
     .filter(Boolean)
 
+  // The ideas the group is currently converging on — the top MAX_VOTES with at
+  // least one vote, taken from `allIdeasForVoting`'s OWN order so the "#1/#2/#3"
+  // marks can never disagree with the order on screen (topVotedIds sorts by count
+  // alone and breaks ties by object order, which is not what is rendered).
+  const leadingIds = allIdeasForVoting
+    .filter(i => (voteCounts[i.id] || 0) > 0)
+    .slice(0, MAX_VOTES)
+    .map(i => i.id)
+  const votedIdeaCount = allIdeasForVoting.filter(i => (voteCounts[i.id] || 0) > 0).length
+
   /** Renders one idea pill card (uses the stable module-scope IdeaPill) */
   function renderPill(idea, variant, showTag = false) {
     const votedByMe = myVotes.includes(idea.id)
     const canVote = !votesLocked && (votedByMe || myVoteCount < MAX_VOTES)
+    const rank = leadingIds.indexOf(idea.id)
     return (
       <IdeaPill
         key={idea.id}
@@ -780,6 +857,8 @@ export default function GroupPhase() {
         canVote={canVote}
         onVote={toggleVote}
         showPhaseTag={showTag}
+        rank={rank + 1}
+        memberCount={members.length}
       />
     )
   }
@@ -885,9 +964,23 @@ export default function GroupPhase() {
           <>
             <h3 className={styles.consensusTitle}>Your group hasn&rsquo;t agreed yet</h3>
             <p className={styles.consensusBody}>
-              Your votes are spread across different ideas — your group hasn&rsquo;t
-              converged on the same {requiredVotes} idea{requiredVotes === 1 ? '' : 's'}.
-              Try discussing in the group chat and aligning on a shared set before you submit.
+              Everyone has voted for <strong>different</strong> ideas — so far no idea
+              has more than one vote from your group.
+            </p>
+            {/* "Consensus" is the word the study uses, and not every participant
+                reads it as everyday English (many are non-native speakers), so it
+                is spelled out in plain words rather than assumed. */}
+            <p className={styles.consensusNote}>
+              <strong>What &ldquo;consensus&rdquo; means:</strong> simply <em>agreeing together</em>.
+              Your group talks it over and ends up choosing the <strong>same</strong> ideas,
+              so the final {requiredVotes} idea{requiredVotes === 1 ? '' : 's'}
+              {requiredVotes === 1 ? ' is one' : ' are ones'} everybody is happy to stand
+              behind — not {members.length > 1 ? `${members.length} separate opinions` : 'separate opinions'}.
+            </p>
+            <p className={styles.consensusBody}>
+              <strong>What to do now:</strong> use the <strong>Group Chat</strong> to say which
+              ideas you like and why, listen to the others, then vote again for the ones you
+              can all live with. You can change your votes any time before you submit.
             </p>
             <p className={styles.consensusBody}>
               If your group does not reach consensus, the system will select ideas at
@@ -901,13 +994,18 @@ export default function GroupPhase() {
               >
                 Keep discussing
               </button>
-              <button
-                className={`btn-primary ${styles.consensusBtn}`}
-                type="button"
-                onClick={() => { setShowConsensus(false); submitVotes(true) }}
-              >
-                Submit anyway
-              </button>
+              {/* Only offered when this ballot could actually be submitted —
+                  below the required count `submitVotes` silently does nothing,
+                  which read as a dead button. */}
+              {myVoteCount >= requiredVotes && !votesLocked && (
+                <button
+                  className={`btn-primary ${styles.consensusBtn}`}
+                  type="button"
+                  onClick={() => { setShowConsensus(false); submitVotes(true) }}
+                >
+                  Submit anyway
+                </button>
+              )}
             </div>
           </>
         ) : (
@@ -916,6 +1014,11 @@ export default function GroupPhase() {
             <p className={styles.consensusBody}>
               Discuss with your group and try to agree on the {requiredVotes} idea
               {requiredVotes === 1 ? '' : 's'} that best represent your work, then cast your votes.
+            </p>
+            <p className={styles.consensusNote}>
+              <strong>&ldquo;Consensus&rdquo; simply means agreeing together</strong> — your group
+              ends up voting for the <strong>same</strong> ideas, rather than each member
+              picking their own.
             </p>
             <p className={styles.consensusBody}>
               If your group does not reach consensus, the system will select ideas at
@@ -1053,6 +1156,11 @@ export default function GroupPhase() {
   // ─── Instructions view ───
   // The timer is shown in a non-ticking preview here (full duration). It only
   // starts counting once the participant presses Start (see startGroup).
+  // Nothing definitive until we know where this participant actually is.
+  if (!participantLoaded) {
+    return <div className={styles.restoring}>Restoring your session...</div>
+  }
+
   if (!started) {
     return (
       <div className={styles.instrPage}>
@@ -1177,6 +1285,34 @@ export default function GroupPhase() {
             {' '}<button className={styles.backLink} onClick={() => goToStage('ideation')}>
               Back to ideation
             </button>
+          </div>
+        )}
+
+        {/* Live state of the group's ballot, above the list: which ideas are
+            carrying votes and whether the group is converging. This is the
+            question members keep asking each other in the chat, so it is
+            answered on screen. */}
+        {members.length > 1 && (
+          <div className={`${styles.voteStatus} ${votesDiverging ? styles.voteStatusWarn : ''}`}>
+            {votedIdeaCount === 0 ? (
+              <span>No votes yet — the ideas your group votes for are highlighted here as they come in.</span>
+            ) : votesDiverging ? (
+              <span>
+                <strong>Your group hasn&rsquo;t agreed yet.</strong> {votedIdeaCount} idea
+                {votedIdeaCount === 1 ? ' has' : 's have'} a vote, but no idea has more than one —
+                everyone picked something different. <strong>Consensus</strong> just means
+                <em> agreeing together</em>: discuss in the chat and re-vote for the same ideas.
+                {' '}<button className={styles.backLink} type="button" onClick={openConsensusWarn}>
+                  What should we do?
+                </button>
+              </span>
+            ) : (
+              <span>
+                <strong>{votedIdeaCount}</strong> idea{votedIdeaCount === 1 ? '' : 's'} with votes
+                {maxAgreement >= 2 && <> · your group agrees on {agreementCounts.filter(n => n >= 2).length} of them</>}
+                {' '}— the highlighted <strong>#1&ndash;#{Math.min(MAX_VOTES, votedIdeaCount)}</strong> become your group&rsquo;s picks.
+              </span>
+            )}
           </div>
         )}
 

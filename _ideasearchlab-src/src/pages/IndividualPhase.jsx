@@ -64,6 +64,11 @@ export default function IndividualPhase() {
   const [groupMembers, setGroupMembers] = useState([])
   const [groupId, setGroupId] = useState(null)
   const [started, setStarted] = useState(false)
+  // Has the participant's own document arrived yet? Until it has, `started` and
+  // `done` are both false and the page rendered the INSTRUCTIONS screen — so
+  // refreshing on the "Your ideas are submitted" summary flashed a Start button
+  // at someone who had already submitted.
+  const [participantLoaded, setParticipantLoaded] = useState(false)
   const [individualStartedAt, setIndividualStartedAt] = useState(null)
   const individualOpenedWrittenRef = useRef(false)
   const [briefOpen, setBriefOpen] = useState(true)
@@ -131,6 +136,9 @@ export default function IndividualPhase() {
     const unsub = onSnapshot(
       doc(db, 'sessions', sessionId, 'participants', user.uid),
       snap => {
+        // Mark the first snapshot even when the doc is missing, so the page can
+        // stop showing its loading state either way.
+        setParticipantLoaded(true)
         if (!snap.exists()) return
         // `estimate` fills a still-pending serverTimestamp with a local value.
         // Read as 'none' (the default) it comes back NULL, so for one round-trip
@@ -468,6 +476,11 @@ export default function IndividualPhase() {
   // end message participants see when they finish, instead of stranding them.
   if (ended) {
     return <Done />
+  }
+
+  // Nothing definitive until we know where this participant actually is.
+  if (!participantLoaded) {
+    return <div className={styles.restoring}>Restoring your session...</div>
   }
 
   // ─── Instructions view ───

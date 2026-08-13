@@ -209,6 +209,25 @@
   line-height: 1.5;
 }
 
+/* Live state of the group's ballot, above the idea list. */
+.voteStatus {
+  font-size: 13px;
+  color: var(--ink);
+  padding: 8px 14px;
+  margin-top: 8px;
+  background: rgba(200,86,42,0.05);
+  border: 1px solid rgba(200,86,42,0.2);
+  border-radius: var(--radius);
+  flex-shrink: 0;
+  line-height: 1.55;
+}
+/* Diverging ballots: the group needs to talk, so it reads as an advisory rather
+   than a status line. Amber, not red — nobody has done anything wrong. */
+.voteStatusWarn {
+  background: rgba(214,158,46,0.12);
+  border-color: rgba(214,158,46,0.45);
+}
+
 /* ─── Task brief ─────────────────────────── */
 .briefWrap {
   display: flex;
@@ -414,24 +433,66 @@
   cursor: default;
   opacity: 0.65;
 }
+/* An idea the GROUP has voted for (whoever cast the vote) — the signal members
+   are scanning the list for. Marked on the card itself, not only by a small tag:
+   a tinted accent edge, growing stronger for the ones currently in the top 3. */
+.ideaPillHasVotes {
+  border-left: 4px solid rgba(200,86,42,0.45);
+  padding-left: 17px;
+  background: rgba(200,86,42,0.035);
+}
+.ideaPillLeading {
+  border-left-color: var(--accent);
+  background: rgba(200,86,42,0.07);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px rgba(200,86,42,0.16);
+}
+/* A maxed-out pill is dimmed, but an idea carrying the group's votes must stay
+   readable — it is exactly what the others need to see to converge on it. */
+.ideaPillMaxed.ideaPillHasVotes { opacity: 0.85; }
 
-/* ─── Vote badge (inside pill, top-right) ── */
+/* ─── Vote badge (inside pill, on the meta row) ── */
 .voteBadge {
-  /* In flow, at the end of the meta row — NOT absolutely positioned. As an
-     absolute top-right chip it painted over the Vote button that now lives on
-     that same row and, being positioned, won the hit test: every idea that
-     already had a vote (i.e. the ones a group converges on) became unvotable by
-     the very control added because double-tap does not work on tablets. */
-  margin-left: auto;
-  font-size: 10.5px;
+  /* In flow, on the meta row — NOT absolutely positioned. As an absolute
+     top-right chip it painted over the Vote button that now lives on that same
+     row and, being positioned, won the hit test: every idea that already had a
+     vote (i.e. the ones a group converges on) became unvotable by the very
+     control added because double-tap does not work on tablets.
+     It sits right beside the tags (no `margin-left:auto`) so the count reads as
+     part of the idea rather than floating in the middle of the row. */
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--muted);
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  background: rgba(200,86,42,0.12);
+  border: 1px solid rgba(200,86,42,0.28);
+  padding: 1px 8px;
+  border-radius: 10px;
   white-space: nowrap;
   pointer-events: none;
 }
+.voteBadgeNum { font-size: 13px; font-weight: 800; line-height: 1; }
+.voteBadgeOf { font-weight: 600; opacity: 0.7; }
 .voteBadgeMine {
-  color: var(--accent);
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Rank of an idea inside the group's current top 3 — the set that becomes the
+   group's picks if voting ended now. */
+.leadTag {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #fff;
+  background: var(--ink);
+  padding: 1px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* ─── Phase tag (shown in voting mode) ──── */
@@ -753,6 +814,18 @@
   color: var(--muted);
   margin: 0 0 12px;
 }
+/* The plain-words explanation of "consensus" — set apart from the surrounding
+   advice so a participant who does not know the word finds it at a glance. */
+.consensusNote {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  background: var(--paper);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
 .consensusBtn {
   margin-top: 6px;
   width: 100%;
@@ -925,4 +998,17 @@
   border: 1px solid rgba(200,86,42,0.2);
   border-radius: 14px;
   padding: 13px 16px;
+}
+
+/* Shown until the participant's own document arrives. Without it the page
+   rendered the instructions screen — Start button and all — for the fraction of
+   a second before the snapshot said they had already started (or submitted). */
+.restoring {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--muted);
+  background: var(--paper);
 }
