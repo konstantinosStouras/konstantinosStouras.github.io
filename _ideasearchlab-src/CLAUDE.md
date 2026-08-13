@@ -147,11 +147,13 @@ Like IndividualPhase, GroupPhase has a **two-view structure**: an instructions s
   list (which stays after the modal is dismissed, with a "What should we do?"
   link that re-opens it).
 - **"Consensus" is spelled out in plain words** in both modal modes
-  (`.consensusNote`, an accent-barred callout): *simply agreeing together — your
-  group talks it over and ends up choosing the SAME ideas, so the final ideas are
-  ones everybody is happy to stand behind, not N separate opinions* — plus a
-  concrete "what to do now" (say which ideas you like in the Group Chat, listen,
-  re-vote; votes can be changed until submit). Many participants are non-native
+  (`.consensusNote`, an accent-barred callout): *simply agreeing together. Your
+  group talks it over and picks the SAME ideas, so the final ideas are ones
+  everybody can stand behind* — plus a concrete "what to do now" (say which ideas
+  you like in the Group Chat, listen, re-vote; votes can be changed until
+  submit). Kept SHORT and free of em dashes, per the owner (2026-08), in the
+  modal, the banner and the rank tooltip alike: this is read mid-task by students
+  under a countdown, many of them non-native speakers. Many participants are non-native
   English speakers and the study's own vocabulary should not be a barrier. The
   warn modal's **Submit anyway** button now renders only when the ballot could
   actually be submitted (`myVoteCount >= requiredVotes`); below that

@@ -120,7 +120,7 @@ function IdeaPill({
           {hasVotes && rank > 0 && (
             <span
               className={styles.leadTag}
-              title={`Currently #${rank} — the top ${MAX_VOTES} ideas become your group's picks`}
+              title={`Currently #${rank}. The top ${MAX_VOTES} ideas become your group's picks.`}
             >
               #{rank}
             </span>
@@ -964,27 +964,26 @@ export default function GroupPhase() {
           <>
             <h3 className={styles.consensusTitle}>Your group hasn&rsquo;t agreed yet</h3>
             <p className={styles.consensusBody}>
-              Everyone has voted for <strong>different</strong> ideas — so far no idea
-              has more than one vote from your group.
+              Everyone voted for <strong>different</strong> ideas. No idea has more
+              than one vote yet.
             </p>
             {/* "Consensus" is the word the study uses, and not every participant
                 reads it as everyday English (many are non-native speakers), so it
                 is spelled out in plain words rather than assumed. */}
             <p className={styles.consensusNote}>
               <strong>What &ldquo;consensus&rdquo; means:</strong> simply <em>agreeing together</em>.
-              Your group talks it over and ends up choosing the <strong>same</strong> ideas,
-              so the final {requiredVotes} idea{requiredVotes === 1 ? '' : 's'}
-              {requiredVotes === 1 ? ' is one' : ' are ones'} everybody is happy to stand
-              behind — not {members.length > 1 ? `${members.length} separate opinions` : 'separate opinions'}.
+              Your group talks it over and picks the <strong>same</strong> ideas, so the
+              final {requiredVotes} {requiredVotes === 1 ? 'idea is one' : 'are ones'} everybody
+              can stand behind.
             </p>
             <p className={styles.consensusBody}>
-              <strong>What to do now:</strong> use the <strong>Group Chat</strong> to say which
+              <strong>What to do now:</strong> in the <strong>Group Chat</strong>, say which
               ideas you like and why, listen to the others, then vote again for the ones you
-              can all live with. You can change your votes any time before you submit.
+              can all live with. You can change your votes until you submit.
             </p>
             <p className={styles.consensusBody}>
-              If your group does not reach consensus, the system will select ideas at
-              random on your behalf, and this can lower your performance score.
+              If your group does not reach consensus, the system will pick ideas at
+              random for you, and that can lower your score.
             </p>
             <div className={styles.consensusActions}>
               <button
@@ -1016,13 +1015,13 @@ export default function GroupPhase() {
               {requiredVotes === 1 ? '' : 's'} that best represent your work, then cast your votes.
             </p>
             <p className={styles.consensusNote}>
-              <strong>&ldquo;Consensus&rdquo; simply means agreeing together</strong> — your group
-              ends up voting for the <strong>same</strong> ideas, rather than each member
-              picking their own.
+              <strong>&ldquo;Consensus&rdquo; simply means agreeing together:</strong> your group
+              votes for the <strong>same</strong> ideas, rather than each member picking
+              their own.
             </p>
             <p className={styles.consensusBody}>
-              If your group does not reach consensus, the system will select ideas at
-              random on your behalf, and this can lower your performance score.
+              If your group does not reach consensus, the system will pick ideas at
+              random for you, and that can lower your score.
             </p>
             <button
               className={`btn-primary ${styles.consensusBtn}`}
@@ -1295,13 +1294,13 @@ export default function GroupPhase() {
         {members.length > 1 && (
           <div className={`${styles.voteStatus} ${votesDiverging ? styles.voteStatusWarn : ''}`}>
             {votedIdeaCount === 0 ? (
-              <span>No votes yet — the ideas your group votes for are highlighted here as they come in.</span>
+              <span>No votes yet. Ideas your group votes for are highlighted here as they arrive.</span>
             ) : votesDiverging ? (
               <span>
                 <strong>Your group hasn&rsquo;t agreed yet.</strong> {votedIdeaCount} idea
-                {votedIdeaCount === 1 ? ' has' : 's have'} a vote, but no idea has more than one —
-                everyone picked something different. <strong>Consensus</strong> just means
-                <em> agreeing together</em>: discuss in the chat and re-vote for the same ideas.
+                {votedIdeaCount === 1 ? ' has' : 's have'} a vote, but none has more than one.
+                {' '}<strong>Consensus</strong> just means <em>agreeing together</em>: discuss in
+                the chat, then vote for the same ideas.
                 {' '}<button className={styles.backLink} type="button" onClick={openConsensusWarn}>
                   What should we do?
                 </button>
@@ -1310,7 +1309,7 @@ export default function GroupPhase() {
               <span>
                 <strong>{votedIdeaCount}</strong> idea{votedIdeaCount === 1 ? '' : 's'} with votes
                 {maxAgreement >= 2 && <> · your group agrees on {agreementCounts.filter(n => n >= 2).length} of them</>}
-                {' '}— the highlighted <strong>#1&ndash;#{Math.min(MAX_VOTES, votedIdeaCount)}</strong> become your group&rsquo;s picks.
+                . The highlighted top {Math.min(MAX_VOTES, votedIdeaCount)} become your group&rsquo;s picks.
               </span>
             )}
           </div>
