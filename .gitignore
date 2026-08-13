@@ -19,3 +19,7 @@ lit/data/**/*.tmp-*
 lit/data-ft50/**/*.tmp-*
 lit/data-refs/**/*.tmp-*
 lit/data-workingpapers/**/*.tmp-*
+
+# Python bytecode from the local generator scripts
+__pycache__/
+*.pyc

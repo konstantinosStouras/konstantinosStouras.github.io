@@ -2376,44 +2376,117 @@ prize map as a red line on the plot — participants must never see it. To
 restore the full study flow, follow the numbered steps in the comment on the
 consent section and remove the checkbox and its `renderPlot` block.
 
-## `/lab/search-v2` — "Search for Knowledge, with and without AI"
+## `/lab/search-v2` — "Search With and Without Generative AI"
 
-`lab/search-v2/` is a **multi-file** static behavioral experiment (vanilla
-HTML/CSS/JS, relative URLs only, no build step): subjects search a hidden line of
-100 prizes, paying 5¢ per reveal, in a **Without AI** and/or **With AI** phase
-(within-subjects, admin-chosen order; arms `A`/`B`). It has a full **admin panel**
-at `/lab/search-v2/admin/` (create sessions, set phases/rounds/AI, view data, and
-export an analysis-ready multi-sheet **.xlsx** — sessions' admin-chosen parameters,
-participants, rounds, every action with per-decision response times, survey —
-generated client-side by the dependency-free writer `admin/xlsx.js`), backed by an
-**optional Firebase** project (`search-with-ai-456d7`) that is **already
-configured** in `firebase-config.js`; it degrades gracefully offline. Firestore
-cannot store nested arrays, so session settings persist `coveragePatches` as
-`[{a,b},…]` maps (admin encodes/decodes; `app.js` `normalizePatches` accepts both
-shapes). See `lab/search-v2/README.md`.
+`lab/search-v2/` is a **multi-file** static behavioural experiment (vanilla
+HTML/CSS/JS, relative URLs only, no build step) implementing the design brief
+`search_with_ai_design.md` in full; the source cites its section numbers
+throughout. Environment adapted from Malladi, Martínez-Marquina & Morozov,
+*"Space Exploration"* (EC 2026), High Variability condition. Backed by the
+Firebase project `search-with-ai-456d7`, already configured in
+`firebase-config.js`; it degrades gracefully when Firestore is unreachable and
+runs fully offline with local logging. See `lab/search-v2/README.md` and
+`SEEDS.md`.
 
-Key design points (keep in sync when editing):
-- **Ground truth is deterministic and generated at runtime** by `landscape.js`
-  (`makeWalk(seed)`), seeded from `(arm, round)` via `config.js` `TRUTH_SEED`: the
-  same curve for **every participant of every session**, **different** between the
-  two phases, and an **independent** draw per round. `makeWalk` deterministically
-  resamples (up to 64 candidates) to **prefer a single tie-free peak** (preferred,
-  not enforced). There is **no landscape pool**
-  (the old `data/mappings.json` + `tools/generate_pool.js` + RICH/POOR strata were
-  retired).
-- The **With-AI assistant** is trained inside one or two admin-set
-  **interpolation regions** (`COVERAGE_PATCHES`); within them it interpolates,
-  outside/between them it extrapolates linearly — same math/look as
-  `/lab/interpolation`. The testing overlays (debug only) render blue truth, red
-  training points, green interpolation, amber dashed extrapolation + shaded zones.
-- **AI-model parameters** (admin, `config.js` `AI`): a **baseline** model (cost/
-  question below the 5¢ reveal cost + a training-data density) and an optional
-  **frontier** model the participant chooses per question (costs more, more data).
-  Consulting the AI is charged per question and folded into the round net.
-- Defaults: **1 round per phase, practice off**. `assistant.js` is a thin wrapper
-  over `landscape.js` and is loaded only in Arm B (strict arm isolation).
-- Tests: `node tools/selftest.js` (Node) and `CHROMIUM=… node tools/smoke.mjs`
-  (Playwright).
+**The task.** 100 positions hiding integer prizes 0–100, neighbours differing by
+at most 10. THREE actions (§7): **Ask the AI** (2 points, returns its estimate,
+does NOT reveal the truth — button ABSENT, not disabled, in AI-off rounds),
+**Reveal** (5 points, the true prize, joins the AI's anchors), and **Stop and
+nominate** (0, ends the round on the selected position; the button NAMES the
+position, and an untouched position asks for confirmation). **Score = the TRUE
+prize at the nominated position minus all query and reveal costs.** The AI's
+number is never a prize — that one rule is what makes trust fallible, and it is
+the strict comprehension gate. No score floor: a round may end negative and that
+is logged. Caps 40 queries / 20 reveals (§7/§17b/§20b say 20; the §20c table says
+30 — the three-to-one reading wins).
+
+**The AI (§3, §12).** K private anchors — 4 sparse / 10 dense, one per equal
+stratum — plus every pre-opened and every revealed position. It answers the truth
+at an anchor, the straight-line interpolation between the two nearest anchors
+inside, and the nearest anchor's value flat beyond the outermost. Rounded, and
+returned after a FIXED latency identical to a reveal's, so neither formatting nor
+response time can leak whether the answer was exact. Never draws a curve, never
+marks its anchors; the two switches that would (`ai.drawCurve`, `ai.markAnchors`)
+stay visible in the panel behind a red confirmation and must never be turned on.
+Sparse sits ABOVE the verification threshold `s* = c_R·√(2π) = 12.53` and dense
+BELOW it, so the prediction is a SIGN CHANGE, not a gradient — the panel's badge
+goes red if a parameter edit breaks that.
+
+**28 rounds**, 4 warm-up + 24 scored, 12 per block, counterbalanced crossover
+(sequence A = AI off then on, B = the reverse). Per block: 4 open + 8 seeded
+(2 FRONTIER, 4 BALANCED, 2 GAP), densities balanced within each shape. Mappings,
+seed positions and AI anchors are FROZEN and identical for every participant;
+only the order within a block is shuffled, from `hash(participant_code)`, and the
+realised order is logged.
+
+**Deterministic artifacts, none committed (§18).** `pool.js` generates the
+mapping pool from `env.generatorSeed`; `specs.js` builds the 28 specs and owns
+the §17b **validation gate**. `tools/generate_mappings.py` is a bit-exact port of
+the same mulberry32 PRNG — the two print the same parity vector and build
+byte-identical pools, asserted by `tools/selftest.js`. **The pool size is 600,
+not the brief's 200**, and that is measured, not a preference: only ~2% of
+(mapping, seed-set) pairings pass the §9 acceptance filter, so 200 cannot give
+the 16 seeded specs a distinct prize curve each — and a repeated curve would make
+the instruction "the prizes are drawn afresh in every round" false.
+`Specs.validate()` FAILS a run whose specs repeat a mapping, so this cannot
+regress silently. Full reasoning in `SEEDS.md`.
+
+**Log raw state, derive nothing in the client (§16).** `logger.js` writes two
+classes: RECORDS (every query/reveal/stop, round and session boundaries,
+comprehension, survey) one flat append-only document each, and TELEMETRY (slider
+trace throttled to 250 ms + one on release, 30 s heartbeats, focus/blur,
+instruction opens, resizes) batched into array documents. A decision row carries
+BOTH anchor sets — `ai_anchors_before` (private anchors included) and
+`participant_known_before` — encoded `"pos:val|pos:val"` because Firestore rejects
+nested arrays. **Every derived field of §16.8 is computed offline in
+`admin/export.js` and nowhere else.**
+
+**Admin panel** at `/lab/search-v2/admin/`, five tabs over the brief's six
+screens: Runs · Parameters (+ Consequences beside it) · Roster · Live monitor ·
+Data & preview. The governing rule is **CLONE, DO NOT EDIT** — a run's task
+parameters lock the moment its first participant claims a code (greyed with a
+padlock and the date; only the Operations group and the next-entrant override
+stay editable), enforced by `firestore.rules`, not by the UI. Consequences
+recompute live with two badges. The four buttons under the form are unchanged in
+number and colour from the previous panel: **Save run** (green), then Cancel
+edit / Make this the default / Restore built-in default (ghost). Export is one
+workbook (ReadMe, Run, Specs, Decisions, Rounds, Participants, Slider, Attention,
+Raw) plus the three CSVs, bundling the run's frozen configuration and a checksum;
+`interrupted` and `disengaged` are COLUMNS, not filters.
+
+**Firestore layout (§17.3):** `runs` · `runCodes` · `runCounts` · `roster` ·
+`participants` · `events` · `audit` · `messages`. **`events` must keep its name**
+— `simulation/admin/verify.js` reads it and matches `event == 'session_end'` on
+`pid`. `firestore.rules` must be REPUBLISHED for the new collections; until then
+the panel says so instead of failing silently. **Known gap, stated plainly:**
+§17.2 wants `queryAI`/`reveal`/`nominate` as Cloud Functions so the mapping never
+reaches the browser, but Functions need the Blaze plan and this is a Pages site on
+the free tier — so the client computes the answer and reads the truth from a pool
+it regenerates from the seed. The truth lives in a closure, never on `window` or
+in the DOM, and only the current round's mapping is materialised; blur/visibility
+are logged. Switching `firebase.js` to call three callable Functions is the whole
+fix if the plan ever changes.
+
+**Simulation Platform contract (both directions, pinned by
+`tools/platform-guard.mjs`).** The handoff's `studentId` becomes
+`participant_code` AND `pid` — one join key, no second identifier invented. A
+background item the platform already answered (level of study, age band, gender)
+is NOT asked again; its answer travels as `platform_<field>`, flagged. The
+student's name and e-mail NEVER reach this study's log (§11). Finishing writes
+`session_end` with `pid` and calls `window.simpMarkCompleted()`. A rehearsal
+(`?preview=1&debug=1&key=…`) does neither, never adopts the student ID, and its
+rows carry no `run_id`.
+
+**Tests that must stay green** (browser ones need Playwright; only Chromium is
+installed in the container, so Firefox/WebKit report as skipped rather than
+pretending):
+`node lab/search-v2/tools/selftest.js` (201) ·
+`tools/smoke.mjs` (137, a whole 28-round session) ·
+`tools/admin-smoke.mjs` (55) · `tools/platform-guard.mjs` (26) ·
+`tools/layout-guard.mjs` (89, reachability at five window sizes) ·
+`tools/preview-guard.mjs` · `python3 tools/generate_rounds.py --validate`.
+Standing in for cross-engine coverage: the browser code contains no syntax or API
+newer than 2020, and `inset` carries its long-hand fallback.
 
 ## `/lab/jagged` — self-contained "Trust the AI?" jagged-intelligence game
 

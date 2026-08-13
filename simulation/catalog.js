@@ -143,7 +143,7 @@ window.SIMP_CATALOG = [
   {
     key: 'search-v2', title: 'Search for Knowledge, with & without AI', icon: '🔎',
     path: '/lab/search-v2/',
-    blurb: 'Search a hidden prize landscape paying per reveal — once on your own, once with an AI assistant.',
+    blurb: 'Search a hidden line of prizes, paying to look and paying to ask — one half with an AI you can consult, one half without.',
     session: 'auto', sessionParam: 'code',
     params: function (p, s) {
       var pid = (p && p.studentId) || 'anon';
@@ -164,7 +164,7 @@ window.SIMP_CATALOG = [
         messagingSenderId: '9761548035',
         appId: '1:9761548035:web:13d1cda30bbe35aeec2b36'
       },
-      idNote: 'the student ID the platform sends as PROLIFIC_PID (events.pid), on every logged “session_end” event'
+      idNote: 'the student ID the platform sends as PROLIFIC_PID — it becomes the study’s participant_code and is carried as events.pid on the “session_end” row'
     },
     adminUrl: '/lab/search-v2/admin/', adminAuth: 'firebase',
     adminNote: 'Email/password per ADMIN_EMAILS in lab/search-v2/firebase-config.js. The launch link mirrors its canonical Prolific link, with the student ID as PROLIFIC_PID.'

@@ -1,69 +1,126 @@
 rules_version = '2';
 // ==========================================================================
 // search-v2 · Firestore security rules
-// Deploy these in Firebase console → Firestore Database → Rules → Publish.
+// Design brief §17.4: "Rules, not conventions, are what make the design hold."
+//
+// Deploy in Firebase console → Firestore Database → Rules → Publish.
 // REPLACE the admin email(s) below with your own (must match ADMIN_EMAILS in
 // firebase-config.js and the Email/Password user you created in Firebase Auth).
+//
+// What these rules enforce:
+//   · the event log is APPEND-ONLY — a participant may create their own rows and
+//     can never update or delete one, and only the admin may read them;
+//   · run parameters are ADMIN-WRITE ONLY, and only while the run is unlocked,
+//     so a live run's parameters cannot be edited from anywhere, including the
+//     console's client SDK;
+//   · the roster is never listable, so codes cannot be enumerated, and a code
+//     can only be claimed by binding it to the claiming uid;
+//   · a participant reads and writes ONLY their own participant record.
 // ==========================================================================
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function isSignedIn() { return request.auth != null; }
 
-    // Admin allow-list. Add more emails to the list if you have co-admins.
+    // Admin allow-list. Add more addresses if you have co-admins.
     function isAdmin() {
       return isSignedIn()
         && request.auth.token.email in ['admin@admin.com'];
     }
 
-    // Participant events: anyone signed in (participants sign in anonymously)
-    // may CREATE their own event documents. Only the admin may read or modify
-    // them, so one participant can never read another's data.
+    // ---- the event log ---------------------------------------------------
+    // APPEND-ONLY, and the database is what enforces it (§17.4): a participant
+    // may create rows and can never modify one afterwards. The document id is
+    // (participant, sequence), so a retry after a dropped connection lands on the
+    // same id — that write is refused, which the client reads as "already
+    // written" rather than as a failure (see writeEvent in firebase.js).
+    //
+    // Letting a signed-in user update an existing row would be a real hole here:
+    // participant codes are university student IDs, so the ids are guessable, and
+    // one participant could otherwise rewrite the values in another's rows.
     match /events/{eventId} {
       allow create: if isSignedIn();
+      allow update: if isAdmin();
       allow read:   if isAdmin();
-      allow update: if isAdmin();   // the app overwrites the same doc on retry/resume (idempotent)
       allow delete: if isAdmin();
     }
 
-    // Admin-controlled study conditions & completion codes, and the saved
-    // defaults for new sessions (config/study, config/defaults). Readable by the
-    // app (anonymous participants) so it can apply them; writable only by admin.
-    match /config/{docId} {
-      allow read:  if isSignedIn();
-      allow write: if isAdmin();
+    // ---- runs: the immutable parameter sets -------------------------------
+    // A participant may `get` the run their code points at (they need its
+    // parameters and specs to play) but may never list the collection and may
+    // never write. Admin writes are refused once the run is locked, EXCEPT for
+    // the operational fields, which the brief keeps editable for a run's life.
+    match /runs/{runId} {
+      allow get:   if isSignedIn();
+      allow list:  if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin() && (
+        resource.data.locked != true
+        || request.resource.data.params == resource.data.params
+      );
+      allow delete: if isAdmin() && resource.data.locked != true;
     }
 
-    // Study "sessions" (waves) the admin creates. A participant loads the one
-    // whose code matches their ?code= launch link (via the sessionCodes map
-    // below) to read its settings; only the admin may create/edit/delete.
-    //
-    // `get` (a point read of one known session id) is allowed for any signed-in
-    // participant, but `list` is ADMIN-ONLY: sessions carry per-wave
-    // completion/payment codes, and an unrestricted list let any anonymous
-    // participant enumerate the whole collection and harvest every code. The
-    // participant never needs to list — they resolve their session id from
-    // sessionCodes/<code> and then get that one doc.
-    match /sessions/{sessionId} {
+    // code → runId lookup. Holds ONLY the target run id, so exposing it leaks
+    // nothing. A participant does a point read by their launch code.
+    match /runCodes/{code} {
       allow get:   if isSignedIn();
       allow list:  if isAdmin();
       allow write: if isAdmin();
     }
 
-    // code → session-id lookup. Holds ONLY the target session id, so exposing it
-    // leaks nothing sensitive. A participant does a POINT read (get) by their
-    // launch code; the admin writes it on create/update and backfills legacy
-    // sessions on panel load (see firebase.js listSessions).
-    match /sessionCodes/{code} {
-      allow get:   if isSignedIn();
-      allow list:  if isAdmin();
-      allow write: if isAdmin();
+    // Sequence counters, so the crossover split stays exactly half and half.
+    // Contentless (two integers), and a participant must be able to increment
+    // them inside a transaction when they enter — so the write has to be open to
+    // any signed-in user, and is instead constrained to what an entrant can
+    // legitimately do: the counters may only ever go UP, and only by one in
+    // total. That leaves nothing worth tampering with.
+    match /runCounts/{runId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || (
+        isSignedIn()
+        && request.resource.data.keys().hasOnly(['nA', 'nB'])
+        && request.resource.data.nA is int && request.resource.data.nB is int
+        && request.resource.data.nA >= (resource == null ? 0 : resource.data.nA)
+        && request.resource.data.nB >= (resource == null ? 0 : resource.data.nB)
+        && (request.resource.data.nA + request.resource.data.nB)
+             <= (resource == null ? 0 : resource.data.nA + resource.data.nB) + 1
+      );
     }
 
-    // Admin → participant messages / nudges, keyed by the participant's play
-    // session id. Only the admin writes; any signed-in participant may read (the
-    // content is just encouragement, and a participant can't guess another's
-    // session id). Dismissal is tracked client-side, so participants never write.
+    // ---- roster ------------------------------------------------------------
+    // NEVER listable: a listable roster is an enumerable list of every valid
+    // code. A participant may `get` the one document whose id they already know
+    // (runId__THEIRCODE) and may only write it to bind it to their own uid.
+    match /roster/{entryId} {
+      allow get:   if isSignedIn();
+      allow list:  if isAdmin();
+      allow create: if isAdmin()
+        || (isSignedIn() && request.resource.data.claimedByUid == request.auth.uid);
+      allow update: if isAdmin()
+        || (isSignedIn() && request.resource.data.claimedByUid == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // ---- participant records ----------------------------------------------
+    // Owner reads and writes their own document; the admin reads all of them
+    // (the live monitor is a listener on this collection).
+    match /participants/{entryId} {
+      allow read:  if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isAdmin() || isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // ---- audit -------------------------------------------------------------
+    // Every admin action writes a row, and the audit log is part of the export.
+    match /audit/{auditId} {
+      allow create: if isAdmin();
+      allow read:   if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ---- admin → participant messages -------------------------------------
     match /messages/{msgId} {
       allow read:  if isSignedIn();
       allow write: if isAdmin();

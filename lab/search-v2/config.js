@@ -1,11 +1,17 @@
 /* ==========================================================================
-   search-v2  ·  Search for Knowledge, with and without AI
-   config.js  ·  Single source of truth for every tunable constant.
+   search-v2  ·  config.js
+   Single source of truth for every tunable constant of
+   "Search With and Without Generative AI".
 
-   This file is loaded both in the browser (as window.CONFIG) and in Node
-   (require('../config.js') from tools/generate_pool.js and tools/selftest.js),
-   so the offline pool generator and the live app never disagree on a constant.
-   Change a value HERE and nowhere else.
+   Loaded in the browser (window.CONFIG) and in Node
+   (require('../config.js') from tools/*.js and admin/export.js), so the offline
+   generators, the live app, the admin panel and the exporter can never disagree
+   on a constant. Change a value HERE and nowhere else.
+
+   DEFAULTS mirrors the design brief §17b (Screen 2: Parameters) exactly. Every
+   field in DEFAULTS is a run parameter; the admin panel edits a COPY of it into
+   a run document, and a run's parameters are LOCKED once the first participant
+   claims a code (§17b "clone, do not edit").
    ========================================================================== */
 (function (root, factory) {
   var CONFIG = factory();
@@ -14,66 +20,139 @@
 })(typeof window !== 'undefined' ? window : null, function () {
   'use strict';
 
-  return {
-    // ---- task rules (identical in both arms) -----------------------------
-    N_POSITIONS: 100,   // line length: positions 1..100
-    L_STEP: 10,         // max step between adjacent true values, in cents
-    REVEAL_COST: 5,     // cents charged per reveal
-    N_TASKS: 1,         // number of real (paid-eligible) rounds PER PHASE (admin-overridable)
-    N_PRACTICE: 0,      // number of unpaid practice rounds (0 or 1; admin-overridable)
-    PAID_TASKS: 2,      // rounds drawn for payment at the end
-
-    // ---- deterministic ground truth --------------------------------------
-    // The hidden prize curve is a bounded random walk (Brownian-like) generated
-    // AT RUNTIME (landscape.js), seeded so that it is IDENTICAL for every
-    // participant of every session, DIFFERENT between the Without-AI (arm A) and
-    // With-AI (arm B) phases, and an INDEPENDENT fresh draw for each round within
-    // a phase. Change TRUTH_SEED to reshuffle every curve at once.
-    TRUTH_SEED: 20260711,
-
-    // ---- assistant (Arm B only) ------------------------------------------
-    // The interval(s) where the assistant's training data lives ("interpolation
-    // regions"). Inside them it INTERPOLATES between its nearest training points
-    // (accurate, the true curve is locally smooth); outside/between them it
-    // EXTRAPOLATES linearly along the nearest edge (confident but increasingly
-    // wrong). Admin-overridable per session (one or two regions); this is the
-    // built-in default. See landscape.js / assistant.js.
-    COVERAGE_PATCHES: [[30, 70]], // inclusive interval(s) the assistant is "trained on"
-
-    // ---- AI model parameters (Arm B) -------------------------------------
-    // A "baseline" model is always available; an optional "frontier" model can be
-    // offered alongside it for the participant to choose from. They differ in the
-    // per-query COST (cents, charged like a reveal) and in how much TRAINING DATA
-    // they have (denser data => finer interpolation). Baseline cost must be below
-    // the reveal cost (consulting is cheaper than searching yourself); the
-    // frontier costs more than the baseline (its position relative to the reveal
-    // cost is the researcher's choice). Density: 'few' | 'standard' | 'lots'.
-    AI: {
-      baselineCost: 2,        // cents per baseline-model query (0..REVEAL_COST-1)
-      baselineData: 'few',    // baseline training-data density
-      frontier: false,        // offer a second, frontier model too?
-      frontierCost: 4,        // cents per frontier-model query (>= baselineCost)
-      frontierData: 'lots'    // frontier training-data density
+  // --------------------------------------------------------------------------
+  // Run parameters (§17b Screen 2). Everything here is per-RUN and frozen at
+  // launch, except the `ops` group, which stays editable for the run's life.
+  // --------------------------------------------------------------------------
+  var DEFAULTS = {
+    // ---- Environment (§8) --------------------------------------------------
+    env: {
+      positions: 100,          // J — positions 1..100 on the line
+      prizeMin: 0,             // value range, integer, reflecting boundaries
+      prizeMax: 100,
+      stepBound: 10,           // L — adjacent positions differ by at most L
+      seedLowMin: 20,          // walk seed value, low band  U[20,80] …
+      seedLowMax: 80,
+      seedHighMin: 80,         // … with prob 0.5, else the high band U[80,100]
+      seedHighMax: 100,
+      seedHighProb: 0.5,       // P(draw from the LOW band) — 0.5 per the brief
+      rounding: 'nearest',     // rounding of the finished path
+      // Mapping pool size. The brief's own value is 200. MEASURED at the default
+      // parameters: only about 2% of (mapping, seed-set) pairings pass the §9
+      // acceptance filter — "highest pre-opened value between 30 and 60" is a
+      // hard ask on a pool that build_pool already filtered up to `max >= 80`,
+      // where the highest of three seeded positions has a median of 91 — and only
+      // 7% of mappings admit ANY jitter of the BALANCED seed set. With 200
+      // mappings the 16 seeded specs cannot all get a distinct one, and the
+      // builder would have to serve the same prize curve in two rounds, which
+      // would make the instructions ("the prizes are drawn afresh") false.
+      // The pool is generated, never committed, so a larger one costs nothing.
+      poolSize: 600,
+      generatorSeed: 20260813  // generator random seed (frozen, recorded)
     },
 
-    // ---- logging ---------------------------------------------------------
-    ENDPOINT_URL: '',      // Apps Script web-app URL; '' = local-only logging
-    BATCH_SIZE: 10,        // flush the event queue after this many events...
-    BATCH_MS: 15000,       // ...or after this many milliseconds, whichever first
-    UPLOAD_MAX_RETRIES: 5, // POST retries before giving up on a batch
-    UPLOAD_BACKOFF_MS: 1000, // base backoff; doubles each retry
+    // ---- Costs and limits (§7) --------------------------------------------
+    costs: {
+      revealCost: 5,           // c_R
+      queryCost: 2,            // c_AI
+      queryCap: 40,            // per round
+      revealCap: 20,           // per round
+      scoreFloor: false        // off: a round may end negative, and that is logged
+    },
 
-    // ---- Prolific / deployment ------------------------------------------
-    COMPLETION_CODE: 'SET-ME', // Prolific completion code shown on the finish page
-    APP_VERSION: 'v2.0.0',     // stamped on every logged event
+    // ---- AI (§3, §12) ------------------------------------------------------
+    ai: {
+      sparseK: 4,
+      denseK: 10,
+      placement: 'stratified', // 'stratified' | 'uniform' (never use uniform)
+      answerRounding: 'nearest',
+      allowRequery: true,
+      drawCurve: false,        // MUST stay off — see §17b
+      markAnchors: false       // MUST stay off — see §17b
+    },
 
-    // ---- encouragement / nudges ------------------------------------------
-    // If a participant makes no move for this many ms during a round, the app
-    // shows a gentle "keep going" nudge (client-side; no server needed). The
-    // admin can also push a message to a specific participant from the panel.
-    NUDGE_IDLE_MS: 60000,
+    // ---- Round structure (§10) --------------------------------------------
+    rounds: {
+      warmupPerBlock: 2,
+      scoredPerBlock: 12,
+      openPerBlock: 4,
+      seededPerBlock: 8,
+      shapeMix: { FRONTIER: 2, BALANCED: 4, GAP: 2 },
+      densitySeeded: { SPARSE: 4, DENSE: 4 },
+      densityOpen: { SPARSE: 2, DENSE: 2 },
+      seedJitter: 2,           // ± uniform integer jitter on each seed position
+      shuffleWithinBlock: true
+    },
 
-    // ---- debug -----------------------------------------------------------
-    DEBUG_KEY: 'stouras'   // ?debug=1&key=stouras to enable the debug overlay
+    // ---- Assignment (§11) --------------------------------------------------
+    assign: {
+      sequenceAssignment: 'block', // 'block' (exact 50/50) | 'random'
+      freezeSeeds: true,
+      freezeAnchors: true,
+      nextEntrantOverride: 'auto'  // 'auto' | 'A' | 'B'  (the ONE unlocked control)
+    },
+
+    // ---- Acceptance filter (§9) -------------------------------------------
+    filter: {
+      minGlobalMax: 80,        // seeded rounds only
+      seedHighestMin: 30,      // highest pre-opened value must sit in [30, 60]
+      seedHighestMax: 60,
+      minHeadroom: 25,         // global max at least this far above the best seed
+      applyToOpen: false       // open rounds are unfiltered by design
+    },
+
+    // ---- Operations — editable at any time (§17b) --------------------------
+    ops: {
+      runName: 'untitled',
+      entryOpen: false,
+      windowFrom: '',          // ISO date-time, '' = none
+      windowTo: '',
+      minViewport: 900,        // CSS pixels; refuse to start below it
+      allowResume: true,
+      resumeWindowH: 24,
+      idleWarnMin: 10,
+      exitSurvey: true,
+      debrief: true,
+      gateQ2: 'strict',        // must pass to continue
+      gateOther: 'record',     // record attempts, do not block
+      rosterMode: 'open',      // 'open' (any code, incl. platform student IDs)
+                               // | 'roster' (only pre-generated codes)
+      completionCode: ''       // shown on the Done screen (blank = none needed)
+    }
+  };
+
+  return {
+    DEFAULTS: DEFAULTS,
+
+    // ---- constants the code needs directly ---------------------------------
+    // Per-step SD of the walk, sigma = L / sqrt(3). Every uncertainty formula in
+    // §16.8 is expressed in it, so it is derived from the run's own step bound.
+    sigma: function (L) { return (L == null ? DEFAULTS.env.stepBound : L) / Math.sqrt(3); },
+    // Verification threshold s* = c_R * sqrt(2*pi) (§3.4).
+    sStar: function (cR) { return (cR == null ? DEFAULTS.costs.revealCost : cR) * Math.sqrt(2 * Math.PI); },
+    // AI gap width at which verification starts to pay, g* = (2 s* / sigma)^2.
+    gStar: function (cR, L) {
+      var s = (cR == null ? DEFAULTS.costs.revealCost : cR) * Math.sqrt(2 * Math.PI);
+      var sg = (L == null ? DEFAULTS.env.stepBound : L) / Math.sqrt(3);
+      return Math.pow(2 * s / sg, 2);
+    },
+
+    SEED_SHAPES: ['FRONTIER', 'BALANCED', 'GAP'],
+    // Base seed positions per shape (§10). Each is jittered by ±seedJitter.
+    SEED_BASE: {
+      FRONTIER: [40, 47, 54, 61],
+      BALANCED: [8, 52, 92],
+      GAP: [3, 50, 97]
+    },
+    DENSITIES: ['SPARSE', 'DENSE'],
+
+    // ---- logging / transport ----------------------------------------------
+    BATCH_SIZE: 12,            // flush the telemetry queue after this many events…
+    BATCH_MS: 10000,           // …or after this many ms, whichever comes first (§17.2)
+    SLIDER_THROTTLE_MS: 250,   // §16.4
+    HEARTBEAT_MS: 30000,       // §16.5
+
+    APP_VERSION: 'v3.0.0',     // stamped on every logged event
+    DEBUG_KEY: 'stouras'       // ?debug=1&key=stouras enables the testing overlay
   };
 });

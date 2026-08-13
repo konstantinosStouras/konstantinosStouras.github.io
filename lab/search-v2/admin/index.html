@@ -3,471 +3,568 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Search for Knowledge — Admin</title>
-  <meta name="description" content="Admin panel for the “Search for Knowledge” decision experiment: create sessions, configure phases, and view data." />
+  <title>Search With and Without Generative AI — Admin</title>
+  <meta name="description" content="Admin panel: runs, parameters, consequences, roster, live monitor and data export." />
   <meta name="robots" content="noindex,nofollow" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b2b2b'/%3E%3Cpath d='M9 22V10m7 12V14m7 8v-6' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="../icon-180.png" />
-  <!-- Social / link-preview metadata (Open Graph + Twitter Card), so the admin
-       link unfurls nicely when shared in messaging apps. -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="stouras.com/lab" />
-  <meta property="og:title" content="Search for Knowledge — Admin" />
-  <meta property="og:description" content="Admin panel for the “Search for Knowledge” decision experiment: create sessions, configure phases, and view collected data." />
+  <meta property="og:title" content="Search With and Without Generative AI — Admin" />
+  <meta property="og:description" content="Admin panel: runs, parameters, consequences, roster, live monitor and data export." />
   <meta property="og:url" content="https://www.stouras.com/lab/search-v2/admin/" />
   <meta property="og:image" content="https://www.stouras.com/lab/search-v2/og-image.png" />
-  <meta property="og:image:type" content="image/png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Search for Knowledge — an online decision experiment" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Search for Knowledge — Admin" />
-  <meta name="twitter:description" content="Admin panel for the “Search for Knowledge” decision experiment." />
-  <meta name="twitter:image" content="https://www.stouras.com/lab/search-v2/og-image.png" />
   <meta name="theme-color" content="#2780e3" />
   <link rel="stylesheet" href="../styles.css" />
   <style>
-    .admin-wrap{max-width:1180px;}
-    /* Top bar: align its contents with the centered page, and let them reflow
-       (wrap) when the window is narrow or zoomed in, so nothing is pushed off to
-       the far left/right or hidden off-screen. */
+    .admin-wrap{max-width:1400px;}
     .nav{padding:12px 20px;}
-    .nav-inner{max-width:1180px; width:100%; margin:0 auto; display:flex; align-items:center;
+    .nav-inner{max-width:1400px; width:100%; margin:0 auto; display:flex; align-items:center;
       justify-content:space-between; gap:8px 18px; flex-wrap:wrap;}
     .nav .brand{min-width:0;}
     .nav .nav-right{flex-wrap:wrap; justify-content:flex-end; row-gap:8px;}
+
     /* ---- dark mode (admin page only; set via data-theme on <html>) ---- */
     :root[data-theme="dark"]{ --ink:#e7e9ec; --muted:#9aa0a6; --line:#2d3138; --bg:#15171a; --panel:#1d2025; }
     :root[data-theme="dark"] body{ background:#15171a; }
     :root[data-theme="dark"] .nav{ background:#1a1d21; border-bottom-color:#2d3138; }
     :root[data-theme="dark"] .card,
     :root[data-theme="dark"] .table-scroll,
-    :root[data-theme="dark"] .sess-card{ background:#1d2025; border-color:#2d3138; }
-    :root[data-theme="dark"] .btn-ghost{ background:#2a2e34; color:#e7e9ec; }
+    :root[data-theme="dark"] .run-card{ background:#1d2025; border-color:#2d3138; }
+    :root[data-theme="dark"] .btn-ghost{ background:#2a2e34; color:#e7e9ec; border-color:#2a2e34; }
     :root[data-theme="dark"] .btn-ghost:hover:not(:disabled){ background:#333941; }
     :root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] select{ background:#15171a; color:#e7e9ec; border-color:#2d3138; }
     :root[data-theme="dark"] .data-table th{ background:#23262c; }
     :root[data-theme="dark"] .seg button{ background:#23262c; color:#e7e9ec; }
     :root[data-theme="dark"] .seg button.on{ background:var(--blue); color:#fff; }
-    :root[data-theme="dark"] .stat-box, :root[data-theme="dark"] .summary, :root[data-theme="dark"] .acc-head{ background:#1d2025; border-color:#2d3138; }
-    :root[data-theme="dark"] .code-box{ background:#1a2230; }
+    :root[data-theme="dark"] .pgroup > summary{ background:#23262c; }
+    :root[data-theme="dark"] .cons-table tbody tr:nth-child(odd){ background:#1a1d21; }
+    :root[data-theme="dark"] .locked-field{ background:#23262c; }
 
     .tabs{display:flex; gap:6px; border-bottom:1px solid var(--line); margin:8px 0 18px; flex-wrap:wrap;}
-    .tab{border:none; background:none; padding:10px 16px; font-size:15px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;}
+    .tab{border:none; background:none; padding:10px 16px; font-size:15px; font-weight:600; color:var(--muted);
+      cursor:pointer; border-bottom:2px solid transparent;}
     .tab.on{color:var(--ink); border-bottom-color:var(--blue);}
-    .icon-btn{border:1px solid var(--line); background:transparent; color:var(--ink); border-radius:50%; width:34px; height:34px; cursor:pointer; font-size:15px; line-height:1;}
+    .icon-btn{border:1px solid var(--line); background:transparent; color:var(--ink); border-radius:50%;
+      width:34px; height:34px; cursor:pointer; font-size:15px; line-height:1;}
     .icon-btn:hover{background:var(--panel);}
 
-    .cols{display:grid; grid-template-columns:1fr 400px; gap:20px; align-items:start;}
-    @media (max-width:900px){ .cols{grid-template-columns:1fr;} }
+    .cols{display:grid; grid-template-columns:1fr 430px; gap:20px; align-items:start;}
+    @media (max-width:1100px){ .cols{grid-template-columns:1fr;} }
 
     .field{margin:12px 0;}
     .field label{display:block; font-weight:600; font-size:14px; margin-bottom:5px;}
-    .field input[type=text], .field input[type=password], .field input[type=number], .field textarea{
-      width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; font-size:15px;
+    .field input[type=text], .field input[type=password], .field input[type=number],
+    .field input[type=datetime-local], .field textarea, .field select{
+      width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:9px; font-size:15px;
       font-family:inherit; background:var(--bg); color:var(--ink); transition:border-color .12s, box-shadow .12s;}
-    .field input::placeholder, .field textarea::placeholder{ color:var(--muted); opacity:.8; }
     .field input[type=number]{max-width:190px;}
     .field input:focus, .field textarea:focus, .field select:focus{
       outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(39,128,227,.16);}
-    /* Keep browser-autofilled fields (e.g. the admin email/password) on-theme —
-       Chrome otherwise paints them with a light UA background + colour. */
-    .field input:-webkit-autofill, .field input:-webkit-autofill:hover,
-    .field input:-webkit-autofill:focus{
+    .field input:-webkit-autofill, .field input:-webkit-autofill:hover, .field input:-webkit-autofill:focus{
       -webkit-text-fill-color:var(--ink); caret-color:var(--ink);
       -webkit-box-shadow:0 0 0 1000px var(--bg) inset; box-shadow:0 0 0 1000px var(--bg) inset;
       transition:background-color 9999s ease-in-out 0s;}
-    .field textarea{min-height:120px; resize:vertical; line-height:1.45;}
+    .field textarea{min-height:110px; resize:vertical; line-height:1.45;}
     .field .hint{font-size:12.5px; color:var(--muted); margin-top:4px;}
-    /* deterministic-truth callout + AI-model section */
-    .admin-note{background:#eef6ff; border:1px solid #cfe2fb; border-radius:10px; padding:11px 14px; font-size:13.5px; color:#1f4e79; margin:12px 0;}
-    :root[data-theme="dark"] .admin-note{background:#152232; border-color:#26405e; color:#bcd6f5;}
-    .ai-section{border:1px solid var(--line); border-radius:12px; padding:2px 16px 14px; margin:14px 0; background:var(--panel);}
-    :root[data-theme="dark"] .ai-section{background:#1a1d21;}
-    .regions-inputs .row2{margin-top:6px;}
-    #frontier-fields{border-left:3px solid var(--blue); padding-left:14px; margin-top:8px;}
-    #frontier-fields.off{display:none;}
-    .regions-warn{color:var(--red); font-size:12.5px; margin-top:6px; display:none;}
-    .regions-warn.show{display:block;}
-    .help{display:inline-block; width:15px; height:15px; line-height:14px; text-align:center; font-size:11px; font-weight:700;
-      color:var(--muted); border:1px solid var(--line); border-radius:50%; cursor:help; vertical-align:middle;}
-    .field[title]:hover .help, .field[data-tip]:hover .help,
-    h3[title]:hover .help, h3[data-tip]:hover .help{color:var(--blue); border-color:var(--blue);}
-    /* Fast tooltip bubble (.tip-pop) styles live in the shared styles.css. */
-    .howto{border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:12px 14px; margin:8px 0 16px; font-size:13.5px;}
-    .howto summary{cursor:pointer; font-weight:600;}
-    .howto ol{margin:8px 0 0; padding-left:20px;} .howto li{margin:4px 0;}
     .row2{display:flex; gap:10px; flex-wrap:wrap;} .row2 .field{flex:1; min-width:150px;}
+    .row3{display:flex; gap:10px; flex-wrap:wrap;} .row3 .field{flex:1; min-width:110px;}
     .seg{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; flex-wrap:wrap;}
     .seg button{border:none; background:#fff; padding:8px 13px; font-size:13.5px; cursor:pointer; color:var(--ink);}
     .seg button.on{background:var(--blue); color:#fff;}
+    .help{display:inline-block; width:15px; height:15px; line-height:14px; text-align:center; font-size:11px;
+      font-weight:700; color:var(--muted); border:1px solid var(--line); border-radius:50%; cursor:help; vertical-align:middle;}
+    .admin-note{background:#eef6ff; border:1px solid #cfe2fb; border-radius:10px; padding:11px 14px;
+      font-size:13.5px; color:#1f4e79; margin:12px 0;}
+    :root[data-theme="dark"] .admin-note{background:#152232; border-color:#26405e; color:#bcd6f5;}
+    .admin-note.bad{background:#fdeeee; border-color:#f3c9c9; color:#a12a2a;}
+    :root[data-theme="dark"] .admin-note.bad{background:#2c1618; border-color:#5e2a2c; color:#f5c9cb;}
 
-    /* PHASES: include toggles (switches) + order dropdown. The compound selector
-       out-specifies the generic ".field label{display:block}" rule above. */
-    .phase-toggles{display:flex; flex-direction:column; gap:8px;}
-    .phase-toggles .phase-toggle{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0;
-      border:1px solid var(--line); border-radius:10px; padding:11px 14px; background:var(--panel); cursor:pointer; user-select:none;}
-    .pt-label{font-weight:600; font-size:14.5px;}
-    .pt-switch{position:relative; display:inline-block; width:44px; height:24px; flex:0 0 auto;}
-    .pt-switch input{position:absolute; opacity:0; width:0; height:0; margin:0;}
-    .pt-sw{position:absolute; inset:0; border-radius:24px; background:#c7ccd2; transition:background .15s;}
-    .pt-sw::after{content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%;
-      background:#fff; transition:transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.3);}
-    .pt-switch input:checked + .pt-sw{background:var(--green);}
-    .pt-switch input:checked + .pt-sw::after{transform:translateX(20px);}
-    .pt-switch input:focus-visible + .pt-sw{outline:2px solid var(--blue); outline-offset:2px;}
-    :root[data-theme="dark"] .pt-sw{background:#3a3f47;}
-    .phase-order-row{margin-top:10px;}
-    .phase-order-row select{padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:14.5px; width:100%; max-width:440px;}
-    .phase-order-row.hidden{display:none;}
-    .code-row{display:flex; gap:8px;}
-    .code-row input{flex:1;}
+    /* ---- parameter groups (§17b Screen 2) ---- */
+    .pgroup{border:1px solid var(--line); border-radius:12px; margin:12px 0; background:var(--bg);}
+    .pgroup > summary{cursor:pointer; font-weight:700; font-size:15px; padding:12px 16px; background:var(--panel);
+      border-radius:11px; list-style:none; display:flex; justify-content:space-between; align-items:center; gap:10px;}
+    .pgroup[open] > summary{border-radius:11px 11px 0 0; border-bottom:1px solid var(--line);}
+    .pgroup > summary::-webkit-details-marker{display:none;}
+    .pgroup > summary::after{content:'▾'; color:var(--muted); font-size:13px;}
+    .pgroup[open] > summary::after{content:'▴';}
+    .pgroup .pbody{padding:4px 16px 14px;}
+    .lock-tag{font-size:11.5px; font-weight:600; color:var(--muted); background:var(--bg);
+      border:1px solid var(--line); border-radius:20px; padding:2px 9px;}
+    .locked-field{background:var(--panel) !important; opacity:.75;}
+    .locked-note{font-size:12.5px; color:var(--muted); margin-top:2px;}
+    .defval{font-size:12px; color:var(--muted); font-weight:400;}
+    .danger-switch{border:1px solid #f3c9c9; background:#fdeeee; border-radius:10px; padding:10px 12px; margin:8px 0;}
+    :root[data-theme="dark"] .danger-switch{background:#2c1618; border-color:#5e2a2c;}
+    .danger-switch .ds-t{font-weight:700; color:var(--red); font-size:13.5px;}
+    .danger-switch .ds-b{font-size:12.5px; color:var(--muted); margin-top:3px;}
 
-    .accordion{border:1px solid var(--line); border-radius:10px; margin:8px 0; overflow:hidden;}
-    .acc-head{width:100%; text-align:left; border:none; background:var(--panel); padding:11px 14px; font-weight:600; font-size:14px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; color:var(--ink);}
-    .acc-body{padding:12px 14px; display:none;}
-    .accordion.open .acc-body{display:block;}
-    .acc-head .chev{transition:transform .15s;}
-    .accordion.open .acc-head .chev{transform:rotate(180deg);}
+    /* ---- consequences (§17b Screen 3) ---- */
+    .cons{position:sticky; top:78px;}
+    .badge{display:block; border-radius:10px; padding:11px 14px; font-size:13.5px; font-weight:600; margin:8px 0;}
+    .badge.green{background:#eef8e9; border:1px solid #cfe8c2; color:#2c5d1f;}
+    .badge.amber{background:#fff7ed; border:1px solid #f4d5a8; color:#8a5a12;}
+    .badge.red{background:#fdeeee; border:1px solid #f3c9c9; color:#a12a2a;}
+    .badge .bt{display:block; font-weight:700; margin-bottom:2px;}
+    .badge .bb{display:block; font-weight:400; font-size:12.5px;}
+    .cons-table{width:100%; border-collapse:collapse; font-size:13px; margin-top:8px;}
+    .cons-table td{padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top;}
+    .cons-table tbody tr:nth-child(odd){background:var(--panel);}
+    .cons-table td:last-child{text-align:right; font-weight:700; white-space:nowrap;}
+    .cons-table td .f{display:block; font-weight:400; color:var(--muted); font-size:11.5px;}
 
-    .actions3{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px;}
-    .flash{color:var(--green-d); font-weight:600; font-size:13px; opacity:0; transition:opacity .2s;}
-    .flash.show{opacity:1;}
+    /* ---- runs, roster, monitor, data ---- */
+    .run-card{border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:10px 0; background:#fff;}
+    .run-head{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;}
+    .run-title{font-weight:700; font-size:16px;}
+    .run-meta{font-size:12.5px; color:var(--muted); line-height:1.7;}
+    .run-acts{display:flex; gap:7px; flex-wrap:wrap; margin-top:10px;}
+    .status{display:inline-block; font-size:11.5px; font-weight:700; border-radius:20px; padding:2px 10px; margin-left:6px;}
+    .status.draft{background:#eef0f3; color:#555;}
+    .status.validating{background:#fff7ed; color:#8a5a12;}
+    .status.open{background:#eef8e9; color:#2c5d1f;}
+    .status.closed{background:#fdeeee; color:#a12a2a;}
+    .status.archived{background:#eef0f3; color:#888;}
+    .sBtn{font-size:12px; padding:7px 11px; border-radius:10px; font-weight:600; line-height:1.4;
+      white-space:nowrap; border:1px solid transparent; cursor:pointer; box-shadow:none;}
+    .sBtnPrimary{background:var(--blue); color:#fff;}
+    .sBtnSec{background:var(--bg); color:var(--ink); border-color:var(--line);}
+    .sBtnSec:hover{background:var(--panel);}
+    .exportBtn{background:var(--green); color:#fff;}
+    .closeBtn{background:var(--bg); color:var(--ink); border-color:var(--line);}
+    .deleteBtn{background:transparent; color:var(--red); border-color:var(--red);}
 
-    .summary{border:1px solid var(--line); border-radius:10px; padding:14px 16px; background:var(--panel); margin-top:14px;}
-    .summary h3{margin:0 0 8px;}
-    .sum-row{display:grid; grid-template-columns:130px 1fr; gap:8px; font-size:14px; padding:4px 0; border-top:1px solid var(--line);}
-    .sum-row:first-of-type{border-top:none;}
-    .sum-row .v{font-weight:600; text-align:right;}
-
-    .code-box{margin-top:14px; padding:14px; border:1px dashed var(--blue); border-radius:12px; background:#f3f8ff;}
-    .launch{font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:7px 9px; margin:6px 0;}
-
-    .sess-card{border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:10px 0; background:#fff;}
-    .sess-card .sc-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
-    .sess-card .sc-name{font-weight:700; font-size:16px;}
-    .sc-code{font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--muted);}
-    .pill{font-size:11px; font-weight:700; padding:2px 7px; border-radius:20px; text-transform:uppercase;}
-    .pill.active{background:#eef8e9; color:#2e7d32;} .pill.completed{background:#eef0f3; color:#666;}
-    :root[data-theme="dark"] .pill.completed{background:#2a2e34; color:#aaa;}
-    .sc-meta{font-size:12.5px; color:var(--muted); margin:6px 0;}
-    .sc-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
-    .link-btn{border:none; background:none; color:var(--blue); cursor:pointer; font-size:13.5px; padding:4px 2px;}
+    .table-scroll{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:#fff;}
+    .data-table{width:100%; border-collapse:collapse; font-size:13px;}
+    .data-table th, .data-table td{padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap;}
+    .data-table th{background:var(--panel); position:sticky; top:0; font-weight:700;}
+    .data-table td.warn{color:var(--red); font-weight:700;}
+    .stat-row{display:flex; gap:10px; flex-wrap:wrap; margin:12px 0;}
+    .stat-box{flex:1; min-width:120px; background:var(--panel); border:1px solid var(--line);
+      border-radius:10px; padding:10px 12px; text-align:center;}
+    .stat-box b{display:block; font-size:22px;} .stat-box span{font-size:11.5px; color:var(--muted);}
+    .health{width:100%; border-collapse:collapse; font-size:13px; margin-top:8px;}
+    .health td{padding:7px 9px; border-bottom:1px solid var(--line);}
+    .health td:last-child{text-align:right; font-weight:700;}
+    .health tr.warn td{background:#fff7ed;}
+    :root[data-theme="dark"] .health tr.warn td{background:#2a2013;}
+    .health tr.warn td:last-child{color:var(--amber-d);}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px;}
+    .link-btn{border:none; background:none; color:var(--blue); cursor:pointer; font-size:13px; padding:0;}
     .link-btn.danger{color:var(--red);}
-    /* Participants panel (right column of the Sessions tab) — expandable cards */
-    .part-scroll{max-height:520px; overflow:auto;}
-    .part-card{border:1px solid var(--line); border-radius:10px; margin:8px 0; background:#fff; overflow:hidden;}
-    :root[data-theme="dark"] .part-card{ background:#1d2025; border-color:#2d3138; }
-    .pu-head{width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
-      background:none; border:none; cursor:pointer; padding:10px 12px; text-align:left; color:var(--ink); font:inherit;}
-    .pu-head:hover{background:var(--panel);}
-    .pu-idwrap{display:flex; flex-direction:column; gap:2px; min-width:0;}
-    .pu-id{font-weight:700; font-size:14px; font-family:ui-monospace,Menlo,monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-    .pu-sub{font-size:12px; color:var(--muted); font-family:ui-monospace,Menlo,monospace;}
-    .pu-right{display:flex; align-items:center; gap:8px; flex:0 0 auto;}
-    .pu-chev{color:var(--muted); font-size:11px; transition:transform .15s;}
-    .part-card.open .pu-chev{transform:rotate(180deg);}
-    :root[data-theme="dark"] .pill.active{background:#243026; color:#7bd88f;}
-    .pu-body{display:none; padding:2px 12px 12px; border-top:1px solid var(--line);}
-    .part-card.open .pu-body{display:block;}
-    .pu-facts{font-size:12.5px; color:var(--muted); margin:10px 0 2px;}
-    .pu-facts .sep{opacity:.55; padding:0 2px;}
-    .pu-rounds{display:flex; flex-direction:column; gap:6px; margin:12px 0 2px;}
-    .pu-round{display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--line);
-      border-radius:8px; padding:7px 10px; font-size:13px;}
-    .pu-arm{font-weight:600;}
-    .pu-net{margin-left:auto; color:var(--muted); font-variant-numeric:tabular-nums;}
-    .pu-sep{border-top:1px dashed var(--line); margin:14px 0 10px;}
-    .pu-actions{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
-    .pu-actions-left{display:flex; align-items:center; gap:14px;}
-    .pu-remove{border:1px solid var(--red); background:transparent; color:var(--red); border-radius:8px;
-      padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer;}
-    .pu-remove:hover:not(:disabled){background:var(--red); color:#fff;}
-    .pu-remove:disabled{opacity:.5; cursor:default;}
-    /* per-participant message composer (revealed by the "Message" link) */
-    .pu-compose{display:none; margin-top:10px; flex-direction:column; gap:8px;}
-    .part-card.composing .pu-compose{display:flex;}
-    .pu-compose textarea{width:100%; min-height:56px; padding:9px 11px; border:1px solid var(--line);
-      border-radius:8px; font-family:inherit; font-size:13.5px; background:var(--bg); color:var(--ink); resize:vertical;}
-    .pu-msg-row{display:flex; align-items:center; gap:12px;}
-
-    .stat-grid{display:flex; gap:12px; flex-wrap:wrap; margin:12px 0;}
-    .stat-box{border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:120px; background:#fff;}
-    .stat-box .n{font-size:24px; font-weight:700;} .stat-box .l{font-size:12.5px; color:var(--muted);}
-    .data-table{width:100%; border-collapse:collapse; font-size:12.5px;}
-    .data-table th,.data-table td{border:1px solid var(--line); padding:5px 7px; text-align:left; white-space:nowrap;}
-    .data-table th{background:var(--panel); position:sticky; top:0;}
-    .table-scroll{max-height:440px; overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fff;}
-    .banner{border-radius:10px; padding:11px 14px; font-size:14px; margin:10px 0;}
-    .banner.info{background:#eef6ff; border:1px solid #cfe2fb; color:#1f4e79;}
-    .banner.warn{background:#fff7ed; border:1px solid #f4d5a8; color:#8a5a12;}
-    /* On the sign-in screen the banner sat full-width above a 420px card; keep it
-       card-width, and give the banners a muted on-theme colour in dark mode. */
-    #login-banner{max-width:420px;}
-    #login-banner .banner{margin:14px 0 0;}
-    :root[data-theme="dark"] .banner.info{background:#182233; border-color:#28405e; color:#c2d6f0;}
-    :root[data-theme="dark"] .banner.warn{background:#2a2113; border-color:#5a4a1f; color:#f0d9a8;}
-    code.k{background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:13px;}
-    .bars{margin:10px 0;} .bar-row{display:grid; grid-template-columns:180px 1fr 90px; gap:10px; align-items:center; margin:7px 0; font-size:13.5px;}
-    .bar-track{background:var(--panel); border:1px solid var(--line); border-radius:6px; height:22px; overflow:hidden;}
-    .bar-fill{height:100%; background:var(--blue);} .bar-fill.b{background:var(--green);}
-    .an-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;} @media(max-width:800px){.an-grid{grid-template-columns:1fr;}}
-    select.sess-filter{padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px;}
   </style>
 </head>
 <body>
   <div class="nav">
     <div class="nav-inner">
-      <div class="brand">Search for Knowledge <span class="muted" style="font-weight:400; font-size:14px;">· Admin</span></div>
+      <div class="brand">Search &mdash; Admin</div>
       <div class="nav-right">
         <span class="muted small" id="who"></span>
-        <button class="icon-btn" id="btn-theme" title="Switch between light and dark appearance">☾</button>
-        <button class="btn btn-ghost btn-sm" id="btn-analytics-nav" style="display:none;" title="Jump to the Analytics tab (Without AI vs With AI results)">Data Analytics</button>
-        <button class="btn btn-ghost btn-sm" id="btn-signout" style="display:none;" title="Sign out of the admin panel">Sign out</button>
+        <button class="icon-btn" id="btn-theme" title="Switch between light and dark">&#9789;</button>
+        <button class="btn btn-ghost btn-sm" id="btn-signout" style="display:none;">Sign out</button>
       </div>
     </div>
   </div>
 
   <div class="wrap admin-wrap">
 
-    <!-- LOGIN -->
+    <!-- ============ LOGIN ============ -->
     <section class="screen active" id="a-login">
-      <h1>Admin sign in</h1>
-      <div id="login-banner"></div>
-      <div class="card" id="login-card" style="max-width:420px;">
-        <div class="field"><label>Email</label><input type="text" id="in-email" autocomplete="username" /></div>
-        <div class="field"><label>Password</label><input type="password" id="in-pass" autocomplete="current-password" /></div>
+      <div class="card" style="max-width:420px; margin:48px auto;">
+        <h2>Sign in</h2>
+        <div class="field"><label for="li-email">E-mail</label><input type="text" id="li-email" autocomplete="username" /></div>
+        <div class="field"><label for="li-pw">Password</label><input type="password" id="li-pw" autocomplete="current-password" /></div>
+        <div class="feedback bad" id="li-err" style="display:none;"></div>
         <div class="right"><button class="btn btn-blue" id="btn-login">Sign in</button></div>
-        <div class="feedback bad" id="login-err" style="display:none;"></div>
+        <p class="muted small" id="li-note" style="margin-top:12px;"></p>
       </div>
     </section>
 
-    <!-- DASHBOARD -->
+    <!-- ============ DASHBOARD ============ -->
     <section class="screen" id="a-dash">
-      <div id="dash-banner"></div>
       <div class="tabs">
-        <button class="tab on" data-tab="sessions" title="Create and manage sessions (runs of the study), and edit what participants see">Sessions</button>
-        <button class="tab" data-tab="data" title="Raw collected data per participant, with CSV/JSON export">Data</button>
-        <button class="tab" data-tab="analytics" title="Summary results comparing the Without AI (human only) vs With AI (AI assisted) phases">Analytics</button>
+        <button class="tab on" data-tab="runs" title="Every run: status, participants, sequence balance">Runs</button>
+        <button class="tab" data-tab="params" title="The parameter set for the selected run, with its downstream consequences beside it">Parameters</button>
+        <button class="tab" data-tab="roster" title="Participant codes and sequence assignment">Roster</button>
+        <button class="tab" data-tab="monitor" title="Live counters and health checks while a run is open">Live monitor</button>
+        <button class="tab" data-tab="data" title="Preview, validate, dry-run and export">Data &amp; preview</button>
       </div>
 
-      <!-- SESSIONS TAB: create/edit (left) + active/completed (right) -->
-      <div class="tab-panel" id="tab-sessions">
-        <details class="howto">
-          <summary>How this works — click to expand</summary>
-          <ol>
-            <li><b>Create a session</b> (left): give it a name + code, choose the <b>phases</b> (which conditions to include and their order) and how many rounds participants play, and optionally reword any page. Hover the <span class="help">?</span> on any field for help.</li>
-            <li><b>Save.</b> You'll get a participant link (<code class="k">?code=…</code>) and a <b>▶ Test</b> link that lets you play it yourself (intro skipped, no data saved).</li>
-            <li><b>Share</b> the appropriate link with participants (via Prolific). Their data is tagged with this session's code.</li>
-            <li>Watch progress under <b>Active sessions</b> (right); <b>mark completed</b> when done. See results on the <b>Data</b> and <b>Analytics</b> tabs.</li>
-          </ol>
-          <p class="small muted" style="margin:8px 0 0;">The game: each participant searches a hidden line of 100 prizes, paying 5¢ to reveal any position, and keeps the best prize minus reveal costs. In the <b>With AI</b> phase they also get a free AI assistant that gives an estimate for any position — accurate near the positions it was trained on and unreliable elsewhere, but it always answers (participants aren't told where it is reliable). In the <b>Without AI</b> phase they search alone.</p>
-        </details>
+      <div class="admin-note" id="scope-note"></div>
+
+      <!-- ---------------- Screen 1: RUNS ---------------- -->
+      <div class="tab-panel" id="tab-runs">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
+          <h2 style="margin:0;">Runs</h2>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-green btn-sm" id="btn-new-run" title="Start a new run from the built-in defaults">+ New run</button>
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-runs">&#8635; Refresh</button>
+          </div>
+        </div>
+        <p class="muted small">A <b>run</b> is an immutable parameter set. Once the first participant
+        claims a code every parameter that touches the task is locked; to change anything you
+        <b>clone</b> the run and collect under a new run id. Every event, round and participant
+        row carries its <span class="mono">run_id</span>, so two parameter sets can never be silently pooled.</p>
+        <div id="runs-list"></div>
+      </div>
+
+      <!-- ------- Screens 2 + 3: PARAMETERS beside CONSEQUENCES ------- -->
+      <div class="tab-panel" id="tab-params" style="display:none;">
         <div class="cols">
-          <!-- LEFT: create / edit form -->
-          <div class="card">
-            <h2 id="form-title">Create a session</h2>
-            <p class="muted small">A session is one run of the study with its own code, settings, and page text. Configure it below, then name it and give it a code at the bottom before creating it. Share its launch link with participants; data is grouped by session.</p>
-
-            <div class="field" title="A phase is a block of rounds played in one condition. 'Without AI' = the participant searches alone; 'With AI' = the participant also has a free assistant that gives its best estimate for any position — interpolating between the points it was trained on (accurate) and flat-extrapolating beyond them (unreliable), never refusing. Participants are not told where it is reliable. Turn a phase on to include it, and choose the order participants move through them. Include one phase for a single-condition study, or both for a within-subjects design where everyone plays both.">
-              <label>Phases <span class="help">?</span></label>
-              <div class="hint" style="margin:0 0 8px;">Select which phases to include and the order participants move through them. Each included phase is played as its own block of the rounds set above.</div>
-              <div class="phase-toggles" id="phase-toggles">
-                <label class="phase-toggle" title="Include a block of rounds where the participant searches on their own, with no AI assistant.">
-                  <span class="pt-label">Without AI <span class="muted small">· human only</span></span>
-                  <span class="pt-switch"><input type="checkbox" id="ph-A" data-ph="A"><span class="pt-sw"></span></span>
-                </label>
-                <label class="phase-toggle" title="Include a block of rounds where the participant also has the free AI assistant (gives an estimate for any position; reliable only near where it was trained, which participants aren't told).">
-                  <span class="pt-label">With AI <span class="muted small">· AI assisted</span></span>
-                  <span class="pt-switch"><input type="checkbox" id="ph-B" data-ph="B"><span class="pt-sw"></span></span>
-                </label>
-              </div>
-              <div class="phase-order-row" id="phase-order-row">
-                <label style="display:block; font-weight:600; font-size:14px; margin-bottom:5px;">Phase order <span class="help" title="The sequence participants move through the included phases. 'Counterbalanced' randomly assigns each participant one of the two orders (the within-subjects way to control for order effects). Only relevant when both phases are on.">?</span></label>
-                <select id="f-phase-order"></select>
-              </div>
-              <div class="feedback bad" id="phase-err" style="display:none; margin-top:8px;">Include at least one phase.</div>
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
+              <h2 style="margin:0;" id="params-title">Parameters</h2>
+              <span class="muted small" id="params-sub"></span>
             </div>
+            <div class="admin-note" id="lock-note" style="display:none;"></div>
 
-            <div class="field" title="How many rounds each participant plays. Real rounds are paid-eligible; a subset of them (Paid rounds) is drawn at random at the end and paid as a bonus. The practice round is unpaid and can be turned off.">
-              <label>Rounds each participant plays <span class="help">?</span></label>
-              <div class="row2">
-                <div class="field" title="The number of real (paid-eligible) rounds each participant plays IN EACH PHASE. In a within-subjects session with both phases, they play this many rounds without AI and this many with AI. Default 1. Each round is a fresh hidden curve.">
-                  <label>Rounds per Phase <span class="help">?</span></label><input type="number" id="f-ntasks" min="1" max="120" value="1" /></div>
-                <div class="field" title="How many of the real rounds (across all phases) are drawn at random at the end and paid to the participant as a bonus. Must be ≤ total real rounds. Default 2.">
-                  <label>Paid rounds (drawn at end)</label><input type="number" id="f-paid" min="0" max="120" value="2" /></div>
-                <div class="field" title="Whether participants play one unpaid practice round before the real rounds. Off by default.">
-                  <label>Practice round</label>
-                  <span class="seg" id="seg-practice"><button data-v="1">On</button><button data-v="0" class="on">Off</button></span>
-                </div>
-              </div>
-              <div class="admin-note">
-                <b>Ground truth is fixed.</b> Every participant — in this and every session — sees the
-                <b>same</b> hidden Brownian prize curves, so results are directly comparable. The
-                <b>Without&nbsp;AI</b> and <b>With&nbsp;AI</b> phases use different curves, and each round within a
-                phase is an independent draw (10 rounds ⇒ 10 different curves). Change <code class="k">TRUTH_SEED</code>
-                in <code class="k">config.js</code> to reshuffle every curve at once.
-              </div>
-            </div>
-
-            <div class="ai-section">
-              <h3 style="margin-top:12px;" title="The AI assistant participants can consult in the With-AI phase: where it has training data (the interpolation regions), what a question costs, and how much data it was trained on. More parameters will be added here over time.">AI model parameters <span class="help">?</span></h3>
-              <p class="muted small">Only relevant when the <b>With AI</b> phase is included. Consulting the assistant costs money (but less than revealing a position), and a model trained on more data gives sharper guesses.</p>
-
-              <div class="field" title="Where the assistant has training data. Inside a region it interpolates between its points (accurate); outside and between regions it extrapolates (increasingly wrong). Choose one region or two disjoint regions and set their position on the 1–100 line. Shown to you in the testing view; hidden from participants.">
-                <label>AI interpolation region(s) <span class="help">?</span></label>
-                <div class="hint" style="margin:0 0 8px;">The assistant is trained only inside these region(s): it interpolates within them and extrapolates outside/between them.</div>
-                <span class="seg" id="seg-regions"><button data-v="1" class="on">One region</button><button data-v="2">Two regions</button></span>
-                <div class="regions-inputs" id="regions-inputs">
-                  <div class="row2">
-                    <div class="field"><label>Region 1 — start</label><input type="number" id="f-r1a" min="1" max="100" value="30" /></div>
-                    <div class="field"><label>Region 1 — end</label><input type="number" id="f-r1b" min="1" max="100" value="70" /></div>
-                  </div>
-                  <div class="row2" id="region2-row" style="display:none;">
-                    <div class="field"><label>Region 2 — start</label><input type="number" id="f-r2a" min="1" max="100" value="60" /></div>
-                    <div class="field"><label>Region 2 — end</label><input type="number" id="f-r2b" min="1" max="100" value="85" /></div>
-                  </div>
-                </div>
-                <div class="regions-warn" id="regions-warn"></div>
-              </div>
-
-              <div class="row2">
-                <div class="field" title="What the participant pays each time they ask the baseline model. 0 makes it free. Must be below the 5¢ reveal cost — consulting is cheaper than searching yourself.">
-                  <label>Baseline model — cost / question (¢) <span class="help">?</span></label>
-                  <input type="number" id="f-ai-base-cost" min="0" max="4" value="2" /></div>
-                <div class="field" title="How much data the baseline model is trained on inside the region(s). Fewer points → coarser interpolation.">
-                  <label>Baseline model — training data</label>
-                  <span class="seg" id="seg-base-data"><button data-v="few" class="on">Few</button><button data-v="standard">Standard</button><button data-v="lots">Lots</button></span></div>
-              </div>
-
-              <label class="phase-toggle" title="Offer a second, stronger 'frontier' model alongside the baseline. When on, the participant picks which model to consult for each question." style="margin-top:8px;">
-                <span class="pt-label">Offer a frontier model too <span class="muted small">· participant chooses per question</span></span>
-                <span class="pt-switch"><input type="checkbox" id="f-ai-frontier"><span class="pt-sw"></span></span>
-              </label>
-              <div id="frontier-fields" class="off">
+            <details class="pgroup" open>
+              <summary>Environment <span class="lock-tag">locked after launch</span></summary>
+              <div class="pbody">
                 <div class="row2">
-                  <div class="field" title="What the participant pays to ask the frontier model. It costs more than the baseline; whether it is above or below the 5¢ reveal cost is your choice.">
-                    <label>Frontier model — cost / question (¢) <span class="help">?</span></label>
-                    <input type="number" id="f-ai-front-cost" min="0" max="50" value="4" /></div>
-                  <div class="field" title="How much data the frontier model is trained on. 'Lots' makes it noticeably sharper than the baseline.">
-                    <label>Frontier model — training data</label>
-                    <span class="seg" id="seg-front-data"><button data-v="few">Few</button><button data-v="standard">Standard</button><button data-v="lots" class="on">Lots</button></span></div>
+                  <div class="field"><label>Positions <span class="defval">· default 100</span></label><input type="number" id="p-env-positions" min="10" max="1000"></div>
+                  <div class="field"><label>Step bound L <span class="defval">· default 10</span></label><input type="number" id="p-env-stepBound" min="1" max="100"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Prize minimum <span class="defval">· default 0</span></label><input type="number" id="p-env-prizeMin"></div>
+                  <div class="field"><label>Prize maximum <span class="defval">· default 100</span></label><input type="number" id="p-env-prizeMax"></div>
+                </div>
+                <div class="row3">
+                  <div class="field"><label>Seed low band, from <span class="defval">· 20</span></label><input type="number" id="p-env-seedLowMin"></div>
+                  <div class="field"><label>to <span class="defval">· 80</span></label><input type="number" id="p-env-seedLowMax"></div>
+                  <div class="field"><label>with probability <span class="defval">· 0.5</span></label><input type="number" id="p-env-seedHighProb" step="0.05" min="0" max="1"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Seed high band, from <span class="defval">· 80</span></label><input type="number" id="p-env-seedHighMin"></div>
+                  <div class="field"><label>to <span class="defval">· 100</span></label><input type="number" id="p-env-seedHighMax"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Mapping pool size <span class="defval">· default 200</span></label><input type="number" id="p-env-poolSize" min="10" max="2000"></div>
+                  <div class="field"><label>Generator random seed <span class="defval">· default 20260813</span></label><input type="number" id="p-env-generatorSeed"></div>
+                </div>
+                <p class="hint">Rounding is always to the nearest integer, applied after the whole path is
+                generated, and the adjacency bound is re-checked afterwards &mdash; a mapping that fails is
+                rejected and redrawn, so the instructions stay literally true.</p>
+              </div>
+            </details>
+
+            <details class="pgroup">
+              <summary>Costs and limits <span class="lock-tag">locked after launch</span></summary>
+              <div class="pbody">
+                <div class="row2">
+                  <div class="field"><label>Reveal cost <span class="defval">· default 5</span></label><input type="number" id="p-costs-revealCost" min="0" max="100"></div>
+                  <div class="field"><label>Query cost <span class="defval">· default 2</span></label><input type="number" id="p-costs-queryCost" min="0" max="100"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Query cap per round <span class="defval">· default 40</span></label><input type="number" id="p-costs-queryCap" min="1" max="500"></div>
+                  <div class="field"><label>Reveal cap per round <span class="defval">· default 20</span></label><input type="number" id="p-costs-revealCap" min="1" max="500"></div>
+                </div>
+                <div class="field"><label>Score floor <span class="defval">· default off</span></label>
+                  <div class="seg" id="p-costs-scoreFloor"><button data-v="false">Off &mdash; a round may end negative</button><button data-v="true">Floor at zero</button></div>
+                  <div class="hint">Off is the recommended value: the brief requires a negative round to be possible, and logged.</div>
                 </div>
               </div>
-            </div>
+            </details>
 
-            <div class="row2">
-              <div class="field" title="The Prolific completion code participants copy back at the end to be paid. Used for everyone unless you set a phase-specific code below (which only applies to single-phase sessions).">
-                <label>Completion code (shared) <span class="help">?</span></label><input type="text" id="f-code-shared" placeholder="e.g. C1A2B3C4" /></div>
-              <div class="field" title="Optional: a completion code used only when the whole session is the single Without-AI phase (overrides the shared code). Handy if each condition is run as its own separate Prolific study.">
-                <label>Without AI code (optional)</label><input type="text" id="f-codeA" placeholder="single-phase only" /></div>
-              <div class="field" title="Optional: a completion code used only when the whole session is the single With-AI phase (overrides the shared code).">
-                <label>With AI code (optional)</label><input type="text" id="f-codeB" placeholder="single-phase only" /></div>
-            </div>
-            <h3 style="margin-top:16px;" title="Override the wording participants see on each screen. Leave a box blank to keep the built-in text. Tokens like {nTasks}, {paidTasks}, {fee} and {rounds} are filled in automatically.">Page text &amp; content <span class="help">?</span></h3>
-            <p class="muted small">Edit what participants see on each page. Leave a box blank to use the built-in default. Use <code class="k">**bold**</code>, blank lines for paragraphs, and tokens <code class="k">{nTasks}</code>, <code class="k">{paidTasks}</code>, <code class="k">{fee}</code>, <code class="k">{rounds}</code>.</p>
-            <div id="content-editors"><!-- accordions injected by admin.js --></div>
-
-            <h3 style="margin-top:16px;" title="How this run of the study is identified. The name is for you only; the code ties participants and their data to this session and goes in the participant link.">Session details <span class="help">?</span></h3>
-            <div class="row2">
-              <div class="field" title="A label for this run of the study, shown only to you (in the sessions list and data). Participants never see it.">
-                <label>Session name <span class="help">?</span></label><input type="text" id="f-name" placeholder="e.g. Prolific wave 1" /></div>
-              <div class="field" title="The code that ties participants and their data to THIS session. It goes in the participant link as ?code=CODE. Click Auto to generate one, or type your own (capital letters + digits).">
-                <label>Session code <span class="help">?</span></label>
-                <div class="code-row"><input type="text" id="f-code" placeholder="AUTO or custom (A–Z, 0–9)" /><button class="btn btn-ghost btn-sm" id="btn-gencode" title="Generate a random unused code">Auto</button></div>
-                <div class="hint">Single word, capital letters + digits. Used in the participant link.</div>
+            <details class="pgroup">
+              <summary>AI <span class="lock-tag">locked after launch</span></summary>
+              <div class="pbody">
+                <div class="row2">
+                  <div class="field"><label>Sparse K <span class="defval">· default 4</span></label><input type="number" id="p-ai-sparseK" min="1" max="50"></div>
+                  <div class="field"><label>Dense K <span class="defval">· default 10</span></label><input type="number" id="p-ai-denseK" min="1" max="50"></div>
+                </div>
+                <div class="field"><label>Anchor placement <span class="defval">· default stratified</span></label>
+                  <div class="seg" id="p-ai-placement"><button data-v="stratified">Stratified</button><button data-v="uniform">Uniform</button></div>
+                  <div class="hint">A uniform draw produces highly variable gap widths, which blurs sparse and
+                  dense across the s* threshold and destroys the sharpness of the prediction. Keep it stratified.</div>
+                </div>
+                <div class="field"><label>Answer rounding <span class="defval">· default nearest integer</span></label>
+                  <div class="seg" id="p-ai-answerRounding"><button data-v="nearest">Nearest integer</button><button data-v="none">Unrounded</button></div>
+                  <div class="hint">Rounded, so an answer is never distinguishable from a true prize by its formatting.</div>
+                </div>
+                <div class="field"><label>Re-query allowed <span class="defval">· default on</span></label>
+                  <div class="seg" id="p-ai-allowRequery"><button data-v="true">On</button><button data-v="false">Off</button></div>
+                </div>
+                <div class="danger-switch">
+                  <div class="ds-t">Draw the full curve &mdash; keep off</div>
+                  <div class="ds-b">Turning this on makes consultation free: the participant reads every answer off
+                  a line instead of paying for them one at a time. That is a different experiment.</div>
+                  <div class="seg" id="p-ai-drawCurve" style="margin-top:8px;"><button data-v="false">Off</button><button data-v="true">On</button></div>
+                </div>
+                <div class="danger-switch">
+                  <div class="ds-t">Mark the AI&rsquo;s known positions &mdash; keep off</div>
+                  <div class="ds-b">Turning this on makes the jaggedness visible, so locating it stops being the
+                  scarce commodity the study measures. That is a different experiment.</div>
+                  <div class="seg" id="p-ai-markAnchors" style="margin-top:8px;"><button data-v="false">Off</button><button data-v="true">On</button></div>
+                </div>
               </div>
-            </div>
+            </details>
 
-            <div class="actions3">
-              <button class="btn btn-green" id="btn-save" title="Save this session to the database (creates it, or saves your edits)">Create session</button>
+            <details class="pgroup">
+              <summary>Round structure <span class="lock-tag">locked after launch</span></summary>
+              <div class="pbody">
+                <div class="row2">
+                  <div class="field"><label>Warm-up rounds per block <span class="defval">· 2</span></label><input type="number" id="p-rounds-warmupPerBlock" min="0" max="10"></div>
+                  <div class="field"><label>Scored rounds per block <span class="defval">· 12</span></label><input type="number" id="p-rounds-scoredPerBlock" min="1" max="60"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Open rounds per block <span class="defval">· 4</span></label><input type="number" id="p-rounds-openPerBlock" min="0" max="60"></div>
+                  <div class="field"><label>Seeded rounds per block <span class="defval">· 8</span></label><input type="number" id="p-rounds-seededPerBlock" min="0" max="60"></div>
+                </div>
+                <label style="font-weight:600; font-size:14px;">Seed shape mix <span class="defval">· 2 frontier, 4 balanced, 2 gap</span></label>
+                <div class="row3">
+                  <div class="field"><label>Frontier</label><input type="number" id="p-shape-FRONTIER" min="0" max="30"></div>
+                  <div class="field"><label>Balanced</label><input type="number" id="p-shape-BALANCED" min="0" max="30"></div>
+                  <div class="field"><label>Gap</label><input type="number" id="p-shape-GAP" min="0" max="30"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Seeded: sparse <span class="defval">· 4</span></label><input type="number" id="p-dseed-SPARSE" min="0" max="30"></div>
+                  <div class="field"><label>Seeded: dense <span class="defval">· 4</span></label><input type="number" id="p-dseed-DENSE" min="0" max="30"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Open: sparse <span class="defval">· 2</span></label><input type="number" id="p-dopen-SPARSE" min="0" max="30"></div>
+                  <div class="field"><label>Open: dense <span class="defval">· 2</span></label><input type="number" id="p-dopen-DENSE" min="0" max="30"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Seed jitter <span class="defval">· plus or minus 2</span></label><input type="number" id="p-rounds-seedJitter" min="0" max="20"></div>
+                  <div class="field"><label>Shuffle round order within block <span class="defval">· on</span></label>
+                    <div class="seg" id="p-rounds-shuffleWithinBlock"><button data-v="true">On</button><button data-v="false">Off</button></div>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details class="pgroup">
+              <summary>Assignment <span class="lock-tag">locked after launch, except the entrant override</span></summary>
+              <div class="pbody">
+                <div class="field"><label>Sequence assignment <span class="defval">· block randomised, exact 50/50</span></label>
+                  <div class="seg" id="p-assign-sequenceAssignment"><button data-v="block">Block randomised</button><button data-v="random">Coin flip</button></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Freeze seed positions <span class="defval">· on</span></label>
+                    <div class="seg" id="p-assign-freezeSeeds"><button data-v="true">On</button><button data-v="false">Off</button></div></div>
+                  <div class="field"><label>Freeze AI anchors <span class="defval">· on</span></label>
+                    <div class="seg" id="p-assign-freezeAnchors"><button data-v="true">On</button><button data-v="false">Off</button></div></div>
+                </div>
+                <div class="field"><label>Next entrant override <span class="defval">· automatic &mdash; the one control that stays unlocked</span></label>
+                  <div class="seg" id="p-assign-nextEntrantOverride"><button data-v="auto">Automatic</button><button data-v="A">Force sequence A</button><button data-v="B">Force sequence B</button></div>
+                  <div class="hint">Forcing is no longer pure randomisation. Every use is logged with a timestamp
+                  and a reason, and the log ships with the export, because the analysis has to say so.</div>
+                </div>
+              </div>
+            </details>
+
+            <details class="pgroup">
+              <summary>Acceptance filter <span class="lock-tag">locked after launch</span></summary>
+              <div class="pbody">
+                <div class="row2">
+                  <div class="field"><label>Minimum global max, seeded <span class="defval">· 80</span></label><input type="number" id="p-filter-minGlobalMax" min="0" max="100"></div>
+                  <div class="field"><label>Minimum headroom above the best seed <span class="defval">· 25</span></label><input type="number" id="p-filter-minHeadroom" min="0" max="100"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Highest seeded value, from <span class="defval">· 30</span></label><input type="number" id="p-filter-seedHighestMin" min="0" max="100"></div>
+                  <div class="field"><label>to <span class="defval">· 60</span></label><input type="number" id="p-filter-seedHighestMax" min="0" max="100"></div>
+                </div>
+                <div class="field"><label>Apply the filter to open rounds <span class="defval">· default off</span></label>
+                  <div class="seg" id="p-filter-applyToOpen"><button data-v="false">Off</button><button data-v="true">On</button></div>
+                  <div class="hint">Keep it off. The step-size manipulation check compares the AI-off arm against a
+                  published estimate, and that comparison is only valid if the open-round mappings come from the
+                  same, unfiltered distribution.</div>
+                </div>
+              </div>
+            </details>
+
+            <details class="pgroup" open>
+              <summary>Operations <span class="lock-tag">editable at any time</span></summary>
+              <div class="pbody">
+                <div class="row2">
+                  <div class="field"><label>Run name</label><input type="text" id="p-ops-runName" placeholder="untitled"></div>
+                  <div class="field"><label>Run code <span class="defval">· goes in the participant link</span></label>
+                    <div style="display:flex; gap:8px;"><input type="text" id="p-ops-code" placeholder="AUTO">
+                    <button class="btn btn-ghost btn-sm" id="btn-gencode" title="Generate an unused code">Auto</button></div></div>
+                </div>
+                <div class="field"><label>Entry open</label>
+                  <div class="seg" id="p-ops-entryOpen"><button data-v="false">Closed</button><button data-v="true">Open</button></div></div>
+                <div class="row2">
+                  <div class="field"><label>Scheduled window, from</label><input type="datetime-local" id="p-ops-windowFrom"></div>
+                  <div class="field"><label>to</label><input type="datetime-local" id="p-ops-windowTo"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Minimum viewport width <span class="defval">· 900 px</span></label><input type="number" id="p-ops-minViewport" min="0" max="3000"></div>
+                  <div class="field"><label>Resumption window <span class="defval">· 24 h</span></label><input type="number" id="p-ops-resumeWindowH" min="0" max="720"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Allow resumption</label>
+                    <div class="seg" id="p-ops-allowResume"><button data-v="true">On</button><button data-v="false">Off</button></div></div>
+                  <div class="field"><label>Idle warning <span class="defval">· after 10 min</span></label><input type="number" id="p-ops-idleWarnMin" min="0" max="240"></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Exit survey</label>
+                    <div class="seg" id="p-ops-exitSurvey"><button data-v="true">On</button><button data-v="false">Off</button></div></div>
+                  <div class="field"><label>Debrief screen</label>
+                    <div class="seg" id="p-ops-debrief"><button data-v="true">On</button><button data-v="false">Off</button></div></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Gate on the scoring question</label>
+                    <div class="seg" id="p-ops-gateQ2"><button data-v="strict">Strict &mdash; must pass</button><button data-v="record">Record only</button></div></div>
+                  <div class="field"><label>Gate on the other questions</label>
+                    <div class="seg" id="p-ops-gateOther"><button data-v="record">Record attempts</button><button data-v="block">Block</button></div></div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Roster mode</label>
+                    <div class="seg" id="p-ops-rosterMode"><button data-v="open">Open &mdash; a class platform ID enrols itself</button><button data-v="roster">Roster only</button></div>
+                    <div class="hint">Open is what the Simulation Platform needs: a student arrives with their
+                    university student ID, which becomes their participant code and the join key between the two
+                    datasets. Roster-only refuses any code not already on the list.</div>
+                  </div>
+                  <div class="field"><label>Completion code <span class="defval">· blank = none shown</span></label><input type="text" id="p-ops-completionCode"></div>
+                </div>
+              </div>
+            </details>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;">
+              <button class="btn btn-green" id="btn-save" title="Save this run">Save run</button>
               <button class="btn btn-ghost btn-sm" id="btn-cancel" style="display:none;">Cancel edit</button>
-              <button class="btn btn-ghost btn-sm" id="btn-makedefault" title="Save these settings as the starting point for new sessions">Make this the default</button>
+              <button class="btn btn-ghost btn-sm" id="btn-makedefault" title="Save these settings as the starting point for new runs">Make this the default</button>
               <button class="btn btn-ghost btn-sm" id="btn-restore" title="Reset the form to the built-in defaults">Restore built-in default</button>
-              <span class="flash" id="form-flash"></span>
             </div>
-            <div class="feedback bad" id="form-err" style="display:none;"></div>
-
-            <!-- launch links + preview (shown after create/select) -->
-            <div id="launch-box" style="display:none;"></div>
-            <!-- settings summary -->
-            <div class="summary" id="settings-summary"></div>
+            <div class="admin-note" id="save-note" style="display:none;"></div>
           </div>
 
-          <!-- RIGHT: active + completed sessions -->
+          <!-- Screen 3: consequences, recomputed live -->
+          <div class="cons">
+            <h2 style="margin:0;">Consequences</h2>
+            <p class="muted small">Recomputed as you type, so the downstream effect of every setting
+            is visible before anything is launched.</p>
+            <div id="cons-badges"></div>
+            <table class="cons-table" id="cons-table"></table>
+            <p class="muted small" id="cons-poolnote" style="margin-top:10px;"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------------- Screen 4: ROSTER ---------------- -->
+      <div class="tab-panel" id="tab-roster" style="display:none;">
+        <h2 style="margin:0;">Roster and assignment</h2>
+        <p class="muted small">Anonymous participant codes only &mdash; no names, no e-mail addresses, no
+        free-text identifiers. A student arriving from the class platform enrols with their
+        university student ID, which is the join key between this study&rsquo;s data and the platform roster.</p>
+        <div class="stat-row" id="roster-stats"></div>
+        <div class="cols">
+          <div>
+            <div class="table-scroll" style="max-height:520px;"><table class="data-table" id="roster-table"></table></div>
+          </div>
           <div>
             <div class="card">
-              <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
-                <h2 style="margin:0;">Active sessions</h2>
-                <div style="display:flex; align-items:baseline; gap:10px;">
-                  <button class="link-btn danger" id="btn-remove-all-sessions" style="display:none;" title="Delete every session (wave). Collected event data is kept.">Remove all sessions</button>
-                  <span class="muted small" id="active-count"></span>
-                </div>
+              <h3 style="margin-top:0;">Generate codes</h3>
+              <div class="row2">
+                <div class="field"><label>How many</label><input type="number" id="ros-n" value="90" min="1" max="1000"></div>
+                <div class="field"><label>Prefix</label><input type="text" id="ros-prefix" value="P" maxlength="6"></div>
               </div>
-              <div id="active-list"><p class="muted small">Loading…</p></div>
+              <p class="hint">Codes are assigned to sequences by block randomisation, so the split is exactly
+              half and half rather than a series of coin flips.</p>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-green btn-sm" id="btn-ros-gen">Generate</button>
+                <button class="btn btn-ghost btn-sm" id="btn-ros-csv">Download codes (CSV)</button>
+              </div>
             </div>
             <div class="card">
-              <div style="display:flex; justify-content:space-between; align-items:baseline;"><h2 style="margin:0;">Completed sessions</h2><span class="muted small" id="completed-count"></span></div>
-              <div id="completed-list"></div>
-            </div>
-            <div class="card">
-              <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
-                <h2 style="margin:0;">Participants</h2>
-                <div style="display:flex; align-items:baseline; gap:10px;">
-                  <button class="link-btn danger" id="btn-remove-all-parts" style="display:none;" title="Remove every participant and permanently delete all collected event data.">Remove all</button>
-                  <span class="muted small" id="participants-count"></span>
-                </div>
-              </div>
-              <p class="muted small" style="margin:6px 0 10px;">Everyone who has taken part, across all sessions. Participants join anonymously via a session link (no user accounts), so each is identified by its session code and Prolific ID.</p>
-              <div id="participants-list" class="part-scroll"><p class="muted small">Loading…</p></div>
+              <h3 style="margin-top:0;">Next entrant override</h3>
+              <p class="muted small">If attrition runs unevenly the crossover balance drifts. This forces the
+              next entrants into the under-filled sequence. A reason is required and is logged.</p>
+              <div class="seg" id="ros-override"><button data-v="auto">Automatic</button><button data-v="A">Force A</button><button data-v="B">Force B</button></div>
+              <div class="field" style="margin-top:10px;"><label>Reason</label><input type="text" id="ros-reason" placeholder="why the balance is being forced"></div>
+              <button class="btn btn-green btn-sm" id="btn-ros-override">Apply override</button>
+              <div id="ros-overrides" class="muted small" style="margin-top:10px;"></div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- DATA TAB -->
+      <!-- ---------------- Screen 5: LIVE MONITOR ---------------- -->
+      <div class="tab-panel" id="tab-monitor" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
+          <h2 style="margin:0;">Live monitor</h2>
+          <button class="btn btn-ghost btn-sm" id="btn-monitor-refresh">&#8635; Refresh health checks</button>
+        </div>
+        <p class="muted small">Counters update live from the participant records. The health checks read the
+        event log, which is heavier &mdash; refresh them when you want them.</p>
+        <div class="stat-row" id="mon-counters"></div>
+        <h3>Health</h3>
+        <table class="health" id="mon-health"></table>
+        <h3 style="margin-top:18px;">Participants</h3>
+        <div class="table-scroll" style="max-height:520px;"><table class="data-table" id="mon-table"></table></div>
+      </div>
+
+      <!-- ---------------- Screen 6: DATA & PREVIEW ---------------- -->
       <div class="tab-panel" id="tab-data" style="display:none;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-          <h2 style="margin:0;">Collected data</h2>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <select class="sess-filter" id="data-filter"></select>
-            <button class="btn btn-ghost btn-sm" id="btn-refresh">↻ Refresh</button>
-            <button class="btn btn-blue btn-sm" id="btn-dl-xlsx" title="One analysis-ready Excel workbook for the selected session (or all sessions): the admin-chosen parameters, one row per participant, per round, and per action/decision with response times, plus the exit survey.">⬇ Download Excel (.xlsx)</button>
-            <button class="btn btn-ghost btn-sm" id="btn-dl-csv">Download CSV</button>
-            <button class="btn btn-ghost btn-sm" id="btn-dl-json">Download JSON</button>
+        <div class="cols">
+          <div>
+            <h2 style="margin:0;">Data</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin:12px 0;">
+              <button class="btn btn-ghost btn-sm" id="btn-fetch">&#8635; Load the event log</button>
+              <button class="btn btn-blue btn-sm" id="btn-dl-xlsx" title="One analysis-ready workbook: ReadMe, Run, Decisions, Rounds, Participants, Survey, Comprehension, Slider trace, Audit and the raw log.">&#11015; Download Excel (.xlsx)</button>
+              <button class="btn btn-ghost btn-sm" id="btn-dl-decisions">decisions.csv</button>
+              <button class="btn btn-ghost btn-sm" id="btn-dl-rounds">rounds.csv</button>
+              <button class="btn btn-ghost btn-sm" id="btn-dl-participants">participants.csv</button>
+              <button class="btn btn-ghost btn-sm" id="btn-dl-raw">raw log (JSON)</button>
+            </div>
+            <div class="admin-note" id="data-note">Load the event log to build the export.</div>
+            <h3>Rows</h3>
+            <div class="stat-row" id="data-counts"></div>
+            <h3 style="margin-top:18px;">Decisions <span class="muted small" id="dec-count"></span></h3>
+            <div class="table-scroll" style="max-height:420px;"><table class="data-table" id="dec-table"></table></div>
+          </div>
+          <div>
+            <div class="card">
+              <h3 style="margin-top:0;">Validation gate</h3>
+              <p class="muted small">Runs the adjacency check over the pool, the acceptance filter over every
+              seeded spec, and the balance checks on shape and density. A run cannot open until it passes.</p>
+              <button class="btn btn-green btn-sm" id="btn-validate">Run the validation</button>
+              <div id="validate-out" style="margin-top:10px;"></div>
+            </div>
+            <div class="card">
+              <h3 style="margin-top:0;">Preview a round spec</h3>
+              <p class="muted small">Play any spec exactly as a participant would, writing nothing. The testing
+              overlays show the true prizes, the AI&rsquo;s whole curve and its private anchors, so you can see at a
+              glance whether a seed geometry looks the way it was meant to.</p>
+              <div class="field"><label>Spec</label><select id="prev-spec"></select></div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-ghost btn-sm" id="btn-preview" data-act="testround">&#129514; Test round</button>
+                <button class="btn btn-ghost btn-sm" id="btn-preview-full">&#129514; Test the whole session</button>
+              </div>
+            </div>
+            <div class="card">
+              <h3 style="margin-top:0;">Dry run</h3>
+              <p class="muted small">Push a scripted bot through a whole session against this run&rsquo;s specs, in
+              memory, and check that every export column populates. Bot rows are never written anywhere.</p>
+              <button class="btn btn-ghost btn-sm" id="btn-dryrun">Run the bot</button>
+              <div id="dryrun-out" style="margin-top:10px;"></div>
+            </div>
+            <div class="card" style="border-color:#f3c9c9;">
+              <h3 style="margin-top:0; color:var(--red);">Danger zone</h3>
+              <p class="muted small">Regenerating the mapping pool is blocked once any data exists for the run.</p>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="sBtn deleteBtn" id="btn-reset-participant">Reset one participant</button>
+                <button class="sBtn deleteBtn" id="btn-close-run">Close this run permanently</button>
+              </div>
+            </div>
           </div>
         </div>
-        <div id="data-source" class="muted small" style="margin-top:4px;"></div>
-        <div class="stat-grid" id="stat-grid"></div>
-        <h3>Per-participant sessions</h3>
-        <div class="table-scroll"><table class="data-table" id="sessions-table"></table></div>
-
-        <h3 style="margin-top:18px;" title="Scores each real round's reveals against the rational 'search window' of Malladi–Martínez-Marquina–Morozov, Space Exploration. An 'obvious mistake' is revealing a cell whose best-possible value (given the ±10¢ bounds and earlier reveals) is already ≤ your best. 'Optimal stops' = rounds ended with an empty window (nothing left could beat you). Uses participants' reveals only; respects the session filter above.">Rational-search benchmark <span class="muted small">· Space Exploration search window <span class="help">?</span></span></h3>
-        <p class="muted small" style="margin:2px 0 8px;">How close participants come to optimal search: obvious-mistake rate (vs a uniform-random null), share of rounds stopped optimally, and the i.i.d. reservation (≈68¢). Real rounds only.</p>
-        <div class="stat-grid" id="opt-stat-grid"></div>
-        <div class="table-scroll" style="margin-top:8px;"><table class="data-table" id="opt-table"></table></div>
-
-        <h3 style="margin-top:18px;">Events <span class="muted small" id="events-count"></span></h3>
-        <div class="table-scroll"><table class="data-table" id="events-table"></table></div>
       </div>
 
-      <!-- ANALYTICS TAB -->
-      <div class="tab-panel" id="tab-analytics" style="display:none;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-          <h2 style="margin:0;">Data analytics</h2>
-          <select class="sess-filter" id="an-filter"></select>
-        </div>
-        <p class="muted small">Without AI (human only) vs With AI (AI assisted), computed from completed participants. In a within-subjects session each participant contributes to both.</p>
-        <div class="stat-grid" id="an-stats"></div>
-        <div id="an-body"></div>
-      </div>
     </section>
   </div>
 
   <script src="../config.js"></script>
-  <script src="../landscape.js"></script>
+  <script src="../pool.js"></script>
+  <script src="../specs.js"></script>
+  <script src="../ai.js"></script>
+  <script src="../content.js"></script>
   <script src="../firebase-config.js"></script>
   <script src="../firebase.js"></script>
+  <script src="export.js"></script>
   <script src="xlsx.js"></script>
   <script src="admin.js"></script>
   <script src="../tooltip.js"></script>
