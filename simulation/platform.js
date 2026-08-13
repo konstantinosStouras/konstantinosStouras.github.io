@@ -535,6 +535,12 @@
             return { failed: bad.length };
           });
         },
+        /* Patch fields on ONE roster doc (admin-only per the rules). Used to
+           repair answers that were stored in the student's display language —
+           see simulation/answers.js. Merge, so nothing else is touched. */
+        updateStudent: function (uid, patch) {
+          return D.setDoc(D.doc(fs, PATHS.students + '/' + uid), patch || {}, { merge: true });
+        },
         /* Approve / revoke a student (admin-only per the rules): only approved
            students can launch the active simulations — the owner's guard
            against class links being passed to students who are not in the

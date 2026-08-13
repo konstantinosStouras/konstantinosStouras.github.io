@@ -11,7 +11,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { join, extname, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs';
 const { chromium } = await import(PW);
@@ -30,17 +30,20 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
     const m = src.match(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[:=]\\s*\\[([\\s\\S]*?)\\]'));
     return m ? strs(m[1]) : null;
   };
-  const selList = (id) => {
-    const m = plat.match(new RegExp('<select id="' + id + '">([\\s\\S]*?)</select>'));
-    /* The answer set is the options' explicit value="…" attributes, not their
-       text: an option with no value takes its text as its value, which page
-       translation rewrites (see simulation/tools/registration-guard.mjs). The
-       first entry is the disabled placeholder and is not an answer. */
-    return (m[1].match(/<option [^>]*>/g) || [])
-      .filter(s => !/\bdisabled\b/.test(s))
-      .map(s => (s.match(/value="([^"]*)"/) || [, ''])[1])
-      .filter(Boolean);
-  };
+  /* Every dropdown is built from simulation/answers.js — the one place that
+     holds the platform's answer sets (and knows how to map an answer saved in
+     a student's display language back to its catalogue value). The form itself
+     must therefore carry NO hardcoded option list: one that drifted from
+     answers.js would save answers the repair cannot recognise. */
+  const answers = (await import(pathToFileURL(join(ROOT, 'simulation/answers.js')).href)).default
+    ?? globalThis.SIMP_ANSWERS;
+  const selList = (field) => answers.sets[field];
+  const strayOptions = (plat.match(/<option [^>]*>/g) || [])
+    .filter(s => !/\bdisabled\b/.test(s));
+  if (strayOptions.length) {
+    console.error(`PARITY FAIL — simulation/index.html hardcodes ${strayOptions.length} <option>(s); build them from answers.js`);
+    process.exitCode = 1;
+  }
   const qOptions = (src, id) => {
     const m = src.match(new RegExp(`['"]?id['"]?\\s*:\\s*['"]${id}['"][\\s\\S]{0,1200}?['"]?options['"]?\\s*:\\s*\\[([\\s\\S]*?)\\]`));
     return m ? strs(m[1]) : null;
@@ -51,12 +54,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
     answerarena: readFileSync(join(ROOT, 'lab/answerarena/arena-data.js'), 'utf8'),
   };
   const platSets = {
-    age: jsList(plat, 'var AGE_BANDS'),
-    occupation: jsList(plat, 'var OCCUPATIONS'),
-    industry: jsList(plat, 'var INDUSTRIES'),
-    gender: selList('f-gender'),
-    levelOfStudy: selList('f-level'),
-    englishFluency: selList('f-english'),
+    age: selList('age'),
+    occupation: selList('occupation'),
+    industry: selList('industry'),
+    gender: selList('gender'),
+    levelOfStudy: selList('levelOfStudy'),
+    englishFluency: selList('englishFluency'),
   };
   let parityFails = 0;
   const same = (a, b) => [...a].sort().join('') === [...b].sort().join('');
@@ -70,7 +73,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
       }
     }
   }
-  const platCountries = jsList(plat, 'var COUNTRIES');
+  const platCountries = answers.sets.country;
   const countryLists = {
     ideasearchlab: jsList(sims.ideasearchlab, 'COUNTRIES'),
     portfoliofit: jsList(sims.portfoliofit, 'countries'),
