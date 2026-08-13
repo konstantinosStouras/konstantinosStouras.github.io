@@ -12,6 +12,17 @@ Vanilla HTML/CSS/JS, no build step, no external CDN (the Firebase SDK is
 lazy-imported only when configured). Unlisted (`noindex`) until launch.
 Offline test: `node simulation/tools/smoke.mjs` (Playwright; drives the whole
 flow against a local static server, no network), plus
+**`node simulation/tools/handoff-guard.mjs`** — the one that protects the
+research data: it runs each simulation's OWN handoff mapper (its id/label
+tables and validation rules, read from its source) over a canonical platform
+profile and requires FULL coverage — every field of every default registration
+form answered, in-list, from the platform alone. The sims deliberately DROP an
+answer their form would not accept and show the field instead, which is safe
+but silent: one drifted option list, or a new question the platform cannot
+answer, quietly turns the silent registration back into a form and the export
+comes back with holes. It also pins that a field a sim leaves OPTIONAL (Gender,
+in both) is compulsory on the platform — otherwise a missing answer is exported
+blank with nothing asked. And
 `node simulation/tools/roster-width-guard.mjs`, which pins that the roster's
 per-row **Delete** button stays fully visible (it is the last of a dozen columns
 and used to be clipped into `.roster-wrap`'s horizontal scroll).
