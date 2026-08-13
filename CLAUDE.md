@@ -2585,7 +2585,14 @@ roster + recovery docs) AND in the admin roster at idle (`healRosterAnswers`
 → `updateStudent`, admin-only per the rules, reporting "Repaired N
 registrations"; an unmappable Level is flagged `⚠`). Offline tests
 `node simulation/tools/answers-guard.mjs` +
-`node simulation/tools/registration-guard.mjs`;
+`node simulation/tools/registration-guard.mjs` +
+**`node simulation/tools/handoff-guard.mjs`** (the research-data guard: runs
+each sim's OWN handoff mapper — id/label tables + validation rules sliced from
+its source — over a canonical platform profile and demands FULL coverage of
+every default registration field, in-list; also asserts a field a sim leaves
+OPTIONAL, i.e. Gender, is compulsory on the platform, since the sims drop an
+answer they cannot accept and show the field SILENTLY, which is how a blank
+reaches the export);
 LIVE in the admin panel — auto-loads and updates via
 onSnapshot, no manual load) with CSV export, a per-row **Delete**
 (confirm-guarded; removes the row's doc(s) incl. collapsed duplicate
