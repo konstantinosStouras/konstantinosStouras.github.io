@@ -1,6 +1,15 @@
 /* ==========================================================================
-   search-v2  ·  firebase.js
+   search-v2  ·  svfirebase.js
    Firestore + Auth integration for the layout of design brief §17.3.
+
+   NAMED `svfirebase.js`, NOT `firebase.js`, AND IT MUST STAY THAT WAY.
+   Windows CMD searches the current directory before PATH, and `.JS` is in the
+   default PATHEXT — so with a `firebase.js` sitting here, typing `firebase`
+   in this directory ran THIS FILE through Windows Script Host instead of the
+   Firebase CLI. Every `firebase deploy` printed nothing at all and published
+   nothing, which is a silent failure of the worst kind: the rules look
+   deployed and are not. (`firebase-config.js` is safe — CMD only matches the
+   exact stem.)
 
    Loaded on every page but INERT until firebase-config.js holds a real project
    config, so the study still runs (locally logged, downloadable) on a machine

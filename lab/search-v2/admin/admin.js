@@ -67,6 +67,15 @@
     wireMonitor();
     wireData();
 
+    // The parameter form carries its values from the moment the panel opens, so a
+    // box is never blank beside its own "default 100" hint. Selecting a run, or
+    // starting a new one, overwrites this. It matters most when the runs read
+    // FAILS — a fresh project whose Rules are not published yet — because that
+    // path used to leave the whole form empty, with nothing to read the defaults
+    // off and nothing to save.
+    currentParams = savedDefaultParams();
+    fillForm(currentParams, null);
+
     if (!FB.isConfigured()) {
       // Local preview: the panel is fully usable against browser storage, so the
       // parameter form, the consequences, the validation gate, the preview and
@@ -175,6 +184,10 @@
       note('scope-note', 'Could not read the runs collection: <b>' + esc(String(e && e.message || e)) + '</b>. ' +
         'If this is a fresh project, publish <span class="mono">firestore.rules</span> from the repository first.', true);
       runs = []; renderRuns();
+      // Leave the form standing on the defaults rather than blanking it: the
+      // panel is still usable for reading and adjusting parameters, and the
+      // failure above is about Firestore, not about this form.
+      if (!current) { currentParams = savedDefaultParams(); fillForm(currentParams, null); }
     });
   }
 

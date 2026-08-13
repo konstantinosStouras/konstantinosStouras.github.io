@@ -19,6 +19,7 @@
    ========================================================================== */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -102,6 +103,28 @@ ok(collapsed > 0, 'the groups are collapsible, and most start collapsed');
 // Open them all so the rest of the test can reach every control.
 const openAll = () => pg.$$eval('.pgroup', els => els.forEach(e => { e.open = true; }));
 await openAll();
+
+// The form must arrive CARRYING the defaults. It used to be filled only from
+// loadRuns(), so the one path that matters most to a new user — a fresh project
+// whose Rules are not published, where the runs read throws — showed every box
+// empty beside its own "default 100" hint, with nothing to save and no
+// consequences panel.
+for (const [id, want] of [['p-env-positions', '100'], ['p-env-stepBound', '10'],
+  ['p-env-prizeMax', '100'], ['p-costs-revealCost', '5'], ['p-costs-queryCost', '2'],
+  ['p-ai-sparseK', '4'], ['p-ai-denseK', '10'], ['p-env-poolSize', '600'],
+  ['p-env-generatorSeed', '20260813']]) {
+  const got = await pg.locator('#' + id).inputValue();
+  ok(got === want, 'the form opens carrying its default for ' + id.replace('p-', ''), got);
+}
+const hint = await pg.locator('#p-env-poolSize').locator('xpath=../label').innerText();
+ok(/600/.test(hint), 'and the pool-size hint states the default this build actually uses', hint);
+
+// The failing-read path cannot be reproduced here (local preview never throws),
+// so it is pinned at the source: the catch branch must restore the defaults.
+const src = readFileSync(new URL('../admin/admin.js', import.meta.url), 'utf8');
+const rescue = src.slice(src.indexOf('Could not read the runs collection'), src.indexOf('Could not read the runs collection') + 700);
+ok(/fillForm\(currentParams, null\)/.test(rescue),
+  'a runs read that FAILS leaves the defaults standing rather than blanking the form');
 
 ok(await shown('cons-table'), 'the Consequences panel sits beside the form');
 const cons0 = await pg.locator('#cons-table').innerText();
