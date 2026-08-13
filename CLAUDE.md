@@ -2564,7 +2564,14 @@ compulsory; LIVE in the admin panel — auto-loads and updates via
 onSnapshot, no manual load) with CSV export, a per-row **Delete**
 (confirm-guarded; removes the row's doc(s) incl. collapsed duplicate
 re-registrations — for test registrations etc.; rules already allow
-admin delete) and a per-row **Approve** toggle — the play gate (per the
+admin delete) and a per-row **Approve** toggle — plus the bulk
+**✓ Approve all** / **Revoke all approvals** buttons beside Export CSV
+(owner 2026-08: a whole class in one click — `wireBulkApproval` in
+admin.js; each shows how many rows it would change, disables itself when
+there is nothing to do, confirms first, writes ONLY the rows that change
+— every uid behind a collapsed row, like the per-row toggle — and acts on
+the rows CURRENTLY SHOWN, so the column filters double as a selector) —
+the play gate (per the
 owner, against class links shared with out-of-class students): an
 unapproved student sees NO simulation cards (approval overrides the
 active toggles; `startApprovalWatch`/`apprBlocked` in index.html, live
