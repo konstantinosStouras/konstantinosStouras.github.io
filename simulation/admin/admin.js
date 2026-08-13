@@ -522,6 +522,58 @@
     wireBulkApproval('btn-approve-all', true);
     wireBulkApproval('btn-unapprove-all', false);
 
+    /* Delete all (owner request): the row Delete button applied to every row
+       SHOWN — the end-of-term clean-out, so the column filters scope it too.
+       It is irreversible and it locks those students out (their browser will
+       not re-create a roster doc it believes it already synced, and the
+       student page shows no cards without one), so it asks TWICE: a confirm
+       naming the count and scope, then the word DELETE typed back. */
+    (function wireDeleteAll() {
+      var btn = $('btn-delete-all');
+      if (!btn) return;
+      btn.hidden = roster.length === 0;
+      var scope = filtered ? ' shown (column filters are on)' : '';
+      btn.disabled = visible.length === 0;
+      btn.textContent = 'Delete all students' + (visible.length ? ' (' + visible.length + ')' : '');
+      btn.title = 'Delete the ' + visible.length + ' registration(s)' + scope +
+        ' — permanently. They lose access until they register again; use the row Delete for single rows.';
+      btn.onclick = function () {
+        if (!visible.length) return;
+        if (!window.confirm('Delete ALL ' + visible.length + ' student registration(s)' + scope +
+              ' from the roster?\n\nThis cannot be undone. Those students see no simulations until they ' +
+              'register again, and their answers-per-simulation record here goes with them ' +
+              '(each simulation keeps its own data).')) return;
+        var typed = window.prompt('Type DELETE to confirm removing ' + visible.length +
+          ' student registration(s)' + scope + '.');
+        if (!typed || typed.trim().toUpperCase() !== 'DELETE') {
+          $('roster-count').textContent = 'Delete all cancelled — nothing was removed.';
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Deleting…';
+        var uids = [], gone = {};
+        visible.forEach(function (r) {
+          (uidsByKey[keyOf(r)] || [r.uid]).forEach(function (u) { uids.push(u); gone[u] = 1; });
+        });
+        P.firebase().then(function (F) {
+          return F.deleteStudents(uids);
+        }).then(function () {
+          /* Drop them locally too — the live snapshot normally does it, but a
+             dead streaming channel would leave the wiped rows on screen. */
+          var left = (lastRows || []).filter(function (r) { return !gone[r.uid]; });
+          renderRoster(left);
+          $('roster-count').textContent = 'Deleted ' + uids.length + ' registration(s). ' +
+            $('roster-count').textContent;
+        }, function (e) {
+          renderRoster(lastRows);
+          $('roster-count').textContent = 'Delete all failed: ' +
+            ((e && e.code && String(e.code).indexOf('permission-denied') >= 0)
+              ? 'permission denied — sign in as the admin' + RULES_HINT
+              : ((e && e.message) || e));
+        });
+      };
+    })();
+
     $('roster-count').textContent = roster.length === 0
       ? 'No registrations yet — students appear here the moment they register.'
       : roster.length + ' student' + (roster.length === 1 ? '' : 's') +

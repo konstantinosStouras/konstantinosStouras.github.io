@@ -2570,7 +2570,12 @@ admin delete) and a per-row **Approve** toggle — plus the bulk
 admin.js; each shows how many rows it would change, disables itself when
 there is nothing to do, confirms first, writes ONLY the rows that change
 — every uid behind a collapsed row, like the per-row toggle — and acts on
-the rows CURRENTLY SHOWN, so the column filters double as a selector) —
+the rows CURRENTLY SHOWN, so the column filters double as a selector) and
+a red **Delete all students** (the row Delete over the same shown-rows
+scope, for clearing a class between terms; irreversible AND locking —
+a browser whose high-water mark says it already synced does NOT re-create
+its roster doc, and no roster doc means no cards — so it asks TWICE:
+confirm + the word DELETE typed back) —
 the play gate (per the
 owner, against class links shared with out-of-class students): an
 unapproved student sees NO simulation cards (approval overrides the
