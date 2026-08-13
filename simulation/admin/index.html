@@ -7,6 +7,24 @@
 <title>Admin · Simulation Platform · stouras.com</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
 <link rel="stylesheet" href="../styles.css">
+<!-- Nothing on this page can be shown until Firebase has loaded and told us who
+     is signed in, and the SDK is three ES modules on Google's CDN. Left to
+     itself the browser only learns about them when platform.js RUNS, i.e. after
+     every local script has been fetched and parsed: connection setup + download
+     happen in series with the page. These hints start the TCP/TLS handshake and
+     the module downloads during HTML parsing instead, so the SDK is normally
+     already in the cache by the time the code asks for it — the difference the
+     admin sees on a hard refresh. Also warms the two API hosts the SDK calls the
+     moment it starts (auth, then Firestore).
+     KEEP THE VERSION IN STEP with the loader in platform.js (`var U = …`) —
+     a mismatch just downloads the SDK twice; simulation/tools/smoke.mjs fails
+     the build if they drift. -->
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js" crossorigin>
 </head>
 <body>
 
@@ -28,6 +46,10 @@
       this panel. In LOCAL mode your edits apply only to this browser until you commit the downloaded
       <code>config.json</code>.</p>
     </div>
+    <!-- Shown while Firebase loads and reports who is signed in. The admin is
+         normally signed in already, so opening straight onto a sign-in form
+         showed them a state they were never in and had to wait out. -->
+    <p id="gate-wait" class="hint" hidden>Checking your sign-in…</p>
     <div id="gate-fb" hidden>
       <div class="fgrid">
         <div class="field"><label for="g-email">E-mail</label><input id="g-email" type="email" autocomplete="username"></div>
