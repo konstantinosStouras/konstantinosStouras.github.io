@@ -32,7 +32,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
   };
   const selList = (id) => {
     const m = plat.match(new RegExp('<select id="' + id + '">([\\s\\S]*?)</select>'));
-    return (m[1].match(/<option>[^<]*<\/option>/g) || []).map(s => s.slice(8, -9));
+    /* The answer set is the options' explicit value="…" attributes, not their
+       text: an option with no value takes its text as its value, which page
+       translation rewrites (see simulation/tools/registration-guard.mjs). The
+       first entry is the disabled placeholder and is not an answer. */
+    return (m[1].match(/<option [^>]*>/g) || [])
+      .filter(s => !/\bdisabled\b/.test(s))
+      .map(s => (s.match(/value="([^"]*)"/) || [, ''])[1])
+      .filter(Boolean);
   };
   const qOptions = (src, id) => {
     const m = src.match(new RegExp(`['"]?id['"]?\\s*:\\s*['"]${id}['"][\\s\\S]{0,1200}?['"]?options['"]?\\s*:\\s*\\[([\\s\\S]*?)\\]`));
@@ -96,8 +103,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
       markerFails++;
     }
   }
-  const { readdirSync } = await import('node:fs');
-  const bundle = readdirSync(join(ROOT, 'lab/ideasearchlab/assets')).find(n => /^index-.*\.js$/.test(n));
+  /* The bundle to check is the one index.html actually LOADS. Older builds stay
+     in assets/ (cached clients still fetch them), so picking the first match
+     could pass on a stale file while the shipped app lacks the marker. */
+  const shipped = readFileSync(join(ROOT, 'lab/ideasearchlab/index.html'), 'utf8');
+  const bundle = (shipped.match(/assets\/(index-[A-Za-z0-9_-]+\.js)/) || [])[1];
   if (!bundle || !readFileSync(join(ROOT, 'lab/ideasearchlab/assets', bundle), 'utf8').includes('simpMarkCompleted')) {
     console.error('MARKER FAIL — the shipped ideasearchlab bundle lacks simpMarkCompleted (rebuild needed)');
     markerFails++;
