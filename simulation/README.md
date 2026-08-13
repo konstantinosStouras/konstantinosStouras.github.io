@@ -11,7 +11,16 @@ exactly as before; the platform only *drives* them from the outside.
 Vanilla HTML/CSS/JS, no build step, no external CDN (the Firebase SDK is
 lazy-imported only when configured). Unlisted (`noindex`) until launch.
 Offline test: `node simulation/tools/smoke.mjs` (Playwright; drives the whole
-flow against a local static server, no network).
+flow against a local static server, no network), plus
+`node simulation/tools/roster-width-guard.mjs`, which pins that the roster's
+per-row **Delete** button stays fully visible (it is the last of a dozen columns
+and used to be clipped into `.roster-wrap`'s horizontal scroll).
+
+The admin page is laid out with `.wrap wide` — the window width, capped at
+1680px — rather than the student page's 1060px reading column, because the
+roster carries one column per active simulation on top of its six base columns.
+Keep new admin markup inside a `.wrap wide` container; the student page keeps
+plain `.wrap`.
 
 ## Files
 

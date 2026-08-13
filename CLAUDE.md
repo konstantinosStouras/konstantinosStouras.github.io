@@ -2746,7 +2746,21 @@ authenticates against its OWN Firebase project, so a shared login means
 registering the same e-mail/password in every project. **Keep `catalog.js`
 in sync with the served class sims** (add/retire entries deliberately — it is
 a curated subset of `/lab/`, not a mirror). Currently UNLISTED: `noindex` on both
-pages, no homepage link — flip deliberately at launch. Offline test that must
+pages, no homepage link — flip deliberately at launch. **The admin page is the
+one page that uses the WINDOW width** (`.wrap.wide`, 1680px cap, vs the student
+page's 1060px reading column): the roster is the widest thing on the site — name,
+student ID, e-mail, level, registered, approved, ONE COLUMN PER ACTIVE
+SIMULATION, then the per-row **Delete** — and at 1060px that last cell sat
+outside `.roster-wrap` inside its horizontal scroll, so an instructor who did not
+know to scroll sideways could not reach it (owner report 2026-08). Long unbroken
+cell values wrap too (`table.simtab td { overflow-wrap: anywhere }` — an e-mail
+address has no spaces, so it otherwise sets the table's minimum width), with the
+actions column exempted so its button stays on one line. Offline tests that must
 stay green: `node simulation/tools/smoke.mjs` (Playwright over a local static
 server, LOCAL mode forced — registration → admin activation → cards → launch
-handoff/seeds → prefill). Details in `simulation/README.md`.
+handoff/seeds → prefill) and `node simulation/tools/roster-width-guard.mjs`
+(the Delete button unclipped at six window widths × simulation counts). That
+second guard measures containment inside `.roster-wrap` plus `elementFromPoint`,
+NOT viewport coordinates: a button clipped inside a scrolling ancestor still
+reports a rect on screen, so a viewport-only check passes while the bug is
+present. Details in `simulation/README.md`.
