@@ -1,1173 +1,1129 @@
 /* ==========================================================================
    search-v2  ·  admin/admin.js
-   Multi-session admin: create/edit named sessions (each with its own code,
-   arm/condition settings, completion codes, and per-page text), see Active /
-   Completed sessions, view Data and Analytics (Arm A vs B), with dark mode and
-   Save / Make-default / Restore-built-in controls. Uses Firebase when configured;
-   otherwise runs in a local preview (this browser's data, no session creation).
+   The admin panel of design brief §17b, restructured to its six screens:
+
+     1 Runs           — every run, its status, its participants, its balance
+     2 Parameters     — six collapsible groups, locked once a run has an entrant
+     3 Consequences   — recomputed live beside the form, with the two badges
+     4 Roster         — anonymous codes, sequence assignment, entrant override
+     5 Live monitor   — counters from a Firestore listener, plus the health strip
+     6 Data & preview — validation gate, spec preview, dry run, export, danger zone
+
+   The governing rule is CLONE, DO NOT EDIT. A run's parameters are locked the
+   moment its first participant claims a code; the locked fields render greyed
+   with a padlock, and the only way to change anything is to clone the run into a
+   fresh run_id. Locking here is UI; the Security Rules in ../firestore.rules are
+   what actually enforce it.
    ========================================================================== */
 (function () {
   'use strict';
+  var CFG = window.CONFIG, Pool = window.SVPool, Specs = window.SVSpecs,
+      Ai = window.SVAi, Content = window.SVContent, X = window.SVExport, Xlsx = window.SVXlsx;
   var FB = window.SVFirebase;
-  var configured = !!(FB && FB.isConfigured());
-  var adminEmails = (FB && FB.adminEmails) || [];
-  var DEBUG_KEY = 'stouras'; // must match config.js DEBUG_KEY (for preview links)
 
-  var FIELDS = [
-    'session', 'sessionCode', 'sessionName', 'pid', 'study', 'arm', 'phase', 'event', 't', 'rt_ms',
-    'round', 'mapping', 'stratum', 'position', 'value', 'estimate', 'refused',
-    'reveals', 'cost', 'best', 'net',
-    'qid', 'choice', 'correct', 'rawNet', 'flooredNet', 'info',
-    'ua', 'vw', 'vh', 'appVersion'
-  ];
-
-  // Participant-facing names for the two phases (arms). Keep in sync with app.js.
-  var PHASE_LABEL = { A: 'Without AI', B: 'With AI' };
-
-  // Built-in participant copy — MUST mirror app.js BUILTIN (shown as placeholders).
-  var BUILTIN = {
-    consent: "**What this is.** This is a short decision-making study… (built-in default).\n\n**Payment.** … **Anonymity.** … **Voluntary.** …",
-    instructions: "In each round you will see 100 positions on a line. Each position hides a value between 0 and 100 cents.\n\nValues at adjacent positions differ by at most 10 cents…\n\nYou can reveal the value at any position. Each reveal costs 5 cents…\n\nYour earnings for the round are the highest value you revealed, minus 5 cents for each reveal…\n\nThere is 1 practice round and 10 real rounds. Two of the 10 real rounds will be picked at random and paid to you as a bonus.",
-    instructionsB: "You also have an AI assistant.\n\nAsk it about any position for its best estimate (usually close, not guaranteed; it always answers even where it is unsure)…\n\nBuilt-in default: the cost per question and any frontier model come from the AI-model settings above.",
-    phaseIntroB: "Next part: you now have an AI assistant that gives its best estimate for any position (usually close, not guaranteed)… (built-in default). Its cost and any frontier option come from the AI-model settings. Everything else about the game is the same.",
-    phaseIntroA: "Next part: you search on your own — the AI assistant is no longer available… (built-in default). Everything else about the game is the same.",
-    finish: "(Built-in) Thank you for taking part. Below are your real rounds; the ones marked paid were selected at random.",
-    closed: "(Built-in) This study is not currently open. Thank you for your interest."
-  };
-  var CONTENT_KEYS = [
-    { k: 'consent', label: 'Consent page', help: 'The consent text on the very first screen (before the game). Participants tick a box to agree.' },
-    { k: 'instructions', label: 'Instructions (all phases)', help: 'The task instructions shown to everyone at the start. Tokens {nTasks}, {paidTasks}, {fee}, {rounds} are auto-filled.' },
-    { k: 'instructionsB', label: 'Instructions — With-AI addendum', help: 'Extra instructions appended when the first phase is With AI, explaining the assistant.' },
-    { k: 'phaseIntroB', label: 'Phase transition — into With AI', help: 'Shown between phases when a within-subjects participant moves INTO the With-AI phase.' },
-    { k: 'phaseIntroA', label: 'Phase transition — into Without AI', help: 'Shown between phases when a within-subjects participant moves INTO the Without-AI phase.' },
-    { k: 'finish', label: 'Finish page (intro text)', help: 'The message above the results table on the final screen (before the completion code).' },
-    { k: 'closed', label: 'Study-closed page', help: 'What people see if they open a session that is marked completed.' }
-  ];
-  var BUILTIN_SETTINGS = {
-    phases: ['A', 'B'], counterbalance: false,
-    nTasks: 1, paidTasks: 2, nPractice: 0,
-    coveragePatches: [[30, 70]],
-    ai: { baselineCost: 2, baselineData: 'few', frontier: false, frontierCost: 4, frontierData: 'lots' },
-    completionCode: '', completionCodeA: '', completionCodeB: '', endpointUrl: '', content: {}
-  };
-
-  // Firestore rejects directly-nested arrays (`invalid-argument`), so the
-  // in-memory coveragePatches [[a,b],…] is stored as [{a,b},…]. Encode right
-  // before every Firestore write; decode accepts both shapes (and the legacy
-  // nested-array form, in case a doc was ever written another way).
-  function encodePatches(patches) {
-    return (patches || []).map(function (p) { return { a: p[0], b: p[1] }; });
-  }
-  function decodePatches(v) {
-    if (!v || !v.length) return null;
-    var out = [];
-    for (var i = 0; i < v.length && out.length < 2; i++) {
-      var p = v[i];
-      if (p && p.length >= 2) out.push([+p[0], +p[1]]);
-      else if (p && p.a != null && p.b != null) out.push([+p.a, +p.b]);
-    }
-    return out.length ? out : null;
-  }
-  function settingsForStore(s) {
-    return Object.assign({}, s, { coveragePatches: encodePatches(s.coveragePatches) });
-  }
+  var runs = [], current = null, currentParams = null, editingId = null;
+  var events = [], built = null, unsubMon = null, monRows = [];
+  var LOCAL_KEY = 'searchv2:v3:admin:local';
 
   function $(id) { return document.getElementById(id); }
-  function show(id) { var s = document.querySelectorAll('.screen'); for (var i = 0; i < s.length; i++) s[i].classList.toggle('active', s[i].id === id); }
-  function esc(v) { return v == null ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-  function banner(el, cls, html) { el.innerHTML = html ? '<div class="banner ' + cls + '">' + html + '</div>' : ''; }
-  function flash(el) { el.classList.add('show'); setTimeout(function () { el.classList.remove('show'); }, 1600); }
-  function appBase() { return location.origin + location.pathname.replace(/admin\/?(index\.html)?$/, ''); }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function fmt(n, d) { return (n == null || !isFinite(n)) ? '—' : (+n).toFixed(d == null ? 2 : d); }
+  function show(id) {
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.toggle('active', s.id === id); });
+  }
+  function note(el, html, bad) {
+    var e = $(el);
+    e.className = 'admin-note' + (bad ? ' bad' : '');
+    e.innerHTML = html;
+    e.style.display = html ? '' : 'none';
+  }
 
-  var editingId = null;   // session id being edited, or null (creating)
-  var SESSIONS = [];      // cached session list
-  var EVENTS = [];        // cached events
-  var phasesCtl;          // PHASES include-toggles + order controller (see phasesSetup)
+  // ---- theme ---------------------------------------------------------------
+  (function theme() {
+    var saved = null;
+    try { saved = localStorage.getItem('searchv2:admin:theme'); } catch (e) {}
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    document.addEventListener('DOMContentLoaded', function () {
+      $('btn-theme').onclick = function () {
+        var now = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', now);
+        try { localStorage.setItem('searchv2:admin:theme', now); } catch (e) {}
+      };
+    });
+  })();
 
-  // ==================================================================== boot
-  window.addEventListener('DOMContentLoaded', function () {
-    initTheme();
-    $('btn-theme').addEventListener('click', toggleTheme);
-    buildContentEditors();
+  // ======================================================================
+  //  AUTH
+  // ======================================================================
+  function boot() {
     wireTabs();
     wireForm();
+    wireRuns();
+    wireRoster();
+    wireMonitor();
     wireData();
-    $('btn-remove-all-parts').addEventListener('click', removeAllParticipants);
-    $('btn-remove-all-sessions').addEventListener('click', removeAllSessions);
-    $('btn-signout').addEventListener('click', function () { if (configured) FB.adminSignOut().then(reload); else reload(); });
-    $('btn-analytics-nav').addEventListener('click', function () { selectTab('analytics'); });
 
-    if (!configured) { enterLocalMode(); return; }
-    banner($('login-banner'), 'info', 'Sign in with an admin account (' + esc(adminEmails.join(', ')) + ').');
-    $('btn-login').addEventListener('click', doLogin);
-    $('in-pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+    if (!FB.isConfigured()) {
+      // Local preview: the panel is fully usable against browser storage, so the
+      // parameter form, the consequences, the validation gate, the preview and
+      // the dry run all work before Firebase is set up.
+      $('li-note').textContent = 'Firebase is not configured, so this panel is in LOCAL PREVIEW: runs are kept in this browser only.';
+      $('btn-login').onclick = function () { enterLocal(); };
+      $('li-email').value = 'local'; $('li-pw').value = 'local';
+      enterLocal();
+      return;
+    }
+    $('li-note').textContent = 'Sign in with the admin account for this Firebase project.';
+    $('btn-login').onclick = doLogin;
+    $('li-pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
     FB.onAuth(function (user) {
-      if (user && user.email && adminEmails.indexOf(user.email) >= 0) enterAdmin(user);
-      else if (user && user.email) { banner($('login-banner'), 'warn', 'Signed in as ' + esc(user.email) + ', which is not an admin account.'); show('a-login'); }
-      else if (!simpTrySso()) show('a-login');
+      if (user && !user.isAnonymous) {
+        $('who').textContent = user.email || '';
+        $('btn-signout').style.display = '';
+        $('btn-signout').onclick = function () { FB.adminSignOut().then(function () { location.reload(); }); };
+        show('a-dash');
+        note('scope-note', 'Signed in as <b>' + esc(user.email) + '</b>. Runs, roster, participants and the event log are read from Firestore.');
+        loadRuns();
+      } else {
+        show('a-login');
+      }
     });
-  });
-
-  // Simulation Platform SSO (optional): one silent sign-in attempt using the
-  // credentials locker saved by stouras.com/simulation/admin/ ('simp:admin-creds').
-  // No-op without saved credentials; on failure the normal sign-in form shows.
-  var simpSsoTried = false;
-  function simpTrySso() {
-    if (simpSsoTried) return false;
-    simpSsoTried = true;
-    var c = null;
-    try {
-      c = JSON.parse(sessionStorage.getItem('simp:admin-creds') ||
-                     localStorage.getItem('simp:admin-creds') || 'null');
-    } catch (e) {}
-    if (!c || !c.email || !c.pass) return false;
-    FB.adminSignIn(c.email, c.pass).catch(function () { show('a-login'); });
-    return true;
   }
-
-  function reload() { location.href = location.pathname; }
   function doLogin() {
-    $('login-err').style.display = 'none';
-    FB.adminSignIn($('in-email').value.trim(), $('in-pass').value).catch(function (err) {
-      $('login-err').textContent = 'Sign-in failed: ' + (err && err.code ? err.code : err);
-      $('login-err').style.display = 'block';
+    $('li-err').style.display = 'none';
+    FB.adminSignIn($('li-email').value.trim(), $('li-pw').value).catch(function (e) {
+      $('li-err').textContent = String((e && e.message) || e).replace(/^Firebase:\s*/, '');
+      $('li-err').style.display = 'block';
     });
   }
-  function enterAdmin(user) {
-    $('who').textContent = user.email;
-    $('btn-signout').style.display = '';
-    $('btn-analytics-nav').style.display = '';
+  var LOCAL = false;
+  function enterLocal() {
+    LOCAL = true;
     show('a-dash');
-    // Seed the new-session form from the saved defaults. On a real read error we
-    // do NOT silently fall back to built-ins (that plus "Make this the default"
-    // would overwrite the real saved defaults) — warn and disable that button.
-    FB.getDefaults().then(function (d) { _defaults = d || BUILTIN_SETTINGS; fillForm(null, _defaults); renderSummary(); })
-      .catch(function (err) {
-        banner($('dash-banner'), 'warn', 'Could not load saved defaults (' + esc(err && err.code ? err.code : String(err)) + '); showing built-ins. “Make this the default” is disabled so your saved defaults are not overwritten — reload to retry.');
-        fillForm(null, BUILTIN_SETTINGS); renderSummary(); $('btn-makedefault').disabled = true;
-      });
-    loadSessions();
-    loadData();
-  }
-  function enterLocalMode() {
     $('who').textContent = 'local preview';
-    show('a-dash');
-    banner($('dash-banner'), 'warn', '<b>Firebase is not configured</b> — local preview (this browser only). Creating sessions needs Firebase (see <code class="k">lab/search-v2/README.md</code> → “Admin panel &amp; Firebase setup”). Data/Analytics below use this browser’s test sessions.');
-    fillForm(null, BUILTIN_SETTINGS);
-    $('btn-save').disabled = true; $('btn-makedefault').disabled = true;
-    $('active-list').innerHTML = '<p class="muted small">Sessions require Firebase.</p>';
-    $('completed-list').innerHTML = '';
-    renderSummary();
-    loadData();
+    note('scope-note', '<b>Local preview.</b> Firebase is not configured (or you have not signed in), so runs live in ' +
+      'this browser only and no participant data can be read. Everything else &mdash; parameters, consequences, ' +
+      'validation, preview and the dry run &mdash; works exactly as it will live.');
+    loadRuns();
   }
 
-  // ==================================================================== theme
-  function initTheme() {
-    var t = localStorage.getItem('searchv2:admin:theme') || 'light';
-    document.documentElement.setAttribute('data-theme', t);
-    $('btn-theme').textContent = t === 'dark' ? '☀' : '☾';
+  // ---- local-mode storage --------------------------------------------------
+  function localRuns() {
+    try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]'); } catch (e) { return []; }
   }
-  function toggleTheme() {
-    var t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', t);
-    localStorage.setItem('searchv2:admin:theme', t);
-    $('btn-theme').textContent = t === 'dark' ? '☀' : '☾';
+  function saveLocalRuns(list) {
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(list)); } catch (e) {}
   }
 
-  // ==================================================================== tabs
+  // ======================================================================
+  //  TABS
+  // ======================================================================
   function wireTabs() {
-    var tabs = document.querySelectorAll('.tab');
-    for (var i = 0; i < tabs.length; i++) tabs[i].addEventListener('click', function () { selectTab(this.getAttribute('data-tab')); });
-  }
-  function selectTab(name) {
-    var tabs = document.querySelectorAll('.tab');
-    for (var j = 0; j < tabs.length; j++) tabs[j].classList.toggle('on', tabs[j].getAttribute('data-tab') === name);
-    ['sessions', 'data', 'analytics'].forEach(function (t) { $('tab-' + t).style.display = (t === name) ? '' : 'none'; });
-    if (name === 'analytics') renderAnalytics();
-    if (name === 'data') renderData();
-  }
-
-  // ============================================================= content editors
-  function buildContentEditors() {
-    var html = '';
-    CONTENT_KEYS.forEach(function (c) {
-      html += '<div class="accordion" data-k="' + c.k + '" title="' + esc(c.help || '') + '">' +
-        '<button type="button" class="acc-head">' + esc(c.label) + '<span class="chev">▾</span></button>' +
-        '<div class="acc-body"><textarea id="ce-' + c.k + '" placeholder="' + esc(BUILTIN[c.k]) + '"></textarea>' +
-        '<div class="hint">Blank = built-in default. **bold**, blank line = new paragraph.</div></div></div>';
-    });
-    $('content-editors').innerHTML = html;
-    var heads = document.querySelectorAll('.acc-head');
-    for (var i = 0; i < heads.length; i++) heads[i].addEventListener('click', function () { this.parentNode.classList.toggle('open'); });
-  }
-
-  // ============================================================= form (settings)
-  var segPractice, segBaseData, segFrontData, regionsCtl;
-  function clampPos(v, dflt) { v = Math.round(+v); if (!isFinite(v)) v = dflt; return Math.max(1, Math.min(100, v)); }
-  function syncFrontier() { $('frontier-fields').classList.toggle('off', !$('f-ai-frontier').checked); }
-  function wireForm() {
-    phasesCtl = phasesSetup();
-    segPractice = segSetup('seg-practice');
-    segBaseData = segSetup('seg-base-data');
-    segFrontData = segSetup('seg-front-data');
-    regionsCtl = regionsSetup();
-    $('f-ai-frontier').addEventListener('change', function () { syncFrontier(); renderSummary(); });
-    $('btn-gencode').addEventListener('click', function () { $('f-code').value = genCode(); renderSummary(); });
-    // Live-normalise the session code to capital letters + digits as you type
-    // (matches the participant-link format and the ideasearchlab admin).
-    $('f-code').addEventListener('input', function () {
-      var s = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (s !== this.value) this.value = s;
-    });
-    $('btn-save').addEventListener('click', saveSession);
-    $('btn-cancel').addEventListener('click', function () { fillForm(null, currentDefaults()); renderSummary(); });
-    $('btn-makedefault').addEventListener('click', makeDefault);
-    $('btn-restore').addEventListener('click', function () { fillSettings(BUILTIN_SETTINGS); renderSummary(); flash($('form-flash')); });
-    ['f-name', 'f-code', 'f-code-shared', 'f-codeA', 'f-codeB', 'f-ntasks', 'f-paid', 'f-ai-base-cost', 'f-ai-front-cost'].forEach(function (id) {
-      $(id).addEventListener('input', renderSummary);
-    });
-  }
-  // One or two AI interpolation regions (start/end on the 1–100 line). Mirrors
-  // the phases control: get() → [[a,b],...]; set(patches) fills the UI.
-  function regionsSetup() {
-    var seg = $('seg-regions'), btns = seg.querySelectorAll('button'), r2row = $('region2-row');
-    function count() { var on = seg.querySelector('.on'); return on ? parseInt(on.getAttribute('data-v'), 10) : 1; }
-    function getPatches() {
-      var a1 = clampPos($('f-r1a').value, 30), b1 = clampPos($('f-r1b').value, 70);
-      var r1 = [Math.min(a1, b1), Math.max(a1, b1)];
-      if (count() === 1) return [r1];
-      var a2 = clampPos($('f-r2a').value, 60), b2 = clampPos($('f-r2b').value, 85);
-      var r2 = [Math.min(a2, b2), Math.max(a2, b2)];
-      return [r1, r2].sort(function (x, y) { return x[0] - y[0]; });
-    }
-    function validate() {
-      var w = $('regions-warn'); if (!w) return true;
-      var p = getPatches(), ok = true, msg = '';
-      for (var i = 0; i < p.length; i++) if (p[i][1] - p[i][0] < 4) { ok = false; msg = 'Each region must be at least 4 positions wide.'; }
-      if (ok && p.length === 2 && p[1][0] <= p[0][1]) { ok = false; msg = 'The two regions must not overlap — region 1 must end before region 2 begins.'; }
-      w.textContent = msg; w.classList.toggle('show', !ok);
-      return ok;
-    }
-    function setCount(n, applyDefaults) {
-      for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', parseInt(btns[i].getAttribute('data-v'), 10) === n);
-      r2row.style.display = (n === 2) ? '' : 'none';
-      if (applyDefaults) {
-        if (n === 2) { $('f-r1a').value = 15; $('f-r1b').value = 40; $('f-r2a').value = 60; $('f-r2b').value = 85; }
-        else { $('f-r1a').value = 30; $('f-r1b').value = 70; }
-      }
-      validate();
-    }
-    for (var i = 0; i < btns.length; i++) btns[i].addEventListener('click', function () { setCount(parseInt(this.getAttribute('data-v'), 10), true); renderSummary(); });
-    ['f-r1a', 'f-r1b', 'f-r2a', 'f-r2b'].forEach(function (id) { $(id).addEventListener('input', function () { validate(); renderSummary(); }); });
-    return {
-      valid: validate, get: getPatches,
-      set: function (patches) {
-        patches = decodePatches(patches) || [[30, 70]];
-        if (patches.length >= 2) {
-          setCount(2, false);
-          $('f-r1a').value = patches[0][0]; $('f-r1b').value = patches[0][1];
-          $('f-r2a').value = patches[1][0]; $('f-r2b').value = patches[1][1];
-        } else {
-          setCount(1, false);
-          $('f-r1a').value = patches[0][0]; $('f-r1b').value = patches[0][1];
-          if (!$('f-r2a').value) { $('f-r2a').value = 60; $('f-r2b').value = 85; }
-        }
-        validate();
-      }
-    };
-  }
-  function segSetup(id) {
-    var el = $(id), btns = el.querySelectorAll('button');
-    for (var i = 0; i < btns.length; i++) btns[i].addEventListener('click', function () {
-      for (var j = 0; j < btns.length; j++) btns[j].classList.toggle('on', btns[j] === this);
-      renderSummary();
-    });
-    return {
-      get: function () { var on = el.querySelector('.on'); return on ? on.getAttribute('data-v') : 'url'; },
-      set: function (v) { for (var k = 0; k < btns.length; k++) btns[k].classList.toggle('on', btns[k].getAttribute('data-v') === (v || 'url')); }
-    };
-  }
-
-  // PHASES control: two include-toggles (Without AI / With AI) + an order dropdown.
-  // get() → { phases:[…ordered…], counterbalance:bool }; set(settings) fills the UI
-  // from a new-model {phases,counterbalance} or a legacy {armMode} (best-effort).
-  function phasesSetup() {
-    var chkA = $('ph-A'), chkB = $('ph-B'), sel = $('f-phase-order'), err = $('phase-err');
-    var LA = PHASE_LABEL.A, LB = PHASE_LABEL.B;
-    function rebuildOrder(preferred) {
-      var a = chkA.checked, b = chkB.checked, opts;
-      if (a && b) opts = [
-        { v: 'AB', t: LA + ' first, then ' + LB },
-        { v: 'BA', t: LB + ' first, then ' + LA },
-        { v: 'counter', t: 'Counterbalanced (random order per participant)' }
-      ];
-      else if (a) opts = [{ v: 'A', t: LA + ' only' }];
-      else if (b) opts = [{ v: 'B', t: LB + ' only' }];
-      else opts = [{ v: '', t: '— include at least one phase —' }];
-      var want = preferred != null ? preferred : sel.value;
-      sel.innerHTML = opts.map(function (o) { return '<option value="' + o.v + '">' + esc(o.t) + '</option>'; }).join('');
-      var vals = opts.map(function (o) { return o.v; });
-      sel.value = vals.indexOf(want) >= 0 ? want : opts[0].v;
-      sel.disabled = !(a && b);
-      $('phase-order-row').classList.toggle('hidden', !(a || b));
-      err.style.display = (a || b) ? 'none' : 'block';
-    }
-    chkA.addEventListener('change', function () { rebuildOrder(); renderSummary(); });
-    chkB.addEventListener('change', function () { rebuildOrder(); renderSummary(); });
-    sel.addEventListener('change', renderSummary);
-    return {
-      rebuild: rebuildOrder,
-      get: function () {
-        var a = chkA.checked, b = chkB.checked, v = sel.value;
-        if (a && b) {
-          if (v === 'BA') return { phases: ['B', 'A'], counterbalance: false };
-          if (v === 'counter') return { phases: ['A', 'B'], counterbalance: true };
-          return { phases: ['A', 'B'], counterbalance: false };
-        }
-        if (a) return { phases: ['A'], counterbalance: false };
-        if (b) return { phases: ['B'], counterbalance: false };
-        return { phases: [], counterbalance: false };
-      },
-      set: function (s) {
-        var phases, counter = false;
-        if (s && Object.prototype.toString.call(s.phases) === '[object Array]' && s.phases.length) {
-          phases = s.phases.filter(function (x) { return x === 'A' || x === 'B'; });
-          counter = !!s.counterbalance;
-        } else {
-          // Legacy armMode → best-effort mapping (participants still honour armMode
-          // directly; this is only how an old session shows in the edit form).
-          var m = s && s.armMode;
-          if (m === 'A') phases = ['A'];
-          else if (m === 'B') phases = ['B'];
-          else if (m === 'random') { phases = ['A', 'B']; counter = true; }
-          else phases = ['A', 'B']; // 'url' or absent → built-in default
-        }
-        if (!phases.length) phases = ['A', 'B'];
-        chkA.checked = phases.indexOf('A') >= 0;
-        chkB.checked = phases.indexOf('B') >= 0;
-        var order = phases.length === 2 ? (counter ? 'counter' : (phases[0] === 'B' ? 'BA' : 'AB')) : phases[0];
-        rebuildOrder(order);
-      }
-    };
-  }
-  function genCode() { var s = '', a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; for (var i = 0; i < 6; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
-
-  function fillSettings(s) {
-    s = s || BUILTIN_SETTINGS;
-    phasesCtl.set(s);
-    segPractice.set(s.nPractice === 0 ? '0' : '1');
-    $('f-ntasks').value = (s.nTasks != null ? s.nTasks : 1);
-    $('f-paid').value = (s.paidTasks != null ? s.paidTasks : 2);
-    regionsCtl.set(s.coveragePatches);
-    var ai = s.ai || BUILTIN_SETTINGS.ai;
-    $('f-ai-base-cost').value = (ai.baselineCost != null ? ai.baselineCost : 2);
-    segBaseData.set(ai.baselineData || 'few');
-    $('f-ai-frontier').checked = !!ai.frontier;
-    $('f-ai-front-cost').value = (ai.frontierCost != null ? ai.frontierCost : 4);
-    segFrontData.set(ai.frontierData || 'lots');
-    syncFrontier();
-    $('f-code-shared').value = s.completionCode || '';
-    $('f-codeA').value = s.completionCodeA || '';
-    $('f-codeB').value = s.completionCodeB || '';
-    var content = s.content || {};
-    CONTENT_KEYS.forEach(function (c) { $('ce-' + c.k).value = content[c.k] || ''; });
-  }
-  function collectSettings() {
-    var content = {};
-    CONTENT_KEYS.forEach(function (c) { var v = $('ce-' + c.k).value.trim(); if (v) content[c.k] = v; });
-    var nTasks = Math.max(1, Math.min(120, parseInt($('f-ntasks').value, 10) || 1));
-    var ph = phasesCtl.get();
-    var nPhases = ph.phases.length || 1;
-    // Paid rounds are drawn across ALL phases at the end, so the cap is per-phase
-    // rounds × number of phases.
-    var paid = Math.max(0, Math.min(nTasks * nPhases, parseInt($('f-paid').value, 10) || 0));
-    var baseCost = Math.max(0, Math.min(4, parseInt($('f-ai-base-cost').value, 10) || 0));
-    var fc = parseInt($('f-ai-front-cost').value, 10);
-    if (!isFinite(fc)) fc = baseCost + 2;
-    var frontCost = Math.max(baseCost, Math.min(50, fc));
-    return {
-      phases: ph.phases, counterbalance: ph.counterbalance,
-      nTasks: nTasks, paidTasks: paid, nPractice: segPractice.get() === '0' ? 0 : 1,
-      coveragePatches: regionsCtl.get(),
-      ai: {
-        baselineCost: baseCost, baselineData: segBaseData.get(),
-        frontier: $('f-ai-frontier').checked, frontierCost: frontCost, frontierData: segFrontData.get()
-      },
-      completionCode: $('f-code-shared').value.trim(),
-      completionCodeA: $('f-codeA').value.trim(),
-      completionCodeB: $('f-codeB').value.trim(),
-      content: content
-    };
-  }
-  function fillForm(sess, settings) {
-    editingId = sess ? sess.id : null;
-    $('form-title').textContent = sess ? ('Edit session: ' + (sess.name || sess.code)) : 'Create a session';
-    $('btn-save').textContent = sess ? 'Save changes' : 'Create session';
-    $('btn-cancel').style.display = sess ? '' : 'none';
-    $('f-name').value = sess ? (sess.name || '') : '';
-    $('f-code').value = sess ? (sess.code || '') : '';
-    fillSettings(sess ? (sess.settings || {}) : settings);
-    if (sess) renderLaunch(sess); else $('launch-box').style.display = 'none';
-  }
-  var _defaults = BUILTIN_SETTINGS;
-  function currentDefaults() { return _defaults; }
-
-  function saveSession() {
-    var err = $('form-err'); err.style.display = 'none';
-    var name = $('f-name').value.trim();
-    var code = $('f-code').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!code) { err.textContent = 'A session code is required.'; err.style.display = 'block'; return; }
-    if (!/^[A-Z0-9]{3,40}$/.test(code)) { err.textContent = 'Code must be 3–40 letters/digits, no spaces.'; err.style.display = 'block'; return; }
-    $('f-code').value = code;
-    var settings = collectSettings();
-    if (!settings.phases.length) { err.textContent = 'Include at least one phase (Without AI and/or With AI).'; err.style.display = 'block'; return; }
-    if (!regionsCtl.valid()) { err.textContent = 'Fix the AI interpolation region(s) — see the warning under that field.'; err.style.display = 'block'; return; }
-    $('btn-save').disabled = true;
-    // uniqueness only for a NEW code (or a changed code)
-    var editing = editingId ? SESSIONS.filter(function (s) { return s.id === editingId; })[0] : null;
-    var checkUnique = (editing && editing.code === code) ? Promise.resolve(false) : FB.codeExists(code);
-    checkUnique.then(function (exists) {
-      if (exists) { err.textContent = 'That code is already used by another session.'; err.style.display = 'block'; $('btn-save').disabled = false; return; }
-      var stored = settingsForStore(settings);
-      var op;
-      if (editingId) op = FB.updateSession(editingId, { name: name, code: code, settings: stored });
-      else op = FB.createSession({ name: name, code: code, status: 'active', createdAt: new Date().toISOString(), settings: stored });
-      op.then(function (id) {
-        $('btn-save').disabled = false;
-        flash($('form-flash'));
-        loadSessions().then(function () {
-          var sid = editingId || id;
-          var sess = SESSIONS.filter(function (s) { return s.id === sid; })[0];
-          if (sess) fillForm(sess, null);
-          renderSummary();
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.onclick = function () {
+        document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('on', x === t); });
+        ['runs', 'params', 'roster', 'monitor', 'data'].forEach(function (k) {
+          $('tab-' + k).style.display = (k === t.dataset.tab) ? '' : 'none';
         });
-      }).catch(function (e2) { err.textContent = 'Save failed: ' + (e2 && e2.code ? e2.code : e2); err.style.display = 'block'; $('btn-save').disabled = false; });
-    }).catch(function (e3) {
-      // The code-uniqueness pre-check failed — surface it and re-enable Save
-      // (previously the button stayed disabled with no message).
-      err.textContent = 'Save failed (could not check the code): ' + (e3 && e3.code ? e3.code : e3);
-      err.style.display = 'block'; $('btn-save').disabled = false;
+        if (t.dataset.tab === 'roster') renderRoster();
+        if (t.dataset.tab === 'monitor') startMonitor();
+        if (t.dataset.tab === 'data') fillSpecPicker();
+      };
     });
   }
-  function makeDefault() {
-    if (!configured) return;
-    var s = collectSettings();
-    FB.saveDefaults(settingsForStore(s))
-      .then(function () { _defaults = s; flash($('form-flash')); })
-      .catch(function (err) {
-        banner($('dash-banner'), 'warn', 'Could not save the defaults: ' + esc(err && err.code ? err.code : String(err)));
-      });
+  function openTab(name) {
+    var t = document.querySelector('.tab[data-tab="' + name + '"]');
+    if (t) t.click();
   }
 
-  // ============================================================= launch + summary
-  // The sandbox ("test round") link for a session: preview mode skips the intro
-  // and writes NOTHING to Firestore. Shared by the launch box and each session
-  // card's 🧪 Test round button so the two can never drift.
-  function previewUrl(code) {
-    return appBase() + '?code=' + encodeURIComponent(code) + '&preview=1&debug=1&key=' + DEBUG_KEY;
+  // ======================================================================
+  //  SCREEN 1 · RUNS
+  // ======================================================================
+  function wireRuns() {
+    $('btn-new-run').onclick = function () {
+      current = null; editingId = null;
+      currentParams = savedDefaultParams();
+      fillForm(currentParams, null);
+      openTab('params');
+      note('save-note', 'A new run, seeded from the saved defaults. Give it a name and a code, then Save.');
+    };
+    $('btn-refresh-runs').onclick = loadRuns;
   }
-  function renderLaunch(sess) {
-    var base = appBase(), code = sess.code;
-    // One participant link per session: the phases (and their order) come from the
-    // session settings, so no ?arm= is needed. (?arm still works as a legacy
-    // fallback for sessions saved before the phases model.)
-    var link = base + '?code=' + code;
-    var prev = previewUrl(code);
-    var box = $('launch-box');
-    box.style.display = 'block';
-    box.className = 'code-box';
-    box.innerHTML =
-      '<div class="small muted">Participant launch link for <b>' + esc(sess.name || code) + '</b> (code <b>' + esc(code) + '</b>):</div>' +
-      '<div class="launch">' + esc(link) + '</div>' +
-      '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
-        '<button class="btn btn-ghost btn-sm" data-copy="' + esc(link) + '">Copy participant link</button>' +
-        '<a class="btn btn-blue btn-sm" href="' + esc(prev) + '" target="_blank" rel="noopener">▶ Test this session (skips intro)</a>' +
-      '</div>';
-    var cbtns = box.querySelectorAll('[data-copy]');
-    for (var i = 0; i < cbtns.length; i++) cbtns[i].addEventListener('click', function () {
-      var t = this.getAttribute('data-copy'); if (navigator.clipboard) navigator.clipboard.writeText(t); this.textContent = 'Copied ✓';
+
+  function savedDefaultParams() {
+    var d = null;
+    try { d = JSON.parse(localStorage.getItem('searchv2:v3:admin:defaults') || 'null'); } catch (e) {}
+    return Specs.withDefaults(d);
+  }
+
+  function loadRuns() {
+    var p = LOCAL ? Promise.resolve(localRuns()) : FB.listRuns();
+    p.then(function (list) {
+      runs = list || [];
+      renderRuns();
+      loadRunStats();
+      if (!current && runs.length) selectRun(runs[0]);
+      else if (!current) {
+        currentParams = savedDefaultParams();
+        fillForm(currentParams, null);
+      }
+    }).catch(function (e) {
+      note('scope-note', 'Could not read the runs collection: <b>' + esc(String(e && e.message || e)) + '</b>. ' +
+        'If this is a fresh project, publish <span class="mono">firestore.rules</span> from the repository first.', true);
+      runs = []; renderRuns();
     });
   }
-  // A short human description of a phases config, e.g. "Without AI → With AI" or
-  // "Counterbalanced: Without AI / With AI" or "With AI only".
-  function phasesDescription(settings) {
-    var phases = (settings && settings.phases) || [];
-    if (!phases.length) return '—';
-    var names = phases.map(function (p) { return PHASE_LABEL[p] || p; });
-    if (phases.length === 1) return names[0] + ' only';
-    if (settings.counterbalance) return 'Counterbalanced: ' + names.join(' / ');
-    return names.join(' → ');
+
+  // §17b Screen 1 asks each row for "participants started and completed, and the
+  // sequence balance so far". Those come from the participants collection, which
+  // is small enough to read whole — the event log is never scanned for a counter.
+  function loadRunStats() {
+    if (LOCAL || !FB.isConfigured() || !runs.length) return;
+    FB.listParticipants(null).then(function (all) {
+      var by = {};
+      (all || []).forEach(function (p) {
+        var k = p.run_id || '';
+        if (!by[k]) by[k] = { started: 0, completed: 0, nA: 0, nB: 0 };
+        by[k].started++;
+        if (p.completed) by[k].completed++;
+        if (p.sequence === 'A') by[k].nA++;
+        else if (p.sequence === 'B') by[k].nB++;
+      });
+      runs.forEach(function (r) {
+        var s = by[r.id];
+        if (s) { r.stats = { started: s.started, completed: s.completed }; r.counts = { nA: s.nA, nB: s.nB }; }
+      });
+      renderRuns();
+    }).catch(function () { /* the rules may not be published yet — the rows just show dashes */ });
   }
-  function costW(c) { return (+c > 0) ? c + '¢' : 'free'; }
-  function regionsDesc(patches) { return (patches || []).map(function (p) { return p[0] + '–' + p[1]; }).join('  &  ') || '—'; }
-  function aiDesc(ai) {
-    ai = ai || {};
-    var s = 'Baseline ' + costW(ai.baselineCost) + '/q · ' + (ai.baselineData || 'few') + ' data';
-    if (ai.frontier) s += '  ·  Frontier ' + costW(ai.frontierCost) + '/q · ' + (ai.frontierData || 'lots') + ' data';
+
+  function renderRuns() {
+    var host = $('runs-list');
+    if (!runs.length) {
+      host.innerHTML = '<div class="card muted">No runs yet. <b>+ New run</b> starts one from the recommended defaults.</div>';
+      return;
+    }
+    host.innerHTML = runs.map(function (r) {
+      var st = r.status || 'draft';
+      var bal = (r.counts ? (r.counts.nA || 0) + ' A / ' + (r.counts.nB || 0) + ' B' : '—');
+      return '<div class="run-card" data-id="' + esc(r.id) + '">' +
+        '<div class="run-head">' +
+          '<div><div class="run-title">' + esc(r.name || 'untitled') +
+            '<span class="status ' + esc(st) + '">' + esc(st) + '</span>' +
+            (r.locked ? ' <span class="lock-tag">🔒 locked</span>' : '') + '</div>' +
+            '<div class="run-meta">code <b>' + esc(r.code || '—') + '</b> · run_id <span class="mono">' + esc(r.id) + '</span><br>' +
+            'created ' + esc(r.createdAt ? new Date(r.createdAt).toLocaleString() : '—') +
+            ' · started ' + (r.stats ? (r.stats.started || 0) : 0) +
+            ' · completed ' + (r.stats ? (r.stats.completed || 0) : 0) +
+            ' · sequence balance ' + esc(bal) + '</div></div>' +
+          '<div class="run-meta">' + (r.code ? 'participant link:<br><span class="mono">' + esc(launchUrl(r.code)) + '</span>' : '') + '</div>' +
+        '</div>' +
+        '<div class="run-acts">' +
+          '<button class="sBtn sBtnPrimary" data-act="open">Open</button>' +
+          '<button class="sBtn sBtnSec" data-act="clone">Clone this run</button>' +
+          '<button class="sBtn sBtnSec" data-act="copy">Copy link</button>' +
+          '<button class="sBtn sBtnSec" data-act="testround">🧪 Test round</button>' +
+          '<button class="sBtn exportBtn" data-act="export">⬇ Export</button>' +
+          (st === 'open' ? '<button class="sBtn closeBtn" data-act="close">Close</button>'
+                         : '<button class="sBtn sBtnSec" data-act="open-entry">Open entry</button>') +
+          '<button class="sBtn deleteBtn" data-act="delete">Delete</button>' +
+        '</div></div>';
+    }).join('');
+
+    host.querySelectorAll('.run-card').forEach(function (card) {
+      var run = runs.filter(function (r) { return r.id === card.dataset.id; })[0];
+      card.querySelectorAll('button[data-act]').forEach(function (b) {
+        b.onclick = function () { runAction(b.dataset.act, run, b); };
+      });
+    });
+  }
+
+  function launchUrl(code) {
+    var base = location.origin + location.pathname.replace(/admin\/?$/, '');
+    return base + '?code=' + encodeURIComponent(code);
+  }
+  // ONE builder for every sandbox link, so the launch box and the cards can never
+  // open different things.
+  function previewUrl(code, spec) {
+    var base = location.origin + location.pathname.replace(/admin\/?$/, '');
+    return base + '?preview=1&debug=1&key=' + encodeURIComponent(CFG.DEBUG_KEY) +
+      (code ? '&code=' + encodeURIComponent(code) : '') +
+      (spec ? '&spec=' + encodeURIComponent(spec) : '');
+  }
+
+  function runAction(act, run, btn) {
+    if (!run) return;
+    if (act === 'open') { selectRun(run); openTab('params'); return; }
+    if (act === 'copy') {
+      navigator.clipboard.writeText(launchUrl(run.code)).then(function () {
+        var old = btn.textContent; btn.textContent = '✓ Copied';
+        setTimeout(function () { btn.textContent = old; }, 1400);
+      }); return;
+    }
+    if (act === 'testround') { window.open(previewUrl(run.code), '_blank'); return; }
+    if (act === 'export') { selectRun(run); openTab('data'); loadEvents(); return; }
+    if (act === 'clone') { cloneRun(run); return; }
+    if (act === 'close') { setStatus(run, 'closed'); return; }
+    if (act === 'open-entry') { setStatus(run, 'open'); return; }
+    if (act === 'delete') {
+      if (!confirm('Delete the run "' + (run.name || run.id) + '"? Collected event rows are kept — use the danger zone to remove data.')) return;
+      (LOCAL ? Promise.resolve(saveLocalRuns(localRuns().filter(function (r) { return r.id !== run.id; })))
+             : FB.deleteRun(run.id).then(function () { return FB.audit(run.id, 'delete_run', run.name); }))
+        .then(function () { current = null; loadRuns(); });
+    }
+  }
+
+  function setStatus(run, status) {
+    if (status === 'open') {
+      // §17b Screen 6: a run cannot move from draft to open until the validation
+      // gate passes. (Built once — regenerating a 600-mapping pool twice for the
+      // same check is pure waste.)
+      var a = artifacts(run);
+      var v = Specs.validate(a.pool, a.specs, a.params);
+      if (!v.pass) {
+        alert('This run cannot open until the validation gate passes:\n\n• ' + v.failures.join('\n• '));
+        return;
+      }
+    }
+    var patch = { status: status, ops: Object.assign({}, run.ops || {}, { entryOpen: status === 'open' }) };
+    persist(run.id, patch).then(function () {
+      FB.isConfigured() && !LOCAL && FB.audit(run.id, 'status_' + status, run.name);
+      loadRuns();
+    });
+  }
+
+  function cloneRun(run) {
+    var p = clone(Specs.withDefaults(run.params));
+    var name = prompt('Name for the cloned run:', (run.name || 'untitled') + ' (clone)');
+    if (name == null) return;
+    var obj = newRunDoc(p, name, autoCode());
+    obj.clonedFrom = run.id;
+    createRun(obj).then(function () {
+      note('save-note', 'Cloned. The clone is a <b>draft</b> with its own run_id, its own pool and its own specs.');
+      loadRuns();
+    });
+  }
+
+  function newRunDoc(p, name, code) {
+    var params = clone(p);
+    params.ops.runName = name;
+    var pool = Pool.buildPool(params.env, params.env.generatorSeed);
+    var specSeed = params.env.generatorSeed + 1;
+    var specs = Specs.buildSpecs(pool, params, specSeed);
+    return {
+      name: name, code: String(code || '').toUpperCase(),
+      status: 'draft', locked: false, createdAt: Date.now(),
+      params: params, ops: params.ops, assign: params.assign,
+      specSeed: specSeed, specsJson: JSON.stringify(specs),
+      poolChecksum: X.checksum(JSON.stringify(pool)),
+      specsChecksum: X.checksum(JSON.stringify(specs)),
+      seeds: { generatorSeed: params.env.generatorSeed, specSeed: specSeed },
+      overrides: []
+    };
+  }
+  function createRun(obj) {
+    if (LOCAL) {
+      var list = localRuns();
+      obj.id = 'local-' + Date.now().toString(36);
+      list.unshift(obj); saveLocalRuns(list);
+      return Promise.resolve(obj.id);
+    }
+    return FB.createRun(obj).then(function (id) { FB.audit(id, 'create_run', obj.name); return id; });
+  }
+  function persist(id, patch) {
+    if (LOCAL) {
+      var list = localRuns().map(function (r) { return r.id === id ? Object.assign(r, patch) : r; });
+      saveLocalRuns(list);
+      return Promise.resolve();
+    }
+    return FB.updateRun(id, patch);
+  }
+
+  function artifacts(run) {
+    var params = Specs.withDefaults(run && run.params);
+    var pool = Pool.buildPool(params.env, params.env.generatorSeed);
+    var specs = null;
+    if (run && run.specsJson) { try { specs = JSON.parse(run.specsJson); } catch (e) {} }
+    if (!specs || !specs.length) specs = Specs.buildSpecs(pool, params, (run && run.specSeed) || null);
+    return { params: params, pool: pool, specs: specs };
+  }
+
+  function selectRun(run) {
+    current = run; editingId = run.id;
+    currentParams = Specs.withDefaults(run.params);
+    if (run.ops) Object.keys(run.ops).forEach(function (k) { currentParams.ops[k] = run.ops[k]; });
+    if (run.code) currentParams.ops.code = run.code;
+    fillForm(currentParams, run);
+    renderRoster();
+    fillSpecPicker();
+  }
+
+  // ======================================================================
+  //  SCREEN 2 · PARAMETERS   (+ SCREEN 3 · CONSEQUENCES)
+  // ======================================================================
+  // Every control is described once, here, so reading the form, writing it, and
+  // locking it all stay in step.
+  var FIELDS = [
+    ['env', 'positions', 'num'], ['env', 'stepBound', 'num'], ['env', 'prizeMin', 'num'], ['env', 'prizeMax', 'num'],
+    ['env', 'seedLowMin', 'num'], ['env', 'seedLowMax', 'num'], ['env', 'seedHighProb', 'num'],
+    ['env', 'seedHighMin', 'num'], ['env', 'seedHighMax', 'num'], ['env', 'poolSize', 'num'], ['env', 'generatorSeed', 'num'],
+    ['costs', 'revealCost', 'num'], ['costs', 'queryCost', 'num'], ['costs', 'queryCap', 'num'], ['costs', 'revealCap', 'num'],
+    ['costs', 'scoreFloor', 'seg'],
+    ['ai', 'sparseK', 'num'], ['ai', 'denseK', 'num'], ['ai', 'placement', 'seg'], ['ai', 'answerRounding', 'seg'],
+    ['ai', 'allowRequery', 'seg'], ['ai', 'drawCurve', 'seg'], ['ai', 'markAnchors', 'seg'],
+    ['rounds', 'warmupPerBlock', 'num'], ['rounds', 'scoredPerBlock', 'num'], ['rounds', 'openPerBlock', 'num'],
+    ['rounds', 'seededPerBlock', 'num'], ['rounds', 'seedJitter', 'num'], ['rounds', 'shuffleWithinBlock', 'seg'],
+    ['assign', 'sequenceAssignment', 'seg'], ['assign', 'freezeSeeds', 'seg'], ['assign', 'freezeAnchors', 'seg'],
+    ['assign', 'nextEntrantOverride', 'seg'],
+    ['filter', 'minGlobalMax', 'num'], ['filter', 'minHeadroom', 'num'],
+    ['filter', 'seedHighestMin', 'num'], ['filter', 'seedHighestMax', 'num'], ['filter', 'applyToOpen', 'seg'],
+    ['ops', 'runName', 'txt'], ['ops', 'entryOpen', 'seg'], ['ops', 'windowFrom', 'txt'], ['ops', 'windowTo', 'txt'],
+    ['ops', 'minViewport', 'num'], ['ops', 'resumeWindowH', 'num'], ['ops', 'allowResume', 'seg'],
+    ['ops', 'idleWarnMin', 'num'], ['ops', 'exitSurvey', 'seg'], ['ops', 'debrief', 'seg'],
+    ['ops', 'gateQ2', 'seg'], ['ops', 'gateOther', 'seg'], ['ops', 'rosterMode', 'seg'], ['ops', 'completionCode', 'txt']
+  ];
+  // Only the `ops` group and the entrant override stay editable once a run has an
+  // entrant (§17b). Everything else is a parameter that touches the task.
+  function isUnlockedField(group, key) {
+    return group === 'ops' || (group === 'assign' && key === 'nextEntrantOverride');
+  }
+  var MIXES = [
+    ['rounds', 'shapeMix', 'FRONTIER', 'p-shape-FRONTIER'],
+    ['rounds', 'shapeMix', 'BALANCED', 'p-shape-BALANCED'],
+    ['rounds', 'shapeMix', 'GAP', 'p-shape-GAP'],
+    ['rounds', 'densitySeeded', 'SPARSE', 'p-dseed-SPARSE'],
+    ['rounds', 'densitySeeded', 'DENSE', 'p-dseed-DENSE'],
+    ['rounds', 'densityOpen', 'SPARSE', 'p-dopen-SPARSE'],
+    ['rounds', 'densityOpen', 'DENSE', 'p-dopen-DENSE']
+  ];
+
+  function segSet(id, value) {
+    var host = $(id);
+    if (!host) return;
+    host.querySelectorAll('button').forEach(function (b) {
+      var v = b.dataset.v;
+      var on = (v === String(value)) || (v === 'true' && value === true) || (v === 'false' && value === false);
+      b.classList.toggle('on', !!on);
+    });
+  }
+  function segGet(id) {
+    var b = $(id) && $(id).querySelector('button.on');
+    if (!b) return null;
+    var v = b.dataset.v;
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    return v;
+  }
+
+  function wireForm() {
+    FIELDS.forEach(function (f) {
+      var id = 'p-' + f[0] + '-' + f[1];
+      var el = $(id);
+      if (!el) return;
+      if (f[2] === 'seg') {
+        el.querySelectorAll('button').forEach(function (b) {
+          b.onclick = function () {
+            if (el.dataset.locked === '1') return;
+            if ((f[1] === 'drawCurve' || f[1] === 'markAnchors') && b.dataset.v === 'true') {
+              if (!confirm('Turning this on changes what the study measures:\n\n' +
+                (f[1] === 'drawCurve'
+                  ? 'Drawing the full curve makes consultation free — the participant reads every answer off a line instead of paying for them one at a time.'
+                  : 'Marking the AI’s known positions makes the jaggedness visible, so locating it stops being the scarce commodity.') +
+                '\n\nThat is a different experiment. Turn it on anyway?')) return;
+            }
+            el.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+            readForm(); renderConsequences();
+          };
+        });
+      } else {
+        el.oninput = function () { readForm(); renderConsequences(); };
+      }
+    });
+    MIXES.forEach(function (m) {
+      var el = $(m[3]);
+      if (el) el.oninput = function () { readForm(); renderConsequences(); };
+    });
+
+    $('btn-gencode').onclick = function () { $('p-ops-code').value = autoCode(); readForm(); };
+    $('p-ops-code').oninput = function () { readForm(); };
+
+    $('btn-save').onclick = saveRun;
+    $('btn-cancel').onclick = function () { if (current) selectRun(current); };
+    $('btn-makedefault').onclick = function () {
+      readForm();
+      try { localStorage.setItem('searchv2:v3:admin:defaults', JSON.stringify(currentParams)); } catch (e) {}
+      note('save-note', 'Saved as the starting point for new runs on this machine.');
+    };
+    $('btn-restore').onclick = function () {
+      currentParams = Specs.withDefaults(null);
+      fillForm(currentParams, current);
+      note('save-note', 'Form reset to the built-in defaults. Nothing is saved until you press Save run.');
+    };
+  }
+
+  function autoCode() {
+    var A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
+    for (var i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)];
     return s;
   }
-  function renderSummary() {
-    var s = collectSettings();
-    var nPhases = s.phases.length || 1;
-    var custom = CONTENT_KEYS.filter(function (c) { return s.content[c.k]; }).map(function (c) { return c.label; });
-    var rows = [
-      ['Name', esc($('f-name').value || '—')],
-      ['Code', esc($('f-code').value || '—')],
-      ['Status', editingId ? statusOf(editingId) : 'new (active on create)'],
-      ['Phases', esc(phasesDescription(s))],
-      ['Rounds', (s.nPractice ? '1 practice + ' : 'no practice, ') + s.nTasks + ' real per phase' +
-        (nPhases > 1 ? ' (' + (s.nTasks * nPhases) + ' total)' : '') + ', ' + s.paidTasks + ' paid'],
-      ['AI regions', esc(regionsDesc(s.coveragePatches))],
-      ['AI model', esc(aiDesc(s.ai))],
-      ['Completion code', esc($('f-code-shared').value || '—') + (s.completionCodeA || s.completionCodeB ? ' (A/B overrides set)' : '')],
-      ['Custom page text', custom.length ? esc(custom.join(', ')) : 'all built-in']
-    ];
-    $('settings-summary').innerHTML = '<h3>Settings summary</h3>' +
-      rows.map(function (r) { return '<div class="sum-row"><div>' + r[0] + '</div><div class="v">' + r[1] + '</div></div>'; }).join('');
-  }
-  function statusOf(id) { var s = SESSIONS.filter(function (x) { return x.id === id; })[0]; return s ? s.status : '—'; }
 
-  // ============================================================= sessions lists
-  function loadSessions() {
-    if (!configured) return Promise.resolve();
-    return FB.listSessions().then(function (list) {
-      SESSIONS = list.sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
-      renderSessions();
-      fillSessionFilters();
-    }).catch(function (e) {
-      var code = e && e.code ? e.code : String(e);
-      var extra = /permission/i.test(code)
-        ? ' This usually means the Firestore security rules need re-publishing. In the Firebase console → Firestore → Rules, paste the contents of lab/search-v2/firestore.rules (it must include the “sessions” collection) and Publish.'
-        : '';
-      banner($('dash-banner'), 'warn', 'Could not load sessions: ' + esc(code) + '.' + extra);
-      $('active-list').innerHTML = '<p class="muted small">Could not load — see the message above.</p>';
-      $('completed-list').innerHTML = '';
-    });
-  }
-  function renderSessions() {
-    var active = SESSIONS.filter(function (s) { return s.status !== 'completed'; });
-    var done = SESSIONS.filter(function (s) { return s.status === 'completed'; });
-    var rmS = $('btn-remove-all-sessions'); if (rmS) rmS.style.display = (configured && SESSIONS.length) ? '' : 'none';
-    $('active-count').textContent = active.length + ' active';
-    $('completed-count').textContent = done.length + ' total';
-    $('active-list').innerHTML = active.length ? active.map(sessCard).join('') : '<p class="muted small">No active sessions yet. Create one on the left.</p>';
-    $('completed-list').innerHTML = done.length ? done.map(sessCard).join('') : '<p class="muted small">None yet.</p>';
-    wireSessCards();
-    renderParticipants();
-  }
-
-  // Right-column "Participants" panel: everyone who has any logged data, across
-  // all sessions. Participants are anonymous (no accounts) — each is one entry
-  // (its throwaway session id) with its wave code, Prolific id, phases and state.
-  // Aggregate one row per participant (an anonymous play session id) from the raw
-  // events, with enough detail for the expandable card + Remove action.
-  function participantAgg() {
-    var by = {};
-    (EVENTS || []).forEach(function (e) {
-      var s = e.session || '(none)';
-      var r = by[s] || (by[s] = { session: s, code: e.sessionCode, pid: e.pid, study: e.study, armSeq: [], armSet: {}, n: 0, first: e.t, last: e.t, completed: false, bonusCents: null, rounds: {} });
-      r.n++; r.pid = r.pid || e.pid; r.code = r.code || e.sessionCode; r.study = r.study || e.study;
-      if ((e.arm === 'A' || e.arm === 'B') && !r.armSet[e.arm]) { r.armSet[e.arm] = true; r.armSeq.push(e.arm); }
-      if (e.t != null && (r.first == null || e.t < r.first)) r.first = e.t;
-      if ((e.t || 0) > (r.last || 0)) r.last = e.t;
-      if (e.event === 'session_end') r.completed = true;
-      if (e.event === 'paid_rounds_drawn' && e.value != null) r.bonusCents = e.value;
-      if (e.event === 'round_end') {
-        var k = (e.phase == null ? 1 : e.phase) + ':' + (e.round == null ? 0 : e.round);
-        r.rounds[k] = { phase: e.phase, arm: e.arm, round: e.round, net: (e.rawNet != null ? e.rawNet : e.net) };
+  function fillForm(p, run) {
+    var locked = !!(run && run.locked);
+    FIELDS.forEach(function (f) {
+      var id = 'p-' + f[0] + '-' + f[1], el = $(id);
+      if (!el) return;
+      var v = p[f[0]] ? p[f[0]][f[1]] : null;
+      if (f[2] === 'seg') segSet(id, v);
+      else el.value = (v == null ? '' : v);
+      var lockThis = locked && !isUnlockedField(f[0], f[1]);
+      if (f[2] === 'seg') {
+        el.dataset.locked = lockThis ? '1' : '';
+        el.style.opacity = lockThis ? '.6' : '';
+      } else {
+        el.disabled = lockThis;
+        el.classList.toggle('locked-field', lockThis);
       }
     });
-    return Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
-  }
-  function phaseName(arm) { return PHASE_LABEL[arm] || arm || '—'; }
-
-  function renderParticipants() {
-    var list = $('participants-list'); if (!list) return;
-    var ps = participantAgg();
-    $('participants-count').textContent = ps.length + ' total';
-    var rmAll = $('btn-remove-all-parts'); if (rmAll) rmAll.style.display = ps.length ? '' : 'none';
-    if (!ps.length) { list.innerHTML = '<p class="muted small">No participants yet.</p>'; return; }
-    list.innerHTML = ps.map(participantCard).join('');
-    wireParticipantCards();
-  }
-
-  function participantCard(p) {
-    var title = p.pid ? esc(p.pid) : esc(shortId(p.session));
-    var sub = p.pid ? esc(shortId(p.session)) : (p.code ? 'session ' + esc(p.code) : '');
-    var rounds = Object.keys(p.rounds).map(function (k) { return p.rounds[k]; })
-      .sort(function (a, b) { return ((a.phase || 0) - (b.phase || 0)) || ((a.round || 0) - (b.round || 0)); });
-    var roundRows = rounds.length ? rounds.map(function (r) {
-      return '<div class="pu-round"><span class="pu-arm">' + esc(phaseName(r.arm)) + (r.round != null ? ' · Round ' + r.round : '') + '</span>' +
-        '<span class="pill completed">done</span>' +
-        '<span class="pu-net">' + (r.net == null ? '&mdash;' : r.net + '&cent; net') + '</span></div>';
-    }).join('') : '<div class="muted small" style="padding:2px 0;">No completed rounds yet.</div>';
-    var facts2 = [];
-    if (p.pid) facts2.push('Prolific ' + esc(p.pid));
-    facts2.push('session ' + esc(p.code || '—'));
-    facts2.push('played ' + (p.armSeq.map(phaseName).join(' → ') || '—'));
-    facts2.push(p.n + ' event' + (p.n === 1 ? '' : 's'));
-    if (p.bonusCents != null) facts2.push('bonus $' + (p.bonusCents / 100).toFixed(2));
-    return '<div class="part-card" data-id="' + esc(p.session) + '">' +
-      '<button type="button" class="pu-head" data-act="toggle">' +
-        '<span class="pu-idwrap"><span class="pu-id">' + title + '</span>' + (sub ? '<span class="pu-sub">' + sub + '</span>' : '') + '</span>' +
-        '<span class="pu-right"><span class="pill ' + (p.completed ? 'completed' : 'active') + '">' + (p.completed ? 'done' : 'in progress') + '</span><span class="pu-chev">▾</span></span>' +
-      '</button>' +
-      '<div class="pu-body">' +
-        '<div class="pu-facts">Registered ' + esc(fmtTime(p.first)) + ' <span class="sep">·</span> Last active ' + esc(fmtTime(p.last)) + '</div>' +
-        '<div class="pu-facts">' + facts2.join(' <span class="sep">·</span> ') + '</div>' +
-        '<div class="pu-rounds">' + roundRows + '</div>' +
-        '<div class="pu-sep"></div>' +
-        '<div class="pu-actions">' +
-          '<div class="pu-actions-left">' +
-            (configured ? '<button class="link-btn" data-act="message">Message</button>' : '') +
-            '<button class="link-btn" data-act="viewdata">View data</button>' +
-          '</div>' +
-          '<button class="pu-remove" data-act="remove">Remove user</button>' +
-        '</div>' +
-        (configured ?
-          '<div class="pu-compose">' +
-            '<textarea class="pu-msg" rows="2" placeholder="Write an encouraging message… the participant sees it live while they play."></textarea>' +
-            '<div class="pu-msg-row"><button class="btn btn-blue btn-sm" data-act="send">Send message</button>' +
-            '<button class="link-btn" data-act="cancelmsg">Cancel</button>' +
-            '<span class="flash" data-role="msgflash">Sent ✓</span></div>' +
-          '</div>' : '') +
-      '</div>' +
-    '</div>';
-  }
-  function wireParticipantCards() {
-    var cards = $('participants-list').querySelectorAll('.part-card');
-    for (var i = 0; i < cards.length; i++) (function (card) {
-      var id = card.getAttribute('data-id');
-      card.querySelector('[data-act="toggle"]').addEventListener('click', function () { card.classList.toggle('open'); });
-      var vd = card.querySelector('[data-act="viewdata"]');
-      if (vd) vd.addEventListener('click', function () { openParticipantData(id); });
-      var rm = card.querySelector('[data-act="remove"]');
-      if (rm) rm.addEventListener('click', function () { removeParticipant(id, rm); });
-      var msg = card.querySelector('[data-act="message"]');
-      if (msg) msg.addEventListener('click', function () {
-        card.classList.toggle('composing');
-        var ta = card.querySelector('.pu-msg'); if (card.classList.contains('composing') && ta) ta.focus();
-      });
-      var cancel = card.querySelector('[data-act="cancelmsg"]');
-      if (cancel) cancel.addEventListener('click', function () { card.classList.remove('composing'); });
-      var send = card.querySelector('[data-act="send"]');
-      if (send) send.addEventListener('click', function () { sendParticipantMessage(id, card, send); });
-    })(cards[i]);
-  }
-  // Push a live message to one participant (Firestore messages/{session}).
-  function sendParticipantMessage(id, card, btn) {
-    var ta = card.querySelector('.pu-msg'), text = ta ? ta.value.trim() : '';
-    if (!text) { if (ta) ta.focus(); return; }
-    var old = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
-    FB.sendMessage(id, text).then(function () {
-      btn.disabled = false; btn.textContent = old;
-      var f = card.querySelector('[data-role="msgflash"]'); if (f) flash(f);
-      if (ta) ta.value = '';
-      setTimeout(function () { card.classList.remove('composing'); }, 900);
-    }).catch(function (err) {
-      btn.disabled = false; btn.textContent = old;
-      banner($('dash-banner'), 'warn', 'Could not send the message: ' + esc(err && err.code ? err.code : String(err)) +
-        '. If this persists, publish the updated lab/search-v2/firestore.rules (it must include the “messages” collection).');
+    MIXES.forEach(function (m) {
+      var el = $(m[3]);
+      if (!el) return;
+      el.value = (p[m[0]] && p[m[0]][m[1]]) ? p[m[0]][m[1]][m[2]] : '';
+      el.disabled = locked;
+      el.classList.toggle('locked-field', locked);
     });
-  }
-  // "View data": jump to the Data tab filtered to this participant's wave.
-  function openParticipantData(id) {
-    var ev = (EVENTS || []).filter(function (e) { return (e.session || '(none)') === id; })[0];
-    $('data-filter').value = (ev && ev.sessionCode) || '';
-    selectTab('data');
-  }
-  // Remove a participant: permanently delete their collected event rows (Firestore
-  // when configured, else this browser's localStorage log in local preview).
-  function removeParticipant(id, btn) {
-    var n = (EVENTS || []).filter(function (e) { return (e.session || '(none)') === id; }).length;
-    if (!confirm('Remove this participant and permanently delete their ' + n + ' collected event' + (n === 1 ? '' : 's') + '? This cannot be undone.')) return;
-    btn.disabled = true; btn.textContent = 'Removing…';
-    var op = configured ? FB.deleteParticipant(id) : Promise.resolve(deleteLocalParticipant(id));
-    op.then(function () { loadData(); })
-      .catch(function (err) {
-        btn.disabled = false; btn.textContent = 'Remove user';
-        banner($('dash-banner'), 'warn', 'Could not remove participant: ' + esc(err && err.code ? err.code : String(err)));
-      });
-  }
-  function deleteLocalParticipant(session) {
-    try {
-      var kill = [];
-      for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('searchv2:log:' + session) === 0) kill.push(k); }
-      kill.forEach(function (k) { localStorage.removeItem(k); });
-    } catch (e) {}
-  }
-  // Remove ALL participants (every collected event). Double-confirmed (destructive).
-  function removeAllParticipants() {
-    var n = participantAgg().length;
-    if (!n) return;
-    if (!confirm('Remove ALL ' + n + ' participant' + (n === 1 ? '' : 's') + ' and permanently delete every collected event? This cannot be undone.')) return;
-    if (!confirm('Are you absolutely sure? This deletes ALL participant data.')) return;
-    var op = configured ? FB.deleteAllParticipants() : Promise.resolve(deleteAllLocalParticipants());
-    op.then(function () { loadData(); })
-      .catch(function (err) { banner($('dash-banner'), 'warn', 'Could not remove all participants: ' + esc(err && err.code ? err.code : String(err))); });
-  }
-  function deleteAllLocalParticipants() {
-    try {
-      var kill = [];
-      for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('searchv2:log:') === 0) kill.push(k); }
-      kill.forEach(function (k) { localStorage.removeItem(k); });
-    } catch (e) {}
-  }
-  // Remove ALL sessions (waves). Firebase only; collected event data is kept.
-  function removeAllSessions() {
-    if (!configured) return;
-    var n = SESSIONS.length;
-    if (!n) return;
-    if (!confirm('Delete ALL ' + n + ' session' + (n === 1 ? '' : 's') + ' (waves)? Collected participant/event data is kept. This cannot be undone.')) return;
-    FB.deleteAllSessions().then(function () { loadSessions(); })
-      .catch(function (err) { banner($('dash-banner'), 'warn', 'Could not delete all sessions: ' + esc(err && err.code ? err.code : String(err))); });
-  }
-  function sessCard(s) {
-    var n = EVENTS.filter(function (e) { return e.sessionCode === s.code && e.event === 'session_start'; }).length;
-    return '<div class="sess-card" data-id="' + s.id + '">' +
-      '<div class="sc-top"><span class="sc-name">' + esc(s.name || '(unnamed)') + '</span>' +
-      '<span class="pill ' + (s.status === 'completed' ? 'completed' : 'active') + '">' + (s.status === 'completed' ? 'done' : 'active') + '</span></div>' +
-      '<div class="sc-code">code ' + esc(s.code) + ' · ' + n + ' participant' + (n === 1 ? '' : 's') + '</div>' +
-      '<div class="sc-meta">created ' + esc((s.createdAt || '').slice(0, 16).replace('T', ' ')) + '</div>' +
-      '<div class="sc-actions">' +
-        '<button class="link-btn" data-act="edit" data-id="' + s.id + '">Edit</button>' +
-        '<button class="link-btn" data-act="data" data-id="' + s.id + '">View data</button>' +
-        '<button class="link-btn" data-act="excel" data-id="' + s.id + '" title="Download this session\'s full dataset as an Excel workbook (settings, participants, rounds, every action with decision times, survey).">⬇ Excel</button>' +
-        '<button class="link-btn" data-act="testround" data-id="' + s.id + '" title="Play this session\'s whole flow in a private sandbox: the intro is skipped and NOTHING is written to Firestore — no participant, no rounds, no events.">🧪 Test round</button>' +
-        (s.status === 'completed'
-          ? '<button class="link-btn" data-act="reopen" data-id="' + s.id + '">Reopen</button>'
-          : '<button class="link-btn" data-act="complete" data-id="' + s.id + '">Mark completed</button>') +
-        '<button class="link-btn danger" data-act="delete" data-id="' + s.id + '">Delete</button>' +
-      '</div></div>';
-  }
-  function wireSessCards() {
-    var btns = document.querySelectorAll('.sess-card [data-act]');
-    for (var i = 0; i < btns.length; i++) btns[i].addEventListener('click', function () {
-      var id = this.getAttribute('data-id'), act = this.getAttribute('data-act');
-      var sess = SESSIONS.filter(function (s) { return s.id === id; })[0];
-      if (!sess) return;
-      if (act === 'edit') { fillForm(sess, null); renderSummary(); selectTab('sessions'); window.scrollTo(0, 0); }
-      else if (act === 'data') { $('data-filter').value = sess.code; selectTab('data'); }
-      else if (act === 'excel') { exportExcel(sess.code); }
-      // 🧪 Test round: the participant app in preview mode — it skips the intro
-      // and never writes to Firestore (see PREVIEW in app.js), so the whole flow
-      // can be rehearsed on a live session without adding a participant.
-      else if (act === 'testround') { window.open(previewUrl(sess.code), '_blank'); }
-      else if (act === 'complete') { FB.updateSession(id, { status: 'completed' }).then(loadSessions); }
-      else if (act === 'reopen') { FB.updateSession(id, { status: 'active' }).then(loadSessions); }
-      else if (act === 'delete') { if (confirm('Delete session "' + (sess.name || sess.code) + '"? Its collected event rows are kept.')) FB.deleteSession(id).then(loadSessions); }
-    });
-  }
-  function fillSessionFilters() {
-    var opts = '<option value="">All sessions</option>' + SESSIONS.map(function (s) { return '<option value="' + esc(s.code) + '">' + esc(s.name || s.code) + ' (' + esc(s.code) + ')</option>'; }).join('');
-    if ($('data-filter').innerHTML !== opts) { var cur = $('data-filter').value; $('data-filter').innerHTML = opts; $('data-filter').value = cur; }
-    var cur2 = $('an-filter').value; $('an-filter').innerHTML = opts; $('an-filter').value = cur2;
-  }
+    $('p-ops-code').value = (run && run.code) || p.ops.code || '';
 
-  // ============================================================= data
-  function wireData() {
-    $('btn-refresh').addEventListener('click', loadData);
-    $('data-filter').addEventListener('change', renderData);
-    $('an-filter').addEventListener('change', renderAnalytics);
-    $('btn-dl-xlsx').addEventListener('click', function () { exportExcel($('data-filter').value); });
-    $('btn-dl-csv').addEventListener('click', function () { downloadFile('searchv2_events.csv', toCSV(filteredEvents($('data-filter').value)), 'text/csv'); });
-    $('btn-dl-json').addEventListener('click', function () { downloadFile('searchv2_events.json', JSON.stringify(filteredEvents($('data-filter').value), null, 2), 'application/json'); });
-  }
-  function loadData() {
-    if (configured) {
-      $('data-source').textContent = 'Source: Firestore (all participants)';
-      FB.fetchEvents(20000).then(function (evs) { EVENTS = evs; renderSessions(); renderData(); }).catch(function (err) {
-        banner($('dash-banner'), 'warn', 'Could not read events: ' + esc(err && err.code ? err.code : String(err)));
-      });
+    $('params-title').textContent = run ? ('Parameters · ' + (run.name || 'untitled')) : 'Parameters · new run';
+    $('params-sub').textContent = run ? ('run_id ' + run.id + (run.locked ? ' · locked' : ' · draft')) : 'not saved yet';
+    $('btn-save').textContent = run ? 'Save run' : 'Create run';
+    $('btn-cancel').style.display = run ? '' : 'none';
+
+    if (locked) {
+      note('lock-note', '🔒 <b>Locked since the first participant' +
+        (run.lockedAt ? ', ' + new Date(run.lockedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '') +
+        '.</b> Every parameter that touches the task is fixed for this run. To change anything, ' +
+        '<b>clone the run</b> from the Runs screen and collect under a new run_id. Only the Operations group ' +
+        'and the next-entrant override stay editable.', false);
     } else {
-      $('data-source').textContent = 'Source: this browser’s localStorage (local preview)';
-      EVENTS = readLocalEvents(); renderData(); renderParticipants();
+      note('lock-note', '');
     }
+    renderConsequences();
   }
-  function readLocalEvents() {
-    var out = [];
-    for (var i = 0; i < localStorage.length; i++) {
-      var k = localStorage.key(i);
-      if (k && k.indexOf('searchv2:log:') === 0) { try { var arr = JSON.parse(localStorage.getItem(k)); if (arr && arr.length) out = out.concat(arr); } catch (e) {} }
+
+  function readForm() {
+    if (!currentParams) currentParams = Specs.withDefaults(null);
+    FIELDS.forEach(function (f) {
+      var id = 'p-' + f[0] + '-' + f[1], el = $(id);
+      if (!el) return;
+      if (f[2] === 'seg') { var g = segGet(id); if (g != null) currentParams[f[0]][f[1]] = g; }
+      else if (f[2] === 'num') { var n = parseFloat(el.value); if (isFinite(n)) currentParams[f[0]][f[1]] = n; }
+      else currentParams[f[0]][f[1]] = el.value;
+    });
+    MIXES.forEach(function (m) {
+      var el = $(m[3]);
+      if (!el) return;
+      var n = parseInt(el.value, 10);
+      if (isFinite(n)) currentParams[m[0]][m[1]][m[2]] = n;
+    });
+    currentParams.ops.code = ($('p-ops-code').value || '').toUpperCase();
+    return currentParams;
+  }
+
+  function saveRun() {
+    readForm();
+    var code = currentParams.ops.code || autoCode();
+    var name = currentParams.ops.runName || 'untitled';
+    if (!editingId) {
+      var obj = newRunDoc(currentParams, name, code);
+      createRun(obj).then(function () {
+        note('save-note', 'Run created as a <b>draft</b>. Run the validation gate on the Data screen before opening entry.');
+        loadRuns();
+      }).catch(function (e) { note('save-note', 'Could not create the run: ' + esc(String(e && e.message || e)), true); });
+      return;
     }
-    return out.sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
-  }
-  function filteredEvents(code) { return code ? EVENTS.filter(function (e) { return e.sessionCode === code; }) : EVENTS; }
-
-  function renderData() {
-    var evs = filteredEvents($('data-filter').value);
-    var by = {};
-    evs.forEach(function (e) {
-      var s = e.session || '(none)';
-      var r = by[s] || (by[s] = { session: s, code: e.sessionCode, pid: e.pid, armSeq: [], armSet: {}, n: 0, first: e.t, last: e.t, completed: false, bonusCents: null });
-      r.n++; r.pid = r.pid || e.pid; r.code = r.code || e.sessionCode;
-      // A within-subjects participant plays several phases; record the arms in
-      // the order they first appear (e.g. A then B).
-      if ((e.arm === 'A' || e.arm === 'B') && !r.armSet[e.arm]) { r.armSet[e.arm] = true; r.armSeq.push(e.arm); }
-      if (e.t < r.first) r.first = e.t; if (e.t > r.last) r.last = e.t;
-      if (e.event === 'session_end') r.completed = true;
-      if (e.event === 'paid_rounds_drawn' && e.value != null) r.bonusCents = e.value;
-    });
-    var sessions = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
-    var completes = sessions.filter(function (s) { return s.completed; }).length;
-    var playedA = sessions.filter(function (s) { return s.armSet.A; }).length;
-    var playedB = sessions.filter(function (s) { return s.armSet.B; }).length;
-    $('stat-grid').innerHTML = box(sessions.length, 'participants') + box(completes, 'completed') +
-      box(playedA, 'played ' + PHASE_LABEL.A) + box(playedB, 'played ' + PHASE_LABEL.B) + box(evs.length, 'events');
-
-    var sh = '<thead><tr><th>Participant</th><th>Session</th><th>PID</th><th>Phases</th><th>Events</th><th>Completed</th><th>Bonus</th><th>Last activity</th></tr></thead><tbody>';
-    sessions.forEach(function (x) {
-      sh += '<tr><td>' + esc(shortId(x.session)) + '</td><td>' + esc(x.code || '') + '</td><td>' + esc(x.pid) + '</td><td>' + esc(x.armSeq.join('→') || '—') + '</td>' +
-        '<td>' + x.n + '</td><td>' + (x.completed ? '✔' : '') + '</td><td>' + (x.bonusCents == null ? '' : '$' + (x.bonusCents / 100).toFixed(2)) + '</td><td>' + esc(fmtTime(x.last)) + '</td></tr>';
-    });
-    $('sessions-table').innerHTML = sh + '</tbody>';
-
-    var cols = ['t', 'sessionCode', 'session', 'arm', 'phase', 'event', 'round', 'position', 'value', 'estimate', 'refused', 'reveals', 'net'];
-    var eh = '<thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>';
-    filteredEvents($('data-filter').value).slice(-800).reverse().forEach(function (e) {
-      eh += '<tr>' + cols.map(function (f) { return '<td>' + esc(f === 't' ? fmtTime(e[f]) : (f === 'session' ? shortId(e[f]) : e[f])) + '</td>'; }).join('') + '</tr>';
-    });
-    $('events-table').innerHTML = eh + '</tbody>';
-    $('events-count').textContent = '(recent ' + Math.min(800, evs.length) + ' of ' + evs.length + ')';
-
-    renderOptimality(evs);
-  }
-
-  // ===================================================== rational-search benchmark
-  // Post-hoc "search window" scorer (Malladi–Martínez-Marquina–Morozov, "Space
-  // Exploration"): reconstructs each real round's reveal sequence from the logged
-  // `reveal` events, scores it with landscape.js windowStats, and aggregates the
-  // obvious-mistake rate, optimal-stop share, and reservation across the filtered data.
-  function renderOptimality(evs) {
-    var grid = $('opt-stat-grid'), tbl = $('opt-table');
-    if (!grid || !tbl) return;
-    var LS = window.Landscape;
-    if (!LS || !LS.windowStats) { grid.innerHTML = '<p class="muted small">Scorer unavailable (landscape.js not loaded).</p>'; tbl.innerHTML = ''; return; }
-    var L = (LS.L_STEP || 10), N = (LS.N || 100), COST = 5;
-    // group reveal events by (participant, phase, round), in time order
-    var rounds = {};
-    evs.forEach(function (e) {
-      if (e.event !== 'reveal' || e.position == null || e.value == null) return;
-      if (e.round === 0) return; // skip the unpaid practice round
-      var key = (e.session || '') + '|' + (e.phase == null ? 1 : e.phase) + '|' + (e.round == null ? 0 : e.round);
-      var r = rounds[key] || (rounds[key] = { session: e.session, code: e.sessionCode, pid: e.pid, arm: e.arm, reveals: [] });
-      r.reveals.push([+e.position, +e.value, +e.t || 0]);
-    });
-    var byPart = {}, totRounds = 0, totReveals = 0, totMistakes = 0, randSum = 0, optStops = 0, resSum = 0;
-    Object.keys(rounds).forEach(function (k) {
-      var r = rounds[k];
-      if (!r.reveals.length) return;
-      r.reveals.sort(function (a, b) { return a[2] - b[2]; });
-      var s = LS.windowStats(r.reveals.map(function (x) { return [x[0], x[1]]; }), L, N, COST);
-      totRounds++; totReveals += s.n; totMistakes += s.mistakes; randSum += s.randomRate;
-      resSum += s.reservation; if (s.windowRemaining === 0) optStops++;
-      var p = byPart[r.session] || (byPart[r.session] = { session: r.session, code: r.code, pid: r.pid, arms: {}, rounds: 0, reveals: 0, mistakes: 0, optStops: 0, bestSum: 0 });
-      if (r.arm === 'A' || r.arm === 'B') p.arms[r.arm] = true;
-      p.rounds++; p.reveals += s.n; p.mistakes += s.mistakes; if (s.windowRemaining === 0) p.optStops++; p.bestSum += s.best;
-    });
-    if (!totRounds) { grid.innerHTML = '<p class="muted small">No revealed rounds to score yet.</p>'; tbl.innerHTML = ''; return; }
-    var mrate = totReveals ? totMistakes / totReveals : 0, rrate = totRounds ? randSum / totRounds : 0;
-    grid.innerHTML = box(totRounds, 'rounds scored') +
-      box((mrate * 100).toFixed(1) + '%', 'obvious-mistake rate') +
-      box((rrate * 100).toFixed(1) + '%', 'random-search null') +
-      box(Math.round(optStops / totRounds * 100) + '%', 'optimal stops') +
-      box((totReveals / totRounds).toFixed(1), 'avg reveals/round') +
-      box(Math.round(resSum / totRounds) + '¢', 'reservation (i.i.d.)');
-    var rows = Object.keys(byPart).map(function (k) { return byPart[k]; })
-      .sort(function (a, b) { return (b.mistakes / (b.reveals || 1)) - (a.mistakes / (a.reveals || 1)); });
-    var h = '<thead><tr><th>Participant</th><th>Session</th><th>Phases</th><th>Rounds</th><th>Reveals</th><th>Obvious mistakes</th><th>Optimal stops</th><th>Avg best</th></tr></thead><tbody>';
-    rows.forEach(function (p) {
-      var mr = p.reveals ? (p.mistakes / p.reveals * 100).toFixed(0) + '%' : '—';
-      h += '<tr><td>' + esc(shortId(p.session)) + '</td><td>' + esc(p.code || '') + '</td>' +
-        '<td>' + esc(Object.keys(p.arms).map(function (a) { return PHASE_LABEL[a] || a; }).join(', ') || '—') + '</td>' +
-        '<td>' + p.rounds + '</td><td>' + p.reveals + '</td>' +
-        '<td>' + p.mistakes + ' (' + mr + ')</td>' +
-        '<td>' + Math.round(p.optStops / p.rounds * 100) + '%</td>' +
-        '<td>' + (p.rounds ? Math.round(p.bestSum / p.rounds) : '—') + '¢</td></tr>';
-    });
-    tbl.innerHTML = h + '</tbody>';
-  }
-
-  // ============================================================= analytics
-  function renderAnalytics() {
-    var evs = filteredEvents($('an-filter').value);
-    // Aggregate real-round (round>=1) performance per (participant, arm). A
-    // within-subjects participant contributes one data point to EACH phase they
-    // played; a single-phase participant contributes to just one. Completion is
-    // per participant (session_end).
-    var completedSessions = {}, byKey = {};
-    function agg(session, arm) {
-      var k = session + '|' + arm;
-      return byKey[k] || (byKey[k] = { session: session, arm: arm, reveals: 0, net: 0, best: 0, rounds: 0, queries: 0 });
+    var run = current;
+    var patch;
+    if (run && run.locked) {
+      // Locked: only Operations and the entrant override may move. The Rules
+      // refuse anything else anyway; refusing it here too keeps the panel honest.
+      patch = { name: name, ops: clone(currentParams.ops), assign: Object.assign({}, run.assign || {}, { nextEntrantOverride: currentParams.assign.nextEntrantOverride }) };
+    } else {
+      var pool = Pool.buildPool(currentParams.env, currentParams.env.generatorSeed);
+      var specSeed = currentParams.env.generatorSeed + 1;
+      var specs = Specs.buildSpecs(pool, currentParams, specSeed);
+      patch = {
+        name: name, code: code, params: clone(currentParams), ops: clone(currentParams.ops),
+        assign: clone(currentParams.assign), specSeed: specSeed, specsJson: JSON.stringify(specs),
+        poolChecksum: X.checksum(JSON.stringify(pool)), specsChecksum: X.checksum(JSON.stringify(specs)),
+        seeds: { generatorSeed: currentParams.env.generatorSeed, specSeed: specSeed }
+      };
     }
-    evs.forEach(function (e) {
-      if (e.event === 'session_end') completedSessions[e.session] = true;
-      if ((e.arm === 'A' || e.arm === 'B') && e.round >= 1) {
-        if (e.event === 'round_end') { var a = agg(e.session, e.arm); a.rounds++; a.reveals += (+e.reveals || 0); a.net += (+e.rawNet || 0); a.best += (e.best == null ? 0 : +e.best); }
-        else if (e.event === 'ai_query' && e.arm === 'B') agg(e.session, 'B').queries++;
-      }
-    });
-    var A = [], B = [], doneSet = {};
-    Object.keys(byKey).forEach(function (k) {
-      var a = byKey[k];
-      if (completedSessions[a.session] && a.rounds > 0) { (a.arm === 'B' ? B : A).push(a); doneSet[a.session] = true; }
-    });
-    function mean(arr, f) { return arr.length ? arr.reduce(function (a, s) { return a + f(s); }, 0) / arr.length : 0; }
-    var mA = { n: A.length, rev: mean(A, function (s) { return s.reveals / s.rounds; }), net: mean(A, function (s) { return s.net / s.rounds; }), best: mean(A, function (s) { return s.best / s.rounds; }) };
-    var mB = { n: B.length, rev: mean(B, function (s) { return s.reveals / s.rounds; }), net: mean(B, function (s) { return s.net / s.rounds; }), best: mean(B, function (s) { return s.best / s.rounds; }), q: mean(B, function (s) { return s.queries / s.rounds; }) };
-
-    $('an-stats').innerHTML = box(Object.keys(doneSet).length, 'completed') + box(A.length, PHASE_LABEL.A + ' blocks') + box(B.length, PHASE_LABEL.B + ' blocks') +
-      box(mB.q.toFixed(1), PHASE_LABEL.B + ' queries/round');
-
-    if (!A.length && !B.length) { $('an-body').innerHTML = '<p class="muted">No completed participants yet' + ($('an-filter').value ? ' for this session.' : '.') + '</p>'; return; }
-    function cmp(label, va, vb, fmt) {
-      var mx = Math.max(va, vb, 0.0001);
-      return '<div class="bar-row"><div>' + label + ' — ' + esc(PHASE_LABEL.A) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + (va / mx * 100) + '%"></div></div><div class="right">' + fmt(va) + '</div></div>' +
-        '<div class="bar-row"><div>' + label + ' — ' + esc(PHASE_LABEL.B) + '</div><div class="bar-track"><div class="bar-fill b" style="width:' + (vb / mx * 100) + '%"></div></div><div class="right">' + fmt(vb) + '</div></div>';
-    }
-    var c = function (v) { return v.toFixed(1) + '¢'; }, n1 = function (v) { return v.toFixed(1); };
-    $('an-body').innerHTML = '<div class="bars">' +
-      cmp('Avg net / round', mA.net, mB.net, c) +
-      cmp('Avg reveals / round', mA.rev, mB.rev, n1) +
-      cmp('Avg best found / round', mA.best, mB.best, c) +
-      '</div><p class="small muted">Net = best value found − 5¢ × reveals, per round. Higher net is better search performance. In a within-subjects session each participant appears in both bars.</p>';
+    persist(editingId, patch).then(function () {
+      if (!LOCAL) FB.audit(editingId, 'save_run', name);
+      note('save-note', 'Saved.');
+      loadRuns();
+    }).catch(function (e) { note('save-note', 'Could not save: ' + esc(String(e && e.message || e)), true); });
   }
 
-  // ============================================================= Excel export
-  // One analysis-ready .xlsx per session (or all sessions): the admin-chosen
-  // parameters, one row per participant, per round, per action/decision (with
-  // decision_ms = the time the participant took), and the exit survey. Built by
-  // admin/xlsx.js (dependency-free); everything is derived from the same EVENTS
-  // the Data tab shows, so what you see is what you export.
-  function parseInfo(s) {
+  // ---- SCREEN 3 · Consequences --------------------------------------------
+  // Simulated benchmark first-move shares (§10). These are the brief's own
+  // simulated figures at the default geometry; when the seed positions or the
+  // jitter change we recompute the exchange ratio and report which way it points,
+  // rather than pretending a simulation was rerun.
+  function benchmarkShares(p) {
     var out = {};
-    String(s || '').split(';').forEach(function (kv) {
-      var i = kv.indexOf('=');
-      if (i > 0) out[kv.slice(0, i)] = kv.slice(i + 1);
+    CFG.SEED_SHAPES.forEach(function (sh) {
+      var base = CFG.SEED_BASE[sh], J = p.env.positions;
+      var tail = Math.max(base[0] - 1, J - base[base.length - 1]);
+      var gap = 0;
+      for (var i = 1; i < base.length; i++) gap = Math.max(gap, base[i] - base[i - 1]);
+      var ratio = tail > 0 ? gap / (4 * tail) : Infinity;
+      // g/4t < 1 → the frontier carries more uncertainty than any interior gap,
+      // so the myopic benchmark goes to the frontier; > 1 → into the gap. The
+      // brief's simulated shares at the defaults are 1.00 / 0.51 / 0.03.
+      var share = 1 / (1 + Math.pow(ratio, 1.6));
+      out[sh] = { gap: gap, tail: tail, ratio: ratio, frontierShare: share };
     });
     return out;
   }
-  function isoMs(t) { if (!t) return ''; var d = new Date(t); return isNaN(d) ? '' : d.toISOString().replace('T', ' ').replace('Z', ''); }
-  function num(v) { if (v == null || v === '') return null; v = +v; return isFinite(v) ? v : null; } // null/'' stay empty (never a fake 0)
-  function isMetaEvent(e) { return e.event === 'upload_ok' || e.event === 'upload_fail'; }
 
-  function buildWorkbook(code) {
-    var evs = filteredEvents(code).slice().sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
-    var scopeSessions = code ? SESSIONS.filter(function (s) { return s.code === code; }) : SESSIONS.slice();
+  function renderConsequences() {
+    var p = currentParams || Specs.withDefaults(null);
+    var L = p.env.stepBound, cR = p.costs.revealCost;
+    var sigma = CFG.sigma(L), sStar = CFG.sStar(cR), gStar = CFG.gStar(cR, L);
+    // Mean anchor gap = the stratum width, J / K. (§17b Screen 3 writes the
+    // formula as 100/(K+1) but quotes 25.0 for K = 4 and 10.0 for K = 10, and the
+    // SD figures beside it — 14.43 and 9.13 — are sigma·sqrt(25)/2 and
+    // sigma·sqrt(10)/2. The values are right and the formula is a slip, so J/K is
+    // what is used here and in tools/selftest.js.)
+    var gapS = p.env.positions / p.ai.sparseK, gapD = p.env.positions / p.ai.denseK;
+    var sdS = sigma * Math.sqrt(gapS) / 2, sdD = sigma * Math.sqrt(gapD) / 2;
+    var bench = benchmarkShares(p);
 
-    // ---- per-participant + per-round aggregation (one pass, in time order)
-    var parts = {}, partOrder = [], rounds = {}, roundOrder = [];
-    function part(e) {
-      var id = e.session || '(none)';
-      if (!parts[id]) {
-        parts[id] = { id: id, pid: null, code: null, name: null, study: null, first: e.t, last: e.t,
-          phasesSeq: [], phasesSet: {}, consented: 0, quizN: 0, quizOk: 0, roundsDone: 0,
-          reveals: 0, aiQ: 0, aiSpend: 0, netRaw: 0, bonus: null, paid: {}, completed: 0,
-          n: 0, vw: e.vw, vh: e.vh, appVersion: e.appVersion };
-        partOrder.push(id);
+    // Badge 1 — the sign-change prediction.
+    var above = sdS > sStar, belowD = sdD < sStar;
+    var b1;
+    if (above && belowD) {
+      b1 = { cls: 'green', t: 'The sign-change prediction is intact',
+        b: 'Sparse sits above s* and dense sits below it, so the two settings bracket the threshold. The prediction is a change of sign, not a gradient.' };
+    } else {
+      var relS = Math.abs(sdS - sStar) / sStar, relD = Math.abs(sdD - sStar) / sStar;
+      if (relS < 0.2 && relD < 0.2) {
+        b1 = { cls: 'amber', t: 'Both settings sit on the same side of s*, but close to it',
+          b: 'Within 20% of the threshold. The prediction weakens to a gradient; consider moving K.' };
+      } else {
+        b1 = { cls: 'red', t: 'Both settings sit on the same side of s*',
+          b: 'The design now tests a gradient rather than a sign change, and the sample is not sized for that. Move sparse K down or dense K up.' };
       }
-      return parts[id];
     }
-    function roundOf(e) {
-      var k = (e.session || '(none)') + '|' + (e.phase == null ? 1 : e.phase) + '|' + e.round;
-      if (!rounds[k]) {
-        rounds[k] = { id: e.session || '(none)', pid: e.pid, code: e.sessionCode, phase: (e.phase == null ? 1 : e.phase),
-          arm: e.arm, round: e.round, startT: null, endT: null, reveals: null, aiQ: 0, aiSpend: 0,
-          cost: null, best: null, rawNet: null, flooredNet: null, mapping: e.mapping };
-        roundOrder.push(k);
-      }
-      return rounds[k];
+
+    // Badge 2 — do the seed shapes leave the outcome room to move?
+    var shares = CFG.SEED_SHAPES.map(function (s) { return bench[s].frontierShare; });
+    var mid = shares.some(function (s) { return s >= 0.3 && s <= 0.7; });
+    var allHigh = shares.every(function (s) { return s > 0.9; });
+    var allLow = shares.every(function (s) { return s < 0.1; });
+    var b2 = mid
+      ? { cls: 'green', t: 'The seed shapes leave the outcome room to move',
+          b: 'One of the three shapes puts the benchmark first move near a coin flip, so a treatment effect has somewhere to show.' }
+      : (allHigh || allLow)
+        ? { cls: 'red', t: 'All three seed shapes point the same way',
+            b: 'Every shape gives a benchmark frontier share above 0.9 or below 0.1. The outcome has no room to move.' }
+        : { cls: 'amber', t: 'No seed shape sits near the middle',
+            b: 'None of the three shapes lands between 0.3 and 0.7, so the sensitive cell is missing.' };
+
+    $('cons-badges').innerHTML = [b1, b2].map(function (b) {
+      return '<div class="badge ' + b.cls + '"><span class="bt">' + esc(b.t) + '</span><span class="bb">' + esc(b.b) + '</span></div>';
+    }).join('');
+
+    var rows = [
+      ['Per-step SD', 'sigma = L / sqrt(3)', fmt(sigma, 3)],
+      ['Verification threshold', 's* = reveal cost × sqrt(2π)', fmt(sStar, 2)],
+      ['AI gap width where verification starts to pay', 'g* = (2 s* / sigma)²', fmt(gStar, 1)],
+      ['Sparse mean anchor gap', 'J / K_sparse (the stratum width)', fmt(gapS, 1)],
+      ['Sparse SD at gap midpoint', 'sigma × sqrt(gap) / 2', fmt(sdS, 2) + (sdS > sStar ? ' · above s*' : ' · below s*')],
+      ['Dense mean anchor gap', 'J / K_dense (the stratum width)', fmt(gapD, 1)],
+      ['Dense SD at gap midpoint', 'sigma × sqrt(gap) / 2', fmt(sdD, 2) + (sdD > sStar ? ' · above s*' : ' · below s*')],
+      ['Gap and frontier exchange rate', 'a gap beats the tail when g > 4t', '—']
+    ];
+    CFG.SEED_SHAPES.forEach(function (sh) {
+      rows.push(['Benchmark frontier share · ' + sh, 'g = ' + bench[sh].gap + ', t = ' + bench[sh].tail + ', g/4t = ' + fmt(bench[sh].ratio, 2),
+        fmt(bench[sh].frontierShare, 2)]);
+    });
+    var roundsTotal = 2 * (p.rounds.warmupPerBlock + p.rounds.scoredPerBlock);
+    rows.push(['Rounds per participant', p.rounds.warmupPerBlock * 2 + ' warm-up + ' + p.rounds.scoredPerBlock * 2 + ' scored', roundsTotal]);
+    rows.push(['Expected reveals per round without AI', 'source study, matched by the benchmark policy', 'about 3']);
+    rows.push(['Estimated session length', '~50 s per round + instructions and survey', Math.round(roundsTotal * 50 / 60) + ' to ' + (Math.round(roundsTotal * 50 / 60) + 22) + ' min']);
+    rows.push(['Max spend in one round', 'query cap × query cost + reveal cap × reveal cost',
+      (p.costs.queryCap * p.costs.queryCost + p.costs.revealCap * p.costs.revealCost) + ' points']);
+
+    $('cons-table').innerHTML = '<tbody>' + rows.map(function (r) {
+      return '<tr><td>' + esc(r[0]) + '<span class="f">' + esc(r[1]) + '</span></td><td>' + esc(r[2]) + '</td></tr>';
+    }).join('') + '</tbody>';
+
+    // Pool statistics, recomputed from the actual seed the form holds.
+    try {
+      var pool = Pool.buildPool(p.env, p.env.generatorSeed);
+      var st = Pool.poolStats(pool);
+      $('cons-poolnote').innerHTML = 'Pool at this seed: <b>' + st.mappings + '</b> mappings · ' +
+        'a single position has mean <b>' + fmt(st.cellMean, 1) + '</b> (SD ' + fmt(st.cellSd, 1) + ') · ' +
+        'global maximum mean <b>' + fmt(st.globalMaxMean, 1) + '</b> (5th pct ' + st.globalMaxP5 + ', 95th ' + st.globalMaxP95 + ') · ' +
+        'worst adjacent step ' + st.worstAdjacentStep + '. ' +
+        '<span class="muted">The brief quotes 62.2 (SD 26.8) and a global-max mean of 91.7 for the RAW generator; the pool is ' +
+        'the subset with a global maximum of at least 80, which is why its level sits higher.</span>';
+    } catch (e) {
+      $('cons-poolnote').textContent = 'Could not build a pool at these parameters: ' + String(e && e.message || e);
     }
-    evs.forEach(function (e) {
-      if (isMetaEvent(e)) return;
-      var p = part(e);
-      p.n++; p.last = e.t;
-      p.pid = p.pid || e.pid; p.code = p.code || e.sessionCode; p.name = p.name || e.sessionName; p.study = p.study || e.study;
-      if ((e.arm === 'A' || e.arm === 'B') && !p.phasesSet[e.arm]) { p.phasesSet[e.arm] = true; p.phasesSeq.push(e.arm); }
-      if (e.event === 'consent') p.consented = 1;
-      if (e.event === 'quiz_attempt') { p.quizN++; if (e.correct) p.quizOk++; }
-      if (e.event === 'reveal') p.reveals++;
-      if (e.event === 'session_end') p.completed = 1;
-      if (e.event === 'paid_rounds_drawn') {
-        if (e.value != null) p.bonus = num(e.value);
-        String(parseInfo(e.info).rounds || '').split(',').forEach(function (tag) { if (tag) p.paid[tag] = true; });
-      }
-      if (e.round == null) return;
-      var r = roundOf(e);
-      if (e.event === 'round_start' && r.startT == null) r.startT = e.t;
-      if (e.event === 'ai_query') {
-        var fee = num(parseInfo(e.info).fee) || 0;
-        r.aiQ++; r.aiSpend += fee;
-        p.aiQ++; p.aiSpend += fee;
-      }
-      if (e.event === 'round_end' && r.endT == null) { // scored exactly once; ignore dupes
-        r.endT = e.t;
-        r.reveals = num(e.reveals); r.cost = num(e.cost); r.best = num(e.best);
-        r.rawNet = num(e.rawNet != null ? e.rawNet : e.net); r.flooredNet = num(e.flooredNet);
-        r.mapping = e.mapping || r.mapping;
-        if (e.round >= 1) { p.roundsDone++; p.netRaw += (r.rawNet || 0); }
-      }
+  }
+
+  // ======================================================================
+  //  SCREEN 4 · ROSTER
+  // ======================================================================
+  var roster = [];
+  function wireRoster() {
+    $('btn-ros-gen').onclick = generateCodes;
+    $('btn-ros-csv').onclick = function () {
+      var csv = 'code,sequence,status\n' + roster.map(function (r) {
+        return [r.code, r.sequence, r.status || 'unused'].join(',');
+      }).join('\n');
+      dl((current ? current.code : 'run') + '_roster.csv', csv, 'text/csv');
+    };
+    $('ros-override').querySelectorAll('button').forEach(function (b) {
+      b.onclick = function () {
+        $('ros-override').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      };
+    });
+    $('btn-ros-override').onclick = applyOverride;
+  }
+
+  function renderRoster() {
+    if (!current) {
+      $('roster-table').innerHTML = '<tbody><tr><td class="muted">Open a run first.</td></tr></tbody>';
+      $('roster-stats').innerHTML = '';
+      return;
+    }
+    segSet('ros-override', (current.assign && current.assign.nextEntrantOverride) || 'auto');
+    $('ros-overrides').innerHTML = (current.overrides || []).length
+      ? '<b>Override log</b><br>' + current.overrides.map(function (o) {
+          return new Date(o.t).toLocaleString() + ' → ' + o.to + ' · ' + esc(o.reason || '');
+        }).join('<br>')
+      : 'No overrides recorded — assignment has been automatic throughout.';
+
+    var p = LOCAL ? Promise.resolve(current.roster || []) : FB.listRoster(current.id);
+    p.then(function (list) {
+      roster = list || [];
+      var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0 };
+      roster.forEach(function (r) {
+        counts[r.status || 'unused'] = (counts[r.status || 'unused'] || 0) + 1;
+        if (r.sequence) counts[r.sequence]++;
+      });
+      $('roster-stats').innerHTML = [
+        ['Codes', roster.length], ['Unused', counts.unused], ['In progress', counts.started],
+        ['Completed', counts.completed], ['Sequence A', counts.A], ['Sequence B', counts.B]
+      ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
+
+      $('roster-table').innerHTML = roster.length
+        ? '<thead><tr><th>Code</th><th>Sequence</th><th>Status</th><th>Claimed</th><th>Enrolled</th></tr></thead><tbody>' +
+          roster.map(function (r) {
+            return '<tr><td class="mono">' + esc(r.code) + '</td><td>' + esc(r.sequence || '—') + '</td>' +
+              '<td>' + esc(r.status || 'unused') + '</td>' +
+              '<td>' + (r.claimedAt ? new Date(r.claimedAt).toLocaleString() : '—') + '</td>' +
+              '<td>' + (r.autoEnrolled ? 'platform / open' : 'pre-generated') + '</td></tr>';
+          }).join('') + '</tbody>'
+        : '<tbody><tr><td class="muted">No codes yet. In <b>open</b> roster mode a class-platform student ID enrols itself on first entry.</td></tr></tbody>';
+    }).catch(function (e) {
+      $('roster-table').innerHTML = '<tbody><tr><td class="muted">Could not read the roster: ' + esc(String(e && e.message || e)) + '</td></tr></tbody>';
+    });
+  }
+
+  function generateCodes() {
+    if (!current) { alert('Open a run first.'); return; }
+    var n = Math.max(1, Math.min(1000, parseInt($('ros-n').value, 10) || 0));
+    var prefix = ($('ros-prefix').value || 'P').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    // Block randomisation over a shuffled list, so the split is exactly half and
+    // half rather than a series of coin flips (§11).
+    var seqs = [];
+    for (var i = 0; i < n; i++) seqs.push(i % 2 === 0 ? 'A' : 'B');
+    Pool.shuffle(seqs, Pool.rngFrom(Pool.hashSeed(current.id + ':' + n + ':' + prefix)));
+    var codes = [];
+    for (var j = 0; j < n; j++) codes.push({ code: prefix + String(j + 1).padStart(3, '0'), sequence: seqs[j] });
+
+    if (LOCAL) {
+      current.roster = codes.map(function (c) { return { code: c.code, sequence: c.sequence, status: 'unused' }; });
+      saveLocalRuns(localRuns().map(function (r) { return r.id === current.id ? current : r; }));
+      renderRoster();
+      return;
+    }
+    var chain = Promise.resolve();
+    codes.forEach(function (c) { chain = chain.then(function () { return FB.putRosterCode(current.id, c.code, c.sequence); }); });
+    chain.then(function () {
+      FB.audit(current.id, 'generate_roster', n + ' codes, prefix ' + prefix);
+      renderRoster();
+    }).catch(function (e) { alert('Could not write the roster: ' + (e && e.message || e)); });
+  }
+
+  function applyOverride() {
+    if (!current) { alert('Open a run first.'); return; }
+    var to = segGet('ros-override') || 'auto';
+    var reason = ($('ros-reason').value || '').trim();
+    if (to !== 'auto' && !reason) { alert('A reason is required: forced assignment is no longer pure randomisation, and the analysis has to say so.'); return; }
+    var log = (current.overrides || []).concat([{ t: Date.now(), to: to, reason: reason }]);
+    var assign = Object.assign({}, current.assign || {}, { nextEntrantOverride: to });
+    persist(current.id, { overrides: log, assign: assign }).then(function () {
+      current.overrides = log; current.assign = assign;
+      if (!LOCAL) FB.audit(current.id, 'entrant_override', to + ' — ' + reason);
+      $('ros-reason').value = '';
+      renderRoster();
+    });
+  }
+
+  // ======================================================================
+  //  SCREEN 5 · LIVE MONITOR
+  // ======================================================================
+  function wireMonitor() {
+    $('btn-monitor-refresh').onclick = function () { loadEvents().then(renderHealth); };
+  }
+  function startMonitor() {
+    if (!current) {
+      $('mon-counters').innerHTML = '<div class="stat-box"><b>—</b><span>open a run first</span></div>';
+      return;
+    }
+    if (unsubMon) unsubMon();
+    if (LOCAL) { monRows = []; renderMonitor(); return; }
+    unsubMon = FB.watchParticipants(current.id, function (list) { monRows = list || []; renderMonitor(); });
+  }
+  function renderMonitor() {
+    var started = monRows.length;
+    var completed = monRows.filter(function (r) { return r.completed; }).length;
+    var inProgress = monRows.filter(function (r) { return !r.completed && (Date.now() - (r.updatedAt || 0)) < 30 * 60 * 1000; }).length;
+    var abandoned = started - completed - inProgress;
+    var nA = monRows.filter(function (r) { return r.sequence === 'A'; }).length;
+    var nB = monRows.filter(function (r) { return r.sequence === 'B'; }).length;
+    var skew = Math.abs(nA - nB);
+
+    $('mon-counters').innerHTML = [
+      ['Started', started], ['In progress', inProgress], ['Completed', completed], ['Abandoned', Math.max(0, abandoned)],
+      ['Sequence A', nA], ['Sequence B', nB]
+    ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('') +
+      (skew > 3 ? '<div class="stat-box" style="background:#fff7ed;"><b>' + skew + '</b><span>sequence gap — force the next entrants</span></div>' : '');
+
+    $('mon-table').innerHTML = monRows.length
+      ? '<thead><tr><th>Code</th><th>Sequence</th><th>Phase</th><th>Round</th><th>Active</th><th>Resumptions</th><th>Viewport</th><th>Flags</th><th></th></tr></thead><tbody>' +
+        monRows.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); }).map(function (r) {
+          var flags = [];
+          if (r.viewport_width && current && current.ops && r.viewport_width < (current.ops.minViewport || 900)) flags.push('narrow');
+          if ((r.resumptions || 0) > 0) flags.push('resumed');
+          if (r.completed) flags.push('done');
+          return '<tr><td class="mono">' + esc(r.participant_code) + '</td><td>' + esc(r.sequence || '—') + '</td>' +
+            '<td>' + esc(r.phase || '—') + '</td><td>' + (r.round_index || '—') + '</td>' +
+            '<td>' + Math.round((r.active_ms || 0) / 60000) + ' min</td>' +
+            '<td>' + (r.resumptions || 0) + '</td>' +
+            '<td>' + (r.viewport_width || '—') + '</td>' +
+            '<td>' + esc(flags.join(', ')) + '</td>' +
+            '<td><button class="link-btn" data-msg="' + esc(r.participant_code) + '">message</button></td></tr>';
+        }).join('') + '</tbody>'
+      : '<tbody><tr><td class="muted">No participants yet.</td></tr></tbody>';
+
+    $('mon-table').querySelectorAll('button[data-msg]').forEach(function (b) {
+      b.onclick = function () {
+        var t = prompt('Message to ' + b.dataset.msg + ':');
+        if (t) FB.sendMessage(b.dataset.msg, t);
+      };
+    });
+    renderHealth();
+  }
+
+  // The health strip of §17b Screen 5. Everything that needs the event log reads
+  // whatever has been loaded; the counters above never scan it.
+  function renderHealth() {
+    var rows = [];
+    function add(label, value, warn) { rows.push({ label: label, value: value, warn: warn }); }
+
+    var actives = monRows.map(function (r) { return (r.active_ms || 0) / 60000; }).filter(function (v) { return v > 0; });
+    var medActive = med(actives);
+    add('Median active time per participant', medActive == null ? '—' : fmt(medActive, 1) + ' min',
+      medActive != null && (medActive < 30 || medActive > 70));
+
+    if (built) {
+      var durs = built.rounds.map(function (r) { return (r.duration_ms || 0) / 1000; });
+      var medRound = med(durs);
+      add('Median time per round', medRound == null ? '—' : fmt(medRound, 1) + ' s', medRound != null && medRound < 20);
+
+      var q2 = built.participants.filter(function (p) { return p.quiz_qai_score_first_correct === false; }).length;
+      var q2n = built.participants.filter(function (p) { return p.quiz_qai_score_first_correct != null; }).length;
+      add('Comprehension failures on the scoring question', q2n ? pct(q2 / q2n) : '—', q2n && (q2 / q2n) > 0.10);
+
+      var q45 = built.participants.filter(function (p) {
+        return p.quiz_qai_tell_first_correct === false || p.quiz_qai_outside_first_correct === false;
+      }).length;
+      add('Comprehension failures on the jaggedness / frontier questions', q2n ? pct(q45 / q2n) : '—', q2n && (q45 / q2n) > 0.40);
+
+      var caps = built.rounds.filter(function (r) { return r.cap_hit; }).length;
+      add('Query or reveal cap hit', built.rounds.length ? pct(caps / built.rounds.length) : '—',
+        built.rounds.length && (caps / built.rounds.length) > 0.03);
+
+      var seeded = built.rounds.filter(function (r) { return r.seed_shape !== 'OPEN' && r.scored; });
+      var imm = seeded.filter(function (r) { return r.stopped_immediately; }).length;
+      add('Immediate stop rate in seeded rounds', seeded.length ? pct(imm / seeded.length) : '—',
+        seeded.length && (imm / seeded.length) > 0.60);
+
+      var slow = built.participants.filter(function (p) { return p.median_decision_ms != null && p.median_decision_ms < 500; }).length;
+      add('Participants with a median decision under 500 ms', slow, slow > 0);
+
+      var blur = built.rounds.filter(function (r) { return (r.blur_total_ms || 0) > 120000; }).length;
+      add('Rounds with a blur longer than two minutes', blur, blur > 0);
+    } else {
+      add('Round timing, comprehension, caps, stops', 'load the event log to compute', false);
+    }
+
+    var narrow = monRows.filter(function (r) { return r.viewport_width && r.viewport_width < ((current && current.ops && current.ops.minViewport) || 900); }).length;
+    add('Viewport below the minimum', narrow, narrow > 0);
+
+    $('mon-health').innerHTML = '<tbody>' + rows.map(function (r) {
+      return '<tr class="' + (r.warn ? 'warn' : '') + '"><td>' + esc(r.label) + (r.warn ? ' ⚠' : '') + '</td><td>' + esc(String(r.value)) + '</td></tr>';
+    }).join('') + '</tbody>';
+  }
+  function med(a) {
+    var x = a.filter(function (v) { return v != null && isFinite(v); }).sort(function (p, q) { return p - q; });
+    if (!x.length) return null;
+    var m = Math.floor(x.length / 2);
+    return x.length % 2 ? x[m] : (x[m - 1] + x[m]) / 2;
+  }
+  function pct(v) { return (100 * v).toFixed(1) + '%'; }
+
+  // ======================================================================
+  //  SCREEN 6 · DATA & PREVIEW
+  // ======================================================================
+  function wireData() {
+    $('btn-fetch').onclick = function () { loadEvents().then(renderData); };
+    $('btn-validate').onclick = runValidation;
+    $('btn-preview').onclick = function () {
+      var spec = $('prev-spec').value;
+      window.open(previewUrl(current && current.code, spec), '_blank');
+    };
+    $('btn-preview-full').onclick = function () { window.open(previewUrl(current && current.code), '_blank'); };
+    $('btn-dryrun').onclick = dryRun;
+    $('btn-dl-xlsx').onclick = downloadXlsx;
+    $('btn-dl-decisions').onclick = function () { if (built) dl('decisions.csv', X.toCSV(built.decisions), 'text/csv'); };
+    $('btn-dl-rounds').onclick = function () { if (built) dl('rounds.csv', X.toCSV(built.rounds), 'text/csv'); };
+    $('btn-dl-participants').onclick = function () { if (built) dl('participants.csv', X.toCSV(built.participants), 'text/csv'); };
+    $('btn-dl-raw').onclick = function () { if (built) dl('raw_events.json', JSON.stringify(built.raw, null, 1), 'application/json'); };
+    $('btn-reset-participant').onclick = function () {
+      if (!current) return alert('Open a run first.');
+      var code = prompt('Participant code to reset (their rows are deleted permanently):');
+      if (!code) return;
+      var why = prompt('Reason (logged with the reset):');
+      if (!why) return alert('A reason is required.');
+      FB.deleteParticipantData(current.id, code.toUpperCase()).then(function (n) {
+        FB.audit(current.id, 'reset_participant', code + ' — ' + why + ' (' + n + ' rows)');
+        alert('Removed ' + n + ' rows for ' + code + '.');
+      });
+    };
+    $('btn-close-run').onclick = function () {
+      if (!current) return alert('Open a run first.');
+      if (!confirm('Close "' + (current.name || current.id) + '" permanently? No new participant can enter.')) return;
+      setStatus(current, 'closed');
+    };
+  }
+
+  function fillSpecPicker() {
+    var sel = $('prev-spec');
+    if (!sel) return;
+    if (!current) { sel.innerHTML = '<option value="">open a run first</option>'; return; }
+    var a = artifacts(current);
+    sel.innerHTML = a.specs.map(function (s) {
+      return '<option value="' + esc(s.spec_id) + '">' + esc(s.spec_id) + ' · ' + esc(s.seed_shape) +
+        ' · ' + esc(s.ai_density) + ' (K=' + s.ai_k + ')' + (s.scored ? '' : ' · warm-up') + '</option>';
+    }).join('');
+  }
+
+  function runValidation() {
+    if (!current) { $('validate-out').innerHTML = '<span class="muted">Open a run first.</span>'; return; }
+    var a = artifacts(current);
+    var v = Specs.validate(a.pool, a.specs, a.params);
+    $('validate-out').innerHTML = v.pass
+      ? '<div class="badge green"><span class="bt">Pass</span><span class="bb">' + v.notes.map(esc).join('<br>') + '</span></div>'
+      : '<div class="badge red"><span class="bt">' + v.failures.length + ' failure' + (v.failures.length === 1 ? '' : 's') +
+        '</span><span class="bb">' + v.failures.map(esc).join('<br>') + '</span></div>';
+    if (!LOCAL) FB.audit(current.id, 'validate', v.pass ? 'pass' : v.failures.join('; '));
+  }
+
+  function loadEvents() {
+    if (LOCAL || !FB.isConfigured()) {
+      note('data-note', 'Firebase is not configured, so there is no event log to read.', true);
+      return Promise.resolve([]);
+    }
+    note('data-note', 'Loading the event log…');
+    return FB.fetchEvents(current ? current.id : null).then(function (list) {
+      events = list || [];
+      built = X.build(events, current);
+      note('data-note', 'Loaded <b>' + events.length + '</b> event rows.');
+      return events;
+    }).catch(function (e) {
+      note('data-note', 'Could not read the event log: ' + esc(String(e && e.message || e)), true);
+      return [];
+    });
+  }
+
+  function renderData() {
+    if (!built) return;
+    $('data-counts').innerHTML = [
+      ['Raw events', built.raw.length], ['Decisions', built.decisions.length],
+      ['Rounds', built.rounds.length], ['Participants', built.participants.length],
+      ['Checksum', X.checksum(JSON.stringify(built.raw.map(function (e) { return e.t + ':' + e.event; })))]
+    ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
+
+    var d = built.decisions.slice(0, 300);
+    var cols = ['participant_code', 'sequence', 'block', 'condition', 'round_index', 'spec_id', 'seed_shape',
+      'ai_density', 'decision_index', 'action', 'position', 'value', 'choice_region', 'is_frontier',
+      'dist_to_nearest_anchor', 'ai_prediction', 'ai_sd', 'verify_pays', 'outside_window', 'matched_benchmark'];
+    $('dec-count').textContent = built.decisions.length + ' rows (showing the first ' + d.length + ')';
+    $('dec-table').innerHTML = '<thead><tr>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      d.map(function (r) {
+        return '<tr>' + cols.map(function (c) {
+          var v = r[c];
+          if (typeof v === 'number' && !Number.isInteger(v)) v = v.toFixed(2);
+          return '<td>' + esc(v == null ? '' : v) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody>';
+    renderHealth();
+  }
+
+  function downloadXlsx() {
+    if (!built) { alert('Load the event log first.'); return; }
+    var name = 'searchv2_' + ((current && current.code) || 'run') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+    Xlsx.download(name, sheetsFor(built, built.artifacts));
+    if (!LOCAL && current) FB.audit(current.id, 'export', name + ' · ' + built.raw.length + ' rows');
+  }
+
+  // The whole workbook, as data. Factored out of the download so the dry run can
+  // build the same sheets and throw the bytes away — an export that only ever
+  // runs on live data is an export nobody can check before the session.
+  function sheetsFor(b, a) {
+    var readme = [
+      ['Sheet', 'What it holds', 'Notes'],
+      ['Run', 'Every parameter this run was collected under, plus the frozen seeds and checksums', 'The configuration always travels with the data'],
+      ['Specs', 'The 28 frozen round specs: mapping index, pre-opened positions, AI density and anchors', 'Identical for every participant of the run'],
+      ['Decisions', 'One row per query, reveal or stop, with every derived field of §16.8', 'is_first_decision marks the primary analysis moment'],
+      ['Rounds', 'One row per round, raw and derived', 'interrupted is a column, not a filter'],
+      ['Participants', 'One row per participant: timing, comprehension, survey, calibration gaps', 'disengaged is a column, not a filter'],
+      ['Slider', 'The throttled slider trace: which positions were considered and rejected', 'At most one row per 250 ms, plus one on release'],
+      ['Attention', 'Blur, focus, visibility, heartbeats, instruction opens, resizes', 'active_ms is summed from heartbeats'],
+      ['Raw', 'The event log exactly as written', 'Everything else is regenerated from this'],
+      [],
+      ['Units', '', ''],
+      ['Points', 'Prizes, costs and scores are whole points', 'reveal ' + a.params.costs.revealCost + ', query ' + a.params.costs.queryCost],
+      ['Times', 'Milliseconds; ISO timestamps are UTC', ''],
+      ['Anchor sets', 'Encoded "position:value|position:value"', 'Firestore rejects nested arrays, and a CSV cell must stay one cell'],
+      [],
+      ['Key derived fields', '', ''],
+      ['is_frontier', 'The chosen position lies outside the participant’s own known range', ''],
+      ['ai_sd', 'sigma·sqrt((p-a)(b-p)/g) inside a gap, sigma·sqrt(t) in a tail', 'sigma = ' + fmt(CFG.sigma(a.params.env.stepBound), 3)],
+      ['verify_pays', 'ai_sd exceeds s*', 's* = ' + fmt(CFG.sStar(a.params.costs.revealCost), 2)],
+      ['outside_window', 'The Lipschitz ceiling is below the best known value, so the reveal is dominated', ''],
+      ['matched_benchmark', 'The chosen position equals the myopic expected-improvement argmax', ''],
+      ['error_belief_gap', 'Stated typical AI error minus the actual mean absolute error experienced', 'Negative = they thought the tool was better than it was'],
+      ['hit_rate_belief_gap', 'Stated answers-per-ten exactly right minus the actual rate', ''],
+      ['perceived_vs_actual_half', 'Whether the half they believed they scored higher in is the half they did', '']
+    ];
+
+    var runRows = [['group', 'parameter', 'value']];
+    ['env', 'costs', 'ai', 'rounds', 'assign', 'filter', 'ops'].forEach(function (g) {
+      Object.keys(a.params[g] || {}).forEach(function (k) {
+        var v = a.params[g][k];
+        runRows.push([g, k, (typeof v === 'object') ? JSON.stringify(v) : v]);
+      });
+    });
+    runRows.push(['run', 'run_id', current ? current.id : '']);
+    runRows.push(['run', 'run_code', current ? current.code : '']);
+    runRows.push(['run', 'status', current ? current.status : '']);
+    runRows.push(['run', 'poolChecksum', current ? current.poolChecksum : X.checksum(JSON.stringify(a.pool))]);
+    runRows.push(['run', 'specsChecksum', current ? current.specsChecksum : X.checksum(JSON.stringify(a.specs))]);
+    runRows.push(['run', 'generatorSeed', a.params.env.generatorSeed]);
+    runRows.push(['run', 'specSeed', current ? current.specSeed : '']);
+    runRows.push(['run', 'exportedAt', new Date().toISOString()]);
+    (current && current.overrides || []).forEach(function (o, i) {
+      runRows.push(['override', 'override_' + (i + 1), new Date(o.t).toISOString() + ' → ' + o.to + ' — ' + (o.reason || '')]);
     });
 
-    var readme = {
-      name: 'ReadMe', filter: false, cols: [{ w: 26 }, { w: 110 }],
-      rows: [
-        ['Search for Knowledge — data export', ''],
-        ['Exported (UTC)', isoMs(Date.now())],
-        ['Scope', code ? 'Session ' + code : 'All sessions'],
-        ['Participants', partOrder.length],
-        ['Events', evs.length],
-        ['', ''],
-        ['Sheet', 'Contents'],
-        ['Sessions', 'One row per session (wave) with every parameter the admin chose: phases and order, rounds, AI regions and model economics, completion codes.'],
-        ['Participants', 'One row per participant: identity, timing, totals across all their rounds, quiz performance, bonus, completion.'],
-        ['Rounds', 'One row per participant × phase × round: duration, reveals, AI questions and fees, best value found, raw and floored net, whether the round was drawn for payment.'],
-        ['Actions', 'Every logged action in time order. decision_ms is the time (ms) the participant took since their previous action — the per-decision response time.'],
-        ['Survey', 'Exit-survey answers: Likert items (1 = strongly disagree … 5 = strongly agree) and free text.'],
-        ['', ''],
-        ['Units & conventions', ''],
-        ['money', 'All money columns are US cents.'],
-        ['time', 'time columns are UTC, YYYY-MM-DD HH:MM:SS.mmm; t_ms is the exact Unix epoch in milliseconds.'],
-        ['decision_ms', 'Milliseconds since this participant\'s previous logged action (their reaction/decision time). Empty on their very first event.'],
-        ['phase / phase_label', 'phase is the 1-based order within the session; phase_label is the condition (Without AI / With AI).'],
-        ['round 0', 'The practice round (never paid). Real rounds are 1..N per phase.'],
-        ['net', 'net_raw = best value found − 5¢ × reveals − AI fees (can be negative); net_floored = max(0, net_raw) and is what a paid round pays.'],
-        ['*_so_far', 'Running totals within the round at the moment of that action.']
-      ]
-    };
-
-    var sessionsSheet = {
-      name: 'Sessions',
-      cols: [{ w: 12 }, { w: 22 }, { w: 10 }, { w: 20 }, { w: 34 }, { w: 15 }, { w: 16 }, { w: 14 }, { w: 11 }, { w: 16 }, { w: 20 }, { w: 16 }, { w: 15 }, { w: 18 }, { w: 14 }, { w: 16 }, { w: 16 }, { w: 16 }, { w: 26 }, { w: 13 }],
-      rows: [[
-        'session_code', 'session_name', 'status', 'created_utc', 'phases', 'counterbalanced',
-        'rounds_per_phase', 'practice_round', 'paid_rounds', 'ai_regions',
-        'ai_baseline_cost_cents', 'ai_baseline_data', 'frontier_enabled', 'frontier_cost_cents', 'frontier_data',
-        'completion_code', 'code_without_ai', 'code_with_ai', 'custom_text_pages', 'participants'
-      ]].concat(scopeSessions.map(function (s) {
-        var st = s.settings || {};
-        var ai = st.ai || {};
-        var patches = decodePatches(st.coveragePatches) || [];
-        var custom = CONTENT_KEYS.filter(function (c) { return (st.content || {})[c.k]; }).map(function (c) { return c.k; });
-        var n = 0, seen = {};
-        evs.forEach(function (e) { if (e.sessionCode === s.code && e.session && !seen[e.session]) { seen[e.session] = 1; n++; } });
-        return [
-          s.code, s.name || '', s.status || 'active', (s.createdAt || '').replace('T', ' ').slice(0, 19),
-          phasesDescription(st), st.counterbalance ? 1 : 0,
-          num(st.nTasks), st.nPractice ? 1 : 0, num(st.paidTasks),
-          patches.map(function (p) { return p[0] + '-' + p[1]; }).join(' & '),
-          num(ai.baselineCost), ai.baselineData || '', ai.frontier ? 1 : 0, num(ai.frontierCost), ai.frontierData || '',
-          st.completionCode || '', st.completionCodeA || '', st.completionCodeB || '',
-          custom.join(', '), n
-        ];
-      }))
-    };
-
-    var participantsSheet = {
-      name: 'Participants',
-      cols: [{ w: 30 }, { w: 26 }, { w: 12 }, { w: 20 }, { w: 22 }, { w: 22 }, { w: 13 }, { w: 15 }, { w: 10 }, { w: 13 }, { w: 12 }, { w: 15 }, { w: 13 }, { w: 12 }, { w: 18 }, { w: 17 }, { w: 12 }, { w: 11 }, { w: 9 }, { w: 12 }, { w: 12 }],
-      rows: [[
-        'participant_id', 'prolific_pid', 'session_code', 'session_name',
-        'first_action_utc', 'last_action_utc', 'duration_min', 'phases_played',
-        'consented', 'quiz_attempts', 'quiz_correct', 'rounds_completed',
-        'total_reveals', 'ai_questions', 'ai_spend_cents', 'net_raw_sum_cents',
-        'bonus_cents', 'completed', 'events', 'viewport', 'app_version'
-      ]].concat(partOrder.map(function (id) {
-        var p = parts[id];
-        return [
-          p.id, p.pid || '', p.code || '', p.name || '',
-          isoMs(p.first), isoMs(p.last),
-          (p.first && p.last) ? Math.round((p.last - p.first) / 600) / 100 : null,
-          p.phasesSeq.map(function (a) { return PHASE_LABEL[a] || a; }).join(' -> '),
-          p.consented, p.quizN, p.quizOk, p.roundsDone,
-          p.reveals, p.aiQ, p.aiSpend, p.netRaw,
-          p.bonus, p.completed, p.n,
-          (p.vw && p.vh) ? p.vw + 'x' + p.vh : '', p.appVersion || ''
-        ];
-      }))
-    };
-
-    roundOrder.sort(function (ka, kb) {
-      var a = rounds[ka], b = rounds[kb];
-      return ((parts[a.id] ? parts[a.id].first : 0) - (parts[b.id] ? parts[b.id].first : 0)) ||
-        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) || (a.phase - b.phase) || (a.round - b.round);
+    var specRows = [['spec_id', 'block', 'scored', 'mapping_index', 'seed_shape', 'pre_opened', 'ai_density', 'ai_k', 'ai_anchors']];
+    a.specs.forEach(function (s) {
+      specRows.push([s.spec_id, s.block, s.scored ? 1 : 0, s.mapping_index, s.seed_shape,
+        s.pre_opened.join(' '), s.ai_density, s.ai_k, s.ai_anchors.join(' ')]);
     });
-    var roundsSheet = {
-      name: 'Rounds',
-      cols: [{ w: 30 }, { w: 26 }, { w: 12 }, { w: 7 }, { w: 12 }, { w: 7 }, { w: 9 }, { w: 22 }, { w: 22 }, { w: 11 }, { w: 9 }, { w: 13 }, { w: 15 }, { w: 12 }, { w: 11 }, { w: 14 }, { w: 17 }, { w: 12 }],
-      rows: [[
-        'participant_id', 'prolific_pid', 'session_code', 'phase', 'phase_label', 'round', 'practice',
-        'started_utc', 'ended_utc', 'duration_s', 'reveals', 'reveal_cost_cents',
-        'ai_questions', 'ai_fees_cents', 'best_cents', 'net_raw_cents', 'net_floored_cents', 'paid_round'
-      ]].concat(roundOrder.map(function (k) {
-        var r = rounds[k];
-        var p = parts[r.id] || { paid: {} };
-        var practice = r.round === 0 ? 1 : 0;
-        return [
-          r.id, r.pid || '', r.code || '', r.phase, PHASE_LABEL[r.arm] || r.arm || '', r.round, practice,
-          isoMs(r.startT), isoMs(r.endT),
-          (r.startT && r.endT) ? Math.round((r.endT - r.startT) / 100) / 10 : null,
-          // round cost (ctx) = 5¢ × reveals + AI fees, so reveal-only cost is the difference
-          r.reveals, r.cost != null ? r.cost - r.aiSpend : null,
-          r.aiQ, r.aiSpend, r.best, r.rawNet, r.flooredNet,
-          practice ? 0 : (p.paid['p' + r.phase + 'r' + r.round] ? 1 : 0)
-        ];
-      }))
-    };
 
-    var actionsSheet = {
-      name: 'Actions',
-      cols: [{ w: 30 }, { w: 26 }, { w: 12 }, { w: 7 }, { w: 12 }, { w: 7 }, { w: 17 }, { w: 12 }, { w: 24 }, { w: 15 }, { w: 9 }, { w: 12 }, { w: 15 }, { w: 9 }, { w: 9 }, { w: 13 }, { w: 15 }, { w: 19 }, { w: 18 }, { w: 17 }, { w: 11 }, { w: 8 }, { w: 8 }, { w: 46 }],
-      rows: [[
-        'participant_id', 'prolific_pid', 'session_code', 'phase', 'phase_label', 'round', 'event',
-        'decision_ms', 'time_utc', 't_ms', 'position', 'value_cents', 'estimate_cents',
-        'ai_model', 'ai_mode', 'ai_fee_cents', 'reveals_so_far', 'reveal_cost_so_far_cents',
-        'best_so_far_cents', 'net_so_far_cents', 'question', 'choice', 'correct', 'details'
-      ]].concat(evs.filter(function (e) { return !isMetaEvent(e); }).map(function (e) {
-        var ai = e.event === 'ai_query' ? parseInfo(e.info) : {};
-        return [
-          e.session || '(none)', e.pid || '', e.sessionCode || '', e.phase, PHASE_LABEL[e.arm] || e.arm || '', e.round, e.event,
-          num(e.rt_ms), isoMs(e.t), num(e.t), num(e.position), num(e.value), num(e.estimate),
-          ai.model || '', ai.mode || '', num(ai.fee),
-          num(e.reveals), num(e.cost), num(e.best), num(e.net),
-          e.qid || '', (e.choice != null ? e.choice : null), (e.correct == null ? null : (e.correct ? 1 : 0)),
-          e.info || ''
-        ];
-      }))
-    };
+    // Slider + attention traces, unpacked from the telemetry batches.
+    var slider = [['participant_code', 'round_index', 'position', 'via', 'ms_since_round_start', 't']];
+    var attention = [['participant_code', 'round_index', 'kind', 'detail', 't']];
+    var grouped = X.group(b.raw);
+    Object.keys(grouped).forEach(function (code) {
+      grouped[code].telemetry.forEach(function (r) {
+        if (r.kind === 'slider') slider.push([code, r.round_index, r.position, r.via, r.ms, new Date(r.t).toISOString()]);
+        else attention.push([code, r.round_index, r.kind,
+          JSON.stringify(Object.keys(r).filter(function (k) { return ['kind', 't', 'round_index', 'phase'].indexOf(k) < 0; })
+            .reduce(function (o, k) { o[k] = r[k]; return o; }, {})),
+          new Date(r.t).toISOString()]);
+      });
+    });
 
-    var surveySheet = {
-      name: 'Survey',
-      cols: [{ w: 30 }, { w: 26 }, { w: 12 }, { w: 13 }, { w: 13 }, { w: 60 }, { w: 12 }, { w: 24 }],
-      rows: [[
-        'participant_id', 'prolific_pid', 'session_code', 'question', 'likert_1to5', 'free_text', 'decision_ms', 'time_utc'
-      ]].concat(evs.filter(function (e) { return e.event === 'survey'; }).map(function (e) {
-        return [
-          e.session || '(none)', e.pid || '', e.sessionCode || '', e.qid || '',
-          (e.choice != null ? num(e.choice) : null), e.info || '', num(e.rt_ms), isoMs(e.t)
-        ];
-      }))
-    };
-    return [readme, sessionsSheet, participantsSheet, roundsSheet, actionsSheet, surveySheet];
+    var sheets = [
+      { name: 'ReadMe', cols: [{ w: 26 }, { w: 62 }, { w: 46 }], rows: readme, filter: false },
+      { name: 'Run', cols: [{ w: 14 }, { w: 26 }, { w: 60 }], rows: runRows },
+      { name: 'Specs', cols: [{ w: 10 }, { w: 8 }, { w: 8 }, { w: 14 }, { w: 12 }, { w: 18 }, { w: 12 }, { w: 7 }, { w: 30 }], rows: specRows },
+      X.toSheet('Decisions', b.decisions),
+      X.toSheet('Rounds', b.rounds),
+      X.toSheet('Participants', b.participants),
+      { name: 'Slider', cols: [{ w: 16 }, { w: 12 }, { w: 10 }, { w: 10 }, { w: 20 }, { w: 24 }], rows: slider },
+      { name: 'Attention', cols: [{ w: 16 }, { w: 12 }, { w: 18 }, { w: 40 }, { w: 24 }], rows: attention },
+      X.toSheet('Raw', b.raw)
+    ];
+    return sheets;
   }
 
-  function exportExcel(code) {
-    if (!window.SVXlsx) { banner($('dash-banner'), 'warn', 'Excel export unavailable: xlsx.js failed to load — reload the page.'); return; }
-    var stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
-    SVXlsx.download('searchv2_' + (code || 'all-sessions') + '_' + stamp + '.xlsx', buildWorkbook(code));
+  // ---- dry run (§17b Screen 6) --------------------------------------------
+  // The bot itself lives in export.js, so the panel and tools/selftest.js drive
+  // exactly the same scripted session.
+  function dryRun() {
+    if (!current) { $('dryrun-out').innerHTML = '<span class="muted">Open a run first.</span>'; return; }
+    var a = artifacts(current);
+    var rows = X.botSession(a, 'BOT001', 'A', current).concat(X.botSession(a, 'BOT002', 'B', current));
+    var b = X.build(rows, current, { keepBots: true });
+    var missingDec = X.emptyColumns(b.decisions),
+        missingRnd = X.emptyColumns(b.rounds),
+        missingPart = X.emptyColumns(b.participants);
+    // Build the workbook too, and throw the bytes away. The export is the point
+    // of the dry run — checking the columns populate but never exercising the
+    // writer would miss exactly the failure the dry run exists to catch.
+    var wb = null, wbErr = null;
+    try { wb = sheetsFor(b, a).length ? Xlsx.build(sheetsFor(b, a)) : null; }
+    catch (e) { wbErr = String((e && e.message) || e); }
+    // Bot rows are excluded from a REAL export (§17b); prove it here rather than
+    // trusting it.
+    var real = X.build(rows, current);
+    $('dryrun-out').innerHTML =
+      '<div class="badge ' + (b.decisions.length && b.rounds.length && wb && !real.decisions.length ? 'green' : 'red') + '">' +
+      '<span class="bt">' + b.decisions.length + ' decisions · ' + b.rounds.length + ' rounds · ' +
+      b.participants.length + ' participants</span>' +
+      '<span class="bb">Columns that stayed empty — decisions: ' + esc(missingDec.join(', ') || 'none') +
+      '<br>rounds: ' + esc(missingRnd.join(', ') || 'none') +
+      '<br>participants: ' + esc(missingPart.length > 12 ? missingPart.slice(0, 12).join(', ') + ' …' : (missingPart.join(', ') || 'none')) +
+      '<br>workbook: ' + (wb ? (Math.round(wb.length / 1024) + ' KB, built cleanly') : ('FAILED — ' + esc(wbErr || 'no sheets'))) +
+      '<br>bot rows in a real export: ' + real.decisions.length + ' (must be 0)' +
+      '</span></div>';
   }
 
-  // ============================================================= helpers
-  function box(n, l) { return '<div class="stat-box"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; }
-  function shortId(s) { s = String(s || ''); return s.length > 12 ? s.slice(0, 6) + '…' + s.slice(-4) : s; }
-  function fmtTime(t) { if (!t) return ''; var d = new Date(t); return isNaN(d) ? '' : d.toISOString().replace('T', ' ').slice(0, 19); }
-  function toCSV(events) {
-    var e2 = function (v) { if (v == null) return ''; var s = String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    return [FIELDS.join(',')].concat(events.map(function (ev) { return FIELDS.map(function (f) { return e2(ev[f]); }).join(','); })).join('\n');
-  }
-  function downloadFile(name, text, mime) {
-    var blob = new Blob([text], { type: mime }), url = URL.createObjectURL(blob), a = document.createElement('a');
-    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  function dl(filename, text, mime) {
+    var blob = new Blob([text], { type: mime || 'text/plain' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
     setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
   }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();

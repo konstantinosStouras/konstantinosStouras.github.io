@@ -26,10 +26,19 @@ window.FIREBASE_CONFIG = {
 // will sign in with.
 window.ADMIN_EMAILS = ['admin@admin.com'];
 
-// Firestore collection/doc names (rarely need changing).
+// Firestore collection names (design brief §17.3; rarely need changing).
+// `events` MUST keep its name: the Simulation Platform's verification adapter
+// (simulation/admin/verify.js) reads this collection and matches
+// `event == 'session_end'` on `pid`, which is the student's university ID.
 window.FIREBASE_PATHS = {
-  events: 'events',       // one document per logged event
-  configDoc: 'config/study' // admin-controlled study conditions & codes
+  runs: 'runs',                 // one document per immutable parameter set
+  runCodes: 'runCodes',         // code → runId, so participants never list runs
+  runCounts: 'runCounts',       // transactional sequence counters (exact 50/50)
+  roster: 'roster',             // runId__CODE → sequence, claim, status
+  participants: 'participants', // runId__CODE → the session record of §16.1
+  events: 'events',             // one document per logged event, append-only
+  audit: 'audit',               // admin actions
+  messages: 'messages'          // admin → participant nudges
 };
 
 // Version of the Firebase JS SDK to load from the CDN.

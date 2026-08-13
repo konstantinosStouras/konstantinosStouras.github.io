@@ -3,27 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Search for Knowledge</title>
-  <meta name="description" content="A short online decision experiment: search a hidden line of prizes for the best value, with and without AI." />
+  <title>Search With and Without Generative AI</title>
+  <meta name="description" content="An online decision experiment: search a hidden line of prizes, with and without an AI you can consult." />
   <meta name="robots" content="noindex,nofollow" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232780e3'/%3E%3Cpolyline points='4,22 12,10 18,18 24,6 28,14' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-180.png" />
-  <!-- Social / link-preview metadata (Open Graph + Twitter Card). Read by
-       messaging apps (Messenger, WhatsApp, iMessage, Slack, …); shown even though
-       the page is noindex for search engines. -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="stouras.com/lab" />
-  <meta property="og:title" content="Search for Knowledge — with and without AI" />
-  <meta property="og:description" content="A short online decision experiment: search a hidden line of prizes for the best value, with and without AI." />
+  <meta property="og:title" content="Search With and Without Generative AI" />
+  <meta property="og:description" content="An online decision experiment: search a hidden line of prizes, with and without an AI you can consult." />
   <meta property="og:url" content="https://www.stouras.com/lab/search-v2/" />
   <meta property="og:image" content="https://www.stouras.com/lab/search-v2/og-image.png" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Search for Knowledge — an online decision experiment" />
+  <meta property="og:image:alt" content="Search With and Without Generative AI — an online decision experiment" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Search for Knowledge — with and without AI" />
-  <meta name="twitter:description" content="A short online decision experiment: search a hidden line of prizes for the best value, with and without AI." />
+  <meta name="twitter:title" content="Search With and Without Generative AI" />
+  <meta name="twitter:description" content="An online decision experiment: search a hidden line of prizes, with and without an AI you can consult." />
   <meta name="twitter:image" content="https://www.stouras.com/lab/search-v2/og-image.png" />
   <meta name="theme-color" content="#2780e3" />
   <link rel="stylesheet" href="styles.css" />
@@ -32,14 +29,12 @@
   <div class="nav">
     <div class="brand">Search for Knowledge</div>
     <div class="nav-right">
-      <span class="muted small" id="nav-arm"></span>
+      <span class="muted small" id="nav-tag" style="display:none;"></span>
       <button class="btn btn-ghost btn-sm" id="btn-logout" style="display:none;" title="Log out and clear this study on this device">Log out</button>
-      <button class="btn btn-ghost btn-sm" id="btn-restart" style="display:none;">&#8635; Restart</button>
     </div>
   </div>
 
-  <!-- Encouragement / admin-message toast (auto-nudge when idle, or a message the
-       admin pushes from the panel). Hidden until there's something to show. -->
+  <!-- Admin message / encouragement toast. Hidden until there is something to show. -->
   <div class="nudge-toast" id="nudge-toast" style="display:none;">
     <span class="nudge-ico" aria-hidden="true">💬</span>
     <span class="nudge-text" id="nudge-text"></span>
@@ -55,32 +50,42 @@
 
     <!-- ============ STUDY CLOSED ============ -->
     <section class="screen" id="s-closed">
-      <div class="card center" style="max-width:560px; margin:48px auto;" id="closed-body">
+      <div class="card center" style="max-width:560px; margin:48px auto;">
         <h2>This study is not currently open</h2>
-        <p class="muted">Thank you for your interest. Recruitment for this study is
-        paused or complete right now. If you reached this page from a study listing,
-        please return to the platform — no action is needed.</p>
+        <p class="muted">Thank you for your interest. Recruitment for this study is paused or
+        complete right now. If you reached this page from a class platform, please return
+        there &mdash; no action is needed.</p>
       </div>
     </section>
 
-    <!-- ============ SESSION CODE ============ -->
-    <!-- Gate: nobody plays without a session code. Real participants arrive from
-         their recruitment platform with SESSION_ID in the URL (auto-filled, so
-         they never see this); anyone else must type a code here. app.js never
-         invents a code, so an empty landing can no longer start the game. -->
+    <!-- ============ VIEWPORT TOO NARROW ============ -->
+    <!-- §16.1: the display is a visual object, so a participant on a narrow screen
+         would see a compressed version of the same picture. Refuse to start below
+         the minimum, and log the width either way. -->
+    <section class="screen" id="s-viewport">
+      <div class="card center" style="max-width:560px; margin:48px auto;">
+        <h2>Your window is too narrow</h2>
+        <p class="muted">This study needs a window at least <b><span id="vp-min">900</span></b> pixels
+        wide, so that everyone sees the same picture. Your window is currently
+        <b><span id="vp-now">0</span></b> pixels wide.</p>
+        <p class="muted">Please maximise the window (or use a laptop or desktop computer) and try again.</p>
+        <div style="margin-top:14px;"><button class="btn btn-green" id="btn-vp-retry">I have resized &mdash; continue</button></div>
+      </div>
+    </section>
+
+    <!-- ============ PARTICIPANT CODE ============ -->
     <section class="screen" id="s-code">
       <div class="card center" style="max-width:520px; margin:48px auto;">
-        <h2>Enter your session code</h2>
-        <p class="muted">To take part you need a session code. If you arrived from a
-        study listing (for example Prolific), please open the study using the link
-        you were given &mdash; your code is filled in automatically and you will not
-        see this screen. Otherwise, enter your session code below.</p>
+        <h2>Enter your participant code</h2>
+        <p class="muted">If you arrived from the class platform your code is filled in
+        automatically and you will not see this screen. Otherwise, enter the code you
+        were given.</p>
         <div class="code-entry">
-          <input type="text" id="code-input" placeholder="Session code"
-                 autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <input type="text" id="code-input" placeholder="Participant code"
+                 autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" />
           <button class="btn btn-green" id="btn-code" disabled>Continue</button>
         </div>
-        <p class="feedback bad" id="code-feedback" style="display:none;">Please enter your session code to continue.</p>
+        <p class="feedback bad" id="code-feedback" style="display:none;"></p>
       </div>
     </section>
 
@@ -88,7 +93,7 @@
     <section class="screen" id="s-consent">
       <h1>Before you begin</h1>
       <div class="card">
-        <div id="consent-body"><!-- filled by app.js (admin-editable, with a built-in default) --></div>
+        <div id="consent-body"></div>
         <label class="consent-line">
           <input type="checkbox" id="consent-box" />
           <span>I have read the above and I agree to take part.</span>
@@ -99,111 +104,152 @@
       </div>
     </section>
 
-    <!-- ============ INSTRUCTIONS ============ -->
+    <!-- ============ INSTRUCTIONS (5 screens) ============ -->
     <section class="screen" id="s-instructions">
-      <h1>Instructions</h1>
-      <div class="card" id="instructions-body"><!-- filled by app.js (arm-specific) --></div>
-      <div class="right"><button class="btn btn-green" id="btn-instructions">Continue to a quick check</button></div>
+      <div class="step-tag" id="instr-step"></div>
+      <h1 id="instr-title"></h1>
+      <div class="card" id="instr-body"></div>
+      <div class="pager">
+        <button class="btn btn-ghost" id="btn-instr-back">Back</button>
+        <button class="btn btn-green" id="btn-instr-next">Next</button>
+      </div>
     </section>
 
-    <!-- ============ QUIZ ============ -->
+    <!-- ============ COMPREHENSION GATE ============ -->
     <section class="screen" id="s-quiz">
       <h1>Quick check</h1>
-      <p class="muted">Please answer these to make sure the instructions are clear. You
-      need all answers correct to continue.</p>
-      <div id="quiz-body"><!-- filled by app.js --></div>
-      <div class="feedback bad" id="quiz-feedback" style="display:none;">Not quite, re-read the instructions.</div>
+      <p class="muted">Please answer these so we know the instructions were clear.</p>
+      <div id="quiz-body"></div>
+      <div class="feedback bad" id="quiz-feedback" style="display:none;"></div>
       <div class="right" style="margin-top:14px;"><button class="btn btn-green" id="btn-quiz">Submit answers</button></div>
     </section>
 
-    <!-- ============ PHASE TRANSITION ============ -->
-    <!-- Shown between phases in a within-subjects session (e.g. "Without AI" then
-         "With AI"). Content is admin-editable (phaseIntroA / phaseIntroB). -->
-    <section class="screen" id="s-phase-intro">
-      <h1 id="phase-intro-title">Next part</h1>
-      <div class="card" id="phase-intro-body"><!-- filled by app.js --></div>
-      <div class="right"><button class="btn btn-green" id="btn-phase-intro">Continue</button></div>
+    <!-- ============ AI INSTRUCTIONS (3 screens) ============ -->
+    <section class="screen" id="s-aiinstructions">
+      <div class="step-tag ai" id="ai-step"></div>
+      <h1 id="ai-title"></h1>
+      <div class="card" id="ai-body"></div>
+      <div class="pager">
+        <button class="btn btn-ghost" id="btn-ai-back">Back</button>
+        <button class="btn btn-green" id="btn-ai-next">Next</button>
+      </div>
+    </section>
+
+    <!-- ============ AI COMPREHENSION GATE ============ -->
+    <section class="screen" id="s-aiquiz">
+      <h1>Quick check &mdash; the AI</h1>
+      <p class="muted">These are about how the AI works.</p>
+      <div id="aiquiz-body"></div>
+      <div class="feedback bad" id="aiquiz-feedback" style="display:none;"></div>
+      <div class="right" style="margin-top:14px;"><button class="btn btn-green" id="btn-aiquiz">Submit answers</button></div>
+    </section>
+
+    <!-- ============ BLOCK / WARM-UP INTRO ============ -->
+    <section class="screen" id="s-blockintro">
+      <h1 id="bi-title"></h1>
+      <div class="card" id="bi-body"></div>
+      <div class="right"><button class="btn btn-green" id="btn-bi">Continue</button></div>
     </section>
 
     <!-- ============ ROUND ============ -->
     <section class="screen" id="s-round">
       <div class="round-head">
-        <div class="round-label" id="round-label">Practice</div>
-        <div class="counters">
-          <div class="counter boxed" title="The highest value you've revealed so far this round — your prize if you stop now.">
-            <span class="c-label">Best so far</span><span class="c-val" id="c-best">&mdash;</span></div>
-          <div class="counter" title="How many positions you've revealed so far this round.">
-            <span class="c-label">Reveals</span><span class="c-val" id="c-reveals">0</span></div>
-          <div class="counter cost" title="What you've spent revealing positions so far — 5¢ per reveal.">
-            <span class="c-label">Cost</span><span class="c-val" id="c-cost">0&cent;</span></div>
-          <div class="counter net" title="Your earnings so far: best value found minus what you've spent revealing.">
-            <span class="c-label">Net so far</span><span class="c-val" id="c-net">0&cent;</span></div>
+        <div>
+          <div class="round-label" id="round-label"></div>
+          <div class="round-sub" id="round-sub"></div>
         </div>
+        <button class="btn btn-ghost btn-sm" id="btn-instr-open" title="Reopen the instructions summary">&#9432; Instructions</button>
       </div>
 
-      <div class="round-grid" id="round-grid">
+      <div class="round-grid">
+        <!-- LEFT: everything touched this round, with the two costs kept apart -->
+        <aside class="side-col">
+          <h3>This round</h3>
+          <ul class="touched" id="touched-list"></ul>
+          <div class="side-stats">
+            <div class="ss"><span class="ss-l">Questions asked</span><span class="ss-v" id="c-queries">0</span></div>
+            <div class="ss"><span class="ss-l">Spent on questions</span><span class="ss-v cost" id="c-query-cost">0</span></div>
+            <div class="ss"><span class="ss-l">Positions revealed</span><span class="ss-v" id="c-reveals">0</span></div>
+            <div class="ss"><span class="ss-l">Spent on reveals</span><span class="ss-v cost" id="c-reveal-cost">0</span></div>
+            <div class="ss sel"><span class="ss-l">Selected position</span><span class="ss-v" id="c-selected">50</span></div>
+            <div class="ss"><span class="ss-l">Rounds remaining</span><span class="ss-v" id="c-remaining">0</span></div>
+          </div>
+        </aside>
+
+        <!-- CENTRE: the line -->
         <div class="chart-col">
           <div class="plot-wrap"><div id="plot"></div></div>
-          <div class="legend" id="legend"><!-- filled by app.js --></div>
-          <div class="testview" id="testview" style="display:none;"><!-- testing-only overlay toggles (debug), injected by app.js --></div>
+          <div class="legend" id="legend"></div>
+          <div class="answer-flash" id="answer-flash"></div>
+          <div class="testview" id="testview" style="display:none;"></div>
 
           <div class="controls">
-            <div class="pos-picker">
-              <span class="small muted">Position</span>
-              <button class="btn btn-ghost btn-sm arrow" id="btn-left" title="Previous position">&#8592;</button>
-              <input type="number" id="pos-input" min="1" max="100" value="50" />
-              <button class="btn btn-ghost btn-sm arrow" id="btn-right" title="Next position">&#8594;</button>
-            </div>
-            <div class="action-btns">
-              <button class="btn btn-blue" id="btn-reveal">Reveal (costs 5&cent;)</button>
-              <button class="btn btn-amber" id="btn-stop">Stop this round</button>
-            </div>
+            <span class="small muted">Position</span>
+            <button class="btn btn-ghost btn-sm arrow" id="btn-pos-left" title="Previous position" aria-label="Previous position">&#8592;</button>
+            <input type="range" id="pos-slider" min="1" max="100" value="50" step="1"
+                   aria-label="Select a position from 1 to 100" />
+            <button class="btn btn-ghost btn-sm arrow" id="btn-pos-right" title="Next position" aria-label="Next position">&#8594;</button>
+            <input type="number" id="pos-input" min="1" max="100" value="50" aria-label="Selected position" />
           </div>
-          <div class="note warn" id="warn-negative" style="display:none;">Your net for this round is now 0 or negative.</div>
+          <div class="note warn" id="cap-note" style="display:none;"></div>
         </div>
 
-        <div class="aux-col" id="aux-panel"><!-- side panel (Arm B only) injected by app.js --></div>
+        <!-- RIGHT: the three actions -->
+        <aside class="act-col">
+          <div id="ask-panel">
+            <button class="btn btn-est" id="btn-ask">Ask the AI (<span id="ask-cost">2</span>)</button>
+            <p class="act-note">The AI gives its estimate. It does not reveal the truth.</p>
+          </div>
+          <button class="btn btn-blue" id="btn-reveal">Reveal (<span id="reveal-cost">5</span>)</button>
+          <p class="act-note">Shows the true prize at the selected position.</p>
+          <button class="btn btn-amber" id="btn-nominate">Stop and nominate</button>
+          <p class="act-note">Ends the round on the selected position. Your score is the true prize there, minus what you spent.</p>
+        </aside>
       </div>
     </section>
 
-    <!-- ============ INTERSTITIAL ============ -->
+    <!-- ============ BETWEEN ROUNDS ============ -->
     <section class="screen" id="s-interstitial">
-      <div class="card center" style="max-width:520px; margin:40px auto;">
-        <h3 id="inter-title">Round complete</h3>
+      <h1>Round complete</h1>
+      <div class="plot-wrap"><div id="inter-plot"></div></div>
+      <div class="card center" style="max-width:620px; margin:16px auto;">
         <div id="inter-body"></div>
         <div style="margin-top:18px;"><button class="btn btn-green" id="btn-continue">Continue</button></div>
       </div>
     </section>
 
-    <!-- ============ COMPARISON (end-of-study debrief) ============ -->
-    <section class="screen" id="s-compare">
-      <h1>Your results</h1>
-      <p class="muted" id="compare-intro"></p>
-      <div id="compare-body"><!-- plots + stats injected by app.js --></div>
-      <div class="right" style="margin-top:18px;"><button class="btn btn-green" id="btn-compare-next">Next</button></div>
-    </section>
-
-    <!-- ============ SURVEY ============ -->
+    <!-- ============ EXIT SURVEY ============ -->
     <section class="screen" id="s-survey">
-      <h1>One last thing</h1>
-      <p class="muted">A few quick questions before you finish. Your answers are anonymous.</p>
+      <h1>A few questions</h1>
+      <p class="muted">This takes four to six minutes. Your answers are stored against your
+      participant code and nothing else.</p>
       <div class="card">
-        <div id="survey-body"><!-- questions injected by app.js --></div>
-        <div class="right" style="margin-top:8px;"><button class="btn btn-green" id="btn-survey-submit">Submit &amp; finish</button></div>
+        <div id="survey-body"></div>
+        <div class="feedback bad" id="survey-feedback" style="display:none;"></div>
+        <div class="right" style="margin-top:8px;"><button class="btn btn-green" id="btn-survey">Submit &amp; continue</button></div>
       </div>
     </section>
 
-    <!-- ============ FINISH ============ -->
-    <section class="screen" id="s-finish">
+    <!-- ============ DEBRIEF ============ -->
+    <section class="screen" id="s-debrief">
+      <h1>How the AI worked</h1>
+      <div class="card" id="debrief-body"></div>
+      <p class="muted small" id="debrief-round"></p>
+      <div class="plot-wrap"><div id="debrief-plot"></div></div>
+      <div class="legend" id="debrief-caption"></div>
+      <div class="right" style="margin-top:18px;"><button class="btn btn-green" id="btn-debrief">Finish</button></div>
+    </section>
+
+    <!-- ============ DONE ============ -->
+    <section class="screen" id="s-done">
       <h1>All done &mdash; thank you!</h1>
       <div class="card">
-        <div id="finish-body"></div>
-        <div class="code-box">
+        <div id="done-body"></div>
+        <div id="done-stats" class="center" style="margin:14px 0;"></div>
+        <div class="code-box" id="done-code-box" style="display:none;">
           <div class="small muted">Your completion code</div>
-          <div class="code" id="completion-code">SET-ME</div>
-          <div class="small muted">Copy this code back into the recruitment platform to be paid.</div>
+          <div class="code" id="done-code"></div>
         </div>
-        <div class="note" id="upload-note" style="display:none; margin-top:14px;"></div>
         <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn btn-ghost btn-sm" id="btn-dl-json">Download my session data (JSON)</button>
           <button class="btn btn-ghost btn-sm" id="btn-dl-csv">Download my session data (CSV)</button>
@@ -213,32 +259,44 @@
 
   </div>
 
-  <!-- stop-confirm modal -->
-  <div class="overlay" id="ov-stop">
+  <!-- nominate-confirm modal (only when the position was never touched) -->
+  <div class="overlay" id="ov-nominate">
     <div class="modal">
-      <h3>Stop this round?</h3>
-      <p id="stop-msg">You will end this round with a net of X cents. Stop?</p>
+      <h3 id="nom-title">Stop here?</h3>
+      <p id="nom-msg"></p>
       <div class="modal-foot">
-        <button class="btn btn-ghost" id="btn-stop-cancel">Keep going</button>
-        <button class="btn btn-amber" id="btn-stop-ok">Yes, stop</button>
+        <button class="btn btn-ghost" id="btn-nom-cancel">Keep going</button>
+        <button class="btn btn-amber" id="btn-nom-ok">Yes, stop</button>
       </div>
     </div>
   </div>
 
-  <!-- Simulation Platform (stouras.com/simulation): completion marker only —
-       the study has no demographics form to prefill. Inert standalone. -->
-  <!-- Off in a test round (?preview=1): a sandbox must never tell the platform
-       the run completed, or it would gate the student's real play. -->
+  <!-- instructions summary, reopenable from the round screen -->
+  <div class="overlay" id="ov-summary">
+    <div class="modal">
+      <div id="summary-body"></div>
+      <div class="modal-foot">
+        <button class="btn btn-green" id="btn-summary-close">Back to the round</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Simulation Platform (stouras.com/simulation): the launch handoff carries
+       the student's ID, which becomes this study's participant code, and the
+       completion marker ticks their card when the session ends. Inert standalone.
+       Off in a test round (?preview=1): a sandbox must never tell the platform a
+       run completed, or it would gate the student's real play. -->
   <script>window.SIMP_EXPECT = /[?&]preview=1\b/.test(location.search) ? '__off__' : 'search-v2';</script>
   <script src="/simulation/prefill.js" defer></script>
   <script src="config.js"></script>
-  <script src="landscape.js"></script>
+  <script src="pool.js"></script>
+  <script src="specs.js"></script>
+  <script src="ai.js"></script>
+  <script src="content.js"></script>
   <script src="firebase-config.js"></script>
   <script src="firebase.js"></script>
   <script src="logger.js"></script>
   <script src="chart.js"></script>
-  <!-- The Arm-B side-panel module is loaded by app.js at runtime only in Arm B,
-       so an Arm-A document contains no reference to it (strict arm isolation). -->
   <script src="app.js"></script>
   <script src="tooltip.js"></script>
 </body>

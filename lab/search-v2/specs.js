@@ -1,0 +1,359 @@
+/* ==========================================================================
+   search-v2  ·  specs.js
+   The frozen round specs of design brief §10, and the per-participant round
+   order of §11.
+
+   A run's 28 specs (4 warm-up + 24 scored, 12 scored per block) are generated
+   ONCE from the run's frozen seeds and never regenerated between sessions.
+   Mappings, seed positions, AI anchors and the block membership of each spec are
+   IDENTICAL for every participant; only the order within a block is shuffled,
+   from a participant-specific seed, and the realised order is logged.
+
+   Browser: window.SVSpecs.  Node: require('./specs.js').
+   ========================================================================== */
+(function (root, factory) {
+  var isNode = typeof require === 'function' && typeof module !== 'undefined';
+  var M = factory(
+    isNode ? require('./config.js') : (root && root.CONFIG),
+    isNode ? require('./pool.js') : (root && root.SVPool)
+  );
+  if (isNode) module.exports = M;
+  if (root) root.SVSpecs = M;
+})(typeof window !== 'undefined' ? window : null, function (CFG, Pool) {
+  'use strict';
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  // Merge a partial params object over the defaults, group by group, so a run
+  // saved before a parameter existed still gets that parameter's default.
+  function withDefaults(params) {
+    var out = clone(CFG.DEFAULTS);
+    if (!params) return out;
+    Object.keys(out).forEach(function (g) {
+      if (!params[g]) return;
+      Object.keys(out[g]).forEach(function (k) {
+        if (params[g][k] != null) out[g][k] = clone(params[g][k]);
+      });
+    });
+    return out;
+  }
+
+  // ---- seed placement (§10) -----------------------------------------------
+  // Positions near the shape's base points, each jittered by a uniform integer
+  // in [-jitter, +jitter]. Jitter is small on purpose: the geometry IS the
+  // treatment, so it must not be blurred. Clamped into the line and deduped
+  // (a collision after jitter would silently shrink the seed set).
+  function placeSeeds(shape, rng, params) {
+    var base = CFG.SEED_BASE[shape];
+    if (!base) return [];
+    var J = params.env.positions, jit = params.rounds.seedJitter;
+    for (var attempt = 0; attempt < 64; attempt++) {
+      var out = [], seen = {};
+      for (var i = 0; i < base.length; i++) {
+        var p = base[i] + Pool.randInt(rng, -jit, jit);
+        p = Math.max(1, Math.min(J, p));
+        if (seen[p]) { out = null; break; }
+        seen[p] = 1; out.push(p);
+      }
+      if (out) { out.sort(function (a, b) { return a - b; }); return out; }
+    }
+    return base.slice();  // astronomically unlikely; fall back to the un-jittered base
+  }
+
+  // ---- AI anchor placement (§10, "AI density") ----------------------------
+  // STRATIFIED: one anchor drawn uniformly within each of K equal strata. A
+  // uniform draw of K positions produces highly variable gap widths, which blurs
+  // sparse and dense across the s* threshold and destroys the sharpness of the
+  // prediction — so 'uniform' exists only as a switch nobody should flip.
+  function placeAnchors(K, rng, params) {
+    var J = params.env.positions, out = [], seen = {};
+    if (params.ai.placement === 'uniform') {
+      while (out.length < K) {
+        var u = Pool.randInt(rng, 1, J);
+        if (!seen[u]) { seen[u] = 1; out.push(u); }
+      }
+    } else {
+      var w = J / K;
+      for (var s = 0; s < K; s++) {
+        var lo = Math.floor(s * w) + 1, hi = Math.floor((s + 1) * w);
+        if (hi < lo) hi = lo;
+        var p = Pool.randInt(rng, lo, hi), guard = 0;
+        while (seen[p] && guard++ < 4 * (hi - lo + 2)) p = Pool.randInt(rng, lo, hi);
+        seen[p] = 1; out.push(p);
+      }
+    }
+    out.sort(function (a, b) { return a - b; });
+    return out;
+  }
+
+  function densityK(density, params) {
+    return density === 'DENSE' ? params.ai.denseK : params.ai.sparseK;
+  }
+
+  // ---- the block plan (§10) ------------------------------------------------
+  // The 12 scored slots of a block: 4 open (2 sparse / 2 dense) and 8 seeded
+  // (FRONTIER 1+1, BALANCED 2+2, GAP 1+1). Density is balanced WITHIN each seed
+  // shape as well as within the block, so density never confounds shape.
+  function blockPlan(params) {
+    var r = params.rounds, slots = [], i;
+    var openS = r.densityOpen.SPARSE, openD = r.densityOpen.DENSE;
+    for (i = 0; i < openS; i++) slots.push({ shape: 'OPEN', density: 'SPARSE' });
+    for (i = 0; i < openD; i++) slots.push({ shape: 'OPEN', density: 'DENSE' });
+
+    // Split each shape's count as evenly as possible between the two densities,
+    // then reconcile the totals against densitySeeded so the block-level 4/4
+    // holds even if a shape has an odd count.
+    var shapes = CFG.SEED_SHAPES, seeded = [];
+    shapes.forEach(function (sh) {
+      var n = r.shapeMix[sh] || 0;
+      var sp = Math.ceil(n / 2), dn = n - sp;
+      for (var a = 0; a < sp; a++) seeded.push({ shape: sh, density: 'SPARSE' });
+      for (var b = 0; b < dn; b++) seeded.push({ shape: sh, density: 'DENSE' });
+    });
+    var wantS = r.densitySeeded.SPARSE;
+    var haveS = seeded.filter(function (s) { return s.density === 'SPARSE'; }).length;
+    for (i = 0; i < seeded.length && haveS > wantS; i++) {
+      if (seeded[i].density === 'SPARSE') { seeded[i].density = 'DENSE'; haveS--; }
+    }
+    for (i = seeded.length - 1; i >= 0 && haveS < wantS; i--) {
+      if (seeded[i].density === 'DENSE') { seeded[i].density = 'SPARSE'; haveS++; }
+    }
+    return slots.concat(seeded);
+  }
+
+  // Warm-up slots. The brief does not fix their geometry (they exist to absorb
+  // interface learning and are never analysed), so each block warms up with one
+  // OPEN round and then one BALANCED seeded round — the participant meets both
+  // kinds of screen before anything counts. Densities alternate.
+  function warmupPlan(params) {
+    var n = params.rounds.warmupPerBlock, out = [];
+    for (var i = 0; i < n; i++) {
+      out.push({
+        shape: (i % 2 === 0) ? 'OPEN' : 'BALANCED',
+        density: (i % 2 === 0) ? 'SPARSE' : 'DENSE'
+      });
+    }
+    return out;
+  }
+
+  // ---- spec generation -----------------------------------------------------
+  // Deterministic in (params, specSeed): the SAME 28 specs for every participant
+  // of the run. Mapping indices are consumed from one shuffled pass over the
+  // pool, so no mapping is used twice; a seeded slot keeps drawing until the
+  // acceptance filter of §9 passes on the (mapping, seeds) pairing.
+  function buildSpecs(pool, params, specSeed) {
+    params = withDefaults(params);
+    var rng = Pool.rngFrom(specSeed == null ? (params.env.generatorSeed + 1) : specSeed);
+    var order = Pool.shuffle(pool.map(function (_, i) { return i; }), rng);
+    var cursor = 0;
+    // Seed placements to try against ONE mapping before moving on. §9 says to
+    // "reject and redraw the pairing", and the pairing is (mapping, seed set) —
+    // so the jitter is redrawn first. This matters: only ~2% of pairings pass at
+    // the default parameters, so burning a whole mapping per rejected jitter
+    // would exhaust the pool.
+    var SEED_TRIES = 24;
+
+    var specs = [], blocks = 2;
+    for (var b = 1; b <= blocks; b++) {
+      var plans = warmupPlan(params).map(function (p) { return { p: p, scored: false }; })
+        .concat(blockPlan(params).map(function (p) { return { p: p, scored: true }; }));
+
+      for (var i = 0; i < plans.length; i++) {
+        var slot = plans[i].p, scored = plans[i].scored;
+        var isSeeded = slot.shape !== 'OPEN';
+        var mi = -1, pre = [], found = false;
+
+        // Walk the shuffled pool from the cursor. A mapping is CONSUMED once it
+        // is used, so no two specs ever serve the same prize curve — a
+        // participant meeting the same curve twice would make the instruction
+        // "the prizes are drawn afresh in every round" false.
+        while (cursor < order.length && !found) {
+          var cand = order[cursor++];
+          if (!isSeeded) {
+            // Open-round mappings are NOT filtered beyond adjacency, by design:
+            // the step-size manipulation check compares the AI-off arm against a
+            // published estimate, and filtering would break that comparison.
+            if (Pool.maxAdjacentStep(pool[cand]) <= params.env.stepBound) { mi = cand; pre = []; found = true; }
+            continue;
+          }
+          for (var tj = 0; tj < SEED_TRIES; tj++) {
+            var trySeeds = placeSeeds(slot.shape, rng, params);
+            if (Pool.acceptance(pool[cand], trySeeds, params.filter, params.env).ok) {
+              mi = cand; pre = trySeeds; found = true; break;
+            }
+          }
+        }
+        if (!found) {
+          throw new Error('The mapping pool is too small for this acceptance filter: ' +
+            'no unused mapping accepts a ' + slot.shape + ' seed set. Raise the pool size, ' +
+            'or widen the "highest seeded value" range.');
+        }
+
+        var K = densityK(slot.density, params);
+        var id = 'B' + b + (scored
+          ? '-' + String(specs.filter(function (s) { return s.block === b && s.scored; }).length + 1).padStart(2, '0')
+          : '-W' + (specs.filter(function (s) { return s.block === b && !s.scored; }).length + 1));
+
+        specs.push({
+          spec_id: id,
+          block: b,
+          scored: scored,
+          mapping_index: mi,
+          seed_shape: isSeeded ? slot.shape : 'OPEN',
+          pre_opened: pre,
+          ai_density: slot.density,
+          ai_anchors: placeAnchors(K, rng, params),
+          ai_k: K
+        });
+      }
+    }
+    return specs;
+  }
+
+  // ---- per-participant order (§11) ----------------------------------------
+  // Warm-ups always come first and are never shuffled into the scored set.
+  // `shuffleSeed` is hash(participant_code) so the order is reproducible from the
+  // logged seed alone.
+  function orderForParticipant(specs, participantCode, params) {
+    params = withDefaults(params);
+    var seed = Pool.hashSeed(String(participantCode || ''));
+    var out = { shuffleSeed: seed, order: [] };
+    for (var b = 1; b <= 2; b++) {
+      var warm = specs.filter(function (s) { return s.block === b && !s.scored; })
+        .map(function (s) { return s.spec_id; });
+      var scored = specs.filter(function (s) { return s.block === b && s.scored; })
+        .map(function (s) { return s.spec_id; });
+      if (params.rounds.shuffleWithinBlock) {
+        // A per-block RNG stream, so block 2's order does not depend on how many
+        // draws block 1 happened to consume.
+        Pool.shuffle(scored, Pool.rngFrom(seed ^ (0x9E3779B9 * b)));
+      }
+      out.order.push({ block: b, specIds: warm.concat(scored) });
+    }
+    return out;
+  }
+
+  // The realised 1..28 sequence for a participant, given their block condition
+  // order. `sequence` is 'A' (AI off first) or 'B' (AI on first).
+  function sessionPlan(specs, participantCode, sequence, params) {
+    var ord = orderForParticipant(specs, participantCode, params);
+    var byId = {}; specs.forEach(function (s) { byId[s.spec_id] = s; });
+    var rounds = [], idx = 0;
+    ord.order.forEach(function (blk) {
+      var aiOn = (sequence === 'B') ? (blk.block === 1) : (blk.block === 2);
+      blk.specIds.forEach(function (id) {
+        var s = byId[id];
+        if (!s) return;
+        rounds.push({
+          round_index: ++idx,
+          spec_id: id,
+          block: blk.block,
+          condition: aiOn ? 'AI_ON' : 'AI_OFF',
+          scored: s.scored,
+          spec: s
+        });
+      });
+    });
+    return { shuffleSeed: ord.shuffleSeed, roundOrder: ord.order, rounds: rounds };
+  }
+
+  // ---- validation gate (§17b Screen 6) ------------------------------------
+  // Runs the adjacency check over the pool, the acceptance filter over every
+  // seeded spec, and the balance checks on shape and density. Returns
+  // { pass, failures:[…], notes:[…] } — a run cannot open until it passes.
+  function validate(pool, specs, params) {
+    params = withDefaults(params);
+    var failures = [], notes = [];
+    var i, s;
+
+    if (!pool || !pool.length) failures.push('The mapping pool is empty.');
+    else {
+      var bad = 0;
+      for (i = 0; i < pool.length; i++) {
+        if (pool[i].length !== params.env.positions) bad++;
+        else if (Pool.maxAdjacentStep(pool[i]) > params.env.stepBound) bad++;
+      }
+      if (bad) failures.push(bad + ' of ' + pool.length + ' mappings break the adjacency bound or the length.');
+      else notes.push('Adjacency holds in all ' + pool.length + ' mappings.');
+      if (pool.length !== params.env.poolSize) {
+        notes.push('Pool holds ' + pool.length + ' mappings (parameter says ' + params.env.poolSize + ').');
+      }
+    }
+
+    var want = 2 * (params.rounds.warmupPerBlock + params.rounds.scoredPerBlock);
+    if (!specs || specs.length !== want) {
+      failures.push('Expected ' + want + ' round specs, found ' + ((specs && specs.length) || 0) + '.');
+    }
+    if (specs) {
+      var filterFails = [];
+      for (i = 0; i < specs.length; i++) {
+        s = specs[i];
+        var map = pool[s.mapping_index];
+        if (!map) { failures.push(s.spec_id + ': mapping ' + s.mapping_index + ' is not in the pool.'); continue; }
+        if (s.seed_shape !== 'OPEN') {
+          var a = Pool.acceptance(map, s.pre_opened, params.filter, params.env);
+          if (!a.ok) filterFails.push(s.spec_id + ' (' + a.fails.join(', ') + ')');
+        }
+        var K = densityK(s.ai_density, params);
+        if (!s.ai_anchors || s.ai_anchors.length !== K) {
+          failures.push(s.spec_id + ': expected ' + K + ' AI anchors, found ' + ((s.ai_anchors || []).length) + '.');
+        }
+      }
+      if (filterFails.length) failures.push('Acceptance filter fails on: ' + filterFails.join('; ') + '.');
+      else notes.push('Acceptance filter passes on every seeded spec.');
+
+      // No two specs may serve the same prize curve: the instructions promise the
+      // prizes are drawn afresh every round, and a repeat would make that false.
+      var seenMap = {}, dupes = [];
+      specs.forEach(function (x) {
+        if (seenMap[x.mapping_index]) dupes.push(x.spec_id + '/' + seenMap[x.mapping_index]);
+        seenMap[x.mapping_index] = x.spec_id;
+      });
+      if (dupes.length) failures.push('The same mapping is served in two rounds: ' + dupes.join(', ') + '.');
+      else notes.push('Every round uses a different mapping.');
+
+      for (var b = 1; b <= 2; b++) {
+        var scored = specs.filter(function (x) { return x.block === b && x.scored; });
+        if (scored.length !== params.rounds.scoredPerBlock) {
+          failures.push('Block ' + b + ' has ' + scored.length + ' scored rounds, expected ' + params.rounds.scoredPerBlock + '.');
+        }
+        var counts = { OPEN: 0, FRONTIER: 0, BALANCED: 0, GAP: 0 }, dens = { SPARSE: 0, DENSE: 0 };
+        scored.forEach(function (x) { counts[x.seed_shape]++; dens[x.ai_density]++; });
+        if (counts.OPEN !== params.rounds.openPerBlock) {
+          failures.push('Block ' + b + ': ' + counts.OPEN + ' open rounds, expected ' + params.rounds.openPerBlock + '.');
+        }
+        CFG.SEED_SHAPES.forEach(function (sh) {
+          if (counts[sh] !== (params.rounds.shapeMix[sh] || 0)) {
+            failures.push('Block ' + b + ': ' + counts[sh] + ' ' + sh + ' rounds, expected ' + (params.rounds.shapeMix[sh] || 0) + '.');
+          }
+        });
+        var seededSlots = scored.filter(function (x) { return x.seed_shape !== 'OPEN'; });
+        var sS = seededSlots.filter(function (x) { return x.ai_density === 'SPARSE'; }).length;
+        if (sS !== params.rounds.densitySeeded.SPARSE) {
+          failures.push('Block ' + b + ': ' + sS + ' sparse seeded rounds, expected ' + params.rounds.densitySeeded.SPARSE + '.');
+        }
+        var openSlots = scored.filter(function (x) { return x.seed_shape === 'OPEN'; });
+        var oS = openSlots.filter(function (x) { return x.ai_density === 'SPARSE'; }).length;
+        if (oS !== params.rounds.densityOpen.SPARSE) {
+          failures.push('Block ' + b + ': ' + oS + ' sparse open rounds, expected ' + params.rounds.densityOpen.SPARSE + '.');
+        }
+      }
+      if (!failures.length) notes.push('Shape and density balance hold in both blocks.');
+    }
+
+    return { pass: failures.length === 0, failures: failures, notes: notes };
+  }
+
+  return {
+    withDefaults: withDefaults,
+    placeSeeds: placeSeeds,
+    placeAnchors: placeAnchors,
+    densityK: densityK,
+    blockPlan: blockPlan,
+    warmupPlan: warmupPlan,
+    buildSpecs: buildSpecs,
+    orderForParticipant: orderForParticipant,
+    sessionPlan: sessionPlan,
+    validate: validate
+  };
+});
