@@ -93,6 +93,12 @@ Then:
   roster. Only rows that would actually change are written (every uid behind
   a collapsed row, like the per-row toggle), and the table repaints locally on
   success, since the live snapshot can be slow on a stream-hostile network.
+  A red **Delete all students** button sits beside them — the row Delete
+  applied to every row shown (same filter scope), for clearing a class between
+  terms. It is irreversible and locks those students out (a browser that
+  believes it already synced does not re-create its roster doc, and the student
+  page shows no cards without one), so it asks **twice**: a confirm naming the
+  count and scope, then the word `DELETE` typed back.
   Students can never approve themselves — the rules pin `approved` to
   admin-only writes (**republish `firestore.rules` when adopting this**).
   LOCAL mode has no roster and therefore no gate. The roster also carries

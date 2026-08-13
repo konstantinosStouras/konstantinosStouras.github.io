@@ -130,11 +130,15 @@
         Chains, Newsvendor, Trust the AI?) have nothing to reconcile against, so they show no button.</p>
         <p class="hint"><strong>Approve all</strong> / <strong>Revoke all</strong> set the approval of every
         student shown in one click — with a column filter on they act only on the rows displayed (so you can,
-        say, filter to the students who have answered a simulation and approve just those).</p>
+        say, filter to the students who have answered a simulation and approve just those).
+        <strong>Delete all</strong> is the same scope for the row Delete button — it wipes the registrations
+        shown, cannot be undone (ask for it twice), and leaves the students locked out until they register
+        again, so it is meant for clearing a class between terms, not for mid-class housekeeping.</p>
         <div class="actions" style="margin-top:0">
           <button id="btn-csv" class="btn ghost" hidden>Export CSV</button>
           <button id="btn-approve-all" class="btn ghost" hidden>✓ Approve all</button>
           <button id="btn-unapprove-all" class="btn ghost" hidden>Revoke all approvals</button>
+          <button id="btn-delete-all" class="btn danger" style="margin-left:14px" hidden>Delete all students</button>
           <span id="verify-btns" class="actions" style="margin:0;gap:8px"></span>
           <span id="roster-count" class="hint">Loading roster…</span>
           <span id="verify-note" class="hint"></span>
