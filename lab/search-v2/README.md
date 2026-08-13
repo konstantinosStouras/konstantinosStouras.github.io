@@ -69,7 +69,8 @@ lab/search-v2/
   chart.js            the inline-SVG centre panel (§14)
   logger.js           append-only event log: records + batched telemetry (§16, §17.2)
   app.js              the state machine: screens, rounds, resume
-  firebase.js         Firestore + Auth for the layout of §17.3
+  svfirebase.js       Firestore + Auth for the layout of §17.3 (never name it
+                      firebase.js — see "Deploying" below)
   firebase-config.js  the project config (public by design — see below)
   firestore.rules     the Security Rules that do the enforcing (§17.4)
   backend.js          local vs server: where the score-bearing actions run
@@ -222,14 +223,35 @@ from a pool it regenerates from the run's seed, so a determined participant with
 developer tools could read a round's prizes — which is why server mode is the
 default recommendation now that the plan supports it.
 
-### Deploying the Functions
+### Deploying
+
+**Always name the project.** This repository holds six unrelated Firebase
+projects, and the CLI takes its target from a project it remembers per folder in
+its own global config *before* it reads the `default` alias in `.firebaserc`. A
+deploy run from this directory can therefore publish these rules into another
+study's database and report a clean success — it has happened, and it locked
+Answer Arena's participants out until its own rules were re-published. So:
 
 ```bash
 cd lab/search-v2
+firebase use search-with-ai-456d7                                    # once per machine
 node tools/sync-engine.mjs          # refresh the engine copies (also a predeploy step)
-firebase deploy --only functions
-firebase deploy --only firestore:rules
+firebase deploy --only functions       --project search-with-ai-456d7
+firebase deploy --only firestore:rules --project search-with-ai-456d7
 ```
+
+`tools/check-project.mjs` runs as a predeploy hook on both targets and **aborts
+the deploy** when the project the CLI resolved is not the `default` in
+`.firebaserc`, so a mis-aimed deploy now fails loudly instead of overwriting
+someone else's rules. Run it on its own to see where this folder points:
+`node tools/check-project.mjs`.
+
+**On Windows, this file is `svfirebase.js` and must never be renamed to
+`firebase.js`.** CMD searches the current directory before PATH and `.JS` is in
+the default `PATHEXT`, so a `firebase.js` here makes `firebase` run *that file*
+under Windows Script Host: every command prints nothing, exits cleanly and
+deploys nothing. If you ever see silent `firebase` output, that is why — and
+`firebase.cmd` is the immediate way through.
 
 Then set *Score-bearing actions* to **On the server** for the run, before its
 first participant. `tools/emulator-test.mjs` runs the whole thing against the

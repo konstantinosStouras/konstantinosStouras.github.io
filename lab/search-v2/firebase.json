@@ -1,11 +1,12 @@
 {
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "predeploy": ["node tools/check-project.mjs"]
   },
   "functions": {
     "source": "_functions/functions",
     "runtime": "nodejs20",
-    "predeploy": ["node tools/sync-engine.mjs"]
+    "predeploy": ["node tools/check-project.mjs", "node tools/sync-engine.mjs"]
   },
   "emulators": {
     "auth": { "port": 9099 },
