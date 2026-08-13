@@ -110,6 +110,8 @@ lab/search-v2/
   index.html            screens shell (dynamic content injected by app.js)
   styles.css
   config.js             ONE place for every tunable constant (browser + Node)
+  copy.js               ONE place for every participant-facing WORD (browser + Node);
+                        read by the app AND rendered as the admin's text editors
   landscape.js          deterministic Brownian truth + AI interp/extrap (browser + Node)
   app.js                state machine: screens, rounds, logging, resume
   chart.js              inline-SVG chart (axes, selection, dots, diamonds, debug)
@@ -125,6 +127,8 @@ lab/search-v2/
   tools/apps_script_endpoint.gs  paste-ready Google Apps Script logging endpoint
   tools/selftest.js     Node acceptance tests (deterministic truth, estimate, wiring)
   tools/smoke.mjs        browser acceptance tests (Playwright)
+  tools/copy-guard.mjs   every participant word is in copy.js, editable in the
+                         admin, and an override reaches the screen (Playwright)
   README.md
 ```
 
@@ -168,6 +172,8 @@ node tools/selftest.js          # Node acceptance tests (truth, estimate, geomet
 # browser acceptance tests (arm isolation, resume, logging) — needs Playwright:
 npm i playwright                 # or point CHROMIUM=/path/to/chrome at an existing build
 CHROMIUM=/path/to/chrome node tools/smoke.mjs
+CHROMIUM=/path/to/chrome node tools/copy-guard.mjs   # participant copy ↔ admin editors
+CHROMIUM=/path/to/chrome node tools/preview-guard.mjs # 🧪 Test round writes nothing
 ```
 
 ---
@@ -244,12 +250,30 @@ The **admin panel** at **`/lab/search-v2/admin/`** lets you, from any browser
   below the 5¢ reveal cost, and how much training data it has), and an optional
   **frontier model** the participant can choose per question (costs more, trained
   on more data). More AI parameters can be added here over time.
-- **edit every participant page** — consent, instructions (all phases + the
-  With-AI addendum), the between-phase transition screens, the finish page, and
-  the study-closed page. Blank = built-in default;
-  `**bold**` and blank lines are supported. **Save**, **Make this the default**
-  (seed new sessions), and **Restore built-in default** controls, plus a **Settings
-  summary**.
+- **edit EVERY word a participant sees** — the **Page text & content** section is
+  one accordion per screen, in the order participants meet them: the session-code
+  gate, consent, instructions (+ the With-AI addendum), the **Quick check**
+  comprehension questions, the phase transitions, the game screen (round label,
+  the four counters *and their hover tooltips*, the plot legend, the Reveal/Stop
+  buttons), the stop dialog, the AI assistant panel (including the words the
+  assistant answers with), the end-of-round card, the results debrief, the **exit
+  survey**, the finish page, the study-closed page, and the header/idle-nudge
+  wording — 112 fields plus two structured editors. Every box's **grey
+  placeholder is the exact wording that will be shown** with the settings
+  currently in the form (change the round count or the AI price and the wording
+  re-renders as you type); leave a box blank to keep it, type over it to change
+  it. `**bold**`, blank lines for paragraphs, and tokens (`{nTasks}`,
+  `{paidTasks}`, `{fee}`, `{nPositions}`, `{rounds}` + per-screen ones like
+  `{round}`, `{net}`, `{cost}`) are supported. The **Quick check** and **exit
+  survey** get structured editors — add/remove/reword questions and options, and
+  a radio marks which answer is **correct** (options are still shown to
+  participants in random order). A section head badges how many of its fields you
+  changed. **Save**, **Make this the default** (seed new sessions), and **Restore
+  built-in default** controls, plus a **Settings summary**.
+  A session only stores what you actually changed, so untouched wording keeps
+  following `copy.js` — which is the single source of truth the *study itself*
+  runs on, so the panel can never show you a stale or abridged version of it.
+  Offline test: `node lab/search-v2/tools/copy-guard.mjs`.
 - **test immediately (🧪 Test round)** — every session **card** carries a
   **🧪 Test round** action, and the launch box keeps its **▶ Test this session**
   link; both open the same sandbox URL (built once by `previewUrl(code)`) with
@@ -434,6 +458,39 @@ is loaded by both the browser and the Node tools, so the two never disagree.
 
 ---
 
+## Copy (`copy.js`)
+
+`config.js` is the one place for every tunable **number**; `copy.js` is the one
+place for every participant-facing **word**:
+
+- `TEXT` — 112 keyed strings, verbatim: headings, buttons, counter labels and
+  their tooltips, the prose blocks, dialogs, the assistant's replies, the idle
+  nudges. A few (`instructionsB`, `phaseIntroB`, `aiIntro`) have several built-in
+  wordings picked by the AI-model settings (free / paid / two models) —
+  `dynamicDefault()`.
+- `QUIZ` — the **Quick check** comprehension questions with their answer key, and
+  `SURVEY` — the exit-survey questions.
+- `GROUPS` — how the admin panel lays all of that out, screen by screen.
+- `subTokens()` — the `{token}` expansion, shared by the app and the admin, so
+  the panel's placeholders read exactly what a participant will read.
+
+It is loaded by the participant page **and** the admin panel, so the panel can
+never drift from what actually ships. The static screens carry their key in a
+`data-copy` / `data-copy-title` / `data-copy-ph` attribute and are painted by
+`applyStaticCopy()`; everything dynamic goes through `T(key, vars)` (short
+strings) or `content(key)` (prose). Adding a participant-facing string means
+adding it to `TEXT`, listing it in `GROUPS`, and reading it through one of those
+— never hard-coding it in `index.html` or `app.js`, which
+`tools/copy-guard.mjs` enforces.
+
+Per-session overrides live in that session's `settings.content` and win over the
+built-in; only what the admin actually changed is stored, so untouched wording
+keeps following this file. Admin-supplied copy is escaped before it reaches the
+DOM (only `**bold**` is re-introduced), and a half-edited or hostile
+quiz/survey override degrades safely rather than breaking the study.
+
+---
+
 ## Acceptance tests
 
 Automated in `tools/selftest.js` (Node) and `tools/smoke.mjs` (browser):
@@ -450,3 +507,7 @@ Automated in `tools/selftest.js` (Node) and `tools/smoke.mjs` (browser):
 | 8 | arm-B playthrough (AI question + reveal → cost 7¢, net = best − 7¢) | smoke |
 | 9 | interpolation overlays render (blue truth · green interp · amber extrap + zones · red dots) | smoke |
 | 10 | Arm-A isolation (no assistant DOM/text) | smoke |
+| 11 | every participant word is defined in `copy.js` and offered as an admin field | copy-guard |
+| 12 | a broken/hostile quiz or survey override degrades safely (bad rows dropped, answer key repaired) | copy-guard |
+| 13 | an admin override reaches all eleven screens in a full two-phase playthrough | copy-guard |
+| 14 | the admin renders the editors, shows the exact built-in wording, and round-trips an edit | copy-guard |

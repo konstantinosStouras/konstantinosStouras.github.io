@@ -16,10 +16,16 @@
 window.Assistant = (function () {
   'use strict';
   var LS = window.Landscape;
+  // The answer text is admin-editable copy, so it is escaped like any other
+  // participant-facing string before it reaches innerHTML.
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
   // groups: array (one per interpolation region) of [pos,value] pairs, sorted by
   // pos. Always returns an estimate (refused stays false, kept for logging).
   // Returns { position, refused:false, estimate:Number, mode:'interp'|'extrap', text }.
+  // `text` is only a fallback: the WORDING of the answer is participant-facing
+  // copy (copy.js `aiAnswer`, admin-editable), and app.js overwrites it before
+  // the answer is stored or shown. This module owns the number, not the words.
   function estimate(groups, x) {
     x = Math.round(x);
     var r = LS.estimate(groups || [], x);
@@ -32,10 +38,12 @@ window.Assistant = (function () {
   }
 
   // Render the per-round query log (newest last) into a container element.
-  function renderLog(el, queries) {
+  // `emptyText` is the admin-editable "nothing asked yet" line (copy.js aiEmptyLog).
+  function renderLog(el, queries, emptyText) {
     if (!el) return;
     if (!queries.length) {
-      el.innerHTML = '<div class="ai-empty muted small">No questions yet this round.</div>';
+      el.innerHTML = '<div class="ai-empty muted small">' +
+        esc(emptyText == null ? 'No questions yet this round.' : emptyText) + '</div>';
       return;
     }
     var html = '';
@@ -43,8 +51,8 @@ window.Assistant = (function () {
       var q = queries[i];
       var cls = q.refused ? 'ai-msg refused' : 'ai-msg';
       html += '<div class="' + cls + '">' +
-                '<span class="ai-q">pos ' + q.position + '</span> ' +
-                '<span class="ai-a">' + q.text + '</span>' +
+                '<span class="ai-q">pos ' + esc(q.position) + '</span> ' +
+                '<span class="ai-a">' + esc(q.text) + '</span>' +
               '</div>';
     }
     el.innerHTML = html;

@@ -129,6 +129,34 @@
     .accordion.open .acc-body{display:block;}
     .acc-head .chev{transition:transform .15s;}
     .accordion.open .acc-head .chev{transform:rotate(180deg);}
+    /* The acc-head is a flex row: title on the left, then the "N edited" badge
+       and the chevron pinned right. */
+    .acc-head .ce-count{margin-left:auto; margin-right:10px; font-size:12px; font-weight:600; color:transparent;}
+    .acc-head .ce-count.on{color:var(--green-d);}
+
+    /* "Page text & content" — one field per participant-facing string. */
+    .ce-field{margin:0 0 12px;}
+    .ce-field:last-child{margin-bottom:0;}
+    .ce-field > label{display:block; font-size:12.5px; font-weight:600; color:var(--muted); margin-bottom:4px;}
+    .ce-input, .ce-area{width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+      font-size:13.5px; font-family:inherit; color:var(--ink); background:var(--bg); box-sizing:border-box;}
+    .ce-area{resize:vertical; line-height:1.45;}
+    .ce-area.tall{min-height:130px;}
+    .ce-input::placeholder, .ce-area::placeholder{color:var(--muted); opacity:.85;}
+    .ce-sel{width:auto; min-width:180px;}
+    .ce-field .hint, .ce-qfoot .hint{font-size:12px; color:var(--muted); margin-top:4px;}
+    /* Structured editors: the Quick-check questions and the exit survey. */
+    .ce-qgroup{border:1px solid var(--line); border-radius:9px; padding:10px 12px; margin-bottom:10px; background:var(--panel);}
+    .ce-qgroup-head{font-size:12.5px; font-weight:600; color:var(--muted); margin-bottom:8px;}
+    .ce-q{border:1px solid var(--line); border-radius:8px; padding:9px 10px; margin-bottom:8px; background:var(--bg);}
+    .ce-qtop{display:flex; gap:8px; align-items:center;}
+    .ce-qtop .ce-input{flex:1;}
+    .ce-qn{font-size:12px; font-weight:700; color:var(--muted); min-width:22px;}
+    .ce-opt{display:flex; gap:8px; align-items:center; margin-top:6px; padding-left:22px;}
+    .ce-opt .ce-input{flex:1;}
+    .ce-correct{display:flex; align-items:center;}
+    .ce-qfoot{display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:6px;}
+    .ce-chk{font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:5px;}
 
     .actions3{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px;}
     .flash{color:var(--green-d); font-weight:600; font-size:13px; opacity:0; transition:opacity .2s;}
@@ -364,9 +392,18 @@
               <div class="field" title="Optional: a completion code used only when the whole session is the single With-AI phase (overrides the shared code).">
                 <label>With AI code (optional)</label><input type="text" id="f-codeB" placeholder="single-phase only" /></div>
             </div>
-            <h3 style="margin-top:16px;" title="Override the wording participants see on each screen. Leave a box blank to keep the built-in text. Tokens like {nTasks}, {paidTasks}, {fee} and {rounds} are filled in automatically.">Page text &amp; content <span class="help">?</span></h3>
-            <p class="muted small">Edit what participants see on each page. Leave a box blank to use the built-in default. Use <code class="k">**bold**</code>, blank lines for paragraphs, and tokens <code class="k">{nTasks}</code>, <code class="k">{paidTasks}</code>, <code class="k">{fee}</code>, <code class="k">{rounds}</code>.</p>
-            <div id="content-editors"><!-- accordions injected by admin.js --></div>
+            <h3 style="margin-top:16px;" title="Every word participants see, screen by screen, in the order they meet them. Each box's grey text is the exact wording that will be shown with your current settings — type over it to change it, leave it blank to keep it.">Page text &amp; content <span class="help">?</span></h3>
+            <p class="muted small">
+              <b>Every word a participant sees</b> is here, screen by screen — headings, buttons, counter labels
+              and tooltips, the <b>Quick check</b> comprehension questions (and which answer is correct), the
+              <b>exit survey</b> questions, the assistant's replies and the idle nudges. The grey text in each box
+              is the <b>exact wording that will be shown</b> with the settings above; type over it to change it,
+              leave it blank to keep it. Use <code class="k">**bold**</code>, blank lines for paragraphs, and tokens
+              <code class="k">{nTasks}</code>, <code class="k">{paidTasks}</code>, <code class="k">{fee}</code>,
+              <code class="k">{nPositions}</code>, <code class="k">{rounds}</code> — plus the per-screen ones noted
+              beside a field.
+            </p>
+            <div id="content-editors"><!-- accordions injected by admin.js from copy.js --></div>
 
             <h3 style="margin-top:16px;" title="How this run of the study is identified. The name is for you only; the code ties participants and their data to this session and goes in the participant link.">Session details <span class="help">?</span></h3>
             <div class="row2">
@@ -465,6 +502,9 @@
   </div>
 
   <script src="../config.js"></script>
+  <!-- The participant copy itself: the SAME module the study runs on, so the
+       editors below always show the exact words participants will read. -->
+  <script src="../copy.js"></script>
   <script src="../landscape.js"></script>
   <script src="../firebase-config.js"></script>
   <script src="../firebase.js"></script>

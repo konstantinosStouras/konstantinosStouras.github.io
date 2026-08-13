@@ -2412,8 +2412,53 @@ Key design points (keep in sync when editing):
   Consulting the AI is charged per question and folded into the round net.
 - Defaults: **1 round per phase, practice off**. `assistant.js` is a thin wrapper
   over `landscape.js` and is loaded only in Arm B (strict arm isolation).
-- Tests: `node tools/selftest.js` (Node) and `CHROMIUM=… node tools/smoke.mjs`
-  (Playwright).
+- **EVERY participant-facing word lives in `copy.js` and is editable per session
+  from the admin panel** (owner report 2026-08: "include the exact words that
+  will be shown to each participant right in the admin panel… I wanted to check
+  these questions that participants see, and can't find them"). The copy used to
+  be spread over three places — prose blocks in `app.js` (`BUILTIN`), headings /
+  buttons / labels hard-coded in `index.html`, and an **abridged mirror** in
+  `admin/admin.js` (`"…(built-in default)"` stubs) used only as textarea
+  placeholders — so the **Quick check** comprehension questions, the **exit
+  survey**, and every heading, button, counter label, tooltip and dialog were
+  neither shown nor editable in the panel, and the 7 blocks that WERE editable
+  showed a stub rather than their real words. `copy.js` is now the single source
+  of truth, loaded by BOTH pages: `TEXT` (112 keyed strings, verbatim), `QUIZ`
+  (the comprehension questions **with their answer key**), `SURVEY`, `GROUPS`
+  (how the admin lays them out, screen by screen in the order participants meet
+  them) and `subTokens()` (the `{token}` expander, shared so the panel's
+  **placeholders render the exact words** a participant will read under the
+  settings currently in the form — change a round count or an AI price and every
+  placeholder re-renders as you type; `preview()` also fills per-moment tokens
+  like `{round}`/`{net}` with sample values). A few blocks have several built-in
+  wordings picked by the AI settings (free / paid / two models) —
+  `dynamicDefault()`, and the panel shows whichever applies. The static screens
+  carry their key in `data-copy` / `data-copy-title` / `data-copy-ph` and are
+  painted by `applyStaticCopy()`; everything dynamic goes through `T(key, vars)`
+  (short strings) or `content(key)` (prose). **Adding a participant-facing string
+  = add to `TEXT`, list in `GROUPS`, read via `T()`/`content()`/`data-copy` —
+  never hard-code it** in `index.html`/`app.js`, which `tools/copy-guard.mjs`
+  enforces. The Quick check and exit survey get **structured** editors
+  (add/remove/reword questions + options, a radio marks the correct answer;
+  options are still shown to participants in random order) stored as
+  `content.quiz = {common:[…], ai:[…]}` / `content.survey = […]` — arrays of maps,
+  Firestore-safe (no directly-nested arrays), and **only written when they differ
+  from the built-ins**, so an untouched session keeps following `copy.js`. Admin
+  copy is escaped before it reaches the DOM (`inline()`/`renderProse()`
+  re-introduce only `**bold**`) and the normalizers make a half-edited or hostile
+  override degrade safely (unusable rows dropped, out-of-range answer key
+  repaired, ids sanitised since they become radio names + CSS selectors; deleting
+  every question deliberately turns that check off rather than reverting to the
+  built-ins). Back-compatible: the 7 pre-existing keys keep their names and
+  meaning. One deliberate behaviour change — an override of `closed` used to
+  replace the whole study-closed card including its heading; the heading is now
+  its own `closedTitle` field, so an old override shows under the built-in
+  heading until it is edited.
+- Tests: `node tools/selftest.js` (Node), `CHROMIUM=… node tools/smoke.mjs` and
+  `CHROMIUM=… node tools/copy-guard.mjs` (Playwright — the copy guard checks the
+  markup ↔ `copy.js` ↔ admin-panel contract statically, the normalizers, a full
+  two-phase playthrough against a stubbed session whose `settings.content`
+  overrides one string on every screen, and the admin panel's own editors).
 
 ## `/lab/jagged` — self-contained "Trust the AI?" jagged-intelligence game
 

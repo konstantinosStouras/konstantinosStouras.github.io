@@ -21,28 +21,17 @@
     'ua', 'vw', 'vh', 'appVersion'
   ];
 
-  // Participant-facing names for the two phases (arms). Keep in sync with app.js.
-  var PHASE_LABEL = { A: 'Without AI', B: 'With AI' };
+  // Participant copy lives in ../copy.js — the SAME module the participant app
+  // reads, so this panel can never show a stale or abridged mirror of it (it
+  // used to keep its own "…(built-in default)" stubs, which is why whole screens
+  // — the Quick check questions, the exit survey, every heading and button —
+  // were invisible here). GROUPS drives the editors; TEXT/QUIZ/SURVEY supply the
+  // exact built-in wording shown as each field's placeholder.
+  var CP = window.SVCopy;
 
-  // Built-in participant copy — MUST mirror app.js BUILTIN (shown as placeholders).
-  var BUILTIN = {
-    consent: "**What this is.** This is a short decision-making study… (built-in default).\n\n**Payment.** … **Anonymity.** … **Voluntary.** …",
-    instructions: "In each round you will see 100 positions on a line. Each position hides a value between 0 and 100 cents.\n\nValues at adjacent positions differ by at most 10 cents…\n\nYou can reveal the value at any position. Each reveal costs 5 cents…\n\nYour earnings for the round are the highest value you revealed, minus 5 cents for each reveal…\n\nThere is 1 practice round and 10 real rounds. Two of the 10 real rounds will be picked at random and paid to you as a bonus.",
-    instructionsB: "You also have an AI assistant.\n\nAsk it about any position for its best estimate (usually close, not guaranteed; it always answers even where it is unsure)…\n\nBuilt-in default: the cost per question and any frontier model come from the AI-model settings above.",
-    phaseIntroB: "Next part: you now have an AI assistant that gives its best estimate for any position (usually close, not guaranteed)… (built-in default). Its cost and any frontier option come from the AI-model settings. Everything else about the game is the same.",
-    phaseIntroA: "Next part: you search on your own — the AI assistant is no longer available… (built-in default). Everything else about the game is the same.",
-    finish: "(Built-in) Thank you for taking part. Below are your real rounds; the ones marked paid were selected at random.",
-    closed: "(Built-in) This study is not currently open. Thank you for your interest."
-  };
-  var CONTENT_KEYS = [
-    { k: 'consent', label: 'Consent page', help: 'The consent text on the very first screen (before the game). Participants tick a box to agree.' },
-    { k: 'instructions', label: 'Instructions (all phases)', help: 'The task instructions shown to everyone at the start. Tokens {nTasks}, {paidTasks}, {fee}, {rounds} are auto-filled.' },
-    { k: 'instructionsB', label: 'Instructions — With-AI addendum', help: 'Extra instructions appended when the first phase is With AI, explaining the assistant.' },
-    { k: 'phaseIntroB', label: 'Phase transition — into With AI', help: 'Shown between phases when a within-subjects participant moves INTO the With-AI phase.' },
-    { k: 'phaseIntroA', label: 'Phase transition — into Without AI', help: 'Shown between phases when a within-subjects participant moves INTO the Without-AI phase.' },
-    { k: 'finish', label: 'Finish page (intro text)', help: 'The message above the results table on the final screen (before the completion code).' },
-    { k: 'closed', label: 'Study-closed page', help: 'What people see if they open a session that is marked completed.' }
-  ];
+  // Participant-facing names for the two phases (arms), for THIS panel's own
+  // labels. What participants see is the admin-editable phaseLabelA/B copy.
+  var PHASE_LABEL = { A: 'Without AI', B: 'With AI' };
   var BUILTIN_SETTINGS = {
     phases: ['A', 'B'], counterbalance: false,
     nTasks: 1, paidTasks: 2, nPractice: 0,
@@ -188,17 +177,208 @@
   }
 
   // ============================================================= content editors
+  //  One accordion per screen, in the order a participant meets it; inside, one
+  //  field per string, its placeholder showing the EXACT words that will be
+  //  shown under the settings currently in this form (round counts, fee, AI
+  //  prices), so the researcher can read the study without running it. Two of
+  //  the groups hold structured editors — the Quick-check questions (with their
+  //  answer key) and the exit-survey questions.
+  var QUIZ_DRAFT = null;    // { common:[…], ai:[…] } — the questions being edited
+  var SURVEY_DRAFT = null;  // […] — the survey questions being edited
+
   function buildContentEditors() {
     var html = '';
-    CONTENT_KEYS.forEach(function (c) {
-      html += '<div class="accordion" data-k="' + c.k + '" title="' + esc(c.help || '') + '">' +
-        '<button type="button" class="acc-head">' + esc(c.label) + '<span class="chev">▾</span></button>' +
-        '<div class="acc-body"><textarea id="ce-' + c.k + '" placeholder="' + esc(BUILTIN[c.k]) + '"></textarea>' +
-        '<div class="hint">Blank = built-in default. **bold**, blank line = new paragraph.</div></div></div>';
+    CP.GROUPS.forEach(function (g) {
+      var body = '';
+      g.fields.forEach(function (f) { body += fieldHTML(f); });
+      html += '<div class="accordion" data-g="' + esc(g.id) + '" title="' + esc(g.help || '') + '">' +
+        '<button type="button" class="acc-head">' + esc(g.title) +
+          (g.ai ? ' <span class="muted small">· With-AI phase only</span>' : '') +
+          '<span class="ce-count" id="ce-count-' + esc(g.id) + '"></span><span class="chev">▾</span></button>' +
+        '<div class="acc-body">' + body + '</div></div>';
     });
     $('content-editors').innerHTML = html;
-    var heads = document.querySelectorAll('.acc-head');
+
+    var heads = $('content-editors').querySelectorAll('.acc-head');
     for (var i = 0; i < heads.length; i++) heads[i].addEventListener('click', function () { this.parentNode.classList.toggle('open'); });
+    wireContentDelegates();
+  }
+
+  function fieldHTML(f) {
+    if (f.type === 'quiz') return '<div class="ce-field" id="ce-quiz-wrap"><label>' + esc(f.label) + '</label><div id="ce-quiz"></div></div>';
+    if (f.type === 'survey') return '<div class="ce-field" id="ce-survey-wrap"><label>' + esc(f.label) + '</label><div id="ce-survey"></div></div>';
+    var ph = esc(CP.preview(f.k, previewCtx()));
+    var rows = f.type === 'prose' ? 7 : (f.type === 'list' ? 5 : 3);
+    var input = (f.type === 'text')
+      ? '<input type="text" id="ce-' + f.k + '" class="ce-input" placeholder="' + ph + '" />'
+      : '<textarea id="ce-' + f.k + '" class="ce-area' + (f.type === 'prose' ? ' tall' : '') + '" rows="' + rows + '" placeholder="' + ph + '"></textarea>';
+    return '<div class="ce-field"' + (f.help ? ' title="' + esc(f.help) + '"' : '') + '>' +
+      '<label for="ce-' + f.k + '">' + esc(f.label) +
+        (f.ai ? ' <span class="muted small">· With AI only</span>' : '') +
+        (f.tokens ? ' <span class="muted small">· ' + esc(f.tokens) + '</span>' : '') +
+      '</label>' + input +
+      (f.help ? '<div class="hint">' + esc(f.help) + '</div>' : '') +
+      (f.type === 'list' ? '<div class="hint">One per line.</div>' : '') +
+      '</div>';
+  }
+
+  // The settings currently in the form, so placeholders read as finished
+  // sentences ("There are 10 rounds. 2 of the 10…") rather than "{rounds}".
+  function previewCtx() {
+    var nTasks = parseInt($('f-ntasks') && $('f-ntasks').value, 10);
+    var paid = parseInt($('f-paid') && $('f-paid').value, 10);
+    var nPhases = (phasesCtl && phasesCtl.get().phases.length) || 1;
+    var baseCost = parseInt($('f-ai-base-cost') && $('f-ai-base-cost').value, 10);
+    var frontCost = parseInt($('f-ai-front-cost') && $('f-ai-front-cost').value, 10);
+    return {
+      nTasks: isFinite(nTasks) ? nTasks : 1,
+      paidTasks: isFinite(paid) ? paid : 2,
+      nPractice: (segPractice && segPractice.get() === '0') ? 0 : 1,
+      nPhases: nPhases,
+      fee: (window.CONFIG && CONFIG.REVEAL_COST) || 5,
+      nPositions: (window.CONFIG && CONFIG.N_POSITIONS) || 100,
+      ai: {
+        baselineCost: isFinite(baseCost) ? baseCost : 2,
+        frontier: !!($('f-ai-frontier') && $('f-ai-frontier').checked),
+        frontierCost: isFinite(frontCost) ? frontCost : 4
+      }
+    };
+  }
+  // Re-render every placeholder against the settings now in the form (called
+  // whenever rounds / practice / phases / AI prices change), so the built-in
+  // wording an admin reads is always the wording their participants will read.
+  function refreshContentPlaceholders() {
+    if (!$('content-editors') || !$('content-editors').firstChild) return;
+    var ctx = previewCtx();
+    CP.GROUPS.forEach(function (g) {
+      g.fields.forEach(function (f) {
+        if (f.type === 'quiz' || f.type === 'survey') return;
+        var el = $('ce-' + f.k);
+        if (el) el.setAttribute('placeholder', CP.preview(f.k, ctx));
+      });
+    });
+  }
+  // A small badge on each accordion head: how many of its fields you have
+  // overridden, so customised screens are visible without opening them.
+  function markContentCounts() {
+    CP.GROUPS.forEach(function (g) {
+      var n = 0;
+      g.fields.forEach(function (f) {
+        if (f.type === 'quiz') { if (quizIsCustom()) n++; return; }
+        if (f.type === 'survey') { if (surveyIsCustom()) n++; return; }
+        var el = $('ce-' + f.k);
+        if (el && el.value.trim()) n++;
+      });
+      var badge = $('ce-count-' + g.id);
+      if (badge) { badge.textContent = n ? (n + ' edited') : ''; badge.className = 'ce-count' + (n ? ' on' : ''); }
+    });
+  }
+
+  // ---- structured editor: the Quick-check questions -------------------------
+  function renderQuizEditor() {
+    var host = $('ce-quiz'); if (!host) return;
+    var h = '';
+    [['common', 'Asked to everyone'], ['ai', 'Asked only in a With-AI phase']].forEach(function (pair) {
+      var grp = pair[0], list = QUIZ_DRAFT[grp];
+      h += '<div class="ce-qgroup"><div class="ce-qgroup-head">' + esc(pair[1]) + questionCount(list) + '</div>';
+      if (!list.length) h += '<div class="hint">No questions — this check is skipped.</div>';
+      list.forEach(function (q, qi) {
+        h += '<div class="ce-q">' +
+          '<div class="ce-qtop"><span class="ce-qn">Q' + (qi + 1) + '</span>' +
+            // A textarea, not an input: the whole question must be READABLE here
+            // — being unable to see it is what sent the researcher hunting.
+            '<textarea class="ce-area" rows="3" data-ce-act="qprompt" data-g="' + grp + '" data-i="' + qi + '" placeholder="Question the participant reads">' + esc(q.prompt) + '</textarea>' +
+            '<button type="button" class="link-btn danger" data-ce-act="qdel" data-g="' + grp + '" data-i="' + qi + '" title="Remove this question">Remove</button></div>';
+        q.options.forEach(function (opt, oi) {
+          h += '<div class="ce-opt">' +
+            '<label class="ce-correct" title="Mark this as the correct answer"><input type="radio" name="ce-correct-' + grp + '-' + qi + '" data-ce-act="qcorrect" data-g="' + grp + '" data-i="' + qi + '" data-o="' + oi + '"' + (q.correct === oi ? ' checked' : '') + ' /></label>' +
+            '<input type="text" class="ce-input" data-ce-act="qopt" data-g="' + grp + '" data-i="' + qi + '" data-o="' + oi + '" value="' + esc(opt) + '" placeholder="Answer option" />' +
+            '<button type="button" class="link-btn danger" data-ce-act="qoptdel" data-g="' + grp + '" data-i="' + qi + '" data-o="' + oi + '" title="Remove this option"' + (q.options.length <= 2 ? ' disabled' : '') + '>×</button>' +
+            '</div>';
+        });
+        h += '<div class="ce-qfoot"><button type="button" class="link-btn" data-ce-act="qoptadd" data-g="' + grp + '" data-i="' + qi + '">+ Add option</button>' +
+             '<span class="hint">The selected radio is the correct answer. Options are shown to participants in random order.</span></div>';
+        h += '</div>';
+      });
+      h += '<div class="ce-qfoot"><button type="button" class="link-btn" data-ce-act="qadd" data-g="' + grp + '">+ Add question</button></div></div>';
+    });
+    h += '<div class="ce-qfoot"><button type="button" class="link-btn" data-ce-act="qreset">↺ Restore the built-in questions</button></div>';
+    host.innerHTML = h;
+  }
+  function questionCount(list) { return ' <span class="muted small">· ' + list.length + ' question' + (list.length === 1 ? '' : 's') + '</span>'; }
+  function quizIsCustom() { return !!QUIZ_DRAFT && JSON.stringify(QUIZ_DRAFT) !== JSON.stringify(defaultQuizDraft()); }
+  function defaultQuizDraft() { return JSON.parse(JSON.stringify({ common: CP.QUIZ.common, ai: CP.QUIZ.ai })); }
+
+  // ---- structured editor: the exit-survey questions -------------------------
+  function renderSurveyEditor() {
+    var host = $('ce-survey'); if (!host) return;
+    var h = '';
+    if (!SURVEY_DRAFT.length) h += '<div class="hint">No questions — the survey screen is skipped.</div>';
+    SURVEY_DRAFT.forEach(function (q, i) {
+      h += '<div class="ce-q"><div class="ce-qtop"><span class="ce-qn">' + (i + 1) + '</span>' +
+        '<textarea class="ce-area" rows="2" data-ce-act="sprompt" data-i="' + i + '" placeholder="Question the participant reads">' + esc(q.prompt) + '</textarea>' +
+        '<button type="button" class="link-btn danger" data-ce-act="sdel" data-i="' + i + '" title="Remove this question">Remove</button></div>' +
+        '<div class="ce-qfoot">' +
+          '<select class="ce-input ce-sel" data-ce-act="stype" data-i="' + i + '">' +
+            '<option value="likert"' + (q.type === 'likert' ? ' selected' : '') + '>Agree/disagree scale</option>' +
+            '<option value="text"' + (q.type === 'text' ? ' selected' : '') + '>Free text</option>' +
+          '</select>' +
+          '<label class="ce-chk"><input type="checkbox" data-ce-act="sai" data-i="' + i + '"' + (q.ai ? ' checked' : '') + ' /> Ask only in a With-AI session</label>' +
+        '</div></div>';
+    });
+    h += '<div class="ce-qfoot"><button type="button" class="link-btn" data-ce-act="sadd">+ Add question</button>' +
+         '<button type="button" class="link-btn" data-ce-act="sreset">↺ Restore the built-in questions</button></div>';
+    host.innerHTML = h;
+  }
+  function surveyIsCustom() { return !!SURVEY_DRAFT && JSON.stringify(SURVEY_DRAFT) !== JSON.stringify(defaultSurveyDraft()); }
+  function defaultSurveyDraft() {
+    return CP.SURVEY.map(function (q) { return { id: q.id, type: q.type, ai: !!q.ai, prompt: q.prompt }; });
+  }
+
+  // Every button/field inside the two structured editors funnels through here.
+  function contentAction(act, el) {
+    var grp = el.getAttribute('data-g'), i = +el.getAttribute('data-i'), o = +el.getAttribute('data-o');
+    var q = (grp && QUIZ_DRAFT[grp]) ? QUIZ_DRAFT[grp][i] : null;
+    switch (act) {
+      case 'qprompt': q.prompt = el.value; return markContentCounts();       // no re-render: keep focus
+      case 'qopt': q.options[o] = el.value; return markContentCounts();
+      case 'qcorrect': q.correct = o; markContentCounts(); return;
+      case 'qoptadd': q.options.push(''); break;
+      case 'qoptdel': if (q.options.length > 2) { q.options.splice(o, 1); if (q.correct >= q.options.length) q.correct = 0; else if (q.correct > o) q.correct--; } break;
+      case 'qdel': QUIZ_DRAFT[grp].splice(i, 1); break;
+      case 'qadd': QUIZ_DRAFT[grp].push({ id: grp + '-' + (Date.now().toString(36)), prompt: '', options: ['', ''], correct: 0 }); break;
+      case 'qreset': QUIZ_DRAFT = defaultQuizDraft(); break;
+      case 'sprompt': SURVEY_DRAFT[i].prompt = el.value; return markContentCounts();
+      case 'stype': SURVEY_DRAFT[i].type = el.value === 'text' ? 'text' : 'likert'; return markContentCounts();
+      case 'sai': SURVEY_DRAFT[i].ai = el.checked; return markContentCounts();
+      case 'sdel': SURVEY_DRAFT.splice(i, 1); break;
+      case 'sadd': SURVEY_DRAFT.push({ id: 'sq' + Date.now().toString(36), type: 'likert', ai: false, prompt: '' }); break;
+      case 'sreset': SURVEY_DRAFT = defaultSurveyDraft(); break;
+      default: return;
+    }
+    if (act.charAt(0) === 'q') renderQuizEditor(); else renderSurveyEditor();
+    markContentCounts();
+  }
+  // The whole section is event-delegated (the structured editors re-render, so
+  // per-node listeners would go stale): 'input'/'change' carry field edits,
+  // 'click' carries the add/remove/restore buttons, and a plain field edit just
+  // refreshes the "N edited" badges.
+  function wireContentDelegates() {
+    var host = $('content-editors');
+    ['input', 'change'].forEach(function (evt) {
+      host.addEventListener(evt, function (e) {
+        var t = e.target;
+        if (!t || !t.getAttribute) return;
+        var act = t.getAttribute('data-ce-act');
+        if (act && t.tagName !== 'BUTTON') contentAction(act, t);
+        else if (/^ce-/.test(t.id || '')) markContentCounts();
+      });
+    });
+    host.addEventListener('click', function (e) {
+      var b = e.target;
+      while (b && b !== host && !(b.tagName === 'BUTTON' && b.getAttribute('data-ce-act'))) b = b.parentNode;
+      if (b && b !== host && b.tagName === 'BUTTON') { e.preventDefault(); contentAction(b.getAttribute('data-ce-act'), b); }
+    });
   }
 
   // ============================================================= form (settings)
@@ -370,11 +550,31 @@
     $('f-codeA').value = s.completionCodeA || '';
     $('f-codeB').value = s.completionCodeB || '';
     var content = s.content || {};
-    CONTENT_KEYS.forEach(function (c) { $('ce-' + c.k).value = content[c.k] || ''; });
+    CP.stringKeys().forEach(function (k) { var el = $('ce-' + k); if (el) el.value = content[k] || ''; });
+    // Structured editors work on a draft, seeded from the session (or the
+    // built-ins when it has no override).
+    var q = content.quiz || null;
+    QUIZ_DRAFT = q
+      ? { common: CP.normalizeQuizList(q.common, CP.QUIZ.common), ai: CP.normalizeQuizList(q.ai, CP.QUIZ.ai) }
+      : defaultQuizDraft();
+    SURVEY_DRAFT = content.survey ? CP.normalizeSurvey(content.survey, CP.SURVEY) : defaultSurveyDraft();
+    renderQuizEditor();
+    renderSurveyEditor();
+    refreshContentPlaceholders();
+    markContentCounts();
   }
   function collectSettings() {
     var content = {};
-    CONTENT_KEYS.forEach(function (c) { var v = $('ce-' + c.k).value.trim(); if (v) content[c.k] = v; });
+    CP.stringKeys().forEach(function (k) { var el = $('ce-' + k); if (el && el.value.trim()) content[k] = el.value.trim(); });
+    // Only store the questions when they actually differ from the built-ins, so
+    // a session that never touched them keeps following copy.js as it evolves.
+    if (quizIsCustom()) {
+      content.quiz = {
+        common: CP.normalizeQuizList(QUIZ_DRAFT.common, []),
+        ai: CP.normalizeQuizList(QUIZ_DRAFT.ai, [])
+      };
+    }
+    if (surveyIsCustom()) content.survey = CP.normalizeSurvey(SURVEY_DRAFT, []);
     var nTasks = Math.max(1, Math.min(120, parseInt($('f-ntasks').value, 10) || 1));
     var ph = phasesCtl.get();
     var nPhases = ph.phases.length || 1;
@@ -412,6 +612,28 @@
   var _defaults = BUILTIN_SETTINGS;
   function currentDefaults() { return _defaults; }
 
+  // A blank question or answer option is DROPPED when the copy is stored (that
+  // is the safety rule — a half-edited override must never break a running
+  // study), which would silently lose work the admin thought they had saved.
+  // So say so before saving instead of after. Returns a message, or '' if fine.
+  function validateCopy() {
+    var msg = '';
+    ['common', 'ai'].forEach(function (grp) {
+      (QUIZ_DRAFT[grp] || []).forEach(function (q, i) {
+        var where = 'Quick check → ' + (grp === 'ai' ? 'With-AI' : 'everyone') + ' question ' + (i + 1);
+        if (!q.prompt.trim()) msg = msg || (where + ' has no question text. Fill it in or remove the question.');
+        else if (q.options.filter(function (o) { return o.trim(); }).length < 2)
+          msg = msg || (where + ' needs at least two non-empty answer options.');
+        else if (!String(q.options[q.correct] || '').trim())
+          msg = msg || (where + ' has its correct answer marked on an empty option.');
+      });
+    });
+    (SURVEY_DRAFT || []).forEach(function (q, i) {
+      if (!q.prompt.trim()) msg = msg || ('Exit survey question ' + (i + 1) + ' has no question text. Fill it in or remove the question.');
+    });
+    return msg;
+  }
+
   function saveSession() {
     var err = $('form-err'); err.style.display = 'none';
     var name = $('f-name').value.trim();
@@ -422,6 +644,8 @@
     var settings = collectSettings();
     if (!settings.phases.length) { err.textContent = 'Include at least one phase (Without AI and/or With AI).'; err.style.display = 'block'; return; }
     if (!regionsCtl.valid()) { err.textContent = 'Fix the AI interpolation region(s) — see the warning under that field.'; err.style.display = 'block'; return; }
+    var copyErr = validateCopy();
+    if (copyErr) { err.textContent = copyErr; err.style.display = 'block'; return; }
     $('btn-save').disabled = true;
     // uniqueness only for a NEW code (or a changed code)
     var editing = editingId ? SESSIONS.filter(function (s) { return s.id === editingId; })[0] : null;
@@ -506,10 +730,29 @@
     if (ai.frontier) s += '  ·  Frontier ' + costW(ai.frontierCost) + '/q · ' + (ai.frontierData || 'lots') + ' data';
     return s;
   }
+  // Which participant-facing copy a session overrides — the raw keys (for the
+  // Excel/CSV export) and the human screen names (for the settings summary).
+  function customCopyKeys(content) {
+    content = content || {};
+    var out = [];
+    CP.allKeys().forEach(function (k) { if (content[k]) out.push(k); });
+    return out;
+  }
+  function customCopyLabels(content) {
+    content = content || {};
+    var out = [];
+    CP.GROUPS.forEach(function (g) {
+      for (var i = 0; i < g.fields.length; i++) if (content[g.fields[i].k]) { out.push(g.title); return; }
+    });
+    return out;
+  }
   function renderSummary() {
     var s = collectSettings();
     var nPhases = s.phases.length || 1;
-    var custom = CONTENT_KEYS.filter(function (c) { return s.content[c.k]; }).map(function (c) { return c.label; });
+    var custom = customCopyLabels(s.content);
+    // Rounds / phases / AI prices feed the built-in wording, so every settings
+    // change re-renders the copy placeholders too.
+    refreshContentPlaceholders();
     var rows = [
       ['Name', esc($('f-name').value || '—')],
       ['Code', esc($('f-code').value || '—')],
@@ -1048,7 +1291,7 @@
         var st = s.settings || {};
         var ai = st.ai || {};
         var patches = decodePatches(st.coveragePatches) || [];
-        var custom = CONTENT_KEYS.filter(function (c) { return (st.content || {})[c.k]; }).map(function (c) { return c.k; });
+        var custom = customCopyKeys(st.content);
         var n = 0, seen = {};
         evs.forEach(function (e) { if (e.sessionCode === s.code && e.session && !seen[e.session]) { seen[e.session] = 1; n++; } });
         return [
@@ -1170,4 +1413,10 @@
     a.href = url; a.download = name; document.body.appendChild(a); a.click();
     setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
   }
+
+  // Offline test hook (tools/copy-guard.mjs): read back exactly what a Save
+  // would store, so the guard can prove an edit in the "Page text & content"
+  // editors reaches settings.content — and that an untouched form stores
+  // nothing. Read-only; this panel is admin-only anyway.
+  window.SVAdminTest = { collect: collectSettings, validateCopy: validateCopy };
 })();

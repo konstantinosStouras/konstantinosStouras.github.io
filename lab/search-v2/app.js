@@ -7,6 +7,7 @@
 (function () {
   'use strict';
   var CFG = window.CONFIG, L = window.Logger, LS = window.Landscape, A = null; // A set once assistant.js loads (Arm B)
+  var CP = window.SVCopy;      // every participant-facing word (shared with the admin panel)
   var N_POS = CFG.N_POSITIONS, COST = CFG.REVEAL_COST;
   // Round counts — defaults from config, but the admin can override them per
   // session (see applyRounds). These are the live values the app uses.
@@ -127,46 +128,13 @@
   var STUDY_CFG = null;        // raw settings (config/study or a session's settings)
   var SESSION_CODE = null;     // admin "session" (wave) code from ?code= (stamped on data)
   var SESSION_NAME = null;     // its human name
-  var CONTENT = {};            // admin content overrides { consent, instructions, instructionsB, finish, closed, phaseIntroB, phaseIntroA }
+  var CONTENT = {};            // the session's admin overrides for any copy.js key
   var PREVIEW = false;         // admin preview: skip intro, don't write to Firestore
 
   // Participant-facing names for the two phases (arms). A phase is a block of
   // rounds played in one condition; a within-subjects session runs several in a
-  // chosen order. Keep these in sync with admin/admin.js PHASE_LABEL.
-  var PHASE_LABEL = { A: 'Without AI', B: 'With AI' };
-  function phaseLabel(a) { return PHASE_LABEL[a] || a; }
-
-  // Built-in default participant-facing copy (used when the admin hasn't overridden it).
-  var BUILTIN = {
-    consent:
-      "**What this is.** This is a short decision-making study. You will play a simple game in which you search a hidden line of positions for the highest value. The whole study takes about **15 minutes**.\n\n" +
-      "**Payment.** You receive the base payment for participating. In addition, {paidTasks} rounds of the game are chosen at random at the end and paid to you as a **bonus**, based on how well you did in those rounds.\n\n" +
-      "**Anonymity.** We record only your choices in the game (which positions you reveal, when you stop, and your answers to a few questions). We do not collect any personally identifying information beyond the anonymous IDs your recruitment platform provides. Your data are used only for research.\n\n" +
-      "**Voluntary.** Participation is voluntary and you may stop at any time by closing the window.",
-    instructions:
-      "In each round you will see 100 positions on a line. Each position hides a value between 0 and 100 cents.\n\n" +
-      "Values at adjacent positions differ by at most 10 cents. So positions two apart differ by at most 20 cents, and so on.\n\n" +
-      "You can reveal the value at any position. Each reveal costs 5 cents. You can stop whenever you want.\n\n" +
-      "Your earnings for the round are the highest value you revealed, minus 5 cents for each reveal. If you reveal nothing, you earn 0 for the round.\n\n" +
-      "After each round the values reset and will be different. {rounds}",
-    instructionsB:
-      "You also have a free assistant.\n\n" +
-      "You can ask the assistant about any position, and it gives you its best estimate of the value there — a guess based on data it was trained on. Its estimates are usually close but not guaranteed, and it always gives an answer, even for positions where it is unsure.\n\n" +
-      "Asking the assistant is free and unlimited. The assistant does not learn from your reveals in this study.",
-    // Shown at the start of a later phase when a within-subjects session moves the
-    // subject INTO the With-AI condition (a free assistant becomes available).
-    phaseIntroB:
-      "**Next part: you now have a free AI assistant.**\n\n" +
-      "For the rounds in this part you also have a free assistant. You can ask it about any position and it gives its best estimate of the value there — a guess based on data it was trained on. Its estimates are usually close but not guaranteed, and it always gives an answer, even where it is unsure.\n\n" +
-      "Asking is free and unlimited. Everything else about the game is exactly the same.",
-    // Shown at the start of a later phase when a within-subjects session moves the
-    // subject INTO the Without-AI (human-only) condition (no assistant).
-    phaseIntroA:
-      "**Next part: you search on your own.**\n\n" +
-      "For the rounds in this part the AI assistant is no longer available. Everything else about the game is exactly the same.",
-    finish: "",
-    closed: ""
-  };
+  // chosen order. Admin-editable like every other participant-facing string.
+  function phaseLabel(a) { return T(a === 'B' ? 'phaseLabelB' : 'phaseLabelA') || a; }
 
   // ---- tiny seeded PRNG + string hash (session-deterministic) --------------
   function mulberry32(a) {
@@ -251,6 +219,7 @@
       if (!code) { fb.style.display = 'block'; return; }
       startSession(pr, code);
     }
+    applyStaticCopy();   // built-ins here: no session is known yet, so no overrides
     input.value = '';
     input.addEventListener('input', sync);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
@@ -299,7 +268,7 @@
   // sync markers, saved entry code, legacy ids) and drop the URL params (incl.
   // SESSION_ID) so the reload lands cleanly on the code gate.
   function logout() {
-    if (!confirm('Log out and clear this study on this device? Your progress on this device will be erased.')) return;
+    if (!confirm(T('logoutConfirm'))) return;
     try {
       var kill = [];
       for (var i = 0; i < localStorage.length; i++) {
@@ -352,6 +321,10 @@
     arm = S.phases[S.phaseIdx];
     S.arm = arm;    // keep the logged arm in sync with the active phase
     save();         // lock in phases + ids before any async work
+
+    // The session's settings (and therefore its copy overrides + round counts)
+    // are known now, so paint every static heading/button/label/tooltip.
+    applyStaticCopy();
 
     // Completion code. For a single-phase session an arm-specific code may apply
     // (each arm is its own Prolific study); a multi-phase subject plays every
@@ -481,62 +454,47 @@
       return safe ? '<p>' + safe + '</p>' : '';
     }).join('');
   }
-  // Expand round/fee tokens so both built-in and admin-edited copy stays accurate
-  // when the admin changes the round counts. Tokens: {nTasks} {paidTasks}
-  // {nPractice} {fee} {nPositions} and {rounds} (a full ready-made sentence).
-  function subTokens(text) {
-    var nPhases = (S && S.phases) ? S.phases.length : 1;
-    var totalReal = N_TASKS * nPhases;
-    var roundsSentence;
-    if (nPhases > 1) {
-      roundsSentence = 'You play ' + N_TASKS + ' rounds in each of ' + nPhases + ' parts' +
-        (N_PRACTICE > 0 ? ' (after one practice round)' : '') + ', ' + totalReal + ' rounds in total. ' +
-        PAID_TASKS + ' of the ' + totalReal + ' rounds will be picked at random and paid to you as a bonus.';
-    } else {
-      roundsSentence = (N_PRACTICE > 0 ? 'There is a practice round and ' + N_TASKS + ' real rounds. ' : 'There are ' + N_TASKS + ' rounds. ') +
-        PAID_TASKS + ' of the ' + N_TASKS + ' real rounds will be picked at random and paid to you as a bonus.';
-    }
-    return String(text || '')
-      .replace(/\{rounds\}/g, roundsSentence)
-      .replace(/\{nTasks\}/g, N_TASKS).replace(/\{paidTasks\}/g, PAID_TASKS)
-      .replace(/\{nPractice\}/g, N_PRACTICE).replace(/\{fee\}/g, COST).replace(/\{nPositions\}/g, N_POS)
-      .replace(/\{aiCost\}/g, AI_CFG.baselineCost).replace(/\{aiFrontierCost\}/g, AI_CFG.frontierCost)
-      .replace(/\{totalRounds\}/g, totalReal).replace(/\{nPhases\}/g, nPhases);
+  // Same, for a one-line string dropped inside existing markup: escaped, **bold**
+  // honoured, no paragraph wrapper.
+  function inline(text) { return esc(String(text == null ? '' : text)).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>'); }
+  // ======================================================================
+  //  COPY RESOLUTION
+  //  Every participant-facing string comes from copy.js, with the admin's
+  //  per-session override winning over the built-in default. Study-wide tokens
+  //  ({nTasks}, {fee}, {rounds}, …) are expanded by the SHARED expander, so the
+  //  admin panel's placeholders read exactly what a participant will read.
+  // ======================================================================
+  function copyCtx() {
+    return {
+      nTasks: N_TASKS, paidTasks: PAID_TASKS, nPractice: N_PRACTICE,
+      nPhases: (S && S.phases) ? S.phases.length : 1,
+      fee: COST, nPositions: N_POS, ai: AI_CFG
+    };
   }
-  // The With-AI copy depends on the AI-model settings, so its built-in default is
-  // computed (kept accurate about cost and how many models are offered). An admin
-  // override wins as usual.
-  function aiCostWord(c) { return c > 0 ? c + ' cents' : 'free'; }
-  function defaultInstructionsB() {
-    if (AI_CFG.frontier) {
-      return "You also have AI assistants.\n\n" +
-        "You can ask an assistant about any position and it gives its best estimate of the value there — a guess based on data it was trained on. Its estimates are usually close but not guaranteed, and it always gives an answer, even where it is unsure.\n\n" +
-        "There are two models. The **Baseline** model costs " + aiCostWord(AI_CFG.baselineCost) + " per question; the **Frontier** model costs " + AI_CFG.frontierCost + " cents per question and is trained on more data, so its guesses tend to be sharper. Revealing a position yourself costs " + COST + " cents.";
-    }
-    if (AI_CFG.baselineCost > 0) {
-      return "You also have an AI assistant.\n\n" +
-        "You can ask it about any position and it gives its best estimate of the value there — a guess based on data it was trained on. Its estimates are usually close but not guaranteed, and it always gives an answer, even where it is unsure.\n\n" +
-        "Each question to the assistant costs " + AI_CFG.baselineCost + " cents — cheaper than revealing a position yourself, which costs " + COST + " cents.";
-    }
-    return BUILTIN.instructionsB;
+  function subTokens(text) { return CP.subTokens(text, copyCtx()); }
+  // content(key): a multi-paragraph block, ready for renderProse().
+  function content(key) { return subTokens(CP.resolve(CONTENT, key, copyCtx())); }
+  // T(key, vars): a short string, with the per-moment values filled in
+  // ({round}, {net}, {pos}, …) on top of the study-wide tokens.
+  function T(key, vars) {
+    var s = subTokens(CP.resolve(CONTENT, key, copyCtx()));
+    if (vars) s = s.replace(/\{(\w+)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : m;
+    });
+    return s;
   }
-  function defaultPhaseIntroB() {
-    if (AI_CFG.frontier) {
-      return "**Next part: you now have AI assistants.**\n\n" +
-        "For the rounds in this part you can ask an assistant about any position for its best estimate (a guess from data it was trained on — usually close, not guaranteed, always an answer). A **Baseline** model costs " + aiCostWord(AI_CFG.baselineCost) + " per question and a **Frontier** model costs " + AI_CFG.frontierCost + " cents and is trained on more data. Revealing still costs " + COST + " cents. Everything else about the game is the same.";
-    }
-    if (AI_CFG.baselineCost > 0) {
-      return "**Next part: you now have an AI assistant.**\n\n" +
-        "For the rounds in this part you can ask it about any position for its best estimate (a guess from data it was trained on — usually close, not guaranteed, always an answer). Each question costs " + AI_CFG.baselineCost + " cents; revealing a position costs " + COST + " cents. Everything else about the game is the same.";
-    }
-    return BUILTIN.phaseIntroB;
+  // Paint the static screens (headings, buttons, labels, tooltips, placeholders)
+  // from the resolved copy. Markup carries the key in data-copy / data-copy-title
+  // / data-copy-ph, so adding a string needs no change here.
+  function applyStaticCopy() {
+    var i, els = document.querySelectorAll('[data-copy]');
+    for (i = 0; i < els.length; i++) els[i].textContent = T(els[i].getAttribute('data-copy'));
+    els = document.querySelectorAll('[data-copy-title]');
+    for (i = 0; i < els.length; i++) els[i].setAttribute('title', T(els[i].getAttribute('data-copy-title')));
+    els = document.querySelectorAll('[data-copy-ph]');
+    for (i = 0; i < els.length; i++) els[i].setAttribute('placeholder', T(els[i].getAttribute('data-copy-ph')));
+    try { document.title = T('brand'); } catch (e) {}
   }
-  function defaultContent(key) {
-    if (key === 'instructionsB') return defaultInstructionsB();
-    if (key === 'phaseIntroB') return defaultPhaseIntroB();
-    return BUILTIN[key];
-  }
-  function content(key) { return subTokens((CONTENT && CONTENT[key]) ? CONTENT[key] : defaultContent(key)); }
 
   function showConsent() {
     S.phase = 'consent'; save();
@@ -546,9 +504,7 @@
     $('btn-consent').disabled = true;
   }
 
-  function renderClosed() {
-    if (CONTENT && CONTENT.closed) $('closed-body').innerHTML = renderProse(CONTENT.closed);
-  }
+  function renderClosed() { $('closed-body').innerHTML = renderProse(content('closed')); }
 
   // ======================================================================
   //  INSTRUCTIONS  (admin-editable; built-in default is the verbatim study text)
@@ -570,47 +526,38 @@
   // ======================================================================
   function showPhaseIntro() {
     S.phase = 'phaseIntro'; save();
-    $('phase-intro-title').textContent = 'Part ' + (S.phaseIdx + 1) + ' of ' + S.phases.length;
+    $('phase-intro-title').textContent = T('phaseIntroTitle', { part: S.phaseIdx + 1, parts: S.phases.length });
     $('phase-intro-body').innerHTML = renderProse(content(arm === 'B' ? 'phaseIntroB' : 'phaseIntroA'));
     show('s-phase-intro');
   }
 
   // ======================================================================
-  //  QUIZ  (verbatim; all correct to pass; randomized option order)
+  //  QUIZ  (all correct to pass; randomized option order)
   // ----------------------------------------------------------------------
-  //  QUICK-TEST ANSWER KEY  (the "Quick check" screen — get all right to play)
+  //  The questions, their options AND the answer key are participant-facing
+  //  copy, so they live in copy.js (QUIZ) and are editable per session from the
+  //  admin panel → "Page text & content" → "Quick check". The built-in set is:
   //    Q1  "highest possible value at position 52"      -> 60
   //    Q2  "what do you earn" (reveals 30 & 62)         -> 52
   //    Q3  (Arm B) "ask about a position it wasn't trained near" -> Still an estimate, may be off
   //    Q4  (Arm B) "the assistant's answer at 40 is"    -> An estimate that can be wrong
-  //  To breeze through while testing, open the app in debug mode and these are
-  //  PRE-SELECTED for you (just click Submit):
+  //  To breeze through while testing, open the app in debug mode and the correct
+  //  answers are PRE-SELECTED for you (just click Submit):
   //    https://www.stouras.com/lab/search-v2/?arm=B&debug=1&key=stouras
   //  (debug also overlays the true landscape + assistant dots + stratum/id.)
   // ======================================================================
-  var Q_COMMON = [
-    { id: 'q1', prompt: 'Position 50 shows 40 cents. What is the highest possible value at position 52?',
-      options: [{ t: '50' }, { t: '60', correct: true }, { t: '100' }, { t: '40' }] },
-    { id: 'q2', prompt: 'You revealed two positions this round. The values were 30 cents and 62 cents. You stop now. What do you earn for this round?',
-      options: [{ t: '62' }, { t: '52', correct: true }, { t: '92' }, { t: '30' }] }
-  ];
-  var Q_B = [
-    { id: 'q3', prompt: 'You ask the assistant about a position far from the data it was trained on. What happens?',
-      options: [{ t: 'It tells you it has no data there' }, { t: 'It still gives an estimate, which may be inaccurate', correct: true }, { t: 'It gives you the exact value' }, { t: 'It reveals the position for free' }] },
-    { id: 'q4', prompt: 'The assistant\'s answer at position 40 is:',
-      options: [{ t: 'Always exactly correct' }, { t: 'An estimate that can be wrong', correct: true }] }
-  ];
   // The quiz questions still OWED at the start of the current phase: the common
   // task questions once, and the assistant questions the first time the subject
   // enters an AI (arm B) phase. Returns [] when nothing new needs checking (e.g.
-  // a human-only phase after the common check has already been passed), in which
-  // case the quiz screen is skipped entirely.
+  // a human-only phase after the common check has already been passed, or an
+  // admin who removed every question), in which case the screen is skipped.
   function phaseQuizQuestions() {
-    var qs = [];
-    if (!S.commonQuizPassed) qs = qs.concat(Q_COMMON);
-    if (arm === 'B' && !S.bQuizPassed) qs = qs.concat(Q_B);
+    var set = CP.quizFor(CONTENT), qs = [];
+    if (!S.commonQuizPassed) qs = qs.concat(set.common);
+    if (arm === 'B' && !S.bQuizPassed) qs = qs.concat(set.ai);
     return qs;
   }
+  function correctOptionOf(q) { return q.options[q.correct] != null ? q.options[q.correct] : q.options[0]; }
   // After instructions or a phase transition: quiz if anything is owed, else play.
   function proceedToQuizOrRound() {
     if (!PREVIEW && phaseQuizQuestions().length) showQuiz();
@@ -623,9 +570,9 @@
     for (var i = 0; i < qs.length; i++) {
       var q = qs[i];
       var opts = shuffle(q.options.slice(), Math.random); // display-order only
-      html += '<div class="quiz-q"><div class="q-prompt">' + (i + 1) + '. ' + esc(q.prompt) + '</div>';
+      html += '<div class="quiz-q"><div class="q-prompt">' + (i + 1) + '. ' + esc(subTokens(q.prompt)) + '</div>';
       for (var k = 0; k < opts.length; k++) {
-        html += '<label class="quiz-opt"><input type="radio" name="' + q.id + '" value="' + esc(opts[k].t) + '"><span>' + esc(opts[k].t) + '</span></label>';
+        html += '<label class="quiz-opt"><input type="radio" name="' + esc(q.id) + '" value="' + esc(opts[k]) + '"><span>' + esc(opts[k]) + '</span></label>';
       }
       html += '</div>';
     }
@@ -635,17 +582,13 @@
     // tester can click Submit and get into the game immediately. Gated on the
     // debug key, so real subjects never see this.
     if (DEBUG) {
+      var keyBits = [];
       for (var qi = 0; qi < qs.length; qi++) {
-        var correct = qs[qi].options.filter(function (o) { return o.correct; })[0].t;
+        var correct = correctOptionOf(qs[qi]);
         var inputs = document.getElementsByName(qs[qi].id);
         for (var j = 0; j < inputs.length; j++) if (inputs[j].value === correct) inputs[j].checked = true;
+        keyBits.push('Q' + (qi + 1) + '=' + correct);
       }
-      var ids = qs.map(function (q) { return q.id; });
-      var keyBits = [];
-      if (ids.indexOf('q1') >= 0) keyBits.push('Q1=60');
-      if (ids.indexOf('q2') >= 0) keyBits.push('Q2=52');
-      if (ids.indexOf('q3') >= 0) keyBits.push('Q3=still an estimate, may be inaccurate');
-      if (ids.indexOf('q4') >= 0) keyBits.push('Q4=an estimate that can be wrong');
       var hint = document.createElement('div');
       hint.className = 'note';
       hint.style.marginTop = '10px';
@@ -661,8 +604,7 @@
       var q = qs[i];
       var sel = document.querySelector('input[name="' + q.id + '"]:checked');
       var choice = sel ? sel.value : null;
-      var correctOpt = q.options.filter(function (o) { return o.correct; })[0].t;
-      var ok = (choice === correctOpt);
+      var ok = (choice === correctOptionOf(q));
       if (!ok) allCorrect = false;
       L.log('quiz_attempt', { qid: q.id, choice: choice, correct: ok });
     }
@@ -738,26 +680,18 @@
   }
 
   function buildLegend() {
-    var h = '<span class="lg"><span class="swatch dot"></span> revealed value</span>';
+    var h = '<span class="lg"><span class="swatch dot"></span> ' + esc(T('legendRevealed')) + '</span>';
     if (arm === 'B') {
       // The coverage band / training points are TESTING-only, so they are not
       // advertised in the participant legend — only the estimate the AI returns.
-      h += '<span class="lg"><span class="swatch diamond"></span> assistant estimate (not guaranteed)</span>';
+      h += '<span class="lg"><span class="swatch diamond"></span> ' + esc(T('legendEstimate')) + '</span>';
     }
     $('legend').innerHTML = h;
   }
 
-  function costLabel(c) { return c > 0 ? c + '¢' : 'free'; }
+  function costLabel(c) { return c > 0 ? c + '¢' : T('aiFreeWord'); }
   function askLabel() {
-    var c = modelCost(currentModel());
-    return 'Ask' + (AI_CFG.frontier ? '' : ' assistant') + ' (' + costLabel(c) + ')';
-  }
-  function auxIntro() {
-    if (AI_CFG.frontier)
-      return 'Choose a model, then ask it about any position for its best estimate. The pricier model is trained on more data, so its guesses tend to be sharper.';
-    return (AI_CFG.baselineCost > 0)
-      ? 'Ask it about any position for its best estimate. Each question costs ' + AI_CFG.baselineCost + '¢ (a reveal costs ' + COST + '¢).'
-      : 'Free and unlimited. Ask it about any position for its best estimate.';
+    return T(AI_CFG.frontier ? 'aiAskBtnFrontier' : 'aiAskBtn', { cost: costLabel(modelCost(currentModel())) });
   }
   function buildAuxPanel() {
     var aux = $('aux-panel');
@@ -767,17 +701,17 @@
     if (AI_CFG.frontier) {
       picker =
         '<div class="ai-models" id="ai-models">' +
-          '<button type="button" class="ai-model" data-model="base">Baseline <span class="mc">' + costLabel(AI_CFG.baselineCost) + '</span></button>' +
-          '<button type="button" class="ai-model" data-model="front">Frontier <span class="mc">' + costLabel(AI_CFG.frontierCost) + '</span></button>' +
+          '<button type="button" class="ai-model" data-model="base">' + esc(T('aiModelBase')) + ' <span class="mc">' + esc(costLabel(AI_CFG.baselineCost)) + '</span></button>' +
+          '<button type="button" class="ai-model" data-model="front">' + esc(T('aiModelFront')) + ' <span class="mc">' + esc(costLabel(AI_CFG.frontierCost)) + '</span></button>' +
         '</div>';
     }
     aux.innerHTML =
-      '<h3>Assistant</h3>' +
-      '<p class="small muted">' + auxIntro() + '</p>' +
+      '<h3>' + esc(T('aiTitle')) + '</h3>' +
+      '<p class="small muted">' + esc(T('aiIntro')) + '</p>' +
       picker +
-      '<div class="ask-row"><span class="small">Position</span>' +
+      '<div class="ask-row"><span class="small">' + esc(T('posLabel')) + '</span>' +
       '<input type="number" id="ai-pos" min="1" max="100" value="' + S.round.selected + '">' +
-      '<button class="btn btn-blue btn-sm" id="btn-ask">' + askLabel() + '</button></div>' +
+      '<button class="btn btn-blue btn-sm" id="btn-ask">' + esc(askLabel()) + '</button></div>' +
       '<div class="ai-spend small muted" id="ai-spend"></div>' +
       '<div class="ai-log" id="ai-log"></div>';
     aux.setAttribute('data-built', '1');
@@ -799,17 +733,18 @@
     var aux = $('aux-panel'); if (!aux) return;
     var mbtns = aux.querySelectorAll('.ai-model');
     for (var i = 0; i < mbtns.length; i++) mbtns[i].classList.toggle('on', mbtns[i].getAttribute('data-model') === currentModel());
-    if ($('btn-ask')) $('btn-ask').innerHTML = askLabel();
+    if ($('btn-ask')) $('btn-ask').textContent = askLabel();
   }
   // Running tally of how much the participant has spent consulting the AI this round.
   function updateAiSpend() {
     var el = $('ai-spend'); if (!el) return;
     var q = (S.round.queries || []).length, sp = aiSpend(S.round);
-    el.innerHTML = q ? ('Asked <b>' + q + '</b> time' + (q === 1 ? '' : 's') + ' · spent <b>' + sp + '¢</b> on the assistant this round') : '';
+    el.innerHTML = q ? inline(T('aiSpend', { n: q, spent: sp, timesWord: T(q === 1 ? 'aiTimeSingular' : 'aiTimePlural') })) : '';
   }
 
   function renderRound(fromHover) {
-    $('round-label').textContent = (S.roundNum === 0 ? 'Practice (not paid)' : 'Round ' + S.roundNum + ' of ' + N_TASKS) +
+    $('round-label').textContent =
+      (S.roundNum === 0 ? T('roundLabelPractice') : T('roundLabelReal', { round: S.roundNum })) +
       (S.phases.length > 1 ? ' · ' + phaseLabel(arm) : '');
     var reveals = S.round.reveals;
     $('c-reveals').textContent = reveals.length;
@@ -822,7 +757,7 @@
     var revealed = isRevealed(S.round.selected);
     var rb = $('btn-reveal');
     rb.disabled = revealed;
-    rb.innerHTML = revealed ? 'Already revealed' : 'Reveal (costs ' + COST + '&cent;)';
+    rb.textContent = T(revealed ? 'revealedBtn' : 'revealBtn');
 
     // Keep the AI panel's position in step with the cursor on deliberate moves,
     // but not while merely hovering (so it never clobbers a value being typed).
@@ -987,6 +922,9 @@
     x = Math.max(1, Math.min(N_POS, x));
     var model = currentModel(), cost = modelCost(model);
     var res = A.estimate(currentGroups(), x);
+    // The wording of the answer is participant-facing copy (admin-editable);
+    // assistant.js only computes the number.
+    res.text = T('aiAnswer', { pos: res.position, est: res.estimate });
     S.round.queries.push({ position: res.position, estimate: res.estimate, refused: false, model: model, cost: cost, mode: res.mode, text: res.text });
     // Keep every AI suggestion on the plot: accumulate one diamond per asked
     // position (a re-ask updates that position's estimate), so as the participant
@@ -1004,7 +942,7 @@
     renderRound();
     bumpActivity();
   }
-  function renderAiLog() { if (arm === 'B' && A) A.renderLog($('ai-log'), S.round.queries); }
+  function renderAiLog() { if (arm === 'B' && A) A.renderLog($('ai-log'), S.round.queries, T('aiEmptyLog')); }
 
   // ---- stop / round end ----------------------------------------------------
   function openStop() {
@@ -1012,8 +950,8 @@
     pushContext();
     L.log('stop_confirm', { net: net });
     $('stop-msg').textContent = (reveals.length || aiSpend(S.round))
-      ? 'You will end this round with a net of ' + net + ' cents. Stop?'
-      : 'You will earn 0 for this round. Stop?';
+      ? T('stopMsg', { net: net })
+      : T('stopMsgZero');
     $('ov-stop').classList.add('show');
   }
   function closeStop() { $('ov-stop').classList.remove('show'); }
@@ -1059,17 +997,18 @@
     // The last real round of a non-final phase heads into a phase transition next.
     var lastOfPhase = (!practice && S.roundNum >= N_TASKS && S.phaseIdx < S.phases.length - 1);
     var lastOverall = (!practice && S.roundNum >= N_TASKS && S.phaseIdx >= S.phases.length - 1);
-    $('inter-title').textContent = practice ? 'Practice complete'
-      : lastOfPhase ? 'Part ' + (S.phaseIdx + 1) + ' complete'
-      : 'Round ' + S.roundNum + ' complete';
-    var b = '<div class="res-line">Reveals: <b>' + nReveals + '</b></div>';
+    $('inter-title').textContent = practice ? T('interPractice')
+      : lastOfPhase ? T('interPart', { part: S.phaseIdx + 1 })
+      : T('interRound', { round: S.roundNum });
+    var b = '<div class="res-line">' + inline(T('resReveals')) + ': <b>' + nReveals + '</b></div>';
     if (arm === 'B' && (S.round.queries || []).length)
-      b += '<div class="res-line">AI questions: <b>' + S.round.queries.length + '</b> (spent ' + aiSpend(S.round) + '¢)</div>';
-    b += '<div class="res-line">Best value found: <b>' + (nReveals ? bestOf(reveals) + '¢' : '—') + '</b></div>' +
-         '<div class="res-line">Net this round: <b class="res-big">' + rawNet + '¢</b></div>';
-    if (practice) b += '<p class="muted small">This was practice and was not paid. The real rounds start now.</p>';
-    else if (lastOfPhase) b += '<p class="muted small">That completes this part. The next part starts when you continue.</p>';
-    else if (lastOverall) b += '<p class="muted small">That was the last round. Continue to see your results.</p>';
+      b += '<div class="res-line">' + inline(T('resAiQuestions')) + ': <b>' + S.round.queries.length + '</b> ' +
+           inline(T('resAiSpent', { spent: aiSpend(S.round) })) + '</div>';
+    b += '<div class="res-line">' + inline(T('resBest')) + ': <b>' + (nReveals ? bestOf(reveals) + '¢' : '—') + '</b></div>' +
+         '<div class="res-line">' + inline(T('resNet')) + ': <b class="res-big">' + rawNet + '¢</b></div>';
+    if (practice) b += '<p class="muted small">' + inline(T('interPracticeNote')) + '</p>';
+    else if (lastOfPhase) b += '<p class="muted small">' + inline(T('interPartNote')) + '</p>';
+    else if (lastOverall) b += '<p class="muted small">' + inline(T('interLastNote')) + '</p>';
     $('inter-body').innerHTML = b;
     show('s-interstitial');
   }
@@ -1127,9 +1066,7 @@
 
   function renderCompare() {
     var multi = S.phases.length > 1;
-    $('compare-intro').textContent = multi
-      ? 'Below is one round from each part, showing the true prize curve (hidden while you played) and the positions you revealed — so you can compare searching without vs. with the AI.'
-      : 'Below is one of your rounds, showing the true prize curve (hidden while you played) and the positions you revealed.';
+    $('compare-intro').textContent = T(multi ? 'compareIntroMulti' : 'compareIntroSingle');
 
     var cols = '';
     for (var ph = 0; ph < S.phases.length; ph++) {
@@ -1137,19 +1074,19 @@
       cols += '<div class="cmp-col"><h3>' + esc(phaseLabel(S.phases[ph])) + '</h3>' +
         '<div class="plot-wrap"><div id="cmp-plot-' + ph + '"></div></div>' +
         '<div class="cmp-stats">' +
-          '<div class="s"><b>' + (st.avgNet / 100).toFixed(2) + '</b><span>avg net / round</span></div>' +
-          '<div class="s"><b>' + st.avgRev.toFixed(1) + '</b><span>avg reveals</span></div>' +
-          '<div class="s"><b>' + (st.avgBest / 100).toFixed(2) + '</b><span>avg best found</span></div>' +
+          '<div class="s"><b>' + (st.avgNet / 100).toFixed(2) + '</b><span>' + esc(T('cmpAvgNet')) + '</span></div>' +
+          '<div class="s"><b>' + st.avgRev.toFixed(1) + '</b><span>' + esc(T('cmpAvgReveals')) + '</span></div>' +
+          '<div class="s"><b>' + (st.avgBest / 100).toFixed(2) + '</b><span>' + esc(T('cmpAvgBest')) + '</span></div>' +
         '</div></div>';
     }
     var hasB = S.phases.indexOf('B') >= 0;
     $('compare-body').innerHTML = '<div class="cmp-grid">' + cols + '</div>' +
       '<div class="cmp-legend">' +
-        '<i style="border-top-style:solid;border-color:var(--blue);"></i> true prize curve (was hidden) &nbsp;&nbsp;' +
-        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ink);vertical-align:middle;margin-right:4px;"></span> positions you revealed' +
-        (hasB ? ' &nbsp;&nbsp;<i style="border-top-style:solid;border-color:var(--green);"></i> AI interpolation &nbsp;&nbsp;' +
-          '<i style="border-top-style:dashed;border-color:var(--amber);"></i> AI extrapolation (unreliable) &nbsp;&nbsp;' +
-          '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--red);vertical-align:middle;margin-right:4px;"></span> AI training data' : '') +
+        '<i style="border-top-style:solid;border-color:var(--blue);"></i> ' + esc(T('cmpLegendTruth')) + ' &nbsp;&nbsp;' +
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ink);vertical-align:middle;margin-right:4px;"></span> ' + esc(T('cmpLegendRevealed')) +
+        (hasB ? ' &nbsp;&nbsp;<i style="border-top-style:solid;border-color:var(--green);"></i> ' + esc(T('cmpLegendInterp')) + ' &nbsp;&nbsp;' +
+          '<i style="border-top-style:dashed;border-color:var(--amber);"></i> ' + esc(T('cmpLegendExtrap')) + ' &nbsp;&nbsp;' +
+          '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--red);vertical-align:middle;margin-right:4px;"></span> ' + esc(T('cmpLegendDots')) : '') +
       '</div>';
 
     for (var p = 0; p < S.phases.length; p++) {
@@ -1173,32 +1110,32 @@
   }
 
   // ---- exit survey (anonymous; responses logged as `survey` events) ----------
+  // The questions, their type and the agree/disagree scale are participant-facing
+  // copy: they live in copy.js (SURVEY / surveyLikert) and are editable per
+  // session from the admin panel. `ai:true` questions are asked only when the
+  // session actually includes a With-AI phase.
   function surveyQuestions() {
-    var qs = [
-      { id: 'strategy', type: 'likert', prompt: 'I had a clear strategy for which positions to reveal.' },
-      { id: 'difficult', type: 'likert', prompt: 'The task was difficult.' }
-    ];
-    if (S.phases.indexOf('B') >= 0) {
-      qs.push({ id: 'ai_helpful', type: 'likert', prompt: 'The AI assistant’s estimates were helpful.' });
-      qs.push({ id: 'ai_trust', type: 'likert', prompt: 'I trusted the AI assistant’s estimates.' });
-    }
-    qs.push({ id: 'comments', type: 'text', prompt: 'Anything else about how you searched? (optional)' });
-    return qs;
+    var hasB = S.phases.indexOf('B') >= 0;
+    return CP.surveyFor(CONTENT).filter(function (q) { return hasB || !q.ai; });
+  }
+  function likertLabels() {
+    var l = CP.lines(CONTENT && CONTENT.surveyLikert, 'surveyLikert');
+    return l.length ? l : CP.lines(null, 'surveyLikert');
   }
   function showSurvey() { S.phase = 'survey'; save(); renderSurvey(); show('s-survey'); }
   function renderSurvey() {
     var qs = surveyQuestions();
-    var labels = ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'];
+    var labels = likertLabels();
     var h = '';
     for (var i = 0; i < qs.length; i++) {
       var q = qs[i];
-      h += '<div class="survey-q"><div class="sq-prompt">' + esc(q.prompt) + '</div>';
+      h += '<div class="survey-q"><div class="sq-prompt">' + esc(subTokens(q.prompt)) + '</div>';
       if (q.type === 'likert') {
         h += '<div class="likert">';
-        for (var v = 1; v <= 5; v++) h += '<label><input type="radio" name="sq-' + q.id + '" value="' + v + '"><span>' + labels[v - 1] + '</span></label>';
+        for (var v = 1; v <= labels.length; v++) h += '<label><input type="radio" name="sq-' + esc(q.id) + '" value="' + v + '"><span>' + esc(labels[v - 1]) + '</span></label>';
         h += '</div>';
       } else {
-        h += '<textarea id="sq-' + q.id + '" rows="3"></textarea>';
+        h += '<textarea id="sq-' + esc(q.id) + '" rows="3"></textarea>';
       }
       h += '</div>';
     }
@@ -1285,7 +1222,7 @@
       if (L.pending && L.pending() > 0) {
         var n = $('upload-note');
         n.style.display = 'block';
-        n.textContent = 'We could not reach our server to save your responses automatically. Please click “Download my session data” below and send us the file. Your completion code above is still valid.';
+        n.textContent = T('uploadNote');
       }
     }, 3500);
   }
@@ -1296,7 +1233,6 @@
     for (var i = 0; i < paid.length; i++) bonusCents += resultOf(paid[i].phase, paid[i].round).flooredNet;
     var bonus = (bonusCents / 100).toFixed(2);
     var multi = S.phases.length > 1;
-    var totalReal = N_TASKS * S.phases.length;
 
     var rows = '';
     for (var ph = 0; ph < S.phases.length; ph++) {
@@ -1308,21 +1244,15 @@
                 '<td>' + r + '</td><td>' + res.reveals + '</td>' +
                 '<td>' + (res.best == null ? '—' : res.best + '¢') + '</td>' +
                 '<td>' + res.rawNet + '¢</td>' +
-                '<td>' + (picked ? '✔ paid' : '') + '</td></tr>';
+                '<td>' + (picked ? esc(T('paidMark')) : '') + '</td></tr>';
       }
     }
-    var intro = (CONTENT && CONTENT.finish)
-      ? renderProse(subTokens(CONTENT.finish))
-      : '<p>Thank you for taking part. Below are your ' + totalReal + ' real rounds' +
-        (multi ? ' across ' + S.phases.length + ' parts' : '') + '. The ' +
-        (PAID_TASKS === 1 ? 'round' : PAID_TASKS + ' rounds') + ' marked ' +
-        '<b>paid</b> ' + (PAID_TASKS === 1 ? 'was' : 'were') + ' selected at random; your bonus is the sum of their earnings ' +
-        '(a round counts as 0 if it was negative).</p>';
     $('finish-body').innerHTML =
-      intro +
-      '<table class="paid-table"><thead><tr>' + (multi ? '<th>Part</th>' : '') + '<th>Round</th><th>Reveals</th><th>Best</th><th>Net</th><th></th></tr></thead>' +
+      renderProse(content('finish')) +
+      '<table class="paid-table"><thead><tr>' + (multi ? '<th>' + esc(T('thPart')) + '</th>' : '') +
+      '<th>' + esc(T('thRound')) + '</th><th>' + esc(T('thReveals')) + '</th><th>' + esc(T('thBest')) + '</th><th>' + esc(T('thNet')) + '</th><th></th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table>' +
-      '<p class="res-line">Your bonus: <b class="res-big">$' + bonus + '</b></p>';
+      '<p class="res-line">' + inline(T('finishBonus')) + ' <b class="res-big">$' + bonus + '</b></p>';
 
     $('completion-code').textContent = CFG.COMPLETION_CODE;
   }
@@ -1388,12 +1318,12 @@
   // ======================================================================
   var IDLE_MS = CFG.NUDGE_IDLE_MS || 60000;
   var idleTimer = null, nudgeHideTimer = null, pendingMsgAckKey = null, pendingMsgId = 0;
-  var ENCOURAGE = [
-    'Still there? Take your time — reveal a few positions to find the highest prize, and stop when you’re happy. Doing your best earns a bigger bonus!',
-    'Keep exploring! Each reveal costs a little, so weigh up a few spots and keep the best one you find.',
-    'Give it your best shot — the closer you get to the highest prize, the more you earn this round.'
-  ];
-  function encouragement() { return ENCOURAGE[Math.floor(Math.random() * ENCOURAGE.length)]; }
+  // The encouragements are admin-editable copy (one per line; see copy.js `nudges`).
+  function encouragement() {
+    var list = CP.lines(CONTENT && CONTENT.nudges, 'nudges');
+    if (!list.length) return '';
+    return subTokens(list[Math.floor(Math.random() * list.length)]);
+  }
   function nudgeShowing() { var t = $('nudge-toast'); return t && t.style.display !== 'none'; }
   function showNudge(text, kind) {
     var t = $('nudge-toast'); if (!t || !text) return;
