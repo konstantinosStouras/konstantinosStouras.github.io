@@ -107,6 +107,25 @@ Served app (`lab/portfoliofit/`):
 | `admin.js` | The **admin CMS**. Activates only on `?admin`. Login gate, content/question/settings/puzzle editors, participants table + Excel export, theme. Also hosts the **Data analytics** view (`?admin=data-analytics`) — see §6. |
 | `404.html` | Redirects to `/`. |
 | `og-image.jpg`, `portfoliofit-difficulty.pdf`, `portfoliofit-difficulty.makepdf.py` | Social card + the κ methodology note (PDF + its generator). |
+| `favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` | The game's **own** favicon — see below. |
+
+**The favicon is the game's, never the site's.** `index.html` declares three
+icon links, all **relative** so they resolve for every entry point the app is
+reached by (`/lab/portfoliofit/`, `?admin`, `?exp=1`, a Simulation-Platform
+launch with `?session=CODE`): `favicon.svg` (the modern one), `favicon-32.png`
+(the `alternate icon` fallback for browsers without SVG-favicon support — Safari
+in particular) and `apple-touch-icon.png` (180×180, home-screen). The artwork is
+the game itself: a 4×4 frame **perfectly packed** by four of its own polyominoes
+(the shipped easy solution in `pf-defaults.js` — I3/S/L5/T), in the piece colours
+those specs use, on the app's `--ink` board. The `alternate icon` used to point
+at `/images/KIS_favicon.png`, the personal-site icon, which is what a
+non-SVG browser actually displayed — **do not reintroduce a `/images/` fallback**;
+a fallback must stay inside this app's directory. The icons are generated, not
+hand-written — re-render all three with
+`node lab/portfoliofit/tools/make-favicon.mjs` (emits the SVG from the piece
+cells, asserting they still tile the frame, then rasterises the two PNGs through
+Playwright's Chromium; `--svg-only` skips that), and keep its `PIECES` colours in
+step with `pf-defaults.js` if that palette ever moves.
 
 Backend (`_portfoliofit-lab-firebase/`, underscore-prefixed so Jekyll does **not**
 publish it; versioned in the repo, deployed manually to the lab project):
