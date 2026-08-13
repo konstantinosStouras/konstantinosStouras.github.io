@@ -5,7 +5,7 @@
   "functions": {
     "source": "_functions/functions",
     "runtime": "nodejs20",
-    "predeploy": ["node ../tools/sync-engine.mjs"]
+    "predeploy": ["node tools/sync-engine.mjs"]
   },
   "emulators": {
     "auth": { "port": 9099 },
