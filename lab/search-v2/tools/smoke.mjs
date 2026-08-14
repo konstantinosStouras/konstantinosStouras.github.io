@@ -629,6 +629,67 @@ async function runOne(name) {
   });
   ok(resumptions >= 1, `the resumption is counted (${resumptions})`);
 
+  // Every return is a `resume` row carrying the gap since they were last seen —
+  // the raw observation the export turns into breaks and sittings. A reload
+  // seconds later is a resumption but NOT a break.
+  const resumeRow = await rp.evaluate(() => {
+    const e = window.Logger.getEvents().filter(x => x.event === 'resume').pop();
+    return e ? { gap: e.duration_ms, src: e.source, info: JSON.parse(e.info || '{}') } : null;
+  });
+  ok(resumeRow && typeof resumeRow.gap === 'number',
+    'and logged as a `resume` row carrying how long they were away', JSON.stringify(resumeRow));
+  ok(resumeRow && resumeRow.info.is_break === false,
+    'a reload seconds later is a resumption but NOT a break between sittings');
+  ok(resumeRow && resumeRow.src === 'local',
+    'and it records where the progress came from — this browser, or the cloud copy');
+
+  // A LONG absence is a break. The rewind has to happen while the study page is
+  // NOT open: leaving stamps "last seen" on the way out — which is the point of
+  // that stamp — so rewinding and reloading in one go would simply be undone.
+  // The admin page is the same origin, so it shares the storage and touches
+  // none of it.
+  await rp.goto(BASE + 'admin/');
+  await rp.waitForTimeout(400);
+  await rp.evaluate(() => {
+    const key = 'searchv2:v3:state:RESUME1';
+    const s = JSON.parse(localStorage.getItem(key) || '{}');
+    s.lastSeenAt = Date.now() - 2 * 60 * 60 * 1000;
+    localStorage.setItem(key, JSON.stringify(s));
+  });
+  await rp.goto(BASE + '?code=SMOKE&pcode=RESUME1');
+  await rp.waitForSelector('#s-round.active, #s-interstitial.active, #s-blockintro.active', { timeout: 20000 });
+  const afterBreak = await rp.evaluate(() => {
+    const e = window.Logger.getEvents().filter(x => x.event === 'resume').pop();
+    const s = JSON.parse(localStorage.getItem('searchv2:v3:state:RESUME1') || '{}');
+    return { gap: e && e.duration_ms, info: e && JSON.parse(e.info || '{}'),
+             breaksCount: s.breaksCount, breakMs: s.breakMs, phase: s.phase };
+  });
+  ok(afterBreak.gap > 60 * 60 * 1000 && afterBreak.info.is_break === true,
+    'a two-hour absence IS a break between sittings', JSON.stringify(afterBreak));
+  ok(afterBreak.breaksCount === 1 && afterBreak.breakMs >= 2 * 60 * 60 * 1000 - 60000,
+    'the break is counted and its length accumulated', JSON.stringify(afterBreak));
+  ok(afterBreak.info.sittings === 2, 'and it makes this their second sitting');
+
+  // Returning on ANOTHER device: their progress is mirrored to their record, and
+  // the boot continues from whichever copy got FURTHER — never from the one that
+  // got less far, or a sync that never landed would replay finished rounds.
+  const pick = await rp.evaluate(() => {
+    const R = window.SVApp.resumeChoice;
+    const at = (rounds, phase, seen) => ({ results: new Array(rounds).fill(0), phase: phase, lastSeenAt: seen });
+    return {
+      noLocal: R(null, at(6, 'round', 10)),                       // fresh browser, cloud has progress
+      noRemote: R(at(6, 'round', 10), null),
+      furtherWins: R(at(3, 'round', 9e12), at(9, 'round', 10)),   // stale clock, more rounds
+      newerBreaksTie: R(at(6, 'round', 10), at(6, 'round', 20)),
+      doneWins: R(at(28, 'round', 9e12), { results: [], completed: true, phase: 'done', lastSeenAt: 1 })
+    };
+  });
+  ok(pick.noLocal === 'b' && pick.noRemote === 'a',
+    'a browser with nothing saved continues from the cloud copy, and vice versa', JSON.stringify(pick));
+  ok(pick.furtherWins === 'b', 'the copy that finished MORE rounds wins, whatever the clocks say');
+  ok(pick.newerBreaksTie === 'b', 'and the clock only breaks a tie between two equally-far copies');
+  ok(pick.doneWins === 'b', 'a finished session outranks an unfinished one');
+
   // A reload on the between-rounds screen must redraw it, not crash: the round's
   // mapping lives in a closure the reload wipes.
   await rp.evaluate(() => window.SVApp.select(50));

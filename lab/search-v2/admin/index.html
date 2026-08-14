@@ -243,6 +243,9 @@
     .health td{padding:7px 9px; border-bottom:1px solid var(--line);}
     .health td:last-child{text-align:right; font-weight:700;}
     .health tr.warn td{background:#fff7ed;}
+    /* Why a ⚠ fired, in the row itself: a warning that does not say what tripped
+       it is a mark the reader has to guess at. */
+    .health td .why{margin-top:3px; font-weight:400; font-size:11.5px; color:var(--muted); text-align:right; white-space:normal; max-width:520px; margin-left:auto;}
     :root[data-theme="dark"] .health tr.warn td{background:#2a2013;}
     .health tr.warn td:last-child{color:var(--amber-d);}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px;}
@@ -699,8 +702,11 @@
           <h2 style="margin:0;">Live monitor</h2>
           <button class="btn btn-ghost btn-sm" id="btn-monitor-refresh">&#8635; Refresh health checks</button>
         </div>
-        <p class="muted small">Counters update live from the participant records. The health checks read the
-        event log, which is heavier &mdash; refresh them when you want them.</p>
+        <p class="muted small">Counters update live from the participant records. Six of the health checks are
+        computed from the <b>event log</b> instead &mdash; every decision of every round, far heavier than those
+        records &mdash; so they are not fetched until you press <b>&#8635; Refresh health checks</b>. Each check
+        carries a threshold; when one is crossed the row turns amber, shows a &#9888;, and states the rule that
+        tripped it.</p>
         <div class="stat-row" id="mon-counters"></div>
         <h3>Health</h3>
         <table class="health" id="mon-health"></table>
