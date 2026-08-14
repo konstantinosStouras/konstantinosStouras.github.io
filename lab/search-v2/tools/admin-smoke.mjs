@@ -170,24 +170,59 @@ ok(/btn-green/.test(actions.find(a => a.id === 'btn-save').c), 'the primary acti
 ok(actions.filter(a => a.id !== 'btn-save').every(a => /btn-ghost/.test(a.c)),
   'the other three stay ghost buttons — the palette is unchanged');
 
-// ── save a run and round-trip the form ────────────────────────────────────
-await pg.fill('#p-ops-runName', 'Smoke run');
+// ── create a session: the summary comes first ─────────────────────────────
+await pg.fill('#p-ops-runName', 'Smoke session');
 await pg.locator('#btn-gencode').click();
 const code = await pg.inputValue('#p-ops-code');
-ok(/^[A-Z0-9]{5}$/.test(code), 'Auto generates a five-character run code (' + code + ')');
+ok(/^[A-Z0-9]{5}$/.test(code), 'Auto generates a five-character session code (' + code + ')');
 await pg.locator('#btn-save').click();
-await pg.waitForTimeout(400);
-await tab('runs');
-ok((await pg.locator('.run-card').count()) === 1, 'the run appears on the Runs screen');
-const cardText = await pg.locator('.run-card').innerText();
-ok(/Smoke run/.test(cardText) && /draft/.test(cardText), 'as a DRAFT, with its name and status');
-ok(new RegExp(code).test(cardText), 'carrying its code');
-ok(/participant link/.test(cardText) && /\?code=/.test(cardText), 'and the participant launch link');
+await pg.waitForTimeout(250);
 
-const cardBtns = await pg.$$eval('.run-card .run-acts button', els => els.map(e => e.textContent.trim()));
-ok(cardBtns.some(b => /Clone this run/.test(b)), 'every run card offers "Clone this run" — the governing rule');
-ok(cardBtns.some(b => /Test round/.test(b)), 'and a 🧪 Test round');
-ok(cardBtns.some(b => /Export/.test(b)) && cardBtns.some(b => /Delete/.test(b)), 'and Export and Delete');
+// Creating freezes the pool and the 28 specs, so it is summarised before it happens.
+ok(await pg.locator('#sess-summary').isVisible(), 'creating a session shows a summary FIRST, not a silent write');
+const sum0 = await pg.locator('#sess-summary').innerText();
+ok(/28 rounds/.test(sum0), 'the summary states the session is 28 rounds', sum0.split('\n').find(l => /rounds/.test(l)));
+ok(/4 warm-up/.test(sum0) && /24 scored/.test(sum0), 'split into warm-up and scored');
+ok(/AI in one block only/.test(sum0), 'and that the AI is present in one block of the two');
+ok(new RegExp(code).test(sum0) && /Smoke session/.test(sum0), 'it names the session and its code');
+ok(/Sparse/.test(sum0) && /K=4/.test(sum0) && /K=10/.test(sum0), 'it states the two AI densities');
+ok(/bracket s\*/.test(sum0), 'and confirms they still bracket s* — the design’s sign change');
+ok(/Reveal/.test(sum0) && /cap 20/.test(sum0), 'it states the costs and the caps');
+await pg.locator('#sum-cancel').click();
+await pg.waitForTimeout(200);
+ok(!(await pg.locator('#sess-summary').count()), 'Cancel closes the summary');
+await tab('runs');
+ok((await pg.locator('.run-card').count()) === 0, 'and creates NOTHING — cancelling the summary is a real cancel');
+
+await tab('params');
+await pg.locator('#btn-save').click();
+await pg.waitForTimeout(250);
+await pg.locator('#sum-ok').click();
+await pg.waitForTimeout(500);
+await tab('runs');
+ok((await pg.locator('.run-card').count()) === 1, 'confirming the summary creates the session');
+
+// ── the two session sections, in the shape of the ideasearchlab admin ─────
+const secs = await pg.$$eval('.sess-sec .sess-head h3', els => els.map(e => e.textContent.trim()));
+ok(JSON.stringify(secs) === JSON.stringify(['Active sessions', 'Completed sessions']),
+  'sessions are grouped into Active and Completed, like the other class admin panels', secs.join(' | '));
+ok((await pg.locator('#runs-active .run-card').count()) === 1, 'a draft session is ACTIVE, not completed');
+ok(/1 active/.test(await pg.locator('#runs-active-n').innerText()), 'the active section carries its count');
+ok(/No completed/.test(await pg.locator('#runs-done').innerText()), 'and the empty completed section says so');
+
+const cardText = await pg.locator('.run-card').innerText();
+ok(/Smoke session/.test(cardText) && /draft/.test(cardText), 'the card shows the session name and status');
+ok(new RegExp(code).test(cardText), 'with its code as the headline');
+ok(/0 participants/.test(cardText), 'and a participant count, like the ideasearchlab cards');
+ok(/28 rounds/.test(cardText), 'and states that a session is 28 rounds');
+ok(/Scored in the browser|Scored on the server/.test(cardText), 'and where the score is computed');
+
+const cardBtns = await pg.$$eval('#runs-active .run-card .run-acts button', els => els.map(e => e.textContent.trim()));
+['Open', 'Copy link', '⬇ Export data', '🧪 Test round', 'Clone', 'Open entry', 'Delete'].forEach(want => {
+  ok(cardBtns.some(b => b === want), 'an active card offers ' + want, cardBtns.join(' | '));
+});
+const pill = await pg.$$eval('#runs-active .run-card .run-acts button', els => els.map(e => getComputedStyle(e).borderWidth));
+ok(pill.every(w => w === '1px'), 'every card button carries the 1px border, so the row sits on one baseline');
 
 // ── Screen 6 · validation gate + dry run ──────────────────────────────────
 await tab('data');
@@ -276,6 +311,55 @@ pg.once('dialog', d => d.accept());
 await pg.locator('#btn-dl-xlsx').click();
 const got = await dl;
 ok(got === null, 'the workbook button refuses politely until an event log is loaded (there is none offline)');
+
+// ── every round, drawn — the admin-only view of the ground truth ──────────
+await pg.locator('#btn-rg-draw').click();
+await pg.waitForTimeout(1500);
+ok((await pg.locator('#rg-grid .rg-card').count()) === 28,
+  'the gallery draws one plot per round — all 28 of them');
+const rgNote = await pg.locator('#rg-note').innerText();
+ok(/ever drawn for a participant/.test(rgNote),
+  'and says plainly that none of these overlays reaches a participant', rgNote.slice(0, 120));
+
+const first = pg.locator('#rg-grid .rg-card').first();
+ok((await first.locator('svg.plot-svg').count()) === 1, 'each round card carries its own plot');
+ok((await first.locator('path.gt-line').count()) === 1,
+  'with the GROUND TRUTH — the hidden random walk — drawn as a line');
+ok((await first.locator('path.ai-line').count()) === 1, 'the AI’s interpolation drawn beside it');
+ok((await first.locator('circle.anchor-dot').count()) > 0, 'and the AI’s private anchors marked');
+
+// Every tick box is an independent switch over what is drawn.
+await pg.uncheck('#rg-truth'); await pg.waitForTimeout(700);
+ok((await pg.locator('#rg-grid path.gt-line').count()) === 0, 'unticking the ground truth removes it from every plot');
+ok((await pg.locator('#rg-grid path.ai-line').count()) > 0, 'while leaving the AI’s line alone');
+await pg.check('#rg-truth'); await pg.waitForTimeout(700);
+await pg.uncheck('#rg-ai'); await pg.waitForTimeout(700);
+ok((await pg.locator('#rg-grid path.ai-line').count()) === 0, 'unticking the AI’s line removes it');
+ok((await pg.locator('#rg-grid path.gt-line').count()) === 28, 'and the truth is drawn for every round');
+await pg.check('#rg-ai');
+await pg.uncheck('#rg-anchors'); await pg.waitForTimeout(700);
+ok((await pg.locator('#rg-grid circle.anchor-dot').count()) === 0, 'unticking the anchors removes them');
+await pg.check('#rg-anchors'); await pg.waitForTimeout(700);
+
+// Pre-opened prizes: a seeded round has them, an open round does not.
+const preCards = await pg.$$eval('#rg-grid .rg-card',
+  els => els.map(e => ({ tags: e.querySelector('.rg-tags').textContent, marks: e.querySelectorAll('rect.pre-mark').length,
+                         foot: e.querySelector('.rg-foot').textContent })));
+const seeded = preCards.filter(c => !/OPEN/.test(c.tags));
+const open = preCards.filter(c => /OPEN/.test(c.tags));
+// 24 scored = 16 seeded + 8 open, and the four warm-ups alternate OPEN / BALANCED.
+ok(seeded.length === 18 && open.length === 10, 'the grid separates the seeded rounds from the open ones',
+  seeded.length + ' seeded / ' + open.length + ' open');
+ok(seeded.every(c => c.marks > 0), 'every seeded round shows its pre-opened prizes on the plot');
+ok(seeded.every(c => /Open at the start: p\d+ = \d+/.test(c.foot)), 'and lists them with their values underneath');
+ok(open.every(c => c.marks === 0 && /Nothing pre-opened/.test(c.foot)),
+  'an open round shows none, and says the participant starts from a blank line');
+ok(preCards.every(c => /Best prize \d+ at position \d+/.test(c.foot)),
+  'each round also reports where its best prize is — the check a seed geometry is for');
+
+await pg.check('#rg-scored'); await pg.waitForTimeout(1200);
+ok((await pg.locator('#rg-grid .rg-card').count()) === 24, '"scored rounds only" drops the four warm-ups');
+await pg.uncheck('#rg-scored'); await pg.waitForTimeout(1200);
 
 ok(errors.length === 0, 'no page errors anywhere in the panel', errors.slice(0, 5).join(' | '));
 

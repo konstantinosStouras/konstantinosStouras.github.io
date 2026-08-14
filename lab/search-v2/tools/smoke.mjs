@@ -234,6 +234,19 @@ async function runOne(name) {
         }));
         ok(marks.asked >= 1, 'the asked position is drawn as an open diamond at the AI’s stated value');
         ok(marks.revealed === 0, 'asking the AI does NOT reveal the truth');
+        // The ground truth is the study's whole secret. The admin panel draws it
+        // for every round; a live participant must never get any of it — not the
+        // walk, not the AI's curve, not its anchors, not the testing overlays.
+        const leak = await pg.evaluate(() => ({
+          truth: document.querySelectorAll('#plot .gt-line').length,
+          aiCurve: document.querySelectorAll('#plot .ai-line').length,
+          anchors: document.querySelectorAll('#plot .anchor-dot').length,
+          testview: !!document.getElementById('testview') && getComputedStyle(document.getElementById('testview')).display !== 'none'
+        }));
+        ok(leak.truth === 0, 'the hidden prize walk is NOT drawn for a live participant');
+        ok(leak.aiCurve === 0, 'nor is the AI’s interpolation line');
+        ok(leak.anchors === 0, 'nor are the AI’s private anchors');
+        ok(leak.testview === false, 'and the testing overlays stay out of a live session entirely');
         const li = await pg.locator('#touched-list .tl.ask').first().innerText();
         ok(/AI said/.test(li), 'the left panel lists the asked position as a claim, not a prize');
       }

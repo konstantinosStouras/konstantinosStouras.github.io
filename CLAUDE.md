@@ -2442,17 +2442,49 @@ nested arrays. **Every derived field of §16.8 is computed offline in
 `admin/export.js` and nowhere else.**
 
 **Admin panel** at `/lab/search-v2/admin/`, five tabs over the brief's six
-screens: Runs · Parameters (+ Consequences beside it) · Roster · Live monitor ·
-Data & preview. The governing rule is **CLONE, DO NOT EDIT** — a run's task
-parameters lock the moment its first participant claims a code (greyed with a
-padlock and the date; only the Operations group and the next-entrant override
-stay editable), enforced by `firestore.rules`, not by the UI. Consequences
-recompute live with two badges. The four buttons under the form are unchanged in
-number and colour from the previous panel: **Save run** (green), then Cancel
-edit / Make this the default / Restore built-in default (ghost). Export is one
-workbook (ReadMe, Run, Specs, Decisions, Rounds, Participants, Slider, Attention,
-Raw) plus the three CSVs, bundling the run's frozen configuration and a checksum;
-`interrupted` and `disengaged` are COLUMNS, not filters.
+screens: Sessions · Parameters (+ Consequences beside it) · Roster · Live monitor ·
+Data & preview. **The UI calls the unit a SESSION** (28 rounds: 4 warm-up + 24
+scored, two blocks) — the brief calls it a *run* and the DATA keeps that name
+(`run_id` on every row, the workbook's Run sheet), so the two words are one
+object and no analysis script moves; rename UI copy only. The governing rule is
+**CLONE, DO NOT EDIT** — a session's task parameters lock the moment its first
+participant claims a code (greyed with a padlock and the date; only the
+Operations group and the next-entrant override stay editable), enforced by
+`firestore.rules`, not by the UI. Consequences recompute live with two badges.
+The four buttons under the form are unchanged in number and colour from the
+previous panel: **Save session** (green), then Cancel edit / Make this the
+default / Restore built-in default (ghost). Export is one workbook (ReadMe, Run,
+Specs, Decisions, Rounds, Participants, Slider, Attention, Raw) plus the three
+CSVs, bundling the session's frozen configuration and a checksum; `interrupted`
+and `disengaged` are COLUMNS, not filters.
+**Session cards, like the other class admins** (owner 2026-08): the Sessions
+screen groups **Active** and **Completed** with a count each, and every card
+carries code · status · name · created · participant count · sequence balance ·
+where the score is computed, then **Open · Copy link · ⬇ Export data · 🧪 Test
+round · Clone · Open entry / Close session · Delete** (Copy link is dropped on a
+completed session — its link would refuse the entrant). Same `.sBtn` pill family
+as ideasearchlab/Answer Arena, 1px border on every variant so the row sits on one
+baseline. **Export data is the whole job in one press** (select → read the log →
+build → save); **Delete removes the session AND its event log**, confirm-guarded
+with the participant count.
+**A session is summarised before it can bite** (`summaryBoxes`/`askSummary`):
+CREATING freezes the pool and all 28 specs under its seeds, and OPENING ENTRY
+starts the lock, so both put the whole configuration in front of the admin first
+— rounds, task, costs/caps, the two AI densities and whether they still bracket
+`s*`, assignment, after-the-task, and the participant link — with Cancel as a
+real cancel (the smoke test asserts a cancelled summary creates nothing).
+**Every round, drawn** (`renderRoundGallery`, bottom of Data & preview): one plot
+per round in the frozen order, each overlay behind its own tick box — **ground
+truth (the hidden random walk)**, the AI's interpolation line, its private
+anchors, pre-opened prizes (with values), mark-the-best-position, scored-rounds-
+only — plus, under each plot, what is pre-opened, where the best prize is and how
+many positions the AI knows. Built from `artifacts(run)` + `Ai.anchorSet`/
+`Ai.aiAnswer` through the participant's own `SVChart`, so it cannot drift from
+what the round actually is. **ALL OF IT IS ADMIN-ONLY AND MUST STAY SO** — the
+truth and the AI curve exist in the participant build only as debug overlays
+behind the preview key, the anchors never reach a live browser in server mode,
+and `tools/smoke.mjs` asserts on a LIVE round that `#plot` holds no `.gt-line`,
+no `.ai-line`, no `.anchor-dot` and that `#testview` is not displayed.
 
 **Firestore layout (§17.3):** `runs` · `runPublic` · `runCodes` · `runCounts` ·
 `roster` · `participants` (+ a server-only `rounds` subcollection) · `events` ·
@@ -2505,8 +2537,8 @@ rows carry no `run_id`.
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
 `node lab/search-v2/tools/selftest.js` (202) ·
-`tools/smoke.mjs` (137, a whole 28-round session) ·
-`tools/admin-smoke.mjs` (55) · `tools/platform-guard.mjs` (26) ·
+`tools/smoke.mjs` (141, a whole 28-round session) ·
+`tools/admin-smoke.mjs` (104) · `tools/platform-guard.mjs` (26) ·
 `tools/layout-guard.mjs` (89, reachability at five window sizes) ·
 `tools/preview-guard.mjs` · **`tools/emulator-test.mjs` (37, against the REAL
 Functions + Rules in the Firebase emulator — needs Java and firebase-tools, skips
