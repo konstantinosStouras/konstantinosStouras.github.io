@@ -108,25 +108,29 @@
       id: 'q_adj_hi1',
       prompt: 'Position 40 has been revealed and its prize is 50 points. What is the HIGHEST the prize at position 41 could be?',
       options: ['50 points', '55 points', '60 points', 'It could be anything from 0 to 100'],
-      answer: 2
+      answer: 2,
+      why: 'Neighbouring positions differ by at most {stepBound}, so from 50 the next one can reach 50 + {stepBound}.'
     },
     {
       id: 'q_adj_lo1',
       prompt: 'Same situation: position 40 is 50 points. What is the LOWEST the prize at position 41 could be?',
       options: ['0 points', '40 points', '45 points', '50 points'],
-      answer: 1
+      answer: 1,
+      why: 'The same bound works downwards: 50 − {stepBound}. The prize can never jump further than {stepBound} in one step.'
     },
     {
       id: 'q_adj_hi2',
       prompt: 'Still with position 40 at 50 points — what is the HIGHEST the prize at position 42 could be?',
       options: ['60 points', '65 points', '70 points', '100 points'],
-      answer: 2
+      answer: 2,
+      why: 'Two steps, so at most 2 × {stepBound} away from 50. The further you go, the less the bound tells you.'
     },
     {
       id: 'q_cost',
       prompt: 'What does it cost to reveal one position?',
       options: ['Nothing', '{queryCost} points', '{revealCost} points', 'It depends on the position'],
-      answer: 2
+      answer: 2,
+      why: 'Revealing costs {revealCost} and shows the true prize. Stopping is free.'
     },
     {
       id: 'q_score',
@@ -137,7 +141,8 @@
         'The sum of the three prizes you revealed',
         'The prize at the position you stopped on, with no deduction'
       ],
-      answer: 0
+      answer: 0,
+      why: 'Your score is the TRUE prize where you stop, minus everything you spent that round. It can be negative.'
     },
     {
       id: 'q_reset',
@@ -148,7 +153,8 @@
         'They are always higher than this round',
         'Only the positions that were open stay the same'
       ],
-      answer: 1
+      answer: 1,
+      why: 'Every round is a fresh draw. Nothing you learn in one round applies to the next.'
     }
   ];
 
@@ -165,7 +171,8 @@
         'Both cost {revealCost}',
         'Asking is free, revealing costs {revealCost}'
       ],
-      answer: 0
+      answer: 0,
+      why: 'Asking the AI costs {queryCost}; revealing the truth costs {revealCost}. Asking is cheaper because it does not tell you the prize.'
     },
     {
       id: 'qai_score',
@@ -177,7 +184,8 @@
         'Nothing, because I did not reveal it',
         'The average of 70 and the true prize'
       ],
-      answer: 1
+      answer: 1,
+      why: 'The AI\'s number is an ESTIMATE, never a prize. You are paid the true prize where you stop, whatever it turns out to be.'
     },
     {
       id: 'qai_right',
@@ -188,13 +196,15 @@
         'It is right in the middle of the line and wrong at the ends',
         'It is right about half the time, at random'
       ],
-      answer: 1
+      answer: 1,
+      why: 'It knows a few positions exactly and interpolates between them. It is confident everywhere, right only in places.'
     },
     {
       id: 'qai_tell',
       prompt: 'Can you tell, from a single answer, whether the AI knew that position or guessed it?',
       options: ['Yes, a guess is shown differently', 'Yes, a guess takes longer to arrive', 'No', 'Only if the answer is a round number'],
-      answer: 2
+      answer: 2,
+      why: 'No — every answer is rounded the same way and arrives after the same delay, so nothing in it says whether it was known or guessed.'
     },
     {
       id: 'qai_outside',
@@ -205,7 +215,8 @@
         'It continues the slope it had at the edge',
         'It refuses to answer out there'
       ],
-      answer: 0
+      answer: 0,
+      why: 'Beyond the outermost position it knows, it simply repeats that value. It cannot see further out than its own knowledge.'
     },
     {
       id: 'qai_update',
@@ -216,7 +227,8 @@
         'It stops answering about that position',
         'They become exactly right everywhere'
       ],
-      answer: 1
+      answer: 1,
+      why: 'Anything you reveal becomes something the AI knows, so its later answers can change.'
     }
   ];
 

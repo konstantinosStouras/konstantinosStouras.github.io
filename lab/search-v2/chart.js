@@ -107,6 +107,11 @@ window.SVChart = (function () {
           'L' + ex.toFixed(1) + ' ' + (ey + r).toFixed(1) +
           'L' + (ex - r).toFixed(1) + ' ' + ey.toFixed(1) + 'Z"><title>AI said ' +
           asked[i].val + ' at position ' + asked[i].pos + '</title></path>');
+        // Labelled like the other marks. The side panel used to list every answer
+        // in words; with that gone the plot is the only record, so it has to
+        // carry the number rather than hide it in a hover tooltip.
+        parts.push('<text class="mark-lbl ask" x="' + ex.toFixed(1) + '" y="' + (ey - 11).toFixed(1) +
+          '" text-anchor="middle">' + asked[i].val + '</text>');
       }
 
       // ---- pre-opened: filled squares at the true prize ---------------------

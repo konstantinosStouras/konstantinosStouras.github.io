@@ -156,6 +156,13 @@ async function runOne(name) {
   // we simply check that an unanswered form does not advance.
   await pg.locator('#btn-quiz').click();
   ok(await visible(pg, 's-quiz'), 'submitting an empty comprehension form does not advance');
+  // The reminder carries what a participant needs to ANSWER, on the same screen.
+  const rem = await pg.locator('#quiz-reminder').innerText();
+  ok(/Revealing/.test(rem) && new RegExp(String(await pg.evaluate(() => window.CONFIG.DEFAULTS.costs.revealCost))).test(rem),
+    'the comprehension gate reminds the participant what revealing costs', rem.split('\n')[1]);
+  ok(/true prize where you stop/.test(rem), 'and how the round is scored');
+  ok(/at most/.test(rem), 'and the step bound the adjacency questions turn on');
+
   await answerQuiz(pg, 'base');
   await pg.locator('#btn-quiz').click();
   await pg.waitForSelector('#s-blockintro.active, #s-round.active');
@@ -191,6 +198,17 @@ async function runOne(name) {
       await pg.locator('#btn-aiquiz').click();
       ok(await visible(pg, 's-aiquiz'),
         'the STRICT gate blocks: getting "the AI’s number is not your prize" wrong does not let you through');
+      // Every answered question is marked, and a correct one carries the reason.
+      const fbs = await pg.$$eval('#aiquiz-body .q-fb',
+        els => els.filter(e => e.style.display !== 'none').map(e => e.textContent.trim()));
+      ok(fbs.length >= 2, 'every answered question is marked right or wrong, not only the wrong ones', String(fbs.length));
+      ok(fbs.some(t => /✓ Correct/.test(t)), 'a correct answer is ticked');
+      ok(fbs.some(t => /✓ Correct\./.test(t) && t.length > 20),
+        'and carries a short explanation, so the tick teaches something',
+        fbs.find(t => /✓ Correct/.test(t)));
+      ok(fbs.some(t => /Not quite/.test(t)), 'a wrong answer says so');
+      const aiRem = await pg.locator('#aiquiz-reminder').innerText();
+      ok(/not a prize/.test(aiRem), 'the AI gate reminds them the AI’s number is not a prize', aiRem.split('\n')[2]);
       await answerQuiz(pg, 'ai');
       await pg.locator('#btn-aiquiz').click();
       await pg.waitForSelector('#s-blockintro.active, #s-round.active');
@@ -247,8 +265,13 @@ async function runOne(name) {
         ok(leak.aiCurve === 0, 'nor is the AI’s interpolation line');
         ok(leak.anchors === 0, 'nor are the AI’s private anchors');
         ok(leak.testview === false, 'and the testing overlays stay out of a live session entirely');
-        const li = await pg.locator('#touched-list .tl.ask').first().innerText();
-        ok(/AI said/.test(li), 'the left panel lists the asked position as a claim, not a prize');
+        // The plot is now the ONLY record of what the AI said, so it must label
+        // the diamond rather than hide the number in a hover tooltip.
+        const askLbl = await pg.evaluate(() =>
+          Array.from(document.querySelectorAll('#plot .mark-lbl.ask')).map(e => e.textContent));
+        ok(askLbl.length >= 1, 'the AI’s answer is labelled on the plot, not only in a tooltip', askLbl.join(','));
+        ok(await pg.evaluate(() => document.querySelectorAll('#plot .rev-mark').length) === 0,
+          'and it is still drawn as a claim, not as a revealed prize');
       }
       // Re-querying the same position must stay possible (§14).
       if (!requeryChecked) {
