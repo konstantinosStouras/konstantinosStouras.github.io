@@ -170,11 +170,11 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 263 checks, no browser
-node lab/search-v2/tools/smoke.mjs           # 178 checks, a whole session
-node lab/search-v2/tools/admin-smoke.mjs     # 136 checks, the admin panel
-node lab/search-v2/tools/wording-guard.mjs   #  15 checks, a session's own words
-node lab/search-v2/tools/platform-guard.mjs  #  26 checks, the platform contract
+node lab/search-v2/tools/selftest.js         # 299 checks, no browser
+node lab/search-v2/tools/smoke.mjs           # 201 checks, a whole session
+node lab/search-v2/tools/admin-smoke.mjs     # 161 checks, the admin panel
+node lab/search-v2/tools/wording-guard.mjs   #  17 checks, a session's own words
+node lab/search-v2/tools/platform-guard.mjs  #  28 checks, the platform contract
 node lab/search-v2/tools/layout-guard.mjs    # 104 checks, five window sizes
 node lab/search-v2/tools/preview-guard.mjs   #  the sandbox writes nothing
 node lab/search-v2/tools/emulator-test.mjs   #  37 checks against the REAL Functions
@@ -362,9 +362,20 @@ whole configuration in front of you first — rounds, task, costs and caps, the 
 AI densities and whether they still bracket `s*`, assignment, what happens after
 the task, and the participant link — with **Cancel** as a real cancel.
 
+**A session is named before it exists.** The Sessions screen opens on a **Create a
+session** card — session name, an optional Session ID, one green button — the same
+shape the ideasearchlab and Answer Arena admins use. It builds the session from the
+saved default parameters, shows the summary above, and then **selects it**, so
+creating a session is also opening it: every other screen is already on it, and the
+card reports the code, the participant link, and the three things there are to do
+next (copy the link, check its parameters, open entry). Naming is the one thing
+every session needs, so it is asked first; the parameter form stays one click away
+(**Set the parameters first…**, which carries whatever was typed with it) for a
+session whose task differs from the defaults.
+
 | Screen | What it does |
 |---|---|
-| **Sessions** | grouped **Active** and **Completed**, one card each in the shape of the other class admin panels: code, status, name, created date, participant count, sequence balance and where the score is computed; **Open · Copy link · ⬇ Export data · 🧪 Test round · Clone · Open entry / Close session · Delete**. Export data does the whole job in one press — read the log, build the workbook, save it. Delete removes the session **and its event log**, so export first |
+| **Sessions** | a **Create a session** card first — name, optional Session ID, Create session — then grouped **Active** and **Completed**, one card each in the shape of the other class admin panels: code, status, name, created date, participant count, sequence balance and where the score is computed; **Open · Copy link · ⬇ Export data · 🧪 Test round · Clone · Open entry / Close session · Delete**. Export data does the whole job in one press — read the log, build the workbook, save it. Delete removes the session **and its event log**, so export first |
 | **Parameters** | six collapsible groups — Environment, Costs and limits, AI, Round structure, Assignment, Acceptance filter — plus an always-editable Operations group. Two red-confirmed switches ("draw the full curve", "mark the AI's known positions") stay visible but must never be turned on |
 | **Consequences** | recomputed live beside the form: σ, `s*`, `g*`, the two gap-midpoint SDs, the benchmark frontier share per seed shape, session length, and **two badges** — green when sparse sits above `s*` and dense below it, red when the design has become a gradient rather than a sign change |
 | **Roster** | generate anonymous codes with an exact 50/50 block-randomised split; next-entrant override, which demands a reason and logs it into the export |

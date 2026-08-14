@@ -204,8 +204,9 @@ ok((await pg.locator('.run-card').count()) === 1, 'confirming the summary create
 
 // ── the two session sections, in the shape of the ideasearchlab admin ─────
 const secs = await pg.$$eval('.sess-sec .sess-head h3', els => els.map(e => e.textContent.trim()));
-ok(JSON.stringify(secs) === JSON.stringify(['Active sessions', 'Completed sessions']),
-  'sessions are grouped into Active and Completed, like the other class admin panels', secs.join(' | '));
+ok(JSON.stringify(secs) === JSON.stringify(['Create a session', 'Active sessions', 'Completed sessions']),
+  'the screen reads Create · Active · Completed — creating first, then the two groups the other class ' +
+  'admin panels use', secs.join(' | '));
 ok((await pg.locator('#runs-active .run-card').count()) === 1, 'a draft session is ACTIVE, not completed');
 ok(/1 active/.test(await pg.locator('#runs-active-n').innerText()), 'the active section carries its count');
 ok(/No completed/.test(await pg.locator('#runs-done').innerText()), 'and the empty completed section says so');
@@ -515,6 +516,108 @@ const cloned = await pg.evaluate(() => {
 ok(cloned.found, 'cloning a session from its card creates the clone');
 ok(cloned.consent === 'Reworded for this session only.',
   'and the clone carries the wording of the session it was cloned FROM', String(cloned.consent));
+
+// ── creating a session from the Sessions screen ───────────────────────────
+// Naming is the one thing every session needs, so it is asked FIRST, on the
+// screen the panel opens on — not at the bottom of the seventh parameter group.
+await tab('runs');
+ok(await pg.locator('#create-sec').isVisible(), 'the Sessions screen carries a "Create a session" card');
+ok(await pg.locator('#nr-name').isVisible() && await pg.locator('#nr-code').isVisible(),
+  'with the session NAME and its optional Session ID asked before anything is created');
+ok((await pg.getAttribute('#nr-name', 'placeholder')) === 'e.g. Spring MBA 2026',
+  'the name field is the one the other class admins show');
+ok(/capital letters and digits/.test(await pg.locator('#create-sec .hint').innerText()),
+  'and the ID field states the rule it enforces');
+ok((await pg.locator('#tab-runs #btn-new-run').count()) === 1,
+  'the parameter-form path is still one click away, from the card itself');
+
+// What the admin types is live-normalised to a code that is typeable back.
+await pg.fill('#nr-name', 'Spring MBA 2026');
+await pg.fill('#nr-code', 'spring mba-2026');
+ok((await pg.inputValue('#nr-code')) === 'SPRINGMBA2026',
+  'the Session ID normalises to one word of capitals and digits as it is typed',
+  await pg.inputValue('#nr-code'));
+
+// Taking the advanced path must not cost the admin what they already typed.
+await pg.locator('#tab-runs #btn-new-run').click();
+await pg.waitForTimeout(200);
+ok((await pg.inputValue('#p-ops-runName')) === 'Spring MBA 2026' &&
+   (await pg.inputValue('#p-ops-code')) === 'SPRINGMBA2026',
+  '"Set the parameters first…" carries the typed name and code into the form');
+
+await tab('runs');
+const cardsBefore = await pg.locator('.run-card').count();
+
+// A too-short custom ID is refused before any summary is raised.
+await pg.fill('#nr-code', 'AB');
+await pg.locator('#btn-create-run').click();
+await pg.waitForTimeout(300);
+ok(!(await pg.locator('#sess-summary').count()) && /3–40 characters/.test(await pg.locator('#nr-note').innerText()),
+  'a Session ID shorter than three characters is refused, and nothing is created');
+
+// So is one that is already taken — a repeat would re-point the code at the
+// newer session and send the older one's participants into it.
+await pg.fill('#nr-code', code);
+await pg.locator('#btn-create-run').click();
+await pg.waitForTimeout(400);
+ok(!(await pg.locator('#sess-summary').count()) && /already taken/.test(await pg.locator('#nr-note').innerText()),
+  'and so is a Session ID another session already uses');
+ok((await pg.locator('.run-card').count()) === cardsBefore, 'neither refusal creates a session');
+
+// The real thing: name, code, the same summary gate, one press.
+await pg.fill('#nr-code', 'SPRINGMBA2026');
+await pg.locator('#btn-create-run').click();
+await pg.waitForTimeout(400);
+ok(await pg.locator('#sess-summary').isVisible(),
+  'creating from the card still summarises the session FIRST — the pool and the 28 specs freeze here too');
+const sumC = await pg.locator('#sess-summary').innerText();
+ok(/Spring MBA 2026/.test(sumC) && /SPRINGMBA2026/.test(sumC), 'the summary names the session and its code');
+ok(/Entry: closed/.test(sumC), 'and states that it is created closed, exactly as the lead text promises');
+await pg.locator('#sum-ok').click();
+await pg.waitForTimeout(700);
+
+ok((await pg.locator('.run-card').count()) === cardsBefore + 1, 'confirming creates the session');
+const newCard = await pg.locator('#runs-active .run-card', { hasText: 'SPRINGMBA2026' }).innerText();
+ok(/Spring MBA 2026/.test(newCard) && /draft/.test(newCard),
+  'it lands in Active sessions under its name, as a draft', newCard.split('\n').slice(0, 3).join(' · '));
+
+const created = await pg.locator('#nr-created').innerText();
+ok(/SPRINGMBA2026/.test(created) && /\?code=SPRINGMBA2026/.test(created),
+  'the card reports the code and the participant link', created.split('\n').join(' · '));
+const boxBtns = await pg.$$eval('#nr-created button', els => els.map(e => e.textContent.trim()));
+ok(JSON.stringify(boxBtns) === JSON.stringify(['Copy link', 'Check its parameters', 'Open entry']),
+  'and offers the three things there are to do next', boxBtns.join(' | '));
+ok((await pg.inputValue('#nr-name')) === '' && (await pg.inputValue('#nr-code')) === '',
+  'the form clears, ready for the next session');
+
+// "Create, then open it" was the complaint: the new session is already the
+// selected one, so every other screen is on it without a second click.
+await tab('params');
+ok(/Spring MBA 2026/.test(await pg.locator('#params-title').innerText()) &&
+   /SPRINGMBA2026/.test(await pg.locator('#params-sub').innerText()),
+  'creating a session SELECTS it — the Parameters screen is already on it, with nothing to open',
+  await pg.locator('#params-title').innerText());
+
+// A blank ID auto-generates, so a name is genuinely all it takes.
+await tab('runs');
+await pg.fill('#nr-name', 'Autumn cohort');
+await pg.locator('#btn-create-run').click();
+await pg.waitForTimeout(400);
+await pg.locator('#sum-ok').click();
+await pg.waitForTimeout(700);
+ok((await pg.locator('.run-card').count()) === cardsBefore + 2, 'a name alone creates a session');
+const autoGenerated = (await pg.locator('#nr-created .cb-code').innerText()).trim();
+ok(/^[A-Z0-9]{5}$/.test(autoGenerated), 'with an automatic five-character code (' + autoGenerated + ')');
+ok(autoGenerated !== code && autoGenerated !== 'SPRINGMBA2026', 'that is not one already in use');
+
+// A draft must really be closed: app.js treats a session as open when
+// ops.entryOpen is anything but false, so a draft carrying the Operations
+// toggle's "Open" would be enterable before the validation gate ever ran.
+const drafts = await pg.evaluate(() => JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]')
+  .map(r => ({ code: r.code, status: r.status, entryOpen: r.ops && r.ops.entryOpen })));
+ok(drafts.every(r => r.status !== 'draft' || r.entryOpen === false),
+  'every session is created as a real draft — status draft AND entry closed',
+  JSON.stringify(drafts));
 
 ok(errors.length === 0, 'no page errors anywhere in the panel', errors.slice(0, 5).join(' | '));
 

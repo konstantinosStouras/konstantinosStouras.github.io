@@ -165,6 +165,25 @@
     .closeBtn{background:var(--bg); color:var(--ink); border-color:var(--line);}
     .deleteBtn{background:transparent; color:var(--red); border-color:var(--red);}
 
+    /* ---- create a session (the shape of the ideasearchlab / Answer Arena card) ---- */
+    .create-card{border:1px solid var(--line); border-radius:12px; padding:2px 16px 14px;
+      margin:10px 0; background:#fff;}
+    :root[data-theme="dark"] .create-card{background:#1d2025; border-color:#2d3138;}
+    .create-card .run-acts{margin-top:6px;}
+    /* Deliberately NOT .code-box: ../styles.css already has one (the participant
+       app's completion code), and sharing the name would leave this box quietly
+       inheriting whatever that one becomes. */
+    .made-box{border:2px dashed var(--green); border-radius:12px; padding:12px 14px; margin:14px 0 2px;
+      background:#f3faef; text-align:center;}
+    :root[data-theme="dark"] .made-box{background:#16221a; border-color:#3a7a3f;}
+    .made-box .run-acts{justify-content:center;}
+    .cb-label{font-size:12.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;}
+    .cb-code{font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      font-size:26px; font-weight:800; letter-spacing:.1em; margin:3px 0 0;}
+    .cb-name{font-weight:600; font-size:14px;}
+    .cb-link{font-size:12.5px; color:var(--muted); word-break:break-all; margin-top:4px;}
+    .cb-hint{font-size:12.5px; color:var(--muted); margin-top:8px;}
+
     /* ---- session sections + cards (the shape of the ideasearchlab admin) ---- */
     .sess-sec{margin-top:22px;}
     .sess-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px;}
@@ -271,7 +290,6 @@
         <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
           <h2 style="margin:0;">Sessions</h2>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-green btn-sm" id="btn-new-run" title="Start a new session from the built-in defaults">+ New session</button>
             <button class="btn btn-ghost btn-sm" id="btn-refresh-runs">&#8635; Refresh</button>
           </div>
         </div>
@@ -280,6 +298,43 @@
         that touches the task is locked; to change anything you <b>clone</b> the session and collect under a
         new id. Every event, round and participant row carries its <span class="mono">run_id</span> — the
         session's id, which the design brief calls a run — so two parameter sets can never be silently pooled.</p>
+
+        <!-- Create a session, right here on the Sessions screen. Naming is the one
+             thing every session needs, so it is asked FIRST — the parameter form
+             stays the advanced path for a session whose task differs from the
+             saved defaults. Mirrors the ideasearchlab "Session details" card and
+             Answer Arena's "Create a session". -->
+        <div class="sess-sec" id="create-sec">
+          <div class="sess-head"><h3>Create a session</h3></div>
+          <p class="muted small">Give it a name and it is created from the <b>saved default parameters</b>,
+          as a draft nobody can enter yet. Everything stays editable on the Parameters screen for as long as
+          it is a draft &mdash; nothing locks until the first participant claims a code.</p>
+          <div class="create-card">
+            <div class="row2">
+              <div class="field">
+                <label for="nr-name">Session name</label>
+                <input type="text" id="nr-name" placeholder="e.g. Spring MBA 2026" maxlength="80"
+                       autocomplete="off" spellcheck="false">
+              </div>
+              <div class="field">
+                <label for="nr-code">Session ID <span class="defval">&middot; goes in the participant link</span></label>
+                <input type="text" id="nr-code" placeholder="(OPTIONAL) CUSTOM CODE" maxlength="40"
+                       autocomplete="off" spellcheck="false" style="text-transform:uppercase; letter-spacing:.06em;">
+                <div class="hint">Leave blank to auto-generate a short code. Single word &mdash; capital letters
+                and digits only, no spaces or dashes (3&ndash;40 chars).</div>
+              </div>
+            </div>
+            <!-- A form action, so it carries the form-button family the Parameters
+                 screen uses (Save session), not the .sBtn card pills. -->
+            <div class="run-acts" style="margin-top:8px;">
+              <button class="btn btn-green btn-sm" id="btn-create-run">Create session</button>
+              <button class="btn btn-ghost btn-sm" id="btn-new-run"
+                      title="Open the parameter form on a new session instead, to change the task before it is created">Set the parameters first&hellip;</button>
+            </div>
+            <div class="admin-note" id="nr-note" style="display:none;"></div>
+            <div id="nr-created"></div>
+          </div>
+        </div>
 
         <div class="sess-sec">
           <div class="sess-head"><h3>Active sessions</h3><span class="sess-count" id="runs-active-n"></span></div>
