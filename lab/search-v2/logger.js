@@ -46,6 +46,13 @@ window.Logger = (function () {
     // round / session summary (raw only)
     'duration_ms', 'active_ms', 'blur_events', 'blur_total_ms', 'instruction_reopens',
     'interrupted', 'n_queries', 'n_reveals', 'total_cost', 'final_score',
+    // raw_score and nomination_type are sent by app.js on every round_end. They
+    // were absent from this whitelist, which silently DROPPED them — build()
+    // copies only keys it finds here — so `raw_score` was null in every exported
+    // row of every real session (the bot path in export.js sets it directly,
+    // which is why the offline tests never noticed). Anything app.js logs must
+    // appear here or it does not exist.
+    'raw_score', 'nomination_type',
     'stopped_immediately', 'nominated_position', 'nominated_true_value',
     // comprehension / survey
     'question_id', 'attempts', 'ms_to_first_answer', 'first_answer_correct',

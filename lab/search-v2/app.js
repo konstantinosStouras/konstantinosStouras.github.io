@@ -248,7 +248,11 @@
     var fresh = !saved;
     S.version = CFG.APP_VERSION;
     S.code = code;
-    S.runId = RUN ? RUN.id : (S.runId || null);
+    // In SERVER mode the run document is admin-only (it holds the seeds), so the
+    // id comes from the redacted public copy. Without this S.runId stayed null,
+    // which skipped the roster claim below (so no round could ever start) and
+    // stamped run_id:null on every client row (so the export dropped them all).
+    S.runId = (RUN && RUN.id) || (PUB && PUB.id) || S.runId || null;
     S.runCode = (RUN && RUN.code) || (pr.code || '').toUpperCase() || S.runCode || null;
     S.pid = pr.PROLIFIC_PID || (HANDOFF && HANDOFF.profile && HANDOFF.profile.studentId) || S.pid || code;
     S.study = pr.STUDY_ID || S.study || null;
@@ -270,7 +274,17 @@
 
     if (closed && !S.completed && S.phase === 'consent') { show('s-closed'); return; }
 
-    if (window.SVFirebase && SVFirebase.isConfigured() && S.runId) {
+    // Claiming the code is what creates the roster entry, and in server mode
+    // EVERY other callable refuses without one (requireOwner). So server mode
+    // claims through the callable — which also assigns the sequence
+    // transactionally — and client mode keeps the direct Firestore write.
+    if (SERVER_MODE) {
+      B.claimCode(code).then(function (r) {
+        if (r && !r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
+        if (r && r.sequence) S.sequence = r.sequence;
+        finishBoot();
+      }, function (err) { serverProblem(err); });
+    } else if (window.SVFirebase && SVFirebase.isConfigured() && S.runId) {
       SVFirebase.claimCode(S.runId, code, P.ops.rosterMode, (RUN && RUN.assign && RUN.assign.nextEntrantOverride) || 'auto')
         .then(function (r) {
           if (!r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
@@ -360,17 +374,39 @@
   function startEventSync() {
     if (PREVIEW || !(window.SVFirebase && SVFirebase.isConfigured())) return;
     var key = 'searchv2:v3:synced:' + S.code;
+    // The watermark is CONTIGUOUS, not a maximum. Rows are written concurrently,
+    // so a row that fails while a later one succeeds used to be jumped over and
+    // never retried — the backfill on the next load starts at watermark+1. Acked
+    // sequence numbers are therefore held until the run below them is complete.
+    var acked = {}, failed = {};
+    function readMark() { try { return parseInt(localStorage.getItem(key) || '-1', 10); } catch (e) { return -1; } }
     function mark(seq) {
-      try { var cur = parseInt(localStorage.getItem(key) || '-1', 10); if (seq > cur) localStorage.setItem(key, String(seq)); } catch (e) {}
+      acked[seq] = 1;
+      delete failed[seq];
+      var cur = readMark();
+      while (acked[cur + 1]) { cur++; delete acked[cur]; }
+      try { localStorage.setItem(key, String(cur)); } catch (e) {}
     }
-    L.onEvent(function (ev, seq) { SVFirebase.writeEvent(ev, seq).then(function (ok) { if (ok) mark(seq); }); });
-    SVFirebase.signInAnon().then(function () {
-      var synced = -1;
-      try { synced = parseInt(localStorage.getItem(key) || '-1', 10); } catch (e) {}
-      var evs = L.getEvents();
-      for (var i = synced + 1; i < evs.length; i++) {
-        (function (idx) { SVFirebase.writeEvent(evs[idx], idx).then(function (ok) { if (ok) mark(idx); }); })(i);
+    function send(ev, seq) {
+      return SVFirebase.writeEvent(ev, seq).then(function (okWrite) {
+        if (okWrite) mark(seq); else failed[seq] = ev;
+      }, function () { failed[seq] = ev; });
+    }
+    L.onEvent(send);
+    // Retry within the session too. Without this, every write that failed while
+    // the connection was down survived only until the tab closed — and for the
+    // last participant of the day, that is the end of the study.
+    setInterval(function () {
+      var pending = Object.keys(failed);
+      for (var j = 0; j < pending.length && j < 40; j++) {
+        var sq = +pending[j], row = failed[sq];
+        delete failed[sq];
+        send(row, sq);
       }
+    }, 20000);
+    SVFirebase.signInAnon().then(function () {
+      var evs = L.getEvents();
+      for (var i = readMark() + 1; i < evs.length; i++) send(evs[i], i);
     }).catch(function () {});
   }
 
@@ -649,6 +685,7 @@
         decisionIdx: 0,
         sliderMoves: 0, movesSinceAction: 0, lastSliderT: null,
         instrReopens: 0, blurEvents: 0, blurMs: 0,
+        lastActionAt: Date.now(),
         capHit: null
       };
       sel = Math.round((P.env.positions + 1) / 2);
@@ -669,6 +706,7 @@
       buildRoundUI();
       renderRound();
       show('s-round');
+      armNudges();
     }, serverProblem);
   }
 
@@ -842,13 +880,45 @@
         }).join('')
       : '<li class="tl empty">Nothing yet this round.</li>';
 
+    var qCost = S.round.queries.length * P.costs.queryCost;
+    var rCost = S.round.reveals.length * P.costs.revealCost;
     $('c-queries').textContent = S.round.queries.length;
-    $('c-query-cost').textContent = S.round.queries.length * P.costs.queryCost;
+    $('c-query-cost').textContent = qCost;
     $('c-reveals').textContent = S.round.reveals.length;
-    $('c-reveal-cost').textContent = S.round.reveals.length * P.costs.revealCost;
+    $('c-reveal-cost').textContent = rCost;
+    $('c-total-cost').textContent = qCost + rCost;
     $('c-selected').textContent = sel;
     $('c-remaining').textContent = PLAN.rounds.length - S.roundPtr - 1;
     $('ask-panel').style.display = aiOn ? '' : 'none';
+    // The AI rows are meaningless in a round without it.
+    $('ss-ai').style.display = aiOn ? '' : 'none';
+    $('ss-ai-cost').style.display = aiOn ? '' : 'none';
+
+    // Best prize FOUND — true prizes only. An AI answer is not a prize, and
+    // showing one here would be the one place the study contradicts itself.
+    var knownPairs = preOpenedPairs().concat(revealedPairs());
+    var best = null;
+    knownPairs.forEach(function (x) { if (best == null || x.val > best.val) best = x; });
+    $('c-best').textContent = best ? (best.val + ' at position ' + best.pos) : '—';
+
+    // What stopping on the SELECTED position is worth, but only when its prize
+    // is actually known — otherwise this would leak the truth for free.
+    var selKnown = null;
+    knownPairs.forEach(function (x) { if (x.pos === sel) selKnown = x.val; });
+    var netEl = $('c-net');
+    if (selKnown != null) {
+      var net = selKnown - (qCost + rCost);
+      netEl.textContent = net + ' (' + selKnown + ' − ' + (qCost + rCost) + ' spent)';
+      netEl.parentNode.classList.toggle('neg', net < 0);
+    } else {
+      netEl.textContent = 'unknown — position ' + sel + ' is not open yet';
+      netEl.parentNode.classList.remove('neg');
+    }
+
+    $('c-prices').innerHTML = 'Revealing a position costs <b>' + P.costs.revealCost + '</b>' +
+      (aiOn ? ' · asking the AI costs <b>' + P.costs.queryCost + '</b>' : '') +
+      ' · stopping is free.<br>Your score is the <b>true prize where you stop</b>, minus everything you spent this round.' +
+      (aiOn ? '<br>The AI\u2019s answer is an <b>estimate, not a prize</b>.' : '');
 
     var revealedHere = isRevealed(sel);
     $('btn-reveal').disabled = busy || revealedHere || S.round.reveals.length >= P.costs.revealCap;
@@ -948,6 +1018,8 @@
       B.act(action, pos, actionId, S.code, currentRound().round_index).then(function (res) {
         var value = res.value;
         var at = Date.now() - S.round.startedAt;
+        S.round.lastActionAt = at;
+        hideNudge();
         if (action === 'query') S.round.queries.push({ pos: pos, val: value, t: at });
         else S.round.reveals.push({ pos: pos, val: value, t: at });
         S.round.decisionIdx++;
@@ -1044,6 +1116,8 @@
       S.results.push(result);
       S.lastResult = result;
       S.round.open = false;
+      clearNudges();
+      hideNudge();
       save();
       done();
       showInterstitial(result);
@@ -1081,20 +1155,90 @@
       lines.push('<div class="res-line muted">The AI had said <b>' + askedAt + '</b> there — ' +
         (errAbs === 0 ? 'exactly right.' : 'out by ' + errAbs + '.') + '</div>');
     }
-    lines.push('<div class="res-line muted">You spent ' + result.total_cost + ' points' +
-      ' (' + result.n_queries + ' question' + (result.n_queries === 1 ? '' : 's') +
-      ', ' + result.n_reveals + ' reveal' + (result.n_reveals === 1 ? '' : 's') + ').</div>');
-    lines.push('<div class="res-line"><b>Round score: ' + result.final_score + ' points</b>' +
-      (result.scored ? '' : ' — practice, not counted') + '</div>');
+    // The whole sum, itemised: the prize won, the cost of searching, the cost of
+    // consulting, and what is left. A participant should never have to work out
+    // where their score went.
+    var qC = result.n_queries * P.costs.queryCost, rC = result.n_reveals * P.costs.revealCost;
+    var led = ['<div class="ledger">'];
+    led.push('<div class="lg plus"><span>Prize at position ' + result.nominated_position + '</span>' +
+      '<span class="lg-v">+' + result.nominated_true_value + '</span></div>');
+    led.push('<div class="lg minus"><span>Cost of revealing &mdash; ' + result.n_reveals + ' \u00d7 ' +
+      P.costs.revealCost + '</span><span class="lg-v">' + (rC ? '\u2212' + rC : '0') + '</span></div>');
+    if (r && r.condition === 'AI_ON') {
+      led.push('<div class="lg minus"><span>Cost of asking the AI &mdash; ' + result.n_queries + ' \u00d7 ' +
+        P.costs.queryCost + '</span><span class="lg-v">' + (qC ? '\u2212' + qC : '0') + '</span></div>');
+    }
+    led.push('<div class="lg total"><span>Round score' + (result.scored ? '' : ' (practice, not counted)') +
+      '</span><span class="lg-v">' + result.final_score + '</span></div>');
+    led.push('</div>');
+    lines.push(led.join(''));
     if (result.scored) {
       lines.push('<div class="res-line muted">Running total: <b>' + S.totalScore + '</b> points across ' +
         S.results.filter(function (x) { return x.scored; }).length + ' scored rounds.</div>');
     }
+    var passive = passiveNudgeText(result);
+    if (passive) lines.push('<div class="res-line muted" style="margin-top:10px;">' + passive + '</div>');
     var left = PLAN.rounds.length - S.roundPtr - 1;
     lines.push('<div class="res-line muted">' + (left > 0 ? left + ' round' + (left === 1 ? '' : 's') + ' to go.' : 'That was the last round.') + '</div>');
     host.innerHTML = lines.join('');
     $('btn-continue').onclick = nextRound;
     show('s-interstitial');
+  }
+
+
+  // ======================================================================
+  //  NUDGES
+  // ======================================================================
+  // Short, friendly, dismissible. They never block anything and they never say
+  // what to choose — only that the participant may act, and how the round is
+  // scored. Every appearance is logged as telemetry (`nudge`, with its kind), so
+  // the analysis can see who was nudged and when: an unlogged prompt is an
+  // uncontrolled intervention.
+  var IDLE_FIRST_MS = 45000, IDLE_AGAIN_MS = 90000;
+  var nudgeTimer = null, nudgeShownThisRound = {}, passiveRounds = 0;
+
+  function showNudge(kind, text) {
+    if (PREVIEW) { /* still shown — a rehearsal should look like the real thing */ }
+    var el = $('tip');
+    if (!el) return;
+    $('tip-text').textContent = text;
+    el.classList.add('show');
+    nudgeShownThisRound[kind] = true;
+    try { L.tele('nudge', { kind: kind, round_index: S.round ? S.roundPtr + 1 : null }); } catch (e) {}
+  }
+  function hideNudge() { var el = $('tip'); if (el) el.classList.remove('show'); }
+
+  function armNudges() {
+    clearNudges();
+    nudgeShownThisRound = {};
+    hideNudge();
+    var x = $('tip-close');
+    if (x) x.onclick = function () { hideNudge(); };
+    nudgeTimer = setInterval(function () {
+      if (!S || !S.round || !S.round.open || S.phase !== 'round') return;
+      var since = Date.now() - (S.round.lastActionAt || S.round.startedAt || Date.now());
+      var did = S.round.queries.length + S.round.reveals.length;
+      if (!did && since > IDLE_FIRST_MS && !nudgeShownThisRound.start) {
+        showNudge('start', 'Take your time. When you are ready you can reveal a position, ' +
+          (currentRound() && currentRound().condition === 'AI_ON' ? 'ask the AI, ' : '') +
+          'or stop where you are.');
+      } else if (did && since > IDLE_AGAIN_MS && !nudgeShownThisRound.mid) {
+        showNudge('mid', 'Still thinking? You can stop on the best position you have found whenever you like.');
+      }
+    }, 5000);
+  }
+  function clearNudges() { if (nudgeTimer) { clearInterval(nudgeTimer); nudgeTimer = null; } }
+
+  // A participant who stops blind several rounds running has usually stopped
+  // reading rather than decided to gamble; this is the only nudge that mentions
+  // the trade-off, and it says nothing about WHERE to look.
+  function passiveNudgeText(result) {
+    if (result.n_queries + result.n_reveals > 0) { passiveRounds = 0; return null; }
+    passiveRounds++;
+    if (passiveRounds < 3) return null;
+    passiveRounds = 0;
+    return 'A reminder: your score is the true prize where you stop, minus what you spent. ' +
+      'Opening even one position tells you what is really there.';
   }
 
   function nextRound() {
@@ -1122,7 +1266,10 @@
       '<ul>' +
       '<li>Neighbouring positions differ by at most <b>' + P.env.stepBound + '</b> points.</li>' +
       '<li>Revealing a position costs <b>' + P.costs.revealCost + '</b> points and shows the true prize.</li>' +
-      (aiOn ? '<li>Asking the AI costs <b>' + P.costs.queryCost + '</b> points. It knows <b>' + (r.spec.ai_k) +
+      // currentK(), never r.spec.ai_k — a server-mode plan deliberately carries no
+      // spec, so that dereference threw and the reminder overlay never opened,
+      // after the open had already been counted against the attention measure.
+      (aiOn ? '<li>Asking the AI costs <b>' + P.costs.queryCost + '</b> points. It knows <b>' + currentK() +
         '</b> of the ' + P.env.positions + ' positions exactly and guesses everywhere else — you are not told which.</li>' : '') +
       '<li>Your score is the <b>true prize at the position you stop on</b>, minus everything you spent this round.</li>' +
       '<li>Prizes are drawn afresh every round.</li>' +

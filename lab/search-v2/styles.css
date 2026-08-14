@@ -224,3 +224,26 @@ p{margin:.6em 0;}
 .sv-ribbon{position:fixed; left:0; right:0; bottom:0; z-index:9999; background:#b26a00; color:#fff;
   text-align:center; padding:7px 14px; font-size:13px; box-shadow:0 -2px 10px rgba(0,0,0,.18);
   pointer-events:none;}
+
+/* ---- the round ledger: the two costs, the total, and what stopping is worth ---- */
+.side-stats .ss.tot{margin-top:6px; padding-top:6px; border-top:1px solid var(--line);}
+.side-stats .ss.net .ss-v{color:var(--blue);}
+.side-stats .ss.net.neg .ss-v{color:var(--red);}
+.price-note{margin-top:9px; font-size:12px; color:var(--muted); line-height:1.6;}
+.price-note b{color:var(--ink);}
+
+/* ---- the result ledger on the between-rounds screen ---- */
+.ledger{margin:12px auto 0; max-width:420px; text-align:left; font-size:14.5px;}
+.ledger .lg{display:flex; justify-content:space-between; gap:12px; padding:5px 0;}
+.ledger .lg-v{font-weight:700; font-variant-numeric:tabular-nums;}
+.ledger .lg.minus .lg-v{color:var(--red);}
+.ledger .lg.plus .lg-v{color:var(--green);}
+.ledger .lg.total{border-top:2px solid var(--line); margin-top:6px; padding-top:9px; font-size:16px;}
+
+/* ---- the in-round tip (distinct from the admin's own nudge-toast) ---- */
+.tip{display:none; align-items:center; gap:10px; margin:0 0 12px; padding:10px 14px;
+  background:#eef6ff; border:1px solid #cfe2fb; border-radius:10px; color:#1f4e79; font-size:14px;}
+.tip.show{display:flex;}
+.tip-x{margin-left:auto; border:none; background:none; color:inherit; font-size:20px;
+  line-height:1; cursor:pointer; opacity:.6;}
+.tip-x:hover{opacity:1;}

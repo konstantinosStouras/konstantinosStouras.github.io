@@ -136,6 +136,21 @@ async function planFor(art, code, sequence) {
 // Append an authoritative event row. Written by the Admin SDK, so the Rules'
 // refusal of client updates never applies to it — and the client cannot forge
 // one, because in server mode it never learns the values in the first place.
+// One document per authoritative row. The id must be unique across the WHOLE
+// session, so the per-round band below leaves room for every kind:
+//
+//     round_index * 1000        round_start
+//                      + 1..899 decisions (caps allow at most 60)
+//                      +   900  the stop decision
+//                      +   901  round_end
+//
+// It used to end the round at `roundIndex * 1000 + 1000`, which is the NEXT
+// round's round_start — same id, written with { merge: false }, so starting
+// round N+1 destroyed round N's round_end. In a 28-round session 27 of the 28
+// authoritative round rows were overwritten and rounds.csv came out with one
+// row per participant.
+const SEQ_STOP = 900, SEQ_ROUND_END = 901;
+
 async function appendEvent(runId, code, row) {
   const id = String(code).replace(/[^\w-]/g, '_') + '__srv__' +
     String(row.seq != null ? row.seq : Date.now()).padStart(9, '0');
@@ -319,7 +334,16 @@ exports.act = onCall(async (req) => {
     const applied = st.applied || {};
     if (applied[actionId] != null) return { value: applied[actionId], replay: true };
 
-    const queries = st.queries || [], reveals = st.reveals || [];
+    // COPY, do not alias. These arrays are pushed into below, and the caller
+    // builds the decision row's `*_before` fields from `result.st`; sharing the
+    // reference made every one of them describe the state AFTER the action —
+    // ai_anchors_before contained the position just revealed, decision_index was
+    // 1-based, and is_first_decision was never true for a server-mode row.
+    const before = {
+      queries: (st.queries || []).slice(),
+      reveals: (st.reveals || []).slice()
+    };
+    const queries = (st.queries || []).slice(), reveals = (st.reveals || []).slice();
     if (action === 'query' && queries.length >= P.costs.queryCap) {
       throw new HttpsError('resource-exhausted', 'Query cap reached.');
     }
@@ -346,19 +370,19 @@ exports.act = onCall(async (req) => {
     }
     applied[actionId] = value;
     tx.set(ref, { queries: queries, reveals: reveals, applied: applied }, { merge: true });
-    return { value: value, replay: false, nQ: queries.length, nR: reveals.length, st: st };
+    return { value: value, replay: false, nQ: queries.length, nR: reveals.length, before: before };
   });
 
   if (!result.replay) {
     // The authoritative decision row. The client's own row carries the timing
     // and the scanning; this one carries the values, and it is the one the
     // analysis trusts.
+    const bq = result.before.queries, brv = result.before.reveals;
     const anchorsBefore = Ai.anchorSet(
-      spec.ai_anchors, spec.pre_opened,
-      (result.st.reveals || []).map(function (x) { return x.pos; }), map
+      spec.ai_anchors, spec.pre_opened, brv.map(function (x) { return x.pos; }), map
     );
     const knownBefore = Ai.knownSet(
-      spec.pre_opened, (result.st.reveals || []).map(function (x) { return x.pos; }), map
+      spec.pre_opened, brv.map(function (x) { return x.pos; }), map
     );
     const enc = function (a) { return a.map(function (x) { return x.pos + ':' + x.val; }).join('|'); };
     await appendEvent(runId, code, {
@@ -367,15 +391,15 @@ exports.act = onCall(async (req) => {
       round_index: roundIndex, spec_id: spec.spec_id, seed_shape: spec.seed_shape,
       ai_density: spec.ai_density, mapping_index: spec.mapping_index,
       event_id: actionId, action: action, position: position, value: result.value,
-      decision_index: (result.st.queries || []).length + (result.st.reveals || []).length,
-      queries_so_far: (result.st.queries || []).length,
-      reveals_so_far: (result.st.reveals || []).length,
-      n_reveals_before: (result.st.reveals || []).length,
+      decision_index: bq.length + brv.length,
+      queries_so_far: bq.length,
+      reveals_so_far: brv.length,
+      n_reveals_before: brv.length,
       already_queried: action === 'reveal'
-        ? (result.st.queries || []).some(function (q) { return q.pos === position; }) : null,
+        ? bq.some(function (q) { return q.pos === position; }) : null,
       ai_anchors_before: enc(anchorsBefore),
       participant_known_before: enc(knownBefore),
-      participant_queried_before: enc(result.st.queries || []),
+      participant_queried_before: enc(bq),
       best_true_known_before: knownBefore.reduce(function (m, x) { return (m == null || x.val > m) ? x.val : m; }, null)
     });
   }
@@ -444,7 +468,7 @@ exports.nominate = onCall(async (req) => {
     const capHit = out.nReveals >= P.costs.revealCap ? 'reveal'
       : (out.nQueries >= P.costs.queryCap ? 'query' : null);
     await appendEvent(runId, code, {
-      event: 'decision', seq: roundIndex * 1000 + 999,
+      event: 'decision', seq: roundIndex * 1000 + SEQ_STOP,
       sequence: entry.sequence, block: r.block, condition: r.condition, scored: r.scored,
       round_index: roundIndex, spec_id: spec.spec_id, seed_shape: spec.seed_shape,
       ai_density: spec.ai_density, mapping_index: spec.mapping_index,
@@ -455,7 +479,7 @@ exports.nominate = onCall(async (req) => {
       participant_queried_before: enc(out.queries || [])
     });
     await appendEvent(runId, code, {
-      event: 'round_end', seq: roundIndex * 1000 + 1000,
+      event: 'round_end', seq: roundIndex * 1000 + SEQ_ROUND_END,
       sequence: entry.sequence, block: r.block, condition: r.condition, scored: r.scored,
       round_index: roundIndex, spec_id: spec.spec_id, seed_shape: spec.seed_shape,
       ai_density: spec.ai_density, mapping_index: spec.mapping_index,

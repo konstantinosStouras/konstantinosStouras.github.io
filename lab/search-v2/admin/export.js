@@ -102,7 +102,7 @@
       });
 
       Object.keys(perRound).forEach(function (ri) {
-        var rows = perRound[ri];
+        var rows = mergeServerRows(perRound[ri]);
         var spec = art.specById[rows[0].spec_id];
         var mapping = spec ? art.pool[spec.mapping_index] : null;
         if (!mapping) return;
@@ -110,7 +110,19 @@
 
         rows.forEach(function (e, i) {
           var known = decodePairs(e.participant_known_before);
-          var aiAnchors = decodePairs(e.ai_anchors_before);
+          // The AI's anchor set is RECONSTRUCTED, never trusted from the row.
+          // A stop row carries no anchors — no writer supplies them, and in
+          // server mode the browser could not know them — so trusting the field
+          // left the nomination, the decision this study is about, with no AI
+          // geometry at all, and handed eiSurface an empty set, which then
+          // reported max_ei_available 0, ei_regret 0 and matched_benchmark TRUE
+          // for anyone who stopped at position 1. Everything needed is here:
+          // the round's private anchors, its pre-opened positions and what the
+          // participant had revealed by this decision.
+          var aiAnchors = Ai.anchorSet(
+            spec.ai_anchors, spec.pre_opened,
+            known.map(function (k) { return k.pos; }), mapping
+          );
           var queried = decodePairs(e.participant_queried_before);
           var pos = num(e.position);
 
@@ -172,6 +184,55 @@
     return out;
   }
 
+  // `info` is one JSON string, so merging field by field would keep whichever
+  // side's blob won and silently drop the other's keys — the browser's
+  // slider_moves, in practice, since the server's row has no clock.
+  function mergeInfo(a, b) {
+    if (!a) return b; if (!b) return a;
+    var A = {}, B = {};
+    try { A = JSON.parse(a) || {}; } catch (e) {}
+    try { B = JSON.parse(b) || {}; } catch (e) {}
+    Object.keys(B).forEach(function (k) { if (A[k] == null || A[k] === '') A[k] = B[k]; });
+    try { return JSON.stringify(A); } catch (e) { return a; }
+  }
+  function mergeInto(into, e) {
+    if (!into) return Object.assign({}, e);
+    var prefer = (e.server === true);
+    var info = mergeInfo(into.info, e.info);
+    Object.keys(e).forEach(function (f) {
+      if (e[f] == null) return;
+      if (into[f] == null || prefer) into[f] = e[f];
+    });
+    if (info != null) into.info = info;
+    return into;
+  }
+
+  // ======================================================================
+  //  SERVER + CLIENT ROWS ARE ONE ROW
+  // ======================================================================
+  // In server mode an action is written TWICE on purpose: the Cloud Function
+  // writes the authoritative values (it is the only side that has the mapping),
+  // and the browser writes the timing and the scanning (the only side that has
+  // a clock in front of the participant). Both carry the same `event_id`.
+  //
+  // Nothing downstream implemented the join, so the Decisions sheet had two rows
+  // per action — one with null timings, one with null anchors — and every count
+  // of actions was doubled. They are merged here, server fields winning where
+  // both are present, so the sheet has one row per action in BOTH modes.
+  function mergeServerRows(list) {
+    var byId = {}, out = [], anyServer = false;
+    list.forEach(function (e) { if (e.server === true) anyServer = true; });
+    if (!anyServer) return list;
+    list.forEach(function (e) {
+      var k = e.event_id || (e.event + ':' + e.round_index + ':' + e.seq);
+      if (!byId[k]) { byId[k] = Object.assign({}, e); out.push(k); return; }
+      // The server row is authoritative for values; the client row supplies
+      // whatever the server never had. Neither may overwrite a field with null.
+      mergeInto(byId[k], e);
+    });
+    return out.map(function (k) { return byId[k]; });
+  }
+
   // ======================================================================
   //  ROUND ROWS (§19 rounds.csv)
   // ======================================================================
@@ -186,8 +247,10 @@
         if (e.sequence) seqLetter = e.sequence;
         if (e.run_id) runId = e.run_id;
         if (e.pid) pid = e.pid;
-        if (e.event === 'round_start') starts[e.round_index] = e;
-        else if (e.event === 'round_end') ends[e.round_index] = e;
+        // Same two-writer join as the decisions: merge rather than let whichever
+        // row arrived last win, or a server-mode round loses its client timings.
+        if (e.event === 'round_start') starts[e.round_index] = mergeInto(starts[e.round_index], e);
+        else if (e.event === 'round_end') ends[e.round_index] = mergeInto(ends[e.round_index], e);
         else if (e.event === 'decision') {
           if (!decisions[e.round_index]) decisions[e.round_index] = [];
           decisions[e.round_index].push(e);
@@ -195,7 +258,7 @@
       });
 
       Object.keys(ends).forEach(function (ri) {
-        var end = ends[ri], start = starts[ri], decs = decisions[ri] || [];
+        var end = ends[ri], start = starts[ri], decs = mergeServerRows(decisions[ri] || []);
         var spec = art.specById[end.spec_id];
         var mapping = spec ? art.pool[spec.mapping_index] : null;
         if (!mapping) return;
@@ -218,9 +281,16 @@
         for (var mi = 0; mi < mapping.length; mi++) if (mapping[mi] === gmax) argmaxAll.push(mi + 1);
         var knownFinal = preOpened.concat(reveals);
         var bestFound = knownFinal.reduce(function (m, x) { return (m == null || x.val > m) ? x.val : m; }, null);
+        var bestPos = null;
+        knownFinal.forEach(function (x) { if (bestFound != null && x.val === bestFound && bestPos == null) bestPos = x.pos; });
 
         var nomPos = num(end.nominated_position), nomVal = num(end.nominated_true_value);
-        var queriedPos = {}; queries.forEach(function (q) { queriedPos[q.pos] = q.val; });
+        // FIRST answer wins. Once a position is revealed it joins the AI's anchor
+        // set, so a re-query there returns the truth — keeping the last answer
+        // made every verify-then-recheck look like a wasted verification and
+        // zeroed the very error the participant had caught.
+        var queriedPos = {};
+        queries.forEach(function (q) { if (queriedPos[q.pos] == null) queriedPos[q.pos] = q.val; });
         var revealedPos = {}; reveals.forEach(function (r) { revealedPos[r.pos] = r.val; });
 
         // Verification: reveals of positions that had been queried EARLIER in the
@@ -241,8 +311,13 @@
           if (d.action !== 'reveal') return;
           revealCount++;
           var known = decodePairs(d.participant_known_before);
-          if (!known.length) return;
           var p = num(d.position);
+          // Knowing NOTHING yet means the whole line is unexplored territory, so
+          // this reveal is a frontier move. It used to count in the denominator
+          // and never in the numerator, which biased the primary outcome down by
+          // 1/n in exactly the rounds it is measured in — the open ones, which
+          // by construction start with nothing known.
+          if (!known.length) { frontier++; return; }
           if (p < known[0].pos || p > known[known.length - 1].pos) frontier++;
         });
 
@@ -283,15 +358,36 @@
           stopped_immediately: !!end.stopped_immediately,
           cap_hit: end.cap_hit || null,
 
+          // The score is COPIED from the log (it is what the participant was
+          // actually told), so it is also recomputed here from the mapping and
+          // the counts, and any disagreement is flagged rather than hidden. That
+          // is the check that would have caught `raw_score` being silently
+          // dropped by the logger's field whitelist for every real session.
+          final_score_check: (nomPos != null && nomVal != null)
+            ? nomVal - (num(end.n_queries) || 0) * params.costs.queryCost
+                     - (num(end.n_reveals) || 0) * params.costs.revealCost
+            : null,
+          score_mismatch: (nomPos != null && nomVal != null && num(end.final_score) != null)
+            ? (num(end.final_score) !== nomVal - (num(end.n_queries) || 0) * params.costs.queryCost
+                                                - (num(end.n_reveals) || 0) * params.costs.revealCost)
+            : null,
+          // pct_of_max_attainable measures what they DISCOVERED; this measures
+          // what they WALKED AWAY WITH. The two differ whenever a participant
+          // finds the best prize and then stops somewhere else.
+          pct_of_max_nominated: (nomVal != null && gmax) ? nomVal / gmax : null,
           global_max: gmax, argmax_position: argmax, argmax_count: argmaxAll.length,
           best_found: bestFound,
           pct_of_max_attainable: (bestFound != null && gmax) ? bestFound / gmax : null,
           dist_best_to_argmax: (nomPos != null) ? argmaxAll.reduce(function (m, x) {
             var d = Math.abs(nomPos - x); return (m == null || d < m) ? d : m;
           }, null) : null,
-          final_best_is_last_reveal: reveals.length ? (reveals[reveals.length - 1].val === bestFound) : null,
+          // Compared by POSITION, not by value: two positions can hold the same
+          // prize, and comparing values made a round claim its best came from a
+          // reveal AND from a pre-opened position at once.
+          final_best_is_last_reveal: reveals.length
+            ? (bestPos != null && reveals[reveals.length - 1].pos === bestPos) : null,
           final_best_was_pre_opened: preOpened.length
-            ? (preOpened.reduce(function (m, x) { return Math.max(m, x.val); }, -Infinity) === bestFound) : false,
+            ? (bestPos != null && preOpened.some(function (x) { return x.pos === bestPos; })) : false,
           ms_to_first_action: firstDec ? num(firstDec.ms_since_round_start) : null,
           active_ms: hb * CFG.HEARTBEAT_MS,
           verification_rate: queries.length ? verified / queries.length : null,
