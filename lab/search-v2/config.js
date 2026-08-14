@@ -217,6 +217,19 @@
     SLIDER_THROTTLE_MS: 250,   // §16.4
     HEARTBEAT_MS: 30000,       // §16.5
 
+    // A participant may leave and come back — on this browser, or on another
+    // one entirely. Every return is logged as a `resume` event carrying the gap
+    // since they were last seen; a gap of at least this long is counted as a
+    // BREAK BETWEEN SITTINGS rather than a reload (a reload takes seconds).
+    // Shared by app.js, which reports it live, and admin/export.js, which
+    // aggregates the raw gaps offline — change it in one place or the panel and
+    // the workbook will disagree about what a break is.
+    BREAK_MIN_MS: 300000,      // 5 minutes
+    // How long the boot will wait for the cloud copy of a returning
+    // participant's progress before falling back to whatever this browser
+    // holds. Waiting for ever would strand them on a spinner.
+    RESUME_FETCH_MS: 6000,
+
     APP_VERSION: 'v3.0.0',     // stamped on every logged event
     DEBUG_KEY: 'stouras'       // ?debug=1&key=stouras enables the testing overlay
   };

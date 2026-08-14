@@ -229,7 +229,9 @@ runs/{runId}                  parameter set, status, locked flag, frozen specs
 runCodes/{code}               code → runId, so participants never list runs
 runCounts/{runId}             sequence counters, transactionally assigned
 roster/{runId}__{code}        one entrant: sequence, claim, status
-participants/{runId}__{code}  the session record of §16.1
+participants/{runId}__{code}  the session record of §16.1, and `state_json` —
+                              their own progress, so a return on another device
+                              continues where they left off
 events/{eventId}              the append-only event log
 audit/{auditId}               admin actions
 ```
@@ -239,7 +241,25 @@ participant may create their own rows and can never update or delete one, and
 only the admin may read them. Run parameters are admin-write only and refuse to
 change once the run is locked, so editing a live run is impossible rather than
 merely discouraged. The roster is never listable, so codes cannot be enumerated.
-A participant reads and writes only their own record.
+A participant reads and writes only their own record — or, on a device whose
+uid has never written it, the record whose roster document THIS browser has
+claimed, which is what makes resuming on a second device possible without
+opening anyone else's data. **Republish `firestore.rules` for that to work**;
+until then a returning participant simply falls back to whatever their own
+browser holds, exactly as before.
+
+**Coming back (§17.7).** Progress is mirrored to `state_json` on every save, so
+a participant who returns — on this browser, another browser, another device, or
+this one after its storage was cleared — continues from where they left off. The
+boot takes whichever copy got FURTHER (rounds finished first; the clock only
+breaks a tie), so a sync that never landed can never replay finished rounds. The
+one thing that does NOT resume mid-way is an open round: it restarts from its
+beginning and is flagged `interrupted`, because a round is one uninterrupted
+decision sequence and its timings are the measure. Every return is logged as a
+`resume` row carrying the gap since they were last seen; a gap of at least
+`CONFIG.BREAK_MIN_MS` (5 minutes) is a **break between sittings** rather than a
+reload, and the workbook derives `breaks_count`, `break_total_ms`,
+`longest_sitting_break_ms` and `sittings` from those raw gaps.
 
 **Score-bearing actions (§17.2).** `claimCode`, `startRound`, `act` (query or
 reveal), `nominate` and `debriefRound` are **callable Cloud Functions** in
@@ -380,7 +400,7 @@ session whose task differs from the defaults.
 | **Parameters** | six collapsible groups — Environment, Costs and limits, AI, Round structure, Assignment, Acceptance filter — plus an always-editable Operations group. Two red-confirmed switches ("draw the full curve", "mark the AI's known positions") stay visible but must never be turned on |
 | **Consequences** | recomputed live beside the form: σ, `s*`, `g*`, the two gap-midpoint SDs, the benchmark frontier share per seed shape, session length, and **two badges** — green when sparse sits above `s*` and dense below it, red when the design has become a gradient rather than a sign change |
 | **Participants** | one full-width table of everyone in the session: code, sequence, **Left button** — which of the two paid buttons (Ask the AI / Reveal) sat on the left for them, the covariate `button_order` — **Round** — the scored rounds they have finished out of the scored rounds the session assigns them, `18/24 (75%)`; warm-ups are not counted, and 100% with a status of *started* is a real state, because the survey and the debrief come after the last round — status, when they claimed and how they enrolled, with the sequence and button-order balance in the tiles above and a CSV of the lot. **Every heading sorts, and sorts back when pressed again**; rows with nothing to compare (an unclaimed code has no progress) stay at the bottom either way, and Status orders by how far they got rather than alphabetically. **Status is read from the participant's own session record**, so it turns to `completed` the moment they reach the end; the roster document is stamped too, but the panel does not depend on it. The screen holds no code generator and no entrant override: participants enrol from the class platform, and the override is a parameter (Assignment → Next entrant). The data keeps the name `roster` — the collection, the document ids and the tab's own id are unchanged |
-| **Live monitor** | counters from a Firestore listener plus the health strip: median active time, median round time, comprehension failures, cap hits, immediate-stop rate, narrow viewports, long blurs, sub-500 ms deciders |
+| **Live monitor** | counters from a Firestore listener plus the health strip: median active time **over completed sessions only**, median round time, comprehension failures, cap hits, immediate-stop rate, narrow viewports, long blurs, sub-500 ms deciders. Every check states the threshold behind its ⚠, and the six that need the event log say so until you press **⟳ Refresh health checks** — the log is far heavier than the participant records the counters use, so it is never fetched on its own. The fourth tile is **Away 30+ min**, not "abandoned": it is `started − completed − in progress`, and anyone in it can come back and carry on. Per participant: their phase, round, active time, **resumptions** and **breaks** (how many, how long away in total) |
 | **Data & preview** | the validation gate, a spec preview that writes nothing, a scripted dry run, the export, a danger zone, and the round gallery below |
 | **Design notes** | the questions this design attracts, answered against the code — does the AI hold private data, what a pre-opened round is, gaps versus tails and `g = 4t`, why all three layouts are needed, whether the landscape changes each round — with **every number measured from the open session's own frozen pool**, never copied from the design document |
 | **Wording** | **everything the study says to a participant, in the order they meet it** — consent, both sets of instructions, both quick checks with their answer options, all twenty-four survey items, the part headings, debrief and thanks — each shown with this session's own numbers already substituted, and editable **for this session only** |

@@ -102,16 +102,55 @@
   // ---- persistence ---------------------------------------------------------
   function stateKey() { return 'searchv2:v3:state:' + (S && S.code ? S.code : 'anon'); }
   function save() {
-    if (PREVIEW) return;
+    if (PREVIEW || wiped) return;
+    // The moment they were last seen. It is what the NEXT boot subtracts to get
+    // the length of the break, and what decides whether this browser's copy of
+    // their progress or the cloud's is the more recent one.
+    S.lastSeenAt = Date.now();
     try { localStorage.setItem(stateKey(), JSON.stringify(S)); } catch (e) {}
     syncParticipant();
+  }
+  // The resumable state, as it travels to Firestore. Everything in it is already
+  // on the participant's own screen — their answers, their own queries and
+  // reveals, the values they paid to see — so carrying it never tells them
+  // anything the study was keeping from them. The AI's private anchors and the
+  // mapping are not in S and must never be put there.
+  var STATE_MAX_BYTES = 400000;   // well under Firestore's 1 MiB document limit
+  function stateBlob() {
+    try {
+      var s = JSON.stringify(S);
+      return s.length > STATE_MAX_BYTES ? null : s;
+    } catch (e) { return null; }
+  }
+  // Just the "last seen" stamp, written straight to this browser. Used on the
+  // way out, where a full save is neither possible nor needed.
+  var wiped = false;   // set by logout(): nothing may be written after it
+  function stampSeen() {
+    if (PREVIEW || wiped || !S || !S.code) return;
+    S.lastSeenAt = Date.now();
+    // ONLY the timestamp, written onto whatever is stored — never this tab's
+    // whole state. This runs on the way out, when another tab of the same study
+    // may have gone further; rewriting S wholesale here would push that tab's
+    // progress back to whatever this one happened to be holding.
+    try {
+      var raw = localStorage.getItem(stateKey());
+      var cur = raw ? JSON.parse(raw) : null;
+      if (cur && typeof cur === 'object') { cur.lastSeenAt = S.lastSeenAt; raw = JSON.stringify(cur); }
+      else raw = JSON.stringify(S);
+      localStorage.setItem(stateKey(), raw);
+    } catch (e) {}
   }
   var syncTimer = null;
   function syncParticipant() {
     if (PREVIEW || !S || !S.runId || !window.SVFirebase || !SVFirebase.isConfigured()) return;
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(function () {
-      SVFirebase.saveParticipant(S.runId, S.code, sessionRecord());
+      // state_json rides ALONGSIDE the session record rather than inside it:
+      // sessionRecord() is also the body of the `session_end` event, and a copy
+      // of the whole state in the event log would be both huge and redundant.
+      var rec = sessionRecord(), blob = stateBlob();
+      if (blob) rec.state_json = blob;
+      SVFirebase.saveParticipant(S.runId, S.code, rec);
     }, 1500);
   }
 
@@ -261,10 +300,54 @@
   function beginSession(pr, code, closed) {
     try { localStorage.setItem(ENTRY_KEY, code); } catch (e) {}
 
+    var saved = readLocalState(code);
+    adoptState(saved, pr, code);
+    if (closed && !S.completed && S.phase === 'consent') { show('s-closed'); return; }
+
+    // Claiming the code is what creates the roster entry, and in server mode
+    // EVERY other callable refuses without one (requireOwner). So server mode
+    // claims through the callable — which also assigns the sequence
+    // transactionally — and client mode keeps the direct Firestore write.
+    //
+    // The cloud copy of their progress is read AFTER the claim, never before:
+    // the claim is what binds this browser to this code, and it is that binding
+    // the Rules check when a participant returns on a device whose uid has
+    // never written the record.
+    var afterClaim = function () { resumeFromCloud(saved, pr, code, finishBoot); };
+    if (SERVER_MODE) {
+      B.claimCode(code).then(function (r) {
+        if (r && !r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
+        if (r && r.sequence) S.sequence = r.sequence;
+        if (r && r.buttonOrder) S.claimedButtonOrder = r.buttonOrder;
+        afterClaim();
+      }, function (err) { serverProblem(err); });
+    } else if (window.SVFirebase && SVFirebase.isConfigured() && S.runId) {
+      SVFirebase.claimCode(S.runId, code, P.ops.rosterMode,
+                           (RUN && RUN.assign && RUN.assign.nextEntrantOverride) || 'auto',
+                           (P.ui && P.ui.buttonOrder) || 'fixed')
+        .then(function (r) {
+          if (!r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
+          if (r.sequence) S.sequence = r.sequence;
+          if (r.buttonOrder) S.claimedButtonOrder = r.buttonOrder;
+          afterClaim();
+        }, function () { afterClaim(); });
+    } else {
+      afterClaim();
+    }
+  }
+
+  function readLocalState(code) {
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem('searchv2:v3:state:' + code)); } catch (e) {}
+    return saved && typeof saved === 'object' ? saved : null;
+  }
+
+  // Take a saved snapshot as the session state and fill in everything the rest
+  // of this file assumes. Deliberately does NOT count a resumption: it may run
+  // twice in one boot (once on this browser's copy, once on a fuller copy from
+  // the cloud), and a return is counted ONCE, after the choice is made.
+  function adoptState(saved, pr, code) {
     S = saved || {};
-    var fresh = !saved;
     S.version = CFG.APP_VERSION;
     S.code = code;
     // In SERVER mode the run document is admin-only (it holds the seeds), so the
@@ -277,7 +360,7 @@
     S.study = pr.STUDY_ID || S.study || null;
     S.platformSession = (HANDOFF && HANDOFF.session) || pr.SESSION_ID || S.platformSession || null;
     if (S.startedAt == null) S.startedAt = Date.now();
-    if (S.resumptions == null) S.resumptions = 0; else if (!fresh) S.resumptions++;
+    if (S.resumptions == null) S.resumptions = 0;
     if (!S.quiz) S.quiz = {};
     if (!S.survey) S.survey = {};
     if (!S.results) S.results = [];
@@ -289,34 +372,93 @@
     if (!S.phase) S.phase = 'consent';
 
     // The interrupted round is resumed from its START and flagged for exclusion.
+    // DELIBERATE: a round is one uninterrupted decision sequence, and its timings
+    // are the measure — half a round played yesterday and half today is not one
+    // observation. Everything else resumes exactly where it was left.
     if (S.round && S.round.open) { S.round = null; S.interruptedRounds = (S.interruptedRounds || []).concat([S.roundPtr]); }
+  }
 
-    if (closed && !S.completed && S.phase === 'consent') { show('s-closed'); return; }
-
-    // Claiming the code is what creates the roster entry, and in server mode
-    // EVERY other callable refuses without one (requireOwner). So server mode
-    // claims through the callable — which also assigns the sequence
-    // transactionally — and client mode keeps the direct Firestore write.
-    if (SERVER_MODE) {
-      B.claimCode(code).then(function (r) {
-        if (r && !r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
-        if (r && r.sequence) S.sequence = r.sequence;
-        if (r && r.buttonOrder) S.claimedButtonOrder = r.buttonOrder;
-        finishBoot();
-      }, function (err) { serverProblem(err); });
-    } else if (window.SVFirebase && SVFirebase.isConfigured() && S.runId) {
-      SVFirebase.claimCode(S.runId, code, P.ops.rosterMode,
-                           (RUN && RUN.assign && RUN.assign.nextEntrantOverride) || 'auto',
-                           (P.ui && P.ui.buttonOrder) || 'fixed')
-        .then(function (r) {
-          if (!r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
-          if (r.sequence) S.sequence = r.sequence;
-          if (r.buttonOrder) S.claimedButtonOrder = r.buttonOrder;
-          finishBoot();
-        }, function () { finishBoot(); });
-    } else {
-      finishBoot();
+  // ---- returning participants (§17.7) --------------------------------------
+  // A participant who comes back must continue from where they left off, even
+  // when "back" means another browser, another device, or this one after its
+  // storage was cleared. Their progress is mirrored to their participant record
+  // as `state_json` on every save; this reads it back and continues from
+  // whichever copy got FURTHER.
+  var PHASE_ORDER = ['consent', 'registration', 'instructions', 'quiz', 'aiinstructions',
+    'aiquiz', 'blockintro', 'round', 'interstitial', 'survey', 'debrief', 'done'];
+  function progressOf(s) {
+    if (!s) return null;
+    return { done: s.completed ? 1 : 0, rounds: (s.results || []).length,
+             phase: Math.max(0, PHASE_ORDER.indexOf(s.phase || 'consent')), seen: s.lastSeenAt || 0 };
+  }
+  // NEVER the copy that got less far. A cloud copy left behind by a sync that
+  // did not land must not send a participant back through rounds they have
+  // already played, and neither must a stale browser; the clock only breaks a
+  // tie between two copies that are equally far along.
+  function furtherAlong(a, b) {
+    var pa = progressOf(a), pb = progressOf(b);
+    if (!pa) return b ? 'b' : 'a';
+    if (!pb) return 'a';
+    var keys = ['done', 'rounds', 'phase', 'seen'];
+    for (var i = 0; i < keys.length; i++) {
+      if (pa[keys[i]] !== pb[keys[i]]) return pa[keys[i]] > pb[keys[i]] ? 'a' : 'b';
     }
+    return 'a';
+  }
+
+  var pendingResume = null;   // logged once the logger exists, in finishBoot()
+  function resumeFromCloud(local, pr, code, done) {
+    var settled = false;
+    function finish(chosen, src) {
+      if (settled) return;
+      settled = true;
+      if (chosen && chosen !== local) adoptState(chosen, pr, code);
+      noteResumption(chosen, src);
+      done();
+    }
+    // `getParticipant` is checked by name, not assumed: a browser holding a
+    // cached older svfirebase.js must fall back to its own copy of the progress,
+    // not die on the way into the study.
+    if (PREVIEW || !S.runId || !window.SVFirebase || !SVFirebase.isConfigured()
+        || typeof SVFirebase.getParticipant !== 'function') return finish(local, 'local');
+    show('s-loading');
+    // A slow or unreachable network must never strand a returning participant on
+    // a spinner: past this, they continue from whatever this browser holds.
+    setTimeout(function () { finish(local, 'local'); }, CFG.RESUME_FETCH_MS);
+    SVFirebase.getParticipant(S.runId, code).then(function (doc) {
+      var remote = null;
+      if (doc && doc.state_json) { try { remote = JSON.parse(doc.state_json); } catch (e) {} }
+      if (remote && !remote.code) remote.code = code;
+      if (!remote) return finish(local, 'local');
+      finish.apply(null, furtherAlong(local, remote) === 'a' ? [local, 'local'] : [remote, 'cloud']);
+    }, function () { finish(local, 'local'); });
+  }
+
+  // One return = one resumption. The gap since they were last seen is the raw
+  // observation; a gap of at least CFG.BREAK_MIN_MS is a break BETWEEN SITTINGS
+  // rather than a reload, and only those are summed.
+  var BREAK_LOG_CAP = 100;
+  function noteResumption(saved, src) {
+    if (!saved) return;                       // a first sitting is not a return
+    var last = saved.lastSeenAt || 0;
+    var gap = last ? Math.max(0, Date.now() - last) : null;
+    S.resumptions = (S.resumptions || 0) + 1;
+    S.resumedFrom = src;
+    var isBreak = gap != null && gap >= CFG.BREAK_MIN_MS;
+    if (gap != null) {
+      S.breaks = (S.breaks || []).concat([{ t: Date.now(), ms: gap, src: src }]).slice(-BREAK_LOG_CAP);
+      if (isBreak) {
+        S.breakMs = (S.breakMs || 0) + gap;
+        S.breaksCount = (S.breaksCount || 0) + 1;
+        S.longestSittingBreakMs = Math.max(S.longestSittingBreakMs || 0, gap);
+      }
+    }
+    pendingResume = {
+      duration_ms: gap, source: src,
+      info: JSON.stringify({ break_ms: gap, is_break: isBreak, source: src,
+        resumption: S.resumptions, sittings: 1 + (S.breaksCount || 0),
+        phase: S.phase, rounds_done: (S.results || []).length })
+    };
   }
 
   function showCodeRefused() {
@@ -370,6 +512,11 @@
       $('nav-tag').style.display = '';
     }
     var lo = $('btn-logout'); if (lo && !PREVIEW) { lo.style.display = ''; lo.onclick = logout; }
+
+    // The return itself is a row: how long they were away, and whether their
+    // progress came from this browser or from the cloud copy. Logged here
+    // because the logger does not exist until L.init above.
+    if (pendingResume) { L.log('resume', pendingResume); pendingResume = null; }
 
     if (!S.startLogged) {
       S.startLogged = true;
@@ -447,7 +594,11 @@
     if (!confirm('Log out and clear this study on this device? Your progress on this device will be erased.')) return;
     // Stop the logger FIRST. Its pagehide flush fires during the navigation
     // below, and would otherwise write the event mirror straight back into the
-    // storage this function has just cleared.
+    // storage this function has just cleared. The same is true of THIS file's
+    // own pagehide stamp, which is what `wiped` silences — logout promises to
+    // erase every trace on the device, and a stamp written a millisecond later
+    // would put the state key straight back.
+    wiped = true;
     L.stop();
     if (unsubMsg) { try { unsubMsg(); } catch (e) {} unsubMsg = null; }
     try {
@@ -1942,6 +2093,15 @@
       input_mode: inputMode,
       user_agent_parsed: ua.browser + '/' + ua.os,
       resumptions: S.resumptions || 0,
+      // Time AWAY between sittings, as opposed to `longest_break_ms` above,
+      // which is the longest quiet stretch inside one. A gap counts here only
+      // when it is at least CFG.BREAK_MIN_MS — a reload takes seconds.
+      breaks_count: S.breaksCount || 0,
+      break_total_ms: S.breakMs || 0,
+      longest_sitting_break_ms: S.longestSittingBreakMs || 0,
+      sittings: 1 + (S.breaksCount || 0),
+      resumed_from: S.resumedFrom || null,
+      last_seen_at: S.lastSeenAt || null,
       completed: !!S.completed,
       total_score: S.totalScore || 0,
       rounds_done: (S.results || []).length,
@@ -1988,7 +2148,14 @@
     });
     document.addEventListener('visibilitychange', function () {
       L.tele('visibility_change', { hidden: document.visibilityState !== 'visible' });
+      if (document.visibilityState !== 'visible') stampSeen();
     });
+    // The break between two sittings is measured from the moment they LEFT, so
+    // the leaving is stamped. Without this the clock would start at the last
+    // heartbeat and every break would read up to half a minute short. The write
+    // is the synchronous localStorage half of save() — the debounced Firestore
+    // sync cannot land during an unload, and does not need to.
+    window.addEventListener('pagehide', stampSeen);
     var rzT = null;
     window.addEventListener('resize', function () {
       clearTimeout(rzT);
@@ -2148,6 +2315,12 @@
     plan: function () { return PLAN ? PLAN.rounds.map(function (r) { return { i: r.round_index, spec: r.spec_id, block: r.block, cond: r.condition, scored: r.scored }; }) : null; },
     select: function (p) { setSel(p, 'test'); },
     selected: function () { return sel; },
-    isPreview: function () { return PREVIEW; }
+    isPreview: function () { return PREVIEW; },
+    // Which of two saved copies of a participant's progress would be continued
+    // from — this browser's, or the one on their record. Exposed so the rule can
+    // be tested directly: it is the part that could quietly go wrong, by sending
+    // someone back through rounds they have already played. Read-only, and it
+    // touches no session state.
+    resumeChoice: function (a, b) { return furtherAlong(a, b); }
   };
 })();

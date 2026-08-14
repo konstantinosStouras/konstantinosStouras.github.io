@@ -2601,7 +2601,7 @@ clean reversal. Status sorts unused → started → completed — by how far the
 since alphabetical order here is an accident. Painting was split from reading
 (`paintRoster` vs `renderRoster`), so a sort click re-renders what is loaded
 instead of firing two more collection reads; the CSV exports in the displayed
-order. Covered by `tools/admin-smoke.mjs` (175).
+order. Covered by `tools/admin-smoke.mjs` (178).
 **The Dictionary sheet describes EVERY column** of Decisions/Rounds/Participants
 in a sentence + a type, generated from `admin/dictionary.js`; `selftest.js`
 FAILS when a column is exported without an entry, so the two can never drift —
@@ -2686,7 +2686,7 @@ created a draft, `app.js` treats a session as open when `entryOpen !== false` OR
 enterable before the validation gate had ever run. `.made-box` is deliberately
 NOT named `.code-box`: `../styles.css` already has one (the participant app's
 completion code) and the admin page loads it. Covered by `admin-smoke.mjs`
-(175 checks).
+(178 checks).
 **A session is summarised before it can bite** (`summaryBoxes`/`askSummary`):
 CREATING freezes the pool and all 28 specs under its seeds, and OPENING ENTRY
 starts the lock, so both put the whole configuration in front of the admin first
@@ -2705,6 +2705,66 @@ truth and the AI curve exist in the participant build only as debug overlays
 behind the preview key, the anchors never reach a live browser in server mode,
 and `tools/smoke.mjs` asserts on a LIVE round that `#plot` holds no `.gt-line`,
 no `.ai-line`, no `.anchor-dot` and that `#testview` is not displayed.
+
+**A participant who comes back continues where they left off — on ANY device**
+(owner 2026-08). Resume was localStorage-only, so a returning participant whose
+browser had been cleared, or who came back on their phone, started the study
+again from consent. Their progress is now mirrored to their participant record
+as **`state_json`** on every save (alongside, never inside, `sessionRecord()` —
+that object is also the body of the `session_end` event, and a copy of the whole
+state in the log would be huge and redundant), and the boot reads it back after
+the claim. It continues from whichever copy got **FURTHER** —
+`progressOf`/`furtherAlong`: completed, then rounds finished, then phase, and
+only then the clock — so a sync that never landed can never replay finished
+rounds, in either direction. Carrying the state is safe because S holds only
+what the participant has already SEEN (their answers, their own queries and
+reveals, the values they paid for); the mapping and the AI's private anchors are
+not in it and must never be put there. Reading it on a new device needs the
+`firestore.rules` change that ships with it — a new browser is a new anonymous
+uid, so `data.uid` cannot be the test on that first read; the test is the roster
+document with the SAME id (`runId__CODE`), which `claimCode` rebinds on a resume,
+hence the read happens AFTER the claim. **Republish the rules**; until then the
+fetch is refused and the participant falls back to their own browser's copy,
+which is the old behaviour. Deliberately NOT resumed mid-way: an OPEN round,
+which still restarts from its beginning and is flagged `interrupted` — a round is
+one uninterrupted decision sequence and its timings are the measure. Guards: a
+6 s `CONFIG.RESUME_FETCH_MS` timeout so a slow network cannot strand anyone on a
+spinner, `getParticipant` checked by name (a cached older `svfirebase.js` must
+fall back, not die), a 400 KB blob cap, and nothing written in PREVIEW.
+**Resumptions and BREAKS BETWEEN SITTINGS are tracked** (same request): `save()`
+stamps `lastSeenAt`, and leaving stamps it too (`stampSeen` on
+`pagehide`/`visibilitychange`) so a break is measured from when they actually
+left rather than from the last 30 s heartbeat. `stampSeen` writes **only the
+timestamp onto whatever is stored**, never this tab's whole state — a second tab
+may have gone further, and rewriting S wholesale on the way out would push its
+progress back (that is also what made every localStorage-editing test resume into
+the wrong phase). Every return logs a `resume` RECORD row carrying the raw gap
+and where the progress came from (`local`/`cloud`); a gap ≥ `CONFIG.BREAK_MIN_MS`
+(5 min) is a break rather than a reload, and `admin/export.js` derives
+`breaks_count`/`break_total_ms`/`longest_sitting_break_ms`/`sittings` from those
+raw gaps (with Dictionary entries — `selftest.js` fails without them). The live
+monitor shows Resumptions beside a **Breaks** column. `logout()` sets `wiped`,
+which silences both writers — it promises to erase every trace on the device, and
+a stamp written a millisecond into the navigation would put the state key back.
+**The "Abandoned" tile is now "Away 30+ min"** (owner: "how do you know 15 users
+have abandoned?"): nothing observes abandonment — it is
+`started − completed − (record written in the last 30 min)`, and with
+cross-device resume anyone in it can come back and carry on, so the tile says
+what it actually knows. Every monitor tile and health check now carries the rule
+behind it (`why`, shown in the row when the ⚠ fires), the event-log placeholder
+names the button that computes it, and **the median active time counts COMPLETED
+sessions only** — someone who stopped after five minutes is not a fast
+participant, and the row exists to answer "is the study the length we designed".
+**The round gallery's caption reports what the AI ACTUALLY knows** (owner
+2026-08: "it says the AI knows 10 points; it knows 13"): the anchor set is the
+UNION of its private anchors, the pre-opened positions and every prize revealed
+so far — that is `Ai.anchorSet`, in the preview and in BOTH backends, which is
+why the dashed line already bent through the pre-opened squares — but the caption
+printed the private K alone. It now reads "the AI knows **13** positions exactly
+at the start (10 private + 3 pre-opened), and one more with every prize the
+participant reveals", counting a shared position once, and the pre-opened list
+above it is labelled as what the PARTICIPANT knows. Behaviour unchanged; only the
+label was wrong.
 
 **Firestore layout (§17.3):** `runs` · `runPublic` · `runCodes` · `runCounts` ·
 `roster` · `participants` (+ a server-only `rounds` subcollection) · `events` ·
@@ -2801,8 +2861,8 @@ so the two cannot drift again.
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
 `node lab/search-v2/tools/selftest.js` (299) ·
-`tools/smoke.mjs` (a whole 28-round session) ·
-`tools/admin-smoke.mjs` (175) · `tools/platform-guard.mjs` (28) ·
+`tools/smoke.mjs` (211 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
+`tools/admin-smoke.mjs` (178) · `tools/platform-guard.mjs` (28) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its
 participants, and the drift guard that `app.js` reads content only through the
 resolved copy: one `Content.SURVEY` slipping back would silently ignore that

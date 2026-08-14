@@ -431,11 +431,31 @@ const open = preCards.filter(c => /OPEN/.test(c.tags));
 ok(seeded.length === 18 && open.length === 10, 'the grid separates the seeded rounds from the open ones',
   seeded.length + ' seeded / ' + open.length + ' open');
 ok(seeded.every(c => c.marks > 0), 'every seeded round shows its pre-opened prizes on the plot');
-ok(seeded.every(c => /Open at the start: p\d+ = \d+/.test(c.foot)), 'and lists them with their values underneath');
+ok(seeded.every(c => /Open at the start \(the \d+ positions? the participant knows\): p\d+ = \d+/.test(c.foot)),
+  'and lists them with their values underneath, said to be what the PARTICIPANT knows — as against the fuller set the AI knows');
 ok(open.every(c => c.marks === 0 && /Nothing pre-opened/.test(c.foot)),
   'an open round shows none, and says the participant starts from a blank line');
 ok(preCards.every(c => /Best prize \d+ at position \d+/.test(c.foot)),
   'each round also reports where its best prize is — the check a seed geometry is for');
+
+// What the AI knows is the UNION of its private anchors, the pre-opened
+// positions and every prize the participant reveals — so a seeded DENSE round
+// starts at K + (pre-opened), not at K.
+const seededDense = preCards.find(c => !/OPEN/.test(c.tags) && /DENSE/.test(c.tags));
+const kOf = s => +(/K=(\d+)/.exec(s) || [])[1];
+// The set is a UNION, so a pre-opened position that happens to be one of the
+// private anchors is counted once — and the caption says so when it happens.
+const parts = /the AI knows (\d+) positions? exactly at the start \((\d+) private \+ (\d+) pre-opened(?:, (\d+) of them the same position)?\)/
+  .exec(seededDense.foot);
+ok(parts && +parts[2] === kOf(seededDense.tags) && +parts[3] === seededDense.marks
+   && +parts[1] === +parts[2] + +parts[3] - (+parts[4] || 0),
+  'a seeded round reports the AI knowing its private anchors PLUS the pre-opened positions — the set it ' +
+  'actually answers from — counting a shared position once', seededDense.foot);
+ok(/one more with every prize the participant reveals/.test(seededDense.foot),
+  'and says that revealing a prize teaches it that position too');
+const openDense = preCards.find(c => /OPEN/.test(c.tags) && /DENSE/.test(c.tags));
+ok(new RegExp('the AI knows <?b?>?' + kOf(openDense.tags) + ' positions exactly at the start').test(openDense.foot),
+  'an open round starts at exactly its K — there is nothing pre-opened to add', openDense.foot);
 
 await pg.check('#rg-scored'); await pg.waitForTimeout(1200);
 ok((await pg.locator('#rg-grid .rg-card').count()) === 24, '"scored rounds only" drops the four warm-ups');

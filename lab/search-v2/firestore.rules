@@ -128,8 +128,26 @@ service cloud.firestore {
     // ---- participant records ----------------------------------------------
     // Owner reads and writes their own document; the admin reads all of them
     // (the live monitor is a listener on this collection).
+    //
+    // The record also carries `state_json`, the participant's own progress, so
+    // that someone returning on another device — or on this one after clearing
+    // its storage — continues from where they left off instead of starting the
+    // study again. Their new browser is a NEW anonymous uid, so `data.uid` (the
+    // uid that last wrote the record) cannot be the test on that first read.
+    // The test is the roster document with the SAME id (runId__CODE): claiming
+    // the code is what binds a browser to a participant, and claimCode rebinds
+    // it on a resume. Nothing is exposed by this that the participant has not
+    // already seen — the state holds their own answers and the values they paid
+    // to reveal, never the mapping and never the AI's private anchors.
+    function claimsThisCode(entryId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/roster/$(entryId))
+        && get(/databases/$(database)/documents/roster/$(entryId)).data.claimedByUid == request.auth.uid;
+    }
     match /participants/{entryId} {
-      allow read:  if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow read:  if isAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid)
+        || claimsThisCode(entryId);
       allow create: if isSignedIn();
       allow update: if isAdmin() || isSignedIn();
       allow delete: if isAdmin();

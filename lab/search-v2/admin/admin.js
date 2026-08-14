@@ -1375,32 +1375,62 @@
     if (LOCAL) { monRows = []; renderMonitor(); return; }
     unsubMon = FB.watchParticipants(current.id, function (list) { monRows = list || []; renderMonitor(); });
   }
+  // "Abandoned" was never observed — nobody tells us they have given up. It is
+  // this arithmetic: started − completed − (updated in the last half hour). With
+  // progress now mirrored to the participant record, an away participant can
+  // come back on any device and carry on, so the tile says what it actually
+  // knows — they have been AWAY for half an hour — and not that they are gone.
+  var AWAY_MS = 30 * 60 * 1000;
+  function fmtDur(ms) {
+    if (!ms) return '0m';
+    var m = Math.round(ms / 60000);
+    if (m < 60) return m + 'm';
+    var h = Math.floor(m / 60);
+    return h >= 24 ? Math.floor(h / 24) + 'd ' + (h % 24) + 'h' : h + 'h ' + (m % 60) + 'm';
+  }
   function renderMonitor() {
     var started = monRows.length;
     var completed = monRows.filter(function (r) { return r.completed; }).length;
-    var inProgress = monRows.filter(function (r) { return !r.completed && (Date.now() - (r.updatedAt || 0)) < 30 * 60 * 1000; }).length;
-    var abandoned = started - completed - inProgress;
+    var inProgress = monRows.filter(function (r) { return !r.completed && (Date.now() - (r.updatedAt || 0)) < AWAY_MS; }).length;
+    var away = started - completed - inProgress;
     var nA = monRows.filter(function (r) { return r.sequence === 'A'; }).length;
     var nB = monRows.filter(function (r) { return r.sequence === 'B'; }).length;
     var skew = Math.abs(nA - nB);
 
     $('mon-counters').innerHTML = [
-      ['Started', started], ['In progress', inProgress], ['Completed', completed], ['Abandoned', Math.max(0, abandoned)],
-      ['Sequence A', nA], ['Sequence B', nB]
-    ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('') +
+      ['Started', started, 'Participants who have claimed a code.'],
+      ['In progress', inProgress, 'Not finished, and their record was written in the last 30 minutes.'],
+      ['Completed', completed, 'They reached the end of the study.'],
+      ['Away 30+ min', Math.max(0, away),
+       'Not finished and nothing written for over 30 minutes. NOT a count of people who gave up: ' +
+       'it is started − completed − in progress, and any of them can come back and carry on from ' +
+       'exactly where they stopped, on this device or another one.'],
+      ['Sequence A', nA, 'Assigned the AI-off block first.'],
+      ['Sequence B', nB, 'Assigned the AI-on block first.']
+    ].map(function (s) {
+      return '<div class="stat-box" title="' + esc(s[2] || '') + '"><b>' + s[1] + '</b><span>' + esc(s[0]) + '</span></div>';
+    }).join('') +
       (skew > 3 ? '<div class="stat-box" style="background:#fff7ed;"><b>' + skew + '</b><span>sequence gap — force the next entrants</span></div>' : '');
 
     $('mon-table').innerHTML = monRows.length
-      ? '<thead><tr><th>Code</th><th>Sequence</th><th>Phase</th><th>Round</th><th>Active</th><th>Resumptions</th><th>Viewport</th><th>Flags</th><th></th></tr></thead><tbody>' +
+      ? '<thead><tr><th>Code</th><th>Sequence</th><th>Phase</th><th>Round</th><th>Active</th>' +
+        '<th title="How many times they came back to the study after leaving it.">Resumptions</th>' +
+        '<th title="Breaks between sittings: how many, and how long they were away in total. ' +
+        'A gap counts as a break only when it is at least ' + Math.round(CFG.BREAK_MIN_MS / 60000) +
+        ' minutes — a reload takes seconds.">Breaks</th>' +
+        '<th>Viewport</th><th>Flags</th><th></th></tr></thead><tbody>' +
         monRows.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); }).map(function (r) {
           var flags = [];
           if (r.viewport_width && current && current.ops && r.viewport_width < (current.ops.minViewport || 900)) flags.push('narrow');
           if ((r.resumptions || 0) > 0) flags.push('resumed');
+          if (r.resumed_from === 'cloud') flags.push('another device');
+          if (!r.completed && (Date.now() - (r.updatedAt || 0)) >= AWAY_MS) flags.push('away');
           if (r.completed) flags.push('done');
           return '<tr><td class="mono">' + esc(r.participant_code) + '</td><td>' + esc(r.sequence || '—') + '</td>' +
             '<td>' + esc(r.phase || '—') + '</td><td>' + (r.round_index || '—') + '</td>' +
             '<td>' + Math.round((r.active_ms || 0) / 60000) + ' min</td>' +
             '<td>' + (r.resumptions || 0) + '</td>' +
+            '<td>' + ((r.breaks_count || 0) ? r.breaks_count + ' · ' + fmtDur(r.break_total_ms || 0) : '—') + '</td>' +
             '<td>' + (r.viewport_width || '—') + '</td>' +
             '<td>' + esc(flags.join(', ')) + '</td>' +
             '<td><button class="link-btn" data-msg="' + esc(r.participant_code) + '">message</button></td></tr>';
@@ -1420,50 +1450,77 @@
   // whatever has been loaded; the counters above never scan it.
   function renderHealth() {
     var rows = [];
-    function add(label, value, warn) { rows.push({ label: label, value: value, warn: warn }); }
+    // `why` is the rule behind the ⚠ — a warning that does not say what it is
+    // warning about is just a mark on a screen. It is the row's tooltip, and it
+    // is shown in the cell whenever the check has actually tripped.
+    function add(label, value, warn, why) { rows.push({ label: label, value: value, warn: warn, why: why }); }
 
-    var actives = monRows.map(function (r) { return (r.active_ms || 0) / 60000; }).filter(function (v) { return v > 0; });
+    // COMPLETED sessions only. A participant who stopped after five minutes is
+    // not a fast one, and mixing them in drags the median toward whoever left;
+    // this row exists to answer "is the study the length we designed", which is
+    // a question about people who did the whole thing.
+    var doneRows = monRows.filter(function (r) { return r.completed; });
+    var actives = doneRows.map(function (r) { return (r.active_ms || 0) / 60000; }).filter(function (v) { return v > 0; });
     var medActive = med(actives);
-    add('Median active time per participant', medActive == null ? '—' : fmt(medActive, 1) + ' min',
-      medActive != null && (medActive < 30 || medActive > 70));
+    add('Median active time per COMPLETED participant',
+      medActive == null ? (monRows.length ? '— no completed sessions yet' : '—')
+        : fmt(medActive, 1) + ' min · ' + actives.length + ' session' + (actives.length === 1 ? '' : 's'),
+      medActive != null && (medActive < 30 || medActive > 70),
+      'Expected 30–70 minutes of active time for the whole study. Outside that band the task is running much ' +
+      'faster or much slower than it was designed for. Unfinished sessions are excluded.');
 
     if (built) {
       var durs = built.rounds.map(function (r) { return (r.duration_ms || 0) / 1000; });
       var medRound = med(durs);
-      add('Median time per round', medRound == null ? '—' : fmt(medRound, 1) + ' s', medRound != null && medRound < 20);
+      add('Median time per round', medRound == null ? '—' : fmt(medRound, 1) + ' s', medRound != null && medRound < 20,
+        'Under 20 seconds a round is being clicked through rather than played.');
 
       var q2 = built.participants.filter(function (p) { return p.quiz_qai_score_first_correct === false; }).length;
       var q2n = built.participants.filter(function (p) { return p.quiz_qai_score_first_correct != null; }).length;
-      add('Comprehension failures on the scoring question', q2n ? pct(q2 / q2n) : '—', q2n && (q2 / q2n) > 0.10);
+      add('Comprehension failures on the scoring question', q2n ? pct(q2 / q2n) : '—', q2n && (q2 / q2n) > 0.10,
+        'More than 10% getting the scoring question wrong first time means the instructions are not landing.');
 
       var q45 = built.participants.filter(function (p) {
         return p.quiz_qai_tell_first_correct === false || p.quiz_qai_outside_first_correct === false;
       }).length;
-      add('Comprehension failures on the jaggedness / frontier questions', q2n ? pct(q45 / q2n) : '—', q2n && (q45 / q2n) > 0.40);
+      add('Comprehension failures on the jaggedness / frontier questions', q2n ? pct(q45 / q2n) : '—', q2n && (q45 / q2n) > 0.40,
+        'More than 40% missing these means the AI screens are not landing — and they carry the mechanism.');
 
       var caps = built.rounds.filter(function (r) { return r.cap_hit; }).length;
       add('Query or reveal cap hit', built.rounds.length ? pct(caps / built.rounds.length) : '—',
-        built.rounds.length && (caps / built.rounds.length) > 0.03);
+        built.rounds.length && (caps / built.rounds.length) > 0.03,
+        'Over 3% of rounds hitting a cap means the caps are binding on behaviour, not just guarding against runaway clicking.');
 
       var seeded = built.rounds.filter(function (r) { return r.seed_shape !== 'OPEN' && r.scored; });
       var imm = seeded.filter(function (r) { return r.stopped_immediately; }).length;
       add('Immediate stop rate in seeded rounds', seeded.length ? pct(imm / seeded.length) : '—',
-        seeded.length && (imm / seeded.length) > 0.60);
+        seeded.length && (imm / seeded.length) > 0.60,
+        'Over 60% stopping on the first screen means the pre-opened geometry is too generous to search from.');
 
       var slow = built.participants.filter(function (p) { return p.median_decision_ms != null && p.median_decision_ms < 500; }).length;
-      add('Participants with a median decision under 500 ms', slow, slow > 0);
+      add('Participants with a median decision under 500 ms', slow, slow > 0,
+        'Half a second is not enough to read the plot: these participants are clicking, and the column disengaged flags them.');
 
       var blur = built.rounds.filter(function (r) { return (r.blur_total_ms || 0) > 120000; }).length;
-      add('Rounds with a blur longer than two minutes', blur, blur > 0);
+      add('Rounds with a blur longer than two minutes', blur, blur > 0,
+        'The window was left for over two minutes mid-round, so that round’s timings measure something else.');
     } else {
-      add('Round timing, comprehension, caps, stops', 'load the event log to compute', false);
+      add('Round timing, comprehension, caps, stops',
+        'press ⟳ Refresh health checks — these read the event log', false,
+        'These six checks are computed from the event log, which is far heavier than the participant records ' +
+        'the counters above use, so it is never fetched on its own. Pressing Refresh health checks loads it.');
     }
 
     var narrow = monRows.filter(function (r) { return r.viewport_width && r.viewport_width < ((current && current.ops && current.ops.minViewport) || 900); }).length;
-    add('Viewport below the minimum', narrow, narrow > 0);
+    add('Viewport below the minimum', narrow, narrow > 0,
+      'That many participants are on a window narrower than ops.minViewport (' +
+      ((current && current.ops && current.ops.minViewport) || 900) + 'px). The task is a picture, so a narrow ' +
+      'window is a different stimulus; they are blocked until they widen it.');
 
     $('mon-health').innerHTML = '<tbody>' + rows.map(function (r) {
-      return '<tr class="' + (r.warn ? 'warn' : '') + '"><td>' + esc(r.label) + (r.warn ? ' ⚠' : '') + '</td><td>' + esc(String(r.value)) + '</td></tr>';
+      return '<tr class="' + (r.warn ? 'warn' : '') + '" title="' + esc(r.why || '') + '">' +
+        '<td>' + esc(r.label) + (r.warn ? ' <span title="' + esc(r.why || '') + '">⚠</span>' : '') + '</td>' +
+        '<td>' + esc(String(r.value)) + (r.warn && r.why ? '<div class="why">' + esc(r.why) + '</div>' : '') + '</td></tr>';
     }).join('') + '</tbody>';
   }
   function med(a) {
@@ -1915,12 +1972,26 @@
         tag: 'mapping #' + s.mapping_index
       });
 
+      // What the AI knows is the UNION of its private anchors, the pre-opened
+      // positions and everything the participant has revealed — that is how
+      // Ai.anchorSet builds it, in this preview and in both backends alike, so
+      // the dashed line above already bends through the pre-opened squares.
+      // Reporting only the private K here (which this caption used to do) named
+      // a smaller AI than the one the participant actually meets.
+      var privN = (s.ai_anchors || []).length, startN = anchors.length;
+      var shared = privN + pre.length - startN;   // a pre-opened position it already knew
       card.querySelector('.rg-foot').innerHTML =
         (pre.length
-          ? 'Open at the start: ' + pre.map(function (x) { return 'p' + x.pos + ' = <b>' + x.val + '</b>'; }).join(' · ')
+          ? 'Open at the start (the ' + pre.length + ' position' + (pre.length === 1 ? '' : 's') +
+            ' the participant knows): ' +
+            pre.map(function (x) { return 'p' + x.pos + ' = <b>' + x.val + '</b>'; }).join(' · ')
           : 'Nothing pre-opened — the participant starts from a blank line.') +
         '<br>Best prize <b>' + truth[best - 1] + '</b> at position ' + best +
-        ' · the AI knows ' + (s.ai_anchors || []).length + ' position' + ((s.ai_anchors || []).length === 1 ? '' : 's') + ' exactly';
+        ' · the AI knows <b>' + startN + '</b> position' + (startN === 1 ? '' : 's') + ' exactly at the start' +
+        (pre.length ? ' (' + privN + ' private + ' + pre.length + ' pre-opened' +
+          (shared > 0 ? ', ' + shared + ' of them the same position' : '') + ')' : '') +
+        ', and one more with every prize the participant reveals — up to ' +
+        (startN + a.params.costs.revealCap) + ' of ' + N + '.';
     });
   }
 
