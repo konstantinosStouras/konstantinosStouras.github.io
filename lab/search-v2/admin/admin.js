@@ -135,12 +135,13 @@
     document.querySelectorAll('.tab').forEach(function (t) {
       t.onclick = function () {
         document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('on', x === t); });
-        ['runs', 'params', 'roster', 'monitor', 'data'].forEach(function (k) {
+        ['runs', 'params', 'roster', 'monitor', 'data', 'notes'].forEach(function (k) {
           $('tab-' + k).style.display = (k === t.dataset.tab) ? '' : 'none';
         });
         if (t.dataset.tab === 'roster') renderRoster();
         if (t.dataset.tab === 'monitor') startMonitor();
         if (t.dataset.tab === 'data') { fillSpecPicker(); renderRoundGallery(); }
+        if (t.dataset.tab === 'notes') renderNotes();
       };
     });
   }
@@ -575,8 +576,9 @@
     fillForm(currentParams, run);
     renderRoster();
     fillSpecPicker();
-    rgFor = null;   // a different session means different rounds
+    rgFor = null; notesFor = null;   // a different session means different rounds
     if ($('tab-data') && $('tab-data').style.display !== 'none') renderRoundGallery();
+    if ($('tab-notes') && $('tab-notes').style.display !== 'none') renderNotes();
   }
 
   // ======================================================================
@@ -1174,6 +1176,163 @@
   }
 
   // ======================================================================
+  //  DESIGN NOTES
+  // ======================================================================
+  // The questions that get asked about this design, answered against the code
+  // rather than the document — and every number on the screen measured from the
+  // session's OWN frozen pool, so the page cannot drift from what will be played.
+  function poolStatsFor(a) {
+    var pool = a.pool, hi = a.params.env.prizeMax;
+    var ceil = 0, uniq = 0, three = 0, n = pool.length;
+    var decFirst = [0,0,0,0,0,0,0,0,0,0], decAll = [0,0,0,0,0,0,0,0,0,0], allN = 0;
+    var sumFirst = 0, sumMid = 0;
+    pool.forEach(function (m) {
+      var mx = -Infinity, i;
+      for (i = 0; i < m.length; i++) if (m[i] > mx) mx = m[i];
+      if (mx >= hi) ceil++;
+      var at = [];
+      for (i = 0; i < m.length; i++) if (m[i] === mx) at.push(i + 1);
+      if (at.length === 1) uniq++;
+      if (at.length >= 3) three++;
+      decFirst[Math.min(9, Math.floor((at[0] - 1) / 10))]++;
+      sumFirst += at[0];
+      var s = 0;
+      at.forEach(function (pp) { decAll[Math.min(9, Math.floor((pp - 1) / 10))]++; allN++; s += pp; });
+      sumMid += s / at.length;
+    });
+    return {
+      n: n, ceilPct: 100 * ceil / n, uniqPct: 100 * uniq / n, threePct: 100 * three / n,
+      decFirst: decFirst.map(function (d) { return 100 * d / n; }),
+      decAll: decAll.map(function (d) { return 100 * d / allN; }),
+      meanFirst: sumFirst / n, meanMid: sumMid / n
+    };
+  }
+
+  var notesFor = null;
+  function renderNotes(force) {
+    var host = $('notes-body');
+    if (!host) return;
+    if (!current) {
+      notesFor = null;
+      host.innerHTML = '<div class="empty-card">Open a session on the Sessions screen and this fills in with its own numbers.</div>';
+      return;
+    }
+    if (!force && notesFor === current.id) return;
+    notesFor = current.id;
+
+    var a;
+    try { a = artifacts(current); } catch (e) {
+      host.innerHTML = '<div class="admin-note bad">The specs for this session could not be built: ' +
+        esc(String(e && e.message || e)) + '</div>';
+      return;
+    }
+    var p = a.params, st = poolStatsFor(a), bench = benchmarkShares(p);
+    var sigma = CFG.sigma(p.env.stepBound);
+    var rounds = 2 * (p.rounds.warmupPerBlock + p.rounds.scoredPerBlock);
+    var seeded = a.specs.filter(function (s) { return s.seed_shape !== 'OPEN'; }).length;
+    var pct = function (x) { return x.toFixed(1) + '%'; };
+
+    var shapes = CFG.SEED_SHAPES.map(function (sh) {
+      var b = bench[sh], base = CFG.SEED_BASE[sh];
+      var where = (b.ratio < 1) ? 'the frontier — outside everything known'
+                : (b.ratio > 2) ? 'the widest interior gap'
+                : 'either — this is the knife edge';
+      return '<tr><td><b>' + esc(sh) + '</b></td><td class="mono">' + base.join(', ') + '</td>' +
+        '<td>' + b.gap + '</td><td>' + b.tail + '</td><td><b>' + b.ratio.toFixed(2) + '</b></td>' +
+        '<td>' + Math.round(b.frontierShare * 100) + '%</td><td>' + where + '</td></tr>';
+    }).join('');
+
+    var decRow = function (arr) {
+      return arr.map(function (d, i) {
+        return '<td title="positions ' + (i * 10 + 1) + '–' + ((i + 1) * 10) + '">' + d.toFixed(1) + '</td>';
+      }).join('');
+    };
+
+    host.innerHTML =
+      '<div class="card"><h3 style="margin-top:0;">Does the AI hold private data?</h3>' +
+      '<p><b>Yes — and that is the whole mechanism.</b> In every round the AI is given <b>K positions whose true ' +
+      'prize it knows exactly</b> (' + p.ai.sparseK + ' in a sparse round, ' + p.ai.denseK + ' in a dense one, placed ' +
+      esc(p.ai.placement) + '), plus every pre-opened position and everything the participant has revealed so far. ' +
+      'The participant is never told which positions those are, nor how many there are.</p>' +
+      '<p>Asked about a position, it answers the truth <b>at</b> one of its known points, the straight-line ' +
+      '<b>interpolation between the two nearest</b> known points inside them, and the nearest known value flat ' +
+      '<b>beyond the outermost</b> one — it interpolates, it cannot extrapolate. The answer is rounded to an integer ' +
+      'and returned after a latency identical to a reveal&rsquo;s, so neither the number&rsquo;s shape nor its timing ' +
+      'says whether the position was one it knew. That is what makes trust fallible rather than merely noisy: the ' +
+      'AI&rsquo;s number is never a prize, and it is confidently wrong in exactly the places it has no data.</p></div>' +
+
+      '<div class="card"><h3 style="margin-top:0;">What is a &ldquo;seeded&rdquo; round, and what is the seed?</h3>' +
+      '<p>A <b>pre-opened round</b> (the code calls it <span class="mono">seeded</span>) does not start blank: ' +
+      'three or four positions are already open when it begins, with their true prizes showing. A <b>blank round</b> ' +
+      '(<span class="mono">OPEN</span>) starts with the whole line unknown. This session runs <b>' + seeded + ' pre-opened ' +
+      'and ' + (a.specs.length - seeded) + ' blank</b> rounds of ' + rounds + '.</p>' +
+      '<p>They exist for identification. In a blank round the first move happens with no information, so everything ' +
+      'afterwards depends on choices the participant made themselves and nothing can be cleanly attributed to the AI. ' +
+      'In a pre-opened round <b>you assign the starting picture</b>: at the first decision the participant knows exactly ' +
+      'the positions you chose and nothing else, so the geometry they face is an experimenter-assigned quantity and the ' +
+      'first move is the primary analysis moment.</p>' +
+      '<div class="admin-note"><b>The word &ldquo;seed&rdquo; means three unrelated things</b>, and mixing them up would ' +
+      'break the design silently. In this build they are kept apart in the code and named apart wherever a label allows:' +
+      '<br>· <b>pre-opened positions</b> — what the participant starts with (<span class="mono">pre_opened</span>, ' +
+      '<span class="mono">seed_shape</span>, the acceptance filter&rsquo;s &ldquo;highest pre-opened value&rdquo;)' +
+      '<br>· <b>the walk&rsquo;s start</b> — where the random walk is anchored before it is drawn outwards ' +
+      '(Environment &rarr; &ldquo;walk start value&rdquo;). Nothing to do with what anyone sees.' +
+      '<br>· <b>the RNG seed</b> — reproducibility (<span class="mono">generatorSeed</span>, ' +
+      '<span class="mono">specSeed</span>, <span class="mono">shuffle_seed</span>).</div></div>' +
+
+      '<div class="card"><h3 style="margin-top:0;">Gaps, tails, and why there are three layouts</h3>' +
+      '<p>The pre-opened positions carve the line of ' + p.env.positions + ' into two kinds of unknown. A stretch ' +
+      '<b>between</b> two known positions is a <b>gap</b>, pinned at both ends. A stretch <b>beyond the outermost</b> ' +
+      'known position is a <b>tail</b> — the frontier — pinned on one side only.</p>' +
+      '<p>Uncertainty behaves differently in each. In a gap of width <i>g</i> the walk is tied down at both ends, so ' +
+      'the standard deviation peaks at the midpoint at <b>σ√g/2</b>. In a tail of length <i>t</i> nothing holds the far ' +
+      'side, so it grows as <b>σ√t</b>. Setting them equal gives <b>g = 4t</b>: an interior gap only carries more ' +
+      'uncertainty than the frontier when it is <b>more than four times as long</b>. Here σ = ' + sigma.toFixed(3) + '.</p>' +
+      '<table class="data-table" style="width:auto;"><thead><tr><th>Layout</th><th>Pre-opened at</th><th>widest gap g</th>' +
+      '<th>tail t</th><th>g / 4t</th><th>benchmark first move to the frontier</th><th>where a rational searcher looks first</th>' +
+      '</tr></thead><tbody>' + shapes + '</tbody></table>' +
+      '<p class="muted small" style="margin-top:10px;">These describe <b>where the value is</b>, not what the plots look ' +
+      'like — the prize curve behind each round is a fresh draw either way.</p>' +
+      '<p><b>Why you need all three.</b> The AI interpolates but cannot extrapolate, so its blind spot <i>is</i> the ' +
+      'frontier. FRONTIER rounds put the value where the machine is useless, GAP rounds put it on the machine&rsquo;s home ' +
+      'ground, and BALANCED sits on the knife edge where a small nudge flips the answer. Run only GAP rounds and an AI ' +
+      'that pulls people away from the frontier would be undetectable, because the frontier was never worth visiting.</p></div>' +
+
+      '<div class="card"><h3 style="margin-top:0;">Does the landscape change every round?</h3>' +
+      '<p><b>Yes, and so does where the maximum is.</b> Each of the ' + rounds + ' round specs points at a <b>different</b> ' +
+      'mapping from the frozen pool of ' + st.n + ' — the validation gate fails a session that repeats one — so the whole ' +
+      'landscape is redrawn each round and the best position moves. It has to work this way: a fixed landscape would be ' +
+      'learned after one round and the search task would evaporate.</p>' +
+      '<p>Every participant sees the <b>same</b> ' + rounds + ' mappings, in an order shuffled within each block, and the ' +
+      'sequence counterbalance decides which block carries the AI. So each mapping is played with and without the tool by ' +
+      'equal halves of the sample: mapping difficulty is balanced across conditions by construction, not by luck.</p>' +
+      '<div class="admin-note"><b>&ldquo;Brownian&rdquo; here runs across positions, not across time.</b> The path is drawn ' +
+      'once, offline, and then sits still. Position 1…' + p.env.positions + ' is a spatial index, not a clock, and nothing ' +
+      'evolves while the participant works — they are uncovering a static landscape, not tracking a moving one.</div></div>' +
+
+      '<div class="card"><h3 style="margin-top:0;">Where the maximum lands, in this session&rsquo;s pool</h3>' +
+      '<p class="muted small">Measured over all ' + st.n + ' mappings of this session, by decile of position.</p>' +
+      '<table class="data-table" style="width:auto;"><thead><tr><th>positions</th><th>1–10</th><th>11–20</th><th>21–30</th>' +
+      '<th>31–40</th><th>41–50</th><th>51–60</th><th>61–70</th><th>71–80</th><th>81–90</th><th>91–100</th><th>mean</th></tr></thead>' +
+      '<tbody><tr><td>every maximising position</td>' + decRow(st.decAll) + '<td><b>' + st.meanMid.toFixed(1) + '</b></td></tr>' +
+      '<tr><td>first maximising position only</td>' + decRow(st.decFirst) + '<td><b>' + st.meanFirst.toFixed(1) + '</b></td></tr>' +
+      '</tbody></table>' +
+      '<p style="margin-top:12px;"><b>The two rows differ, and the reason matters.</b> The walk reflects at the ceiling of ' +
+      p.env.prizeMax + ', which produces <b>plateaus</b>: <b>' + pct(st.ceilPct) + '</b> of these mappings touch the ceiling, ' +
+      'only <b>' + pct(st.uniqPct) + '</b> have their maximum at a single position, and <b>' + pct(st.threePct) + '</b> have it ' +
+      'at three or more. Take &ldquo;the&rdquo; maximum as the first index and you inherit a leftward bias that is an artifact ' +
+      'of the tie-break, not a property of the walk — which is exactly the gap between the two rows above.</p>' +
+      '<p>So the export does not do that. <span class="mono">dist_best_to_argmax</span> measures the distance to the ' +
+      '<b>nearest</b> maximising position, and <span class="mono">argmax_count</span> ships beside it so a plateau is ' +
+      'visible in the data rather than hidden in it. <span class="mono">argmax_position</span> remains the first index, ' +
+      'for continuity.</p>' +
+      '<p class="muted small">The plateaus are inherited from the generator the source study used, so their data has the ' +
+      'same property. If you would rather not have them, the clean fix is an acceptance-filter rule rejecting mappings ' +
+      'whose maximum is attained at more than two positions; it would discard roughly a quarter of draws, which a pool ' +
+      'of ' + st.n + ' can afford. That is a change to the task, so it belongs to a new session, never to this one.</p></div>';
+  }
+
+  // ======================================================================
   //  EVERY ROUND, DRAWN
   // ======================================================================
   // One plot per frozen spec: the ground-truth prize walk, the prizes that start
@@ -1345,6 +1504,7 @@
       ['Specs', 'The 28 frozen round specs: mapping index, pre-opened positions, AI density and anchors', 'Identical for every participant of the run'],
       ['Decisions', 'One row per query, reveal or stop, with every derived field of §16.8', 'is_first_decision marks the primary analysis moment'],
       ['Rounds', 'One row per round, raw and derived', 'interrupted is a column, not a filter'],
+      ['', 'dist_best_to_argmax is measured to the NEAREST maximising position', 'the walk reflects at the ceiling, so many mappings have a plateau — argmax_count says how wide'],
       ['Participants', 'One row per participant: timing, comprehension, survey, calibration gaps', 'disengaged is a column, not a filter'],
       ['Slider', 'The throttled slider trace: which positions were considered and rejected', 'At most one row per 250 ms, plus one on release'],
       ['Attention', 'Blur, focus, visibility, heartbeats, instruction opens, resizes', 'active_ms is summed from heartbeats'],

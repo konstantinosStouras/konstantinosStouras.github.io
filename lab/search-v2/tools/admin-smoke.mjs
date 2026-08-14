@@ -86,8 +86,8 @@ ok(/Local preview/.test(await pg.locator('#scope-note').innerText()), 'and says 
 
 // ── the six screens ────────────────────────────────────────────────────────
 const tabs = await pg.$$eval('.tab', els => els.map(e => e.dataset.tab));
-ok(JSON.stringify(tabs) === JSON.stringify(['runs', 'params', 'roster', 'monitor', 'data']),
-  'the panel is restructured to Runs · Parameters · Roster · Live monitor · Data & preview', tabs.join(','));
+ok(JSON.stringify(tabs) === JSON.stringify(['runs', 'params', 'roster', 'monitor', 'data', 'notes']),
+  'the panel is Sessions · Parameters · Roster · Live monitor · Data & preview · Design notes', tabs.join(','));
 ok(await shown('tab-runs'), 'it opens on the Runs screen');
 
 // ── Screen 2 + 3 · parameters beside consequences ─────────────────────────
@@ -360,6 +360,38 @@ ok(preCards.every(c => /Best prize \d+ at position \d+/.test(c.foot)),
 await pg.check('#rg-scored'); await pg.waitForTimeout(1200);
 ok((await pg.locator('#rg-grid .rg-card').count()) === 24, '"scored rounds only" drops the four warm-ups');
 await pg.uncheck('#rg-scored'); await pg.waitForTimeout(1200);
+
+// ── Design notes: the explainer, measured from this session's own pool ────
+await tab('notes');
+await pg.waitForTimeout(1500);
+const nt = await pg.locator('#notes-body').innerText();
+ok(/Yes — and that is the whole mechanism/.test(nt),
+  'the notes answer whether the AI holds private data: yes, K positions it knows exactly');
+ok(/interpolates, it cannot extrapolate/.test(nt), 'and state that it interpolates but cannot extrapolate');
+ok(/latency identical to a reveal/.test(nt), 'and that its latency cannot leak whether it knew the position');
+ok(/does not start blank/.test(nt) && /assign the starting picture/.test(nt),
+  'they explain what a pre-opened round is and why it exists');
+ok(/means three unrelated things/.test(nt),
+  'and separate the three meanings of the word "seed", which is the collision that could break the design');
+ok(/g = 4t/.test(nt) && /σ√g\/2/.test(nt) && /σ√t/.test(nt),
+  'the gap-versus-tail arithmetic is stated, not asserted');
+ok(/blind spot/.test(nt) && /undetectable/.test(nt),
+  'and why all three layouts are needed rather than just the one');
+ok(/Yes, and so does where the maximum is/.test(nt),
+  'they confirm the landscape is redrawn every round');
+ok(/across positions, not across time/.test(nt),
+  'and correct the reading of "Brownian" as something that evolves while the participant works');
+
+// The numbers must be MEASURED, not copied from the design document.
+const shapeRows = await pg.$$eval('#notes-body table tbody tr', els => els.map(e => e.innerText));
+ok(shapeRows.some(r => /FRONTIER/.test(r)) && shapeRows.some(r => /BALANCED/.test(r)) && shapeRows.some(r => /GAP/.test(r)),
+  'the layout table covers all three shapes with their own g, t and g/4t');
+ok(/of these mappings touch the ceiling/.test(nt),
+  'the plateau measurement is reported from this session’s pool');
+ok(/nearest<\/b> maximising position|nearest maximising position/.test(nt),
+  'and the tie rule the export uses is stated');
+const notesErr = await pg.locator('#notes-body .admin-note.bad').count();
+ok(notesErr === 0, 'the notes build without error against a real session');
 
 ok(errors.length === 0, 'no page errors anywhere in the panel', errors.slice(0, 5).join(' | '));
 

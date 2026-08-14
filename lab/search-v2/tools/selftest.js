@@ -439,6 +439,27 @@ const run = {
   const r0 = built.rounds[0];
   ok(r0.global_max === Pool.maxOf(art.pool[r0.mapping_index]), 'global_max comes from the mapping');
   ok(r0.argmax_position === Pool.argmaxOf(art.pool[r0.mapping_index]), 'argmax_position comes from the mapping');
+
+  // The walk reflects at the ceiling, so about half of all mappings have their
+  // maximum at more than one position. A distance measured against one arbitrary
+  // index would carry a tie-break artifact into the analysis, so the export
+  // measures the distance to the NEAREST maximising position and ships the count.
+  const tieRounds = built.rounds.filter(r => r.argmax_count > 1);
+  ok(built.rounds.every(r => r.argmax_count >= 1), 'every round reports how many positions attain the maximum');
+  ok(built.rounds.every(r => {
+    const m = art.pool[r.mapping_index], mx = Pool.maxOf(m);
+    return r.argmax_count === m.filter(v => v === mx).length;
+  }), 'argmax_count counts them correctly against the mapping');
+  ok(built.rounds.every(r => {
+    if (r.dist_best_to_argmax == null) return true;
+    const m = art.pool[r.mapping_index], mx = Pool.maxOf(m);
+    let best = Infinity;
+    m.forEach((v, i) => { if (v === mx) best = Math.min(best, Math.abs(r.nominated_position - (i + 1))); });
+    return r.dist_best_to_argmax === best;
+  }), 'dist_best_to_argmax is the distance to the NEAREST maximising position, not to an arbitrary one');
+  ok(tieRounds.length === 0 || tieRounds.every(r => r.dist_best_to_argmax <= Math.abs(r.nominated_position - r.argmax_position)),
+    'on a plateau that distance is never worse than measuring against the first index',
+    tieRounds.length + ' of ' + built.rounds.length + ' rounds have a tied maximum');
   ok(r0.pct_of_max_attainable <= 1 && r0.pct_of_max_attainable > 0, 'pct_of_max_attainable is a proportion');
   ok(built.rounds.every(r => r.total_cost === r.n_queries * P.costs.queryCost + r.n_reveals * P.costs.revealCost),
     'total cost = queries × query cost + reveals × reveal cost');
