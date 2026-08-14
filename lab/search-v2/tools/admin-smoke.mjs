@@ -278,9 +278,14 @@ await pg.waitForTimeout(400);
 
 ok((await pg.locator('.tab[data-tab="roster"]').innerText()).trim() === 'Participants',
   'the screen is called Participants — the `roster` id and collection keep that name in the data');
-const heads = await pg.$$eval('#roster-table thead th', els => els.map(e => e.textContent.trim()));
-ok(JSON.stringify(heads) === JSON.stringify(['Code', 'Sequence', 'Buttons', 'Round', 'Status', 'Claimed', 'Enrolled']),
-  'Round sits beside Status, so progress is readable at a glance', heads.join(' | '));
+const heads = await pg.$$eval('#roster-table thead th',
+  els => els.map(e => e.firstChild.textContent.trim()));
+ok(JSON.stringify(heads) === JSON.stringify(['Code', 'Sequence', 'Left button', 'Round', 'Status', 'Claimed', 'Enrolled']),
+  'Round sits beside Status, and the button column NAMES the button rather than saying "Buttons"', heads.join(' | '));
+ok(/Ask the AI|Reveal/.test((await pg.$$eval('#roster-table tbody tr td:nth-child(3)', els => els.map(e => e.textContent.trim()))).join(' ')),
+  'and its cells read "Ask the AI" / "Reveal" — the button that sat on the left, not a raw code');
+ok(/which of the two paid buttons/i.test(await pg.locator('#roster-table thead th:nth-child(3)').getAttribute('title')),
+  'with the tooltip that says what that means and that it is fixed for the session');
 
 const rows = await pg.$$eval('#roster-table tbody tr', els => els.map(tr => ({
   code: tr.children[0].textContent.trim(), round: tr.children[3].textContent.trim(),
@@ -298,6 +303,30 @@ ok(byCode.P002 && byCode.P002.round === '24/24 (100%)', 'and their round count i
   byCode.P002 && byCode.P002.round);
 ok(byCode.P003 && byCode.P003.round === '—' && byCode.P003.status === 'unused',
   'an unclaimed code shows no progress at all rather than a zero it did not earn');
+
+// Sorting: every heading, both directions, and the rows with nothing to compare
+// stay at the bottom either way.
+const order = () => pg.$$eval('#roster-table tbody tr td:first-child', els => els.map(e => e.textContent.trim()));
+const clickHead = async n => { await pg.locator(`#roster-table thead th:nth-child(${n})`).click(); await pg.waitForTimeout(120); };
+await clickHead(4);
+ok(JSON.stringify(await order()) === JSON.stringify(['P001', 'P002', 'P003']),
+  'sorting by Round puts the least-advanced participant first', JSON.stringify(await order()));
+await clickHead(4);
+ok(JSON.stringify(await order()) === JSON.stringify(['P002', 'P001', 'P003']),
+  'clicking it again reverses it — and the code with no session record stays LAST in both directions, ' +
+  'because it has nothing to compare rather than a zero', JSON.stringify(await order()));
+ok(/▼/.test(await pg.locator('#roster-table thead th:nth-child(4)').innerText()),
+  'the sorted heading shows which way it is sorted');
+await clickHead(5);
+ok(JSON.stringify(await order()) === JSON.stringify(['P003', 'P001', 'P002']),
+  'sorting by Status runs unused → started → completed: by how far they got, not alphabetically',
+  JSON.stringify(await order()));
+await clickHead(1); await clickHead(1);
+ok(JSON.stringify(await order()) === JSON.stringify(['P003', 'P002', 'P001']),
+  'and every other heading sorts too', JSON.stringify(await order()));
+const sortable = await pg.$$eval('#roster-table thead th', els => els.filter(e => e.classList.contains('sortable')).length);
+ok(sortable === 7, 'all seven columns are sortable', String(sortable));
+await clickHead(1);   // back to code-ascending for the checks below
 
 const rosterStats = await pg.locator('#roster-stats').innerText();
 ok(/Ask on the left/.test(rosterStats) && /Reveal on the left/.test(rosterStats),

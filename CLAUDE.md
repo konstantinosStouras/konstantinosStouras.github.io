@@ -2586,7 +2586,22 @@ its log still ships with the export, but a CONSEQUENCE is that `ops.rosterMode =
 where a class-platform student ID enrols itself. Only the UI word changed: the
 `roster` collection, the `runId__CODE` document ids and the tab's own
 `data-tab="roster"` are untouched, exactly as SESSION/`run_id` is handled above.
-Covered by `tools/admin-smoke.mjs` (167).
+**The button column NAMES the button** (owner 2026-08: "what does the column
+Buttons mean really?"): heading **Left button**, cells "Ask the AI" / "Reveal"
+— which of the two paid buttons sat on the LEFT for that participant, assigned
+once at enrolment and fixed for the session, the covariate `button_order` — with
+a tooltip and a line of lead text saying so. The CSV keeps the raw
+`button_order` beside the readable `left_button`. **Every heading sorts, and
+reverses on a second press.** One `rosterCols(params)` spec owns each column's
+heading, its cell AND its sort key, so a sorted table can never order itself by
+something other than what it displays; `sortRoster` sinks null sort values to the
+bottom in BOTH directions (an unclaimed code has nothing to compare, which is not
+a zero) and decorates with the load index so ties are stable and a re-click is a
+clean reversal. Status sorts unused → started → completed — by how far they got,
+since alphabetical order here is an accident. Painting was split from reading
+(`paintRoster` vs `renderRoster`), so a sort click re-renders what is loaded
+instead of firing two more collection reads; the CSV exports in the displayed
+order. Covered by `tools/admin-smoke.mjs` (175).
 **The Dictionary sheet describes EVERY column** of Decisions/Rounds/Participants
 in a sentence + a type, generated from `admin/dictionary.js`; `selftest.js`
 FAILS when a column is exported without an entry, so the two can never drift —
@@ -2671,7 +2686,7 @@ created a draft, `app.js` treats a session as open when `entryOpen !== false` OR
 enterable before the validation gate had ever run. `.made-box` is deliberately
 NOT named `.code-box`: `../styles.css` already has one (the participant app's
 completion code) and the admin page loads it. Covered by `admin-smoke.mjs`
-(167 checks).
+(175 checks).
 **A session is summarised before it can bite** (`summaryBoxes`/`askSummary`):
 CREATING freezes the pool and all 28 specs under its seeds, and OPENING ENTRY
 starts the lock, so both put the whole configuration in front of the admin first
@@ -2787,7 +2802,7 @@ installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
 `node lab/search-v2/tools/selftest.js` (299) ·
 `tools/smoke.mjs` (a whole 28-round session) ·
-`tools/admin-smoke.mjs` (167) · `tools/platform-guard.mjs` (28) ·
+`tools/admin-smoke.mjs` (175) · `tools/platform-guard.mjs` (28) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its
 participants, and the drift guard that `app.js` reads content only through the
 resolved copy: one `Content.SURVEY` slipping back would silently ignore that
