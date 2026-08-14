@@ -316,7 +316,11 @@
           <div class="sess-head"><h3>Create a session</h3></div>
           <p class="muted small">Give it a name and it is created from the <b>saved default parameters</b>,
           as a draft nobody can enter yet. Everything stays editable on the Parameters screen for as long as
-          it is a draft &mdash; nothing locks until the first participant claims a code.</p>
+          it is a draft &mdash; nothing locks until the first participant claims a code. To change the task
+          <i>before</i> the session exists, take <b>Set the parameters first&hellip;</b>: the Parameters screen
+          composes a new session, and its <b>Create session</b> asks for the name and ID at the end. Editing
+          the parameters of a session that already exists is a different act &mdash; open it from its card
+          below, and its Save says which session it rewrites.</p>
           <div class="create-card">
             <div class="row2">
               <div class="field">
@@ -338,6 +342,8 @@
               <button class="btn btn-green btn-sm" id="btn-create-run">Create session</button>
               <button class="btn btn-ghost btn-sm" id="btn-new-run"
                       title="Open the parameter form on a new session instead, to change the task before it is created">Set the parameters first&hellip;</button>
+              <button class="btn btn-ghost btn-sm" id="btn-demo-run"
+                      title="A 4-round session for showing a class how the game works: 2 rounds without the AI, then 2 with it">🧪 Create the 4-round demo session</button>
             </div>
             <div class="admin-note" id="nr-note" style="display:none;"></div>
             <div id="nr-created"></div>
@@ -367,6 +373,11 @@
               <h2 style="margin:0;" id="params-title">Parameters</h2>
               <span class="muted small" id="params-sub"></span>
             </div>
+            <!-- Which session this form writes to. It is the difference between
+                 adding a session and rewriting one that may already be open, so
+                 it is said in words here, on the button, and again in the
+                 confirmation — never left to be inferred from the heading. -->
+            <div class="admin-note" id="edit-note" style="display:none;"></div>
             <div class="admin-note" id="lock-note" style="display:none;"></div>
 
             <details class="pgroup" open>
@@ -825,6 +836,10 @@
       <!-- ---------------- WORDING ---------------- -->
       <div class="tab-panel" id="tab-wording" style="display:none;">
         <h2 style="margin:0 0 4px;">Wording</h2>
+        <!-- Wording is saved by the Parameters screen's Save, so it writes to the
+             same session that form does — said here so the two screens can never
+             be read as pointing at different sessions. -->
+        <div class="admin-note" id="wd-target" style="display:none;"></div>
         <p class="muted small">Everything the study <i>says</i> to a participant, in the order they meet it
         &mdash; the consent screen, both sets of instructions, both quick checks with their answers, all
         twenty-four survey questions, the debrief and the thank-you. The text is shown
@@ -849,8 +864,9 @@
         </div>
         <div id="wd-note" class="note" style="display:none;"></div>
         <div id="wording-body"></div>
-        <p class="muted small" style="margin-top:14px;">Changes are kept on this screen until you press
-        <b>Save session</b> on the Parameters screen &mdash; the same Save as everything else.</p>
+        <p class="muted small" style="margin-top:14px;">Changes are kept on this screen until you press the green
+        button on the Parameters screen &mdash; the same Save as everything else, and it writes to the session
+        named at the top of this screen.</p>
       </div>
 
     </section>

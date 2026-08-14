@@ -23,6 +23,18 @@
       Dict = window.SVDictionary;
   var FB = window.SVFirebase;
 
+  // `current`   — the session every OTHER screen is looking at (roster, monitor,
+  //               data, notes). The panel picks one on load so those screens
+  //               have something to show.
+  // `editingId` — the session the PARAMETER FORM and the WORDING tab write to.
+  //               null means the form is composing a NEW session, and Save
+  //               creates one. These are deliberately NOT the same thing: the
+  //               panel auto-picks a session for the read screens, and binding
+  //               the form to that pick silently turned "set the parameters for
+  //               my next session, then Save" into "overwrite whichever session
+  //               happened to be picked" — with no summary and no confirmation.
+  //               The form is bound to a session ONLY when the admin opens one
+  //               from its card (see selectRun's `form` option).
   var runs = [], current = null, currentParams = null, editingId = null;
   // This session's wording overrides, as the flat key→string map content.js
   // defines. Empty means every word comes from content.js.
@@ -221,6 +233,7 @@
       el.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); createFromCard(); } };
     });
     $('btn-create-run').onclick = createFromCard;
+    if ($('btn-demo-run')) $('btn-demo-run').onclick = function () { clearCreated(); createDemoRun($('btn-demo-run')); };
   }
   function clearCreated() { $('nr-created').innerHTML = ''; note('nr-note', ''); }
 
@@ -306,6 +319,97 @@
     });
   }
 
+  /* ---- the demo session -------------------------------------------------
+     A 4-round session to show a class how the game works before they play the
+     real one: two rounds without the AI, then two with it, and inside each half
+     one round that starts with nothing open followed by one that starts with a
+     few prizes already open. It exists because the study itself is 28 rounds —
+     far too long to walk through on a projector — and because the two things a
+     new participant has to understand (the AI, and pre-opened prizes) are
+     exactly what a 4-round tour can show.
+
+     Every departure from the defaults below is deliberate:
+       · warm-ups off, 2 scored rounds a block  → 4 rounds in total
+       · 1 open + 1 seeded a block, no shuffle  → the open round always comes
+         first, so "nothing open" is met before "a few already open"
+       · nextEntrantOverride 'A'                → EVERY entrant gets the no-AI
+         half first. The control is labelled "next entrant" but it is not
+         consumed, so it holds for the whole session, which is what a
+         demonstration needs — the counterbalancing that makes the real study
+         a crossover would send half the room in the other order.
+       · densities                              → the open round runs the DENSE
+         AI (10 anchors, usually close) and the seeded one the SPARSE AI (3
+         anchors, wrong in the middle), so a class sees both faces of it.
+       · exit survey off, debrief on            → nobody should fill in 24
+         questions to see a demo, and the debrief is the teaching part.
+       · a different generator seed             → THE POINT. Round specs are
+         drawn from a pool shuffled by this seed, and two sessions sharing it
+         serve the same prize curves in the same slots. A class that had seen
+         the real round 1 in the demo would know where its best prize is, so the
+         demo must draw from a different shuffle. */
+  var DEMO = { code: 'TEST', name: 'For testing purposes' };
+  function demoParams() {
+    var p = Specs.withDefaults(null);
+    p.env.generatorSeed = 20260814;
+    p.rounds.warmupPerBlock = 0;
+    p.rounds.scoredPerBlock = 2;
+    p.rounds.openPerBlock = 1;
+    p.rounds.seededPerBlock = 1;
+    p.rounds.shapeMix = { FRONTIER: 0, BALANCED: 1, GAP: 0 };
+    p.rounds.densitySeeded = { SPARSE: 1, DENSE: 0 };
+    p.rounds.densityOpen = { SPARSE: 0, DENSE: 1 };
+    p.rounds.shuffleWithinBlock = false;
+    p.assign.sequenceAssignment = 'block';
+    p.assign.nextEntrantOverride = 'A';
+    p.ops.runName = DEMO.name;
+    p.ops.code = DEMO.code;
+    p.ops.entryOpen = false;
+    p.ops.exitSurvey = false;
+    p.ops.debrief = true;
+    return p;
+  }
+  // The one instruction screen whose default wording counts the practice rounds.
+  // A demo has none, so it is reworded for this session through the per-session
+  // wording system rather than by touching the study's own text.
+  function demoContent() {
+    return {
+      'instr.i5.body':
+        'This is a short **demonstration**: **2 rounds without the AI**, then **2 rounds with it**. ' +
+        'The full study is longer.\n\n' +
+        '**The prizes are drawn afresh in every round.** What you learned about the line in one round tells ' +
+        'you nothing about the next.\n\n' +
+        'The second round of each pair starts with a few positions already open, for free. Those are shown ' +
+        'to you at the start.\n\n' +
+        'You can reopen this summary at any time from the button at the top right of the game screen.'
+    };
+  }
+
+  function createDemoRun(btn) {
+    var existing = runs.filter(function (r) { return String(r.code || '').toUpperCase() === DEMO.code; })[0];
+    if (existing) {
+      note('nr-note', 'A session with the ID <b>' + esc(DEMO.code) + '</b> already exists (' +
+        esc(existing.name || 'untitled') + '). Delete it first, or open it from its card below.', true);
+      return;
+    }
+    var p = demoParams();
+    askSummary('Create the 4-round demo session?',
+      'A short session to show a class how the game works: <b>2 rounds without the AI, then 2 with it</b>, ' +
+      'and in each half one round that starts empty followed by one that starts with a few prizes already ' +
+      'open. Every entrant gets the same order, the exit survey is off and it draws its prize curves from a ' +
+      'different shuffle than a default session, so it gives nothing away about the real one.',
+      summaryBoxes(p), 'Create session', function () {
+        btn.disabled = true;
+        createRun(newRunDoc(p, DEMO.name, DEMO.code, demoContent())).then(function (id) {
+          btn.disabled = false;
+          showCreated(id, DEMO.code, DEMO.name);
+          loadRuns(id);
+        }, function (e) {
+          btn.disabled = false;
+          note('nr-note', 'Could not create the demo session: ' + esc(String(e && e.message || e)), true);
+        });
+      });
+  }
+
   function savedDefaultParams() {
     var d = null;
     try { d = JSON.parse(localStorage.getItem('searchv2:v3:admin:defaults') || 'null'); } catch (e) {}
@@ -321,8 +425,12 @@
       renderRuns();
       loadRunStats();
       var picked = selectId ? runs.filter(function (r) { return r.id === selectId; })[0] : null;
+      // A session named by the caller was just created or just opened — an
+      // explicit act, so the form follows it. The fallback pick is the panel's
+      // own choice, so it feeds the read screens ONLY: the form stays on a new
+      // session and Save cannot rewrite a session nobody asked to edit.
       if (picked) selectRun(picked);
-      else if (!current && runs.length) selectRun(runs[0]);
+      else if (!current && runs.length) selectRun(runs[0], { form: false });
       else if (!current) {
         currentParams = savedDefaultParams();
         fillForm(currentParams, null);
@@ -594,13 +702,22 @@
 
   // A modal, built and torn down per use so there is never a stale one in the
   // DOM to click through. Resolves only on confirm.
-  function askSummary(title, lead, bodyHtml, okLabel, onOk) {
+  // `opts.formHtml`  — controls shown ABOVE the summary (the name and session ID
+  //                    a new session is given here, rather than hunted for in the
+  //                    Operations group).
+  // `opts.validate`  — reads those controls and returns the value handed to
+  //                    onOk, or a string to show as an error and KEEP the dialog
+  //                    open. Without it the dialog is a plain confirm.
+  function askSummary(title, lead, bodyHtml, okLabel, onOk, opts) {
+    opts = opts || {};
     var back = document.createElement('div');
     back.className = 'modal-back';
     back.id = 'sess-summary';
     back.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
       '<h2 style="margin:0 0 4px;">' + esc(title) + '</h2>' +
       '<p class="muted small" style="margin:0;">' + lead + '</p>' +
+      (opts.formHtml || '') +
+      '<div class="admin-note bad" id="sum-err" style="display:none;"></div>' +
       bodyHtml +
       '<div class="modal-acts">' +
         '<button class="btn btn-ghost btn-sm" id="sum-cancel">Cancel</button>' +
@@ -612,8 +729,19 @@
     document.addEventListener('keydown', onKey);
     back.querySelector('#sum-cancel').onclick = close;
     back.onclick = function (e) { if (e.target === back) close(); };
-    back.querySelector('#sum-ok').onclick = function () { close(); onOk(); };
-    back.querySelector('#sum-ok').focus();
+    back.querySelector('#sum-ok').onclick = function () {
+      if (!opts.validate) { close(); onOk(); return; }
+      var v = opts.validate(back);
+      if (typeof v === 'string') {
+        var err = back.querySelector('#sum-err');
+        err.innerHTML = v; err.style.display = '';
+        return;
+      }
+      close(); onOk(v);
+    };
+    var first = opts.formHtml && back.querySelector('.modal-card input');
+    (first || back.querySelector('#sum-ok')).focus();
+    return back;
   }
 
   function setStatus(run, status) {
@@ -764,8 +892,27 @@
     return { params: params, pool: pool, specs: specs };
   }
 
-  function selectRun(run) {
-    current = run; editingId = run.id;
+  // `opts.form === false` — look at this session on the read screens WITHOUT
+  // pointing the parameter form at it. That is what the panel's own opening pick
+  // does: the form stays on a new session, so the obvious thing to do with it
+  // (change something, press Save) creates a session instead of rewriting one
+  // that may already have participants in it.
+  function selectRun(run, opts) {
+    var bindForm = !(opts && opts.form === false);
+    current = run;
+    editingId = bindForm ? run.id : null;
+    if (!bindForm) {
+      currentParams = savedDefaultParams();
+      currentContent = {};
+      fillForm(currentParams, null);
+      if ($('tab-wording') && $('tab-wording').style.display !== 'none') renderWording();
+      renderRoster();
+      fillSpecPicker();
+      rgFor = null; notesFor = null;
+      if ($('tab-data') && $('tab-data').style.display !== 'none') renderRoundGallery();
+      if ($('tab-notes') && $('tab-notes').style.display !== 'none') renderNotes();
+      return;
+    }
     currentParams = Specs.withDefaults(run.params);
     currentContent = Content.parseOverrides(run.contentJson || run.content);
     if ($('tab-wording') && $('tab-wording').style.display !== 'none') renderWording();
@@ -875,7 +1022,10 @@
     $('p-ops-code').oninput = function () { readForm(); };
 
     $('btn-save').onclick = saveRun;
-    $('btn-cancel').onclick = function () { if (current) selectRun(current); };
+    // Only meaningful while the form is bound to a session — it discards the
+    // edits by re-reading that session. It is hidden on a new session, where
+    // there is nothing to go back to.
+    $('btn-cancel').onclick = function () { if (editingId && current) selectRun(current); };
     $('btn-makedefault').onclick = function () {
       readForm();
       try { localStorage.setItem('searchv2:v3:admin:defaults', JSON.stringify(currentParams)); } catch (e) {}
@@ -884,7 +1034,7 @@
     $('btn-restore').onclick = function () {
       currentParams = Specs.withDefaults(null);
       fillForm(currentParams, current);
-      note('save-note', 'Form reset to the built-in defaults. Nothing is saved until you press Save session.');
+      note('save-note', 'Form reset to the built-in defaults. Nothing is written until you press the green button.');
     };
   }
 
@@ -921,9 +1071,25 @@
     $('p-ops-code').value = (run && run.code) || p.ops.code || '';
 
     $('params-title').textContent = run ? ('Parameters · ' + (run.name || 'untitled')) : 'Parameters · new session';
-    $('params-sub').textContent = run ? ('session ' + (run.code || run.id) + (run.locked ? ' · locked' : ' · draft')) : 'not saved yet';
-    $('btn-save').textContent = run ? 'Save session' : 'Create session';
+    $('params-sub').textContent = run ? ('session ' + (run.code || run.id) + (run.locked ? ' · locked' : ' · draft')) : 'not created yet';
+    // The button says which of the two things it does, because they are not
+    // undoable in the same way: one adds a session, the other rewrites one that
+    // may already be open. Naming the session on the button is the last cheap
+    // warning before the confirmation.
+    $('btn-save').textContent = run ? ('Save changes to ' + (run.code || 'this session')) : 'Create session';
+    $('btn-save').title = run
+      ? 'Write these parameters back to the session named on the button. It does NOT create a new one.'
+      : 'Create a NEW session with these parameters. You name it and give it a session ID next.';
     $('btn-cancel').style.display = run ? '' : 'none';
+    $('btn-cancel').textContent = 'Cancel edit';
+    note('edit-note', run
+      ? 'Editing the <b>existing</b> session <b>' + esc(run.code || run.id) + '</b> &mdash; ' +
+        esc(run.name || 'untitled') + '. Saving rewrites <b>that</b> session and creates nothing. ' +
+        'To build a different session from these settings instead, press ' +
+        '<b>Set the parameters first&hellip;</b> on the Sessions screen.'
+      : 'This is a <b>new session</b>, not created yet. Set whatever the task needs, then press ' +
+        '<b>Create session</b> &mdash; you choose the name and the session ID at that point. ' +
+        'No existing session is touched.', false);
 
     if (locked) {
       note('lock-note', '🔒 <b>Locked since the first participant' +
@@ -956,35 +1122,89 @@
     return currentParams;
   }
 
+  // The two things every session needs, asked in the create dialog itself. They
+  // mirror the Sessions screen's create card — same labels, same rules — so the
+  // two ways into a session ask the same question the same way.
+  function createFieldsHTML(name, code) {
+    return '<div class="create-card" style="margin:12px 0 0;"><div class="row2">' +
+      '<div class="field"><label for="sum-name">Session name</label>' +
+        '<input type="text" id="sum-name" maxlength="80" autocomplete="off" spellcheck="false" ' +
+        'placeholder="e.g. Spring MBA 2026" value="' + esc(name) + '"></div>' +
+      '<div class="field"><label for="sum-code">Session ID <span class="defval">&middot; goes in the participant link</span></label>' +
+        '<input type="text" id="sum-code" maxlength="40" autocomplete="off" spellcheck="false" ' +
+        'style="text-transform:uppercase; letter-spacing:.06em;" placeholder="(OPTIONAL) CUSTOM CODE" value="' + esc(code) + '">' +
+        '<div class="hint">Leave blank for an automatic code. Single word &mdash; capital letters and digits ' +
+        'only (3&ndash;40 chars).</div></div>' +
+      '</div></div>';
+  }
+  // Returns {name, code} — or an error string, which keeps the dialog open. The
+  // server-side check the Sessions card does (another admin may have taken the
+  // code since this list was read) cannot run here without making the dialog
+  // async; createRun's own write is the backstop, and a clash is reported.
+  function readCreateFields(back) {
+    var nameEl = back.querySelector('#sum-name'), codeEl = back.querySelector('#sum-code');
+    var name = (nameEl.value || '').trim() || 'untitled';
+    var typed = normCode(codeEl.value);
+    if (typed && typed.length < 3) {
+      codeEl.focus();
+      return 'A custom <b>Session ID</b> is 3&ndash;40 characters, capital letters and digits only. ' +
+             'Leave it blank for an automatic code.';
+    }
+    if (typed && codeInUse(typed)) {
+      codeEl.focus();
+      return 'Session ID <b>' + esc(typed) + '</b> is already taken by another session. Choose another, ' +
+             'or leave it blank for an automatic code.';
+    }
+    return { name: name, code: typed || freshCode() };
+  }
+
   function saveRun() {
     readForm();
-    var code = currentParams.ops.code || autoCode();
-    var name = currentParams.ops.runName || 'untitled';
+    var code = currentParams.ops.code || '';
+    var name = currentParams.ops.runName || '';
     if (!editingId) {
-      // Creating freezes the mapping pool and the 28 round specs under these
+      // Creating freezes the mapping pool and every round spec under these
       // seeds, so the summary comes first — this is the last cheap moment to
-      // notice that something was set wrong.
+      // notice that something was set wrong. The name and the session ID are
+      // chosen HERE, in the same breath, so "these are the parameters I want"
+      // and "this is the session they belong to" are one decision.
       var pending = clone(currentParams);
-      pending.ops.code = code; pending.ops.runName = name;
       pending.ops.entryOpen = false;   // what newRunDoc will write, so the summary can't promise otherwise
       askSummary('Create this session?',
         'Creating freezes the mapping pool and all <b>' +
         (2 * (pending.rounds.warmupPerBlock + pending.rounds.scoredPerBlock)) +
-        ' round specs</b> under the seeds below. It opens as a <b>draft</b>, so nobody can enter yet.',
-        summaryBoxes(pending), 'Create session', function () {
-          var obj = newRunDoc(currentParams, name, code, currentContent);
+        ' round specs</b> under the seeds below. It opens as a <b>draft</b>, so nobody can enter yet — ' +
+        'and no existing session is changed.',
+        summaryBoxes(pending), 'Create session',
+        function (v) {
+          var obj = newRunDoc(currentParams, v.name, v.code, currentContent);
           createRun(obj).then(function (id) {
-            note('save-note', 'Session <b>' + esc(code) + '</b> created as a <b>draft</b>. Run the validation gate on the ' +
+            note('save-note', 'Session <b>' + esc(v.code) + '</b> created as a <b>draft</b>. Run the validation gate on the ' +
               'Data screen — and check the round plots at the bottom of it — before opening entry.');
             // Select what was just created. Without this the form stayed on a
             // NEW session with editingId null, so pressing Save again created a
             // second session on the same code — and re-pointed the code at it.
             loadRuns(id);
+            // The created box carries Copy link and Open entry, so the session
+            // is one press from live rather than a hunt back through the cards.
+            showCreated(id, v.code, v.name);
+            openTab('runs');
           }).catch(function (e) { note('save-note', 'Could not create the session: ' + esc(String(e && e.message || e)), true); });
-        });
+        },
+        { formHtml: createFieldsHTML(name, code), validate: readCreateFields });
       return;
     }
     var run = current;
+    // Rewriting an existing session is named and confirmed. It used to be the
+    // silent default of a form the panel had bound to whichever session it
+    // picked at load, which is how a parameter change meant for the next session
+    // landed on an old one instead.
+    if (!confirm('Save these parameters to the EXISTING session "' + (run && run.code || editingId) +
+      ' — ' + ((run && run.name) || 'untitled') + '"?\n\n' +
+      'This rewrites that session. It does NOT create a new one.' +
+      (run && run.locked ? '\n\nIt is locked, so only the Operations group and the next-entrant override change.' : ''))) return;
+    code = code || (run && run.code) || autoCode();
+    name = name || (run && run.name) || 'untitled';
     var patch;
     if (run && run.locked) {
       // Locked: only Operations and the entrant override may move. The Rules
@@ -1650,6 +1870,13 @@
   function renderWording() {
     var host = $('wording-body');
     if (!host) return;
+    note('wd-target', editingId
+      ? 'These words belong to session <b>' + esc((current && current.code) || editingId) + '</b> &mdash; ' +
+        esc((current && current.name) || 'untitled') + '. <b>Save changes to ' +
+        esc((current && current.code) || 'this session') + '</b> on the Parameters screen writes them.'
+      : 'These words belong to the <b>new session</b> the Parameters screen is composing, and are saved when ' +
+        'you create it. To edit an existing session&rsquo;s wording, open it from its card on the ' +
+        '<b>Sessions</b> screen first.', false);
     var q = ($('wd-search') && $('wd-search').value || '').trim().toLowerCase();
     var onlyChanged = !!($('wd-changed') && $('wd-changed').checked);
     var groups = Content.outline(), html = [], shown = 0;
