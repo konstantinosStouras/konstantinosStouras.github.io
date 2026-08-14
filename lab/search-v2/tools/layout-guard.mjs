@@ -122,7 +122,10 @@ for (const size of SIZES) {
     ['#btn-pos-left', 'the ← arrow'],
     ['#btn-pos-right', 'the → arrow'],
     ['#btn-instr-open', 'the instructions button'],
-    ['#touched-list', 'the list of everything touched this round'],
+    ['#c-net', 'the running score if you stop right now'],
+    ['#sb-net', 'the NET VALUE band under the plot'],
+    ['#sb-best', 'the best prize found, under the plot'],
+    ['#c-total-cost', 'the total spent this round'],
     ['#c-selected', 'the selected-position readout']
   ]) {
     const r = await pg.evaluate(`(${REACHABLE})(${JSON.stringify(sel)})`);

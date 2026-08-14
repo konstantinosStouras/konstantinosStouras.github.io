@@ -589,6 +589,23 @@ const run = {
   ok(Dict.sheets.length === 3 && Dict.oneRowIs('Decisions').length > 10,
     'and each analysis sheet states what one of its rows is');
 
+  // A revealed position JOINS the AI's anchor set, so the curve moves to pass
+  // through it — which leaves any answer given BEFORE that reveal sitting off the
+  // line. That is the design (it is what the qai_update gate asks about), and the
+  // plot must keep showing what the AI said AT THE TIME rather than rewriting it.
+  {
+    const sp = art.specs.find(x => x.seed_shape === 'OPEN' && x.ai_density === 'SPARSE');
+    const mp = art.pool[sp.mapping_index];
+    const near = sp.ai_anchors[0] + 3;
+    const said = Ai.aiAnswer(Ai.anchorSet(sp.ai_anchors, sp.pre_opened, [], mp), near, P.ai.answerRounding);
+    const after = Ai.aiAnswer(Ai.anchorSet(sp.ai_anchors, sp.pre_opened, [near], mp), near, P.ai.answerRounding);
+    ok(after === mp[near - 1],
+      'revealing a position makes the AI answer the TRUTH there afterwards', String(after));
+    ok(said !== after,
+      'so an answer given before that reveal no longer lies on the curve — historical, not wrong',
+      'said ' + said + ', curve now ' + after);
+  }
+
   const r0 = built.rounds[0];
   ok(r0.global_max === Pool.maxOf(art.pool[r0.mapping_index]), 'global_max comes from the mapping');
   ok(r0.argmax_position === Pool.argmaxOf(art.pool[r0.mapping_index]), 'argmax_position comes from the mapping');
@@ -713,6 +730,149 @@ head('15 · the Cloud Functions engine copies are identical to the originals');
   const r = spawnSync('node', [path.join(__dirname, 'sync-engine.mjs'), '--check'], { encoding: 'utf8' });
   ok(r.status === 0, 'the vendored engine matches lab/search-v2/{config,pool,specs,ai}.js',
     (r.stderr || r.stdout || '').trim());
+}
+
+// ======================================================================
+head('16 · per-session wording overrides change words and nothing else');
+// ======================================================================
+{
+  const groups = Content.outline();
+  const keys = groups.reduce((a, g) => a.concat(g.fields.map(f => f.key)), []);
+  ok(groups.length >= 8, 'the outline covers every screen a participant reads');
+  ok(new Set(keys).size === keys.length, 'every override key is unique');
+  ok(groups.every(g => g.title && g.when), 'every group says what it is and when it is shown');
+  ok(groups.every(g => g.fields.every(f => f.label && (f.kind === 'prose' || f.kind === 'line'))),
+    'every field carries a label and a kind');
+
+  // The outline is the whitelist, so it must reach everything the app renders.
+  const covered = k => keys.includes(k);
+  ok(covered('consent') && covered('debrief') && covered('thanks'), 'the standalone prose blocks are editable');
+  ok(Content.INSTRUCTIONS.every(s => covered('instr.' + s.id + '.body')), 'every instruction screen is editable');
+  ok(Content.AI_INSTRUCTIONS.every(s => covered('ai.' + s.id + '.body')), 'every AI instruction screen is editable');
+  ok(Content.QUIZ_BASE.every(q => covered('quiz.' + q.id + '.prompt')), 'every quick-check question is editable');
+  ok(Content.QUIZ_AI.every(q => covered('aiquiz.' + q.id + '.prompt')), 'every AI quick-check question is editable');
+  ok(Content.SURVEY.every(q => covered('survey.' + q.id + '.prompt')), 'every survey item is editable');
+  ok(Content.QUIZ_BASE.concat(Content.QUIZ_AI).every(q =>
+    q.options.every((o, i) => covered('quiz.' + q.id + '.opt.' + i) || covered('aiquiz.' + q.id + '.opt.' + i))),
+    'every quiz answer option is editable');
+
+  // ---- normalization -----------------------------------------------------
+  const n = Content.normalizeOverrides({
+    consent: 'Short consent.',
+    thanks: Content.THANKS,                 // identical to the default
+    debrief: 12345,                         // not a string
+    'quiz.q_cost.opt.2': '  spaced  ',
+    'nope.not.a.key': 'ignored',
+    'survey.s01.prompt': '',                // blank
+    'instr.i1.body': 'x'.repeat(Content.MAX_LEN + 1)
+  });
+  ok(Object.keys(n).length === 2, 'only the two usable overrides survive normalization',
+    'got ' + JSON.stringify(Object.keys(n)));
+  ok(n.consent === 'Short consent.', 'a genuine override is kept');
+  ok(n['quiz.q_cost.opt.2'] === 'spaced', 'an override is trimmed');
+  ok(!('thanks' in n), 'a value equal to the default is not stored');
+  ok(!('debrief' in n), 'a non-string is dropped');
+  ok(!('nope.not.a.key' in n), 'an unknown key is dropped');
+  ok(!('instr.i1.body' in n), 'an over-long override is dropped');
+  ok(Object.keys(Content.normalizeOverrides(null)).length === 0, 'no overrides normalizes to nothing');
+
+  // ---- resolve: wording moves, structure does not ------------------------
+  const R = Content.resolve({
+    consent: 'Short consent.',
+    'quiz.q_cost.opt.2': 'FIVE points',
+    'aiquiz.qai_score.prompt': 'Reworded strict question',
+    'survey.s17.item.s17a': 'Reworded numeracy item',
+    'survey.s03.opt.0': 'Far less',
+    'part.A.title': 'Part A · Searching'
+  });
+  ok(R.CONSENT === 'Short consent.', 'the consent screen takes its override');
+  ok(R.PART_INTRO.A.title === 'Part A · Searching', 'a survey part heading takes its override');
+
+  const qc = R.QUIZ_BASE.find(q => q.id === 'q_cost');
+  const qcBase = Content.QUIZ_BASE.find(q => q.id === 'q_cost');
+  ok(qc.options[2] === 'FIVE points', 'an answer option takes its override');
+  ok(qc.answer === qcBase.answer, 'the answer key is unchanged by rewording');
+  ok(qc.options.length === qcBase.options.length, 'the number of options is unchanged');
+
+  const strict = R.QUIZ_AI.find(q => q.strict);
+  ok(strict && strict.id === 'qai_score', 'the strict gate survives rewording');
+  ok(strict.prompt === 'Reworded strict question', 'the strict question can be reworded');
+  ok(R.UNDERSTOOD_FRONTIER_QID === Content.UNDERSTOOD_FRONTIER_QID, 'the frontier flag still points at its question');
+
+  const s17 = R.SURVEY.find(q => q.id === 's17');
+  ok(s17.items[0].prompt === 'Reworded numeracy item', 'a numeracy item can be reworded');
+  ok(s17.items[0].answer === 500, 'the numeracy ANSWER is not overridable');
+  ok(R.SURVEY.find(q => q.id === 's03').options[0] === 'Far less', 'a survey option takes its override');
+  ok(R.SURVEY.every((q, i) => q.id === Content.SURVEY[i].id && q.type === Content.SURVEY[i].type),
+    'survey ids, types and order are unchanged');
+  ok(R.SURVEY.every(q => !q.platformKey || q.platformKey === Content.SURVEY.find(x => x.id === q.id).platformKey),
+    'the platform keys that suppress a duplicate question are unchanged');
+
+  // The exported column set is derived from ids, so it must be untouched — this
+  // is the contract that lets wording be editable while the workbook stays put.
+  ok(JSON.stringify(R.surveyColumns()) === JSON.stringify(Content.surveyColumns()),
+    'the survey columns of a reworded session are identical');
+  ok(JSON.stringify(R.quizColumns()) === JSON.stringify(Content.quizColumns()),
+    'the quiz columns of a reworded session are identical');
+
+  // ---- the defaults are never mutated ------------------------------------
+  ok(Content.CONSENT !== 'Short consent.', 'resolving does not touch the default consent');
+  ok(qcBase.options[2] === '{revealCost} points', 'resolving does not touch the default options');
+  ok(Content.SURVEY.find(q => q.id === 's17').items[0].prompt.indexOf('Reworded') < 0,
+    'resolving does not touch the default survey');
+
+  // ---- how it is stored --------------------------------------------------
+  // A JSON STRING, not a map: the admin writes runs with setDoc(merge:true),
+  // which deep-merges a map, so a reverted key would be merged straight back
+  // and "revert" would change nothing for the participant.
+  const json = Content.stringifyOverrides({ consent: 'Short consent.', bogus: 'x' });
+  ok(typeof json === 'string', 'overrides stringify to a string');
+  ok(JSON.parse(json).consent === 'Short consent.' && !('bogus' in JSON.parse(json)),
+    'and are normalized on the way in, so an unknown key is never stored');
+  ok(Content.stringifyOverrides({}) === '{}', 'reverting everything stores an EMPTY map, not a stale one');
+  ok(Object.keys(Content.parseOverrides(Content.stringifyOverrides({}))).length === 0,
+    'which reads back as no overrides at all');
+  ok(Content.parseOverrides(json).consent === 'Short consent.', 'a stored string round-trips');
+  ok(Object.keys(Content.parseOverrides('not json at all')).length === 0,
+    'unreadable wording is no wording, never a broken session');
+  ok(Object.keys(Content.parseOverrides(null)).length === 0, 'and neither is nothing');
+  ok(Content.resolve(json).CONSENT === 'Short consent.', 'resolve accepts the stored string directly');
+  ok(Content.resolve({ consent: 'Short consent.' }).CONSENT === 'Short consent.',
+    'and an already-parsed map, so both callers work');
+
+  const plain = Content.resolve(null);
+  ok(plain.CONSENT === Content.CONSENT && plain.DEBRIEF === Content.DEBRIEF && plain.THANKS === Content.THANKS,
+    'a session with no overrides reads exactly the defaults');
+  ok(JSON.stringify(plain.SURVEY.map(q => q.prompt)) === JSON.stringify(Content.SURVEY.map(q => q.prompt)),
+    'and its survey wording is the default wording');
+}
+
+// ======================================================================
+head('17 · every token in the content is one the app substitutes');
+// ======================================================================
+{
+  // A token the participant screen does not know is printed to the participant
+  // verbatim — "{stepBound}" instead of a number. Reading them out of app.js
+  // rather than restating them here is the point: the list cannot drift.
+  const fs = require('fs');
+  const path = require('path');
+  const appSrc = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  const fn = appSrc.slice(appSrc.indexOf('function tokens('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  const handled = new Set((body.match(/\\\{([A-Za-z]+)\\\}/g) || []).map(m => m.replace(/\\|\{|\}/g, '')));
+  ok(handled.size >= 9, 'the app substitutes a list of tokens', [...handled].join(', '));
+
+  const used = new Set();
+  const walk = v => {
+    if (typeof v === 'string') { (v.match(/\{([A-Za-z]+)\}/g) || []).forEach(t => used.add(t.slice(1, -1))); return; }
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (v && typeof v === 'object') { Object.keys(v).forEach(k => walk(v[k])); }
+  };
+  walk([Content.CONSENT, Content.INSTRUCTIONS, Content.AI_INSTRUCTIONS, Content.QUIZ_BASE,
+        Content.QUIZ_AI, Content.SURVEY, Content.PART_INTRO, Content.DEBRIEF, Content.THANKS]);
+  const unknown = [...used].filter(t => !handled.has(t));
+  ok(unknown.length === 0, 'every token used in content.js is substituted by the app',
+    unknown.length ? 'unsubstituted: {' + unknown.join('}, {') + '}' : '');
 }
 
 console.log('\n' + (fails

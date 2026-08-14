@@ -169,6 +169,7 @@ p{margin:.6em 0;}
 .sel-txt{font-size:12px; fill:#555; font-weight:600;}
 .pre-mark{fill:#5b6570;}
 .rev-mark{fill:var(--blue-d);}
+.mark-lbl.ask{fill:var(--est);}
 .mark-lbl{font-size:11.5px; fill:var(--ink); font-weight:600;}
 .ask-diamond{fill:#fff; stroke:var(--est); stroke-width:2.2;}
 .nom-line{stroke:var(--amber); stroke-width:2; stroke-dasharray:5 4;}
@@ -303,3 +304,31 @@ p{margin:.6em 0;}
 .tip-x{margin-left:auto; border:none; background:none; color:inherit; font-size:20px;
   line-height:1; cursor:pointer; opacity:.6;}
 .tip-x:hover{opacity:1;}
+
+/* ---- the reminder above a comprehension gate ---- */
+.reminder{background:#f6f8fa; border:1px solid var(--line); border-radius:12px;
+  padding:14px 18px; margin:0 0 16px; font-size:14.5px; line-height:1.75;}
+.reminder h4{margin:0 0 8px; font-size:14px; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--muted);}
+.reminder ul{margin:0; padding-left:20px;}
+.reminder li{margin:3px 0;}
+.reminder b{font-weight:700;}
+
+.q-fb.feedback.good{background:#eef8e9; border-color:#cfe8c2; color:#2c5d1f;}
+.q-fb.feedback{margin-top:10px; padding:9px 12px; border-radius:9px; font-size:13.5px; line-height:1.6;}
+
+.tv-note{display:block; flex-basis:100%; margin-top:6px; font-size:12.5px; color:var(--muted); line-height:1.6;}
+
+/* ---- the round in four numbers, under the plot ---- */
+.score-band{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;
+  margin:14px 0 0;}
+.score-band .sb{border:1px solid var(--line); border-radius:12px; padding:10px 14px; background:#fff;
+  display:flex; flex-direction:column; gap:2px; min-width:0;}
+.score-band .sb-l{font-size:12.5px; color:var(--muted); line-height:1.35;}
+.score-band .sb-v{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.2;}
+.score-band .sb-v.cost{color:var(--red);}
+.score-band .sb-v .sub{font-size:12.5px; font-weight:600; color:var(--muted); margin-left:6px;}
+.score-band .sb.net{background:#eef6ff; border-color:#cfe2fb;}
+.score-band .sb.net .sb-l{color:#1f4e79; font-weight:700;}
+.score-band .sb.net .sb-v{font-size:30px; color:#1f4e79;}
+.score-band .sb.net.neg .sb-v{color:var(--red);}

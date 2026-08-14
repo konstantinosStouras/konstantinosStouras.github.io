@@ -193,6 +193,20 @@ for (let i = 0; i < plan.length; i++) {
   if (await pg.locator('#ov-nominate.show').count()) await pg.locator('#btn-nom-ok').click();
   await pg.waitForSelector('#s-interstitial.active', { timeout: 15000 });
 
+  // The running ledger, captured DURING the round (the browser is closed before
+  // the checks run, so anything read from the DOM has to be taken here).
+  if (i === 0) {
+    trace.panel = await pg.evaluate(() => ({
+      hasList: !!document.getElementById('touched-list'),
+      net: (document.querySelector('.ss.net .ss-l') || {}).textContent || '',
+      netVal: (document.getElementById('c-net') || {}).textContent || '',
+      best: (document.getElementById('c-best') || {}).textContent || '',
+      total: (document.getElementById('c-total-cost') || {}).textContent || '',
+      bandNet: (document.getElementById('sb-net') || {}).textContent || '',
+      bandBest: (document.getElementById('sb-best') || {}).textContent || '',
+      bandReveal: (document.getElementById('sb-reveal') || {}).textContent || ''
+    }));
+  }
   // What the participant is told, itemised — checked on the first round.
   if (i === 0) {
     const led = await pg.locator('#inter-body .ledger').innerText();
@@ -426,7 +440,23 @@ ok(surveyCols.length >= 10, 'the survey answers reach the participant row as col
   surveyCols.length + ' populated');
 
 // ── 8 · the participant was told where their score went ───────────────────
-head('8 · the round result is itemised for the participant');
+head('8 · the running ledger on the round screen');
+{
+  const pnl = trace.panel || {};
+  ok(pnl.hasList === false,
+    'the list that repeated every mark in words is gone — the plot already carries them');
+  ok(/stop right now/.test(pnl.net), 'the running score is labelled "if you stop right now"', pnl.net);
+  ok(!/unknown/.test(pnl.netVal), 'and it never reads "unknown" — it is the best prize held minus what was spent', pnl.netVal);
+  ok(/\d/.test(pnl.total), 'the total spent this round is on screen', pnl.total);
+  ok(/\d/.test(pnl.best) || pnl.best.trim() === '—', 'so is the best prize found', pnl.best);
+  // The headline band under the plot: the four numbers that decide the round.
+  ok(/\d/.test(pnl.bandBest), 'the band under the plot shows the best prize found', pnl.bandBest);
+  ok(/\d/.test(pnl.bandReveal), 'and what was spent revealing', pnl.bandReveal);
+  ok(/\d/.test(pnl.bandNet) && /spent/.test(pnl.bandNet),
+    'and the NET VALUE, with the arithmetic beside it', pnl.bandNet);
+}
+
+head('9 · the round result is itemised for the participant');
 const led = trace.ledger || '';
 ok(/Prize at position/.test(led), 'the prize won is named with its position', led.slice(0, 140));
 ok(/Cost of revealing/.test(led), 'the cost of revealing is shown as its own line');
@@ -437,7 +467,7 @@ ok(/Round score/.test(led), 'and the round score closes the sum');
 }
 
 // ── 9 · nothing was invented ──────────────────────────────────────────────
-head('9 · nothing in the log was invented');
+head('10 · nothing in the log was invented');
 const known = new Set(['session_start', 'session_end', 'round_start', 'round_end', 'decision',
   'comprehension', 'registration', 'survey', 'instructions', 'telemetry', 'slider', 'attention',
   'debrief', 'consent', 'block_start']);

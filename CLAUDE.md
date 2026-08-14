@@ -2532,11 +2532,16 @@ BOTH anchor sets — `ai_anchors_before` (private anchors included) and
 nested arrays. **Every derived field of §16.8 is computed offline in
 `admin/export.js` and nowhere else.**
 
-**Admin panel** at `/lab/search-v2/admin/`, five tabs over the brief's six
+**Admin panel** at `/lab/search-v2/admin/`, seven tabs over the brief's six
 screens: Sessions · Parameters (+ Consequences beside it) · Roster · Live monitor ·
-Data & preview. Parameters carries an eighth group, **Interface and engagement**
-(button order, the two cost colours, encouragement), and the Roster reports the
-ask-left / reveal-left balance beside the sequence split. **The UI calls the unit a SESSION** (28 rounds: 4 warm-up + 24
+Data & preview · Design notes · Wording. The tab switcher derives its pane list
+from the buttons themselves — a hard-coded list silently fails to show any screen
+added after it was written, which is exactly how the Wording pane first shipped
+invisible. Parameters carries an eighth group, **Interface and engagement**
+(button order, the two cost colours, encouragement); the Roster reports the
+ask-left / reveal-left balance beside the sequence split; and the Wording tab
+covers the registration questions and every encouragement message, like every
+other word a participant reads. **The UI calls the unit a SESSION** (28 rounds: 4 warm-up + 24
 scored, two blocks) — the brief calls it a *run* and the DATA keeps that name
 (`run_id` on every row, the workbook's Run sheet), so the two words are one
 object and no analysis script moves; rename UI copy only. The governing rule is
@@ -2669,13 +2674,61 @@ student's name and e-mail NEVER reach this study's log (§11). Finishing writes
 (`?preview=1&debug=1&key=…`) does neither, never adopts the student ID, and its
 rows carry no `run_id`.
 
+**A seventh tab, `Wording`** (owner 2026-08 — "include the exact words that will
+be shown to each participant right in the admin panel… I wanted to check these
+questions that participants see, and can't find them"): every participant-facing
+string content.js holds, **in the order a participant meets it** — consent, the
+five instruction screens, the three AI screens, both quick checks with their
+answer options, all twenty-four survey items with their options and follow-ups,
+the part headings, debrief and thanks. Deliberately NOT in scope (and said so on
+the screen): the game screen's own buttons and labels and the reminder box above
+each quick check, which app.js builds from the numbers themselves — interface
+rather than study text. Each is shown **with this session's own numbers substituted**,
+because a screen that displayed `{revealCost}` instead of `4` would defeat its
+own purpose. Editing a field writes a **per-session override**; the study's
+defaults in `content.js` are untouched and every other session keeps them.
+**`content.js` owns the whole mechanism** — `outline()` (the editable fields,
+which doubles as the whitelist), `normalizeOverrides()` and `resolve()` — so the
+panel only draws it and `app.js` only reads it. Storage is a **flat
+`key → string` map** (keys like `quiz.q_cost.opt.2`), held on the run document as
+a JSON STRING — **`run.contentJson`, beside `specsJson`** — and that is not
+cosmetic: both writers use `setDoc(merge:true)`, which DEEP-MERGES a map, so
+stored as a map a reverted key would be merged straight back and "revert" would
+change nothing for the participant while looking right in the panel. A string
+field is replaced whole. It is carried by **`publicDoc` too**, or a server-mode
+participant — for whom the run document is admin-only — could never see an
+override. `newRunDoc` takes the wording as an ARGUMENT rather than reading the
+panel's current state, so **a clone carries the wording of the session it was
+cloned from** instead of whatever session happened to be open in the form. **WORDING IS EDITABLE,
+STRUCTURE IS NOT**: ids, answer keys, option COUNTS, question types, `strict`,
+`platformKey` and the numeracy answers always come from `content.js`. That is the
+safety argument, not a UI convenience — `admin/dictionary.js` describes one entry
+per column and `surveyColumns()`/`quizColumns()` derive the workbook from those
+ids, so a session that could add a question or move an answer key would
+invalidate its own data; rewording cannot. For the same reason wording stays
+editable **after a session locks** (it is not part of the design), unlike the task
+parameters. `normalizeOverrides` drops an unknown key, a non-string, a blank, an
+over-long value (`MAX_LEN` 4000) and — deliberately — **a value equal to the
+default**, so an untouched field is never frozen against a later correction to
+`content.js`. Overrides are plain text: the participant screen escapes them and
+re-introduces only `**bold**`, exactly as it does the defaults. Fixed in the same
+change, because the tab surfaced it: **`{stepBound}` was never substituted** —
+three quick-check explanations reached participants reading "differ by at most
+{stepBound}" — and `selftest.js` now derives the handled token list from `app.js`
+itself and fails on any token `content.js` uses that the app does not substitute,
+so the two cannot drift again.
+
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (247) ·
-`tools/smoke.mjs` (192, a whole 28-round session) ·
-`tools/admin-smoke.mjs` (121) · `tools/platform-guard.mjs` (28) ·
-`tools/layout-guard.mjs` (89, reachability at five window sizes) ·
+`node lab/search-v2/tools/selftest.js` (299) ·
+`tools/smoke.mjs` (a whole 28-round session) ·
+`tools/admin-smoke.mjs` · `tools/platform-guard.mjs` (28) ·
+**`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its
+participants, and the drift guard that `app.js` reads content only through the
+resolved copy: one `Content.SURVEY` slipping back would silently ignore that
+session's wording for that one screen)** ·
+`tools/layout-guard.mjs` (reachability at five window sizes) ·
 `tools/data-audit.mjs` (46) ·
 **`tools/migration-guard.mjs`** (a participant MID-SESSION when a build ships
 must not lose data — the registration phase is entered from the consent button,

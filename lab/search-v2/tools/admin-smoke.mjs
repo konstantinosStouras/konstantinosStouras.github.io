@@ -84,10 +84,10 @@ await pg.waitForSelector('#a-dash.active', { timeout: 20000 });
 ok(true, 'with no Firebase config the panel opens straight into local preview');
 ok(/Local preview/.test(await pg.locator('#scope-note').innerText()), 'and says so, rather than pretending it is live');
 
-// ── the six screens ────────────────────────────────────────────────────────
+// ── the seven screens ──────────────────────────────────────────────────────
 const tabs = await pg.$$eval('.tab', els => els.map(e => e.dataset.tab));
-ok(JSON.stringify(tabs) === JSON.stringify(['runs', 'params', 'roster', 'monitor', 'data', 'notes']),
-  'the panel is Sessions · Parameters · Roster · Live monitor · Data & preview · Design notes', tabs.join(','));
+ok(JSON.stringify(tabs) === JSON.stringify(['runs', 'params', 'roster', 'monitor', 'data', 'notes', 'wording']),
+  'the panel is Sessions · Parameters · Roster · Live monitor · Data & preview · Design notes · Wording', tabs.join(','));
 ok(await shown('tab-runs'), 'it opens on the Runs screen');
 
 // ── Screen 2 + 3 · parameters beside consequences ─────────────────────────
@@ -416,6 +416,105 @@ ok(/nearest<\/b> maximising position|nearest maximising position/.test(nt),
   'and the tie rule the export uses is stated');
 const notesErr = await pg.locator('#notes-body .admin-note.bad').count();
 ok(notesErr === 0, 'the notes build without error against a real session');
+
+// ── Wording: the words a participant reads, as they will read them ─────────
+// The point of the screen is that what it shows IS what is shown, so the checks
+// are about substitution and about structure staying put — not about layout.
+await tab('wording');
+ok(await shown('tab-wording'), 'the Wording screen opens');
+
+// Open every group, so the assertions below see all of the words and not only
+// the one group that starts expanded.
+await pg.$$eval('#wording-body details', els => els.forEach(e => { e.open = true; }));
+const wt = await pg.locator('#wording-body').innerText();
+ok(/consent/i.test(await pg.locator('#tab-wording').innerText()), 'it names the consent screen');
+ok(/Each reveal costs 4 points|reveal costs 4/.test(wt),
+  'the costs are substituted, so the words read as the participant will read them', wt.slice(0, 160));
+ok(!/\{revealCost\}|\{J\}|\{stepBound\}|\{K\}/.test(wt),
+  'no token is left showing anywhere on the screen');
+
+// Every question the owner could not find before must be findable here.
+const findable = async (q) => {
+  await pg.fill('#wd-search', q);
+  await pg.waitForTimeout(150);
+  return (await pg.locator('#wording-body').innerText()).toLowerCase().includes(q.toLowerCase());
+};
+ok(await findable('HIGHEST the prize at position 41'), 'a quick-check question is on the screen');
+ok(await findable('how did you decide when to stop'), 'a survey question is on the screen');
+ok(await findable('Out of every 10 questions'), 'a slider item is on the screen');
+ok(await findable('how many times would it come up even'), 'a numeracy item is on the screen');
+await pg.fill('#wd-search', '');
+await pg.waitForTimeout(150);
+
+// Editing one field changes that field's rendered text and nothing else.
+await pg.fill('#wd-search', 'Consent text');
+await pg.waitForTimeout(150);
+const box = pg.locator('#wording-body textarea[data-edit="consent"]');
+await box.fill('We are going to play a game. It takes about 40 minutes.');
+await pg.waitForTimeout(150);
+ok(/We are going to play a game/.test(await pg.locator('#wording-body .wd-shown').first().innerText()),
+  'typing a new wording repaints what the participant will see');
+ok(await pg.locator('#wording-body .wd-field.edited').count() >= 1, 'the changed field is marked as changed');
+ok(/<b>1<\/b> changed/.test(await pg.locator('#wd-count').innerHTML()), 'the counter reports one change');
+
+// Reverting is one click and puts the default back.
+await pg.locator('#wording-body button[data-revert="consent"]').click();
+await pg.waitForTimeout(150);
+ok(/decision-making study/.test(await pg.locator('#wording-body .wd-shown').first().innerText()),
+  'reverting restores the study default');
+ok(/<b>0<\/b> changed/.test(await pg.locator('#wd-count').innerHTML()), 'and the counter drops back to none');
+await pg.fill('#wd-search', '');
+await pg.waitForTimeout(150);
+
+// A saved override must SURVIVE a reload and reach the participant's copy.
+await pg.fill('#wd-search', 'Consent text');
+await pg.waitForTimeout(150);
+await pg.locator('#wording-body textarea[data-edit="consent"]').fill('Reworded for this session only.');
+await pg.waitForTimeout(120);
+await tab('params');
+await pg.locator('#btn-save').click();
+await pg.waitForTimeout(300);
+if (await pg.locator('#sum-ok').count()) { await pg.locator('#sum-ok').click(); await pg.waitForTimeout(400); }
+const stored = await pg.evaluate(() => {
+  const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
+  return runs.map(r => {
+    try { return JSON.parse(r.contentJson || '{}').consent || null; } catch { return null; }
+  });
+});
+ok(stored.some(c => c === 'Reworded for this session only.'),
+  'Save session persists the wording with the session — a LOCKED one included, since ' +
+  'wording is not part of the design', JSON.stringify(stored));
+
+// And the participant's own copy must carry it, or an override would be
+// invisible in server mode, where the run document is admin-only.
+const pub = await pg.evaluate(() => {
+  const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
+  const r = runs.find(x => (x.contentJson || '').includes('consent'));
+  return r ? typeof r.contentJson : null;
+});
+ok(pub === 'string',
+  'and it is stored as a STRING, so a later revert can actually remove a key — ' +
+  'a map would be deep-merged by setDoc(merge:true) and never lose one', String(pub));
+
+// A CLONE carries the wording of the session it was cloned FROM. newRunDoc used
+// to read the panel's in-form wording, so cloning session B while session A was
+// open gave the clone A's words on B's parameters.
+await tab('runs');
+const beforeClone = await pg.locator('.run-card').count();
+pg.once('dialog', d => d.accept('Cloned by the smoke test'));
+await pg.locator('.run-card [data-act="clone"]').first().click();
+await pg.waitForTimeout(600);
+const cloned = await pg.evaluate(() => {
+  const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
+  const c = runs.find(r => r.clonedFrom);
+  if (!c) return { found: false };
+  let consent = null;
+  try { consent = JSON.parse(c.contentJson || '{}').consent || null; } catch {}
+  return { found: true, consent };
+});
+ok(cloned.found, 'cloning a session from its card creates the clone');
+ok(cloned.consent === 'Reworded for this session only.',
+  'and the clone carries the wording of the session it was cloned FROM', String(cloned.consent));
 
 ok(errors.length === 0, 'no page errors anywhere in the panel', errors.slice(0, 5).join(' | '));
 

@@ -135,6 +135,7 @@
     <section class="screen" id="s-quiz">
       <h1>Quick check</h1>
       <p class="muted">Please answer these so we know the instructions were clear.</p>
+      <div class="reminder" id="quiz-reminder"></div>
       <div id="quiz-body"></div>
       <div class="feedback bad" id="quiz-feedback" style="display:none;"></div>
       <div class="right" style="margin-top:14px;"><button class="btn btn-green" id="btn-quiz">Submit answers</button></div>
@@ -155,6 +156,7 @@
     <section class="screen" id="s-aiquiz">
       <h1>Quick check &mdash; the AI</h1>
       <p class="muted">These are about how the AI works.</p>
+      <div class="reminder" id="aiquiz-reminder"></div>
       <div id="aiquiz-body"></div>
       <div class="feedback bad" id="aiquiz-feedback" style="display:none;"></div>
       <div class="right" style="margin-top:14px;"><button class="btn btn-green" id="btn-aiquiz">Submit answers</button></div>
@@ -191,10 +193,11 @@
       </div>
 
       <div class="round-grid">
-        <!-- LEFT: everything touched this round, with the two costs kept apart -->
+        <!-- LEFT: the ledger. What was found is on the PLOT, where every mark
+             already carries its value — listing it again in words here only
+             asked the participant to read the same thing twice. -->
         <aside class="side-col">
           <h3>This round</h3>
-          <ul class="touched" id="touched-list"></ul>
           <div class="side-stats">
             <div class="ss" id="ss-ai"><span class="ss-l">Questions asked to the AI</span><span class="ss-v" id="c-queries">0</span></div>
             <div class="ss" id="ss-ai-cost"><span class="ss-l">Cost of asking the AI</span><span class="ss-v cost" id="c-query-cost">0</span></div>
@@ -203,7 +206,7 @@
             <div class="ss tot"><span class="ss-l">Total spent this round</span><span class="ss-v cost" id="c-total-cost">0</span></div>
             <div class="ss sel"><span class="ss-l">Best prize you have found</span><span class="ss-v" id="c-best">&mdash;</span></div>
             <div class="ss"><span class="ss-l">Selected position</span><span class="ss-v" id="c-selected">50</span></div>
-            <div class="ss net"><span class="ss-l">Score if you stop here</span><span class="ss-v" id="c-net">&mdash;</span></div>
+            <div class="ss net"><span class="ss-l">Score if you stop right now</span><span class="ss-v" id="c-net">&mdash;</span></div>
             <div class="ss"><span class="ss-l">Rounds remaining</span><span class="ss-v" id="c-remaining">0</span></div>
           </div>
           <!-- The prices, always on screen: a participant who has forgotten them
@@ -215,6 +218,17 @@
         <div class="chart-col">
           <div class="plot-wrap"><div id="plot"></div></div>
           <div class="legend" id="legend"></div>
+
+          <!-- The round in four numbers, under the plot where there is room to
+               make them legible. The left panel keeps the itemised ledger; this
+               is the headline, and NET VALUE is the one that matters. -->
+          <div class="score-band" id="score-band">
+            <div class="sb"><span class="sb-l">Best prize found</span><span class="sb-v" id="sb-best">&mdash;</span></div>
+            <div class="sb"><span class="sb-l">Spent revealing</span><span class="sb-v cost" id="sb-reveal">0</span></div>
+            <div class="sb" id="sb-ai-wrap"><span class="sb-l">Spent asking the AI</span><span class="sb-v cost" id="sb-ai">0</span></div>
+            <div class="sb net"><span class="sb-l">Net value if you stop right now</span><span class="sb-v" id="sb-net">&mdash;</span></div>
+          </div>
+
           <div class="answer-flash" id="answer-flash"></div>
           <div class="testview" id="testview" style="display:none;"></div>
 

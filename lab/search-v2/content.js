@@ -108,25 +108,29 @@
       id: 'q_adj_hi1',
       prompt: 'Position 40 has been revealed and its prize is 50 points. What is the HIGHEST the prize at position 41 could be?',
       options: ['50 points', '55 points', '60 points', 'It could be anything from 0 to 100'],
-      answer: 2
+      answer: 2,
+      why: 'Neighbouring positions differ by at most {stepBound}, so from 50 the next one can reach 50 + {stepBound}.'
     },
     {
       id: 'q_adj_lo1',
       prompt: 'Same situation: position 40 is 50 points. What is the LOWEST the prize at position 41 could be?',
       options: ['0 points', '40 points', '45 points', '50 points'],
-      answer: 1
+      answer: 1,
+      why: 'The same bound works downwards: 50 − {stepBound}. The prize can never jump further than {stepBound} in one step.'
     },
     {
       id: 'q_adj_hi2',
       prompt: 'Still with position 40 at 50 points — what is the HIGHEST the prize at position 42 could be?',
       options: ['60 points', '65 points', '70 points', '100 points'],
-      answer: 2
+      answer: 2,
+      why: 'Two steps, so at most 2 × {stepBound} away from 50. The further you go, the less the bound tells you.'
     },
     {
       id: 'q_cost',
       prompt: 'What does it cost to reveal one position?',
       options: ['Nothing', '{queryCost} points', '{revealCost} points', 'It depends on the position'],
-      answer: 2
+      answer: 2,
+      why: 'Revealing costs {revealCost} and shows the true prize. Stopping is free.'
     },
     {
       id: 'q_score',
@@ -137,7 +141,8 @@
         'The sum of the three prizes you revealed',
         'The prize at the position you stopped on, with no deduction'
       ],
-      answer: 0
+      answer: 0,
+      why: 'Your score is the TRUE prize where you stop, minus everything you spent that round. It can be negative.'
     },
     {
       id: 'q_reset',
@@ -148,7 +153,8 @@
         'They are always higher than this round',
         'Only the positions that were open stay the same'
       ],
-      answer: 1
+      answer: 1,
+      why: 'Every round is a fresh draw. Nothing you learn in one round applies to the next.'
     }
   ];
 
@@ -165,7 +171,8 @@
         'Both cost {revealCost}',
         'Asking is free, revealing costs {revealCost}'
       ],
-      answer: 0
+      answer: 0,
+      why: 'Asking the AI costs {queryCost}; revealing the truth costs {revealCost}. Asking is cheaper because it does not tell you the prize.'
     },
     {
       id: 'qai_score',
@@ -177,7 +184,8 @@
         'Nothing, because I did not reveal it',
         'The average of 70 and the true prize'
       ],
-      answer: 1
+      answer: 1,
+      why: 'The AI\'s number is an ESTIMATE, never a prize. You are paid the true prize where you stop, whatever it turns out to be.'
     },
     {
       id: 'qai_right',
@@ -188,13 +196,15 @@
         'It is right in the middle of the line and wrong at the ends',
         'It is right about half the time, at random'
       ],
-      answer: 1
+      answer: 1,
+      why: 'It knows a few positions exactly and interpolates between them. It is confident everywhere, right only in places.'
     },
     {
       id: 'qai_tell',
       prompt: 'Can you tell, from a single answer, whether the AI knew that position or guessed it?',
       options: ['Yes, a guess is shown differently', 'Yes, a guess takes longer to arrive', 'No', 'Only if the answer is a round number'],
-      answer: 2
+      answer: 2,
+      why: 'No — every answer is rounded the same way and arrives after the same delay, so nothing in it says whether it was known or guessed.'
     },
     {
       id: 'qai_outside',
@@ -205,7 +215,8 @@
         'It continues the slope it had at the edge',
         'It refuses to answer out there'
       ],
-      answer: 0
+      answer: 0,
+      why: 'Beyond the outermost position it knows, it simply repeats that value. It cannot see further out than its own knowledge.'
     },
     {
       id: 'qai_update',
@@ -216,7 +227,8 @@
         'It stops answering about that position',
         'They become exactly right everywhere'
       ],
-      answer: 1
+      answer: 1,
+      why: 'Anything you reveal becomes something the AI knows, so its later answers can change.'
     }
   ];
 
@@ -457,7 +469,296 @@
     "**Thank you.** Your session has been recorded.\n\n" +
     "If you have any questions about the study, you can contact the researcher through the platform you came from.";
 
-  return {
+  // ==========================================================================
+  //  PER-SESSION WORDING OVERRIDES
+  //  The words above are the study's defaults. A session may carry its own
+  //  wording in `run.content` — a FLAT map of override key to replacement
+  //  string — which the admin panel's Wording tab writes and every reader
+  //  applies through `resolve()` below.
+  //
+  //  STRUCTURE IS NEVER OVERRIDABLE, only wording. Ids, answer keys, option
+  //  COUNTS, question types, `strict`, `platformKey` and the numeracy answers
+  //  all come from the definitions above whatever a session says. That is the
+  //  whole safety argument: `admin/dictionary.js` describes one column per
+  //  field and `surveyColumns()`/`quizColumns()` derive the export from these
+  //  ids, so a session that could add a question or renumber an answer key
+  //  would silently invalidate its own workbook. Rewording cannot.
+  //
+  //  Flat, because Firestore cannot store a directly-nested array and a flat
+  //  string→string map is the shape that survives a round trip unexamined.
+  //
+  //  It is STORED as a JSON string (`run.contentJson`), like `specsJson` beside
+  //  it, and for a sharper reason than convention: the admin writes runs with
+  //  setDoc(merge:true), which DEEP-MERGES a nested map. Stored as a map, a
+  //  reverted field would be merged back out of existence — "revert" would
+  //  appear to work in the panel and change nothing for the participant. A
+  //  string field is replaced whole, so removing a key actually removes it.
+  // ==========================================================================
+  var MAX_LEN = 4000;          // a generous ceiling; the longest default is ~700
+
+  function fieldsOfQuiz(list, ns) {
+    var out = [];
+    list.forEach(function (q) {
+      out.push({ key: ns + '.' + q.id + '.prompt', label: q.id + ' · question', kind: 'prose', base: q.prompt });
+      q.options.forEach(function (o, i) {
+        out.push({
+          key: ns + '.' + q.id + '.opt.' + i, kind: 'line', base: o,
+          label: q.id + ' · answer ' + (i + 1) + (i === q.answer ? ' (the correct one)' : '')
+        });
+      });
+      if (q.why != null) {
+        out.push({ key: ns + '.' + q.id + '.why', label: q.id + ' · explanation after answering', kind: 'prose', base: q.why });
+      }
+    });
+    return out;
+  }
+
+  function fieldsOfSurvey(items) {
+    var out = [];
+    items.forEach(function (q) {
+      out.push({ key: 'survey.' + q.id + '.prompt', label: q.id + ' · question', kind: 'prose', base: q.prompt });
+      (q.options || []).forEach(function (o, i) {
+        out.push({ key: 'survey.' + q.id + '.opt.' + (i), label: q.id + ' · answer ' + (i + 1), kind: 'line', base: o });
+      });
+      if (q.followText) {
+        out.push({ key: 'survey.' + q.id + '.follow', label: q.id + ' · follow-up prompt', kind: 'line', base: q.followText });
+      }
+      (q.items || []).forEach(function (it) {
+        out.push({ key: 'survey.' + q.id + '.item.' + it.id, label: it.id + ' · question', kind: 'prose', base: it.prompt });
+      });
+    });
+    return out;
+  }
+
+  // Every string in ENCOURAGE, derived from the object itself so a message
+  // added there cannot be left out of the Wording tab.
+  function encourageFields() {
+    var out = [];
+    Object.keys(ENCOURAGE.milestones).forEach(function (k) {
+      out.push({ key: 'enc.milestone.' + k + '.title', label: k + ' · heading', kind: 'line', base: ENCOURAGE.milestones[k].title });
+      out.push({ key: 'enc.milestone.' + k + '.body', label: k + ' · text', kind: 'prose', base: ENCOURAGE.milestones[k].body });
+    });
+    Object.keys(ENCOURAGE.tips).forEach(function (k) {
+      out.push({ key: 'enc.tip.' + k, label: 'tip · ' + k, kind: 'prose', base: ENCOURAGE.tips[k] });
+    });
+    ENCOURAGE.cheers.forEach(function (c, i) {
+      out.push({ key: 'enc.cheer.' + i, label: 'between rounds · line ' + (i + 1), kind: 'line', base: c });
+    });
+    out.push({ key: 'enc.progress', label: 'progress line under the round title', kind: 'line', base: ENCOURAGE.progress });
+    out.push({ key: 'enc.progressWarmup', label: 'progress line in a practice round', kind: 'line', base: ENCOURAGE.progressWarmup });
+    ['title', 'bodyNone', 'bodyFew', 'stay', 'go'].forEach(function (k) {
+      out.push({ key: 'enc.rush.' + k, label: 'focus prompt · ' + k, kind: (k.indexOf('body') === 0 ? 'prose' : 'line'), base: ENCOURAGE.rush[k] });
+    });
+    return out;
+  }
+
+  // The editable outline, in the order a participant meets the words. The admin
+  // panel renders it top to bottom and it doubles as the whitelist: a key that
+  // is not in here is not a key anybody can set.
+  function outline() {
+    var groups = [];
+    groups.push({
+      id: 'consent', title: 'Consent',
+      when: 'The first screen, before anything else.',
+      fields: [{ key: 'consent', label: 'Consent text', kind: 'prose', base: CONSENT }]
+    });
+    groups.push({
+      id: 'registration', title: 'Registration',
+      when: 'Background, asked once between consent and the instructions. Every item is optional, ' +
+            'and any item the Simulation Platform already answered is not shown at all.',
+      fields: REGISTRATION.reduce(function (acc, q) {
+        acc.push({ key: 'reg.' + q.id + '.prompt', label: q.id + ' · question', kind: 'line', base: q.prompt });
+        q.options.forEach(function (o, i) {
+          acc.push({ key: 'reg.' + q.id + '.opt.' + i, label: q.id + ' · answer ' + (i + 1), kind: 'line', base: o });
+        });
+        return acc;
+      }, [])
+    });
+    groups.push({
+      id: 'instructions', title: 'Instructions',
+      when: 'Five screens, shown once before the first block.',
+      fields: INSTRUCTIONS.reduce(function (acc, s) {
+        acc.push({ key: 'instr.' + s.id + '.title', label: s.id + ' · heading', kind: 'line', base: s.title });
+        acc.push({ key: 'instr.' + s.id + '.body', label: s.id + ' · text', kind: 'prose', base: s.body });
+        return acc;
+      }, [])
+    });
+    groups.push({
+      id: 'quiz', title: 'Quick check',
+      when: 'The comprehension gate after the instructions. Every question must be answered to continue.',
+      fields: fieldsOfQuiz(QUIZ_BASE, 'quiz')
+    });
+    groups.push({
+      id: 'ai', title: 'About the AI',
+      when: 'Three screens, shown once before the half of the study that has the AI.',
+      fields: AI_INSTRUCTIONS.reduce(function (acc, s) {
+        acc.push({ key: 'ai.' + s.id + '.title', label: s.id + ' · heading', kind: 'line', base: s.title });
+        acc.push({ key: 'ai.' + s.id + '.body', label: s.id + ' · text', kind: 'prose', base: s.body });
+        return acc;
+      }, [])
+    });
+    groups.push({
+      id: 'aiquiz', title: 'Quick check · the AI',
+      when: 'The second comprehension gate. One question is a strict gate and must be answered correctly.',
+      fields: fieldsOfQuiz(QUIZ_AI, 'aiquiz')
+    });
+    groups.push({
+      id: 'encourage', title: 'Encouragement',
+      when: 'The pop-ups and tips that keep attention on a forty-minute task. Every one of them is ' +
+            'motivational and never informational — see the rule in content.js — so a rewording must ' +
+            'not name a position, comment on how the participant is doing, or differ between the two arms.',
+      fields: encourageFields()
+    });
+    var partFields = [];
+    Object.keys(PART_INTRO).forEach(function (p) {
+      partFields.push({ key: 'part.' + p + '.title', label: 'Part ' + p + ' · heading', kind: 'line', base: PART_INTRO[p].title });
+      partFields.push({ key: 'part.' + p + '.note', label: 'Part ' + p + ' · note under the heading', kind: 'line', base: PART_INTRO[p].note });
+    });
+    groups.push({
+      id: 'parts', title: 'Survey · part headings',
+      when: 'The headings that divide the exit survey.',
+      fields: partFields
+    });
+    groups.push({
+      id: 'survey', title: 'Survey · questions',
+      when: 'The exit survey, after the last round. Part B and C items are shown only to participants who played with the AI.',
+      fields: fieldsOfSurvey(SURVEY)
+    });
+    groups.push({
+      id: 'end', title: 'Debrief and thanks',
+      when: 'The last two screens.',
+      fields: [
+        { key: 'debrief', label: 'Debrief', kind: 'prose', base: DEBRIEF },
+        { key: 'thanks', label: 'Thank-you', kind: 'prose', base: THANKS }
+      ]
+    });
+    return groups;
+  }
+
+  var _baseIndex = null;
+  function baseIndex() {
+    if (_baseIndex) return _baseIndex;
+    _baseIndex = {};
+    outline().forEach(function (g) {
+      g.fields.forEach(function (f) { _baseIndex[f.key] = f.base == null ? '' : String(f.base); });
+    });
+    return _baseIndex;
+  }
+
+  // Keep only known keys holding a usable string that actually DIFFERS from the
+  // default. Storing a value equal to the default would freeze this session's
+  // wording against a later correction to content.js for no reason, so an
+  // untouched — or reverted — field is dropped rather than written.
+  function normalizeOverrides(raw) {
+    var base = baseIndex(), out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    Object.keys(raw).forEach(function (k) {
+      if (!Object.prototype.hasOwnProperty.call(base, k)) return;
+      var v = raw[k];
+      if (typeof v !== 'string') return;
+      v = v.replace(/\r\n/g, '\n').trim();
+      if (!v || v.length > MAX_LEN) return;
+      if (v === String(base[k]).trim()) return;
+      out[k] = v;
+    });
+    return out;
+  }
+
+  // Overrides as they are STORED: a JSON string, or nothing. Anything
+  // unparseable is no overrides at all — a session whose wording cannot be read
+  // shows the study's own words rather than failing to open.
+  function parseOverrides(json) {
+    if (!json) return {};
+    if (typeof json === 'object') return normalizeOverrides(json);
+    try { return normalizeOverrides(JSON.parse(String(json))); } catch (e) { return {}; }
+  }
+  function stringifyOverrides(raw) { return JSON.stringify(normalizeOverrides(raw)); }
+
+  // The content this session actually shows. Same shape as the defaults, so a
+  // caller reads `C.SURVEY` exactly as it used to read `Content.SURVEY`.
+  // Accepts either the stored string or an already-parsed map.
+  function resolve(raw) {
+    var o = parseOverrides(raw);
+    function P(key, base) { return Object.prototype.hasOwnProperty.call(o, key) ? o[key] : base; }
+
+    function screens(list, ns) {
+      return list.map(function (s) {
+        return { id: s.id, title: P(ns + '.' + s.id + '.title', s.title), body: P(ns + '.' + s.id + '.body', s.body) };
+      });
+    }
+    function quiz(list, ns) {
+      return list.map(function (q) {
+        var out = {};
+        Object.keys(q).forEach(function (k) { out[k] = q[k]; });   // ids, answer, strict survive
+        out.prompt = P(ns + '.' + q.id + '.prompt', q.prompt);
+        out.options = q.options.map(function (opt, i) { return P(ns + '.' + q.id + '.opt.' + i, opt); });
+        if (q.why != null) out.why = P(ns + '.' + q.id + '.why', q.why);
+        return out;
+      });
+    }
+    var parts = {};
+    Object.keys(PART_INTRO).forEach(function (p) {
+      parts[p] = { title: P('part.' + p + '.title', PART_INTRO[p].title), note: P('part.' + p + '.note', PART_INTRO[p].note) };
+    });
+
+    return {
+      CONSENT: P('consent', CONSENT),
+      INSTRUCTIONS: screens(INSTRUCTIONS, 'instr'),
+      AI_INSTRUCTIONS: screens(AI_INSTRUCTIONS, 'ai'),
+      QUIZ_BASE: quiz(QUIZ_BASE, 'quiz'),
+      QUIZ_AI: quiz(QUIZ_AI, 'aiquiz'),
+      UNDERSTOOD_FRONTIER_QID: UNDERSTOOD_FRONTIER_QID,
+      SURVEY: SURVEY.map(function (q) {
+        var out = {};
+        Object.keys(q).forEach(function (k) { out[k] = q[k]; });   // type, id, answer, platformKey survive
+        out.prompt = P('survey.' + q.id + '.prompt', q.prompt);
+        if (q.options) out.options = q.options.map(function (opt, i) { return P('survey.' + q.id + '.opt.' + i, opt); });
+        if (q.followText) out.followText = P('survey.' + q.id + '.follow', q.followText);
+        if (q.items) {
+          out.items = q.items.map(function (it) {
+            var c = {};
+            Object.keys(it).forEach(function (k) { c[k] = it[k]; });   // the numeracy ANSWER survives
+            c.prompt = P('survey.' + q.id + '.item.' + it.id, it.prompt);
+            return c;
+          });
+        }
+        return out;
+      }),
+      REGISTRATION: REGISTRATION.map(function (q) {
+        var out = {};
+        Object.keys(q).forEach(function (k) { out[k] = q[k]; });   // id, platformKey, optional survive
+        out.prompt = P('reg.' + q.id + '.prompt', q.prompt);
+        out.options = q.options.map(function (opt, i) { return P('reg.' + q.id + '.opt.' + i, opt); });
+        return out;
+      }),
+      ENCOURAGE: (function () {
+        var e = { milestones: {}, tips: {}, cheers: [], rush: {} };
+        Object.keys(ENCOURAGE.milestones).forEach(function (k) {
+          e.milestones[k] = {
+            title: P('enc.milestone.' + k + '.title', ENCOURAGE.milestones[k].title),
+            body: P('enc.milestone.' + k + '.body', ENCOURAGE.milestones[k].body)
+          };
+        });
+        Object.keys(ENCOURAGE.tips).forEach(function (k) { e.tips[k] = P('enc.tip.' + k, ENCOURAGE.tips[k]); });
+        e.cheers = ENCOURAGE.cheers.map(function (c, i) { return P('enc.cheer.' + i, c); });
+        e.progress = P('enc.progress', ENCOURAGE.progress);
+        e.progressWarmup = P('enc.progressWarmup', ENCOURAGE.progressWarmup);
+        ['title', 'bodyNone', 'bodyFew', 'stay', 'go'].forEach(function (k) {
+          e.rush[k] = P('enc.rush.' + k, ENCOURAGE.rush[k]);
+        });
+        return e;
+      })(),
+      PLATFORM_BACKGROUND: PLATFORM_BACKGROUND,
+      PART_INTRO: parts,
+      DEBRIEF: P('debrief', DEBRIEF),
+      THANKS: P('thanks', THANKS),
+      surveyColumns: M.surveyColumns,
+      registrationColumns: M.registrationColumns,
+      quizColumns: M.quizColumns
+    };
+  }
+
+  var M = {
     CONSENT: CONSENT,
     INSTRUCTIONS: INSTRUCTIONS,
     AI_INSTRUCTIONS: AI_INSTRUCTIONS,
@@ -491,6 +792,16 @@
 
     quizColumns: function () {
       return QUIZ_BASE.concat(QUIZ_AI).map(function (q) { return q.id; });
-    }
+    },
+
+    // ---- the per-session wording layer -------------------------------------
+    MAX_LEN: MAX_LEN,
+    outline: outline,
+    normalizeOverrides: normalizeOverrides,
+    parseOverrides: parseOverrides,
+    stringifyOverrides: stringifyOverrides,
+    resolve: resolve
   };
+
+  return M;
 });
