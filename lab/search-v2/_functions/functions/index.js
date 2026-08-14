@@ -184,13 +184,13 @@ exports.claimCode = onCall(async (req) => {
           throw new HttpsError('permission-denied', 'That code is already in use.');
         }
         tx.set(ref, { claimedByUid: uid, rebindAt: Date.now() }, { merge: true });
-        return { ok: true, sequence: d.sequence, resumed: true };
+        return { ok: true, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: true };
       }
       if (!d.claimedByUid) {
         tx.set(ref, { claimedByUid: uid, claimedAt: Date.now(), status: 'started' }, { merge: true });
-        return { ok: true, sequence: d.sequence, resumed: false };
+        return { ok: true, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: false };
       }
-      return { ok: true, sequence: d.sequence, resumed: true };
+      return { ok: true, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: true };
     }
     if (mode === 'roster') throw new HttpsError('permission-denied', 'not-on-roster');
 
@@ -200,21 +200,19 @@ exports.claimCode = onCall(async (req) => {
     const cSnap = await tx.get(countRef);
     const c = cSnap.exists ? (cSnap.data() || {}) : { nA: 0, nB: 0 };
     const override = (art.run.assign && art.run.assign.nextEntrantOverride) || 'auto';
-    let seq;
-    if (override === 'A' || override === 'B') seq = override;
-    else if ((c.nA || 0) < (c.nB || 0)) seq = 'A';
-    else if ((c.nB || 0) < (c.nA || 0)) seq = 'B';
-    else seq = (((c.nA || 0) + (c.nB || 0)) % 2 === 0) ? 'A' : 'B';
-
-    tx.set(countRef, {
-      nA: (c.nA || 0) + (seq === 'A' ? 1 : 0),
-      nB: (c.nB || 0) + (seq === 'B' ? 1 : 0)
-    }, { merge: true });
+    // ONE rule, in the shared engine (Specs.nextCell), so this and the
+    // client-mode path cannot drift: the under-filled arm takes the entrant,
+    // and the button order alternates on that arm's own parity — which keeps
+    // all four cells of sequence × order balanced without a counter field the
+    // client's rules would refuse.
+    const cell = Specs.nextCell(c, override, (art.params.ui && art.params.ui.buttonOrder) || 'fixed');
+    const seq = cell.sequence, order = cell.buttonOrder;
+    tx.set(countRef, cell.counts, { merge: true });
     tx.set(ref, {
-      runId: runId, code: code, sequence: seq, status: 'started',
+      runId: runId, code: code, sequence: seq, buttonOrder: order, status: 'started',
       claimedByUid: uid, claimedAt: Date.now(), autoEnrolled: true
     }, { merge: true });
-    return { ok: true, sequence: seq, resumed: false };
+    return { ok: true, sequence: seq, buttonOrder: order, resumed: false };
   });
 
   // The first claim locks the run: from here the Rules refuse every parameter

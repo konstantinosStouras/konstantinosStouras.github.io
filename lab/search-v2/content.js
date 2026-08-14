@@ -338,21 +338,112 @@
       exclusive: 5
     },
     { part: 'E', id: 's19', type: 'text', prompt: 'Did anything go wrong technically?' },
-    { part: 'E', id: 's20', type: 'text', prompt: 'Anything else you would like to tell us?' },
+    { part: 'E', id: 's20', type: 'text', prompt: 'Anything else you would like to tell us?' }
+  ];
 
-    // Part F — background, ALL optional and stated as such on the screen. Coarse
-    // bands only: with ~90 participants from one population a fine-grained
-    // combination is close to identifying. Any field the Simulation Platform
-    // already collected is skipped, so the two datasets carry ONE answer each.
-    { part: 'F', id: 'f_field', type: 'choice', optional: true, platformKey: 'fieldOfStudy',
+  // ---- encouragement (config.ui.encouragement) -----------------------------
+  // Forty minutes of a repeated task loses people, and a bored participant does
+  // not stop producing data — they produce fast, empty rounds that look like
+  // decisions. These messages exist to keep attention on the task and to say
+  // how much is left.
+  //
+  // THE RULE EVERY ONE OF THEM OBEYS: say nothing that changes what the best
+  // move is. No message names a position, hints where the high prizes are,
+  // comments on how well the round is going, or tells the participant to buy
+  // anything — "keep searching" points at the task, "reveal position 60" would
+  // point at the answer, and a message that moved behaviour toward revealing
+  // would move the very quantity the study measures. They are motivational,
+  // never informational: identical text in the AI-on and AI-off arms, shown at
+  // fixed points in the plan (not in response to how the participant is
+  // scoring), and logged so any effect can be looked for rather than assumed.
+  var ENCOURAGE = {
+    // Between-round pop-ups, at fixed points of each half. {left} = scored
+    // rounds still to play in this half, {half} = 'first'/'second'.
+    milestones: {
+      half: {
+        title: 'Halfway through this half',
+        body: 'You are doing great so far. {left} rounds to go in this half — keep searching, ' +
+              'and see whether a higher prize is hiding somewhere you have not looked.'
+      },
+      nearEnd: {
+        title: 'Only {left} rounds left in this half',
+        body: 'Nearly there, and your attention still counts: each of these rounds is scored ' +
+              'exactly like the ones before it. Keep going.'
+      },
+      lastRound: {
+        title: 'Last round',
+        body: 'This is the final round of the study. Give it the same care as the first one — ' +
+              'then a few short questions and you are done.'
+      }
+    },
+    // Between-rounds line, rotated by round index — NOT by how the round went.
+    // Unconditional praise is a mood, contingent praise is feedback, and
+    // feedback on performance would be a treatment nobody agreed to run.
+    cheers: [
+      'Nice work — on to the next one.',
+      'Good. A fresh line of prizes, and everything you learned about the last one is now history.',
+      'Keep it up — every round is scored the same way.',
+      'Well played. Take the next one at your own pace.'
+    ],
+    // The progress line under the round title. {n}/{total} scored rounds of
+    // this half, {left} still to come.
+    progress: 'Round {n} of {total} in this half · {left} to go',
+    progressWarmup: 'Practice round — nothing here is scored',
+    // In-round tips (the small dismissible corner card, never a modal).
+    tips: {
+      encourage: 'You are doing great so far — keep searching, and check whether a higher prize ' +
+                 'is hiding somewhere you have not opened yet.',
+      idleStart: 'Take your time. When you are ready you can reveal a position, {ask}or stop where you are.',
+      idleMid: 'Still thinking? You can stop on the best position you have found whenever you like.'
+    },
+    // The focus pop-up, when a round is about to be closed after almost no
+    // searching. It states the position of the round in the study and what
+    // stopping means — never what to do instead.
+    rush: {
+      title: 'Finish this round already?',
+      bodyNone: 'You have not opened a single position in this round, so there is nothing yet to ' +
+                'tell you what is really out there. There is no time limit — a moment more here ' +
+                'can be worth a lot of points.',
+      bodyFew: 'You have opened {did} of the {J} positions in this round. There is no time limit — ' +
+               'a moment more here can be worth a lot of points.',
+      stay: 'Keep searching',
+      go: 'Stop anyway'
+    }
+  };
+
+  // ---- registration — background, asked ONCE, at the start -----------------
+  // These four were the exit survey's Part F. They are background, not
+  // outcomes: asking them at the END put them after the participant had spent
+  // forty minutes on the task, and on a Simulation Platform launch they were
+  // then dropped one by one, leaving a "Part F" that could be empty, complete
+  // or anything in between. They are now their own REGISTRATION phase, right
+  // after consent — the same shape every other class simulation has, and the
+  // one place this study records who the participant is.
+  //
+  // On a platform launch the answers COME FROM THE PLATFORM's registration
+  // (`platformKey`): those items are not asked again, they travel with the row
+  // flagged `platform_<key>`, and when the platform covers all of them the
+  // phase passes through without a screen. Standalone participants are asked
+  // here. Coarse bands only, all optional: with ~90 participants from one
+  // population a fine-grained combination is close to identifying.
+  //
+  // The ids are unchanged from the Part F era on purpose — sessions already
+  // collected carry them, and the exporter reads either source into the same
+  // column (see admin/export.js).
+  var REGISTRATION = [
+    { id: 'f_field', type: 'choice', optional: true, platformKey: 'fieldOfStudy',
       prompt: 'Field of study', options: ['Business or economics', 'Engineering or computer science', 'Natural sciences', 'Social sciences or humanities', 'Other', 'Prefer not to say'] },
-    { part: 'F', id: 'f_year', type: 'choice', optional: true, platformKey: 'levelOfStudy',
+    { id: 'f_year', type: 'choice', optional: true, platformKey: 'levelOfStudy',
       prompt: 'Year or level of study', options: ['Undergraduate', 'Master’s', 'PhD', 'Not a student', 'Prefer not to say'] },
-    { part: 'F', id: 'f_age', type: 'choice', optional: true, platformKey: 'age',
+    { id: 'f_age', type: 'choice', optional: true, platformKey: 'age',
       prompt: 'Age band', options: ['Under 20', '20 to 24', '25 to 29', '30 to 39', '40 or over', 'Prefer not to say'] },
-    { part: 'F', id: 'f_gender', type: 'choice', optional: true, platformKey: 'gender',
+    { id: 'f_gender', type: 'choice', optional: true, platformKey: 'gender',
       prompt: 'Gender', options: ['Woman', 'Man', 'Non-binary', 'Prefer to self-describe', 'Prefer not to say'] }
   ];
+  // The platform profile fields carried onto the row as `platform_<key>` — the
+  // four the registration items map to, plus the rest of what a launch supplies.
+  var PLATFORM_BACKGROUND = ['fieldOfStudy', 'levelOfStudy', 'age', 'gender',
+                             'nationality', 'country', 'workExperience', 'occupation'];
 
   var PART_INTRO = {
     A: { title: 'Part A · How you searched', note: 'Please answer in your own words — there are no right answers.' },
@@ -360,6 +451,10 @@
     C: { title: 'Part C · Trust and the decision', note: '' },
     D: { title: 'Part D · About you', note: '' },
     E: { title: 'Part E · Finally', note: '' },
+    // Only reachable through the registration MIGRATION path (app.js
+    // surveyItems): a participant who was already in the rounds when the
+    // registration phase shipped answers the background block here instead,
+    // where it used to live.
     F: { title: 'Part F · Background', note: 'Every question in this part is optional — leave any of them blank.' }
   };
 
@@ -374,7 +469,296 @@
     "**Thank you.** Your session has been recorded.\n\n" +
     "If you have any questions about the study, you can contact the researcher through the platform you came from.";
 
-  return {
+  // ==========================================================================
+  //  PER-SESSION WORDING OVERRIDES
+  //  The words above are the study's defaults. A session may carry its own
+  //  wording in `run.content` — a FLAT map of override key to replacement
+  //  string — which the admin panel's Wording tab writes and every reader
+  //  applies through `resolve()` below.
+  //
+  //  STRUCTURE IS NEVER OVERRIDABLE, only wording. Ids, answer keys, option
+  //  COUNTS, question types, `strict`, `platformKey` and the numeracy answers
+  //  all come from the definitions above whatever a session says. That is the
+  //  whole safety argument: `admin/dictionary.js` describes one column per
+  //  field and `surveyColumns()`/`quizColumns()` derive the export from these
+  //  ids, so a session that could add a question or renumber an answer key
+  //  would silently invalidate its own workbook. Rewording cannot.
+  //
+  //  Flat, because Firestore cannot store a directly-nested array and a flat
+  //  string→string map is the shape that survives a round trip unexamined.
+  //
+  //  It is STORED as a JSON string (`run.contentJson`), like `specsJson` beside
+  //  it, and for a sharper reason than convention: the admin writes runs with
+  //  setDoc(merge:true), which DEEP-MERGES a nested map. Stored as a map, a
+  //  reverted field would be merged back out of existence — "revert" would
+  //  appear to work in the panel and change nothing for the participant. A
+  //  string field is replaced whole, so removing a key actually removes it.
+  // ==========================================================================
+  var MAX_LEN = 4000;          // a generous ceiling; the longest default is ~700
+
+  function fieldsOfQuiz(list, ns) {
+    var out = [];
+    list.forEach(function (q) {
+      out.push({ key: ns + '.' + q.id + '.prompt', label: q.id + ' · question', kind: 'prose', base: q.prompt });
+      q.options.forEach(function (o, i) {
+        out.push({
+          key: ns + '.' + q.id + '.opt.' + i, kind: 'line', base: o,
+          label: q.id + ' · answer ' + (i + 1) + (i === q.answer ? ' (the correct one)' : '')
+        });
+      });
+      if (q.why != null) {
+        out.push({ key: ns + '.' + q.id + '.why', label: q.id + ' · explanation after answering', kind: 'prose', base: q.why });
+      }
+    });
+    return out;
+  }
+
+  function fieldsOfSurvey(items) {
+    var out = [];
+    items.forEach(function (q) {
+      out.push({ key: 'survey.' + q.id + '.prompt', label: q.id + ' · question', kind: 'prose', base: q.prompt });
+      (q.options || []).forEach(function (o, i) {
+        out.push({ key: 'survey.' + q.id + '.opt.' + (i), label: q.id + ' · answer ' + (i + 1), kind: 'line', base: o });
+      });
+      if (q.followText) {
+        out.push({ key: 'survey.' + q.id + '.follow', label: q.id + ' · follow-up prompt', kind: 'line', base: q.followText });
+      }
+      (q.items || []).forEach(function (it) {
+        out.push({ key: 'survey.' + q.id + '.item.' + it.id, label: it.id + ' · question', kind: 'prose', base: it.prompt });
+      });
+    });
+    return out;
+  }
+
+  // Every string in ENCOURAGE, derived from the object itself so a message
+  // added there cannot be left out of the Wording tab.
+  function encourageFields() {
+    var out = [];
+    Object.keys(ENCOURAGE.milestones).forEach(function (k) {
+      out.push({ key: 'enc.milestone.' + k + '.title', label: k + ' · heading', kind: 'line', base: ENCOURAGE.milestones[k].title });
+      out.push({ key: 'enc.milestone.' + k + '.body', label: k + ' · text', kind: 'prose', base: ENCOURAGE.milestones[k].body });
+    });
+    Object.keys(ENCOURAGE.tips).forEach(function (k) {
+      out.push({ key: 'enc.tip.' + k, label: 'tip · ' + k, kind: 'prose', base: ENCOURAGE.tips[k] });
+    });
+    ENCOURAGE.cheers.forEach(function (c, i) {
+      out.push({ key: 'enc.cheer.' + i, label: 'between rounds · line ' + (i + 1), kind: 'line', base: c });
+    });
+    out.push({ key: 'enc.progress', label: 'progress line under the round title', kind: 'line', base: ENCOURAGE.progress });
+    out.push({ key: 'enc.progressWarmup', label: 'progress line in a practice round', kind: 'line', base: ENCOURAGE.progressWarmup });
+    ['title', 'bodyNone', 'bodyFew', 'stay', 'go'].forEach(function (k) {
+      out.push({ key: 'enc.rush.' + k, label: 'focus prompt · ' + k, kind: (k.indexOf('body') === 0 ? 'prose' : 'line'), base: ENCOURAGE.rush[k] });
+    });
+    return out;
+  }
+
+  // The editable outline, in the order a participant meets the words. The admin
+  // panel renders it top to bottom and it doubles as the whitelist: a key that
+  // is not in here is not a key anybody can set.
+  function outline() {
+    var groups = [];
+    groups.push({
+      id: 'consent', title: 'Consent',
+      when: 'The first screen, before anything else.',
+      fields: [{ key: 'consent', label: 'Consent text', kind: 'prose', base: CONSENT }]
+    });
+    groups.push({
+      id: 'registration', title: 'Registration',
+      when: 'Background, asked once between consent and the instructions. Every item is optional, ' +
+            'and any item the Simulation Platform already answered is not shown at all.',
+      fields: REGISTRATION.reduce(function (acc, q) {
+        acc.push({ key: 'reg.' + q.id + '.prompt', label: q.id + ' · question', kind: 'line', base: q.prompt });
+        q.options.forEach(function (o, i) {
+          acc.push({ key: 'reg.' + q.id + '.opt.' + i, label: q.id + ' · answer ' + (i + 1), kind: 'line', base: o });
+        });
+        return acc;
+      }, [])
+    });
+    groups.push({
+      id: 'instructions', title: 'Instructions',
+      when: 'Five screens, shown once before the first block.',
+      fields: INSTRUCTIONS.reduce(function (acc, s) {
+        acc.push({ key: 'instr.' + s.id + '.title', label: s.id + ' · heading', kind: 'line', base: s.title });
+        acc.push({ key: 'instr.' + s.id + '.body', label: s.id + ' · text', kind: 'prose', base: s.body });
+        return acc;
+      }, [])
+    });
+    groups.push({
+      id: 'quiz', title: 'Quick check',
+      when: 'The comprehension gate after the instructions. Every question must be answered to continue.',
+      fields: fieldsOfQuiz(QUIZ_BASE, 'quiz')
+    });
+    groups.push({
+      id: 'ai', title: 'About the AI',
+      when: 'Three screens, shown once before the half of the study that has the AI.',
+      fields: AI_INSTRUCTIONS.reduce(function (acc, s) {
+        acc.push({ key: 'ai.' + s.id + '.title', label: s.id + ' · heading', kind: 'line', base: s.title });
+        acc.push({ key: 'ai.' + s.id + '.body', label: s.id + ' · text', kind: 'prose', base: s.body });
+        return acc;
+      }, [])
+    });
+    groups.push({
+      id: 'aiquiz', title: 'Quick check · the AI',
+      when: 'The second comprehension gate. One question is a strict gate and must be answered correctly.',
+      fields: fieldsOfQuiz(QUIZ_AI, 'aiquiz')
+    });
+    groups.push({
+      id: 'encourage', title: 'Encouragement',
+      when: 'The pop-ups and tips that keep attention on a forty-minute task. Every one of them is ' +
+            'motivational and never informational — see the rule in content.js — so a rewording must ' +
+            'not name a position, comment on how the participant is doing, or differ between the two arms.',
+      fields: encourageFields()
+    });
+    var partFields = [];
+    Object.keys(PART_INTRO).forEach(function (p) {
+      partFields.push({ key: 'part.' + p + '.title', label: 'Part ' + p + ' · heading', kind: 'line', base: PART_INTRO[p].title });
+      partFields.push({ key: 'part.' + p + '.note', label: 'Part ' + p + ' · note under the heading', kind: 'line', base: PART_INTRO[p].note });
+    });
+    groups.push({
+      id: 'parts', title: 'Survey · part headings',
+      when: 'The headings that divide the exit survey.',
+      fields: partFields
+    });
+    groups.push({
+      id: 'survey', title: 'Survey · questions',
+      when: 'The exit survey, after the last round. Part B and C items are shown only to participants who played with the AI.',
+      fields: fieldsOfSurvey(SURVEY)
+    });
+    groups.push({
+      id: 'end', title: 'Debrief and thanks',
+      when: 'The last two screens.',
+      fields: [
+        { key: 'debrief', label: 'Debrief', kind: 'prose', base: DEBRIEF },
+        { key: 'thanks', label: 'Thank-you', kind: 'prose', base: THANKS }
+      ]
+    });
+    return groups;
+  }
+
+  var _baseIndex = null;
+  function baseIndex() {
+    if (_baseIndex) return _baseIndex;
+    _baseIndex = {};
+    outline().forEach(function (g) {
+      g.fields.forEach(function (f) { _baseIndex[f.key] = f.base == null ? '' : String(f.base); });
+    });
+    return _baseIndex;
+  }
+
+  // Keep only known keys holding a usable string that actually DIFFERS from the
+  // default. Storing a value equal to the default would freeze this session's
+  // wording against a later correction to content.js for no reason, so an
+  // untouched — or reverted — field is dropped rather than written.
+  function normalizeOverrides(raw) {
+    var base = baseIndex(), out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    Object.keys(raw).forEach(function (k) {
+      if (!Object.prototype.hasOwnProperty.call(base, k)) return;
+      var v = raw[k];
+      if (typeof v !== 'string') return;
+      v = v.replace(/\r\n/g, '\n').trim();
+      if (!v || v.length > MAX_LEN) return;
+      if (v === String(base[k]).trim()) return;
+      out[k] = v;
+    });
+    return out;
+  }
+
+  // Overrides as they are STORED: a JSON string, or nothing. Anything
+  // unparseable is no overrides at all — a session whose wording cannot be read
+  // shows the study's own words rather than failing to open.
+  function parseOverrides(json) {
+    if (!json) return {};
+    if (typeof json === 'object') return normalizeOverrides(json);
+    try { return normalizeOverrides(JSON.parse(String(json))); } catch (e) { return {}; }
+  }
+  function stringifyOverrides(raw) { return JSON.stringify(normalizeOverrides(raw)); }
+
+  // The content this session actually shows. Same shape as the defaults, so a
+  // caller reads `C.SURVEY` exactly as it used to read `Content.SURVEY`.
+  // Accepts either the stored string or an already-parsed map.
+  function resolve(raw) {
+    var o = parseOverrides(raw);
+    function P(key, base) { return Object.prototype.hasOwnProperty.call(o, key) ? o[key] : base; }
+
+    function screens(list, ns) {
+      return list.map(function (s) {
+        return { id: s.id, title: P(ns + '.' + s.id + '.title', s.title), body: P(ns + '.' + s.id + '.body', s.body) };
+      });
+    }
+    function quiz(list, ns) {
+      return list.map(function (q) {
+        var out = {};
+        Object.keys(q).forEach(function (k) { out[k] = q[k]; });   // ids, answer, strict survive
+        out.prompt = P(ns + '.' + q.id + '.prompt', q.prompt);
+        out.options = q.options.map(function (opt, i) { return P(ns + '.' + q.id + '.opt.' + i, opt); });
+        if (q.why != null) out.why = P(ns + '.' + q.id + '.why', q.why);
+        return out;
+      });
+    }
+    var parts = {};
+    Object.keys(PART_INTRO).forEach(function (p) {
+      parts[p] = { title: P('part.' + p + '.title', PART_INTRO[p].title), note: P('part.' + p + '.note', PART_INTRO[p].note) };
+    });
+
+    return {
+      CONSENT: P('consent', CONSENT),
+      INSTRUCTIONS: screens(INSTRUCTIONS, 'instr'),
+      AI_INSTRUCTIONS: screens(AI_INSTRUCTIONS, 'ai'),
+      QUIZ_BASE: quiz(QUIZ_BASE, 'quiz'),
+      QUIZ_AI: quiz(QUIZ_AI, 'aiquiz'),
+      UNDERSTOOD_FRONTIER_QID: UNDERSTOOD_FRONTIER_QID,
+      SURVEY: SURVEY.map(function (q) {
+        var out = {};
+        Object.keys(q).forEach(function (k) { out[k] = q[k]; });   // type, id, answer, platformKey survive
+        out.prompt = P('survey.' + q.id + '.prompt', q.prompt);
+        if (q.options) out.options = q.options.map(function (opt, i) { return P('survey.' + q.id + '.opt.' + i, opt); });
+        if (q.followText) out.followText = P('survey.' + q.id + '.follow', q.followText);
+        if (q.items) {
+          out.items = q.items.map(function (it) {
+            var c = {};
+            Object.keys(it).forEach(function (k) { c[k] = it[k]; });   // the numeracy ANSWER survives
+            c.prompt = P('survey.' + q.id + '.item.' + it.id, it.prompt);
+            return c;
+          });
+        }
+        return out;
+      }),
+      REGISTRATION: REGISTRATION.map(function (q) {
+        var out = {};
+        Object.keys(q).forEach(function (k) { out[k] = q[k]; });   // id, platformKey, optional survive
+        out.prompt = P('reg.' + q.id + '.prompt', q.prompt);
+        out.options = q.options.map(function (opt, i) { return P('reg.' + q.id + '.opt.' + i, opt); });
+        return out;
+      }),
+      ENCOURAGE: (function () {
+        var e = { milestones: {}, tips: {}, cheers: [], rush: {} };
+        Object.keys(ENCOURAGE.milestones).forEach(function (k) {
+          e.milestones[k] = {
+            title: P('enc.milestone.' + k + '.title', ENCOURAGE.milestones[k].title),
+            body: P('enc.milestone.' + k + '.body', ENCOURAGE.milestones[k].body)
+          };
+        });
+        Object.keys(ENCOURAGE.tips).forEach(function (k) { e.tips[k] = P('enc.tip.' + k, ENCOURAGE.tips[k]); });
+        e.cheers = ENCOURAGE.cheers.map(function (c, i) { return P('enc.cheer.' + i, c); });
+        e.progress = P('enc.progress', ENCOURAGE.progress);
+        e.progressWarmup = P('enc.progressWarmup', ENCOURAGE.progressWarmup);
+        ['title', 'bodyNone', 'bodyFew', 'stay', 'go'].forEach(function (k) {
+          e.rush[k] = P('enc.rush.' + k, ENCOURAGE.rush[k]);
+        });
+        return e;
+      })(),
+      PLATFORM_BACKGROUND: PLATFORM_BACKGROUND,
+      PART_INTRO: parts,
+      DEBRIEF: P('debrief', DEBRIEF),
+      THANKS: P('thanks', THANKS),
+      surveyColumns: M.surveyColumns,
+      registrationColumns: M.registrationColumns,
+      quizColumns: M.quizColumns
+    };
+  }
+
+  var M = {
     CONSENT: CONSENT,
     INSTRUCTIONS: INSTRUCTIONS,
     AI_INSTRUCTIONS: AI_INSTRUCTIONS,
@@ -382,6 +766,9 @@
     QUIZ_AI: QUIZ_AI,
     UNDERSTOOD_FRONTIER_QID: UNDERSTOOD_FRONTIER_QID,
     SURVEY: SURVEY,
+    REGISTRATION: REGISTRATION,
+    ENCOURAGE: ENCOURAGE,
+    PLATFORM_BACKGROUND: PLATFORM_BACKGROUND,
     PART_INTRO: PART_INTRO,
     DEBRIEF: DEBRIEF,
     THANKS: THANKS,
@@ -398,8 +785,23 @@
       return cols;
     },
 
+    // Every registration answer column, in screen order (exported as reg_<id>).
+    registrationColumns: function () {
+      return REGISTRATION.map(function (q) { return q.id; });
+    },
+
     quizColumns: function () {
       return QUIZ_BASE.concat(QUIZ_AI).map(function (q) { return q.id; });
-    }
+    },
+
+    // ---- the per-session wording layer -------------------------------------
+    MAX_LEN: MAX_LEN,
+    outline: outline,
+    normalizeOverrides: normalizeOverrides,
+    parseOverrides: parseOverrides,
+    stringifyOverrides: stringifyOverrides,
+    resolve: resolve
   };
+
+  return M;
 });

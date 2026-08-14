@@ -46,6 +46,36 @@
     .tab{border:none; background:none; padding:10px 16px; font-size:15px; font-weight:600; color:var(--muted);
       cursor:pointer; border-bottom:2px solid transparent;}
     .tab.on{color:var(--ink); border-bottom-color:var(--blue);}
+
+    /* ---- Wording ---- */
+    .wd-bar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:14px 0 10px;}
+    .wd-bar .grow{flex:1;}
+    .wd-bar input[type=search]{min-width:260px; padding:7px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px;}
+    .wd-only{font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px; cursor:pointer;}
+    .wd-group{border:1px solid var(--line); border-radius:10px; margin:0 0 12px; overflow:hidden;}
+    .wd-group > summary{padding:11px 14px; background:var(--panel); cursor:pointer; font-weight:700; font-size:14px;}
+    .wd-group > summary .wd-when{font-weight:400; color:var(--muted); font-size:12px; display:block; margin-top:2px;}
+    .wd-group > summary .wd-badge{float:right; font-weight:700; font-size:11.5px; color:var(--blue);}
+    .wd-field{padding:11px 14px; border-top:1px solid var(--line);}
+    .wd-field.edited{background:rgba(37,99,235,.05); border-left:3px solid var(--blue);}
+    .wd-label{font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;
+              display:flex; align-items:center; gap:8px; margin-bottom:5px;}
+    .wd-label .wd-key{font-weight:400; text-transform:none; letter-spacing:0; opacity:.65;}
+    .wd-label .wd-revert{margin-left:auto; border:none; background:none; color:var(--blue); cursor:pointer;
+                         font-size:11.5px; font-weight:700; padding:0; display:none;}
+    /* The revert affordance appears the moment a field differs from the default,
+       without waiting for a re-render of the screen. */
+    .wd-field.edited .wd-revert{display:inline;}
+    .wd-shown{font-size:13.5px; line-height:1.5; background:#fff; border:1px solid var(--line); border-radius:8px;
+              padding:8px 10px; white-space:pre-wrap;}
+    :root[data-theme="dark"] .wd-shown{background:#1a1d21;}
+    .wd-shown b{font-weight:700;}
+    .wd-blank{color:var(--muted); font-style:italic;}
+    .wd-field textarea{width:100%; font:inherit; font-size:13.5px; line-height:1.5; padding:8px 10px;
+                       border:1px solid var(--line); border-radius:8px; resize:vertical; margin-top:6px;}
+    .wd-edit{margin-top:6px;}
+    .wd-tokhint{font-size:11.5px; color:var(--muted); margin-top:4px;}
+    .wd-empty{padding:18px; text-align:center; color:var(--muted); font-size:13px;}
     .icon-btn{border:1px solid var(--line); background:transparent; color:var(--ink); border-radius:50%;
       width:34px; height:34px; cursor:pointer; font-size:15px; line-height:1;}
     .icon-btn:hover{background:var(--panel);}
@@ -134,6 +164,25 @@
     .exportBtn{background:var(--green); color:#fff;}
     .closeBtn{background:var(--bg); color:var(--ink); border-color:var(--line);}
     .deleteBtn{background:transparent; color:var(--red); border-color:var(--red);}
+
+    /* ---- create a session (the shape of the ideasearchlab / Answer Arena card) ---- */
+    .create-card{border:1px solid var(--line); border-radius:12px; padding:2px 16px 14px;
+      margin:10px 0; background:#fff;}
+    :root[data-theme="dark"] .create-card{background:#1d2025; border-color:#2d3138;}
+    .create-card .run-acts{margin-top:6px;}
+    /* Deliberately NOT .code-box: ../styles.css already has one (the participant
+       app's completion code), and sharing the name would leave this box quietly
+       inheriting whatever that one becomes. */
+    .made-box{border:2px dashed var(--green); border-radius:12px; padding:12px 14px; margin:14px 0 2px;
+      background:#f3faef; text-align:center;}
+    :root[data-theme="dark"] .made-box{background:#16221a; border-color:#3a7a3f;}
+    .made-box .run-acts{justify-content:center;}
+    .cb-label{font-size:12.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;}
+    .cb-code{font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      font-size:26px; font-weight:800; letter-spacing:.1em; margin:3px 0 0;}
+    .cb-name{font-weight:600; font-size:14px;}
+    .cb-link{font-size:12.5px; color:var(--muted); word-break:break-all; margin-top:4px;}
+    .cb-hint{font-size:12.5px; color:var(--muted); margin-top:8px;}
 
     /* ---- session sections + cards (the shape of the ideasearchlab admin) ---- */
     .sess-sec{margin-top:22px;}
@@ -231,6 +280,7 @@
         <button class="tab" data-tab="monitor" title="Live counters and health checks while a session is open">Live monitor</button>
         <button class="tab" data-tab="data" title="Preview, validate, dry-run and export">Data &amp; preview</button>
         <button class="tab" data-tab="notes" title="What the AI knows, what a pre-opened round is, and what the numbers of this session actually are">Design notes</button>
+        <button class="tab" data-tab="wording" title="Every word the participant reads, as they will see it — and editable for this session">Wording</button>
       </div>
 
       <div class="admin-note" id="scope-note"></div>
@@ -240,7 +290,6 @@
         <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
           <h2 style="margin:0;">Sessions</h2>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-green btn-sm" id="btn-new-run" title="Start a new session from the built-in defaults">+ New session</button>
             <button class="btn btn-ghost btn-sm" id="btn-refresh-runs">&#8635; Refresh</button>
           </div>
         </div>
@@ -249,6 +298,43 @@
         that touches the task is locked; to change anything you <b>clone</b> the session and collect under a
         new id. Every event, round and participant row carries its <span class="mono">run_id</span> — the
         session's id, which the design brief calls a run — so two parameter sets can never be silently pooled.</p>
+
+        <!-- Create a session, right here on the Sessions screen. Naming is the one
+             thing every session needs, so it is asked FIRST — the parameter form
+             stays the advanced path for a session whose task differs from the
+             saved defaults. Mirrors the ideasearchlab "Session details" card and
+             Answer Arena's "Create a session". -->
+        <div class="sess-sec" id="create-sec">
+          <div class="sess-head"><h3>Create a session</h3></div>
+          <p class="muted small">Give it a name and it is created from the <b>saved default parameters</b>,
+          as a draft nobody can enter yet. Everything stays editable on the Parameters screen for as long as
+          it is a draft &mdash; nothing locks until the first participant claims a code.</p>
+          <div class="create-card">
+            <div class="row2">
+              <div class="field">
+                <label for="nr-name">Session name</label>
+                <input type="text" id="nr-name" placeholder="e.g. Spring MBA 2026" maxlength="80"
+                       autocomplete="off" spellcheck="false">
+              </div>
+              <div class="field">
+                <label for="nr-code">Session ID <span class="defval">&middot; goes in the participant link</span></label>
+                <input type="text" id="nr-code" placeholder="(OPTIONAL) CUSTOM CODE" maxlength="40"
+                       autocomplete="off" spellcheck="false" style="text-transform:uppercase; letter-spacing:.06em;">
+                <div class="hint">Leave blank to auto-generate a short code. Single word &mdash; capital letters
+                and digits only, no spaces or dashes (3&ndash;40 chars).</div>
+              </div>
+            </div>
+            <!-- A form action, so it carries the form-button family the Parameters
+                 screen uses (Save session), not the .sBtn card pills. -->
+            <div class="run-acts" style="margin-top:8px;">
+              <button class="btn btn-green btn-sm" id="btn-create-run">Create session</button>
+              <button class="btn btn-ghost btn-sm" id="btn-new-run"
+                      title="Open the parameter form on a new session instead, to change the task before it is created">Set the parameters first&hellip;</button>
+            </div>
+            <div class="admin-note" id="nr-note" style="display:none;"></div>
+            <div id="nr-created"></div>
+          </div>
+        </div>
 
         <div class="sess-sec">
           <div class="sess-head"><h3>Active sessions</h3><span class="sess-count" id="runs-active-n"></span></div>
@@ -323,6 +409,56 @@
                 <div class="field"><label>Score floor <span class="defval">· default off</span></label>
                   <div class="seg" id="p-costs-scoreFloor"><button data-v="false">Off &mdash; a round may end negative</button><button data-v="true">Floor at zero</button></div>
                   <div class="hint">Off is the recommended value: the brief requires a negative round to be possible, and logged.</div>
+                </div>
+              </div>
+            </details>
+
+            <details class="pgroup">
+              <summary>Interface and engagement <span class="lock-tag">locked after launch</span></summary>
+              <div class="pbody">
+                <div class="field"><label>Which paid action sits on the LEFT <span class="defval">· default: assigned per participant</span></label>
+                  <div class="seg" id="p-ui-buttonOrder">
+                    <button data-v="participant">Randomised per participant</button>
+                    <button data-v="fixed">Fixed &mdash; Ask on the left</button>
+                  </div>
+                  <div class="hint">&ldquo;Ask the AI&rdquo; and &ldquo;Reveal&rdquo; are the primary outcome of this
+                  study, so neither may be easier to press: they are one button style at strict visual parity, side by
+                  side, and which is on the left is assigned ONCE per participant and fixed for their whole session.
+                  It is block-randomised jointly with the crossover sequence &mdash; the enrolment counter and the
+                  roster generator both fill all four cells of sequence &times; order evenly &mdash; and stamped on
+                  the participant and every row they produce (<code>button_order</code>), so the size of any position
+                  effect is reported rather than assumed away. Deliberately never redrawn per round or per decision:
+                  ~300 actions with the buttons moving buys mis-clicks (a mis-click here spends the higher cost and
+                  destroys the ground truth at that position) and inflates decision latency, which is itself a
+                  measure. &ldquo;Stop and nominate&rdquo; is never in the swap.</div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Cost colour &mdash; Reveal <span class="defval">· hsl(4, 65%, 38%)</span></label>
+                    <input type="text" id="p-ui-costColorReveal"></div>
+                  <div class="field"><label>Cost colour &mdash; Ask the AI <span class="defval">· hsl(4, 65%, 50%)</span></label>
+                    <input type="text" id="p-ui-costColorQuery"></div>
+                </div>
+                <div class="field"><div class="hint">The colour of the cost numeral inside each button &mdash; and of
+                  nothing else on the screen, so red means &ldquo;this is what an action costs&rdquo;. Same hue and
+                  saturation, a lightness step, so the price difference is legible at a glance. The numerals sit on a
+                  white chip (no red meets 4.5:1 against a saturated button fill), and against white the LIGHTER tint
+                  is the lower-contrast one, so the cheaper action takes the lighter value and both stay above 4.5:1.
+                  Styling that touches a primary outcome is a treatment parameter, not a theme: it locks with the task
+                  and travels with the exported data. The Reveal colour is identical in AI-off rounds, where it stands
+                  alone.</div></div>
+                <div class="field"><label>Encouragement <span class="defval">· default on</span></label>
+                  <div class="seg" id="p-ui-encouragement"><button data-v="true">On</button><button data-v="false">Off</button></div>
+                  <div class="hint">Between-round milestone pop-ups (&ldquo;{left} rounds to go in this half&rdquo;), one
+                  in-round encouragement tip, and a focus prompt when a scored round is about to be closed after almost
+                  no searching. Every message is motivational and never informational &mdash; none names a position,
+                  comments on how the participant is doing, or differs between the AI-on and AI-off arms &mdash; and each
+                  one is logged as a <code>nudge</code>.</div>
+                </div>
+                <div class="field"><label>Focus prompt at or below this many actions <span class="defval">· default 2</span></label>
+                  <input type="number" id="p-ui-rushMinActions" min="0" max="20">
+                  <div class="hint">Stopping a scored round having bought this much information or less asks once
+                  whether they meant to. 0 = only a completely untouched round. &ldquo;Stop anyway&rdquo; is always one
+                  click away: a prompt that could not be dismissed would coerce the choice being measured.</div>
                 </div>
               </div>
             </details>
@@ -611,7 +747,17 @@
               <p class="muted small">Play any spec exactly as a participant would, writing nothing. The testing
               overlays show the true prizes, the AI&rsquo;s whole curve and its private anchors, so you can see at a
               glance whether a seed geometry looks the way it was meant to.</p>
-              <div class="field"><label>Spec</label><select id="prev-spec"></select></div>
+              <div class="row2">
+                <div class="field"><label>Spec</label><select id="prev-spec"></select></div>
+                <div class="field"><label>Button layout <span class="defval">· which paid action is on the left</span></label>
+                  <select id="prev-order">
+                    <option value="">As this sandbox falls</option>
+                    <option value="ask">Ask on the left</option>
+                    <option value="reveal">Reveal on the left</option>
+                  </select>
+                  <div class="hint">Participants see one or the other, assigned at enrolment. Rehearse both.</div>
+                </div>
+              </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="btn btn-ghost btn-sm" id="btn-preview" data-act="testround">&#129514; Test round</button>
                 <button class="btn btn-ghost btn-sm" id="btn-preview-full">&#129514; Test the whole session</button>
@@ -675,6 +821,37 @@
         layouts &mdash; with the numbers computed from <b>this session&rsquo;s own frozen pool</b>, not from the
         design document. Open a session on the Sessions screen to fill them in.</p>
         <div id="notes-body"></div>
+      </div>
+
+      <!-- ---------------- WORDING ---------------- -->
+      <div class="tab-panel" id="tab-wording" style="display:none;">
+        <h2 style="margin:0 0 4px;">Wording</h2>
+        <p class="muted small">Everything the study <i>says</i> to a participant, in the order they meet it
+        &mdash; the consent screen, both sets of instructions, both quick checks with their answers, all
+        twenty-four survey questions, the debrief and the thank-you. The text is shown
+        <b>exactly as it will appear</b>, with this session&rsquo;s own numbers already filled in.
+        Edit any of it to change the wording <b>for this session only</b>; the study&rsquo;s defaults are untouched
+        and every other session keeps them.</p>
+        <p class="muted small">Not here: the game screen&rsquo;s own buttons and labels
+        (&ldquo;Stop and nominate position 42&rdquo;, the running cost panel) and the reminder box above each
+        quick check, which restates the rules from the numbers themselves. Those are part of the interface
+        rather than the study text, and they follow the parameters automatically.</p>
+        <p class="muted small"><b>Wording only.</b> How many answers a question has, which one is correct, and the
+        order of the questions are fixed &mdash; the exported workbook is built from those, so changing them here
+        would invalidate this session&rsquo;s own data. Wording stays editable even after a session is locked,
+        because it is not part of the design.</p>
+
+        <div class="wd-bar">
+          <input id="wd-search" type="search" placeholder="Find a word or a question…" autocomplete="off">
+          <label class="wd-only"><input type="checkbox" id="wd-changed"> Show only what I have changed</label>
+          <span class="grow"></span>
+          <span id="wd-count" class="muted small"></span>
+          <button class="btn-ghost" id="btn-wd-revert">Revert all to defaults</button>
+        </div>
+        <div id="wd-note" class="note" style="display:none;"></div>
+        <div id="wording-body"></div>
+        <p class="muted small" style="margin-top:14px;">Changes are kept on this screen until you press
+        <b>Save session</b> on the Parameters screen &mdash; the same Save as everything else.</p>
       </div>
 
     </section>

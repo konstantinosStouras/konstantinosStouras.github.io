@@ -213,7 +213,30 @@ Then:
   completed it by student ID; the sign-in, roster join, safety guards,
   stamping and revoking are all generic. `node simulation/tools/verify-guard.mjs`
   checks the two halves still fit (and that the copied web configs still
-  match the apps' own files). For those, the ✓/— cells are **clickable**:
+  match the apps' own files).
+  **One student, several roster docs — read them MERGED (`completions.js`).**
+  Every registration mints a fresh anonymous uid, so a log-out and re-register
+  (or a second device) gives the same student another
+  `simPlatformStudents/{uid}` doc. The roster collapses those into one row
+  keeping the most recent — but writes fan out to every uid while the
+  STUDENT's own push (`syncCompleted`) only ever reaches the doc they are
+  signed into, and logging out clears the local markers, so the newest doc can
+  be missing a ✓ that a duplicate carries. Reading only that doc showed "—"
+  for students PortfolioFit's own admin listed as done, and "⟲ Verify from …"
+  asked a DIFFERENT question ("does ANY doc have it?"), counted them as
+  already matched and wrote nothing — the pass reported success and the cell
+  never healed. `simulation/completions.js` is now the single reading used by
+  both halves: group a student's docs newest-first and merge per simulation
+  key, the newest statement winning (so a revocation still hides an older
+  mark, and a retake after it counts again). A stamp also writes the e-mail
+  RECOVERY replica, as revoking always did — otherwise a verified ✓ vanished
+  the moment the student logged in on another device, whose fresh doc becomes
+  the newest with nothing to restore onto it. And a refused mass-removal
+  (the guard against a failing student-ID join) now drops only the removals:
+  aborting the whole pass also threw away the safe, additive stamps — the
+  very thing the button was pressed for. Offline test:
+  `node simulation/tools/completion-guard.mjs`.
+  For those, the ✓/— cells are **clickable**:
   a confirm-guarded manual mark/unmark, the instructor's final word. Opening
   the roster also **auto-backfills the e-mail recovery docs** for every
   registered student (students who registered before the recovery feature

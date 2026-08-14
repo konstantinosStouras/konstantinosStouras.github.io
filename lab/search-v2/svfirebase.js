@@ -169,8 +169,8 @@ window.SVFirebase = (function () {
   //   'open'   — an unknown code auto-enrols (this is how a Simulation Platform
   //              student ID becomes a participant), taking the under-filled
   //              sequence from a transactional counter so the split stays exact.
-  // Resolves { ok, code, sequence, resumed, reason }.
-  function claimCode(runId, code, mode, override) {
+  // Resolves { ok, code, sequence, buttonOrder, resumed, reason }.
+  function claimCode(runId, code, mode, override, buttonOrderMode) {
     if (!configured) return Promise.resolve({ ok: false, reason: 'offline' });
     code = String(code || '').trim().toUpperCase();
     if (!runId || !code) return Promise.resolve({ ok: false, reason: 'nocode' });
@@ -186,21 +186,23 @@ window.SVFirebase = (function () {
             // ordinary "they switched machine" case, so re-bind rather than lock
             // the participant out of their own session.
             return sdk.fs.setDoc(ref, { claimedByUid: me, rebindAt: Date.now() }, { merge: true })
-              .then(function () { return { ok: true, code: code, sequence: d.sequence, resumed: true }; })
+              .then(function () { return { ok: true, code: code, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: true }; })
               .catch(function () { return { ok: false, reason: 'claimed' }; });
           }
           if (!d.claimedByUid) {
             return sdk.fs.setDoc(ref, { claimedByUid: me, claimedAt: Date.now(), status: 'started' }, { merge: true })
-              .then(function () { return { ok: true, code: code, sequence: d.sequence, resumed: false }; });
+              .then(function () { return { ok: true, code: code, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: false }; });
           }
-          return { ok: true, code: code, sequence: d.sequence, resumed: true };
+          return { ok: true, code: code, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: true };
         }
         if (mode === 'roster') return { ok: false, reason: 'notonroster' };
-        return assignSequence(runId, override).then(function (seq) {
+        return assignCell(runId, override, buttonOrderMode).then(function (cell) {
           return sdk.fs.setDoc(ref, {
-            runId: runId, code: code, sequence: seq, status: 'started',
-            claimedByUid: me, claimedAt: Date.now(), autoEnrolled: true
-          }, { merge: true }).then(function () { return { ok: true, code: code, sequence: seq, resumed: false }; });
+            runId: runId, code: code, sequence: cell.sequence, buttonOrder: cell.buttonOrder,
+            status: 'started', claimedByUid: me, claimedAt: Date.now(), autoEnrolled: true
+          }, { merge: true }).then(function () {
+            return { ok: true, code: code, sequence: cell.sequence, buttonOrder: cell.buttonOrder, resumed: false };
+          });
         });
       });
     }).catch(function (e) { return { ok: false, reason: 'error', detail: String(e && e.message || e) }; });
@@ -209,24 +211,24 @@ window.SVFirebase = (function () {
   // Transactional 50/50 assignment (§11). The admin's "next entrant override"
   // wins when set, and the forced choice is what the counter records, so the
   // export can always reconstruct how the balance was reached.
-  function assignSequence(runId, override) {
+  function assignCell(runId, override, buttonOrderMode) {
     var ref = sdk.fs.doc(db, C.runCounts, runId);
     return sdk.fs.runTransaction(db, function (tx) {
       return tx.get(ref).then(function (snap) {
         var d = snap.exists() ? (snap.data() || {}) : { nA: 0, nB: 0 };
-        var seq;
-        if (override === 'A' || override === 'B') seq = override;
-        else if ((d.nA || 0) < (d.nB || 0)) seq = 'A';
-        else if ((d.nB || 0) < (d.nA || 0)) seq = 'B';
-        else seq = (((d.nA || 0) + (d.nB || 0)) % 2 === 0) ? 'A' : 'B';
-        var next = { nA: (d.nA || 0) + (seq === 'A' ? 1 : 0), nB: (d.nB || 0) + (seq === 'B' ? 1 : 0) };
-        tx.set(ref, next, { merge: true });
-        return seq;
+        // ONE rule, in specs.js, shared with the Cloud Function's claimCode —
+        // and it writes nothing but nA/nB, which is all the deployed rules
+        // allow on this document (see Specs.nextCell).
+        var cell = window.SVSpecs.nextCell(d, override, buttonOrderMode);
+        tx.set(ref, cell.counts, { merge: true });
+        return { sequence: cell.sequence, buttonOrder: cell.buttonOrder };
       });
     }).catch(function () {
       // The counter is unavailable (rules not published yet, or offline): fall
-      // back to a deterministic parity so a participant is never blocked.
-      return (window.SVPool ? (window.SVPool.hashSeed(runId + ':' + Date.now()) % 2 ? 'B' : 'A') : 'A');
+      // back to a deterministic parity so a participant is never blocked. The
+      // app derives the button order from the code in that case.
+      return { sequence: (window.SVPool ? (window.SVPool.hashSeed(runId + ':' + Date.now()) % 2 ? 'B' : 'A') : 'A'),
+               buttonOrder: null };
     });
   }
 
@@ -336,11 +338,12 @@ window.SVFirebase = (function () {
         return out;
       });
   }
-  function putRosterCode(runId, code, sequence) {
+  function putRosterCode(runId, code, sequence, buttonOrder) {
     code = String(code).trim().toUpperCase();
     return init().then(function () {
       return sdk.fs.setDoc(sdk.fs.doc(db, C.roster, runId + '__' + code),
-        { runId: runId, code: code, sequence: sequence, status: 'unused', claimedByUid: null }, { merge: true });
+        { runId: runId, code: code, sequence: sequence, buttonOrder: buttonOrder || null,
+          status: 'unused', claimedByUid: null }, { merge: true });
     });
   }
   function deleteRosterCode(runId, code) {
@@ -451,7 +454,7 @@ window.SVFirebase = (function () {
     getRunByCode: getRunByCode, getRun: getRun,
     getRunPublic: getRunPublic, getRunPublicByCode: getRunPublicByCode,
     putRunPublic: putRunPublic, callable: callable,
-    claimCode: claimCode, assignSequence: assignSequence,
+    claimCode: claimCode, assignCell: assignCell,
     saveParticipant: saveParticipant, getParticipant: getParticipant,
     writeEvent: writeEvent,
     adminSignIn: adminSignIn, adminSignOut: adminSignOut, onAuth: onAuth,

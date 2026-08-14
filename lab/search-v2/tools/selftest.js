@@ -376,11 +376,13 @@ head('11 · the content: instructions, gates and the survey');
   ok(all.every(q => q.answer >= 0 && q.answer < q.options.length), 'every quiz answer indexes a real option');
   ok(new Set(all.map(q => q.id)).size === all.length, 'quiz ids are unique');
 
-  ok(Content.SURVEY.length === 24, 'the survey holds the twenty numbered items plus the four optional background items');
+  ok(Content.SURVEY.length === 20, 'the survey holds the twenty numbered items — background moved to registration');
   ok(new Set(Content.SURVEY.map(q => q.id)).size === Content.SURVEY.length, 'survey ids are unique');
-  ['A', 'B', 'C', 'D', 'E', 'F'].forEach(part => {
+  ['A', 'B', 'C', 'D', 'E'].forEach(part => {
     ok(Content.SURVEY.some(q => q.part === part), 'part ' + part + ' is present');
   });
+  ok(!Content.SURVEY.some(q => q.part === 'F'),
+    'the exit survey no longer asks background — it is the registration phase, before the study');
   // Free text before multiple choice within each part, so the options never
   // supply the vocabulary (§16.7).
   ['A', 'E'].forEach(part => {
@@ -390,9 +392,134 @@ head('11 · the content: instructions, gates and the survey');
     ok(firstChoice === -1 || lastText == null || part === 'E' || lastText < firstChoice,
       'part ' + part + ': free text comes before multiple choice');
   });
-  ok(Content.SURVEY.filter(q => q.part === 'F').every(q => q.optional), 'every Part F item is optional');
-  ok(Content.SURVEY.filter(q => q.part === 'F').every(q => q.platformKey),
-    'every Part F item names the platform field that would already answer it');
+  // Registration: the background block, asked once, before the study.
+  ok(Content.REGISTRATION.length === 4, 'registration asks the four background items');
+  ok(Content.REGISTRATION.every(q => q.optional), 'every registration item is optional');
+  ok(Content.REGISTRATION.every(q => q.platformKey),
+    'every registration item names the platform field that answers it instead');
+  ok(Content.REGISTRATION.every(q => Content.PLATFORM_BACKGROUND.indexOf(q.platformKey) >= 0),
+    'and that field is one the platform handoff actually carries');
+  // The button-order assignment: per participant, reproducible, balanced.
+  {
+    const pOn = Specs.withDefaults({ ui: { buttonOrder: 'participant' } });
+    const pFix = Specs.withDefaults({ ui: { buttonOrder: 'fixed' } });
+    ok(Specs.buttonOrder(pFix, 'ABC12') === 'ask_first', 'fixed order always puts Ask on the left');
+    ok(Specs.buttonOrder(pOn, 'ABC12') === Specs.buttonOrder(pOn, 'ABC12'),
+       'the fallback draw is deterministic — one participant, one order, for the whole session');
+    ok(Specs.withDefaults(null).ui.buttonOrder === 'participant', 'a new session randomises per participant by default');
+    ok(Specs.withDefaults({ costs: { revealCost: 4 } }).ui.buttonOrder === 'fixed' &&
+       Specs.withDefaults({ costs: { revealCost: 4 } }).ui.encouragement === false,
+       'a session stored before `ui` existed keeps the interface it actually ran with');
+    let revealFirst = 0, n = 0;
+    for (let p = 0; p < 400; p++) { n++; if (Specs.buttonOrder(pOn, 'P' + p) === 'reveal_first') revealFirst++; }
+    const share = revealFirst / n;
+    ok(share > 0.44 && share < 0.56,
+       'the client-mode fallback is balanced across participants (' + (100 * share).toFixed(1) + '% reveal-first)');
+
+    // The four cells of sequence × order, which the roster generator lays out
+    // and the enrolment counter fills — one block, not two coin flips.
+    const cells = Specs.assignmentCells();
+    ok(cells.length === 4, 'the assignment block has four cells');
+    ok(new Set(cells.map(c => c.sequence + '/' + c.buttonOrder)).size === 4, 'and they are distinct');
+    ['A', 'B'].forEach(sq => ok(cells.filter(c => c.sequence === sq).length === 2,
+      'sequence ' + sq + ' appears in exactly half the cells'));
+    ['ask_first', 'reveal_first'].forEach(o => ok(cells.filter(c => c.buttonOrder === o).length === 2,
+      o + ' appears in exactly half the cells, so the two factors are crossed'));
+    // Every consecutive PAIR must carry one of each level of BOTH factors, or a
+    // roster whose size is not a multiple of four loses the exact split.
+    ok(cells[0].sequence !== cells[1].sequence && cells[2].sequence !== cells[3].sequence &&
+       cells[0].buttonOrder !== cells[1].buttonOrder && cells[2].buttonOrder !== cells[3].buttonOrder,
+       'the cycle alternates both factors, so 90 codes still split 45/45 on each');
+    [90, 51, 7].forEach(n => {
+      var got = { A: 0, B: 0, ask_first: 0, reveal_first: 0 };
+      for (var i = 0; i < n; i++) { got[cells[i % 4].sequence]++; got[cells[i % 4].buttonOrder]++; }
+      ok(Math.abs(got.A - got.B) <= 1 && Math.abs(got.ask_first - got.reveal_first) <= 1,
+         'a roster of ' + n + ' splits evenly on both factors (' + got.A + '/' + got.B +
+         ' and ' + got.ask_first + '/' + got.reveal_first + ')');
+    });
+
+    // The ENROLMENT rule (Specs.nextCell) — one implementation shared by the
+    // Cloud Function, the client-mode path and this test.
+    {
+      var counts = { nA: 0, nB: 0 }, tally = {};
+      for (var e = 0; e < 90; e++) {
+        var cell = Specs.nextCell(counts, 'auto', 'participant');
+        var k = cell.sequence + '/' + cell.buttonOrder;
+        tally[k] = (tally[k] || 0) + 1;
+        counts = cell.counts;
+      }
+      ok(counts.nA === 45 && counts.nB === 45,
+         '90 enrolments split the sequence exactly 45/45 (' + counts.nA + '/' + counts.nB + ')');
+      var vals = Object.keys(tally).map(function (k) { return tally[k]; });
+      ok(Object.keys(tally).length === 4 && Math.max.apply(null, vals) - Math.min.apply(null, vals) <= 1,
+         'and all four cells of sequence × button order fill evenly ' + JSON.stringify(tally));
+      ok(Object.keys(Specs.nextCell({ nA: 3, nB: 3 }, 'auto', 'participant').counts).join(',') === 'nA,nB',
+         'the counter write carries ONLY nA and nB — the deployed rules refuse any other key');
+      var fixedCell = Specs.nextCell({ nA: 1, nB: 0 }, 'auto', 'fixed');
+      ok(fixedCell.buttonOrder === 'ask_first',
+         'a run whose order is FIXED gets no assignment, so a locked pre-`ui` session cannot start randomising');
+      ok(Specs.nextCell({ nA: 0, nB: 0 }, 'B', 'participant').sequence === 'B',
+         'the admin\u2019s next-entrant override still wins');
+    }
+
+    // The cost colours are run parameters, and the pair must stay same-hue,
+    // same-saturation with a lightness step — the whole point of the rule.
+    const hsl = s => (String(s).match(/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%/) || [])
+      .slice(1).map(Number);
+    const cr = hsl(Specs.withDefaults(null).ui.costColorReveal);
+    const cq = hsl(Specs.withDefaults(null).ui.costColorQuery);
+    ok(cr.length === 3 && cq.length === 3, 'both cost colours are hsl() triples');
+    ok(cr[0] === cq[0] && cr[1] === cq[1], 'same hue and saturation — only the lightness differs');
+    ok(Math.abs(cr[2] - cq[2]) >= 10, 'the lightness step is big enough to read at a glance');
+    // Both sit on a WHITE chip, so both must clear 4.5:1 against white.
+    const lum = ([h, s2, l]) => {
+      const S = s2 / 100, L = l / 100, C = (1 - Math.abs(2 * L - 1)) * S;
+      const X = C * (1 - Math.abs(((h / 60) % 2) - 1)), m = L - C / 2;
+      const [r, g, b] = (h < 60 ? [C, X, 0] : h < 120 ? [X, C, 0] : h < 180 ? [0, C, X]
+        : h < 240 ? [0, X, C] : h < 300 ? [X, 0, C] : [C, 0, X]).map(v => v + m);
+      const f = v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    [['reveal', cr], ['query', cq]].forEach(([name, c]) => {
+      const ratio = 1.05 / (lum(c) + 0.05);
+      ok(ratio >= 4.5, 'the ' + name + ' cost colour clears 4.5:1 on the white chip (' + ratio.toFixed(2) + ':1)');
+    });
+  }
+
+  // Wiring the three enrolment/redaction paths that no unit test can reach.
+  {
+    const fs2 = require('fs'), path2 = require('path');
+    const rd = f => fs2.readFileSync(path2.join(__dirname, '..', f), 'utf8');
+    const adminSrc = rd('admin/admin.js'), fbSrc = rd('svfirebase.js'), fnSrc = rd('_functions/functions/index.js');
+    ok(/ui:\s*clone\(p\.ui\)/.test(adminSrc),
+       'publicDoc carries the `ui` group — without it a server-mode session reads as pre-`ui` and silently loses the interface parameters');
+    ok(/'env', 'costs', 'ai', 'ui'/.test(adminSrc),
+       'the workbook\u2019s Run sheet exports the `ui` group with the other parameters');
+    ok(/SVSpecs\.nextCell\(/.test(fbSrc) && /Specs\.nextCell\(/.test(fnSrc),
+       'both enrolment paths use the one shared rule');
+    ok(!/nAK|nAR|nBK|nBR/.test(fbSrc) && !/nAK|nAR|nBK|nBR/.test(fnSrc),
+       'neither writes a counter field beyond nA/nB');
+  }
+
+  const regCols = Content.registrationColumns();
+  ok(new Set(regCols).size === regCols.length, 'registration export columns are unique');
+  ok(!regCols.some(c => Content.surveyColumns().indexOf(c) >= 0),
+    'no id is claimed by both the survey and the registration');
+
+  // Encouragement copy: motivational, never informational. Nothing may name a
+  // position or a prize — a message that pointed at the answer, or that only
+  // one arm could see, would move the very quantity the study measures.
+  const encTexts = [];
+  Object.keys(Content.ENCOURAGE.milestones).forEach(k => {
+    encTexts.push(Content.ENCOURAGE.milestones[k].title, Content.ENCOURAGE.milestones[k].body);
+  });
+  Object.keys(Content.ENCOURAGE.tips).forEach(k => encTexts.push(Content.ENCOURAGE.tips[k]));
+  ['title', 'bodyNone', 'bodyFew', 'stay', 'go'].forEach(k => encTexts.push(Content.ENCOURAGE.rush[k]));
+  ok(encTexts.every(t => typeof t === 'string' && t.length > 0), 'every encouragement message has text');
+  ok(!encTexts.some(t => /position\s+\d/i.test(t)),
+    'no encouragement message names a position');
+  ok(!encTexts.some(t => /\bAI\b/.test(t) && !/\{ask\}/.test(t)),
+    'no encouragement message differs by arm (only the idle tip, via its {ask} slot)');
   const cols = Content.surveyColumns();
   ok(new Set(cols).size === cols.length, 'survey export columns are unique');
   const num = Content.SURVEY.find(q => q.type === 'numeracy');
@@ -603,6 +730,149 @@ head('15 · the Cloud Functions engine copies are identical to the originals');
   const r = spawnSync('node', [path.join(__dirname, 'sync-engine.mjs'), '--check'], { encoding: 'utf8' });
   ok(r.status === 0, 'the vendored engine matches lab/search-v2/{config,pool,specs,ai}.js',
     (r.stderr || r.stdout || '').trim());
+}
+
+// ======================================================================
+head('16 · per-session wording overrides change words and nothing else');
+// ======================================================================
+{
+  const groups = Content.outline();
+  const keys = groups.reduce((a, g) => a.concat(g.fields.map(f => f.key)), []);
+  ok(groups.length >= 8, 'the outline covers every screen a participant reads');
+  ok(new Set(keys).size === keys.length, 'every override key is unique');
+  ok(groups.every(g => g.title && g.when), 'every group says what it is and when it is shown');
+  ok(groups.every(g => g.fields.every(f => f.label && (f.kind === 'prose' || f.kind === 'line'))),
+    'every field carries a label and a kind');
+
+  // The outline is the whitelist, so it must reach everything the app renders.
+  const covered = k => keys.includes(k);
+  ok(covered('consent') && covered('debrief') && covered('thanks'), 'the standalone prose blocks are editable');
+  ok(Content.INSTRUCTIONS.every(s => covered('instr.' + s.id + '.body')), 'every instruction screen is editable');
+  ok(Content.AI_INSTRUCTIONS.every(s => covered('ai.' + s.id + '.body')), 'every AI instruction screen is editable');
+  ok(Content.QUIZ_BASE.every(q => covered('quiz.' + q.id + '.prompt')), 'every quick-check question is editable');
+  ok(Content.QUIZ_AI.every(q => covered('aiquiz.' + q.id + '.prompt')), 'every AI quick-check question is editable');
+  ok(Content.SURVEY.every(q => covered('survey.' + q.id + '.prompt')), 'every survey item is editable');
+  ok(Content.QUIZ_BASE.concat(Content.QUIZ_AI).every(q =>
+    q.options.every((o, i) => covered('quiz.' + q.id + '.opt.' + i) || covered('aiquiz.' + q.id + '.opt.' + i))),
+    'every quiz answer option is editable');
+
+  // ---- normalization -----------------------------------------------------
+  const n = Content.normalizeOverrides({
+    consent: 'Short consent.',
+    thanks: Content.THANKS,                 // identical to the default
+    debrief: 12345,                         // not a string
+    'quiz.q_cost.opt.2': '  spaced  ',
+    'nope.not.a.key': 'ignored',
+    'survey.s01.prompt': '',                // blank
+    'instr.i1.body': 'x'.repeat(Content.MAX_LEN + 1)
+  });
+  ok(Object.keys(n).length === 2, 'only the two usable overrides survive normalization',
+    'got ' + JSON.stringify(Object.keys(n)));
+  ok(n.consent === 'Short consent.', 'a genuine override is kept');
+  ok(n['quiz.q_cost.opt.2'] === 'spaced', 'an override is trimmed');
+  ok(!('thanks' in n), 'a value equal to the default is not stored');
+  ok(!('debrief' in n), 'a non-string is dropped');
+  ok(!('nope.not.a.key' in n), 'an unknown key is dropped');
+  ok(!('instr.i1.body' in n), 'an over-long override is dropped');
+  ok(Object.keys(Content.normalizeOverrides(null)).length === 0, 'no overrides normalizes to nothing');
+
+  // ---- resolve: wording moves, structure does not ------------------------
+  const R = Content.resolve({
+    consent: 'Short consent.',
+    'quiz.q_cost.opt.2': 'FIVE points',
+    'aiquiz.qai_score.prompt': 'Reworded strict question',
+    'survey.s17.item.s17a': 'Reworded numeracy item',
+    'survey.s03.opt.0': 'Far less',
+    'part.A.title': 'Part A · Searching'
+  });
+  ok(R.CONSENT === 'Short consent.', 'the consent screen takes its override');
+  ok(R.PART_INTRO.A.title === 'Part A · Searching', 'a survey part heading takes its override');
+
+  const qc = R.QUIZ_BASE.find(q => q.id === 'q_cost');
+  const qcBase = Content.QUIZ_BASE.find(q => q.id === 'q_cost');
+  ok(qc.options[2] === 'FIVE points', 'an answer option takes its override');
+  ok(qc.answer === qcBase.answer, 'the answer key is unchanged by rewording');
+  ok(qc.options.length === qcBase.options.length, 'the number of options is unchanged');
+
+  const strict = R.QUIZ_AI.find(q => q.strict);
+  ok(strict && strict.id === 'qai_score', 'the strict gate survives rewording');
+  ok(strict.prompt === 'Reworded strict question', 'the strict question can be reworded');
+  ok(R.UNDERSTOOD_FRONTIER_QID === Content.UNDERSTOOD_FRONTIER_QID, 'the frontier flag still points at its question');
+
+  const s17 = R.SURVEY.find(q => q.id === 's17');
+  ok(s17.items[0].prompt === 'Reworded numeracy item', 'a numeracy item can be reworded');
+  ok(s17.items[0].answer === 500, 'the numeracy ANSWER is not overridable');
+  ok(R.SURVEY.find(q => q.id === 's03').options[0] === 'Far less', 'a survey option takes its override');
+  ok(R.SURVEY.every((q, i) => q.id === Content.SURVEY[i].id && q.type === Content.SURVEY[i].type),
+    'survey ids, types and order are unchanged');
+  ok(R.SURVEY.every(q => !q.platformKey || q.platformKey === Content.SURVEY.find(x => x.id === q.id).platformKey),
+    'the platform keys that suppress a duplicate question are unchanged');
+
+  // The exported column set is derived from ids, so it must be untouched — this
+  // is the contract that lets wording be editable while the workbook stays put.
+  ok(JSON.stringify(R.surveyColumns()) === JSON.stringify(Content.surveyColumns()),
+    'the survey columns of a reworded session are identical');
+  ok(JSON.stringify(R.quizColumns()) === JSON.stringify(Content.quizColumns()),
+    'the quiz columns of a reworded session are identical');
+
+  // ---- the defaults are never mutated ------------------------------------
+  ok(Content.CONSENT !== 'Short consent.', 'resolving does not touch the default consent');
+  ok(qcBase.options[2] === '{revealCost} points', 'resolving does not touch the default options');
+  ok(Content.SURVEY.find(q => q.id === 's17').items[0].prompt.indexOf('Reworded') < 0,
+    'resolving does not touch the default survey');
+
+  // ---- how it is stored --------------------------------------------------
+  // A JSON STRING, not a map: the admin writes runs with setDoc(merge:true),
+  // which deep-merges a map, so a reverted key would be merged straight back
+  // and "revert" would change nothing for the participant.
+  const json = Content.stringifyOverrides({ consent: 'Short consent.', bogus: 'x' });
+  ok(typeof json === 'string', 'overrides stringify to a string');
+  ok(JSON.parse(json).consent === 'Short consent.' && !('bogus' in JSON.parse(json)),
+    'and are normalized on the way in, so an unknown key is never stored');
+  ok(Content.stringifyOverrides({}) === '{}', 'reverting everything stores an EMPTY map, not a stale one');
+  ok(Object.keys(Content.parseOverrides(Content.stringifyOverrides({}))).length === 0,
+    'which reads back as no overrides at all');
+  ok(Content.parseOverrides(json).consent === 'Short consent.', 'a stored string round-trips');
+  ok(Object.keys(Content.parseOverrides('not json at all')).length === 0,
+    'unreadable wording is no wording, never a broken session');
+  ok(Object.keys(Content.parseOverrides(null)).length === 0, 'and neither is nothing');
+  ok(Content.resolve(json).CONSENT === 'Short consent.', 'resolve accepts the stored string directly');
+  ok(Content.resolve({ consent: 'Short consent.' }).CONSENT === 'Short consent.',
+    'and an already-parsed map, so both callers work');
+
+  const plain = Content.resolve(null);
+  ok(plain.CONSENT === Content.CONSENT && plain.DEBRIEF === Content.DEBRIEF && plain.THANKS === Content.THANKS,
+    'a session with no overrides reads exactly the defaults');
+  ok(JSON.stringify(plain.SURVEY.map(q => q.prompt)) === JSON.stringify(Content.SURVEY.map(q => q.prompt)),
+    'and its survey wording is the default wording');
+}
+
+// ======================================================================
+head('17 · every token in the content is one the app substitutes');
+// ======================================================================
+{
+  // A token the participant screen does not know is printed to the participant
+  // verbatim — "{stepBound}" instead of a number. Reading them out of app.js
+  // rather than restating them here is the point: the list cannot drift.
+  const fs = require('fs');
+  const path = require('path');
+  const appSrc = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  const fn = appSrc.slice(appSrc.indexOf('function tokens('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  const handled = new Set((body.match(/\\\{([A-Za-z]+)\\\}/g) || []).map(m => m.replace(/\\|\{|\}/g, '')));
+  ok(handled.size >= 9, 'the app substitutes a list of tokens', [...handled].join(', '));
+
+  const used = new Set();
+  const walk = v => {
+    if (typeof v === 'string') { (v.match(/\{([A-Za-z]+)\}/g) || []).forEach(t => used.add(t.slice(1, -1))); return; }
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (v && typeof v === 'object') { Object.keys(v).forEach(k => walk(v[k])); }
+  };
+  walk([Content.CONSENT, Content.INSTRUCTIONS, Content.AI_INSTRUCTIONS, Content.QUIZ_BASE,
+        Content.QUIZ_AI, Content.SURVEY, Content.PART_INTRO, Content.DEBRIEF, Content.THANKS]);
+  const unknown = [...used].filter(t => !handled.has(t));
+  ok(unknown.length === 0, 'every token used in content.js is substituted by the app',
+    unknown.length ? 'unsubstituted: {' + unknown.join('}, {') + '}' : '');
 }
 
 console.log('\n' + (fails

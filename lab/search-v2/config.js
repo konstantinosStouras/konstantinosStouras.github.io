@@ -84,6 +84,49 @@
       markAnchors: false       // MUST stay off — see §17b
     },
 
+    // ---- Interface (a TREATMENT parameter group, not a theme) --------------
+    // "Ask the AI" and "Reveal" are the primary outcome of this study: which
+    // one a participant presses, and how often, is the thing being measured.
+    // So the interface must not make either easier to press than the other,
+    // and every property that could tilt it is a locked run parameter that
+    // travels with the exported data.
+    //
+    // buttonOrder — which of the two sits on the LEFT.
+    //   'participant' (default) — assigned ONCE per participant and fixed for
+    //     the whole session, block-randomised jointly with the crossover
+    //     sequence so all four cells of sequence × order come out balanced
+    //     (the server's enrolment counter and the roster generator both do
+    //     this; a client-mode run falls back to a hash of the code). It is
+    //     stamped on the participant and on every row they produce, so it
+    //     enters the analysis as a covariate and the size of any position
+    //     effect can be REPORTED rather than assumed away.
+    //   'fixed' — Ask on the left, always. What a session stored before this
+    //     group existed keeps.
+    // Deliberately NOT randomised per round or per decision: a participant
+    // takes roughly 300 actions, and moving the buttons under them forces a
+    // re-read at every one. That buys mis-clicks — and a mis-click here is not
+    // peripheral noise, it spends the higher cost and destroys the ground
+    // truth at that position — and inflates decision latency with re-reading
+    // rather than deliberation, when latency is itself one of the measures.
+    //
+    // costColor* — the colour of the cost numeral inside each button (nothing
+    // else: the two buttons are at strict visual parity, see styles.css). Same
+    // hue and saturation, a lightness step, so the price difference is legible
+    // at a glance. The suggested pair was hsl(4,65%,42%) / hsl(4,65%,62%); the
+    // numerals here sit on a WHITE chip (a red that meets 4.5:1 against a
+    // saturated button fill is not achievable), and against white a LIGHTER
+    // red loses contrast — so the step runs the other way, 38% / 50%, both
+    // above 4.5:1 on white. The reveal colour is identical in AI-off rounds,
+    // where it stands alone: styling the same action differently across the
+    // two conditions would confound the reveal-rate comparison with chrome.
+    ui: {
+      buttonOrder: 'participant',
+      costColorReveal: 'hsl(4, 65%, 38%)',
+      costColorQuery: 'hsl(4, 65%, 50%)',
+      encouragement: true,
+      rushMinActions: 2
+    },
+
     // ---- Round structure (§10) --------------------------------------------
     rounds: {
       warmupPerBlock: 2,

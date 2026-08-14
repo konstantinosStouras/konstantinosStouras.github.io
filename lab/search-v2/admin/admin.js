@@ -23,6 +23,9 @@
   var FB = window.SVFirebase;
 
   var runs = [], current = null, currentParams = null, editingId = null;
+  // This session's wording overrides, as the flat key→string map content.js
+  // defines. Empty means every word comes from content.js.
+  var currentContent = {};
   var events = [], built = null, unsubMon = null, monRows = [];
   var LOCAL_KEY = 'searchv2:v3:admin:local';
 
@@ -67,6 +70,7 @@
     wireRoster();
     wireMonitor();
     wireData();
+    wireWording();
 
     // The parameter form carries its values from the moment the panel opens, so a
     // box is never blank beside its own "default 100" hint. Selecting a run, or
@@ -136,13 +140,17 @@
     document.querySelectorAll('.tab').forEach(function (t) {
       t.onclick = function () {
         document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('on', x === t); });
-        ['runs', 'params', 'roster', 'monitor', 'data', 'notes'].forEach(function (k) {
-          $('tab-' + k).style.display = (k === t.dataset.tab) ? '' : 'none';
+        // Derived from the buttons themselves rather than listed here: a hard-coded
+        // list silently stops showing any screen added after it was written.
+        document.querySelectorAll('.tab').forEach(function (x) {
+          var pane = $('tab-' + x.dataset.tab);
+          if (pane) pane.style.display = (x === t) ? '' : 'none';
         });
         if (t.dataset.tab === 'roster') renderRoster();
         if (t.dataset.tab === 'monitor') startMonitor();
         if (t.dataset.tab === 'data') { fillSpecPicker(); renderRoundGallery(); }
         if (t.dataset.tab === 'notes') renderNotes();
+        if (t.dataset.tab === 'wording') renderWording();
       };
     });
   }
@@ -158,11 +166,143 @@
     $('btn-new-run').onclick = function () {
       current = null; editingId = null;
       currentParams = savedDefaultParams();
+      currentContent = {};        // a new session starts on the study's own words
+      // Carry whatever was typed on the Sessions screen into the form, so taking
+      // the advanced path never costs the admin the name they just wrote.
+      var typedName = ($('nr-name').value || '').trim(), typedCode = normCode($('nr-code').value);
+      if (typedName) currentParams.ops.runName = typedName;
+      if (typedCode) currentParams.ops.code = typedCode;
       fillForm(currentParams, null);
       openTab('params');
-      note('save-note', 'A new session, seeded from the saved defaults. Give it a name and a code, then Save.');
+      note('save-note', 'A new session, seeded from the saved defaults. Change whatever the task needs, then ' +
+        'press <b>Create session</b>. (A session that only needs a name is quicker to create on the Sessions screen.)');
     };
-    $('btn-refresh-runs').onclick = loadRuns;
+    // The click Event must not reach loadRuns — its argument is a session to
+    // select once the list is back.
+    $('btn-refresh-runs').onclick = function () { loadRuns(); };
+    wireCreateCard();
+  }
+
+  // ---- create a session, from the Sessions screen --------------------------
+  // A session used to be creatable only from the parameter form: press New
+  // session, scroll past seven collapsed groups to Operations, name it there,
+  // create, then come back and open it. Naming is the ONE thing every session
+  // needs, so it is asked here, first — the same shape as the other class
+  // admins. Everything the form could do is still done there; this path just
+  // takes the saved defaults as they stand.
+  function normCode(s) {
+    return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
+  }
+  function codeInUse(code) {
+    return runs.some(function (r) { return String(r.code || '').toUpperCase() === code; });
+  }
+  // autoCode() draws at random, so on a panel that already holds sessions it can
+  // repeat one — and a repeat would re-point runCodes/<code> at the newer run,
+  // quietly sending the older session's participants into it. Draw until free.
+  function freshCode() {
+    for (var i = 0; i < 50; i++) { var c = autoCode(); if (!codeInUse(c)) return c; }
+    return autoCode();
+  }
+  // A typed code is checked against the server too: another admin may have
+  // created one since this list was read. An automatic code is not — it is drawn
+  // from 33 million and already checked against every session on screen.
+  function codeFree(code) {
+    if (codeInUse(code)) return Promise.resolve(false);
+    if (LOCAL || !FB.isConfigured() || !FB.codeExists) return Promise.resolve(true);
+    return FB.codeExists(code).then(function (x) { return !x; }, function () { return true; });
+  }
+
+  function wireCreateCard() {
+    var nameEl = $('nr-name'), codeEl = $('nr-code');
+    codeEl.oninput = function () { codeEl.value = normCode(codeEl.value); clearCreated(); };
+    nameEl.oninput = clearCreated;
+    [nameEl, codeEl].forEach(function (el) {
+      el.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); createFromCard(); } };
+    });
+    $('btn-create-run').onclick = createFromCard;
+  }
+  function clearCreated() { $('nr-created').innerHTML = ''; note('nr-note', ''); }
+
+  function createFromCard() {
+    var nameEl = $('nr-name'), codeEl = $('nr-code'), btn = $('btn-create-run');
+    var name = (nameEl.value || '').trim() || 'untitled';
+    var typed = normCode(codeEl.value);
+    if (typed && typed.length < 3) {
+      note('nr-note', 'A custom <b>Session ID</b> is 3&ndash;40 characters, capital letters and digits only. ' +
+        'Leave it blank for an automatic code.', true);
+      codeEl.focus();
+      return;
+    }
+    clearCreated();
+    btn.disabled = true;
+    (typed ? codeFree(typed) : Promise.resolve(true)).then(function (free) {
+      btn.disabled = false;
+      if (!free) {
+        note('nr-note', 'Session ID <b>' + esc(typed) + '</b> is already taken. Choose another, or leave it ' +
+          'blank for an automatic code.', true);
+        codeEl.focus();
+        return;
+      }
+      askCreate(name, typed || freshCode(), nameEl, codeEl, btn);
+    });
+  }
+
+  function askCreate(name, code, nameEl, codeEl, btn) {
+    var p = savedDefaultParams();
+    p.ops.runName = name;
+    p.ops.code = code;
+    // It is created as a draft, so the entry flag must say so: app.js reads
+    // ops.entryOpen, and a draft carrying entryOpen:true would let people in
+    // before the validation gate has ever run.
+    p.ops.entryOpen = false;
+    // The same gate the parameter form applies: creating freezes the mapping
+    // pool and every round spec under these seeds, so they are read once first.
+    askSummary('Create this session?',
+      'It is built from the <b>saved default parameters</b>, which freezes the mapping pool and all <b>' +
+      (2 * (p.rounds.warmupPerBlock + p.rounds.scoredPerBlock)) + ' round specs</b> under the seeds below. ' +
+      'It opens as a <b>draft</b>, so nobody can enter yet, and every parameter stays editable until the ' +
+      'first participant claims a code.',
+      summaryBoxes(p), 'Create session', function () {
+        btn.disabled = true; btn.textContent = 'Creating…';
+        function done() { btn.disabled = false; btn.textContent = 'Create session'; }
+        createRun(newRunDoc(p, name, code, {})).then(function (id) {
+          done();
+          nameEl.value = ''; codeEl.value = '';
+          showCreated(id, code, name);
+          // Selecting it here is the point of the card: the new session is what
+          // every other screen is already on, so there is nothing to go and open.
+          loadRuns(id);
+        }, function (e) {
+          done();
+          note('nr-note', 'Could not create the session: ' + esc(String(e && e.message || e)), true);
+        });
+      });
+  }
+
+  function showCreated(id, code, name) {
+    var host = $('nr-created');
+    host.innerHTML = '<div class="made-box">' +
+      '<div class="cb-label">Session created &mdash; participants join with this code</div>' +
+      '<div class="cb-code">' + esc(code) + '</div>' +
+      '<div class="cb-name">' + esc(name) + '</div>' +
+      '<div class="cb-link mono">' + esc(launchUrl(code)) + '</div>' +
+      '<div class="run-acts">' +
+        '<button class="sBtn sBtnSec" data-cb="copy">Copy link</button>' +
+        '<button class="sBtn sBtnPrimary" data-cb="params">Check its parameters</button>' +
+        '<button class="sBtn exportBtn" data-cb="open">Open entry</button>' +
+      '</div>' +
+      '<div class="cb-hint">It is a <b>draft</b> until you open entry &mdash; which runs the validation gate ' +
+      'and asks you to confirm, because the first participant to enter locks every parameter.</div>' +
+      '</div>';
+    host.querySelectorAll('button[data-cb]').forEach(function (b) {
+      b.onclick = function () {
+        if (b.dataset.cb === 'copy') { copyLink(code, b); return; }
+        var run = runs.filter(function (r) { return r.id === id; })[0];
+        if (!run) { note('nr-note', 'That session is no longer in the list. Press Refresh.', true); return; }
+        if (b.dataset.cb === 'params') { selectRun(run); openTab('params'); return; }
+        if (b.dataset.cb === 'open') setStatus(run, 'open');
+      };
+    });
   }
 
   function savedDefaultParams() {
@@ -171,13 +311,17 @@
     return Specs.withDefaults(d);
   }
 
-  function loadRuns() {
+  // `selectId` — a session to select once the list is back (a just-created one),
+  // so creating it is also opening it.
+  function loadRuns(selectId) {
     var p = LOCAL ? Promise.resolve(localRuns()) : FB.listRuns();
     p.then(function (list) {
       runs = list || [];
       renderRuns();
       loadRunStats();
-      if (!current && runs.length) selectRun(runs[0]);
+      var picked = selectId ? runs.filter(function (r) { return r.id === selectId; })[0] : null;
+      if (picked) selectRun(picked);
+      else if (!current && runs.length) selectRun(runs[0]);
       else if (!current) {
         currentParams = savedDefaultParams();
         fillForm(currentParams, null);
@@ -269,7 +413,7 @@
     var active = runs.filter(function (r) { return !isDone(r); });
     var done = runs.filter(isDone);
     fillRunSection('runs-active', 'runs-active-n', active,
-      'No active sessions. <b>+ New session</b> starts one from the recommended defaults.',
+      'No active sessions yet. <b>Create a session</b> above starts one from the saved defaults.',
       function (n) { return n + ' active'; });
     fillRunSection('runs-done', 'runs-done-n', done,
       'No completed sessions yet. Closing a session moves it here and keeps its data.',
@@ -293,24 +437,44 @@
     var base = location.origin + location.pathname.replace(/admin\/?$/, '');
     return base + '?code=' + encodeURIComponent(code);
   }
+  // One copier for the cards and the created-code box. The async clipboard is
+  // absent on an insecure origin and can be refused outright, so a failure falls
+  // back to the old selection copy and finally to showing the link to copy by
+  // hand — never to a button that silently does nothing.
+  function copyLink(code, btn) {
+    var url = launchUrl(code), old = btn.textContent;
+    function flash() { btn.textContent = '✓ Copied'; setTimeout(function () { btn.textContent = old; }, 1400); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) { done = false; }
+      document.body.removeChild(ta);
+      if (done) flash(); else window.prompt('Copy the participant link:', url);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(flash, fallback);
+    } else fallback();
+  }
   // ONE builder for every sandbox link, so the launch box and the cards can never
   // open different things.
-  function previewUrl(code, spec) {
+  // `order` ('ask' | 'reveal') rehearses one side of the button swap. Without
+  // it a sandbox always shows whichever layout the constant preview code hashes
+  // to, so half of what participants meet could never be checked before a
+  // session opened.
+  function previewUrl(code, spec, order) {
     var base = location.origin + location.pathname.replace(/admin\/?$/, '');
     return base + '?preview=1&debug=1&key=' + encodeURIComponent(CFG.DEBUG_KEY) +
       (code ? '&code=' + encodeURIComponent(code) : '') +
-      (spec ? '&spec=' + encodeURIComponent(spec) : '');
+      (spec ? '&spec=' + encodeURIComponent(spec) : '') +
+      (order ? '&order=' + encodeURIComponent(order) : '');
   }
 
   function runAction(act, run, btn) {
     if (!run) return;
     if (act === 'open') { selectRun(run); openTab('params'); return; }
-    if (act === 'copy') {
-      navigator.clipboard.writeText(launchUrl(run.code)).then(function () {
-        var old = btn.textContent; btn.textContent = '✓ Copied';
-        setTimeout(function () { btn.textContent = old; }, 1400);
-      }); return;
-    }
+    if (act === 'copy') { copyLink(run.code, btn); return; }
     if (act === 'testround') { window.open(previewUrl(run.code), '_blank'); return; }
     if (act === 'export') { exportRun(run, btn); return; }
     if (act === 'clone') { cloneRun(run); return; }
@@ -398,8 +562,19 @@
           (p.ai.markAnchors ? 'its anchors are marked' : '') + ')'
         : 'Its curve and anchors stay hidden, as they must'
     ]]);
+    box.push(['The interface', [
+      'The two paid buttons: <b>' + (p.ui.buttonOrder === 'participant'
+        ? 'order randomised per participant' : 'fixed — Ask on the left') + '</b>',
+      'Side by side, one style, matched hues — neither is the primary action',
+      'Encouragement: ' + (p.ui.encouragement
+        ? '<b>on</b> — milestones, one in-round tip, and a focus prompt at ≤' + p.ui.rushMinActions + ' actions'
+        : 'off'),
+      'Cost numerals: <b>' + esc(p.ui.costColorReveal) + '</b> reveal · <b>' + esc(p.ui.costColorQuery) + '</b> ask'
+    ]]);
     box.push(['Assignment', [
       'Sequence: ' + esc(p.assign.sequenceAssignment),
+      'Button order: ' + (p.ui.buttonOrder === 'participant'
+        ? 'block-randomised <b>jointly with the sequence</b>' : 'fixed for everyone'),
       'Next entrant: ' + (p.assign.nextEntrantOverride === 'auto' ? 'automatic' : '<b>forced ' + esc(p.assign.nextEntrantOverride) + '</b>'),
       'Seeds frozen: ' + (p.assign.freezeSeeds ? 'yes' : 'no') + ' · anchors frozen: ' + (p.assign.freezeAnchors ? 'yes' : 'no'),
       'Mapping pool: ' + p.env.poolSize + ', seed ' + p.env.generatorSeed
@@ -481,7 +656,7 @@
     var p = clone(Specs.withDefaults(run.params));
     var name = prompt('Name for the cloned session:', (run.name || 'untitled') + ' (clone)');
     if (name == null) return;
-    var obj = newRunDoc(p, name, autoCode());
+    var obj = newRunDoc(p, name, autoCode(), Content.parseOverrides(run.contentJson || run.content));
     obj.clonedFrom = run.id;
     createRun(obj).then(function () {
       note('save-note', 'Cloned. The clone is a <b>draft</b> with its own run_id, its own pool and its own specs.');
@@ -498,6 +673,12 @@
       name: run.name, code: run.code, status: run.status,
       serverMode: (p.ops.compute === 'server'),
       ops: clone(p.ops),
+      // This session's wording travels with the redacted copy. In server mode
+      // the run document is admin-only, so without this the participant app
+      // could never see an override and every session would read the defaults.
+      // A STRING, so that a revert actually removes the key: both writers use
+      // setDoc(merge:true), which deep-merges a map but replaces a string.
+      contentJson: Content.stringifyOverrides(run.contentJson || run.content),
       params: {
         env: {
           positions: p.env.positions, prizeMin: p.env.prizeMin, prizeMax: p.env.prizeMax,
@@ -512,15 +693,27 @@
           warmupPerBlock: p.rounds.warmupPerBlock, scoredPerBlock: p.rounds.scoredPerBlock,
           openPerBlock: p.rounds.openPerBlock, seededPerBlock: p.rounds.seededPerBlock
         },
+        // The interface group must travel: it holds nothing secret, and
+        // WITHOUT it Specs.withDefaults on the participant's side takes the
+        // "stored before `ui` existed" branch and quietly forces the whole
+        // session to fixed buttons with no encouragement — in server mode,
+        // where the redacted copy is ALL the participant ever sees.
+        ui: clone(p.ui),
         ops: clone(p.ops)
       },
       updatedAt: Date.now()
     };
   }
 
-  function newRunDoc(p, name, code) {
+  function newRunDoc(p, name, code, contentOv) {
     var params = clone(p);
     params.ops.runName = name;
+    // Every session is created as a draft, so the entry flag has to agree with
+    // the status: app.js opens a session when `ops.entryOpen !== false` OR the
+    // status is 'open', so a draft created with the Operations toggle left on
+    // would be enterable before the validation gate had ever run. Entry is
+    // opened from the card, which runs that gate and asks for confirmation.
+    params.ops.entryOpen = false;
     var pool = Pool.buildPool(params.env, params.env.generatorSeed);
     var specSeed = params.env.generatorSeed + 1;
     var specs = Specs.buildSpecs(pool, params, specSeed);
@@ -533,7 +726,8 @@
       poolChecksum: X.checksum(JSON.stringify(pool)),
       specsChecksum: X.checksum(JSON.stringify(specs)),
       seeds: { generatorSeed: params.env.generatorSeed, specSeed: specSeed },
-      overrides: []
+      overrides: [],
+      contentJson: Content.stringifyOverrides(contentOv)
     };
   }
   function createRun(obj) {
@@ -572,6 +766,8 @@
   function selectRun(run) {
     current = run; editingId = run.id;
     currentParams = Specs.withDefaults(run.params);
+    currentContent = Content.parseOverrides(run.contentJson || run.content);
+    if ($('tab-wording') && $('tab-wording').style.display !== 'none') renderWording();
     if (run.ops) Object.keys(run.ops).forEach(function (k) { currentParams.ops[k] = run.ops[k]; });
     if (run.code) currentParams.ops.code = run.code;
     fillForm(currentParams, run);
@@ -593,6 +789,8 @@
     ['env', 'seedHighMin', 'num'], ['env', 'seedHighMax', 'num'], ['env', 'poolSize', 'num'], ['env', 'generatorSeed', 'num'],
     ['costs', 'revealCost', 'num'], ['costs', 'queryCost', 'num'], ['costs', 'queryCap', 'num'], ['costs', 'revealCap', 'num'],
     ['costs', 'scoreFloor', 'seg'],
+    ['ui', 'buttonOrder', 'seg'], ['ui', 'costColorReveal', 'txt'], ['ui', 'costColorQuery', 'txt'],
+    ['ui', 'encouragement', 'seg'], ['ui', 'rushMinActions', 'num'],
     ['ai', 'sparseK', 'num'], ['ai', 'denseK', 'num'], ['ai', 'placement', 'seg'], ['ai', 'answerRounding', 'seg'],
     ['ai', 'allowRequery', 'seg'], ['ai', 'drawCurve', 'seg'], ['ai', 'markAnchors', 'seg'],
     ['rounds', 'warmupPerBlock', 'num'], ['rounds', 'scoredPerBlock', 'num'], ['rounds', 'openPerBlock', 'num'],
@@ -767,16 +965,20 @@
       // notice that something was set wrong.
       var pending = clone(currentParams);
       pending.ops.code = code; pending.ops.runName = name;
+      pending.ops.entryOpen = false;   // what newRunDoc will write, so the summary can't promise otherwise
       askSummary('Create this session?',
         'Creating freezes the mapping pool and all <b>' +
         (2 * (pending.rounds.warmupPerBlock + pending.rounds.scoredPerBlock)) +
         ' round specs</b> under the seeds below. It opens as a <b>draft</b>, so nobody can enter yet.',
         summaryBoxes(pending), 'Create session', function () {
-          var obj = newRunDoc(currentParams, name, code);
-          createRun(obj).then(function () {
+          var obj = newRunDoc(currentParams, name, code, currentContent);
+          createRun(obj).then(function (id) {
             note('save-note', 'Session <b>' + esc(code) + '</b> created as a <b>draft</b>. Run the validation gate on the ' +
               'Data screen — and check the round plots at the bottom of it — before opening entry.');
-            loadRuns();
+            // Select what was just created. Without this the form stayed on a
+            // NEW session with editingId null, so pressing Save again created a
+            // second session on the same code — and re-pointed the code at it.
+            loadRuns(id);
           }).catch(function (e) { note('save-note', 'Could not create the session: ' + esc(String(e && e.message || e)), true); });
         });
       return;
@@ -786,7 +988,8 @@
     if (run && run.locked) {
       // Locked: only Operations and the entrant override may move. The Rules
       // refuse anything else anyway; refusing it here too keeps the panel honest.
-      patch = { name: name, ops: clone(currentParams.ops), assign: Object.assign({}, run.assign || {}, { nextEntrantOverride: currentParams.assign.nextEntrantOverride }) };
+      patch = { name: name, ops: clone(currentParams.ops), assign: Object.assign({}, run.assign || {}, { nextEntrantOverride: currentParams.assign.nextEntrantOverride }),
+        contentJson: Content.stringifyOverrides(currentContent) };
     } else {
       var pool = Pool.buildPool(currentParams.env, currentParams.env.generatorSeed);
       var specSeed = currentParams.env.generatorSeed + 1;
@@ -795,7 +998,8 @@
         name: name, code: code, params: clone(currentParams), ops: clone(currentParams.ops),
         assign: clone(currentParams.assign), specSeed: specSeed, specsJson: JSON.stringify(specs),
         poolChecksum: X.checksum(JSON.stringify(pool)), specsChecksum: X.checksum(JSON.stringify(specs)),
-        seeds: { generatorSeed: currentParams.env.generatorSeed, specSeed: specSeed }
+        seeds: { generatorSeed: currentParams.env.generatorSeed, specSeed: specSeed },
+        contentJson: Content.stringifyOverrides(currentContent)
       };
     }
     patch.serverMode = (currentParams.ops.compute === 'server');
@@ -803,7 +1007,7 @@
       if (!LOCAL) {
         FB.audit(editingId, 'save_run', name);
         FB.putRunPublic(editingId, publicDoc(
-          { name: name, code: code, status: (run && run.status) || 'draft' },
+          { name: name, code: code, status: (run && run.status) || 'draft', contentJson: Content.stringifyOverrides(currentContent) },
           currentParams, editingId)).catch(function () {});
       }
       note('save-note', 'Saved.');
@@ -928,8 +1132,8 @@
   function wireRoster() {
     $('btn-ros-gen').onclick = generateCodes;
     $('btn-ros-csv').onclick = function () {
-      var csv = 'code,sequence,status\n' + roster.map(function (r) {
-        return [r.code, r.sequence, r.status || 'unused'].join(',');
+      var csv = 'code,sequence,button_order,status\n' + roster.map(function (r) {
+        return [r.code, r.sequence, r.buttonOrder || '', r.status || 'unused'].join(',');
       }).join('\n');
       dl((current ? current.code : 'run') + '_roster.csv', csv, 'text/csv');
     };
@@ -957,20 +1161,27 @@
     var p = LOCAL ? Promise.resolve(current.roster || []) : FB.listRoster(current.id);
     p.then(function (list) {
       roster = list || [];
-      var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0 };
+      var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0, ask: 0, reveal: 0 };
       roster.forEach(function (r) {
         counts[r.status || 'unused'] = (counts[r.status || 'unused'] || 0) + 1;
         if (r.sequence) counts[r.sequence]++;
+        if (r.buttonOrder === 'reveal_first') counts.reveal++;
+        else if (r.buttonOrder === 'ask_first') counts.ask++;
       });
+      // Button order is a covariate in the primary analysis, so its balance is
+      // shown beside the sequence's — "confirm it is balanced before the first
+      // session opens" is a thing the panel has to make possible.
       $('roster-stats').innerHTML = [
         ['Codes', roster.length], ['Unused', counts.unused], ['In progress', counts.started],
-        ['Completed', counts.completed], ['Sequence A', counts.A], ['Sequence B', counts.B]
+        ['Completed', counts.completed], ['Sequence A', counts.A], ['Sequence B', counts.B],
+        ['Ask on the left', counts.ask], ['Reveal on the left', counts.reveal]
       ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
 
       $('roster-table').innerHTML = roster.length
-        ? '<thead><tr><th>Code</th><th>Sequence</th><th>Status</th><th>Claimed</th><th>Enrolled</th></tr></thead><tbody>' +
+        ? '<thead><tr><th>Code</th><th>Sequence</th><th>Buttons</th><th>Status</th><th>Claimed</th><th>Enrolled</th></tr></thead><tbody>' +
           roster.map(function (r) {
             return '<tr><td class="mono">' + esc(r.code) + '</td><td>' + esc(r.sequence || '—') + '</td>' +
+              '<td>' + (r.buttonOrder === 'reveal_first' ? 'Reveal left' : r.buttonOrder === 'ask_first' ? 'Ask left' : '—') + '</td>' +
               '<td>' + esc(r.status || 'unused') + '</td>' +
               '<td>' + (r.claimedAt ? new Date(r.claimedAt).toLocaleString() : '—') + '</td>' +
               '<td>' + (r.autoEnrolled ? 'platform / open' : 'pre-generated') + '</td></tr>';
@@ -985,22 +1196,31 @@
     if (!current) { alert('Open a session first.'); return; }
     var n = Math.max(1, Math.min(1000, parseInt($('ros-n').value, 10) || 0));
     var prefix = ($('ros-prefix').value || 'P').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    // Block randomisation over a shuffled list, so the split is exactly half and
-    // half rather than a series of coin flips (§11).
-    var seqs = [];
-    for (var i = 0; i < n; i++) seqs.push(i % 2 === 0 ? 'A' : 'B');
-    Pool.shuffle(seqs, Pool.rngFrom(Pool.hashSeed(current.id + ':' + n + ':' + prefix)));
+    // Block randomisation over a shuffled list, so the split is exact rather
+    // than a series of coin flips (§11) — and over the FOUR CELLS of
+    // sequence × button order jointly, not two independent draws, because the
+    // button order enters the primary analysis as a covariate and has to be
+    // balanced within each sequence as well as overall (§ config.js
+    // ui.buttonOrder).
+    var cells = Specs.assignmentCells(), cellFor = [];
+    for (var i = 0; i < n; i++) cellFor.push(cells[i % cells.length]);
+    Pool.shuffle(cellFor, Pool.rngFrom(Pool.hashSeed(current.id + ':' + n + ':' + prefix)));
     var codes = [];
-    for (var j = 0; j < n; j++) codes.push({ code: prefix + String(j + 1).padStart(3, '0'), sequence: seqs[j] });
+    for (var j = 0; j < n; j++) {
+      codes.push({ code: prefix + String(j + 1).padStart(3, '0'),
+                   sequence: cellFor[j].sequence, buttonOrder: cellFor[j].buttonOrder });
+    }
 
     if (LOCAL) {
-      current.roster = codes.map(function (c) { return { code: c.code, sequence: c.sequence, status: 'unused' }; });
+      current.roster = codes.map(function (c) {
+        return { code: c.code, sequence: c.sequence, buttonOrder: c.buttonOrder, status: 'unused' };
+      });
       saveLocalRuns(localRuns().map(function (r) { return r.id === current.id ? current : r; }));
       renderRoster();
       return;
     }
     var chain = Promise.resolve();
-    codes.forEach(function (c) { chain = chain.then(function () { return FB.putRosterCode(current.id, c.code, c.sequence); }); });
+    codes.forEach(function (c) { chain = chain.then(function () { return FB.putRosterCode(current.id, c.code, c.sequence, c.buttonOrder); }); });
     chain.then(function () {
       FB.audit(current.id, 'generate_roster', n + ' codes, prefix ' + prefix);
       renderRoster();
@@ -1142,11 +1362,14 @@
   function wireData() {
     $('btn-fetch').onclick = function () { loadEvents().then(renderData); };
     $('btn-validate').onclick = runValidation;
+    var prevOrder = function () { return ($('prev-order') && $('prev-order').value) || ''; };
     $('btn-preview').onclick = function () {
       var spec = $('prev-spec').value;
-      window.open(previewUrl(current && current.code, spec), '_blank');
+      window.open(previewUrl(current && current.code, spec, prevOrder()), '_blank');
     };
-    $('btn-preview-full').onclick = function () { window.open(previewUrl(current && current.code), '_blank'); };
+    $('btn-preview-full').onclick = function () {
+      window.open(previewUrl(current && current.code, null, prevOrder()), '_blank');
+    };
     $('btn-dryrun').onclick = dryRun;
     $('btn-dl-xlsx').onclick = downloadXlsx;
     $('btn-dl-decisions').onclick = function () { if (built) dl('decisions.csv', X.toCSV(built.decisions), 'text/csv'); };
@@ -1209,6 +1432,140 @@
     };
   }
 
+  // ======================================================================
+  //  SCREEN 7 · WORDING
+  // ======================================================================
+  // Every participant-facing string, in the order a participant meets it,
+  // shown WITH this session's numbers substituted — the panel's whole purpose
+  // is that the words here are the words on the screen, so a default rendered
+  // with the tokens still in it would defeat it. Editing writes into
+  // `currentContent`, which Save session persists; content.js owns the
+  // outline, the whitelist and the merge, so this screen only draws it.
+
+  // The participant app's token substitution, over the parameters in the form.
+  // Keep in step with `tokens()` in app.js.
+  function wdTokens(text) {
+    var p = currentParams || Specs.withDefaults(null);
+    var K = (p.ai.sparseK === p.ai.denseK) ? p.ai.sparseK : (p.ai.sparseK + ' or ' + p.ai.denseK);
+    return String(text == null ? '' : text)
+      .replace(/\{J\}/g, p.env.positions)
+      .replace(/\{L\}/g, p.env.stepBound)
+      .replace(/\{stepBound\}/g, p.env.stepBound)
+      .replace(/\{revealCost\}/g, p.costs.revealCost)
+      .replace(/\{queryCost\}/g, p.costs.queryCost)
+      .replace(/\{revealCap\}/g, p.costs.revealCap)
+      .replace(/\{queryCap\}/g, p.costs.queryCap)
+      .replace(/\{scored\}/g, p.rounds.scoredPerBlock)
+      .replace(/\{warmup\}/g, p.rounds.warmupPerBlock)
+      .replace(/\{K\}/g, K);
+  }
+  // `**bold**` is the only markup the participant screen renders, so it is the
+  // only markup shown here. Everything else is escaped first, exactly as prose()
+  // does it in app.js.
+  function wdShow(text) {
+    var t = String(text == null ? '' : text);
+    // Four of the survey part headings carry no note by default. An empty box
+    // reads as a rendering fault, so it says so instead.
+    if (!t.trim()) return '<span class="wd-blank">nothing is shown here by default</span>';
+    return esc(wdTokens(t)).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+  }
+
+  function wdEdited() { return Object.keys(Content.normalizeOverrides(currentContent)).length; }
+
+  function renderWording() {
+    var host = $('wording-body');
+    if (!host) return;
+    var q = ($('wd-search') && $('wd-search').value || '').trim().toLowerCase();
+    var onlyChanged = !!($('wd-changed') && $('wd-changed').checked);
+    var groups = Content.outline(), html = [], shown = 0;
+
+    groups.forEach(function (g) {
+      var rows = [], gEdits = 0;
+      g.fields.forEach(function (f) {
+        var over = currentContent[f.key];
+        var isEdited = typeof over === 'string' && over.trim() && over.trim() !== String(f.base).trim();
+        var live = isEdited ? over : f.base;
+        if (isEdited) gEdits++;
+        if (onlyChanged && !isEdited) return;
+        if (q && (String(live) + ' ' + f.label + ' ' + f.key).toLowerCase().indexOf(q) < 0) return;
+        shown++;
+        rows.push(
+          '<div class="wd-field' + (isEdited ? ' edited' : '') + '" data-key="' + esc(f.key) + '">' +
+            '<div class="wd-label"><span>' + esc(f.label) + '</span>' +
+              '<span class="wd-key">' + esc(f.key) + '</span>' +
+              '<button class="wd-revert" data-revert="' + esc(f.key) + '">Revert to default</button>' +
+            '</div>' +
+            '<div class="wd-shown">' + wdShow(live) + '</div>' +
+            '<div class="wd-edit">' +
+              '<textarea rows="' + (f.kind === 'prose' ? 4 : 2) + '" data-edit="' + esc(f.key) + '" ' +
+                'maxlength="' + Content.MAX_LEN + '" ' +
+                'placeholder="Leave blank to use the default wording">' + esc(isEdited ? over : '') + '</textarea>' +
+            '</div>' +
+          '</div>');
+      });
+      if (!rows.length) return;
+      html.push(
+        '<details class="wd-group"' + (q || onlyChanged ? ' open' : (g.id === 'consent' ? ' open' : '')) + '>' +
+          '<summary>' + esc(g.title) +
+            (gEdits ? '<span class="wd-badge">' + gEdits + ' changed</span>' : '') +
+            '<span class="wd-when">' + esc(g.when) + '</span>' +
+          '</summary>' + rows.join('') +
+        '</details>');
+    });
+
+    host.innerHTML = html.length ? html.join('')
+      : '<div class="wd-empty">Nothing matches that.</div>';
+
+    var total = groups.reduce(function (n, g) { return n + g.fields.length; }, 0);
+    var edits = wdEdited();
+    $('wd-count').innerHTML = shown + ' of ' + total + ' shown · <b>' + edits + '</b> changed for this session';
+
+    host.querySelectorAll('textarea[data-edit]').forEach(function (t) {
+      t.addEventListener('input', function () {
+        var k = t.dataset.edit, v = t.value;
+        if (!v.trim()) delete currentContent[k]; else currentContent[k] = v;
+        // Repaint only this row's rendered text, so the caret is never lost
+        // mid-sentence by a re-render of the whole screen.
+        var field = t.closest('.wd-field');
+        var base = wdBaseOf(k);
+        var isEdited = !!v.trim() && v.trim() !== String(base).trim();
+        field.querySelector('.wd-shown').innerHTML = wdShow(isEdited ? v : base);
+        field.classList.toggle('edited', isEdited);
+        $('wd-count').innerHTML = $('wd-count').innerHTML.replace(/<b>\d+<\/b>/, '<b>' + wdEdited() + '</b>');
+      });
+    });
+    host.querySelectorAll('button[data-revert]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        delete currentContent[b.dataset.revert];
+        renderWording();
+        note('wd-note', 'Reverted to the default wording. Press <b>Save session</b> on the Parameters screen to keep it.');
+      });
+    });
+  }
+
+  var _wdBase = null;
+  function wdBaseOf(key) {
+    if (!_wdBase) {
+      _wdBase = {};
+      Content.outline().forEach(function (g) {
+        g.fields.forEach(function (f) { _wdBase[f.key] = f.base; });
+      });
+    }
+    return _wdBase[key];
+  }
+
+  function wireWording() {
+    if ($('wd-search')) $('wd-search').addEventListener('input', renderWording);
+    if ($('wd-changed')) $('wd-changed').addEventListener('change', renderWording);
+    if ($('btn-wd-revert')) $('btn-wd-revert').onclick = function () {
+      if (!wdEdited()) { note('wd-note', 'This session already uses the default wording everywhere.'); return; }
+      if (!window.confirm('Put every word back to the study default for this session?')) return;
+      currentContent = {};
+      renderWording();
+      note('wd-note', 'Every word is back to the study default. Press <b>Save session</b> on the Parameters screen to keep it.');
+    };
+  }
+
   var notesFor = null;
   function renderNotes(force) {
     var host = $('notes-body');
@@ -1261,6 +1618,30 @@
       'and returned after a latency identical to a reveal&rsquo;s, so neither the number&rsquo;s shape nor its timing ' +
       'says whether the position was one it knew. That is what makes trust fallible rather than merely noisy: the ' +
       'AI&rsquo;s number is never a prize, and it is confidently wrong in exactly the places it has no data.</p></div>' +
+
+      '<div class="card"><h3 style="margin-top:0;">Why the two paid buttons look identical, and swap</h3>' +
+      '<p>Which of <b>Ask the AI</b> and <b>Reveal</b> a participant presses IS the outcome this study measures, so ' +
+      'the interface must not make either one easier to press. They are one button style at strict parity &mdash; ' +
+      'same size, padding, radius, weight, border, shadow, and two hues matched on saturation and lightness &mdash; ' +
+      'placed <b>side by side</b>, because vertical primacy is the strongest position bias and horizontal is weaker. ' +
+      'Neither is styled as the primary action. <b>Stop and nominate</b> is a different class of action: it sits ' +
+      'below a divider, never moves, and names the selected position so nomination cannot be accidental.</p>' +
+      '<p>Order is assigned <b>once per participant</b> (' +
+      (p.ui.buttonOrder === 'participant' ? 'randomised in this session' : '<b>fixed in this session</b>') +
+      ') and block-randomised jointly with the crossover sequence, so all four cells of sequence &times; order fill ' +
+      'evenly. It is <b>not</b> redrawn per round or per decision: a participant takes roughly 300 actions, and ' +
+      'moving the buttons under them buys mis-clicks &mdash; a mis-click here spends the higher cost and destroys ' +
+      'the ground truth at that position &mdash; and inflates decision latency with re-reading, when latency is ' +
+      'itself one of the measures. The assignment is stamped on the participant and on every row they produce ' +
+      '(<span class="mono">button_order</span>), so it enters the model as a covariate and the size of any position ' +
+      'effect is reported rather than assumed away.</p>' +
+      '<p>The cost numeral inside each button is red &mdash; and nothing else on the screen is &mdash; so red means ' +
+      '&ldquo;this is what an action costs&rdquo;. The cheaper action takes a lighter tint of the <b>same hue</b> ' +
+      '(' + esc(p.ui.costColorReveal) + ' and ' + esc(p.ui.costColorQuery) + ', both above 4.5:1 on their white ' +
+      'chip). Those two values are run parameters, locked with the task: styling that touches a primary outcome is a ' +
+      'treatment, not a theme. The Reveal cost is rendered identically in AI-off rounds, where it stands alone &mdash; ' +
+      'styling the same action differently across the two conditions would confound the reveal-rate comparison with ' +
+      'chrome. In an AI-off round the Ask button is <b>absent from the DOM</b>, not hidden.</p></div>' +
 
       '<div class="card"><h3 style="margin-top:0;">What is a &ldquo;seeded&rdquo; round, and what is the seed?</h3>' +
       '<p>A <b>pre-opened round</b> (the code calls it <span class="mono">seeded</span>) does not start blank: ' +
@@ -1535,7 +1916,11 @@
     ];
 
     var runRows = [['group', 'parameter', 'value']];
-    ['env', 'costs', 'ai', 'rounds', 'assign', 'filter', 'ops'].forEach(function (g) {
+    // `ui` is in the list because it is a TREATMENT group, not a theme: the
+    // button order and the two cost colours are properties of the interface a
+    // primary outcome was measured through, so they have to travel with the
+    // data like every other parameter.
+    ['env', 'costs', 'ai', 'ui', 'rounds', 'assign', 'filter', 'ops'].forEach(function (g) {
       Object.keys(a.params[g] || {}).forEach(function (k) {
         var v = a.params[g][k];
         runRows.push([g, k, (typeof v === 'object') ? JSON.stringify(v) : v]);

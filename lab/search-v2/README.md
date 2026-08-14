@@ -53,6 +53,54 @@ Then the twenty-item exit survey, a debrief that redraws one of the
 participant's own rounds with the true prizes beside what the AI told them, and
 the done screen.
 
+**Registration comes first, and the exit survey no longer asks background.** The
+four background items (field of study, year or level, age band, gender) are a
+**registration phase** between consent and the instructions — asked once, before
+the task, all optional. On a Simulation Platform launch each item the platform's
+own registration already answered is **not asked again**: it travels with the
+row as `platform_<field>`, and when the platform covers everything the phase
+passes through without a screen. `tools/platform-guard.mjs` pins both halves.
+
+**The two paid buttons are the outcome, so the interface may not tilt them.**
+"Ask the AI" and "Reveal" are one button style at strict visual parity — same
+size, padding, radius, weight, border, shadow and states, two hues matched on
+saturation and lightness — placed **side by side** (vertical primacy is the
+strongest position bias) with "Stop and nominate" apart below a divider, never
+in the swap. Which is on the **left** is assigned once per participant and fixed
+for the session, block-randomised **jointly with the sequence** so all four
+cells of sequence × order fill evenly, and stamped on every row as
+`button_order` for the model to control with. It is deliberately never redrawn
+per round or per decision: ~300 actions with the buttons moving buys mis-clicks
+(one spends the higher cost and destroys the ground truth at that position) and
+inflates decision latency, which is itself a measure. The cost numeral inside
+each button is red — and nothing else on screen is — with the cheaper action in
+a lighter tint of the same hue; both colours are locked run parameters
+(`ui.costColorReveal` / `ui.costColorQuery`), because styling that touches a
+primary outcome is a treatment, not a theme. The Reveal cost renders identically
+in AI-off rounds, where the Ask button is absent from the DOM rather than
+hidden. `tools/smoke.mjs` measures the parity from computed styles.
+
+**Nobody mid-session loses data.** The registration phase is entered from the
+consent button, so a participant who had already consented under the previous
+build would be asked by neither it nor the deleted Part F. Two catch-ups, in
+`app.js`: resumed *before* the task they are routed into the phase; resumed
+*inside* the rounds the items come back at the end of the exit survey, where
+they used to be, logged as `registration` rows so they still land in the same
+`reg_*` column. `tools/migration-guard.mjs` pins both.
+
+**Engagement, within the same rule.** Forty minutes of a repeated task loses
+people, and a bored participant produces fast empty rounds that look like
+decisions. So: a progress bar and "round n of 12 in this half" under the round
+title; a milestone pop-up at the halfway point, with three rounds left, and on
+the last round; one in-round encouragement tip; a friendly line between rounds;
+and a **focus prompt** when a scored round is about to be closed after
+`ui.rushMinActions` actions or fewer — always dismissible in one click, because
+a prompt that could not be dismissed would coerce the choice being measured.
+Every message is motivational and never informational: none names a position,
+none reacts to how the participant is scoring, none differs between the two
+arms, and each is logged as a `nudge`. The copy lives in `content.js`
+(`ENCOURAGE`) and the whole feature is one locked parameter, `ui.encouragement`.
+
 ---
 
 ## File structure
@@ -65,7 +113,9 @@ lab/search-v2/
   pool.js             the mapping generator + acceptance filter (§8, §9)
   specs.js            round specs, per-participant order, validation gate (§10, §11)
   ai.js               the AI's answer, and every derived measure of §16.8
-  content.js          instructions, both comprehension gates, the 20 survey items
+  content.js          instructions, both comprehension gates, the 20 survey items,
+                      the registration block, every encouragement message, and
+                      the per-session wording overrides that may replace them
   chart.js            the inline-SVG centre panel (§14)
   logger.js           append-only event log: records + batched telemetry (§16, §17.2)
   app.js              the state machine: screens, rounds, resume
@@ -89,6 +139,7 @@ lab/search-v2/
   tools/selftest.js            Node acceptance tests
   tools/smoke.mjs              a whole session in a browser
   tools/admin-smoke.mjs        the admin panel in a browser
+  tools/wording-guard.mjs      a session's own words reach its participants
   tools/platform-guard.mjs     the Simulation Platform contract, both directions
   tools/layout-guard.mjs       reachability at five window sizes
   tools/preview-guard.mjs      the admin test round writes nothing
@@ -121,11 +172,12 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 211 checks, no browser
-node lab/search-v2/tools/smoke.mjs           # 169 checks, a whole session
-node lab/search-v2/tools/admin-smoke.mjs     # 119 checks, the admin panel
-node lab/search-v2/tools/platform-guard.mjs  #  26 checks, the platform contract
-node lab/search-v2/tools/layout-guard.mjs    #  89 checks, five window sizes
+node lab/search-v2/tools/selftest.js         # 299 checks, no browser
+node lab/search-v2/tools/smoke.mjs           # 201 checks, a whole session
+node lab/search-v2/tools/admin-smoke.mjs     # 161 checks, the admin panel
+node lab/search-v2/tools/wording-guard.mjs   #  17 checks, a session's own words
+node lab/search-v2/tools/platform-guard.mjs  #  28 checks, the platform contract
+node lab/search-v2/tools/layout-guard.mjs    # 104 checks, five window sizes
 node lab/search-v2/tools/preview-guard.mjs   #  the sandbox writes nothing
 node lab/search-v2/tools/emulator-test.mjs   #  37 checks against the REAL Functions
                                              #  and Rules (needs Java + firebase-tools;
@@ -291,7 +343,7 @@ as a download on the done screen.
 
 ## The admin panel (§17b)
 
-`/lab/search-v2/admin/`, five tabs covering the brief's six screens.
+`/lab/search-v2/admin/`, seven tabs covering the brief's six screens.
 
 **The panel calls the unit a SESSION**, played as **28 rounds** (4 warm-up and 24
 scored, in two blocks). The brief calls the same object a *run*, and the data
@@ -312,19 +364,72 @@ whole configuration in front of you first — rounds, task, costs and caps, the 
 AI densities and whether they still bracket `s*`, assignment, what happens after
 the task, and the participant link — with **Cancel** as a real cancel.
 
+**A session is named before it exists.** The Sessions screen opens on a **Create a
+session** card — session name, an optional Session ID, one green button — the same
+shape the ideasearchlab and Answer Arena admins use. It builds the session from the
+saved default parameters, shows the summary above, and then **selects it**, so
+creating a session is also opening it: every other screen is already on it, and the
+card reports the code, the participant link, and the three things there are to do
+next (copy the link, check its parameters, open entry). Naming is the one thing
+every session needs, so it is asked first; the parameter form stays one click away
+(**Set the parameters first…**, which carries whatever was typed with it) for a
+session whose task differs from the defaults.
+
 | Screen | What it does |
 |---|---|
-| **Sessions** | grouped **Active** and **Completed**, one card each in the shape of the other class admin panels: code, status, name, created date, participant count, sequence balance and where the score is computed; **Open · Copy link · ⬇ Export data · 🧪 Test round · Clone · Open entry / Close session · Delete**. Export data does the whole job in one press — read the log, build the workbook, save it. Delete removes the session **and its event log**, so export first |
+| **Sessions** | a **Create a session** card first — name, optional Session ID, Create session — then grouped **Active** and **Completed**, one card each in the shape of the other class admin panels: code, status, name, created date, participant count, sequence balance and where the score is computed; **Open · Copy link · ⬇ Export data · 🧪 Test round · Clone · Open entry / Close session · Delete**. Export data does the whole job in one press — read the log, build the workbook, save it. Delete removes the session **and its event log**, so export first |
 | **Parameters** | six collapsible groups — Environment, Costs and limits, AI, Round structure, Assignment, Acceptance filter — plus an always-editable Operations group. Two red-confirmed switches ("draw the full curve", "mark the AI's known positions") stay visible but must never be turned on |
 | **Consequences** | recomputed live beside the form: σ, `s*`, `g*`, the two gap-midpoint SDs, the benchmark frontier share per seed shape, session length, and **two badges** — green when sparse sits above `s*` and dense below it, red when the design has become a gradient rather than a sign change |
 | **Roster** | generate anonymous codes with an exact 50/50 block-randomised split; next-entrant override, which demands a reason and logs it into the export |
 | **Live monitor** | counters from a Firestore listener plus the health strip: median active time, median round time, comprehension failures, cap hits, immediate-stop rate, narrow viewports, long blurs, sub-500 ms deciders |
 | **Data & preview** | the validation gate, a spec preview that writes nothing, a scripted dry run, the export, a danger zone, and the round gallery below |
 | **Design notes** | the questions this design attracts, answered against the code — does the AI hold private data, what a pre-opened round is, gaps versus tails and `g = 4t`, why all three layouts are needed, whether the landscape changes each round — with **every number measured from the open session's own frozen pool**, never copied from the design document |
+| **Wording** | **everything the study says to a participant, in the order they meet it** — consent, both sets of instructions, both quick checks with their answer options, all twenty-four survey items, the part headings, debrief and thanks — each shown with this session's own numbers already substituted, and editable **for this session only** |
 
 The four buttons under the parameter form are unchanged in number and colour from
 the previous panel: **Save session** (green), then **Cancel edit**, **Make this
 the default** and **Restore built-in default** (ghost).
+
+### Wording
+
+The words are in `content.js`, which is the study's default for every session.
+The **Wording** screen shows them all — with `{revealCost}` and the rest already
+resolved to this session's own numbers, because a screen that displayed the token
+would not answer the question it exists to answer — and lets you change any of
+them **for one session**. `content.js` itself is never touched, so every other
+session keeps the defaults.
+
+The screen covers the study text, which is what `content.js` holds. It does not
+cover the game screen's own buttons and labels, or the reminder box above each
+quick check — app.js builds those from the numbers, so they follow the parameters
+on their own. The screen says so, rather than implying it covers them.
+
+An edit is stored as a per-session override: a flat `key → string` map, held on
+the run document as a JSON string (`run.contentJson`, beside `specsJson`). The
+string matters. Both writers use `setDoc(merge:true)`, which deep-merges a map —
+so stored as a map, a reverted key would be merged straight back, and **revert
+would look right in the panel and change nothing for the participant**. A string
+field is replaced whole, so removing a key removes it.
+
+It travels with the redacted public copy as well, or a participant in server
+mode — who cannot read the run document at all — would never see it. Leaving a
+box blank, or pressing **Revert to default**, removes the override rather than
+freezing today's default into the session. A **clone** carries the wording of the
+session it was cloned from, which is what makes clone-do-not-edit workable for a
+session whose words were tuned.
+
+**Wording is editable; structure is not.** How many answers a question has, which
+one is correct, the question types, the order, and the numeracy answers always
+come from `content.js`, whatever a session says. This is not a UI simplification:
+`admin/dictionary.js` describes one entry per exported column and the column set
+is derived from these ids, so a session that could add a question or move an
+answer key would invalidate its own workbook. Rewording cannot — which is also
+why wording stays editable after a session locks, unlike the task parameters.
+
+`node tools/wording-guard.mjs` proves the round trip: a session carrying
+overrides is played in a browser and its own words appear on the consent screen,
+the instructions and the quick check, while the reworded question still grades on
+the answer key it always had.
 
 ### Every round, drawn
 

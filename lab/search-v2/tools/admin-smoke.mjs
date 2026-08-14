@@ -84,18 +84,18 @@ await pg.waitForSelector('#a-dash.active', { timeout: 20000 });
 ok(true, 'with no Firebase config the panel opens straight into local preview');
 ok(/Local preview/.test(await pg.locator('#scope-note').innerText()), 'and says so, rather than pretending it is live');
 
-// ── the six screens ────────────────────────────────────────────────────────
+// ── the seven screens ──────────────────────────────────────────────────────
 const tabs = await pg.$$eval('.tab', els => els.map(e => e.dataset.tab));
-ok(JSON.stringify(tabs) === JSON.stringify(['runs', 'params', 'roster', 'monitor', 'data', 'notes']),
-  'the panel is Sessions · Parameters · Roster · Live monitor · Data & preview · Design notes', tabs.join(','));
+ok(JSON.stringify(tabs) === JSON.stringify(['runs', 'params', 'roster', 'monitor', 'data', 'notes', 'wording']),
+  'the panel is Sessions · Parameters · Roster · Live monitor · Data & preview · Design notes · Wording', tabs.join(','));
 ok(await shown('tab-runs'), 'it opens on the Runs screen');
 
 // ── Screen 2 + 3 · parameters beside consequences ─────────────────────────
 await tab('params');
 ok(await shown('tab-params'), 'the Parameters screen opens');
 const groups = await pg.$$eval('.pgroup > summary', els => els.map(e => e.textContent.replace(/locked.*|editable.*/i, '').trim()));
-ok(groups.length === 7,
-  'seven collapsible groups: the six parameter groups of §17b plus Operations', groups.join(' | '));
+ok(groups.length === 8,
+  'eight collapsible groups: the six of §17b, Operations, and Interface and engagement', groups.join(' | '));
 ok(groups[0] === 'Environment' && groups[groups.length - 1] === 'Operations',
   'Environment leads and Operations (the always-editable group) closes the form', groups.join(' | '));
 const collapsed = await pg.$$eval('.pgroup', els => els.filter(e => !e.open).length);
@@ -204,8 +204,9 @@ ok((await pg.locator('.run-card').count()) === 1, 'confirming the summary create
 
 // ── the two session sections, in the shape of the ideasearchlab admin ─────
 const secs = await pg.$$eval('.sess-sec .sess-head h3', els => els.map(e => e.textContent.trim()));
-ok(JSON.stringify(secs) === JSON.stringify(['Active sessions', 'Completed sessions']),
-  'sessions are grouped into Active and Completed, like the other class admin panels', secs.join(' | '));
+ok(JSON.stringify(secs) === JSON.stringify(['Create a session', 'Active sessions', 'Completed sessions']),
+  'the screen reads Create · Active · Completed — creating first, then the two groups the other class ' +
+  'admin panels use', secs.join(' | '));
 ok((await pg.locator('#runs-active .run-card').count()) === 1, 'a draft session is ACTIVE, not completed');
 ok(/1 active/.test(await pg.locator('#runs-active-n').innerText()), 'the active section carries its count');
 ok(/No completed/.test(await pg.locator('#runs-done').innerText()), 'and the empty completed section says so');
@@ -257,13 +258,24 @@ await pg.locator('#btn-ros-gen').click();
 await pg.waitForTimeout(600);
 const stats = await pg.locator('#roster-stats').innerText();
 ok(/90/.test(stats), '90 codes generated');
-const seqCounts = await pg.$$eval('#roster-table tbody tr td:nth-child(2)', els => {
-  const c = { A: 0, B: 0 };
-  els.forEach(e => { const v = e.textContent.trim(); if (c[v] != null) c[v]++; });
-  return c;
-});
+const cells = await pg.$$eval('#roster-table tbody tr', els => els.map(tr => ({
+  seq: tr.children[1].textContent.trim(), btn: tr.children[2].textContent.trim()
+})));
+const seqCounts = { A: 0, B: 0 };
+cells.forEach(c => { if (seqCounts[c.seq] != null) seqCounts[c.seq]++; });
 ok(seqCounts.A === 45 && seqCounts.B === 45,
   'block randomisation splits the roster exactly 45 / 45, not by coin flips', JSON.stringify(seqCounts));
+// Button order is a covariate, so it is block-randomised JOINTLY: all four
+// cells of sequence × order fill evenly, which two independent draws would not
+// guarantee.
+const joint = {};
+cells.forEach(c => { const k = c.seq + '/' + c.btn; joint[k] = (joint[k] || 0) + 1; });
+const jointVals = Object.values(joint);
+ok(Object.keys(joint).length === 4 && Math.max(...jointVals) - Math.min(...jointVals) <= 1,
+  'and the four cells of sequence × button order come out balanced', JSON.stringify(joint));
+const rosterStats = await pg.locator('#roster-stats').innerText();
+ok(/Ask on the left/.test(rosterStats) && /Reveal on the left/.test(rosterStats),
+  'the roster reports that balance, so it can be confirmed before the first session opens');
 const rosterText = await pg.locator('#tab-roster').innerText();
 ok(/no names, no e-mail addresses/i.test(rosterText), 'the roster screen states that it holds no identifying information');
 
@@ -405,6 +417,207 @@ ok(/nearest<\/b> maximising position|nearest maximising position/.test(nt),
   'and the tie rule the export uses is stated');
 const notesErr = await pg.locator('#notes-body .admin-note.bad').count();
 ok(notesErr === 0, 'the notes build without error against a real session');
+
+// ── Wording: the words a participant reads, as they will read them ─────────
+// The point of the screen is that what it shows IS what is shown, so the checks
+// are about substitution and about structure staying put — not about layout.
+await tab('wording');
+ok(await shown('tab-wording'), 'the Wording screen opens');
+
+// Open every group, so the assertions below see all of the words and not only
+// the one group that starts expanded.
+await pg.$$eval('#wording-body details', els => els.forEach(e => { e.open = true; }));
+const wt = await pg.locator('#wording-body').innerText();
+ok(/consent/i.test(await pg.locator('#tab-wording').innerText()), 'it names the consent screen');
+ok(/Each reveal costs 4 points|reveal costs 4/.test(wt),
+  'the costs are substituted, so the words read as the participant will read them', wt.slice(0, 160));
+ok(!/\{revealCost\}|\{J\}|\{stepBound\}|\{K\}/.test(wt),
+  'no token is left showing anywhere on the screen');
+
+// Every question the owner could not find before must be findable here.
+const findable = async (q) => {
+  await pg.fill('#wd-search', q);
+  await pg.waitForTimeout(150);
+  return (await pg.locator('#wording-body').innerText()).toLowerCase().includes(q.toLowerCase());
+};
+ok(await findable('HIGHEST the prize at position 41'), 'a quick-check question is on the screen');
+ok(await findable('how did you decide when to stop'), 'a survey question is on the screen');
+ok(await findable('Out of every 10 questions'), 'a slider item is on the screen');
+ok(await findable('how many times would it come up even'), 'a numeracy item is on the screen');
+await pg.fill('#wd-search', '');
+await pg.waitForTimeout(150);
+
+// Editing one field changes that field's rendered text and nothing else.
+await pg.fill('#wd-search', 'Consent text');
+await pg.waitForTimeout(150);
+const box = pg.locator('#wording-body textarea[data-edit="consent"]');
+await box.fill('We are going to play a game. It takes about 40 minutes.');
+await pg.waitForTimeout(150);
+ok(/We are going to play a game/.test(await pg.locator('#wording-body .wd-shown').first().innerText()),
+  'typing a new wording repaints what the participant will see');
+ok(await pg.locator('#wording-body .wd-field.edited').count() >= 1, 'the changed field is marked as changed');
+ok(/<b>1<\/b> changed/.test(await pg.locator('#wd-count').innerHTML()), 'the counter reports one change');
+
+// Reverting is one click and puts the default back.
+await pg.locator('#wording-body button[data-revert="consent"]').click();
+await pg.waitForTimeout(150);
+ok(/decision-making study/.test(await pg.locator('#wording-body .wd-shown').first().innerText()),
+  'reverting restores the study default');
+ok(/<b>0<\/b> changed/.test(await pg.locator('#wd-count').innerHTML()), 'and the counter drops back to none');
+await pg.fill('#wd-search', '');
+await pg.waitForTimeout(150);
+
+// A saved override must SURVIVE a reload and reach the participant's copy.
+await pg.fill('#wd-search', 'Consent text');
+await pg.waitForTimeout(150);
+await pg.locator('#wording-body textarea[data-edit="consent"]').fill('Reworded for this session only.');
+await pg.waitForTimeout(120);
+await tab('params');
+await pg.locator('#btn-save').click();
+await pg.waitForTimeout(300);
+if (await pg.locator('#sum-ok').count()) { await pg.locator('#sum-ok').click(); await pg.waitForTimeout(400); }
+const stored = await pg.evaluate(() => {
+  const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
+  return runs.map(r => {
+    try { return JSON.parse(r.contentJson || '{}').consent || null; } catch { return null; }
+  });
+});
+ok(stored.some(c => c === 'Reworded for this session only.'),
+  'Save session persists the wording with the session — a LOCKED one included, since ' +
+  'wording is not part of the design', JSON.stringify(stored));
+
+// And the participant's own copy must carry it, or an override would be
+// invisible in server mode, where the run document is admin-only.
+const pub = await pg.evaluate(() => {
+  const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
+  const r = runs.find(x => (x.contentJson || '').includes('consent'));
+  return r ? typeof r.contentJson : null;
+});
+ok(pub === 'string',
+  'and it is stored as a STRING, so a later revert can actually remove a key — ' +
+  'a map would be deep-merged by setDoc(merge:true) and never lose one', String(pub));
+
+// A CLONE carries the wording of the session it was cloned FROM. newRunDoc used
+// to read the panel's in-form wording, so cloning session B while session A was
+// open gave the clone A's words on B's parameters.
+await tab('runs');
+const beforeClone = await pg.locator('.run-card').count();
+pg.once('dialog', d => d.accept('Cloned by the smoke test'));
+await pg.locator('.run-card [data-act="clone"]').first().click();
+await pg.waitForTimeout(600);
+const cloned = await pg.evaluate(() => {
+  const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
+  const c = runs.find(r => r.clonedFrom);
+  if (!c) return { found: false };
+  let consent = null;
+  try { consent = JSON.parse(c.contentJson || '{}').consent || null; } catch {}
+  return { found: true, consent };
+});
+ok(cloned.found, 'cloning a session from its card creates the clone');
+ok(cloned.consent === 'Reworded for this session only.',
+  'and the clone carries the wording of the session it was cloned FROM', String(cloned.consent));
+
+// ── creating a session from the Sessions screen ───────────────────────────
+// Naming is the one thing every session needs, so it is asked FIRST, on the
+// screen the panel opens on — not at the bottom of the seventh parameter group.
+await tab('runs');
+ok(await pg.locator('#create-sec').isVisible(), 'the Sessions screen carries a "Create a session" card');
+ok(await pg.locator('#nr-name').isVisible() && await pg.locator('#nr-code').isVisible(),
+  'with the session NAME and its optional Session ID asked before anything is created');
+ok((await pg.getAttribute('#nr-name', 'placeholder')) === 'e.g. Spring MBA 2026',
+  'the name field is the one the other class admins show');
+ok(/capital letters and digits/.test(await pg.locator('#create-sec .hint').innerText()),
+  'and the ID field states the rule it enforces');
+ok((await pg.locator('#tab-runs #btn-new-run').count()) === 1,
+  'the parameter-form path is still one click away, from the card itself');
+
+// What the admin types is live-normalised to a code that is typeable back.
+await pg.fill('#nr-name', 'Spring MBA 2026');
+await pg.fill('#nr-code', 'spring mba-2026');
+ok((await pg.inputValue('#nr-code')) === 'SPRINGMBA2026',
+  'the Session ID normalises to one word of capitals and digits as it is typed',
+  await pg.inputValue('#nr-code'));
+
+// Taking the advanced path must not cost the admin what they already typed.
+await pg.locator('#tab-runs #btn-new-run').click();
+await pg.waitForTimeout(200);
+ok((await pg.inputValue('#p-ops-runName')) === 'Spring MBA 2026' &&
+   (await pg.inputValue('#p-ops-code')) === 'SPRINGMBA2026',
+  '"Set the parameters first…" carries the typed name and code into the form');
+
+await tab('runs');
+const cardsBefore = await pg.locator('.run-card').count();
+
+// A too-short custom ID is refused before any summary is raised.
+await pg.fill('#nr-code', 'AB');
+await pg.locator('#btn-create-run').click();
+await pg.waitForTimeout(300);
+ok(!(await pg.locator('#sess-summary').count()) && /3–40 characters/.test(await pg.locator('#nr-note').innerText()),
+  'a Session ID shorter than three characters is refused, and nothing is created');
+
+// So is one that is already taken — a repeat would re-point the code at the
+// newer session and send the older one's participants into it.
+await pg.fill('#nr-code', code);
+await pg.locator('#btn-create-run').click();
+await pg.waitForTimeout(400);
+ok(!(await pg.locator('#sess-summary').count()) && /already taken/.test(await pg.locator('#nr-note').innerText()),
+  'and so is a Session ID another session already uses');
+ok((await pg.locator('.run-card').count()) === cardsBefore, 'neither refusal creates a session');
+
+// The real thing: name, code, the same summary gate, one press.
+await pg.fill('#nr-code', 'SPRINGMBA2026');
+await pg.locator('#btn-create-run').click();
+await pg.waitForTimeout(400);
+ok(await pg.locator('#sess-summary').isVisible(),
+  'creating from the card still summarises the session FIRST — the pool and the 28 specs freeze here too');
+const sumC = await pg.locator('#sess-summary').innerText();
+ok(/Spring MBA 2026/.test(sumC) && /SPRINGMBA2026/.test(sumC), 'the summary names the session and its code');
+ok(/Entry: closed/.test(sumC), 'and states that it is created closed, exactly as the lead text promises');
+await pg.locator('#sum-ok').click();
+await pg.waitForTimeout(700);
+
+ok((await pg.locator('.run-card').count()) === cardsBefore + 1, 'confirming creates the session');
+const newCard = await pg.locator('#runs-active .run-card', { hasText: 'SPRINGMBA2026' }).innerText();
+ok(/Spring MBA 2026/.test(newCard) && /draft/.test(newCard),
+  'it lands in Active sessions under its name, as a draft', newCard.split('\n').slice(0, 3).join(' · '));
+
+const created = await pg.locator('#nr-created').innerText();
+ok(/SPRINGMBA2026/.test(created) && /\?code=SPRINGMBA2026/.test(created),
+  'the card reports the code and the participant link', created.split('\n').join(' · '));
+const boxBtns = await pg.$$eval('#nr-created button', els => els.map(e => e.textContent.trim()));
+ok(JSON.stringify(boxBtns) === JSON.stringify(['Copy link', 'Check its parameters', 'Open entry']),
+  'and offers the three things there are to do next', boxBtns.join(' | '));
+ok((await pg.inputValue('#nr-name')) === '' && (await pg.inputValue('#nr-code')) === '',
+  'the form clears, ready for the next session');
+
+// "Create, then open it" was the complaint: the new session is already the
+// selected one, so every other screen is on it without a second click.
+await tab('params');
+ok(/Spring MBA 2026/.test(await pg.locator('#params-title').innerText()) &&
+   /SPRINGMBA2026/.test(await pg.locator('#params-sub').innerText()),
+  'creating a session SELECTS it — the Parameters screen is already on it, with nothing to open',
+  await pg.locator('#params-title').innerText());
+
+// A blank ID auto-generates, so a name is genuinely all it takes.
+await tab('runs');
+await pg.fill('#nr-name', 'Autumn cohort');
+await pg.locator('#btn-create-run').click();
+await pg.waitForTimeout(400);
+await pg.locator('#sum-ok').click();
+await pg.waitForTimeout(700);
+ok((await pg.locator('.run-card').count()) === cardsBefore + 2, 'a name alone creates a session');
+const autoGenerated = (await pg.locator('#nr-created .cb-code').innerText()).trim();
+ok(/^[A-Z0-9]{5}$/.test(autoGenerated), 'with an automatic five-character code (' + autoGenerated + ')');
+ok(autoGenerated !== code && autoGenerated !== 'SPRINGMBA2026', 'that is not one already in use');
+
+// A draft must really be closed: app.js treats a session as open when
+// ops.entryOpen is anything but false, so a draft carrying the Operations
+// toggle's "Open" would be enterable before the validation gate ever ran.
+const drafts = await pg.evaluate(() => JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]')
+  .map(r => ({ code: r.code, status: r.status, entryOpen: r.ops && r.ops.entryOpen })));
+ok(drafts.every(r => r.status !== 'draft' || r.entryOpen === false),
+  'every session is created as a real draft — status draft AND entry closed',
+  JSON.stringify(drafts));
 
 ok(errors.length === 0, 'no page errors anywhere in the panel', errors.slice(0, 5).join(' | '));
 

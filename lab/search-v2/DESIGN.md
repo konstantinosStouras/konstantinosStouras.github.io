@@ -16,9 +16,10 @@ reasoning, and it cites the other three rather than repeating them.
 > the platform contract changes, update the matching section here in the same
 > change — the same keep-in-sync discipline the repository applies to
 > `fun/index.html` cards and `/lit`'s About page. Every number in this document
-> was recomputed from `config.js` on **2026-08-14** (app version `v3.0.0`); the
-> section *Verifying the numbers in this document* at the end says how to redo
-> that in one command.
+> was recomputed from `config.js` on **2026-08-14** (app version `v3.0.0`,
+> covering the registration phase, the `ui` treatment group and the admin's
+> Wording tab); the section *Verifying the numbers in this document* at the end
+> says how to redo that in one command.
 
 ---
 
@@ -79,9 +80,18 @@ reveals** per round exist only to bound a pathological session — see §7.
 
 **28 rounds**: 4 warm-up + 24 scored, in two blocks of 12 scored. Every
 participant plays **one block with the AI and one without**, order assigned by a
-counterbalanced crossover (**A** = off then on, **B** = on then off). Then a
-twenty-item exit survey, a debrief that redraws one of the participant's *own*
-rounds with the true prizes beside what the AI told them, and a done screen.
+counterbalanced crossover (**A** = off then on, **B** = on then off). Consent is
+followed by a short **registration phase** (four optional background items, asked
+once, before the task — §10); afterwards come a twenty-item exit survey, a debrief
+that redraws one of the participant's *own* rounds with the true prizes beside
+what the AI told them, and a done screen.
+
+**The two paid buttons are the outcome, so the interface may not tilt them.** Ask
+and Reveal are one button style at strict visual parity, side by side, and which
+one sits on the **left** is assigned once per participant, block-randomised
+*jointly with the sequence*, and stamped on every row as `button_order`. That
+whole group of interface properties is a **treatment parameter set**, not a theme
+— §7.4.
 
 The environment is adapted from Malladi, Martínez-Marquina & Morozov, *"Space
 Exploration"* (EC 2026), High Variability condition. The implementation follows
@@ -132,9 +142,12 @@ lab/search-v2/
   styles.css
   config.js           ONE place for every parameter (browser + Node)
   pool.js             the mapping generator + acceptance filter (§8, §9)
-  specs.js            round specs, per-participant order, validation gate (§10, §11)
+  specs.js            round specs, per-participant order, the four assignment
+                      cells, validation gate (§10, §11)
   ai.js               the AI's answer, and every derived measure of §16.8
-  content.js          instructions, both comprehension gates, the 20 survey items
+  content.js          instructions, both comprehension gates, the 20 survey items,
+                      the registration block, every encouragement message, AND the
+                      per-session wording-override mechanism that may replace them
   chart.js            the inline-SVG centre panel (§14)
   logger.js           append-only event log: records + batched telemetry
   app.js              the state machine: screens, rounds, resume
@@ -489,7 +502,59 @@ Moving **both** parameters is what flips the sign; **neither alone does**
 They also help each other: sparse K = 3 is what widens the admissible cost window
 to (3.64, 6.65), so c_R = 4 sits comfortably inside it rather than on an edge.
 
-### 7.4 Round structure (`rounds`) — §10
+### 7.4 Interface and engagement (`ui`) — a TREATMENT group, not a theme
+
+**Which of the two paid buttons a participant presses, and how often, is the thing
+being measured.** So the interface must not make either easier to press than the
+other, and every property that could tilt it is a **locked run parameter that
+travels with the exported data** — the same status as the reveal cost, for the
+same reason.
+
+| Parameter | Default | Why |
+|---|---|---|
+| `buttonOrder` | `'participant'` | Which paid action sits on the **left**. Assigned **once per participant**, fixed for the session, block-randomised **jointly with the sequence**, and stamped on every row as `button_order` so a position effect can be **reported rather than assumed away**. `'fixed'` (Ask left, always) is what a session stored before this group existed keeps |
+| `costColorReveal` | `hsl(4, 65%, 38%)` | The colour of the cost numeral inside the Reveal button — and nothing else on screen is red |
+| `costColorQuery` | `hsl(4, 65%, 50%)` | The same hue and saturation, one lightness step lighter for the cheaper action, so the price difference is legible at a glance |
+| `encouragement` | **true** | The whole engagement layer: progress line, milestones, between-round line, in-round tip and the focus prompt (§10) |
+| `rushMinActions` | **2** | A scored round about to be closed after **this many actions or fewer** raises the dismissible focus prompt — once per half |
+
+**Why the order is per participant and never per round.** A participant takes
+roughly **300 actions**. Moving the buttons under them forces a re-read at every
+one, which buys mis-clicks — and a mis-click here is not peripheral noise, it
+**spends the higher cost and destroys the ground truth at that position** — and it
+inflates decision latency with re-reading rather than deliberation, when latency
+is itself one of the measures. Per-participant assignment gets the same
+identification with none of that cost.
+
+**Why the layout is side by side, with Stop apart.** Vertical primacy is the
+strongest position bias, so the two *paid* actions never sit above one another;
+"Stop and nominate" is below a divider and never enters the swap. Tab order
+follows visual order because the **DOM order is** the visual order — no CSS
+`order`, which would leave the keyboard out of step with the eye. In an AI-off
+round the Ask panel is **removed from the DOM**, not hidden: a hidden node is
+still in the accessibility tree, still tabbable in some engines, and still
+findable in the inspector.
+
+**Why the lightness step runs the "wrong" way.** The suggested pair was
+`hsl(4,65%,42%)` / `hsl(4,65%,62%)`. These numerals sit on a **white chip** (a red
+meeting 4.5:1 against a saturated button fill is not achievable), and against
+white a *lighter* red loses contrast — so the step runs 38% / 50%, both above
+4.5:1 on white. **The reveal colour is identical in AI-off rounds**, where it
+stands alone: styling the same action differently across the two conditions would
+confound the reveal-rate comparison with chrome.
+
+**Why the engagement layer is a parameter at all.** Forty minutes of a repeated
+task loses people, and a bored participant does not stop producing data — they
+produce **fast, empty rounds that look like decisions**. Every message therefore
+obeys one rule: *say nothing that changes what the best move is.* None names a
+position, none hints where the prizes are, none reacts to how the participant is
+scoring, none differs between the two arms, each is shown at a fixed point of the
+plan, each is dismissible in one click (a prompt that could not be dismissed would
+coerce the choice being measured), and **each is logged as a `nudge`** so any
+effect can be looked for rather than assumed. The copy lives in `content.js`
+(`ENCOURAGE`); the switch is one locked parameter.
+
+### 7.5 Round structure (`rounds`) — §10
 
 | Parameter | Default | Why |
 |---|---|---|
@@ -503,15 +568,15 @@ to (3.64, 6.65), so c_R = 4 sits comfortably inside it rather than on an edge.
 | `seedJitter` | **±2** | Small on purpose: **the geometry is the treatment**, so it must not be blurred. Enough to stop three identical layouts recurring verbatim, not enough to move a shape across the `g = 4t` line |
 | `shuffleWithinBlock` | **true** | Order effects are randomised per participant; the realised order is logged (`shuffle_seed`, `round_order`) so it is reproducible from the log alone |
 
-### 7.5 Assignment (`assign`) — §11
+### 7.6 Assignment (`assign`) — §11
 
 | Parameter | Default | Why |
 |---|---|---|
-| `sequenceAssignment` | `'block'` | Block randomisation over a shuffled list gives an **exact** 50/50 split, not a series of coin flips |
+| `sequenceAssignment` | `'block'` | Block randomisation over a shuffled list gives an **exact** 50/50 split, not a series of coin flips. It now cycles the **four cells of sequence × button order** (§9) rather than two |
 | `freezeSeeds` / `freezeAnchors` | **true** | Every participant meets the same 28 mappings and the same anchors. Mapping difficulty is then balanced across conditions **by construction**, not by luck |
 | `nextEntrantOverride` | `'auto'` | The **one** control that stays unlocked after launch, for repairing a live imbalance. Forcing it **demands a written reason**, which is logged and travels into the export — forced assignment is no longer pure randomisation and the analysis has to say so |
 
-### 7.6 Acceptance filter (`filter`) — §9
+### 7.7 Acceptance filter (`filter`) — §9
 
 Applied to every (mapping, pre-opened set) pairing of a **seeded** round.
 
@@ -527,7 +592,7 @@ before moving on (`SEED_TRIES`). §9 says to "reject and redraw the pairing", an
 the pairing is (mapping, seed set) — burning a whole mapping per rejected jitter
 would exhaust even a 600-mapping pool at a 2% pass rate.
 
-### 7.7 Operations (`ops`) — editable at any time
+### 7.8 Operations (`ops`) — editable at any time
 
 | Parameter | Default | Why |
 |---|---|---|
@@ -545,7 +610,7 @@ would exhaust even a 600-mapping pool at a 2% pass rate.
 | `compute` | `'client'` | Where score-bearing actions run. **Default off** so a project with no Cloud Functions deployed still works out of the box; **server is the recommendation** once Functions are deployed. It sits in `ops` only so it can be configured before launch — it **locks with the task parameters**, because mixing the two inside one session would put two kinds of row in one dataset |
 | `completionCode` | `''` | Shown on the Done screen; blank means none needed |
 
-### 7.8 Constants outside `DEFAULTS`
+### 7.9 Constants outside `DEFAULTS`
 
 | Constant | Value | Why |
 |---|---|---|
@@ -619,16 +684,28 @@ has to be reported as such.
 reverse. Assignment is decided **once**, persisted immediately, and travels on
 every row — a participant is never re-randomised mid-study.
 
+Since the interface group arrived, the randomisation is over **four cells, not
+two**: sequence × button order. The cycle is deliberately ordered
+
+```
+A · ask_first    B · reveal_first    A · reveal_first    B · ask_first
+```
+
+because **every consecutive pair carries one A and one B, and one ask-first and
+one reveal-first**, so a roster whose size is not a multiple of four still splits
+*both* factors evenly — 90 codes give 45/45 on each factor and 23/22 per cell.
+Cycling `A, A, B, B` would have given 46/44 on the sequence, losing the exact
+balance §11 asks for to a change that was only ever about the buttons.
+
 Three paths, in priority order:
 
-1. **Pre-generated roster codes** carry their sequence, block-randomised over a
-   shuffled A/B list seeded on the session id, so the split is exactly half and
-   half.
+1. **Pre-generated roster codes** carry their cell, laid out by the same
+   block-randomised cycle seeded on the session id.
 2. **Open mode** (the platform case): `claimCode` assigns transactionally from
-   `runCounts`, taking the under-filled arm, so the split stays exact even as
+   `runCounts`, taking the under-filled cell, so the split stays exact even as
    students arrive in an unpredictable order.
-3. **No Firebase**: `hash('seq:' + runId + ':' + code) % 2`, deterministic per
-   participant.
+3. **No Firebase**: `hash('seq:' + runId + ':' + code) % 2` for the sequence and
+   `hash('btnorder:' + code) % 2` for the order — deterministic per participant.
 
 A **next-entrant override** can force A or B for the next arrival. It demands a
 written reason, appends to an override log on the session document, and the log is
@@ -644,7 +721,7 @@ come first and are never shuffled into the scored set.
 ## 10 · The participant app, screen by screen
 
 ```
-code entry → consent → instructions 1–5 (+ comprehension gate)
+code entry → consent → REGISTRATION → instructions 1–5 (+ comprehension gate)
   → warm-up block 1 → [AI instructions + AI gate, if block 1 is AI-on]
   → block 1: 12 scored rounds → block transition
   → [AI instructions + AI gate, if block 2 is AI-on] → warm-up block 2
@@ -661,8 +738,32 @@ key between the two datasets — and nothing else.
 defaults *are* the recommended parameter set, so the study runs either way and the
 rows carry `run_id = null`, which the export reports honestly.
 
-**Consent** is a single checkbox that enables the button. **Instructions** are five
-pages (the line; neighbours differ by at most L; revealing costs; stopping and
+**Consent** is a single checkbox that enables the button.
+
+**Registration** is the four background items — field of study, year or level of
+study, age band, gender — asked **once, before the task**, all optional, coarse
+bands only (with ~90 participants from one population a fine-grained combination
+is close to identifying). They were the exit survey's Part F until this build, and
+moving them is a data-quality decision rather than a cosmetic one: at the end they
+came after forty minutes of task, and on a platform launch they were dropped one
+by one, leaving a "Part F" that could be empty, complete or anything in between.
+On a Simulation Platform launch each item the platform's own registration already
+answered is **not asked again** — it travels with the row flagged
+`platform_<field>` — and when the platform covers all four the phase **passes
+through without a screen**. The **ids are unchanged from the Part F era on
+purpose**: sessions already collected carry them, and the exporter reads either
+source into the same `reg_*` column.
+
+**Nobody mid-session loses data.** The registration phase is entered *from the
+consent button*, so a participant who had already consented under the previous
+build would have been asked by neither it nor the deleted Part F. Two catch-ups in
+`app.js`: resumed **before** the task they are routed into the phase; resumed
+**inside** the rounds the items come back at the **end of the exit survey**, where
+they used to be, logged as `registration` rows so they still land in the same
+column. `tools/migration-guard.mjs` pins both halves — a build shipping under a
+live session is a data-loss risk, not a deployment detail.
+
+**Instructions** are five pages (the line; neighbours differ by at most L; revealing costs; stopping and
 scoring; rounds are independent). All prose lives in `content.js` as data, with
 tokens (`{J}`, `{L}`, `{revealCost}`, `{queryCost}`, `{revealCap}`, `{queryCap}`,
 `{scored}`, `{warmup}`, `{K}`) substituted at render time, so the words cannot
@@ -705,8 +806,17 @@ in front of a participant, so block 2's order is followed in both.
 - **Centre — the plot**, a legend, and the same four numbers big underneath
   (best prize found · spent revealing · spent asking · **net value if you stop
   now**), then the position controls: arrows, a slider and a number box.
-- **Right — the three actions**, each with a one-line note. "Ask the AI" is
-  **absent** in AI-off rounds, not disabled.
+- **Right — the three actions.** The two **paid** ones sit **side by side** at
+  strict visual parity (same size, padding, radius, weight, border, shadow and
+  states; two hues matched on saturation and lightness), in the order this
+  participant was assigned; "Stop and nominate" is apart, below a divider, and
+  never in the swap. The only red on the screen is the **cost numeral** inside
+  each paid button. "Ask the AI" is **removed from the DOM** in AI-off rounds, not
+  disabled and not hidden. `tools/smoke.mjs` measures the parity from computed
+  styles rather than trusting the stylesheet.
+
+Under the round title sits a **progress line** — "Round *n* of 12 in this half ·
+*k* to go", or "Practice round — nothing here is scored".
 
 **The keyboard works everywhere.** Arrow keys move the selection by one wherever
 focus sits — except inside a form control, which handles arrows itself. Buttons
@@ -719,12 +829,26 @@ after `LATENCY_MS` (320 ms) whichever action it was, and each Cloud Function pad
 to `FIXED_MS` (260 ms). Neither the wire nor the clock can distinguish an exact AI
 answer from an invented one.
 
-**Nudges** are short, friendly and dismissible. They never block anything and
-never say *what* to choose — only that the participant may act, and how the round
-is scored: after 45 s with no action, after 90 s of further idleness, and once
-after three consecutive rounds ending with nothing bought. **Every appearance is
-logged as telemetry with its kind**, because an unlogged prompt is an uncontrolled
-intervention.
+**Nudges and the engagement layer** are short, friendly and dismissible. They
+never block anything and never say *what* to choose — only that the participant
+may act, and how the round is scored. The idle tips fire after 45 s with no
+action and after 90 s of further idleness, and a reminder appears once after three
+consecutive rounds ending with nothing bought. On top of those, when
+`ui.encouragement` is on:
+
+- a **milestone pop-up** at the halfway point of a half, with three rounds left,
+  and on the last round — once each, and the "seen" marker survives a reload;
+- a **between-rounds line**, rotated **by round index, not by how the round went**
+  (unconditional praise is a mood; contingent praise is feedback, and feedback on
+  performance would be a treatment nobody agreed to run);
+- one **in-round encouragement tip**;
+- a **focus prompt** when a scored round is about to be closed after
+  `ui.rushMinActions` actions or fewer — once per half, always dismissible in one
+  click ("Keep searching" / "Stop anyway"), stating only where the round sits in
+  the study and that there is no time limit, never what to do instead.
+
+**Every appearance is logged as telemetry with its kind**, because an unlogged
+prompt is an uncontrolled intervention.
 
 **Between rounds** the true prize at the nominated position is shown, with the
 whole sum itemised — prize won, cost of revealing, cost of asking, round score —
@@ -732,16 +856,13 @@ plus what the AI had said there and by how much it was out. A participant should
 never have to work out where their score went, and **every round ends with them
 learning whether the machine was right**.
 
-**The exit survey** is twenty items in six parts. Design choices worth recording:
-free text comes **before** multiple choice within each part, so the options never
-supply the vocabulary; the debrief comes after every question, so nothing in it
-contaminates an answer; Part F (background) is coarse bands only and entirely
-optional, because with ~90 participants from one population a fine-grained
-combination is close to identifying; and **any Part F item the Simulation Platform
-already answered is not asked again** — it travels with the row as
-`platform_<field>` instead, so the two datasets carry one answer each rather than
-two that can disagree. Free-text items are never compulsory: forcing prose
-produces noise.
+**The exit survey** is twenty items in five parts (A–E). Design choices worth
+recording: free text comes **before** multiple choice within each part, so the
+options never supply the vocabulary; the debrief comes after every question, so
+nothing in it contaminates an answer; and free-text items are never compulsory,
+because forcing prose produces noise. **Part F is gone from the survey** — it is
+the registration phase now — and its heading survives in `content.js` only as the
+destination of the migration path above.
 
 **The debrief** explains the mechanism in full and then **redraws one of the
 participant's own rounds** — the AI round where they asked the most, because that
@@ -998,10 +1119,10 @@ the open ones, which by construction start with nothing known.
 
 ## 15 · The admin panel
 
-`/lab/search-v2/admin/` — six tabs over the brief's six screens. It runs in **local
-preview** against browser storage until Firebase is configured, so parameters,
-consequences, validation, the preview and the dry run all work before anything is
-set up.
+`/lab/search-v2/admin/` — **seven tabs**: the brief's six screens plus a Wording
+tab. It runs in **local preview** against browser storage until Firebase is
+configured, so parameters, consequences, validation, the preview and the dry run
+all work before anything is set up.
 
 ### Vocabulary
 
@@ -1024,6 +1145,11 @@ Only the **Operations** group and the **next-entrant override** stay editable.
 `ops.compute` is the deliberate exception in the other direction: it lives in
 Operations for convenience but locks with the task parameters.
 
+**Wording is the third case, and it is deliberate.** A session's participant-facing
+*text* stays editable **after** the lock, because rewording is not part of the
+design — while the *structure* those words hang on can never be edited at all. See
+the Wording tab below.
+
 ### A session is summarised before it can bite
 
 Two moments are one-way in practice — **creating** freezes the pool and all 28
@@ -1038,7 +1164,17 @@ Opening entry additionally **refuses until the validation gate passes**.
 
 ### Tab 1 · Sessions
 
-Grouped **Active** and **Completed** with a count each. One card per session:
+The screen opens on a **"Create a session" card** — session name, optional Session
+ID, one green button — the same shape the ideasearchlab and Answer Arena admins
+use. It builds the session from the saved defaults, runs the same summary gate,
+and then **selects** it, so creating a session is also opening it; the card then
+reports the code, the participant link, and Copy link / Check its parameters /
+Open entry. A typed Session ID is refused when it is too short or already taken,
+and a blank one never collides with an existing code. `newRunDoc` forces
+`ops.entryOpen = false`, so a draft is never enterable before the validation gate.
+
+Below it, grouped **Active** and **Completed** with a count each. One card per
+session:
 code · status · lock tag · name · created · id · participant count · completed
 count · sequence balance · round count · and a chip saying **where the score is
 computed**.
@@ -1062,9 +1198,9 @@ the repository's `CLAUDE.md` for that shared contract.
 
 ### Tab 2 · Parameters (+ Consequences beside it)
 
-Six collapsible groups — **Environment · Costs and limits · AI · Round structure ·
-Assignment · Acceptance filter**, each tagged *locked after launch* — plus
-**Operations**, tagged *editable at any time*. Every control is declared once in a
+Seven collapsible groups — **Environment · Costs and limits · Interface and
+engagement · AI · Round structure · Assignment · Acceptance filter**, each tagged
+*locked after launch* — plus **Operations**, tagged *editable at any time*. Every control is declared once in a
 `FIELDS` table, so reading the form, writing it and locking it stay in step.
 
 Four buttons underneath, unchanged in number and colour from the previous panel:
@@ -1094,10 +1230,11 @@ Two badges:
 
 ### Tab 3 · Roster
 
-Generate anonymous codes (prefix + 3 digits) with an **exact 50/50
-block-randomised** split, export them as CSV, and see per-code status (unused / in
-progress / completed) with claim times and whether the entry was pre-generated or
-self-enrolled. Auto-generated session codes use a 5-character alphabet with **I, O,
+Generate anonymous codes (prefix + 3 digits) laid out over the **four
+block-randomised cells** of sequence × button order (§9), export them as CSV
+(`code, sequence, button_order, status`), and see per-code status (unused / in
+progress / completed) with claim times, which action sat on the left, and whether
+the entry was pre-generated or self-enrolled. Auto-generated session codes use a 5-character alphabet with **I, O,
 0 and 1 removed**, because codes get read aloud and typed.
 
 The **next-entrant override** lives here, demands a reason, and writes an override
@@ -1187,6 +1324,61 @@ It also states plainly that **"Brownian" here runs across positions, not across
 time**: the path is drawn once, offline, and then sits still. Position 1…100 is a
 spatial index, not a clock; nothing evolves while the participant works.
 
+### Tab 7 · Wording
+
+Every participant-facing string `content.js` holds, **in the order a participant
+meets it**: consent, the five instruction screens, the three AI screens, both
+quick checks *with their answer options*, all twenty-four survey and registration
+items with their options and follow-ups, the part headings, the debrief and the
+thanks. It exists because the words were previously findable only by reading the
+source — *"I wanted to check these questions that participants see, and can't find
+them."*
+
+Each is shown **with this session's own numbers substituted**, because a screen
+displaying `{revealCost}` instead of `4` would defeat its own purpose. Editing a
+field writes a **per-session override**; the study's defaults in `content.js` are
+untouched and every other session keeps them.
+
+**Deliberately out of scope**, and the screen says so: the game screen's own
+buttons and labels, and the reminder box above each quick check, which `app.js`
+builds from the numbers themselves. Those are interface, not study text.
+
+Three design decisions carry the weight:
+
+**Wording is editable, structure is not.** Ids, answer keys, option **counts**,
+question types, `strict`, `platformKey` and the numeracy answers always come from
+`content.js`, whatever a session says. That is the safety argument rather than a UI
+convenience: `admin/dictionary.js` describes one entry per column and
+`surveyColumns()`/`quizColumns()` derive the workbook from those ids, so a session
+able to add a question or move an answer key would **silently invalidate its own
+data**. Rewording cannot. For the same reason wording stays editable **after the
+session locks** — it is not part of the design.
+
+**`content.js` owns the whole mechanism** — `outline()` (the editable fields,
+which doubles as the whitelist), `normalizeOverrides()` and `resolve()` — so the
+panel only draws it and `app.js` only reads it. `normalizeOverrides` drops an
+unknown key, a non-string, a blank, an over-long value (4000 chars) and,
+deliberately, **a value equal to the default**, so an untouched field is never
+frozen against a later correction to `content.js`. Overrides are plain text: the
+participant screen escapes them and re-introduces only `**bold**`, exactly as it
+does the defaults.
+
+**Storage is a flat `key → string` map held as a JSON *string*** —
+`run.contentJson`, beside `specsJson` — and that is not cosmetic. Both writers use
+`setDoc(merge: true)`, which **deep-merges a map**: stored as a map, a reverted key
+would be merged straight back, so "revert" would look right in the panel and change
+nothing for the participant. A string field is replaced whole. It is carried by
+`publicDoc` too, or a **server-mode** participant — for whom the run document is
+admin-only — could never see an override. And `newRunDoc` takes the wording as an
+**argument** rather than reading the panel's current state, so a **clone carries
+the wording of the session it was cloned from**, not whatever session happened to
+be open in the form.
+
+`tools/wording-guard.mjs` checks both halves: that a session's overrides actually
+**reach** its participants, and that `app.js` reads content **only** through the
+resolved copy — one `Content.SURVEY` slipping back would silently ignore that
+session's wording for that one screen.
+
 ---
 
 ## 16 · The exported workbook
@@ -1212,6 +1404,14 @@ zero**.
 Join keys: `participant_code + round_index` (Decisions → Rounds),
 `participant_code` (→ Participants), `spec_id` (→ Specs).
 
+**`button_order` is denormalised onto every row** — decisions, rounds and
+participants alike — so the position assignment enters the model as a covariate
+wherever the analysis starts, and the size of any position effect can be reported
+rather than assumed away. Registration answers ship as **`reg_*`** columns, reading
+either source into the same column: the phase, the platform (`reg_platform_*`), or
+the migration path's end-of-survey block. `phase_ms_registration` joins the phase
+breakdown.
+
 Each export bundles the session's **frozen configuration, seeds, checksums and
 override log**, so the parameters always travel with the data. `xlsx.js` is a
 dependency-free OOXML writer — no CDN.
@@ -1232,11 +1432,12 @@ directions.
 
 **Platform → study.** The launch handoff's `studentId` becomes this study's
 `participant_code` **and** is carried as `pid`. That is the only join key, and **no
-second identifier is invented**. A background question the platform has already
-answered — level of study, age band, gender — is **not asked again**; its answer
-travels as `platform_<field>`, flagged as to its source. **Nothing else from the
-profile is stored**: the student's name and e-mail address never reach this
-study's log. The handoff is read directly from `localStorage` rather than waiting
+second identifier is invented**. A **registration** item the platform has already
+answered — field of study, level of study, age band, gender — is **not asked
+again**; its answer travels as `platform_<field>`, flagged as to its source, and
+when the platform covers all four the registration phase passes through without a
+screen. **Nothing else from the profile is stored**: the student's name and e-mail
+address never reach this study's log. The handoff is read directly from `localStorage` rather than waiting
 for `/simulation/prefill.js` (which is deferred and runs after this script, while
 the participant code has to resolve during boot), under the same freshness rule
 (6 hours) and the same `SIMP_EXPECT` sim guard.
@@ -1262,13 +1463,16 @@ other five.
 ## 18 · Tests, and what each one pins
 
 ```bash
-node lab/search-v2/tools/selftest.js          # 213 checks, no browser
+node lab/search-v2/tools/selftest.js          # 299 checks, no browser
 node lab/search-v2/tools/smoke.mjs            # a whole 28-round session
-node lab/search-v2/tools/admin-smoke.mjs      # the admin panel
-node lab/search-v2/tools/platform-guard.mjs   # the platform contract, both ways
+node lab/search-v2/tools/admin-smoke.mjs      # 161, the admin panel
+node lab/search-v2/tools/platform-guard.mjs   # 28, the platform contract, both ways
+node lab/search-v2/tools/wording-guard.mjs    # 17, overrides reach participants
+node lab/search-v2/tools/migration-guard.mjs  # a mid-session build never loses data
+node lab/search-v2/tools/data-audit.mjs       # 54, the log is faithful to the session
 node lab/search-v2/tools/layout-guard.mjs     # reachability at five window sizes
 node lab/search-v2/tools/preview-guard.mjs    # the sandbox writes nothing
-node lab/search-v2/tools/emulator-test.mjs    # the REAL Functions + Rules
+node lab/search-v2/tools/emulator-test.mjs    # 37, the REAL Functions + Rules
 python3 lab/search-v2/tools/generate_rounds.py --validate
 ```
 
@@ -1279,10 +1483,23 @@ What the important ones exist to catch:
   crossover; the AI's answer; **the `s*` straddle window, asserted against the
   configured values rather than literals**; `g = 4t`; the geometry and rationality
   benchmarks; that every exported column has a Dictionary entry; that the two
-  overlay switches are off; and that the **vendored Functions engine is identical**
-  to the originals.
-- **`smoke.mjs`** — plays a real session in a browser and asserts that the live
-  plot contains **no** ground truth, **no** AI curve and **no** anchors.
+  overlay switches are off; that **every token `content.js` uses is one `app.js`
+  substitutes** (the list is derived from `app.js`'s own source, so the two cannot
+  drift); and that the **vendored Functions engine is identical** to the originals.
+- **`smoke.mjs`** — plays a real session in a browser, measures the two paid
+  buttons' **visual parity from computed styles**, and asserts that the live plot
+  contains **no** ground truth, **no** AI curve and **no** anchors.
+- **`data-audit.mjs`** — asks a different question from `smoke.mjs`: not *does the
+  app behave* but *is the record of what happened faithful*. It plays a
+  deliberately varied 28-round session while keeping its own trace of everything
+  shown, read out of the DOM at the moment it was shown, then cross-checks four
+  things that must agree — the UI trace, the raw event log, the frozen artifacts
+  rebuilt in Node from the same seeds, and the exported rows. Checking against the
+  artifacts is what makes it more than a tautology.
+- **`migration-guard.mjs`** — a participant mid-session when a build ships must not
+  lose data. The registration phase is entered from the consent button, so a resume
+  from the previous build is either caught up before the task or asked at the end
+  of the survey — never skipped.
 - **`emulator-test.mjs`** — drives the real Cloud Functions and Security Rules in
   the Firebase emulator: identical response shape and timing at an anchor and in a
   gap, idempotency on `actionId`, server-side scoring, and that the rules refuse
@@ -1362,32 +1579,33 @@ Recorded here rather than quietly fixed, because each is a copy-editing decision
 about participant-facing text or documentation, not a behaviour change. **Verified
 2026-08-14.**
 
-1. **`content.js` uses an unsubstituted token.** The three adjacency questions'
-   `why` explanations contain `{stepBound}`, but `tokens()` in `app.js` substitutes
-   `{L}` — so the feedback renders the literal text "{stepBound}" to a participant
-   who answers those questions. *Fix: rename the token to `{L}` in `content.js`, or
-   add `{stepBound}` to `tokens()`.*
+1. ~~**`content.js` uses an unsubstituted token.**~~ **Fixed.** `tokens()` now
+   substitutes `{stepBound}` as well as `{L}`, and `selftest.js` §17 derives the
+   handled token list from `app.js`'s own source and fails on any token
+   `content.js` uses that the app does not substitute — so it cannot recur.
 2. **Two participant-facing strings still say the AI knows 4 positions.** Survey
    item `s07` ("In some rounds the AI knew 4 positions and in others it knew 10")
    and the `DEBRIEF` prose ("4 of the 100 in some rounds") predate the sparse K
-   change to **3**. *Fix: tokenise them, or update to 3.*
+   change to **3**. *Fix: tokenise them (`{K}` is round-scoped, so these two need
+   the sparse and dense values rather than the current round's), or update to 3.
+   The Wording tab can override both per session, but the shipped default is what
+   most sessions will use.*
 3. **`admin/dictionary.js` describes `ai_density` as "SPARSE (K=4)".** Same
    provenance; it reaches the exported Dictionary sheet.
-4. **`README.md` says `selftest.js` runs 211 checks.** It runs **213**.
-5. **`tools/SIMULATION-FINDINGS.md` reads oddly because it was regenerated after
+4. **`tools/SIMULATION-FINDINGS.md` reads oddly because it was regenerated after
    the recommendation was adopted** — the simulator's "current settings" are now the
    recommended ones, so §6 reads *"Move the REVEAL COST from 4 to 4"* and some
    before/after comparisons quote the same number twice. Every measured table in it
    is correct and current; only the recommendation prose is self-referential. *Fix:
    either leave a note at its head, or re-run the sweep with the brief's values
    pinned as the baseline.*
-6. **`SEEDS.md`'s run log is empty.** Add a row whenever a session is frozen for
+5. **`SEEDS.md`'s run log is empty.** Add a row whenever a session is frozen for
    data collection — the export's Run sheet carries the same values, but the
    repository should be able to answer "which sessions were real" on its own.
 
-Neither 1–3 changes any recorded quantity: `ai_k` is written per round from the
-specs, so the **data** is right in every case; it is the prose describing it that
-is stale.
+Neither 2 nor 3 changes any recorded quantity: `ai_k` is written per round from
+the specs, so the **data** is right in every case; it is the prose describing it
+that is stale.
 
 ---
 
