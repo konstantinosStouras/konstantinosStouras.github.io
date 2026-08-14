@@ -18,7 +18,8 @@
 (function () {
   'use strict';
   var CFG = window.CONFIG, Pool = window.SVPool, Specs = window.SVSpecs,
-      Ai = window.SVAi, Content = window.SVContent, X = window.SVExport, Xlsx = window.SVXlsx;
+      Ai = window.SVAi, Content = window.SVContent, X = window.SVExport, Xlsx = window.SVXlsx,
+      Dict = window.SVDictionary;
   var FB = window.SVFirebase;
 
   var runs = [], current = null, currentParams = null, editingId = null;
@@ -1500,6 +1501,7 @@
   function sheetsFor(b, a) {
     var readme = [
       ['Sheet', 'What it holds', 'Notes'],
+      ['Dictionary', 'Every column of Decisions, Rounds and Participants, in one sentence each', 'Start here if a column name is not obvious'],
       ['Run', 'Every parameter this run was collected under, plus the frozen seeds and checksums', 'The configuration always travels with the data'],
       ['Specs', 'The 28 frozen round specs: mapping index, pre-opened positions, AI density and anchors', 'Identical for every participant of the run'],
       ['Decisions', 'One row per query, reveal or stop, with every derived field of §16.8', 'is_first_decision marks the primary analysis moment'],
@@ -1509,6 +1511,12 @@
       ['Slider', 'The throttled slider trace: which positions were considered and rejected', 'At most one row per 250 ms, plus one on release'],
       ['Attention', 'Blur, focus, visibility, heartbeats, instruction opens, resizes', 'active_ms is summed from heartbeats'],
       ['Raw', 'The event log exactly as written', 'Everything else is regenerated from this'],
+      [],
+      ['How to read this workbook', '', ''],
+      ['Tidy data', 'One row per observation, one column per variable, no merged cells and no blank spacer rows in the data sheets', 'read_csv / read_excel it directly'],
+      ['Blanks', 'An empty cell means NOT APPLICABLE or not recorded — never zero', 'e.g. step_size on the first reveal of a round'],
+      ['Booleans', 'TRUE / FALSE', 'the same in the workbook and in the CSVs'],
+      ['Joining', 'participant_code + round_index joins Decisions to Rounds; participant_code joins either to Participants', 'spec_id joins any of them to Specs'],
       [],
       ['Units', '', ''],
       ['Points', 'Prizes, costs and scores are whole points', 'reveal ' + a.params.costs.revealCost + ', query ' + a.params.costs.queryCost],
@@ -1565,8 +1573,19 @@
       });
     });
 
+    // Every column of the three analysis sheets, described in one sentence, so a
+    // reader can understand `verify_pays` or `ei_regret` without the source.
+    // Generated from admin/dictionary.js, which selftest.js holds to covering
+    // every column actually emitted.
+    var dict = [['Sheet', 'Column', 'Type', 'What it means']];
+    [['Decisions', b.decisions], ['Rounds', b.rounds], ['Participants', b.participants]].forEach(function (pair) {
+      dict.push([pair[0], '— ' + Dict.oneRowIs(pair[0]) + ' —', '', '']);
+      Dict.rowsFor(pair[0], X.columnsOf(pair[1])).forEach(function (r) { dict.push(r); });
+    });
+
     var sheets = [
       { name: 'ReadMe', cols: [{ w: 26 }, { w: 62 }, { w: 46 }], rows: readme, filter: false },
+      { name: 'Dictionary', cols: [{ w: 14 }, { w: 30 }, { w: 11 }, { w: 96 }], rows: dict },
       { name: 'Run', cols: [{ w: 14 }, { w: 26 }, { w: 60 }], rows: runRows },
       { name: 'Specs', cols: [{ w: 10 }, { w: 8 }, { w: 8 }, { w: 14 }, { w: 12 }, { w: 18 }, { w: 12 }, { w: 7 }, { w: 30 }], rows: specRows },
       X.toSheet('Decisions', b.decisions),
@@ -1576,6 +1595,9 @@
       { name: 'Attention', cols: [{ w: 16 }, { w: 12 }, { w: 18 }, { w: 40 }, { w: 24 }], rows: attention },
       X.toSheet('Raw', b.raw)
     ];
+    // The browser tests read the workbook's SHAPE from here rather than by
+    // unzipping a download: what sheets it has, in what order, and how big.
+    try { window.SVExportTestHook = sheets; } catch (e) {}
     return sheets;
   }
 

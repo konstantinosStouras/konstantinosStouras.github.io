@@ -750,12 +750,11 @@
     return {
       name: name,
       cols: cols.map(function (c) { return { w: Math.min(38, Math.max(10, c.length + 3)) }; }),
+      // Values pass through as they are: a boolean stays a boolean (the writer
+      // emits a real Excel boolean), a number stays a number, and null stays an
+      // empty cell rather than the string "null".
       rows: [cols].concat(rows.map(function (r) {
-        return cols.map(function (c) {
-          var v = r[c];
-          if (typeof v === 'boolean') return v ? 1 : 0;
-          return v;
-        });
+        return cols.map(function (c) { return r[c] === undefined ? null : r[c]; });
       }))
     };
   }

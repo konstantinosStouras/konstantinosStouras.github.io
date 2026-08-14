@@ -101,7 +101,9 @@
   function cellXml(ref, v, styleId) {
     var s = styleId ? ' s="' + styleId + '"' : '';
     if (v == null || v === '') return '';
-    if (typeof v === 'boolean') v = v ? 1 : 0;
+    // A real Excel boolean, not 1/0: the cell READS "TRUE"/"FALSE" like the CSV
+    // does, while pandas and R still parse it as a boolean rather than a number.
+    if (typeof v === 'boolean') return '<c r="' + ref + '"' + s + ' t="b"><v>' + (v ? 1 : 0) + '</v></c>';
     if (typeof v === 'number' && isFinite(v)) return '<c r="' + ref + '"' + s + '><v>' + v + '</v></c>';
     var t = String(v);
     var sp = /^\s|\s$|\n/.test(t) ? ' xml:space="preserve"' : '';
