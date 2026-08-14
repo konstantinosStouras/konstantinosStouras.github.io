@@ -504,7 +504,10 @@ function record(policy, cond, buckets, out, spec, cf) {
     if (out.unverified) c.unver++;
     if (out.first) c.acted++;
     if (front != null) { c.fmN++; c.fmFront += front; }
-    if (cond === 'AI_ON' && out.aiShown != null && out.unverified) {
+    // Only where the machine was actually consulted and its number was all they
+    // had: an AI-ON round that ended on a position they never opened, in a round
+    // where they asked at least once.
+    if (cond === 'AI_ON' && out.aiShown != null && out.unverified && out.nQueries > 0) {
       const d = Math.abs(out.aiShown - out.truth);
       c.aiN++; if (d >= 1) c.aiOff++;
       c.aiAbs += d; if (d > c.aiMax) c.aiMax = d;
@@ -777,13 +780,14 @@ rule('TABLE 5 · power');
   say('');
   say('  sd(off mean) / sd(on mean) are the standard deviations ACROSS participants of one');
   say('  participant\'s own 12-round mean in that condition — the noise a between-subject');
-  say('  design would face. The paired sd(dif) is smaller because the crossover removes the');
-  say('  between-participant part of it, which is the whole reason the design is within.');
+  say('  design would face.');
   say('');
-  say('  READ THESE AS A FLOOR, NOT A FORECAST. Within one policy the simulated participants');
-  say('  differ only where the policy consults its own RNG, so the between-participant');
-  say('  variance is far smaller than a real sample\'s. The honest power figure is the MIXED');
-  say('  POPULATION below, where each participant is one of the four behavioural types.');
+  say('  READ THESE AS A FLOOR, NOT A FORECAST, and note that the paired sd is NOT smaller');
+  say('  than the per-condition ones here. A crossover normally wins by differencing the');
+  say('  person out; two simulated participants of one type play almost identically, so the');
+  say('  variance it removes is mostly absent by construction while the variance it cannot');
+  say('  remove — the two blocks hold different mappings — is fully present. The honest power');
+  say('  figure is the MIXED POPULATION below, each participant given one behavioural type.');
   say('');
   say('  MIXED POPULATION  ' + MIX.map(m => (100 * m.w).toFixed(0) + '% ' + m.p).join(' · '));
   const rows2 = [
@@ -993,8 +997,19 @@ function sect(title) {
   say(''); say('  ' + title.toUpperCase()); say('');
   md(''); md('## ' + title); md('');
 }
+// A paragraph goes to both outputs. A line that carries its own indentation is
+// laid out, not prose, so consecutive indented lines are fenced in the markdown
+// — otherwise the renderer reflows a table into a sentence.
 function para(lines) {
-  lines.forEach(l => { say(l ? '     ' + l : ''); md(l); });
+  let fenced = false;
+  lines.forEach(l => {
+    say(l ? '     ' + l : '');
+    const pre = /^ {2,}\S/.test(l);
+    if (pre && !fenced) { md('```'); fenced = true; }
+    else if (!pre && fenced && l) { md('```'); fenced = false; }
+    md(l);
+  });
+  if (fenced) md('```');
   say(''); md('');
 }
 function bothTable(headers, rows, align) {
