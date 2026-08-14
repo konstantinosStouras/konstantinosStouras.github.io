@@ -110,8 +110,8 @@ await openAll();
 // empty beside its own "default 100" hint, with nothing to save and no
 // consequences panel.
 for (const [id, want] of [['p-env-positions', '100'], ['p-env-stepBound', '10'],
-  ['p-env-prizeMax', '100'], ['p-costs-revealCost', '5'], ['p-costs-queryCost', '2'],
-  ['p-ai-sparseK', '4'], ['p-ai-denseK', '10'], ['p-env-poolSize', '600'],
+  ['p-env-prizeMax', '100'], ['p-costs-revealCost', '4'], ['p-costs-queryCost', '2'],
+  ['p-ai-sparseK', '3'], ['p-ai-denseK', '10'], ['p-env-poolSize', '600'],
   ['p-env-generatorSeed', '20260813']]) {
   const got = await pg.locator('#' + id).inputValue();
   ok(got === want, 'the form opens carrying its default for ' + id.replace('p-', ''), got);
@@ -129,10 +129,10 @@ ok(/fillForm\(currentParams, null\)/.test(rescue),
 ok(await shown('cons-table'), 'the Consequences panel sits beside the form');
 const cons0 = await pg.locator('#cons-table').innerText();
 ok(/5\.774/.test(cons0), 'per-step SD reads 5.774 at the defaults');
-ok(/12\.53/.test(cons0), 's* reads 12.53 at the defaults');
-ok(/18\.8/.test(cons0), 'g* reads 18.8 at the defaults');
-ok(/25\.0/.test(cons0) && /10\.0/.test(cons0), 'the sparse and dense mean gaps read 25.0 and 10.0');
-ok(/14\.43/.test(cons0) && /9\.13/.test(cons0), 'the two gap-midpoint SDs read 14.43 and 9.13');
+ok(/10\.03/.test(cons0), 's* reads 10.03 at the defaults — c_R is 4, not the brief’s 5');
+ok(/12\.1/.test(cons0), 'g* reads 12.1 at the defaults');
+ok(/33\.3/.test(cons0) && /10\.0/.test(cons0), 'the sparse and dense mean gaps read 33.3 and 10.0');
+ok(/16\.67/.test(cons0) && /9\.13/.test(cons0), 'the two gap-midpoint SDs read 16.67 and 9.13');
 
 const badge0 = await pg.locator('#cons-badges').innerHTML();
 ok(/badge green/.test(badge0), 'at the defaults the sign-change badge is GREEN');
@@ -185,7 +185,7 @@ ok(/28 rounds/.test(sum0), 'the summary states the session is 28 rounds', sum0.s
 ok(/4 warm-up/.test(sum0) && /24 scored/.test(sum0), 'split into warm-up and scored');
 ok(/AI in one block only/.test(sum0), 'and that the AI is present in one block of the two');
 ok(new RegExp(code).test(sum0) && /Smoke session/.test(sum0), 'it names the session and its code');
-ok(/Sparse/.test(sum0) && /K=4/.test(sum0) && /K=10/.test(sum0), 'it states the two AI densities');
+ok(/Sparse/.test(sum0) && /K=3/.test(sum0) && /K=10/.test(sum0), 'it states the two AI densities');
 ok(/bracket s\*/.test(sum0), 'and confirms they still bracket s* — the design’s sign change');
 ok(/Reveal/.test(sum0) && /cap 20/.test(sum0), 'it states the costs and the caps');
 await pg.locator('#sum-cancel').click();

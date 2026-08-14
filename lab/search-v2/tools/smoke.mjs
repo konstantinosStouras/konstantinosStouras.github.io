@@ -261,19 +261,37 @@ async function runOne(name) {
     }
 
     // Reveal a position, then check it cannot be charged twice.
-    await pg.evaluate(() => window.SVApp.select(62));
+    // The position is CHOSEN, not hardcoded: a pre-opened position cannot be
+    // revealed (the button is correctly disabled), and which positions start open
+    // moves whenever the specs are regenerated — as they did when sparse K went
+    // from 4 to 3. Take the first candidate the app will actually let us reveal.
+    // Wait out the fixed latency first: while an action is in flight EVERY button
+    // is disabled, so probing now would find nothing revealable anywhere.
+    // btn-nominate is disabled by that gate alone, which makes it the signal.
+    await pg.waitForFunction(() => !document.getElementById('btn-nominate').disabled, null, { timeout: 8000 });
+    let revealPos = null;
+    for (const cand of [62, 71, 29, 84, 15, 45, 96]) {
+      await pg.evaluate(p => window.SVApp.select(p), cand);
+      if (!(await pg.locator('#btn-reveal').isDisabled())) { revealPos = cand; break; }
+    }
+    ok(revealPos != null, 'a revealable position exists in every round', String(revealPos));
     await pg.locator('#btn-reveal').click();
     await pg.waitForSelector('.answer-flash.show', { timeout: 5000 });
     if (i === 0) {
       ok(/holds/.test(await pg.locator('#answer-flash').innerText()), 'revealing shows the true prize');
       ok(await pg.locator('#btn-reveal').isDisabled(), 'an already-revealed position cannot be revealed again');
+      // Against the CONFIGURED cost, not a literal — the reveal cost is a study
+      // parameter and has already moved once (5 → 4, see SIMULATION-FINDINGS.md).
+      const want = await pg.evaluate(() => String(window.CONFIG.DEFAULTS.costs.revealCost));
       const cost = await pg.locator('#c-reveal-cost').textContent();
-      ok(cost.trim() === '5', 'the reveal cost is charged once, and shown separately from the query cost');
+      ok(cost.trim() === want,
+        'the reveal cost is charged once (' + want + '), and shown separately from the query cost', cost.trim());
     }
 
     // Stop and nominate. The button must name the position.
     const label = await pg.locator('#btn-nominate').textContent();
-    ok(i > 0 || /position 62/.test(label), 'the nominate button names the position, so nomination is never accidental');
+    ok(i > 0 || new RegExp('position ' + revealPos).test(label),
+      'the nominate button names the position, so nomination is never accidental', label);
     await pg.locator('#btn-nominate').click();
     // A revealed position needs no confirmation; an untouched one does.
     if (await pg.locator('#ov-nominate.show').count()) await pg.locator('#btn-nom-ok').click();

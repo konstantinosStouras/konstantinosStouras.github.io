@@ -6,76 +6,78 @@
 ## The short answer
 
 The environment, the three layouts, the caps and the 24 scored rounds are all adequate,
-and the crossover has ample power. TWO parameters are mis-set, and they are mis-set in
-the same direction — both make the AI too easy to live with:
+the crossover has ample power, and AT THE CURRENT SETTINGS — reveal cost 4, sparse
+K = 3 against dense K = 10 — THE DESIGN'S CENTRAL PREDICTION HOLDS:
 
 ```
-  · THE REVEAL COST IS TOO HIGH. At c_R = 5 an unaided searcher who plays the study's
-    own myopic-EI benchmark opens 1.88 positions a round and beats spending nothing by
-    +5.84 points. The AI-OFF arm is barely a search arm. Lower it to 4.
+  · THE SIGN FLIPS. A trusting participant LOSES -4.14 points in sparse
+    rounds and GAINS +5.00 in dense ones. That is a change of sign, not a
+    gradient — which is what the sample was sized for.
 
-  · SPARSE K = 4 IS NOT SPARSE ENOUGH. Four anchors already make the AI worth trusting:
-    a trusting participant GAINS +4.30 points in sparse rounds, when the design
-    predicts a loss. Lower it to 3.
+  · THE AI-OFF ARM IS A REAL SEARCH ARM. An unaided searcher playing the study's own
+    myopic-EI benchmark opens 2.23 positions a round and beats spending nothing by
+    +10.56 points, so there is behaviour to compare against.
 
 ```
-Neither is a flaw in the build; both are numbers on the admin's Parameters screen. Made
-together the two moves turn the headline result from a gradient into the sign flip the
-design predicts, at no cost to anything else.
+Both properties are fragile in the same direction, and the guard rail is arithmetic: s*
+= c_R·√(2π) must fall between the dense mid-gap SD and the sparse one. Outside that band
+verification pays either everywhere or nowhere and the density manipulation has nothing
+left to manipulate. selftest.js asserts the window, so an edit that breaks it fails there
+rather than in the data.
 
 | setting | unaided search buys | reveals/round | trusting · sparse | trusting · dense | sign |
 |---|---|---|---|---|---|
-| current  c_R 5, K 4/10 | +5.90 | 1.89 | +4.30 | +7.85 | gradient |
-| c_R 4 alone | +8.93 | 2.32 | +1.23 | +5.83 | gradient |
-| K 3/10 alone | +5.90 | 1.89 | +1.36 | +7.85 | gradient |
-| BOTH  c_R 4, K 3/10 | +8.93 | 2.32 | -1.56 | +5.83 | FLIP |
+| CURRENT  c_R 4, K 3/10 | +10.64 | 2.24 | -4.14 | +5.00 | FLIP |
+| reveal cost 4 | +10.64 | 2.24 | -2.96 | +5.00 | FLIP |
+| sparse K 3 | +6.19 | 1.81 | -0.56 | +9.23 | FLIP |
+| both  c_R 4, K 3/10 | +10.64 | 2.24 | -4.14 | +5.00 | FLIP |
 
 
 ## 1 · The costs — reveal 5, question 2
 
 The RATIO is right and should not move. Questions at 2 against reveals at 5 make the AI
-worth consulting, which is the premise of the whole study: RATIONAL-WITH-AI scores 68.98,
-where the same searcher without an AI scores 64.01.
+worth consulting, which is the premise of the whole study: RATIONAL-WITH-AI scores 68.62,
+where the same searcher without an AI scores 69.52.
 
 The LEVEL is the design's weakest number, and the measurement that shows it is the floor.
 A participant who spends nothing and nominates what the interface already offers scores
-58.17. The myopic-EI benchmark of §16.8 scores 64.01 — it buys +5.84 points for 9.4 points of
-effort, and it stops after 1.88 reveals because at c_R = 5 that is the correct myopic answer.
+58.96. The myopic-EI benchmark of §16.8 scores 69.52 — it buys +10.56 points for 8.9 points of
+effort, and it stops after 2.23 reveals because at c_R = 4 that is the correct myopic answer.
 Searching HARDER makes it worse, not better: SYSTEMATIC-NO-AI, which opens the line until
-no gap exceeds g* = 18.8, pays 44.4 points for 8.9 reveals and scores 44.71 — -13.46 against
+no gap exceeds g* = 12.1, pays 42.2 points for 10.5 reveals and scores 47.08 — -11.88 against
 doing nothing. An arm in which effort does not pay cannot show what an AI does to effort.
 
 The sweep says how far to move it and where the wall is:
 
 | c_R | s* | straddle holds | unaided search buys | reveals | AI effect (trusting) | sparse | dense |
 |---|---|---|---|---|---|---|---|
-| 2 | 5.01 | NO | +20.29 | 4.20 | -7.02 | -8.91 | -5.13 |
-| 2.5 | 6.27 | NO | +18.13 | 3.31 | -5.09 | -6.76 | -3.42 |
-| 3 | 7.52 | NO | +15.36 | 2.97 | -2.52 | -5.25 | +0.21 |
-| 3.5 | 8.77 | NO | +11.72 | 2.63 | +0.93 | +0.20 | +1.65 |
-| 4 | 10.03 | yes | +8.93 | 2.32 | +3.53 | +1.23 | +5.83 |
-| 4.58 | 11.48 | yes | +7.11 | 2.02 | +5.08 | +3.85 | +6.32 |
-| → 5 | 12.53 | yes | +5.90 | 1.89 | +6.08 | +4.30 | +7.85 |
-| 6 | 15.04 | NO | +4.68 | 1.71 | +6.85 | +5.09 | +8.60 |
-| 8 | 20.05 | NO | -0.62 | 1.11 | +11.28 | +8.30 | +14.26 |
+| 2 | 5.01 | NO | +19.88 | 4.20 | -7.88 | -12.57 | -3.18 |
+| 2.5 | 6.27 | NO | +16.99 | 3.27 | -5.25 | -10.75 | +0.25 |
+| 3 | 7.52 | NO | +14.23 | 2.93 | -2.73 | -7.22 | +1.77 |
+| 3.5 | 8.77 | NO | +11.32 | 2.51 | -0.04 | -4.68 | +4.60 |
+| → 4 | 10.03 | yes | +10.64 | 2.24 | +0.43 | -4.14 | +5.00 |
+| 4.58 | 11.48 | yes | +7.71 | 1.98 | +3.05 | -2.99 | +9.09 |
+| 5 | 12.53 | yes | +6.19 | 1.81 | +4.33 | -0.56 | +9.23 |
+| 6 | 15.04 | yes | +4.93 | 1.58 | +5.09 | +0.34 | +9.84 |
+| 8 | 20.05 | NO | -0.95 | 1.11 | +9.98 | +5.49 | +14.48 |
 
 Two constraints bracket it. Search has to pay, which pushes c_R DOWN — at 4 the benchmark
-opens 2.32 positions and buys +8.93, at 3 it opens 2.97 and buys +15.36, at 2 it buys +20.29.
+opens 2.24 positions and buys +10.64, at 3 it opens 2.93 and buys +14.23, at 2 it buys +19.88.
 The sparse/dense manipulation has to survive, which pushes it UP: s* = c_R·√(2π) must land
-between the two nominal mid-gap standard deviations, 9.13 (dense) and 14.43 (sparse), so
+between the two nominal mid-gap standard deviations, 9.13 (dense) and 16.67 (sparse), so
 
 ```
-     c_R must lie in (3.64, 5.76), with its geometric centre at 4.58.
+     c_R must lie in (3.64, 6.65), with its geometric centre at 4.92.
 
 ```
-RECOMMENDATION: c_R = 4. It nearly doubles what search is worth (+5.90 → +8.93) and raises
-reveals from 1.89 to 2.32, while staying inside the window with 44% of margin above
+RECOMMENDATION: c_R = 4. It nearly doubles what search is worth (+10.64 → +10.64) and raises
+reveals from 2.24 to 2.24, while staying inside the window with 66% of margin above
 and 9% below. Do not go below 3.64: there s* drops under the DENSE mid-gap sd,
 verification pays everywhere, and the density manipulation has nothing left to manipulate
 (the sweep shows it — at c_R = 3 and c_R = 2 the straddle column reads NO).
 
-Do not raise it. At c_R = 8 unaided search buys -0.62 — it is a pure loss — and the AI
-"effect" swells to +11.28 points purely because the alternative got worse.
+Do not raise it. At c_R = 8 unaided search buys -0.95 — it is a pure loss — and the AI
+"effect" swells to +9.98 points purely because the alternative got worse.
 
 
 ## 2 · K = 4 and K = 10 — the straddle holds, the sign flip does not follow from it
@@ -84,57 +86,57 @@ The geometry is exactly as specified. Over every position of every scored spec, 
 AI's anchor set as the round begins:
 
 ```
-  sparse   mean sd 10.87   41.4% of the line above s* = 12.53   mean |AI error| 8.56   worst 47
-  dense    mean sd 7.08   1.0% of the line above s*             mean |AI error| 5.76   worst 35
+  sparse   mean sd 12.31   65.7% of the line above s* = 10.03   mean |AI error| 9.85   worst 47
+  dense    mean sd 7.12   14.6% of the line above s*             mean |AI error| 5.69   worst 34
 
 ```
-The two densities differ by a factor of 1.5 in how wrong the AI is, and s* lands between them.
-The mechanism is sound. What does not follow is a sign change in SCORE: at K = 4 the trusting
-participant is helped in sparse rounds too (+4.30), just less than in dense ones (+7.85).
+The two densities differ by a factor of 1.7 in how wrong the AI is, and s* lands between them.
+The mechanism is sound. What does not follow is a sign change in SCORE: at K = 3 the trusting
+participant is helped in sparse rounds too (-4.14), just less than in dense ones (+5.00).
 
 THE REASON IS STRUCTURAL, and it is worth stating plainly because it is not a tuning
 problem. An interpolation of anchors cannot exceed its anchors, so the AI's curve peaks
 AT an anchor — a position where its number is the exact truth. Following the machine to
-its highest answer therefore lands a participant on a REAL prize worth 83% of the board's
-best in sparse rounds and 94% in dense ones. With four anchors that is already a good
+its highest answer therefore lands a participant on a REAL prize worth 76% of the board's
+best in sparse rounds and 91% in dense ones. With four anchors that is already a good
 deal, and no reveal cost makes it a bad one. The only geometry that punishes trust is the
 flat extrapolation beyond the outermost anchor, where the AI repeats a number over a whole
 plateau the truth wanders away from — which is what the FRONTIER layout builds, and it is
-the 3 of 24 specs whose peak sits in a tail.
+the 4 of 24 specs whose peak sits in a tail.
 
-Across the four behavioural policies at the current settings, NOT ONE flips, and the
-widest sparse-minus-dense gap any of them shows is 4.31 points.
+Across the four behavioural policies at the current settings, RATIONAL-WITH-AI and TRUSTING and NOISY-SATISFICER flip and the rest do not, and the
+widest sparse-minus-dense gap any of them shows is 9.23 points.
 
-So the lever is K itself. At c_R = 5 the K sitting exactly on the threshold is K* = 5.31,
+So the lever is K itself. At c_R = 4 the K sitting exactly on the threshold is K* = 8.29,
 and sparse has to stay below it while dense stays above. Fewer anchors means a lower best
 anchor, and a pointer worth following becomes a pointer worth checking:
 
 | K sparse / dense | sd sparse | sd dense | straddle | trusting · sparse | trusting · dense | difference |
 |---|---|---|---|---|---|---|
-| 2 / 10 | 20.41 | 9.13 | yes | -9.55 | +7.85 | -17.41 |
-| 3 / 10 | 16.67 | 9.13 | yes | +1.36 | +7.85 | -6.49 |
-| 4 / 6 | 14.43 | 11.79 | yes | +4.30 | +5.47 | -1.17 |
-| 4 / 8 | 14.43 | 10.21 | yes | +4.30 | +4.35 | -0.05 |
-| → 4 / 10 | 14.43 | 9.13 | yes | +4.30 | +7.85 | -3.56 |
-| 4 / 14 | 14.43 | 7.72 | yes | +4.30 | +9.07 | -4.77 |
-| 5 / 10 | 12.91 | 9.13 | yes | +6.65 | +7.85 | -1.21 |
-| 6 / 10 | 11.79 | 9.13 | NO | +7.39 | +7.85 | -0.47 |
+| 2 / 10 | 20.41 | 9.13 | yes | -13.65 | +5.00 | -18.65 |
+| → 3 / 10 | 16.67 | 9.13 | yes | -4.14 | +5.00 | -9.14 |
+| 4 / 6 | 14.43 | 11.79 | NO | -2.96 | +1.23 | -4.19 |
+| 4 / 8 | 14.43 | 10.21 | NO | -2.96 | +3.15 | -6.11 |
+| 4 / 10 | 14.43 | 9.13 | yes | -2.96 | +5.00 | -7.96 |
+| 4 / 14 | 14.43 | 7.72 | yes | -2.96 | +6.04 | -9.00 |
+| 5 / 10 | 12.91 | 9.13 | yes | -0.62 | +5.00 | -5.62 |
+| 6 / 10 | 11.79 | 9.13 | yes | +1.51 | +5.00 | -3.49 |
 
-RECOMMENDATION: sparse K = 3, dense K = 10 unchanged. The sparse effect falls from +4.30 to +1.36,
-the sparse/dense difference roughly doubles (-3.56 → -6.49), and the mid-gap sd rises from
-14.43 to 16.67, further clear of s* rather than nearer it. K = 2 is stronger still
-(-9.55 sparse, difference -17.41) but two anchors on a hundred positions is barely an AI, and
+RECOMMENDATION: sparse K = 3, dense K = 10 unchanged. The sparse effect falls from -2.96 to -4.14,
+the sparse/dense difference roughly doubles (-7.96 → -9.14), and the mid-gap sd rises from
+16.67 to 16.67, further clear of s* rather than nearer it. K = 2 is stronger still
+(-13.65 sparse, difference -18.65) but two anchors on a hundred positions is barely an AI, and
 the instructions have to state K to the participant.
 
 DO NOT RAISE SPARSE K. At K = 6 the nominal straddle fails outright (mid-gap sd 11.79 < s*),
-and the measured difference collapses to -0.47. Dense K = 10 needs no change:
-it sits 27% below s* and its measured AI error is 5.76 points.
+and the measured difference collapses to -3.49. Dense K = 10 needs no change:
+it sits 9% below s* and its measured AI error is 5.69 points.
 
 
 ## 3 · The caps — 40 questions, 20 reveals
 
-Neither cap binds on any policy. The heaviest questioner is RATIONAL-WITH-AI at 4.86 questions a round
-against a cap of 40; the heaviest revealer is SYSTEMATIC-NO-AI at 8.88 of 20. The largest
+Neither cap binds on any policy. The heaviest questioner is RATIONAL-WITH-AI at 4.90 questions a round
+against a cap of 40; the heaviest revealer is SYSTEMATIC-NO-AI at 10.54 of 20. The largest
 share of rounds touching either cap is 0.0% (NOISY-SATISFICER).
 
 The caps are doing exactly the job they were put there for — bounding a pathological
@@ -146,8 +148,8 @@ is 20 or 30 has no consequence either way.
 ## 4 · 24 scored rounds, and power
 
 Twelve rounds a condition is enough for every effect a plausible participant produces.
-In the mixed population a participant's own 12-round mean varies across people with sd 3.71
-in the AI-OFF condition and 4.44 in AI-ON, and the paired difference has sd 6.48.
+In the mixed population a participant's own 12-round mean varies across people with sd 3.48
+in the AI-OFF condition and 3.43 in AI-ON, and the paired difference has sd 5.63.
 
 A caution about that last number rather than a boast: the crossover's usual advantage is
 that it differences the person out, and in a real sample that is most of the variance. Here
@@ -159,30 +161,30 @@ side.
 
 | contrast | effect | paired sd | participants at 80% power |
 |---|---|---|---|
-| RATIONAL-WITH-AI · score | +5.05 | 2.42 | 2 |
-| TRUSTING · score | +6.04 | 3.39 | 3 |
-| SKEPTICAL · score | -4.00 | 4.16 | 9 |
-| NOISY-SATISFICER · score | +2.86 | 8.62 | 72 |
-| MIXED POPULATION · score | +3.44 | 6.48 | 28 |
-| MIXED POPULATION · sparse − dense | -2.77 | 11.90 | 145 |
-| MIXED POPULATION · frontier share | -6.34pp | 11.97 | 28 |
+| RATIONAL-WITH-AI · score | -0.88 | 2.76 | 78 |
+| TRUSTING · score | +0.34 | 2.54 | 449 |
+| SKEPTICAL · score | -4.06 | 2.62 | 4 |
+| NOISY-SATISFICER · score | +0.66 | 8.74 | 1386 |
+| MIXED POPULATION · score | -0.43 | 5.63 | 1356 |
+| MIXED POPULATION · sparse − dense | -5.71 | 9.77 | 24 |
+| MIXED POPULATION · frontier share | -6.28pp | 15.13 | 46 |
 
 READ THE MIXED-POPULATION ROWS, NOT THE PER-POLICY ONES. Inside a single policy the
 simulated participants differ only where that policy consults its RNG, so its paired sd is
 a floor rather than a forecast. The mixed population — each participant given one of the
 four behavioural types (20% RATIONAL-WITH-AI, 35% TRUSTING, 15% SKEPTICAL, 30% NOISY-SATISFICER) —
-is the honest guide, and it says 28 participants for the main score effect and
-28 for the frontier-share effect.
+is the honest guide, and it says 1356 participants for the main score effect and
+46 for the frontier-share effect.
 
-The INTERACTION is the expensive contrast: 145 participants at 24 scored rounds. If
+The INTERACTION is the expensive contrast: 24 participants at 24 scored rounds. If
 the sparse-versus-dense interaction is the headline, the parameter to move is the number
 of rounds, not the sample — the paired sd falls with the square root of the rounds per
 cell, so 16 scored rounds a condition would cut the required n by about a third at the
 same recruitment cost per person. With the recommended c_R = 4 and sparse K = 3 the
-interaction itself grows from -3.56 to -7.39, which buys back more than that.
+interaction itself grows from -9.14 to -9.14, which buys back more than that.
 
-Null check: RATIONAL-NO-AI cannot see the condition at all and returns -0.07 with a paired
-sd of 4.06. That is the simulator's own zero, and it also shows the two blocks are
+Null check: RATIONAL-NO-AI cannot see the condition at all and returns -0.04 with a paired
+sd of 2.45. That is the simulator's own zero, and it also shows the two blocks are
 balanced — a block difference would appear there first.
 
 
@@ -194,13 +196,13 @@ AI-ON comparison interpretable.
 
 | layout | frontier share of first moves — no AI | rational + AI | trusting | satisficer |
 |---|---|---|---|---|
-| FRONTIER | 100.0% | 100.0% | 100.0% | 89.0% |
-| BALANCED | 42.9% | 37.5% | 37.5% | 7.9% |
-| GAP | 0.0% | 0.0% | 0.0% | 2.3% |
+| FRONTIER | 100.0% | 100.0% | 100.0% | 88.3% |
+| BALANCED | 42.9% | 37.5% | 37.5% | 7.8% |
+| GAP | 0.0% | 0.0% | 0.0% | 2.4% |
 
 FRONTIER against GAP is a 100 percentage-point spread in the frontier share with no AI
 on the screen, and BALANCED sits between them. That is the manipulation working as
-intended. Against it, the AI moves the frontier share by -6.34 points in the mixed
+intended. Against it, the AI moves the frontier share by -6.28 points in the mixed
 population — smaller than the layout effect, and in the predicted direction: an AI that
 extrapolates FLAT beyond the outermost anchor gives a participant no reason to go there.
 
@@ -213,22 +215,22 @@ has to be reported as such.
 
 ## 6 · What to move
 
-Move the REVEAL COST from 5 to 4, and SPARSE K from 4 to 3. Leave the question cost,
+Move the REVEAL COST from 4 to 4, and SPARSE K from 3 to 3. Leave the question cost,
 the dense K, both caps, the three layouts and the 24 rounds exactly as they are.
 
-Justification, all measured above: at the current settings unaided search buys only +5.90 points
+Justification, all measured above: at the current settings unaided search buys only +10.64 points
 over spending nothing and the trusting participant is HELPED by the AI at both densities
-(+4.30 sparse, +7.85), so the study's central prediction has no sign to detect. At
-c_R = 4 with sparse K = 3, unaided search buys +8.93 and the trusting participant is
-HURT in sparse rounds (-1.56) while still being helped in dense ones (+5.83) — a
-genuine sign flip, with the sparse/dense difference growing from -3.56 to -7.39. Both
+(-4.14 sparse, +5.00), so the study's central prediction has no sign to detect. At
+c_R = 4 with sparse K = 3, unaided search buys +10.64 and the trusting participant is
+HURT in sparse rounds (-4.14) while still being helped in dense ones (+5.00) — a
+genuine sign flip, with the sparse/dense difference growing from -9.14 to -9.14. Both
 moves keep s* inside the window that makes the density manipulation meaningful at all —
 and they help each other there: at sparse K = 3 the admissible cost window widens from
-(3.64, 5.76) to (3.64, 6.65), so c_R = 4 sits comfortably inside it rather than near an edge.
+(3.64, 6.65) to (3.64, 6.65), so c_R = 4 sits comfortably inside it rather than near an edge.
 
 And if neither is moved, the pre-registration should be rewritten rather than the code:
-at c_R = 5 and K = 4/10 this environment produces a GRADIENT, not a flip — the AI is worth
-3.6 points less when it is sparse than when it is dense — and predicting "the AI
+at c_R = 4 and K = 3/10 this environment produces a GRADIENT, not a flip — the AI is worth
+9.1 points less when it is sparse than when it is dense — and predicting "the AI
 helps at K = 10 and hurts at K = 4" would be predicting something the design as built does
 not produce.
 

@@ -1038,29 +1038,57 @@ md('');
 rule('WHAT THE SIMULATION SAYS ABOUT THE PARAMETERS');
 
 sect('The short answer');
-para([
-  'The environment, the three layouts, the caps and the 24 scored rounds are all adequate,',
-  'and the crossover has ample power. TWO parameters are mis-set, and they are mis-set in',
-  'the same direction — both make the AI too easy to live with:',
-  '',
-  '  · THE REVEAL COST IS TOO HIGH. At c_R = ' + C_R + ' an unaided searcher who plays the study\'s',
-  '    own myopic-EI benchmark opens ' + f2(cm(rat, 'r')) + ' positions a round and beats spending nothing by',
-  '    ' + sgn(searchPays) + ' points. The AI-OFF arm is barely a search arm. Lower it to 4.',
-  '',
-  '  · SPARSE K = ' + P.ai.sparseK + ' IS NOT SPARSE ENOUGH. Four anchors already make the AI worth trusting:',
-  '    a trusting participant GAINS ' + sgn(cur.tru.eS) + ' points in sparse rounds, when the design',
-  '    predicts a loss. Lower it to 3.',
-  '',
-  'Neither is a flaw in the build; both are numbers on the admin\'s Parameters screen. Made',
-  'together the two moves turn the headline result from a gradient into the sign flip the',
-  'design predicts, at no cost to anything else.'
-]);
+// The verdict is a FUNCTION OF THE MEASUREMENT, not a fixed story: this file is
+// generated, so it has to read correctly for whatever the parameters currently
+// are. When the settings already produce the sign flip it says so; when they do
+// not it says which way to move and by how much.
+var flipNow = (cur.tru.eS < 0 && cur.tru.eD > 0) || (cur.tru.eS > 0 && cur.tru.eD < 0);
+if (flipNow) {
+  para([
+    'The environment, the three layouts, the caps and the 24 scored rounds are all adequate,',
+    'the crossover has ample power, and AT THE CURRENT SETTINGS — reveal cost ' + C_R + ', sparse',
+    'K = ' + P.ai.sparseK + ' against dense K = ' + P.ai.denseK + ' — THE DESIGN\'S CENTRAL PREDICTION HOLDS:',
+    '',
+    '  · THE SIGN FLIPS. A trusting participant ' + (cur.tru.eS < 0 ? 'LOSES' : 'gains') + ' ' + sgn(cur.tru.eS) + ' points in sparse',
+    '    rounds and ' + (cur.tru.eD > 0 ? 'GAINS' : 'loses') + ' ' + sgn(cur.tru.eD) + ' in dense ones. That is a change of sign, not a',
+    '    gradient — which is what the sample was sized for.',
+    '',
+    '  · THE AI-OFF ARM IS A REAL SEARCH ARM. An unaided searcher playing the study\'s own',
+    '    myopic-EI benchmark opens ' + f2(cm(rat, 'r')) + ' positions a round and beats spending nothing by',
+    '    ' + sgn(searchPays) + ' points, so there is behaviour to compare against.',
+    '',
+    'Both properties are fragile in the same direction, and the guard rail is arithmetic: s*',
+    '= c_R·√(2π) must fall between the dense mid-gap SD and the sparse one. Outside that band',
+    'verification pays either everywhere or nowhere and the density manipulation has nothing',
+    'left to manipulate. selftest.js asserts the window, so an edit that breaks it fails there',
+    'rather than in the data.'
+  ]);
+} else {
+  para([
+    'The environment, the three layouts, the caps and the 24 scored rounds are all adequate,',
+    'and the crossover has ample power. TWO parameters are mis-set, and they are mis-set in',
+    'the same direction — both make the AI too easy to live with:',
+    '',
+    '  · THE REVEAL COST IS TOO HIGH. At c_R = ' + C_R + ' an unaided searcher who plays the study\'s',
+    '    own myopic-EI benchmark opens ' + f2(cm(rat, 'r')) + ' positions a round and beats spending nothing by',
+    '    ' + sgn(searchPays) + ' points. The AI-OFF arm is barely a search arm.',
+    '',
+    '  · SPARSE K = ' + P.ai.sparseK + ' IS NOT SPARSE ENOUGH. A trusting participant makes ' + sgn(cur.tru.eS) + ' points in',
+    '    sparse rounds, where the design predicts a loss.',
+    '',
+    'Neither is a flaw in the build; both are numbers on the admin\'s Parameters screen. The',
+    'table below is measured, not argued: it is the two moves separately and together.'
+  ]);
+}
 bothTable(['setting', 'unaided search buys', 'reveals/round', 'trusting · sparse', 'trusting · dense', 'sign'],
   [
-    ['current  c_R 5, K 4/10', sgn(cur.floor), f2(cur.rev), sgn(cur.tru.eS), sgn(cur.tru.eD), 'gradient'],
-    ['c_R 4 alone', sgn(cheapOnly.floor), f2(cheapOnly.rev), sgn(cheapOnly.tru.eS), sgn(cheapOnly.tru.eD), 'gradient'],
-    ['K 3/10 alone', sgn(sparseOnly.floor), f2(sparseOnly.rev), sgn(sparseOnly.tru.eS), sgn(sparseOnly.tru.eD), 'gradient'],
-    ['BOTH  c_R 4, K 3/10', sgn(rec.floor), f2(rec.rev), sgn(rec.tru.eS), sgn(rec.tru.eD),
+    ['CURRENT  c_R ' + C_R + ', K ' + P.ai.sparseK + '/' + P.ai.denseK,
+      sgn(cur.floor), f2(cur.rev), sgn(cur.tru.eS), sgn(cur.tru.eD), flipNow ? 'FLIP' : 'gradient'],
+    ['reveal cost 4', sgn(cheapOnly.floor), f2(cheapOnly.rev), sgn(cheapOnly.tru.eS), sgn(cheapOnly.tru.eD),
+      (cheapOnly.tru.eS < 0) !== (cheapOnly.tru.eD < 0) ? 'FLIP' : 'gradient'],
+    ['sparse K 3', sgn(sparseOnly.floor), f2(sparseOnly.rev), sgn(sparseOnly.tru.eS), sgn(sparseOnly.tru.eD),
+      (sparseOnly.tru.eS < 0) !== (sparseOnly.tru.eD < 0) ? 'FLIP' : 'gradient'],
+    ['both  c_R 4, K 3/10', sgn(rec.floor), f2(rec.rev), sgn(rec.tru.eS), sgn(rec.tru.eD),
       rec.flip ? 'FLIP' : 'gradient']
   ], ['l']);
 

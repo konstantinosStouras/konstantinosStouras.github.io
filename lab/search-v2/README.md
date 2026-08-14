@@ -119,8 +119,8 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 210 checks, no browser
-node lab/search-v2/tools/smoke.mjs           # 141 checks, a whole session
+node lab/search-v2/tools/selftest.js         # 211 checks, no browser
+node lab/search-v2/tools/smoke.mjs           # 169 checks, a whole session
 node lab/search-v2/tools/admin-smoke.mjs     # 119 checks, the admin panel
 node lab/search-v2/tools/platform-guard.mjs  #  26 checks, the platform contract
 node lab/search-v2/tools/layout-guard.mjs    #  89 checks, five window sizes
@@ -462,14 +462,15 @@ pool of 600. That changes the task, so it belongs to a new session.
 
 ## Deviations from the design brief
 
-Everything else follows the brief line by line. These four do not, and each is
+Everything else follows the brief line by line. These five do not, and each is
 recorded here because an appendix will need them.
 
 | Deviation | Why |
 |---|---|
+| Reveal cost **4**, not 5, and sparse **K = 3**, not 4 | measured over 1000 simulated participants (`tools/simulate.mjs`): at the brief's values the AI-OFF arm is barely a search arm and the sparse/dense contrast is a gradient, not the sign change the design rests on. Moving both flips it; neither alone does. See `tools/SIMULATION-FINDINGS.md` |
 | Mapping pool of **600**, not 200 | measured: ~2% of pairings pass the §9 filter, so 200 cannot give 16 seeded specs a distinct curve each. See `SEEDS.md` |
 | Reveal cap **20** | §7, §17b and §20b all say 20; the §20c table says 30. The three-to-one reading wins |
-| Mean anchor gap read as **J/K** | §17b writes the formula `100/(K+1)` but quotes 25.0 for K = 4, and the SD beside it, 14.43, is `σ·√25/2`. The values are right and the formula is a slip |
+| Mean anchor gap read as **J/K** | §17b writes the formula `100/(K+1)` but quotes 25.0 for K = 4, and the SD beside it, 14.43, is `σ·√25/2`. The values are right and the formula is a slip. (At this build's K = 3 the same rule gives 33.3 and 16.67.) |
 | The AI instructions come **before** the first AI round, warm-up included | §13 orders them warm-up → AI instructions for block 1 (steps 3–4) but AI instructions → warm-up for block 2 (steps 7–8). Block 1's order would put an unexplained "Ask the AI" button in front of a participant; block 2's order is followed in both |
 
 Two of the brief's own figures do not reproduce from the numbers printed next to
