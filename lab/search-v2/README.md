@@ -119,9 +119,9 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 206 checks, no browser
+node lab/search-v2/tools/selftest.js         # 210 checks, no browser
 node lab/search-v2/tools/smoke.mjs           # 141 checks, a whole session
-node lab/search-v2/tools/admin-smoke.mjs     # 117 checks, the admin panel
+node lab/search-v2/tools/admin-smoke.mjs     # 119 checks, the admin panel
 node lab/search-v2/tools/platform-guard.mjs  #  26 checks, the platform contract
 node lab/search-v2/tools/layout-guard.mjs    #  89 checks, five window sizes
 node lab/search-v2/tools/preview-guard.mjs   #  the sandbox writes nothing
@@ -369,6 +369,25 @@ action: **both** anchor sets — `ai_anchors_before` (what the AI knows, private
 anchors included) and `participant_known_before` (what the participant knows) —
 plus `participant_queried_before`, the two "best" values, the counts, and the
 timing and scanning that preceded the choice.
+
+### The workbook is meant to be read
+
+One `.xlsx` per session, plus the three CSVs. Sheet order is **ReadMe ·
+Dictionary · Run · Specs · Decisions · Rounds · Participants · Slider ·
+Attention · Raw**, and the second of those is the one that makes the rest
+legible: every column of the three analysis sheets described in a sentence, with
+its type, generated from `admin/dictionary.js`. `tools/selftest.js` **fails** if
+a column is exported without a description, so the two cannot drift — a derived
+field nobody can define in a sentence is a field nobody should be analysing.
+
+It stays tidy while it does that: one row per observation, one column per
+variable, no merged cells, no spacer rows inside a data sheet. Header row frozen
+and filterable, numbers written as numbers, booleans as real booleans (so the
+cell reads TRUE/FALSE in Excel and parses as a boolean in pandas — the same as
+the CSVs), timestamps as both epoch milliseconds and ISO 8601, and an empty cell
+meaning *not applicable*, never zero. `participant_code + round_index` joins
+Decisions to Rounds; `participant_code` joins either to Participants; `spec_id`
+joins any of them to Specs.
 
 ### Export
 

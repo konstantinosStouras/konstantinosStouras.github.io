@@ -312,6 +312,19 @@ await pg.locator('#btn-dl-xlsx').click();
 const got = await dl;
 ok(got === null, 'the workbook button refuses politely until an event log is loaded (there is none offline)');
 
+// ── the workbook a human has to read ──────────────────────────────────────
+const wb = await pg.evaluate(() => {
+  const b = window.SVExportTestHook;
+  return b ? b.map(s => ({ name: s.name, rows: s.rows.length, first: (s.rows[0] || []).slice(0, 4) })) : null;
+});
+if (wb) {
+  const names = wb.map(s => s.name);
+  ok(names.indexOf('Dictionary') === 1,
+    'the workbook puts a Dictionary right after the ReadMe, before any data', names.join(' · '));
+  const dict = wb.find(s => s.name === 'Dictionary');
+  ok(dict && dict.rows > 150, 'and it describes every column of the three analysis sheets', dict && String(dict.rows));
+}
+
 // ── every round, drawn — the admin-only view of the ground truth ──────────
 await pg.locator('#btn-rg-draw').click();
 await pg.waitForTimeout(1500);

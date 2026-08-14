@@ -18,6 +18,7 @@ const Ai = require('../ai.js');
 const Content = require('../content.js');
 const X = require('../admin/export.js');
 const Xlsx = require('../admin/xlsx.js');
+const Dict = require('../admin/dictionary.js');
 
 let fails = 0, checks = 0;
 function ok(cond, msg, detail) {
@@ -435,6 +436,18 @@ const run = {
     'step_size is computed for consecutive reveals');
   ok(built.decisions.filter(d => d.action === 'reveal').every(d => d.decision_index === 0 || d.step_size != null || d.n_reveals_before === 0),
     'step_size is undefined only for the first reveal of a round');
+
+  // Every exported column must be documented. A derived field nobody can define
+  // in a sentence is a field nobody should be analysing — and the workbook's
+  // Dictionary sheet is generated from the same map, so this keeps the two from
+  // drifting apart as columns are added.
+  [['Decisions', built.decisions], ['Rounds', built.rounds], ['Participants', built.participants]].forEach(function (pair) {
+    const missing = Dict.undocumented(pair[0], X.columnsOf(pair[1]));
+    ok(missing.length === 0, 'every ' + pair[0] + ' column is described in admin/dictionary.js',
+      missing.join(', '));
+  });
+  ok(Dict.sheets.length === 3 && Dict.oneRowIs('Decisions').length > 10,
+    'and each analysis sheet states what one of its rows is');
 
   const r0 = built.rounds[0];
   ok(r0.global_max === Pool.maxOf(art.pool[r0.mapping_index]), 'global_max comes from the mapping');

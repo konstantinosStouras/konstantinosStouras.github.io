@@ -2453,10 +2453,20 @@ Operations group and the next-entrant override stay editable), enforced by
 `firestore.rules`, not by the UI. Consequences recompute live with two badges.
 The four buttons under the form are unchanged in number and colour from the
 previous panel: **Save session** (green), then Cancel edit / Make this the
-default / Restore built-in default (ghost). Export is one workbook (ReadMe, Run,
+default / Restore built-in default (ghost). Export is one workbook (ReadMe, **Dictionary**, Run,
 Specs, Decisions, Rounds, Participants, Slider, Attention, Raw) plus the three
 CSVs, bundling the session's frozen configuration and a checksum; `interrupted`
 and `disengaged` are COLUMNS, not filters.
+**The Dictionary sheet describes EVERY column** of Decisions/Rounds/Participants
+in a sentence + a type, generated from `admin/dictionary.js`; `selftest.js`
+FAILS when a column is exported without an entry, so the two can never drift —
+add the entry in the same change as the column. The data sheets stay tidy (one
+row per observation, no merged cells or spacer rows), header frozen +
+filterable, numbers as numbers, **booleans as real Excel booleans** (reads
+TRUE/FALSE, parses as boolean — same as the CSVs), timestamps as epoch ms AND
+ISO, empty cell = not applicable (never 0). Join keys: `participant_code +
+round_index` (Decisions→Rounds), `participant_code` (→Participants), `spec_id`
+(→Specs).
 **A sixth tab, `Design notes`** (owner 2026-08 — the questions this design
 attracts, answered in the panel itself): does the AI hold private data (YES —
 K positions per round whose TRUE prize it knows exactly, plus every pre-opened
@@ -2569,9 +2579,9 @@ rows carry no `run_id`.
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (206) ·
+`node lab/search-v2/tools/selftest.js` (210) ·
 `tools/smoke.mjs` (141, a whole 28-round session) ·
-`tools/admin-smoke.mjs` (117) · `tools/platform-guard.mjs` (26) ·
+`tools/admin-smoke.mjs` (119) · `tools/platform-guard.mjs` (26) ·
 `tools/layout-guard.mjs` (89, reachability at five window sizes) ·
 `tools/preview-guard.mjs` · **`tools/emulator-test.mjs` (37, against the REAL
 Functions + Rules in the Firebase emulator — needs Java and firebase-tools, skips

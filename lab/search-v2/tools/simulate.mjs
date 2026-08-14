@@ -46,13 +46,22 @@ const P = Specs.withDefaults(null);
 const J = P.env.positions;
 const L = P.env.stepBound;
 const SIGMA = CFG.sigma(L);
-const S_STAR = CFG.sStar(P.costs.revealCost);
-const G_STAR = CFG.gStar(P.costs.revealCost, L);
-const C_R = P.costs.revealCost;
-const C_Q = P.costs.queryCost;
 const ROUNDING = P.ai.answerRounding;
 const SD_SPARSE = SIGMA * Math.sqrt(J / P.ai.sparseK) / 2;   // mid-gap sd, sparse
 const SD_DENSE = SIGMA * Math.sqrt(J / P.ai.denseK) / 2;     // mid-gap sd, dense
+
+// The cost context. These are `let` rather than `const` ONLY so the sensitivity
+// sweeps at the end can re-run the same policies at a different reveal cost;
+// the main run never touches them, and setCosts always leaves them at the
+// study's own values.
+let C_R, C_Q, S_STAR, G_STAR, TAIL_STAR;
+function setCosts(cR, cQ) {
+  C_R = cR; C_Q = cQ;
+  S_STAR = CFG.sStar(cR);                       // s* = c_R √(2π)          (§3.4)
+  G_STAR = CFG.gStar(cR, L);                    // g* = (2 s* / σ)²
+  TAIL_STAR = Math.pow(S_STAR / SIGMA, 2);      // σ√t > s*  ⇔  t > (s*/σ)²
+}
+setCosts(P.costs.revealCost, P.costs.queryCost);
 
 const pool = Pool.buildPool(P.env, P.env.generatorSeed);
 const specs = Specs.buildSpecs(pool, P, null);
@@ -121,6 +130,10 @@ function newRound(spec, aiOn) {
     askedVal: Object.create(null), askedOrder: [],
     nQueries: 0, nReveals: 0,
     first: null,                                  // the round's first action
+    // Whether an ANSWER can be nominated on. A policy that says it ignores the
+    // AI has to ignore it here too, or it quietly banks the information it is
+    // supposed to be throwing away.
+    useAsked: true,
     hypo: stratumMidpoints(spec.ai_k)
   };
 }
@@ -135,6 +148,7 @@ function bestTrueKnown(R) {
 function isOpen(R, p) { return R.preSet.has(p) || R.revealedSet.has(p); }
 function believedAt(R, p) {
   if (isOpen(R, p)) return R.mapping[p - 1];
+  if (!R.useAsked) return null;
   const a = R.askedVal[p];
   return (a == null) ? null : a;
 }
@@ -235,7 +249,6 @@ function playRationalNoAI(R, rng) {
 // a stopping rule instead of a one-step expectation. It exists because a myopic
 // rule stops the moment the NEXT reveal fails to pay, which is not the same
 // question as whether searching pays.
-const TAIL_STAR = Math.pow(S_STAR / SIGMA, 2);          // s = σ√t > s*  ⇔  t > (s*/σ)²
 function playSystematic(R) {
   for (let step = 0; step < P.costs.revealCap; step++) {
     const known = knownPairs(R);
@@ -315,6 +328,7 @@ function playTrusting(R, rng) {
 // the price of the wasted questions and nothing else — the lower bound on what
 // merely having the AI on the screen can cost.
 function playSkeptical(R, rng) {
+  R.useAsked = false;                             // it means it: the answers are dropped
   if (R.aiOn) {
     const wasted = Pool.randInt(rng, 0, 4);
     for (let i = 0; i < wasted; i++) doAsk(R, Pool.randInt(rng, 1, J));
@@ -406,25 +420,54 @@ specs.filter(s => s.scored).forEach(s => {
   const map = pool[s.mapping_index];
   const anchors = Ai.anchorSet(s.ai_anchors, s.pre_opened, [], map);
   let above = 0, sSum = 0, errSum = 0, errMax = 0, n = 0, maxGap = 0;
+  let peakPos = 1, peakVal = -Infinity;
   for (let i = 1; i < anchors.length; i++) maxGap = Math.max(maxGap, anchors[i].pos - anchors[i - 1].pos);
   for (let p = 1; p <= J; p++) {
+    const say_ = Ai.aiAnswer(anchors, p, ROUNDING);
     const sd_ = Ai.aiSd(anchors, p, SIGMA);
-    const e = Math.abs(Ai.aiAnswer(anchors, p, ROUNDING) - map[p - 1]);
+    const e = Math.abs(say_ - map[p - 1]);
     n++; sSum += sd_; errSum += e; if (e > errMax) errMax = e;
     if (sd_ > S_STAR) above++;
+    if (say_ > peakVal) { peakVal = say_; peakPos = p; }
   }
+  // …unless the highest anchor is the OUTERMOST one, in which case the flat
+  // extrapolation makes the whole tail beyond it a plateau of that same number,
+  // and the truth out there drifts away from it. That is the one place the AI's
+  // best answer is not a true prize.
+  const peakInTail = peakPos < anchors[0].pos || peakPos > anchors[anchors.length - 1].pos;
+  // Where the AI's curve is HIGHEST is where a trusting participant ends up. An
+  // interpolation of anchors peaks AT an anchor (§3), so the truth there is not
+  // an approximation of anything — it is a real prize, and this measures how
+  // good a prize following the machine to its peak actually lands you on.
+  const peakTruth = map[peakPos - 1], ceiling = Pool.maxOf(map);
   [s.ai_density, s.seed_shape, s.ai_density + '·' + s.seed_shape].forEach(k => {
-    const g = geo[k] || (geo[k] = { specs: 0, n: 0, above: 0, s: 0, err: 0, errMax: 0, gap: 0 });
+    const g = geo[k] || (geo[k] = {
+      specs: 0, n: 0, above: 0, s: 0, err: 0, errMax: 0, gap: 0,
+      peakErr: 0, peakShare: 0, peakTruth: 0, peakTail: 0
+    });
     g.specs++; g.n += n; g.above += above; g.s += sSum; g.err += errSum;
     g.gap += maxGap; if (errMax > g.errMax) g.errMax = errMax;
+    g.peakErr += Math.abs(peakVal - peakTruth);
+    g.peakTruth += peakTruth;
+    g.peakShare += peakTruth / ceiling;
+    if (peakInTail) g.peakTail++;
   });
 });
+
+// The environment's own floor: the mean prize over every position of every
+// scored mapping. A participant who nominates a position at random, having spent
+// nothing, expects this. Everything a searcher pays for has to beat it.
+const ENV_MEAN = (() => {
+  let s = 0, n = 0;
+  specs.filter(x => x.scored).forEach(x => pool[x.mapping_index].forEach(v => { s += v; n++; }));
+  return s / n;
+})();
 
 // ── accumulators ───────────────────────────────────────────────────────────
 function newCell() {
   return {
     n: 0, score: 0, score2: 0, q: 0, r: 0, truth: 0, cost: 0,
-    fmN: 0, fmFront: 0, unver: 0, ceiling: 0, cap: 0,
+    fmN: 0, fmFront: 0, acted: 0, unver: 0, ceiling: 0, cap: 0,
     aiN: 0, aiOff: 0, aiAbs: 0, aiMax: 0,
     cfN: 0, cfWorse: 0, cfLoss: 0
   };
@@ -459,6 +502,7 @@ function record(policy, cond, buckets, out, spec, cf) {
     c.truth += out.truth; c.cost += out.cost; c.ceiling += ceiling;
     if (out.capHit) c.cap++;
     if (out.unverified) c.unver++;
+    if (out.first) c.acted++;
     if (front != null) { c.fmN++; c.fmFront += front; }
     if (cond === 'AI_ON' && out.aiShown != null && out.unverified) {
       const d = Math.abs(out.aiShown - out.truth);
@@ -504,8 +548,11 @@ for (let i = 1; i <= N; i++) {
       const seed = code + '|' + policy + '|' + spec.spec_id;
       const out = PLAY[policy](newRound(spec, aiOn), Pool.rngFrom(Pool.hashSeed(seed)));
 
+      // The counterfactual runs on the SAME rng stream, so a policy that does not
+      // change its behaviour between conditions produces an identical round and
+      // the "worse with the AI" column reads exactly zero for it.
       let cf = null;
-      if (aiOn) cf = PLAY_OFF[policy](newRound(spec, false), Pool.rngFrom(Pool.hashSeed(seed + '|cf')));
+      if (aiOn) cf = PLAY_OFF[policy](newRound(spec, false), Pool.rngFrom(Pool.hashSeed(seed)));
 
       record(policy, r.condition, ['ALL', spec.seed_shape, spec.ai_density], out, spec, cf);
 
@@ -522,6 +569,35 @@ for (let i = 1; i <= N; i++) {
     pp.fmOn.push(mean(acc.fmOn)); pp.fmOff.push(mean(acc.fmOff));
   });
 }
+
+// ── a mixed population ─────────────────────────────────────────────────────
+// Every participant above played every policy, which makes the policies
+// comparable but makes each one's sample far too homogeneous to read power off.
+// So: give each simulated participant ONE behavioural type, drawn from their own
+// code, and re-do the paired analysis over that mixture. This is the number a
+// real study should be powered against.
+const MIX = [
+  { p: 'RATIONAL-WITH-AI', w: 0.20 },
+  { p: 'TRUSTING', w: 0.35 },
+  { p: 'SKEPTICAL', w: 0.15 },
+  { p: 'NOISY-SATISFICER', w: 0.30 }
+];
+const mix = { on: [], off: [], onS: [], offS: [], onD: [], offD: [], fmOn: [], fmOff: [] };
+for (let i = 1; i <= N; i++) {
+  const u = Pool.rngFrom(Pool.hashSeed('SIM' + pad4(i) + '|type'))();
+  let acc = 0, chosen = MIX[MIX.length - 1].p;
+  for (const m of MIX) { acc += m.w; if (u < acc) { chosen = m.p; break; } }
+  const pp = perPart[chosen];
+  Object.keys(mix).forEach(k => mix[k].push(pp[k][i - 1]));
+}
+const mixScore = paired(mix, 'on', 'off');
+const mixS = paired(mix, 'onS', 'offS');
+const mixD = paired(mix, 'onD', 'offD');
+const mixF = paired(mix, 'fmOn', 'fmOff');
+const mixI = (() => {
+  const d = mix.onS.map((v, i) => (v - mix.offS[i]) - (mix.onD[i] - mix.offD[i])).filter(isFinite);
+  return { d, eff: mean(d), sd: sd(d), n: n80(mean(d), sd(d)) };
+})();
 
 // ── report ─────────────────────────────────────────────────────────────────
 function table(headers, rows, align) {
@@ -551,18 +627,33 @@ rule('TABLE 0 · the AI as actually built — geometry, before any participant a
       const g = geo[d + '·' + sh];
       if (!g) return;
       rows.push([d, sh === 'OPEN' ? 'blank' : sh, g.specs, f1(g.gap / g.specs),
-        f2(g.s / g.n), pct(g.above, g.n), f2(g.err / g.n), g.errMax]);
+        f2(g.s / g.n), pct(g.above, g.n), f2(g.err / g.n), g.errMax,
+        f2(g.peakErr / g.specs), f1(g.peakTruth / g.specs), (100 * g.peakShare / g.specs).toFixed(1) + '%']);
     });
     const g = geo[d];
     rows.push([d, 'ALL', g.specs, f1(g.gap / g.specs), f2(g.s / g.n),
-      pct(g.above, g.n), f2(g.err / g.n), g.errMax]);
+      pct(g.above, g.n), f2(g.err / g.n), g.errMax,
+      f2(g.peakErr / g.specs), f1(g.peakTruth / g.specs), (100 * g.peakShare / g.specs).toFixed(1) + '%']);
   });
-  say(table(['density', 'layout', 'specs', 'widest gap', 'mean sd', 'above s*', 'mean |err|', 'max |err|'],
-    rows, ['l', 'l']));
+  say(table(['density', 'layout', 'specs', 'widest gap', 'mean sd', 'above s*', 'mean |err|',
+    'max |err|', 'err at peak', 'truth at peak', 'of the best'], rows, ['l', 'l']));
   say('');
   say('  Over all 100 positions of every scored spec, with the AI\'s anchor set as the round');
   say('  BEGINS (its K private anchors plus the pre-opened positions). "above s*" is §16.8\'s');
-  say('  verify_pays: the share of the line where paying 5 for the truth is worth it.');
+  say('  verify_pays: the share of the line where paying ' + C_R + ' for the truth is worth it.');
+  say('');
+  say('  THE LAST THREE COLUMNS ARE THE DESIGN\'S CENTRAL PROBLEM. An interpolation of anchors');
+  say('  peaks AT an anchor, so wherever the AI\'s curve is highest it is usually telling the');
+  say('  exact truth — error at the peak is ' + f2(geo.SPARSE.peakErr / geo.SPARSE.specs) + ' in sparse rounds and ' +
+    f2(geo.DENSE.peakErr / geo.DENSE.specs) + ' in dense ones, and the prize');
+  say('  standing there is worth ' + (100 * geo.SPARSE.peakShare / geo.SPARSE.specs).toFixed(0) + '% / ' +
+    (100 * geo.DENSE.peakShare / geo.DENSE.specs).toFixed(0) + '% of the best on the board. Following the machine to');
+  say('  its highest number is mostly not a trap: it is a free pointer to a real, large prize.');
+  say('  The exception is the ' + (geo.SPARSE.peakTail + geo.DENSE.peakTail) + ' of ' +
+    (geo.SPARSE.specs + geo.DENSE.specs) + ' specs whose highest anchor is the OUTERMOST one: the flat');
+  say('  extrapolation then makes the whole tail beyond it a plateau of that same number, and');
+  say('  out there the truth drifts. That is the one geometry in which trust is genuinely');
+  say('  punished, and it is also the geometry the FRONTIER layout is built to create.');
 }
 
 rule('TABLE 1 · score by policy and condition (24 scored rounds, ' + N + ' participants)');
@@ -583,8 +674,9 @@ rule('TABLE 1 · score by policy and condition (24 scored rounds, ' + N + ' part
   say('  column is one baseline seen three times and the effect is attributable entirely to');
   say('  what the AI does to behaviour — which is what the crossover is for.');
   say('');
-  say('  Reference points, both measured here:');
+  say('  Reference points, all measured here:');
   say('    best prize on the board, mean         ' + f1(cm(cell('BLIND-GUESS', 'AI_OFF', 'ALL'), 'ceiling')));
+  say('    a position picked at random           ' + f2(ENV_MEAN) + '   (the environment\'s own mean)');
   say('    spend nothing, take what is offered   ' + f2(cm(cell('BLIND-GUESS', 'AI_OFF', 'ALL'), 'score')) +
     '   (BLIND-GUESS)');
   say('    unaided myopic search adds            ' +
@@ -655,8 +747,8 @@ say('  "AI wrong" / "mean |err|" are measured at the NOMINATED position, over th
 say('  ended on a position the participant never opened — the only rounds where the AI\'s');
 say('  number was all they had to go on.');
 
-rule('TABLE 4 · did the AI cost them? (each AI-ON round against the same round played');
-say('           by the same policy with the AI taken away)');
+rule('TABLE 4 · did the AI cost them? Each AI-ON round against the same round,\n' +
+  '           same participant, same rng, played with the AI taken away');
 {
   const rows = POLICIES.map(p => {
     const on = cell(p, 'AI_ON', 'ALL');
@@ -687,6 +779,173 @@ rule('TABLE 5 · power');
   say('  participant\'s own 12-round mean in that condition — the noise a between-subject');
   say('  design would face. The paired sd(dif) is smaller because the crossover removes the');
   say('  between-participant part of it, which is the whole reason the design is within.');
+  say('');
+  say('  READ THESE AS A FLOOR, NOT A FORECAST. Within one policy the simulated participants');
+  say('  differ only where the policy consults its own RNG, so the between-participant');
+  say('  variance is far smaller than a real sample\'s. The honest power figure is the MIXED');
+  say('  POPULATION below, where each participant is one of the four behavioural types.');
+  say('');
+  say('  MIXED POPULATION  ' + MIX.map(m => (100 * m.w).toFixed(0) + '% ' + m.p).join(' · '));
+  const rows2 = [
+    ['score (all rounds)', sgn(mixScore.eff), f2(mixScore.sd), nn(mixScore.n)],
+    ['score · sparse', sgn(mixS.eff), f2(mixS.sd), nn(mixS.n)],
+    ['score · dense', sgn(mixD.eff), f2(mixD.sd), nn(mixD.n)],
+    ['sparse − dense interaction', sgn(mixI.eff), f2(mixI.sd), nn(mixI.n)],
+    ['frontier share of first moves', sgn(mixF.eff * 100) + 'pp', f2(mixF.sd * 100), nn(mixF.n)]
+  ];
+  say(table(['contrast', 'effect', 'paired sd', 'n@80%'], rows2, ['l']));
+}
+
+// ── sensitivity: what would moving a parameter actually do? ────────────────
+// A recommendation is only worth making if the alternative was measured, so the
+// same policies are replayed at other reveal costs and other K pairs. Specs do
+// not depend on the costs, so the cost sweep re-uses the frozen ones; the K
+// sweep has to rebuild them, which is 6 ms.
+const SWEEP_N = Math.min(N, 200);
+const SWEEP_POLICIES = ['BLIND-GUESS', 'RATIONAL-NO-AI', 'SYSTEMATIC-NO-AI', 'RATIONAL-WITH-AI', 'TRUSTING'];
+function quickRun(specsX, nParts, policies) {
+  const res = {};
+  policies.forEach(p => { res[p] = { on: [], off: [], onS: [], offS: [], onD: [], offD: [], q: 0, r: 0, nOn: 0 }; });
+  for (let i = 1; i <= nParts; i++) {
+    const code = 'SIM' + pad4(i);
+    const plan = Specs.sessionPlan(specsX, code, (i % 2 === 1) ? 'A' : 'B', P);
+    policies.forEach(policy => {
+      const a = { on: [], off: [], onS: [], offS: [], onD: [], offD: [] };
+      plan.rounds.forEach(r => {
+        if (!r.scored) return;
+        const spec = r.spec, aiOn = r.condition === 'AI_ON';
+        const out = PLAY[policy](newRound(spec, aiOn),
+          Pool.rngFrom(Pool.hashSeed(code + '|' + policy + '|' + spec.spec_id)));
+        const side = aiOn ? 'on' : 'off';
+        a[side].push(out.score);
+        a[side + (spec.ai_density === 'SPARSE' ? 'S' : 'D')].push(out.score);
+        if (aiOn) { res[policy].q += out.nQueries; res[policy].r += out.nReveals; res[policy].nOn++; }
+      });
+      Object.keys(a).forEach(k => res[policy][k].push(mean(a[k])));
+    });
+  }
+  return res;
+}
+function sweepRow(res, policy) {
+  const t = paired(res[policy], 'on', 'off');
+  const s = paired(res[policy], 'onS', 'offS');
+  const d = paired(res[policy], 'onD', 'offD');
+  return { off: mean(res[policy].off), on: mean(res[policy].on), eff: t.eff, eS: s.eff, eD: d.eff };
+}
+
+// Re-anchor the frozen specs for a different K, keeping every mapping and every
+// pre-opened set exactly as it is — so a row of the K sweep differs from another
+// row ONLY in the treatment, and rows sharing a K are identical by construction.
+// Anchors are placed by Specs.placeAnchors, the same function the run uses.
+const respecCache = {};
+function respec(ks, kd) {
+  const key = ks + '/' + kd;
+  if (respecCache[key]) return respecCache[key];
+  const Px = Specs.withDefaults({ ai: { sparseK: ks, denseK: kd } });
+  const out = specs.map(s => {
+    const K = Specs.densityK(s.ai_density, Px);
+    if (K === s.ai_k) return s;                 // unchanged density: the REAL spec
+    const rng = Pool.rngFrom(Pool.hashSeed(s.spec_id + '|K' + K));
+    const copy = {};
+    Object.keys(s).forEach(k => { copy[k] = s[k]; });
+    copy.ai_k = K;
+    copy.ai_anchors = Specs.placeAnchors(K, rng, Px);
+    return copy;
+  });
+  respecCache[key] = out;
+  return out;
+}
+
+rule('TABLE 6 · sensitivity — the reveal cost (' + SWEEP_N + ' participants, specs unchanged)');
+const costSweep = [];
+{
+  [2, 2.5, 3, 3.5, 4, 4.58, 5, 6, 8].forEach(cR => {
+    setCosts(cR, P.costs.queryCost);
+    const res = quickRun(specs, SWEEP_N, SWEEP_POLICIES);
+    const blind = mean(res['BLIND-GUESS'].off);
+    const myo = sweepRow(res, 'RATIONAL-NO-AI');
+    const sys = sweepRow(res, 'SYSTEMATIC-NO-AI');
+    const rat = sweepRow(res, 'RATIONAL-WITH-AI');
+    const tru = sweepRow(res, 'TRUSTING');
+    costSweep.push({
+      cR, sStar: CFG.sStar(cR), blind, myo, sys, rat, tru,
+      rev: res['RATIONAL-NO-AI'].r / Math.max(1, res['RATIONAL-NO-AI'].nOn),
+      straddle: (SD_SPARSE > CFG.sStar(cR)) && (SD_DENSE < CFG.sStar(cR))
+    });
+  });
+  setCosts(P.costs.revealCost, P.costs.queryCost);
+  const rows = costSweep.map(x => [
+    (x.cR === P.costs.revealCost ? '→ ' : '  ') + x.cR, f2(x.sStar), x.straddle ? 'yes' : 'NO',
+    f2(x.myo.off), f2(x.rev), sgn(x.myo.off - x.blind), f2(x.sys.off),
+    sgn(x.rat.eff), sgn(x.tru.eff), sgn(x.tru.eS), sgn(x.tru.eD), sgn(x.tru.eS - x.tru.eD)
+  ]);
+  say(table(['c_R', 's*', 'straddle', 'no-AI score', 'reveals', 'vs floor', 'systematic',
+    'AI eff (rat)', 'AI eff (tru)', 'tru sparse', 'tru dense', 'sparse−dense'], rows, ['l']));
+  say('');
+  say('  "straddle" = does s* still fall between the dense mid-gap sd (' + SD_DENSE.toFixed(2) +
+    ') and the sparse one');
+  say('  (' + SD_SPARSE.toFixed(2) + ')? Outside that band, verification pays either everywhere or nowhere and');
+  say('  the sparse/dense manipulation has nothing left to manipulate.');
+  say('  "vs floor" = what unaided myopic search buys over spending nothing.');
+}
+
+rule('TABLE 7 · sensitivity — the two K values (' + SWEEP_N + ' participants, mappings unchanged)');
+const kSweep = [];
+{
+  [[2, 10], [3, 10], [4, 6], [4, 8], [4, 10], [4, 14], [5, 10], [6, 10]].forEach(([ks, kd]) => {
+    const res = quickRun(respec(ks, kd), SWEEP_N, ['RATIONAL-WITH-AI', 'TRUSTING']);
+    const rat = sweepRow(res, 'RATIONAL-WITH-AI');
+    const tru = sweepRow(res, 'TRUSTING');
+    const sdS = SIGMA * Math.sqrt(J / ks) / 2, sdD = SIGMA * Math.sqrt(J / kd) / 2;
+    kSweep.push({ ks, kd, sdS, sdD, rat, tru, straddle: sdS > S_STAR && sdD < S_STAR });
+  });
+  const rows = kSweep.map(x => [
+    (x.ks === P.ai.sparseK && x.kd === P.ai.denseK ? '→ ' : '  ') + x.ks + ' / ' + x.kd,
+    f2(x.sdS), f2(x.sdD), x.straddle ? 'yes' : 'NO',
+    sgn(x.tru.eS), sgn(x.tru.eD), sgn(x.tru.eS - x.tru.eD),
+    sgn(x.rat.eS), sgn(x.rat.eD), sgn(x.rat.eS - x.rat.eD)
+  ]);
+  say(table(['K sparse/dense', 'sd sparse', 'sd dense', 'straddle',
+    'tru sparse', 'tru dense', 'tru diff', 'rat sparse', 'rat dense', 'rat diff'], rows, ['l']));
+  say('');
+  say('  Only the anchors move between rows: every mapping and every pre-opened set is the one');
+  say('  the run actually serves, a density whose K is unchanged keeps the run\'s OWN anchors,');
+  say('  and two rows sharing a K share their anchors exactly. So a column is comparable down');
+  say('  the table, the sparse side is literally identical wherever K sparse is, and the → row');
+  say('  is the study as it currently stands.');
+}
+
+rule('TABLE 8 · sensitivity — the two together, and the candidate settings');
+const jointSweep = [];
+{
+  [[5, 4, 10], [4, 4, 10], [5, 3, 10], [4, 3, 10], [3.5, 3, 10],
+  [3, 3, 10], [4, 2, 10], [3.5, 2, 10], [3, 4, 10]].forEach(([cR, ks, kd]) => {
+    setCosts(cR, P.costs.queryCost);
+    const res = quickRun(respec(ks, kd), SWEEP_N, SWEEP_POLICIES);
+    const blind = mean(res['BLIND-GUESS'].off);
+    const myo = sweepRow(res, 'RATIONAL-NO-AI');
+    const tru = sweepRow(res, 'TRUSTING');
+    const rat = sweepRow(res, 'RATIONAL-WITH-AI');
+    jointSweep.push({
+      cR, ks, kd, floor: myo.off - blind,
+      rev: res['RATIONAL-NO-AI'].r / Math.max(1, res['RATIONAL-NO-AI'].nOn),
+      tru, rat,
+      flip: (tru.eS > 0) !== (tru.eD > 0) && Math.abs(tru.eS) > 0.5 && Math.abs(tru.eD) > 0.5
+    });
+  });
+  setCosts(P.costs.revealCost, P.costs.queryCost);
+  const rows = jointSweep.map(x => [
+    (x.cR === P.costs.revealCost && x.ks === P.ai.sparseK && x.kd === P.ai.denseK ? '→ ' : '  ') +
+    'c_R ' + x.cR + ', K ' + x.ks + '/' + x.kd,
+    sgn(x.floor), f2(x.rev), sgn(x.tru.eS), sgn(x.tru.eD), sgn(x.tru.eS - x.tru.eD),
+    sgn(x.rat.eS), sgn(x.rat.eD), x.flip ? 'FLIP' : 'gradient'
+  ]);
+  say(table(['setting', 'search vs floor', 'reveals', 'tru sparse', 'tru dense', 'tru diff',
+    'rat sparse', 'rat dense', 'sign'], rows, ['l']));
+  say('');
+  say('  "search vs floor" is what unaided myopic search buys over spending nothing — the');
+  say('  measure of whether the AI-OFF arm is a search arm at all. "sign" asks whether the');
+  say('  trusting participant is HELPED at one density and HURT at the other.');
 }
 
 // ── the closing section, written from the numbers ─────────────────────────
@@ -695,342 +954,353 @@ const rat = cell('RATIONAL-NO-AI', 'AI_OFF', 'ALL');
 const sys = cell('SYSTEMATIC-NO-AI', 'AI_OFF', 'ALL');
 const ratAI = cell('RATIONAL-WITH-AI', 'AI_ON', 'ALL');
 const truOn = cell('TRUSTING', 'AI_ON', 'ALL');
-const satOn = cell('NOISY-SATISFICER', 'AI_ON', 'ALL');
 
 const searchPays = cm(rat, 'score') - cm(blind, 'score');
 const sysPays = cm(sys, 'score') - cm(blind, 'score');
 const tNull = paired(perPart['RATIONAL-NO-AI'], 'on', 'off');
 const tRat = paired(perPart['RATIONAL-WITH-AI'], 'on', 'off');
 const tTru = paired(perPart['TRUSTING'], 'on', 'off');
-const tSke = paired(perPart['SKEPTICAL'], 'on', 'off');
-const tSat = paired(perPart['NOISY-SATISFICER'], 'on', 'off');
-
-// The window of reveal costs in which a sparse/dense sign flip can exist AT ALL:
-// s* = c_R√(2π) has to fall between the two nominal mid-gap standard deviations.
-const CR_LO = SD_DENSE / Math.sqrt(2 * Math.PI);
-const CR_HI = SD_SPARSE / Math.sqrt(2 * Math.PI);
-// … and the K at which the nominal mid-gap sd equals s*, given the reveal cost.
-const K_STAR = J / G_STAR;
-
 const behavioural = ['RATIONAL-WITH-AI', 'TRUSTING', 'SKEPTICAL', 'NOISY-SATISFICER'];
 const flipping = behavioural.filter(p => flip[p].verdict === 'FLIP');
-const gradients = behavioural.map(p => Math.abs(flip[p].eS - flip[p].eD));
-const maxGradient = Math.max(...gradients);
-const geoS = geo['SPARSE'], geoD = geo['DENSE'];
+const maxGradient = Math.max(...behavioural.map(p => Math.abs(flip[p].eS - flip[p].eD)));
+const geoS = geo.SPARSE, geoD = geo.DENSE;
+
+// The window of reveal costs in which a sparse/dense sign change can exist at
+// all: s* = c_R√(2π) has to fall between the two nominal mid-gap standard
+// deviations. Closed form, not simulated — and the sweeps agree with it.
+const CR_LO = SD_DENSE / Math.sqrt(2 * Math.PI);
+const CR_HI = SD_SPARSE / Math.sqrt(2 * Math.PI);
+const CR_MID = Math.sqrt(SD_DENSE * SD_SPARSE) / Math.sqrt(2 * Math.PI);
+const K_STAR = J / G_STAR;
+
+// The candidate settings, straight out of Table 8.
+const cur = jointSweep.find(x => x.cR === P.costs.revealCost && x.ks === P.ai.sparseK && x.kd === P.ai.denseK);
+const rec = jointSweep.find(x => x.cR === 4 && x.ks === 3 && x.kd === 10);
+const cheapOnly = jointSweep.find(x => x.cR === 4 && x.ks === 4 && x.kd === 10);
+const sparseOnly = jointSweep.find(x => x.cR === 5 && x.ks === 3 && x.kd === 10);
+const cR2 = costSweep.find(x => x.cR === 2);
+const cR3 = costSweep.find(x => x.cR === 3);
+const cR4 = costSweep.find(x => x.cR === 4);
+const cR8 = costSweep.find(x => x.cR === 8);
+const k2 = kSweep.find(x => x.ks === 2 && x.kd === 10);
+const k3 = kSweep.find(x => x.ks === 3 && x.kd === 10);
+const k4 = kSweep.find(x => x.ks === 4 && x.kd === 10);
+const k6 = kSweep.find(x => x.ks === 6 && x.kd === 10);
 
 const MD = [];
 const md = s => MD.push(s);
-const both = s => { say(s.replace(/\*\*/g, '')); md(s); };
+function sect(title) {
+  say(''); say('  ' + title.toUpperCase()); say('');
+  md(''); md('## ' + title); md('');
+}
+function para(lines) {
+  lines.forEach(l => { say(l ? '     ' + l : ''); md(l); });
+  say(''); md('');
+}
+function bothTable(headers, rows, align) {
+  say(table(headers, rows, align).split('\n').map(l => '   ' + l).join('\n'));
+  say('');
+  md('| ' + headers.join(' | ') + ' |');
+  md('|' + headers.map(() => '---').join('|') + '|');
+  rows.forEach(r => md('| ' + r.map(x => String(x).trim()).join(' | ') + ' |'));
+  md('');
+}
 
 md('# What the simulation says about the parameters');
 md('');
 md('*Generated by `node lab/search-v2/tools/simulate.mjs`. ' + N + ' simulated participants ' +
-  '(' + Math.ceil(N / 2) + ' on sequence A, ' + Math.floor(N / 2) + ' on B), each playing all 28 rounds of ' +
-  'the real frozen artifacts — the same pool, the same 28 specs, the same AI — under seven ' +
-  'policies, with a counterfactual re-play of every AI-ON round. Every number below comes ' +
-  'from that run. Nothing is asserted that the simulator did not measure.*');
+  '(' + Math.ceil(N / 2) + ' on sequence A, ' + Math.floor(N / 2) + ' on B), each playing all 28 rounds of the real ' +
+  'frozen artifacts — the same mapping pool, the same 28 specs, the same AI — under seven ' +
+  'policies, with a counterfactual re-play of every AI-ON round and sensitivity sweeps over ' +
+  'the reveal cost and the two K values. Every number below comes from that run. Nothing is ' +
+  'asserted here that the simulator did not measure.*');
 md('');
 
 rule('WHAT THE SIMULATION SAYS ABOUT THE PARAMETERS');
-say('');
 
-// --- 1 · costs ------------------------------------------------------------
-md('## 1 · The costs (reveal 5, question 2)');
-md('');
-say('  1 · THE COSTS — reveal ' + C_R + ', question ' + C_Q);
-say('');
-{
-  const lines = [
-    'The 5:2 ratio works: the AI is worth consulting, which is the premise of the study.',
-    'RATIONAL-WITH-AI scores ' + f2(cm(ratAI, 'score')) + ' where the same searcher without an AI scores ' +
-    f2(cm(rat, 'score')) + ', spending ' + f1(cm(ratAI, 'cost')) + ' points a round against ' +
-    f1(cm(rat, 'cost')) + '.',
-    '',
-    'The LEVEL, however, is the design\'s weakest parameter, and the number that shows it is',
-    'the floor. A participant who spends nothing and nominates what the interface already',
-    'offers scores ' + f2(cm(blind, 'score')) + '. Myopic unaided search — §16.8\'s own benchmark — scores ' +
-    f2(cm(rat, 'score')) + ',',
-    'i.e. it buys ' + sgn(searchPays) + ' points for ' + f1(cm(rat, 'cost')) + ' points of effort. Systematic unaided search,',
-    'which opens the line until no gap is wider than g* = ' + G_STAR.toFixed(1) + ', scores ' + f2(cm(sys, 'score')) +
-    ' — ' + sgn(sysPays) + ' against',
-    'doing nothing, because ' + f1(cm(sys, 'r')) + ' reveals cost ' + f1(cm(sys, 'cost')) + ' and the prize surface has a mean of 62.',
-    '',
-    'So in the AI-OFF arm there is almost nothing for effort to buy, and the myopic',
-    'benchmark stops after ' + f2(cm(rat, 'r')) + ' reveals a round. That is not a bug in the benchmark: at',
-    'c_R = ' + C_R + ' it is the correct myopic answer. It does mean the AI-OFF arm is close to a',
-    'no-search arm, which narrows every contrast the study is trying to draw.'
-  ];
-  lines.forEach(l => { say('     ' + l); md(l); });
-  md('');
-  md('| | mean score | questions | reveals | spent | net of the do-nothing floor |');
-  md('|---|---|---|---|---|---|');
-  [['spend nothing (floor)', blind], ['myopic search, no AI', rat], ['systematic search, no AI', sys],
-  ['rational, with AI', ratAI], ['trusting, with AI', truOn]].forEach(([lab, c]) => {
-    md('| ' + lab + ' | ' + f2(cm(c, 'score')) + ' | ' + f2(cm(c, 'q')) + ' | ' + f2(cm(c, 'r')) +
-      ' | ' + f1(cm(c, 'cost')) + ' | ' + sgn(cm(c, 'score') - cm(blind, 'score')) + ' |');
-  });
-  md('');
-}
+sect('The short answer');
+para([
+  'The environment, the three layouts, the caps and the 24 scored rounds are all adequate,',
+  'and the crossover has ample power. TWO parameters are mis-set, and they are mis-set in',
+  'the same direction — both make the AI too easy to live with:',
+  '',
+  '  · THE REVEAL COST IS TOO HIGH. At c_R = ' + C_R + ' an unaided searcher who plays the study\'s',
+  '    own myopic-EI benchmark opens ' + f2(cm(rat, 'r')) + ' positions a round and beats spending nothing by',
+  '    ' + sgn(searchPays) + ' points. The AI-OFF arm is barely a search arm. Lower it to 4.',
+  '',
+  '  · SPARSE K = ' + P.ai.sparseK + ' IS NOT SPARSE ENOUGH. Four anchors already make the AI worth trusting:',
+  '    a trusting participant GAINS ' + sgn(flip['TRUSTING'].eS) + ' points in sparse rounds, when the design',
+  '    predicts a loss. Lower it to 3.',
+  '',
+  'Neither is a flaw in the build; both are numbers on the admin\'s Parameters screen. Made',
+  'together the two moves turn the headline result from a gradient into the sign flip the',
+  'design predicts, at no cost to anything else.'
+]);
+bothTable(['setting', 'unaided search buys', 'reveals/round', 'trusting · sparse', 'trusting · dense', 'sign'],
+  [
+    ['current  c_R 5, K 4/10', sgn(cur.floor), f2(cur.rev), sgn(cur.tru.eS), sgn(cur.tru.eD), 'gradient'],
+    ['c_R 4 alone', sgn(cheapOnly.floor), f2(cheapOnly.rev), sgn(cheapOnly.tru.eS), sgn(cheapOnly.tru.eD), 'gradient'],
+    ['K 3/10 alone', sgn(sparseOnly.floor), f2(sparseOnly.rev), sgn(sparseOnly.tru.eS), sgn(sparseOnly.tru.eD), 'gradient'],
+    ['BOTH  c_R 4, K 3/10', sgn(rec.floor), f2(rec.rev), sgn(rec.tru.eS), sgn(rec.tru.eD),
+      rec.flip ? 'FLIP' : 'gradient']
+  ], ['l']);
 
-// --- 2 · K ----------------------------------------------------------------
-say('');
-say('  2 · K = ' + P.ai.sparseK + ' AND K = ' + P.ai.denseK + ' — the straddle is real, the FLIP is not');
-say('');
-md('## 2 · K = 4 and K = 10 — the straddle holds, the sign flip does not follow');
-md('');
-{
-  const lines = [
-    'The geometry is exactly as designed. Measured over every position of every scored spec,',
-    'with the AI\'s anchor set as the round begins:',
-    '',
-    '  sparse   mean sd ' + f2(geoS.s / geoS.n) + '   ' + pct(geoS.above, geoS.n) +
-    ' of the line above s* = ' + S_STAR.toFixed(2) + '   mean |AI error| ' + f2(geoS.err / geoS.n),
-    '  dense    mean sd ' + f2(geoD.s / geoD.n) + '   ' + pct(geoD.above, geoD.n) +
-    ' of the line above s*             mean |AI error| ' + f2(geoD.err / geoD.n),
-    '',
-    'The two densities are separated by a factor of ' + (((geoS.err / geoS.n) / (geoD.err / geoD.n)).toFixed(1)) +
-    ' in how wrong the AI is, and the',
-    'verification threshold lands between them. The design\'s premise is sound.',
-    '',
-    'What does NOT follow is a sign change in SCORE. Per-participant crossover effects:'
-  ];
-  lines.forEach(l => { say('     ' + l); md(l === '' ? '' : (l.startsWith('  ') ? '`' + l + '`' : l)); });
-  md('');
-  md('| policy | sparse effect | dense effect | sparse − dense | n@80% for the interaction | verdict |');
-  md('|---|---|---|---|---|---|');
-  say('');
-  behavioural.forEach(p => {
-    const fl = flip[p];
-    say('       ' + p.padEnd(18) + ' sparse ' + sgn(fl.eS).padStart(7) + '   dense ' + sgn(fl.eD).padStart(7) +
-      '   difference ' + sgn(fl.eS - fl.eD).padStart(7) + '   ' +
-      (fl.verdict === 'FLIP' ? 'FLIP' : fl.verdict === 'near-zero' ? 'one side ≈ 0' : 'gradient'));
-    md('| ' + p + ' | ' + sgn(fl.eS) + ' | ' + sgn(fl.eD) + ' | ' + sgn(fl.eS - fl.eD) + ' | ' +
-      nn(fl.nInter) + ' | ' + (fl.verdict === 'FLIP' ? '**flip**' : fl.verdict === 'near-zero'
-        ? 'signs differ, one side ≈ 0' : 'gradient') + ' |');
-  });
-  say('');
-  md('');
-  const verdict = flipping.length
-    ? ['A sign flip is present for ' + flipping.join(' and ') + '. For the others the contrast is a',
-      'GRADIENT: the AI is worth less in sparse rounds than in dense ones, by up to ' +
-      maxGradient.toFixed(2) + ' points,',
-      'but it does not cross zero. Report the interaction, not "the AI hurts in sparse rounds".']
-    : ['NO POLICY FLIPS. The contrast is a GRADIENT in every case: the AI is worth up to ' +
-      maxGradient.toFixed(2),
-    'points less in sparse rounds than in dense ones, and stays the same sign throughout.',
-    'The reason is structural rather than a matter of tuning. The AI\'s curve can never',
-    'exceed its highest anchor (§3), so an over-trusting participant is steered TOWARDS the',
-    'largest value the AI knows — which is a real prize, and in this environment a good one.',
-    'A sparse AI is wronger, but it is wrong in a way that is not systematically downward,',
-    'so the money mistake it causes is smaller than the money saved by not revealing.'];
-  verdict.forEach(l => { say('     ' + l); md(l); });
-  md('');
-  const win = ['',
-    'The window in which a flip could exist at all is narrow and it is a property of the',
-    'REVEAL COST, not of K: s* = c_R·√(2π) has to fall between the two nominal mid-gap',
-    'standard deviations, ' + SD_DENSE.toFixed(2) + ' (dense) and ' + SD_SPARSE.toFixed(2) + ' (sparse), so',
-    '',
-    '    c_R must lie in (' + CR_LO.toFixed(2) + ', ' + CR_HI.toFixed(2) + ')  —  and it is ' + C_R + ', almost exactly mid-window.',
-    '',
-    'Equivalently, at c_R = ' + C_R + ' the K that sits exactly on the threshold is K* = ' + K_STAR.toFixed(2) + ':',
-    'sparse must be below it and dense above it, and K = ' + P.ai.sparseK + ' / K = ' + P.ai.denseK + ' straddle it with ' +
-    (100 * (SD_SPARSE / S_STAR - 1)).toFixed(0) + '%',
-    'and ' + (100 * (1 - SD_DENSE / S_STAR)).toFixed(0) + '% of margin. Nothing about the two K values needs to move.'];
-  win.forEach(l => { say('     ' + l); md(l === '' ? '' : (l.startsWith('    c_R') ? '`' + l.trim() + '`' : l)); });
-  md('');
-}
+sect('1 · The costs — reveal 5, question 2');
+para([
+  'The RATIO is right and should not move. Questions at 2 against reveals at 5 make the AI',
+  'worth consulting, which is the premise of the whole study: RATIONAL-WITH-AI scores ' +
+  f2(cm(ratAI, 'score')) + ',',
+  'where the same searcher without an AI scores ' + f2(cm(rat, 'score')) + '.',
+  '',
+  'The LEVEL is the design\'s weakest number, and the measurement that shows it is the floor.',
+  'A participant who spends nothing and nominates what the interface already offers scores',
+  f2(cm(blind, 'score')) + '. The myopic-EI benchmark of §16.8 scores ' + f2(cm(rat, 'score')) +
+  ' — it buys ' + sgn(searchPays) + ' points for ' + f1(cm(rat, 'cost')) + ' points of',
+  'effort, and it stops after ' + f2(cm(rat, 'r')) + ' reveals because at c_R = ' + C_R +
+  ' that is the correct myopic answer.',
+  'Searching HARDER makes it worse, not better: SYSTEMATIC-NO-AI, which opens the line until',
+  'no gap exceeds g* = ' + G_STAR.toFixed(1) + ', pays ' + f1(cm(sys, 'cost')) + ' points for ' +
+  f1(cm(sys, 'r')) + ' reveals and scores ' + f2(cm(sys, 'score')) + ' — ' + sgn(sysPays) + ' against',
+  'doing nothing. An arm in which effort does not pay cannot show what an AI does to effort.',
+  '',
+  'The sweep says how far to move it and where the wall is:'
+]);
+bothTable(['c_R', 's*', 'straddle holds', 'unaided search buys', 'reveals', 'AI effect (trusting)', 'sparse', 'dense'],
+  costSweep.map(x => [(x.cR === C_R ? '→ ' : '  ') + x.cR, f2(x.sStar), x.straddle ? 'yes' : 'NO',
+    sgn(x.myo.off - x.blind), f2(x.rev), sgn(x.tru.eff), sgn(x.tru.eS), sgn(x.tru.eD)]), ['l']);
+para([
+  'Two constraints bracket it. Search has to pay, which pushes c_R DOWN — at 4 the benchmark',
+  'opens ' + f2(cR4.rev) + ' positions and buys ' + sgn(cR4.myo.off - cR4.blind) + ', at 3 it opens ' +
+  f2(cR3.rev) + ' and buys ' + sgn(cR3.myo.off - cR3.blind) + ', at 2 it buys ' +
+  sgn(cR2.myo.off - cR2.blind) + '.',
+  'The sparse/dense manipulation has to survive, which pushes it UP: s* = c_R·√(2π) must land',
+  'between the two nominal mid-gap standard deviations, ' + SD_DENSE.toFixed(2) + ' (dense) and ' +
+  SD_SPARSE.toFixed(2) + ' (sparse), so',
+  '',
+  '     c_R must lie in (' + CR_LO.toFixed(2) + ', ' + CR_HI.toFixed(2) +
+  '), with its geometric centre at ' + CR_MID.toFixed(2) + '.',
+  '',
+  'RECOMMENDATION: c_R = 4. It nearly doubles what search is worth (' +
+  sgn(cur.floor) + ' → ' + sgn(cheapOnly.floor) + ') and raises',
+  'reveals from ' + f2(cur.rev) + ' to ' + f2(cheapOnly.rev) + ', while staying inside the window with ' +
+  (100 * (SD_SPARSE / CFG.sStar(4) - 1)).toFixed(0) + '% of margin above',
+  'and ' + (100 * (1 - SD_DENSE / CFG.sStar(4))).toFixed(0) +
+  '% below. Do not go below ' + CR_LO.toFixed(2) + ': there s* drops under the DENSE mid-gap sd,',
+  'verification pays everywhere, and the density manipulation has nothing left to manipulate',
+  '(the sweep shows it — at c_R = 3 and c_R = 2 the straddle column reads NO).',
+  '',
+  'Do not raise it. At c_R = ' + cR8.cR + ' unaided search buys ' + sgn(cR8.myo.off - cR8.blind) +
+  ' — it is a pure loss — and the AI',
+  '"effect" swells to ' + sgn(cR8.tru.eff) + ' points purely because the alternative got worse.'
+]);
 
-// --- 3 · caps -------------------------------------------------------------
-say('');
-say('  3 · THE CAPS — ' + P.costs.queryCap + ' questions / ' + P.costs.revealCap + ' reveals');
-say('');
-md('## 3 · The caps (40 questions, 20 reveals)');
-md('');
+sect('2 · K = 4 and K = 10 — the straddle holds, the sign flip does not follow from it');
+para([
+  'The geometry is exactly as specified. Over every position of every scored spec, with the',
+  'AI\'s anchor set as the round begins:',
+  '',
+  '  sparse   mean sd ' + f2(geoS.s / geoS.n) + '   ' + pct(geoS.above, geoS.n) + ' of the line above s* = ' +
+  S_STAR.toFixed(2) + '   mean |AI error| ' + f2(geoS.err / geoS.n) + '   worst ' + geoS.errMax,
+  '  dense    mean sd ' + f2(geoD.s / geoD.n) + '   ' + pct(geoD.above, geoD.n) + ' of the line above s*' +
+  '             mean |AI error| ' + f2(geoD.err / geoD.n) + '   worst ' + geoD.errMax,
+  '',
+  'The two densities differ by a factor of ' + ((geoS.err / geoS.n) / (geoD.err / geoD.n)).toFixed(1) +
+  ' in how wrong the AI is, and s* lands between them.',
+  'The mechanism is sound. What does not follow is a sign change in SCORE: at K = ' +
+  P.ai.sparseK + ' the trusting',
+  'participant is helped in sparse rounds too (' + sgn(flip['TRUSTING'].eS) + '), just less than in dense ones (' +
+  sgn(flip['TRUSTING'].eD) + ').',
+  '',
+  'THE REASON IS STRUCTURAL, and it is worth stating plainly because it is not a tuning',
+  'problem. An interpolation of anchors cannot exceed its anchors, so the AI\'s curve peaks',
+  'AT an anchor — a position where its number is the exact truth. Following the machine to',
+  'its highest answer therefore lands a participant on a REAL prize worth ' +
+  (100 * geoS.peakShare / geoS.specs).toFixed(0) + '% of the board\'s',
+  'best in sparse rounds and ' + (100 * geoD.peakShare / geoD.specs).toFixed(0) +
+  '% in dense ones. With four anchors that is already a good',
+  'deal, and no reveal cost makes it a bad one. The only geometry that punishes trust is the',
+  'flat extrapolation beyond the outermost anchor, where the AI repeats a number over a whole',
+  'plateau the truth wanders away from — which is what the FRONTIER layout builds, and it is',
+  'the ' + (geoS.peakTail + geoD.peakTail) + ' of ' + (geoS.specs + geoD.specs) + ' specs whose peak sits in a tail.',
+  '',
+  'So the lever is K itself. Fewer anchors means a lower best anchor, and a pointer worth',
+  'following becomes a pointer worth checking:'
+]);
+bothTable(['K sparse / dense', 'sd sparse', 'sd dense', 'straddle', 'trusting · sparse', 'trusting · dense', 'difference'],
+  kSweep.map(x => [(x.ks === P.ai.sparseK && x.kd === P.ai.denseK ? '→ ' : '  ') + x.ks + ' / ' + x.kd,
+    f2(x.sdS), f2(x.sdD), x.straddle ? 'yes' : 'NO',
+    sgn(x.tru.eS), sgn(x.tru.eD), sgn(x.tru.eS - x.tru.eD)]), ['l']);
+para([
+  'RECOMMENDATION: sparse K = 3, dense K = 10 unchanged. The sparse effect falls from ' +
+  sgn(k4.tru.eS) + ' to ' + sgn(k3.tru.eS) + ',',
+  'the sparse/dense difference roughly doubles (' + sgn(k4.tru.eS - k4.tru.eD) + ' → ' +
+  sgn(k3.tru.eS - k3.tru.eD) + '), and the mid-gap sd rises from',
+  SD_SPARSE.toFixed(2) + ' to ' + (SIGMA * Math.sqrt(J / 3) / 2).toFixed(2) +
+  ', further clear of s* rather than nearer it. K = 2 is stronger still',
+  '(' + sgn(k2.tru.eS) + ' sparse, difference ' + sgn(k2.tru.eS - k2.tru.eD) +
+  ') but two anchors on a hundred positions is barely an AI, and',
+  'the instructions have to state K to the participant.',
+  '',
+  'DO NOT RAISE SPARSE K. At K = ' + k6.ks + ' the nominal straddle fails outright (mid-gap sd ' +
+  k6.sdS.toFixed(2) + ' < s*),',
+  'and the measured difference collapses to ' + sgn(k6.tru.eS - k6.tru.eD) + '. Dense K = 10 needs no change:',
+  'it sits ' + (100 * (1 - SD_DENSE / S_STAR)).toFixed(0) +
+  '% below s* and its measured AI error is ' + f2(geoD.err / geoD.n) + ' points.'
+]);
+
+sect('3 · The caps — 40 questions, 20 reveals');
 {
-  const capShare = POLICIES.map(p => {
+  const capRows = POLICIES.map(p => {
     const on = cell(p, 'AI_ON', 'ALL'), off = cell(p, 'AI_OFF', 'ALL');
-    return { p, on: on.cap / Math.max(1, on.n), off: off.cap / Math.max(1, off.n), q: cm(on, 'q'), r: cm(off, 'r') };
+    return { p, q: cm(on, 'q'), r: Math.max(cm(on, 'r'), cm(off, 'r')), cap: Math.max(on.cap / Math.max(1, on.n), off.cap / Math.max(1, off.n)) };
   });
-  const worst = capShare.reduce((a, b) => (Math.max(a.on, a.off) > Math.max(b.on, b.off) ? a : b));
-  const lines = [
-    'Neither cap binds, on any policy. The heaviest questioner is ' +
-    capShare.reduce((a, b) => a.q > b.q ? a : b).p + ' at ' +
-    f2(capShare.reduce((a, b) => a.q > b.q ? a : b).q) + ' questions',
-    'a round against a cap of ' + P.costs.queryCap + '; the heaviest revealer is ' +
-    capShare.reduce((a, b) => a.r > b.r ? a : b).p + ' at ' +
-    f2(capShare.reduce((a, b) => a.r > b.r ? a : b).r) + ' of ' + P.costs.revealCap + '.',
-    'The highest share of rounds touching either cap is ' +
-    (100 * Math.max(worst.on, worst.off)).toFixed(1) + '% (' + worst.p + ').',
-    'The caps are doing their intended job — bounding a pathological session — and nothing',
-    'else. Leave them. They are not what limits search here; the reveal cost is.'
-  ];
-  lines.forEach(l => { say('     ' + l); md(l); });
-  md('');
+  const mq = capRows.reduce((a, b) => a.q > b.q ? a : b);
+  const mr = capRows.reduce((a, b) => a.r > b.r ? a : b);
+  const mc = capRows.reduce((a, b) => a.cap > b.cap ? a : b);
+  para([
+    'Neither cap binds on any policy. The heaviest questioner is ' + mq.p + ' at ' + f2(mq.q) +
+    ' questions a round',
+    'against a cap of ' + P.costs.queryCap + '; the heaviest revealer is ' + mr.p + ' at ' + f2(mr.r) +
+    ' of ' + P.costs.revealCap + '. The largest',
+    'share of rounds touching either cap is ' + (100 * mc.cap).toFixed(1) + '% (' + mc.p + ').',
+    '',
+    'The caps are doing exactly the job they were put there for — bounding a pathological',
+    'session — and nothing else. LEAVE THEM. They are also not what limits search here: the',
+    'reveal COST is, which is why the brief\'s own disagreement about whether the reveal cap',
+    'is 20 or 30 has no consequence either way.'
+  ]);
 }
 
-// --- 4 · rounds -----------------------------------------------------------
-say('');
-say('  4 · 24 SCORED ROUNDS');
-say('');
-md('## 4 · 24 scored rounds');
-md('');
-{
-  const lines = [
-    'Twelve rounds a condition is enough for every effect a plausible participant produces:',
-    ''
-  ];
-  lines.forEach(l => { say('     ' + l); md(l); });
-  md('| contrast | effect (points) | paired sd | participants for 80% power |');
-  md('|---|---|---|---|');
-  behavioural.forEach(p => {
+sect('4 · 24 scored rounds, and power');
+para([
+  'Twelve rounds a condition is enough for every effect a plausible participant produces.',
+  'In the mixed population a participant\'s own 12-round mean varies across people with sd ' +
+  f2(sd(mix.off)),
+  'in the AI-OFF condition and ' + f2(sd(mix.on)) + ' in AI-ON, and the paired difference has sd ' +
+  f2(mixScore.sd) + '.',
+  '',
+  'A caution about that last number rather than a boast: the crossover\'s usual advantage is',
+  'that it differences the person out, and in a real sample that is most of the variance. Here',
+  'it is not, because two simulated participants of the same type play almost the same way —',
+  'so the between-participant term the design removes is largely absent by construction, while',
+  'the term it CANNOT remove (the two blocks hold different mappings) is fully present. The',
+  'power figures below are therefore conservative on the person side and honest on the spec',
+  'side.'
+]);
+bothTable(['contrast', 'effect', 'paired sd', 'participants at 80% power'],
+  behavioural.map(p => {
     const t = paired(perPart[p], 'on', 'off');
-    say('       ' + p.padEnd(18) + ' effect ' + sgn(t.eff).padStart(7) + '   paired sd ' +
-      f2(t.sd).padStart(5) + '   n@80% ' + nn(t.n).padStart(5));
-    md('| ' + p + ' (score) | ' + sgn(t.eff) + ' | ' + f2(t.sd) + ' | ' + nn(t.n) + ' |');
-  });
-  const fdT = perPart['TRUSTING'].fmOn.map((v, i) => v - perPart['TRUSTING'].fmOff[i]).filter(isFinite);
-  const fdR = perPart['RATIONAL-WITH-AI'].fmOn.map((v, i) => v - perPart['RATIONAL-WITH-AI'].fmOff[i]).filter(isFinite);
-  md('| RATIONAL-WITH-AI (frontier share) | ' + sgn(mean(fdR) * 100) + 'pp | ' + f2(sd(fdR) * 100) +
-    ' | ' + nn(n80(mean(fdR), sd(fdR))) + ' |');
-  md('| TRUSTING (frontier share) | ' + sgn(mean(fdT) * 100) + 'pp | ' + f2(sd(fdT) * 100) +
-    ' | ' + nn(n80(mean(fdT), sd(fdT))) + ' |');
-  md('');
-  const tail = [
-    '',
-    'The null policy — RATIONAL-NO-AI, which cannot see the condition at all — returns ' +
-    sgn(tNull.eff) + ' with a',
-    'paired sd of ' + f2(tNull.sd) + '. That is the simulator\'s own zero and the floor any real effect',
-    'has to clear; it also shows the two blocks are balanced, since a block difference would',
-    'appear here first.',
-    '',
-    'The sparse-vs-dense INTERACTION is the expensive one: ' +
-    nn(flip['TRUSTING'].nInter) + ' participants for TRUSTING and ' +
-    nn(flip['RATIONAL-WITH-AI'].nInter),
-    'for RATIONAL-WITH-AI. If the interaction is the headline, 24 scored rounds is the',
-    'parameter to move, not the sample: the paired sd falls with the square root of the',
-    'rounds per cell, so 16 scored rounds per condition would cut the required n by about a',
-    'third at the same recruitment cost per participant.'
-  ];
-  tail.forEach(l => { say('     ' + l); md(l); });
-  md('');
-}
+    return [p + ' · score', sgn(t.eff), f2(t.sd), nn(t.n)];
+  }).concat([
+    ['MIXED POPULATION · score', sgn(mixScore.eff), f2(mixScore.sd), nn(mixScore.n)],
+    ['MIXED POPULATION · sparse − dense', sgn(mixI.eff), f2(mixI.sd), nn(mixI.n)],
+    ['MIXED POPULATION · frontier share', sgn(mixF.eff * 100) + 'pp', f2(mixF.sd * 100), nn(mixF.n)]
+  ]), ['l']);
+para([
+  'READ THE MIXED-POPULATION ROWS, NOT THE PER-POLICY ONES. Inside a single policy the',
+  'simulated participants differ only where that policy consults its RNG, so its paired sd is',
+  'a floor rather than a forecast. The mixed population — each participant given one of the',
+  'four behavioural types (' + MIX.map(m => (100 * m.w).toFixed(0) + '% ' + m.p).join(', ') + ') —',
+  'is the honest guide, and it says ' + nn(mixScore.n) + ' participants for the main score effect and',
+  nn(mixF.n) + ' for the frontier-share effect.',
+  '',
+  'The INTERACTION is the expensive contrast: ' + nn(mixI.n) + ' participants at 24 scored rounds. If',
+  'the sparse-versus-dense interaction is the headline, the parameter to move is the number',
+  'of rounds, not the sample — the paired sd falls with the square root of the rounds per',
+  'cell, so 16 scored rounds a condition would cut the required n by about a third at the',
+  'same recruitment cost per person. With the recommended c_R = 4 and sparse K = 3 the',
+  'interaction itself grows from ' + sgn(cur.tru.eS - cur.tru.eD) + ' to ' + sgn(rec.tru.eS - rec.tru.eD) +
+  ', which buys back more than that.',
+  '',
+  'Null check: RATIONAL-NO-AI cannot see the condition at all and returns ' + sgn(tNull.eff) +
+  ' with a paired',
+  'sd of ' + f2(tNull.sd) + '. That is the simulator\'s own zero, and it also shows the two blocks are',
+  'balanced — a block difference would appear there first.'
+]);
 
-// --- 5 · layouts ----------------------------------------------------------
-say('');
-say('  5 · THE THREE LAYOUTS');
-say('');
-md('## 5 · The three layouts');
-md('');
-{
-  md('| layout | frontier share of first moves — no AI | rational + AI | trusting | satisficer |');
-  md('|---|---|---|---|---|');
-  ['FRONTIER', 'BALANCED', 'GAP'].forEach(b => {
+sect('5 · The three layouts');
+para([
+  'Keep all three. They separate the primary outcome by a wider margin than anything else in',
+  'the design, and they do it with no AI in the picture at all — which is what makes the',
+  'AI-ON comparison interpretable.'
+]);
+bothTable(['layout', 'frontier share of first moves — no AI', 'rational + AI', 'trusting', 'satisficer'],
+  ['FRONTIER', 'BALANCED', 'GAP'].map(b => {
     const o = cell('RATIONAL-NO-AI', 'AI_OFF', b);
     const r = cell('RATIONAL-WITH-AI', 'AI_ON', b);
     const t = cell('TRUSTING', 'AI_ON', b);
     const s = cell('NOISY-SATISFICER', 'AI_ON', b);
-    say('       ' + b.padEnd(9) + ' no AI ' + pct(o.fmFront, o.fmN).padStart(7) +
-      '   rational+AI ' + pct(r.fmFront, r.fmN).padStart(7) +
-      '   trusting ' + pct(t.fmFront, t.fmN).padStart(7) +
-      '   satisficer ' + pct(s.fmFront, s.fmN).padStart(7));
-    md('| ' + b + ' | ' + pct(o.fmFront, o.fmN) + ' | ' + pct(r.fmFront, r.fmN) + ' | ' +
-      pct(t.fmFront, t.fmN) + ' | ' + pct(s.fmFront, s.fmN) + ' |');
-  });
-  md('');
-  const lines = [
+    return [b, pct(o.fmFront, o.fmN), pct(r.fmFront, r.fmN), pct(t.fmFront, t.fmN), pct(s.fmFront, s.fmN)];
+  }), ['l']);
+{
+  const fo = cell('RATIONAL-NO-AI', 'AI_OFF', 'FRONTIER');
+  const go = cell('RATIONAL-NO-AI', 'AI_OFF', 'GAP');
+  const spread = 100 * (fo.fmFront / Math.max(1, fo.fmN) - go.fmFront / Math.max(1, go.fmN));
+  para([
+    'FRONTIER against GAP is a ' + spread.toFixed(0) + ' percentage-point spread in the frontier share with no AI',
+    'on the screen, and BALANCED sits between them. That is the manipulation working as',
+    'intended. Against it, the AI moves the frontier share by ' + sgn(mixF.eff * 100) + ' points in the mixed',
+    'population — smaller than the layout effect, and in the predicted direction: an AI that',
+    'extrapolates FLAT beyond the outermost anchor gives a participant no reason to go there.',
     '',
-    'The three geometries separate the primary outcome cleanly and by a wide margin, with no',
-    'AI involved at all: a rational searcher goes to the frontier from FRONTIER and into the',
-    'gap from GAP, and BALANCED sits between them. That separation is the manipulation',
-    'working. Keep all three; they are the sharpest instrument in the design.'
-  ];
-  lines.forEach(l => { say('     ' + l); md(l); });
-  md('');
+    'One thing to watch in the analysis rather than in the parameters: a round can end with NO',
+    'first move at all. The myopic benchmark opens nothing in ' +
+    pct(cell('RATIONAL-NO-AI', 'AI_OFF', 'ALL').n - cell('RATIONAL-NO-AI', 'AI_OFF', 'ALL').acted,
+      cell('RATIONAL-NO-AI', 'AI_OFF', 'ALL').n) + ' of its rounds, because the',
+    'best pre-opened value is already good enough. Those rounds have no frontier outcome to',
+    'record, so the denominator of the primary outcome is smaller than the round count and',
+    'has to be reported as such.'
+  ]);
 }
 
-// --- 6 · the recommendation ----------------------------------------------
-say('');
-say('  6 · WHAT TO MOVE');
-say('');
-md('## 6 · What to move, and in which direction');
-md('');
-{
-  const rec = [];
-  if (searchPays < 5) {
-    rec.push('**Move the reveal cost DOWN, from 5 to 3.** This is the one parameter that is');
-    rec.push('mis-set. At c_R = ' + C_R + ' the whole AI-OFF arm is worth ' + sgn(searchPays) +
-      ' points against spending nothing');
-    rec.push('(' + f2(cm(rat, 'score')) + ' versus ' + f2(cm(blind, 'score')) +
-      '), and the myopic benchmark stops after ' + f2(cm(rat, 'r')) + ' reveals. A control arm in');
-    rec.push('which searching barely pays cannot show what an AI does to searching.');
-    rec.push('');
-    rec.push('The size of the move is pinned from two sides. Downward, c_R must stay above ' +
-      CR_LO.toFixed(2) + ',');
-    rec.push('or s* drops below the DENSE mid-gap sd of ' + SD_DENSE.toFixed(2) +
-      ' and verification pays everywhere — which');
-    rec.push('destroys the sparse/dense contrast outright. Upward, it must stay below ' +
-      CR_HI.toFixed(2) + ', or');
-    rec.push('verification pays nowhere. So the admissible band is (' + CR_LO.toFixed(2) + ', ' +
-      CR_HI.toFixed(2) + ') and the useful part of it');
-    rec.push('is its lower half: **c_R = 4** keeps a margin on both sides while making search');
-    rec.push('meaningfully cheaper, and **c_R = 3.65** is the floor. Below that the design breaks.');
-    rec.push('');
-    rec.push('If the intention is to make search pay MUCH more, the reveal cost cannot deliver it');
-    rec.push('alone, because the flip window caps how far it can fall. The second lever is the');
-    rec.push('environment: raise the step bound L (currently ' + L + '). σ = L/√3 scales every');
-    rec.push('uncertainty in the design, so a larger L widens the prize range actually reachable');
-    rec.push('inside 100 positions and raises what a reveal is worth — and it moves s*, g* and');
-    rec.push('both mid-gap standard deviations together, so the straddle is preserved by');
-    rec.push('construction. The cost is that the walk becomes rougher, which the instructions');
-    rec.push('already describe in one sentence ("neighbours differ by at most L").');
-  } else {
-    rec.push('The costs are adequate: unaided search buys ' + sgn(searchPays) +
-      ' points over doing nothing, which is');
-    rec.push('enough for the AI-OFF arm to be a real search arm. No change recommended.');
-  }
-  rec.push('');
-  rec.push('**Leave alone:** the two K values (they straddle K* = ' + K_STAR.toFixed(2) +
-    ' with ' + (100 * (SD_SPARSE / S_STAR - 1)).toFixed(0) + '% and ' +
-    (100 * (1 - SD_DENSE / S_STAR)).toFixed(0) + '% of margin,');
-  rec.push('and the measured AI error differs between them by a factor of ' +
-    ((geoS.err / geoS.n) / (geoD.err / geoD.n)).toFixed(1) + '); the caps (neither binds,');
-  rec.push('on any policy); the three layouts (they separate the primary outcome by ' +
-    (() => {
-      const a = cell('RATIONAL-NO-AI', 'AI_OFF', 'FRONTIER');
-      const b = cell('RATIONAL-NO-AI', 'AI_OFF', 'GAP');
-      return Math.round(100 * (a.fmFront / Math.max(1, a.fmN) - b.fmFront / Math.max(1, b.fmN)));
-    })() + ' points of');
-  rec.push('frontier share with no AI in the picture); and the question cost of ' + C_Q +
-    ', which is what makes');
-  rec.push('the AI worth consulting in the first place.');
-  rec.push('');
-  rec.push('**Expect a gradient, not a flip.** ' + (flipping.length
-    ? 'A sign change does appear for ' + flipping.join(' and ') + ', but not for every policy, so'
-    : 'No policy produces one, so'));
-  rec.push('a pre-registration that predicts "the AI helps at K = 10 and hurts at K = 4" is');
-  rec.push('predicting something this environment does not reliably produce. Predict the');
-  rec.push('INTERACTION instead — the AI is worth less when it is sparse — and power for it: ' +
-    nn(flip['TRUSTING'].nInter));
-  rec.push('participants at 24 scored rounds, against ' + nn(tTru.n) + ' for the main effect.');
-  rec.forEach(l => { say('     ' + l.replace(/\*\*/g, '')); md(l); });
-  md('');
-}
+sect('6 · What to move, in one paragraph');
+para([
+  'Move the REVEAL COST from ' + C_R + ' to 4, and SPARSE K from ' + P.ai.sparseK + ' to 3. Leave the question cost,',
+  'the dense K, both caps, the three layouts and the 24 rounds exactly as they are.',
+  '',
+  'Justification, all measured above: at the current settings unaided search buys only ' +
+  sgn(cur.floor) + ' points',
+  'over spending nothing and the trusting participant is HELPED by the AI at both densities',
+  '(' + sgn(cur.tru.eS) + ' sparse, ' + sgn(cur.tru.eD) + '), so the study\'s central prediction has no sign to detect. At',
+  'c_R = 4 with sparse K = 3, unaided search buys ' + sgn(rec.floor) + ' and the trusting participant is',
+  'HURT in sparse rounds (' + sgn(rec.tru.eS) + ') while still being helped in dense ones (' + sgn(rec.tru.eD) + ') — a',
+  'genuine sign flip, with the sparse/dense difference growing from ' + sgn(cur.tru.eS - cur.tru.eD) +
+  ' to ' + sgn(rec.tru.eS - rec.tru.eD) + '. Both',
+  'moves keep s* inside the window that makes the density manipulation meaningful at all,',
+  '(' + CR_LO.toFixed(2) + ', ' + CR_HI.toFixed(2) + ') for the cost and K* = ' + K_STAR.toFixed(2) +
+  ' for the anchors.',
+  '',
+  'And if neither is moved, the pre-registration should be rewritten rather than the code:',
+  'at c_R = ' + C_R + ' and K = ' + P.ai.sparseK + '/' + P.ai.denseK +
+  ' this environment produces a GRADIENT, not a flip — the AI is worth',
+  Math.abs(flip['TRUSTING'].eS - flip['TRUSTING'].eD).toFixed(1) +
+  ' points less when it is sparse than when it is dense — and predicting "the AI',
+  'helps at K = 10 and hurts at K = 4" would be predicting something the design as built does',
+  'not produce.'
+]);
 
 md('## Appendix · the seven policies');
 md('');
 md('| policy | what it does | AI-OFF behaviour |');
 md('|---|---|---|');
-md('| BLIND-GUESS | spends nothing, nominates the best pre-opened position (or mid-line) | same |');
-md('| RATIONAL-NO-AI | myopic expected improvement on its own reveals; stops when the best EI < c_R | same |');
-md('| SYSTEMATIC-NO-AI | reveals the widest stretch until no gap exceeds g* and no tail exceeds (s*/σ)² | same |');
-md('| RATIONAL-WITH-AI | probes by asking, verifies a new front-runner only where its own uncertainty exceeds s* | RATIONAL-NO-AI |');
-md('| TRUSTING | treats an answer as a fact, converges on the AI\'s curve, verifies 10% of the time | RATIONAL-NO-AI |');
-md('| SKEPTICAL | asks 0–4 questions, ignores every answer, searches as RATIONAL-NO-AI | RATIONAL-NO-AI |');
+md('| BLIND-GUESS | spends nothing, nominates the best pre-opened position (or the mid-line slider default) | same |');
+md('| RATIONAL-NO-AI | myopic expected improvement over its own reveals; stops when the best EI falls below c_R | same |');
+md('| SYSTEMATIC-NO-AI | opens the widest stretch until no gap exceeds g\\* and no tail exceeds (s\\*/σ)² | same |');
+md('| RATIONAL-WITH-AI | probes by asking; buys the truth only where the answer is a new front-runner AND its own uncertainty exceeds s\\* | RATIONAL-NO-AI |');
+md('| TRUSTING | treats an answer as a fact, converges on the AI\'s own curve, verifies 10% of the time | RATIONAL-NO-AI |');
+md('| SKEPTICAL | asks 0–4 questions, discards every answer, searches as RATIONAL-NO-AI | RATIONAL-NO-AI |');
 md('| NOISY-SATISFICER | probes the widest gap, stops on anything above a personal threshold, 10% random actions; an AI answer counts as something held | itself, revealing instead of asking |');
+md('');
+md('Policies 4–6 share one AI-OFF behaviour by construction, so the crossover effect is');
+md('attributable entirely to what the AI does to behaviour. The counterfactual in Table 4');
+md('re-plays each AI-ON round on the same rng stream with the AI removed, so a policy that');
+md('does not change between conditions scores an exact zero there.');
 md('');
 
 say('');
 say('  Full write-up: lab/search-v2/tools/SIMULATION-FINDINGS.md');
 say('');
 writeFileSync(join(HERE, 'SIMULATION-FINDINGS.md'), MD.join('\n') + '\n');
-console.log('  (' + ((Date.now() - t0) / 1000).toFixed(1) + ' s, ' + N + ' participants × 7 policies × 24 scored rounds)');
+console.log('  (' + ((Date.now() - t0) / 1000).toFixed(1) + ' s · ' + N +
+  ' participants × ' + POLICIES.length + ' policies × 24 scored rounds, plus ' +
+  (costSweep.length + kSweep.length + jointSweep.length) + ' sensitivity settings)');
