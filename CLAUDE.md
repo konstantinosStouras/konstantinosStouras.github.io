@@ -2596,10 +2596,25 @@ student's name and e-mail NEVER reach this study's log (§11). Finishing writes
 (`?preview=1&debug=1&key=…`) does neither, never adopts the student ID, and its
 rows carry no `run_id`.
 
+**`lab/search-v2/DESIGN.md` is the design document — keep it in sync.** It is the
+single place that explains how the participant app AND the admin panel are built
+and **why every default parameter is the number it is** (the c_R = 4 / sparse
+K = 3 straddle window, the 600-mapping pool, the three layouts' `g = 4t`
+ordering, the caps, the gates, the lock semantics), with every derived figure
+recomputed from `config.js` and a one-command recipe to re-verify them. **Whenever
+a parameter default, a screen, a security rule, an export column, an admin tab or
+the platform contract changes, update the matching section of `DESIGN.md` in the
+same change** — the same discipline as the `fun/index.html` cards and `/lit`'s
+About page. `README.md` stays the operator's guide, `SEEDS.md` the frozen seeds,
+`tools/SIMULATION-FINDINGS.md` the measurements. Its "Known drift" section is the
+live to-do list of stale participant-facing copy (`{stepBound}` unsubstituted in
+`content.js`; the survey/debrief/dictionary strings still saying the AI knows 4
+positions when sparse K is 3) — data is unaffected, prose is not.
+
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (211) ·
+`node lab/search-v2/tools/selftest.js` (213) ·
 `tools/smoke.mjs` (169, a whole 28-round session) ·
 `tools/admin-smoke.mjs` (119) · `tools/platform-guard.mjs` (26) ·
 `tools/layout-guard.mjs` (89, reachability at five window sizes) ·
