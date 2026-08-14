@@ -1164,6 +1164,11 @@
         ended: false,
         wasFull: false,
         wasOptimal: false,
+        // The player's OWN benchmark for this round: how many times they have
+        // covered the whole frame, and the best Net Value any of those covers
+        // reached. Never the puzzle optimum — that stays hidden from participants.
+        fullCovers: 0,
+        bestFullNet: null,
         cs: cellSize(puzzle.rows, puzzle.cols)
       };
       sessionRounds++;
@@ -1214,6 +1219,7 @@
         pd: buildPlacements(region, pcs), occupied: new Map(),
         pieces: pcs,
         selected: null, milestones: new Set(), timeNudges: new Set(), ended: true, wasFull: false, wasOptimal: false,
+        fullCovers: 0, bestFullNet: null,
         cs: cellSize(spec.rows, spec.cols)
       };
       renderBoard(); renderTray(); renderBoardMeta(); renderKPIs();
@@ -1475,6 +1481,9 @@
       const bBefore = pfBoardMatrix();   // frame BEFORE this brick is removed
       for (const [r, c] of p.placedCells) state.occupied.delete(r + ',' + c);
       p.placed = false; p.placedCells = null;
+      // The frame is no longer complete, so the NEXT time it is counts as a fresh
+      // cover — the pulse/celebration and the full-coverage prompt fire again.
+      state.wasFull = false; state.wasOptimal = false;
       pfEmit('remove', { pieceId: p.id, name: p.name, value: p.value, cells: formerCells, anchor: pfAnchorOf(formerCells), boardBefore: bBefore, board: pfBoardMatrix(), metricsBefore: mBefore, metrics: pfMetrics() });
       state.selected = p.id;
       renderBoard();
@@ -1496,9 +1505,20 @@
       if (allFilled) {
         const val = placedValue();                 // full board => Net Value = total value
         const optimal = val >= state.bestValue;
-        if (!state.wasFull) { boardEl.classList.add('pulse'); setTimeout(() => boardEl.classList.remove('pulse'), 600); }
+        // A partial -> full transition: ONE per cover, so removing a brick and
+        // filling the frame again counts (and celebrates) as a fresh cover.
+        const fresh = !state.wasFull;
+        if (fresh) { boardEl.classList.add('pulse'); setTimeout(() => boardEl.classList.remove('pulse'), 600); }
         if (optimal && !state.wasOptimal) confetti();
         state.wasFull = true; state.wasOptimal = optimal;
+        // Update the player's own round benchmark BEFORE emitting, so the event
+        // carries the best-so-far including this cover.
+        const prevBest = (state.bestFullNet == null) ? null : state.bestFullNet;
+        const improved = (prevBest == null || val > prevBest);
+        if (fresh) {
+          state.fullCovers = (state.fullCovers || 0) + 1;
+          if (improved) state.bestFullNet = val;
+        }
         if (window.PF_EXPERIMENT) {
           // Never reveal the maximum/optimal net value to participants.
           if (optimal) {
@@ -1515,6 +1535,13 @@
           setStatus('Board filled at Net ' + money(val) + '. Best possible here is ' + money(state.bestValue) + '. Rearrange to raise it before time runs out.', 'win');
           nudge('🎉 Board filled at Net ' + money(val) + '. Can you reach ' + money(state.bestValue) + '? Keep trying!', 'cheer');
         }
+        // One event per cover. Research data on its own (when, and at what value,
+        // each participant completed the frame) AND the trigger the experiment
+        // layer listens for to offer the "keep improving / move on" choice.
+        if (fresh) pfEmit('full_cover', {
+          net: val, bestNet: state.bestFullNet, prevBestNet: prevBest, improved: improved,
+          cover: state.fullCovers, board: pfBoardMatrix(), metrics: pfMetrics()
+        });
       } else {
         state.wasFull = false; state.wasOptimal = false;
         setStatus('Keep going. Find the bricks that fill the rest.', '');
@@ -2235,6 +2262,10 @@
         coverage: total ? Math.round(occ / total * 100) : 0,
         fitness: computeFitness(), bestValue: state.bestValue,
         bricks: bricks, placed: occ, total: total, kappa: state.kappa,
+        // How many times the frame was fully covered this round, and the best Net
+        // Value any of those covers reached (the player's own benchmark).
+        fullCovers: state.fullCovers || 0,
+        bestFullNet: (state.bestFullNet == null ? null : state.bestFullNet),
         ended: !!state.ended, time: timer ? timer.elapsed : 0,
         limit: roundLimit(),
         remaining: Math.max(0, roundLimit() - (timer ? timer.elapsed : 0))
@@ -2286,8 +2317,12 @@
       demoSelectSolution: function (i) { if (state && state.solution && state.solution[i]) { var s = state.solution[i]; var p = state.pieces.find(function (x) { return x.name === s.name && !x.placed; }); if (p) { state.selected = p.id; renderTray(); } } },
       demoCycleOri: function () { var p = state && state.pieces.find(function (x) { return x.id === state.selected; }); if (p && p.oris && p.oris.length) { p.oriIndex = (p.oriIndex + 1) % p.oris.length; renderTray(); } },
       demoPlaceSolution: function (i) { if (!state || !state.solution || !state.solution[i]) return; var s = state.solution[i]; var p = state.pieces.find(function (x) { return x.name === s.name; }); if (!p || p.placed) return; var cells = s.cells.map(function (c) { return [c[0], c[1]]; }); cells.forEach(function (c) { state.occupied.set(c[0] + ',' + c[1], p.id); }); p.placed = true; p.placedCells = cells; state.selected = null; renderBoard(); renderTray(); renderKPIs(); },
-      demoRemoveSolution: function (i) { if (!state || !state.solution || !state.solution[i]) return; var s = state.solution[i]; var p = state.pieces.find(function (x) { return x.name === s.name; }); if (p && p.placed) { (p.placedCells || []).forEach(function (c) { state.occupied.delete(c[0] + ',' + c[1]); }); p.placed = false; p.placedCells = null; state.selected = null; renderBoard(); renderTray(); renderKPIs(); } },
-      demoClear: function () { if (!state) return; state.occupied = new Map(); state.pieces.forEach(function (p) { p.placed = false; p.placedCells = null; }); state.selected = null; renderBoard(); renderTray(); renderKPIs(); },
+      // The two demo removers empty cells without going through checkWin, so they
+      // clear the fullness flags themselves — otherwise a board the tour filled
+      // and cleared would still count as "already full" and the next genuine
+      // cover would raise no celebration and no full-coverage prompt.
+      demoRemoveSolution: function (i) { if (!state || !state.solution || !state.solution[i]) return; var s = state.solution[i]; var p = state.pieces.find(function (x) { return x.name === s.name; }); if (p && p.placed) { (p.placedCells || []).forEach(function (c) { state.occupied.delete(c[0] + ',' + c[1]); }); p.placed = false; p.placedCells = null; state.selected = null; state.wasFull = false; state.wasOptimal = false; renderBoard(); renderTray(); renderKPIs(); } },
+      demoClear: function () { if (!state) return; state.occupied = new Map(); state.pieces.forEach(function (p) { p.placed = false; p.placedCells = null; }); state.selected = null; state.wasFull = false; state.wasOptimal = false; renderBoard(); renderTray(); renderKPIs(); },
       _onRoundEnd: null
     };
 

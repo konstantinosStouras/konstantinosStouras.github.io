@@ -188,6 +188,24 @@
       + '.pfx-submit{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:8500;display:none;background:#2ecc71;color:#fff;border:2px solid #fff;font-weight:800;font-size:18px;letter-spacing:.2px;padding:16px 40px;border-radius:16px;box-shadow:0 14px 38px rgba(46,204,113,.6);cursor:pointer;text-align:center;}'
       + '.pfx-submit:hover{background:#27ae60;animation:none;}.pfx-submit.show{display:block;animation:pfxpulse 1.7s ease-in-out infinite;}'
       + '@keyframes pfxpulse{0%,100%{transform:translateX(-50%) scale(1);box-shadow:0 14px 34px rgba(46,204,113,.5);}50%{transform:translateX(-50%) scale(1.05);box-shadow:0 16px 50px rgba(46,204,113,.9);}}'
+      // Full-coverage prompt. Its OWN overlay, deliberately not `.pfx-ov`: the
+      // round is still live behind it (the clock keeps running, `pf-playing`
+      // stays on the body), so it must not go through showOverlay/closeOverlay.
+      // Above the green submit pill (8500) so that pill cannot be clicked
+      // through it; below the test-round ribbon (9500, pointer-events:none).
+      + '.pfx-fc{position:fixed;inset:0;z-index:9200;display:flex;align-items:center;justify-content:center;'
+      + 'padding:20px;background:rgba(40,30,15,.5);backdrop-filter:blur(3px);overflow:auto;}'
+      // Wide enough for the two buttons to sit side by side once the green one
+      // has swallowed the countdown sentence; narrower screens wrap them.
+      + '.pfx-fc-card{background:#fff;border-radius:18px;box-shadow:0 22px 64px rgba(60,45,20,.32);max-width:600px;'
+      + 'width:100%;margin:auto;padding:26px 28px;font-family:Inter,system-ui,sans-serif;color:#2b2b2b;text-align:center;}'
+      + '.pfx-fc-card h3{font-family:"Space Grotesk",Inter,sans-serif;font-size:1.45rem;margin:0 0 10px;}'
+      + '.pfx-fc-card p{color:#4a4843;line-height:1.6;margin:0 0 10px;font-size:15px;text-align:center;}'
+      + '.pfx-fc-row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:18px;}'
+      + '.pfx-fc-btn{border:none;color:#fff;font-weight:700;font-size:15px;line-height:1.35;padding:13px 22px;'
+      + 'border-radius:12px;cursor:pointer;transition:.15s;font-family:inherit;}'
+      + '.pfx-fc-go{background:#2ecc71;}.pfx-fc-go:hover{background:#27ae60;}'
+      + '.pfx-fc-next{background:#e67e22;}.pfx-fc-next:hover{background:#cf6f17;}'
       + '.pfx-tour{position:fixed;inset:0;z-index:9000;pointer-events:none;}'
       + '.pfx-spot{position:absolute;border-radius:14px;box-shadow:0 0 0 9999px rgba(20,15,8,.74);transition:left .25s,top .25s,width .25s,height .25s;pointer-events:none;}'
       + '.pfx-tip{position:absolute;max-width:340px;width:calc(100vw - 24px);background:#fff;color:#2b2b2b;border-radius:14px;padding:16px 18px;box-shadow:0 18px 46px rgba(0,0,0,.35);pointer-events:auto;box-sizing:border-box;}'
@@ -254,6 +272,7 @@
     b.innerHTML = esc(label) + '<br><span style="font-weight:600;font-size:13px;opacity:.92;">(or wait ' + fmtTime(rem) + ')</span>';
   }
   function showGameSubmit(label) {
+    hideFullCover();                 // a new round starts with no prompt on screen
     paintSubmit(label);
     gameSubmitBtn().classList.add('show');
     if (submitTimer) clearInterval(submitTimer);
@@ -262,6 +281,100 @@
   function hideGameSubmit() {
     if (submitTimer) { clearInterval(submitTimer); submitTimer = null; }
     if (submitBtn) submitBtn.classList.remove('show');
+    hideFullCover();                 // the round is over: the prompt goes with it
+  }
+
+  // ---- Full-coverage prompt --------------------------------------------
+  // Observed in class: many participants stop at their FIRST full cover and move
+  // straight on, using ~1 minute of a 10-minute puzzle. The game emits
+  // `full_cover` on every partial->full transition; this pops a centred choice —
+  // keep improving (green, reading out the time left in this puzzle, refreshed
+  // twice a second) or move on (orange: "Next puzzle", "Finish" on the last one,
+  // "Continue to the game" during training).
+  //
+  // It deliberately does NOT use showOverlay(): that is the PHASE overlay, and it
+  // strips `pf-playing` off the body. Here the round is still live behind the
+  // prompt — the clock keeps running and the board stays exactly as it was, so
+  // "Let's try" simply removes the box and play continues from where it was left.
+  var fcBox = null, fcTimer = null, fcGo = null;
+
+  // "3 min 23 sec" / "45 sec" — the countdown wording the green button reads out
+  // (the submit pill's fmtTime "03:23" is too terse to read inside a sentence).
+  function fmtLeftWords(s) {
+    s = Math.max(0, Math.round(s || 0));
+    var m = Math.floor(s / 60), ss = s % 60;
+    return (m > 0 ? (m + ' min ' + ss + ' sec') : (ss + ' sec'));
+  }
+  // What the orange button leads to. During training it hands over to the main
+  // game; in the main phase it is the next puzzle, or "Finish" on the last one
+  // (S.mainIndex is still the CURRENT puzzle's index — it advances on round end).
+  function fcNextLabel() {
+    if (window.PFGame && window.PFGame._onRoundEnd === onTrainingEnd) return 'Continue to the game';
+    var total = (S.queue || []).length;
+    return (total > 0 && S.mainIndex >= total - 1) ? 'Finish' : 'Next puzzle';
+  }
+  function fcPaint() {
+    var m = null;
+    try { m = window.PFGame && window.PFGame.getMetrics(); } catch (e) {}
+    // The clock runs on behind the prompt: if the deadline arrived while it was
+    // open, close it and let the round's results screen take over.
+    if (!m || m.ended) { hideFullCover(); return; }
+    var left = Math.max(0, Math.round(m.remaining));
+    if (fcGo) fcGo.innerHTML = 'Let&rsquo;s try! There ' + (left === 1 ? 'is' : 'are')
+      + ' ' + esc(fmtLeftWords(left)) + ' left.';
+  }
+  function fcKey(e) { if (e.key === 'Escape') fcChoose('continue'); }
+  function hideFullCover() {
+    if (fcTimer) { clearInterval(fcTimer); fcTimer = null; }
+    if (fcBox) { fcBox.remove(); fcBox = null; }
+    fcGo = null;
+    document.removeEventListener('keydown', fcKey);
+  }
+  // The choice itself is the datum this feature exists to move: did they keep
+  // working on the frame, and with how much of the puzzle's time still to run?
+  function fcChoose(choice) {
+    var m = null; try { m = window.PFGame && window.PFGame.getMetrics(); } catch (e) {}
+    logEvent('full_cover_choice', {
+      choice: choice, remaining: m ? m.remaining : null, elapsed: m ? m.time : null,
+      cover: m ? m.fullCovers : null, metrics: m || null
+    });
+    hideFullCover();
+    if (choice === 'next') { hideGameSubmit(); if (window.PFGame) window.PFGame.endRound(); }
+  }
+  function showFullCover(p) {
+    // Only while a round is genuinely live: `_onRoundEnd` is wired for the whole
+    // of a training/main round and nulled the moment it ends.
+    if (!window.PFGame || !window.PFGame._onRoundEnd) return;
+    if (curOverlay) return;                             // a phase screen is up
+    if (document.querySelector('.pfx-tour')) return;    // the onboarding tour owns the screen
+    hideFullCover();
+
+    var net = money(p.net);
+    var best = money(p.bestNet != null ? p.bestNet : p.net);
+    // Their own values only — the puzzle's maximum is never revealed (§6).
+    var msg = 'Congrats &mdash; you fully covered the frame, reaching a net value of <b>' + esc(net) + '</b>. ';
+    msg += p.improved
+      // First cover of this puzzle, or a new personal best: X *is* Y, so say so
+      // rather than repeating the same number back twice.
+      ? ('That is the best full cover you have found on this frame so far. Can you improve upon <b>' + esc(net)
+         + '</b> by finding a better combination of bricks to add on the frame?')
+      : ('The best of all such values you obtained in this run is <b>' + esc(best) + '</b>. Can you improve upon <b>'
+         + esc(best) + '</b> by finding a better combination of bricks to add on the frame?');
+
+    fcGo = el('button', { class: 'pfx-fc-btn pfx-fc-go', on: { click: function () { fcChoose('continue'); } } });
+    var nextBtn = el('button', { class: 'pfx-fc-btn pfx-fc-next', on: { click: function () { fcChoose('next'); } } },
+      [fcNextLabel()]);
+    fcBox = el('div', { class: 'pfx-fc' }, [
+      el('div', { class: 'pfx-fc-card' }, [
+        el('h3', { text: '🎉 Frame fully covered!' }),
+        el('p', { html: msg }),
+        el('div', { class: 'pfx-fc-row' }, [fcGo, nextBtn])
+      ])
+    ]);
+    document.body.appendChild(fcBox);
+    document.addEventListener('keydown', fcKey);
+    fcPaint();
+    fcTimer = setInterval(fcPaint, 500);
   }
 
   // ---- Firebase ---------------------------------------------------------
@@ -412,8 +525,18 @@
       S.flushing = false;
     }
   }
-  // Game forwards every action here.
-  window.PF = { onGameEvent: logEvent };
+  // Game forwards every action here. Everything is logged; `full_cover` also
+  // drives the keep-improving prompt — and that call is made OUTSIDE logEvent on
+  // purpose, since logEvent is a no-op offline (a test round must still show it).
+  window.PF = {
+    onGameEvent: function (type, payload) {
+      logEvent(type, payload);
+      if (type === 'full_cover') {
+        try { showFullCover(payload || {}); }
+        catch (e) { console.warn('[PFX] full-coverage prompt failed', e); }   // never break gameplay
+      }
+    }
+  };
 
   // ---- Top bar ----------------------------------------------------------
   function renderTopbar() {
@@ -1016,6 +1139,9 @@
   function runNextPuzzle() {
     closeOverlay();
     document.body.classList.add('pf-playing');
+    // Back on the board: the previous puzzle's results screen left S.phase on
+    // 'roundstats', which would otherwise mislabel every event of puzzles 2+.
+    S.phase = 'main';
     if (S.mainIndex >= S.queue.length) { finalizeMainStats(); showSurvey(); return; }
     var item = S.queue[S.mainIndex];
     S.roundIndex = S.mainIndex + 1;

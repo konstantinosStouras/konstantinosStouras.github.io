@@ -191,6 +191,19 @@ publish it; versioned in the repo, deployed manually to the lab project):
   renders, starts the timer; the round ends on the deadline (not on completion),
   calling `endRound()` → `showEnd()` (end modal suppressed in experiment mode) →
   the `PFGame._onRoundEnd(metrics)` callback.
+- **Full covers are counted, and each one is an event.** Filling the frame does
+  not end the round, so a player may cover it, rearrange and cover it again.
+  `checkWin()` treats every **partial → full transition** as one cover: it bumps
+  `state.fullCovers`, lifts `state.bestFullNet` (the best Net Value any of *this
+  round's* covers reached — the player's OWN benchmark, never `bestValue`, which
+  stays hidden from participants), and emits **`full_cover`**
+  `{net, bestNet, prevBestNet, improved, cover, board, metrics}`. Both counters
+  ride along in `pfMetrics()` (so they reach the round doc and the export).
+  Because the transition is what counts, anything that empties cells outside
+  `checkWin` must clear `state.wasFull`/`wasOptimal` itself, or the next genuine
+  cover would raise no pulse, no celebration and no prompt — `removePiece` (the
+  player picking a brick back up) and the two demo removers (`demoRemoveSolution`,
+  `demoClear`, which the tour uses) all do.
 - **`window.PFGame` bridge (the contract):**
   `newGame(diff,limit)`, `loadPuzzle(spec,limit)`, `generatePuzzle(diff)` (returns
   a serializable spec), `previewPuzzle(spec)` (load without a timer),
@@ -263,6 +276,48 @@ publish it; versioned in the repo, deployed manually to the lab project):
   scroll/resize for mobile. The add/remove demo (`runDemo`) is deliberately **slow
   and step-by-step** (≈2–3s per action, narrated "Step 1/2", add → add → remove →
   replace) so players clearly see how placing and removing bricks works.
+- **Full-coverage prompt — "you covered it; can you do better?"** Observed in
+  class (owner, 2026-08): many participants covered the frame once and pressed
+  "next" after ~1 minute of a 10-minute puzzle, never trying a second
+  arrangement. So the game's `full_cover` event (see §4) now pops a centred
+  prompt — `showFullCover`/`hideFullCover`/`fcChoose` — reporting the net value
+  that cover reached and, when it is not their best, the best of all covers
+  **in this run**, then asking whether they can beat it. Two buttons: a **green**
+  one that reads out the time left in **this puzzle** and keeps counting down
+  (`fcPaint` every 500 ms off `PFGame.getMetrics().remaining`, worded
+  "Let's try! There are 3 min 23 sec left." by `fmtLeftWords` — the submit
+  pill's `fmtTime` "03:23" does not read inside a sentence), and an **orange**
+  one that leaves: **"Next puzzle"**, **"Finish"** on the last puzzle of the
+  queue, **"Continue to the game"** during training (`fcNextLabel`; it compares
+  `S.mainIndex` against `S.queue.length - 1`, since `mainIndex` still points at
+  the CURRENT puzzle until the round ends). Green — or Escape — just removes the
+  box and play resumes exactly where it was left; orange does precisely what the
+  green submit pill does (`hideGameSubmit()` + `PFGame.endRound()`).
+  Three things about it are deliberate:
+  - It is **its own overlay** (`.pfx-fc`), NOT `showOverlay()`. That is the
+    *phase* overlay and it strips `pf-playing` off the body; here the round is
+    still live behind the prompt, the clock still running — which is also why
+    `fcPaint` closes the box if the deadline arrives while it is open, and why
+    `showGameSubmit`/`hideGameSubmit` (the round's start/end boundaries) call
+    `hideFullCover`. It sits at z-index 9200: above the submit pill (8500) so
+    that cannot be clicked through it, below the test-round ribbon (9500).
+  - The trigger hangs off **`window.PF.onGameEvent`**, which is now a dispatcher
+    (log, then prompt) rather than `logEvent` itself — `logEvent` returns early
+    when `S.offline`, and a **test round** must still show the prompt.
+  - It shows **only the player's own numbers**. The puzzle optimum is never
+    named, per §2.6, and the prompt is suppressed while a phase screen or the
+    onboarding tour owns the screen, or when no round is live
+    (`PFGame._onRoundEnd` is the liveness signal — `S.phase` is not, it sits on
+    `'roundstats'` from the previous results screen; `runNextPuzzle` now resets
+    it to `'main'`, which also stops events of puzzles 2+ being mislabelled).
+  The choice itself is logged as **`full_cover_choice`**
+  `{choice:'continue'|'next', remaining, elapsed, cover, metrics}` — the datum
+  that shows whether the prompt actually changed behaviour. Offline test:
+  `node lab/portfoliofit/tools/fullcover-guard.mjs` (Playwright, no network; runs
+  inside the test-round sandbox so it writes nothing — pins that nothing shows
+  mid-play, that the first cover names itself as their best while an equal second
+  cover quotes the best of the run, the live countdown, "keep playing" leaving the
+  board untouched, and all three orange labels driving the round to its end).
 - **Per-puzzle results screen:** after **every** main puzzle, `showRoundStats(rec)`
   shows a breakdown of **that puzzle's own** metrics (never an aggregate across
   puzzles) via the shared `statsGrid`. Between puzzles the button reads "Continue
@@ -432,11 +487,16 @@ publish it; versioned in the repo, deployed manually to the lab project):
     question, in the order presented** (heading = question label), then summary
     stats (Final Net Value / Coverage % / Total Time).
   - **Rounds** — per-round summary incl. **Bricks Placed** (the true count of
-    placed bricks, `metrics.bricks`), **Cells Filled** (occupied cells), and the
-    round's **Final FrameMatrix** (rebuilt from `placementsJson` via
-    `matrixFromPlacements`). Note: `pfMetrics()` exposes both `bricks` (number of
-    placed pieces, shown as "Bricks Placed" in the results screen) and `placed`
-    (occupied cells, used for coverage).
+    placed bricks, `metrics.bricks`), **Cells Filled** (occupied cells),
+    **Full Covers** and **Best Full-Cover Net** (how many times the frame was
+    completed in that round and the best Net Value any of those covers reached —
+    the pair the full-coverage prompt is measured by; blank for rounds recorded
+    before it shipped), and the round's **Final FrameMatrix** (rebuilt from
+    `placementsJson` via `matrixFromPlacements`). Note: `pfMetrics()` exposes both
+    `bricks` (number of placed pieces, shown as "Bricks Placed" in the results
+    screen) and `placed` (occupied cells, used for coverage). The `full_cover` /
+    `full_cover_choice` events land in **Events (raw)** only — the Play log builds
+    rows from `round_start`/`place`/`remove` and ignores every other type.
   - **Survey** — identity columns then one column **per survey question in order**
     (heading = question label).
   - **Events (raw)** — the full event log (incl. `dataJson`) for completeness.
