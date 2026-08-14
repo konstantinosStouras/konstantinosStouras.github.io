@@ -167,11 +167,142 @@
       current = null; editingId = null;
       currentParams = savedDefaultParams();
       currentContent = {};        // a new session starts on the study's own words
+      // Carry whatever was typed on the Sessions screen into the form, so taking
+      // the advanced path never costs the admin the name they just wrote.
+      var typedName = ($('nr-name').value || '').trim(), typedCode = normCode($('nr-code').value);
+      if (typedName) currentParams.ops.runName = typedName;
+      if (typedCode) currentParams.ops.code = typedCode;
       fillForm(currentParams, null);
       openTab('params');
-      note('save-note', 'A new session, seeded from the saved defaults. Give it a name and a code, then Save.');
+      note('save-note', 'A new session, seeded from the saved defaults. Change whatever the task needs, then ' +
+        'press <b>Create session</b>. (A session that only needs a name is quicker to create on the Sessions screen.)');
     };
-    $('btn-refresh-runs').onclick = loadRuns;
+    // The click Event must not reach loadRuns — its argument is a session to
+    // select once the list is back.
+    $('btn-refresh-runs').onclick = function () { loadRuns(); };
+    wireCreateCard();
+  }
+
+  // ---- create a session, from the Sessions screen --------------------------
+  // A session used to be creatable only from the parameter form: press New
+  // session, scroll past seven collapsed groups to Operations, name it there,
+  // create, then come back and open it. Naming is the ONE thing every session
+  // needs, so it is asked here, first — the same shape as the other class
+  // admins. Everything the form could do is still done there; this path just
+  // takes the saved defaults as they stand.
+  function normCode(s) {
+    return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
+  }
+  function codeInUse(code) {
+    return runs.some(function (r) { return String(r.code || '').toUpperCase() === code; });
+  }
+  // autoCode() draws at random, so on a panel that already holds sessions it can
+  // repeat one — and a repeat would re-point runCodes/<code> at the newer run,
+  // quietly sending the older session's participants into it. Draw until free.
+  function freshCode() {
+    for (var i = 0; i < 50; i++) { var c = autoCode(); if (!codeInUse(c)) return c; }
+    return autoCode();
+  }
+  // A typed code is checked against the server too: another admin may have
+  // created one since this list was read. An automatic code is not — it is drawn
+  // from 33 million and already checked against every session on screen.
+  function codeFree(code) {
+    if (codeInUse(code)) return Promise.resolve(false);
+    if (LOCAL || !FB.isConfigured() || !FB.codeExists) return Promise.resolve(true);
+    return FB.codeExists(code).then(function (x) { return !x; }, function () { return true; });
+  }
+
+  function wireCreateCard() {
+    var nameEl = $('nr-name'), codeEl = $('nr-code');
+    codeEl.oninput = function () { codeEl.value = normCode(codeEl.value); clearCreated(); };
+    nameEl.oninput = clearCreated;
+    [nameEl, codeEl].forEach(function (el) {
+      el.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); createFromCard(); } };
+    });
+    $('btn-create-run').onclick = createFromCard;
+  }
+  function clearCreated() { $('nr-created').innerHTML = ''; note('nr-note', ''); }
+
+  function createFromCard() {
+    var nameEl = $('nr-name'), codeEl = $('nr-code'), btn = $('btn-create-run');
+    var name = (nameEl.value || '').trim() || 'untitled';
+    var typed = normCode(codeEl.value);
+    if (typed && typed.length < 3) {
+      note('nr-note', 'A custom <b>Session ID</b> is 3&ndash;40 characters, capital letters and digits only. ' +
+        'Leave it blank for an automatic code.', true);
+      codeEl.focus();
+      return;
+    }
+    clearCreated();
+    btn.disabled = true;
+    (typed ? codeFree(typed) : Promise.resolve(true)).then(function (free) {
+      btn.disabled = false;
+      if (!free) {
+        note('nr-note', 'Session ID <b>' + esc(typed) + '</b> is already taken. Choose another, or leave it ' +
+          'blank for an automatic code.', true);
+        codeEl.focus();
+        return;
+      }
+      askCreate(name, typed || freshCode(), nameEl, codeEl, btn);
+    });
+  }
+
+  function askCreate(name, code, nameEl, codeEl, btn) {
+    var p = savedDefaultParams();
+    p.ops.runName = name;
+    p.ops.code = code;
+    // It is created as a draft, so the entry flag must say so: app.js reads
+    // ops.entryOpen, and a draft carrying entryOpen:true would let people in
+    // before the validation gate has ever run.
+    p.ops.entryOpen = false;
+    // The same gate the parameter form applies: creating freezes the mapping
+    // pool and every round spec under these seeds, so they are read once first.
+    askSummary('Create this session?',
+      'It is built from the <b>saved default parameters</b>, which freezes the mapping pool and all <b>' +
+      (2 * (p.rounds.warmupPerBlock + p.rounds.scoredPerBlock)) + ' round specs</b> under the seeds below. ' +
+      'It opens as a <b>draft</b>, so nobody can enter yet, and every parameter stays editable until the ' +
+      'first participant claims a code.',
+      summaryBoxes(p), 'Create session', function () {
+        btn.disabled = true; btn.textContent = 'Creating…';
+        function done() { btn.disabled = false; btn.textContent = 'Create session'; }
+        createRun(newRunDoc(p, name, code, {})).then(function (id) {
+          done();
+          nameEl.value = ''; codeEl.value = '';
+          showCreated(id, code, name);
+          // Selecting it here is the point of the card: the new session is what
+          // every other screen is already on, so there is nothing to go and open.
+          loadRuns(id);
+        }, function (e) {
+          done();
+          note('nr-note', 'Could not create the session: ' + esc(String(e && e.message || e)), true);
+        });
+      });
+  }
+
+  function showCreated(id, code, name) {
+    var host = $('nr-created');
+    host.innerHTML = '<div class="made-box">' +
+      '<div class="cb-label">Session created &mdash; participants join with this code</div>' +
+      '<div class="cb-code">' + esc(code) + '</div>' +
+      '<div class="cb-name">' + esc(name) + '</div>' +
+      '<div class="cb-link mono">' + esc(launchUrl(code)) + '</div>' +
+      '<div class="run-acts">' +
+        '<button class="sBtn sBtnSec" data-cb="copy">Copy link</button>' +
+        '<button class="sBtn sBtnPrimary" data-cb="params">Check its parameters</button>' +
+        '<button class="sBtn exportBtn" data-cb="open">Open entry</button>' +
+      '</div>' +
+      '<div class="cb-hint">It is a <b>draft</b> until you open entry &mdash; which runs the validation gate ' +
+      'and asks you to confirm, because the first participant to enter locks every parameter.</div>' +
+      '</div>';
+    host.querySelectorAll('button[data-cb]').forEach(function (b) {
+      b.onclick = function () {
+        if (b.dataset.cb === 'copy') { copyLink(code, b); return; }
+        var run = runs.filter(function (r) { return r.id === id; })[0];
+        if (!run) { note('nr-note', 'That session is no longer in the list. Press Refresh.', true); return; }
+        if (b.dataset.cb === 'params') { selectRun(run); openTab('params'); return; }
+        if (b.dataset.cb === 'open') setStatus(run, 'open');
+      };
+    });
   }
 
   function savedDefaultParams() {
@@ -180,13 +311,17 @@
     return Specs.withDefaults(d);
   }
 
-  function loadRuns() {
+  // `selectId` — a session to select once the list is back (a just-created one),
+  // so creating it is also opening it.
+  function loadRuns(selectId) {
     var p = LOCAL ? Promise.resolve(localRuns()) : FB.listRuns();
     p.then(function (list) {
       runs = list || [];
       renderRuns();
       loadRunStats();
-      if (!current && runs.length) selectRun(runs[0]);
+      var picked = selectId ? runs.filter(function (r) { return r.id === selectId; })[0] : null;
+      if (picked) selectRun(picked);
+      else if (!current && runs.length) selectRun(runs[0]);
       else if (!current) {
         currentParams = savedDefaultParams();
         fillForm(currentParams, null);
@@ -278,7 +413,7 @@
     var active = runs.filter(function (r) { return !isDone(r); });
     var done = runs.filter(isDone);
     fillRunSection('runs-active', 'runs-active-n', active,
-      'No active sessions. <b>+ New session</b> starts one from the recommended defaults.',
+      'No active sessions yet. <b>Create a session</b> above starts one from the saved defaults.',
       function (n) { return n + ' active'; });
     fillRunSection('runs-done', 'runs-done-n', done,
       'No completed sessions yet. Closing a session moves it here and keeps its data.',
@@ -302,6 +437,26 @@
     var base = location.origin + location.pathname.replace(/admin\/?$/, '');
     return base + '?code=' + encodeURIComponent(code);
   }
+  // One copier for the cards and the created-code box. The async clipboard is
+  // absent on an insecure origin and can be refused outright, so a failure falls
+  // back to the old selection copy and finally to showing the link to copy by
+  // hand — never to a button that silently does nothing.
+  function copyLink(code, btn) {
+    var url = launchUrl(code), old = btn.textContent;
+    function flash() { btn.textContent = '✓ Copied'; setTimeout(function () { btn.textContent = old; }, 1400); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) { done = false; }
+      document.body.removeChild(ta);
+      if (done) flash(); else window.prompt('Copy the participant link:', url);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(flash, fallback);
+    } else fallback();
+  }
   // ONE builder for every sandbox link, so the launch box and the cards can never
   // open different things.
   // `order` ('ask' | 'reveal') rehearses one side of the button swap. Without
@@ -319,12 +474,7 @@
   function runAction(act, run, btn) {
     if (!run) return;
     if (act === 'open') { selectRun(run); openTab('params'); return; }
-    if (act === 'copy') {
-      navigator.clipboard.writeText(launchUrl(run.code)).then(function () {
-        var old = btn.textContent; btn.textContent = '✓ Copied';
-        setTimeout(function () { btn.textContent = old; }, 1400);
-      }); return;
-    }
+    if (act === 'copy') { copyLink(run.code, btn); return; }
     if (act === 'testround') { window.open(previewUrl(run.code), '_blank'); return; }
     if (act === 'export') { exportRun(run, btn); return; }
     if (act === 'clone') { cloneRun(run); return; }
@@ -558,6 +708,12 @@
   function newRunDoc(p, name, code, contentOv) {
     var params = clone(p);
     params.ops.runName = name;
+    // Every session is created as a draft, so the entry flag has to agree with
+    // the status: app.js opens a session when `ops.entryOpen !== false` OR the
+    // status is 'open', so a draft created with the Operations toggle left on
+    // would be enterable before the validation gate had ever run. Entry is
+    // opened from the card, which runs that gate and asks for confirmation.
+    params.ops.entryOpen = false;
     var pool = Pool.buildPool(params.env, params.env.generatorSeed);
     var specSeed = params.env.generatorSeed + 1;
     var specs = Specs.buildSpecs(pool, params, specSeed);
@@ -809,16 +965,20 @@
       // notice that something was set wrong.
       var pending = clone(currentParams);
       pending.ops.code = code; pending.ops.runName = name;
+      pending.ops.entryOpen = false;   // what newRunDoc will write, so the summary can't promise otherwise
       askSummary('Create this session?',
         'Creating freezes the mapping pool and all <b>' +
         (2 * (pending.rounds.warmupPerBlock + pending.rounds.scoredPerBlock)) +
         ' round specs</b> under the seeds below. It opens as a <b>draft</b>, so nobody can enter yet.',
         summaryBoxes(pending), 'Create session', function () {
           var obj = newRunDoc(currentParams, name, code, currentContent);
-          createRun(obj).then(function () {
+          createRun(obj).then(function (id) {
             note('save-note', 'Session <b>' + esc(code) + '</b> created as a <b>draft</b>. Run the validation gate on the ' +
               'Data screen — and check the round plots at the bottom of it — before opening entry.');
-            loadRuns();
+            // Select what was just created. Without this the form stayed on a
+            // NEW session with editingId null, so pressing Save again created a
+            // second session on the same code — and re-pointed the code at it.
+            loadRuns(id);
           }).catch(function (e) { note('save-note', 'Could not create the session: ' + esc(String(e && e.message || e)), true); });
         });
       return;
