@@ -17,9 +17,9 @@ reasoning, and it cites the other three rather than repeating them.
 > change — the same keep-in-sync discipline the repository applies to
 > `fun/index.html` cards and `/lit`'s About page. Every number in this document
 > was recomputed from `config.js` on **2026-08-14** (app version `v3.0.0`,
-> covering the registration phase, the `ui` treatment group and the admin's
-> Wording tab); the section *Verifying the numbers in this document* at the end
-> says how to redo that in one command.
+> covering the registration phase, the `ui` treatment group, cross-device resume,
+> the admin's Wording tab and its Participants screen); the section *Verifying the
+> numbers in this document* at the end says how to redo that in one command.
 
 ---
 
@@ -81,7 +81,7 @@ reveals** per round exist only to bound a pathological session — see §7.
 **28 rounds**: 4 warm-up + 24 scored, in two blocks of 12 scored. Every
 participant plays **one block with the AI and one without**, order assigned by a
 counterbalanced crossover (**A** = off then on, **B** = on then off). Consent is
-followed by a short **registration phase** (four optional background items, asked
+followed by a short **registration phase** (three optional background items, asked
 once, before the task — §10); afterwards come a twenty-item exit survey, a debrief
 that redraws one of the participant's *own* rounds with the true prizes beside
 what the AI told them, and a done screen.
@@ -620,6 +620,7 @@ would exhaust even a 600-mapping pool at a 2% pass rate.
 | `BATCH_SIZE` / `BATCH_MS` | 12 / 10 s | Telemetry flush trigger, whichever comes first |
 | `SLIDER_THROTTLE_MS` | 250 | One slider row per 250 ms **plus one on release**. Cheap to capture, impossible to recover later |
 | `HEARTBEAT_MS` | 30 000 | `active_ms` is summed from heartbeats, so twenty minutes away never looks like twenty minutes of thinking |
+| `BREAK_MIN_MS` | 300 000 | A return after a gap of at least five minutes is a **break between sittings** rather than a reload — the threshold the workbook's `breaks_count` / `sittings` columns are cut at |
 | `APP_VERSION` | `v3.0.0` | Stamped on every logged row |
 | `DEBUG_KEY` | `stouras` | `?debug=1&key=…` gates the testing overlay; a participant can never trigger it |
 | `LATENCY_MS` (app.js) | **320** | The client-side floor: a query and a reveal release after the same delay, so response time cannot signal which action was taken |
@@ -740,19 +741,29 @@ rows carry `run_id = null`, which the export reports honestly.
 
 **Consent** is a single checkbox that enables the button.
 
-**Registration** is the four background items — field of study, year or level of
-study, age band, gender — asked **once, before the task**, all optional, coarse
-bands only (with ~90 participants from one population a fine-grained combination
-is close to identifying). They were the exit survey's Part F until this build, and
-moving them is a data-quality decision rather than a cosmetic one: at the end they
-came after forty minutes of task, and on a platform launch they were dropped one
-by one, leaving a "Part F" that could be empty, complete or anything in between.
-On a Simulation Platform launch each item the platform's own registration already
-answered is **not asked again** — it travels with the row flagged
-`platform_<field>` — and when the platform covers all four the phase **passes
-through without a screen**. The **ids are unchanged from the Part F era on
-purpose**: sessions already collected carry them, and the exporter reads either
-source into the same `reg_*` column.
+**Registration** is three background items — year or level of study, age band,
+gender — asked **once, before the task**, all optional, coarse bands only (with
+~90 participants from one population a fine-grained combination is close to
+identifying). They were the exit survey's Part F until this build, and moving them
+is a data-quality decision rather than a cosmetic one: at the end they came after
+forty minutes of task, and on a platform launch they were dropped one by one,
+leaving a "Part F" that could be empty, complete or anything in between.
+
+**Field of study was removed** (2026-08, owner: irrelevant to this study), and the
+deletion is one array entry because every consumer is derived from `REGISTRATION`
+— `registrationColumns()` for the `reg_*` workbook columns, `outline()` for the
+Wording tab's editable fields, `resolve()` for the per-session copy. It left
+`PLATFORM_BACKGROUND` with it, and that is the interesting consequence: field of
+study was **the one item a platform launch still had to ask**, because the
+Simulation Platform's own registration has no such answer set. What remains is
+exactly what a launch already answers, so **a platform participant now passes
+through the phase with no screen at all** — and with no `phase_ms_registration`
+either, because consent routes *past* a phase with nothing to ask rather than
+entering it and bouncing out. A standalone participant is asked all three.
+
+The **ids are unchanged from the Part F era on purpose**: sessions already
+collected carry them, and the exporter reads either source — the phase, the
+platform, or the migration path — into the same `reg_*` column.
 
 **Nobody mid-session loses data.** The registration phase is entered *from the
 consent button*, so a participant who had already consented under the previous
@@ -803,9 +814,18 @@ in front of a participant, so block 2's order is followed in both.
   truths, and the "score if you stop now" line uses the best **true** prize held,
   never the selected position — an unopened position has no known value and
   guessing at it there would hand over the truth for free.
-- **Centre — the plot**, a legend, and the same four numbers big underneath
-  (best prize found · spent revealing · spent asking · **net value if you stop
-  now**), then the position controls: arrows, a slider and a number box.
+- **Centre — the plot**, a legend, then the position controls (arrows, slider,
+  number box) **directly under the plot they point at**, and only then the four
+  big numbers. That order is deliberate: choose where you are looking, read what
+  the round is worth there, then act on the buttons below. With the picker between
+  the numbers and the buttons, the band described a position the participant had
+  not chosen yet. The band **leads with NET VALUE**, in green (#226b0c on #eefaea
+  is 5.6:1, so the big number clears 4.5:1 as text) — it is what the round is
+  actually worth, and nothing else on the screen may compete with that tile, which
+  is why the two paid buttons keep their own matched hues. Then best prize found,
+  then the two running costs, named **"Total cost of revealing"** and **"Total cost
+  of asking the AI"** — they are what the round has cost so far, and the earlier
+  "Spent revealing" read as the price of the last action.
 - **Right — the three actions.** The two **paid** ones sit **side by side** at
   strict visual parity (same size, padding, radius, weight, border, shadow and
   states; two hues matched on saturation and lightness), in the order this
@@ -871,11 +891,35 @@ curve, its private anchors, the answers they paid for and what they revealed. In
 server mode the truth for it comes from a Function that serves it only for a round
 that is already finished.
 
-**Resume (§17.7).** State is kept in `localStorage` and mirrored to the
-participant document. A round that was open when the browser closed is **restarted
-from its beginning and flagged `interrupted`**, which ships as a *column*, not a
-filter. A round already nominated is not replayable — the server refuses it — or a
-participant could re-roll a bad score.
+**Resume, on any device (§17.7).** Progress rides on the **participant record** as
+`state_json`, not only in `localStorage`: a participant returning on their phone,
+or on the same machine after clearing its storage, continues instead of starting
+the study again. Boot reads both copies back after the claim and continues from
+whichever got **further** — completed, then rounds finished, then phase, and only
+then the clock — so a sync that never landed can never replay finished rounds in
+either direction. Carrying the state is safe because `S` holds only what the
+participant has already seen; the mapping and the AI's private anchors are not in
+it. Reading it on a **new** device needs the rules change described in §13 (a new
+browser is a new anonymous uid, so `data.uid` cannot be the test); until those
+rules are republished the read is refused and the participant falls back to their
+own browser's copy, which is the previous behaviour.
+
+A round that was open when the browser closed is **restarted from its beginning
+and flagged `interrupted`**, which ships as a *column*, not a filter — a round is
+one uninterrupted decision sequence and its timings are the measure. A round
+already nominated is not replayable — the server refuses it — or a participant
+could re-roll a bad score.
+
+**Breaks between sittings are measured, not inferred.** `save()` stamps when the
+participant was last seen, and so does leaving, so a break runs from when they
+actually left rather than from the last heartbeat. Every return logs a `resume`
+row carrying the raw gap and which copy the progress came from; a gap of at least
+`BREAK_MIN_MS` is a **break between sittings** rather than a reload, and the
+workbook derives `breaks_count`, `break_total_ms`, `longest_sitting_break_ms` and
+`sittings` from those gaps — distinct from `idle_ms`, which is quiet time *inside*
+a sitting. The leaving stamp writes **only** the timestamp onto what is stored: a
+second tab may have gone further, and rewriting the whole state on the way out
+would push its progress back.
 
 **Logout** clears every `searchv2:` key and signs the device out. The logger is
 stopped **first**, because its `pagehide` flush fires during the navigation and
@@ -1020,6 +1064,16 @@ messages/{msgId}              admin → participant messages
 - **The per-round server state is `read: admin, write: false`.** A client that
   could read it would learn the answers; one that could write it would set its own
   score.
+- **A participant record is readable by whoever holds its code**, not only by the
+  uid that last wrote it. This is what makes cross-device resume possible: a new
+  browser is a **new anonymous uid**, so `resource.data.uid == request.auth.uid`
+  cannot be the test on that first read. The test is the **roster document with
+  the same id** (`runId__CODE`) — claiming the code is what binds a browser to a
+  participant, and `claimCode` rebinds it on a resume. Nothing is exposed that the
+  participant has not already seen: the state holds their own answers and the
+  values they paid to reveal, never the mapping and never the AI's anchors.
+  **This rule must be republished** for resume-anywhere to work; until then the
+  read is refused and the participant falls back to their own browser's copy.
 - Everything else is denied by default.
 
 ### The logger
@@ -1173,6 +1227,23 @@ Open entry. A typed Session ID is refused when it is too short or already taken,
 and a blank one never collides with an existing code. `newRunDoc` forces
 `ops.entryOpen = false`, so a draft is never enterable before the validation gate.
 
+Beside it, a one-press **4-round demo session** (`TEST`) for showing a class how
+the game works before they play the real one: two rounds without the AI then two
+with it, and inside each half one round starting blank followed by one starting
+with a few prizes open. Every departure from the defaults is deliberate —
+warm-ups off; no shuffle, so "nothing open" is always met before "a few already
+open"; `nextEntrantOverride: 'A'`, so **every** entrant gets the no-AI half first
+(the control is labelled "next entrant" but is never consumed, so it holds for the
+whole session — the crossover that makes the real study a crossover would send
+half the room the other way); the blank round runs the **dense** AI and the seeded
+one the **sparse** AI, so a class sees both faces of it; the exit survey off and
+the debrief on, because the debrief is the teaching part. Most important: **a
+different `generatorSeed`**. Specs are drawn from a pool shuffled by that seed, so
+two sessions sharing it serve the same prize curves in the same slots — a class
+that had seen the real round 1 in the demo would know where its best prize is. The
+one instruction screen that counts practice rounds is reworded for the demo
+**through the per-session wording system**, not by touching the study's own text.
+
 Below it, grouped **Active** and **Completed** with a count each. One card per
 session:
 code · status · lock tag · name · created · id · participant count · completed
@@ -1208,6 +1279,22 @@ Four buttons underneath, unchanged in number and colour from the previous panel:
 **Restore built-in default** (ghost). "Make this the default" saves to this
 machine's browser only; it never touches a stored session.
 
+**The form composes a session; it does not silently rewrite one.** Two variables
+had been kept as one, and the bug that produced was severe: `current` is the
+session the *read* screens are on (Participants, monitor, data, notes), which the
+panel picks automatically at load so they have something to show, while
+`editingId` is what the parameter form and the Wording tab *write* to, with `null`
+meaning "a new session". Binding the form to the panel's own pick turned "set the
+parameters for my next session, then Save" into an **overwrite of whichever
+session happened to be picked** — reveal cost 4 → 9 rewrote an existing session
+and created nothing, with no summary and no confirmation. The automatic pick now
+uses `selectRun(run, {form: false})`, and the form is bound to a session **only**
+by opening it from its card. Save therefore has two clearly separated jobs, said
+on the button, in a banner above the form and again in the confirmation: **Create
+session** (which asks for name and Session ID in the dialog itself, under the same
+rules as the card) or **Save changes to `<CODE>`** (which names the session in a
+confirm before rewriting it).
+
 The two AI overlay switches are behind a red confirmation that spells out what
 turning them on would change about the experiment.
 
@@ -1228,13 +1315,44 @@ Two badges:
   move near a coin flip (0.3–0.7), so a treatment effect has somewhere to show;
   red when all three point the same way.
 
-### Tab 3 · Roster
+### Tab 3 · Participants
+
+*(UI wording only — the `roster` collection, its document ids and the tab's own id
+are unchanged, exactly as SESSION / `run_id` is handled.)*
 
 Generate anonymous codes (prefix + 3 digits) laid out over the **four
 block-randomised cells** of sequence × button order (§9), export them as CSV
-(`code, sequence, button_order, status`), and see per-code status (unused / in
-progress / completed) with claim times, which action sat on the left, and whether
-the entry was pre-generated or self-enrolled. Auto-generated session codes use a 5-character alphabet with **I, O,
+(`code, sequence, button_order, status`), and see one row per participant: status,
+claim time, sequence, **Left button** (reading "Ask the AI" / "Reveal" — the
+covariate `button_order`, which the CSV keeps beside the readable label), a
+**Round** column, and whether the entry was pre-generated or self-enrolled.
+
+**The status now tells the truth.** The roster document learns exactly one thing —
+that a code was *claimed*, stamped `started` at entry — and nothing ever wrote to
+it again, so every participant who finished still read as in progress for the rest
+of the session's life. Fixed in both directions: the panel **joins each roster row
+to that participant's own session record** and prefers its `completed` flag, which
+heals every session already recorded, and `showDone` marks the roster document
+completed too (a best-effort merge write the existing rule already allows). The
+panel keeps deriving regardless — that write must never be able to surface on a
+participant's Done screen.
+
+**Round** is scored rounds finished out of the scored rounds *this session*
+assigns — "18/24 (75%)" — derived from `rounds_done` (which counts warm-ups) against
+the session's own warm-up/scored parameters rather than the default 4 + 24. A code
+with no session record reads "—", never "0/24"; a session record whose roster
+document is missing is listed rather than left invisible.
+
+**Every heading sorts**, and reverses on a second press. One `rosterCols(params)`
+spec owns each column's heading, its cell **and** its sort key, so a sorted table
+cannot order itself by something other than what it displays. Rows with nothing to
+compare sink to the bottom in **both** directions — an unclaimed code has no
+progress, which is not a zero — and the sort decorates with the load index, so ties
+are stable and a re-click is a clean reversal rather than a reshuffle. Status sorts
+`unused → started → completed`, by how far they got: alphabetical order here would
+be an accident. Painting is separate from reading, so a sort click re-renders what
+is loaded instead of firing two more collection reads, and the CSV exports in the
+order on screen. Auto-generated session codes use a 5-character alphabet with **I, O,
 0 and 1 removed**, because codes get read aloud and typed.
 
 The **next-entrant override** lives here, demands a reason, and writes an override
@@ -1243,17 +1361,23 @@ log that ships with the export.
 ### Tab 4 · Live monitor
 
 Counters from a Firestore listener on the participants collection — started, in
-progress, completed, abandoned, sequence A/B, plus a warning box when the sequence
-gap exceeds 3. A per-participant table with phase, round, active minutes,
-resumptions, viewport and flags, and a **message** button that pushes a one-off
-note to that participant's screen.
+progress, completed, **Away 30+ min**, sequence A/B, plus a warning box when the
+sequence gap exceeds 3. A per-participant table with phase, round, active minutes,
+resumptions, breaks between sittings, viewport and flags, and a **message** button
+that pushes a one-off note to that participant's screen.
+
+That tile used to say **"Abandoned"**, which it could not know: it is
+`started − completed − (record written in the last 30 minutes)`, and with
+cross-device resume anyone in it can come back and carry on. It now says what it
+actually measures, and every tile and health check carries the rule behind it,
+shown in the row when its ⚠ fires.
 
 Underneath, the **health strip**, each row flagged against a threshold chosen to
 mean "look at this now":
 
 | Check | Warns when |
 |---|---|
-| median active time per participant | < 30 min or > 70 min |
+| median active time per participant *(completed sessions only — someone who stopped after five minutes is not a fast participant, and this row exists to answer whether the study is the length we designed)* | < 30 min or > 70 min |
 | median time per round | < 20 s |
 | comprehension failures on the scoring question | > 10% |
 | failures on the jaggedness / frontier questions | > 40% |
@@ -1410,7 +1534,13 @@ wherever the analysis starts, and the size of any position effect can be reporte
 rather than assumed away. Registration answers ship as **`reg_*`** columns, reading
 either source into the same column: the phase, the platform (`reg_platform_*`), or
 the migration path's end-of-survey block. `phase_ms_registration` joins the phase
-breakdown.
+breakdown — and is legitimately **empty for a platform participant**, who never
+enters a phase with nothing to ask.
+
+Sittings ship beside the timing columns: **`breaks_count`** (returns that followed
+a gap of at least `BREAK_MIN_MS`), **`break_total_ms`** (time spent *away* between
+sittings — not `idle_ms`, which is quiet time *inside* one),
+**`longest_sitting_break_ms`** and **`sittings`** (`breaks_count + 1`).
 
 Each export bundles the session's **frozen configuration, seeds, checksums and
 override log**, so the parameters always travel with the data. `xlsx.js` is a
@@ -1433,10 +1563,10 @@ directions.
 **Platform → study.** The launch handoff's `studentId` becomes this study's
 `participant_code` **and** is carried as `pid`. That is the only join key, and **no
 second identifier is invented**. A **registration** item the platform has already
-answered — field of study, level of study, age band, gender — is **not asked
-again**; its answer travels as `platform_<field>`, flagged as to its source, and
-when the platform covers all four the registration phase passes through without a
-screen. **Nothing else from the profile is stored**: the student's name and e-mail
+answered — level of study, age band, gender — is **not asked again**; its answer
+travels as `platform_<field>`, flagged as to its source. Since field of study was
+dropped, those three are *all* of them, so **a platform launch now has nothing left
+to ask** and the registration phase passes through with no screen at all. **Nothing else from the profile is stored**: the student's name and e-mail
 address never reach this study's log. The handoff is read directly from `localStorage` rather than waiting
 for `/simulation/prefill.js` (which is deferred and runs after this script, while
 the participant code has to resolve during boot), under the same freshness rule
@@ -1463,9 +1593,9 @@ other five.
 ## 18 · Tests, and what each one pins
 
 ```bash
-node lab/search-v2/tools/selftest.js          # 299 checks, no browser
-node lab/search-v2/tools/smoke.mjs            # a whole 28-round session
-node lab/search-v2/tools/admin-smoke.mjs      # 161, the admin panel
+node lab/search-v2/tools/selftest.js          # 307 checks, no browser
+node lab/search-v2/tools/smoke.mjs            # 211, a whole 28-round session
+node lab/search-v2/tools/admin-smoke.mjs      # 178, the admin panel
 node lab/search-v2/tools/platform-guard.mjs   # 28, the platform contract, both ways
 node lab/search-v2/tools/wording-guard.mjs    # 17, overrides reach participants
 node lab/search-v2/tools/migration-guard.mjs  # a mid-session build never loses data
