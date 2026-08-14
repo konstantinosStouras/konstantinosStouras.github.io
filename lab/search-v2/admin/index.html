@@ -4,14 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Search With and Without Generative AI — Admin</title>
-  <meta name="description" content="Admin panel: runs, parameters, consequences, roster, live monitor and data export." />
+  <meta name="description" content="Admin panel: sessions, parameters, consequences, roster, live monitor and data export." />
   <meta name="robots" content="noindex,nofollow" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b2b2b'/%3E%3Cpath d='M9 22V10m7 12V14m7 8v-6' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="../icon-180.png" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="stouras.com/lab" />
   <meta property="og:title" content="Search With and Without Generative AI — Admin" />
-  <meta property="og:description" content="Admin panel: runs, parameters, consequences, roster, live monitor and data export." />
+  <meta property="og:description" content="Admin panel: sessions, parameters, consequences, roster, live monitor and data export." />
   <meta property="og:url" content="https://www.stouras.com/lab/search-v2/admin/" />
   <meta property="og:image" content="https://www.stouras.com/lab/search-v2/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -135,6 +135,47 @@
     .closeBtn{background:var(--bg); color:var(--ink); border-color:var(--line);}
     .deleteBtn{background:transparent; color:var(--red); border-color:var(--red);}
 
+    /* ---- session sections + cards (the shape of the ideasearchlab admin) ---- */
+    .sess-sec{margin-top:22px;}
+    .sess-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px;}
+    .sess-head h3{margin:0;}
+    .sess-count{font-size:12.5px; color:var(--muted); font-weight:600;}
+    .run-code{font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      font-size:20px; font-weight:800; letter-spacing:.06em;}
+    .run-right{text-align:right;}
+    .run-people{font-weight:700; font-size:14px; color:var(--ink);}
+    .cond-chip{display:inline-block; font-size:11.5px; font-weight:700; border-radius:20px;
+      padding:2px 10px; background:var(--panel); color:var(--ink); border:1px solid var(--line);}
+    .cond-chip.server{background:#eef8e9; color:#2c5d1f; border-color:#cfe6c4;}
+    .cond-chip.client{background:#fff7ed; color:#8a5a12; border-color:#f0dcbe;}
+    .run-name{font-weight:600; margin-top:8px;}
+    .empty-card{border:1px dashed var(--line); border-radius:12px; padding:16px; margin:10px 0;
+      color:var(--muted); font-size:13px;}
+
+    /* ---- the pre-flight session summary ---- */
+    .modal-back{position:fixed; inset:0; background:rgba(15,18,22,.55); display:flex;
+      align-items:flex-start; justify-content:center; padding:28px 16px; overflow:auto; z-index:60;}
+    .modal-card{background:var(--card, #fff); border:1px solid var(--line); border-radius:14px;
+      max-width:780px; width:100%; padding:20px 22px; box-shadow:0 18px 50px rgba(0,0,0,.28);}
+    .sum-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:12px; margin:14px 0;}
+    .sum-box{border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--bg);}
+    .sum-box h4{margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);}
+    .sum-box div{font-size:13px; line-height:1.65;}
+    .modal-acts{display:flex; gap:8px; justify-content:flex-end; margin-top:8px; flex-wrap:wrap;}
+
+    /* ---- round-by-round gallery ---- */
+    .rg-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:14px; margin-top:12px;}
+    .rg-card{border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--card, #fff);}
+    .rg-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap;}
+    .rg-id{font-weight:700; font-size:13.5px;}
+    .rg-tags{font-size:11.5px; color:var(--muted);}
+    .rg-foot{font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.6;}
+    .rg-card .plot-svg{cursor:default;}
+    .rg-legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:8px;}
+    .rg-legend b{color:var(--ink);}
+    .chk{display:inline-flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;}
+    .chk input{margin:0;}
+
     .table-scroll{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:#fff;}
     .data-table{width:100%; border-collapse:collapse; font-size:13px;}
     .data-table th, .data-table td{padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap;}
@@ -184,29 +225,43 @@
     <!-- ============ DASHBOARD ============ -->
     <section class="screen" id="a-dash">
       <div class="tabs">
-        <button class="tab on" data-tab="runs" title="Every run: status, participants, sequence balance">Runs</button>
-        <button class="tab" data-tab="params" title="The parameter set for the selected run, with its downstream consequences beside it">Parameters</button>
+        <button class="tab on" data-tab="runs" title="Every session: status, participants, sequence balance">Sessions</button>
+        <button class="tab" data-tab="params" title="The parameter set for the selected session, with its downstream consequences beside it">Parameters</button>
         <button class="tab" data-tab="roster" title="Participant codes and sequence assignment">Roster</button>
-        <button class="tab" data-tab="monitor" title="Live counters and health checks while a run is open">Live monitor</button>
+        <button class="tab" data-tab="monitor" title="Live counters and health checks while a session is open">Live monitor</button>
         <button class="tab" data-tab="data" title="Preview, validate, dry-run and export">Data &amp; preview</button>
       </div>
 
       <div class="admin-note" id="scope-note"></div>
 
-      <!-- ---------------- Screen 1: RUNS ---------------- -->
+      <!-- ---------------- Screen 1: SESSIONS ---------------- -->
       <div class="tab-panel" id="tab-runs">
         <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
-          <h2 style="margin:0;">Runs</h2>
+          <h2 style="margin:0;">Sessions</h2>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-green btn-sm" id="btn-new-run" title="Start a new run from the built-in defaults">+ New run</button>
+            <button class="btn btn-green btn-sm" id="btn-new-run" title="Start a new session from the built-in defaults">+ New session</button>
             <button class="btn btn-ghost btn-sm" id="btn-refresh-runs">&#8635; Refresh</button>
           </div>
         </div>
-        <p class="muted small">A <b>run</b> is an immutable parameter set. Once the first participant
-        claims a code every parameter that touches the task is locked; to change anything you
-        <b>clone</b> the run and collect under a new run id. Every event, round and participant
-        row carries its <span class="mono">run_id</span>, so two parameter sets can never be silently pooled.</p>
-        <div id="runs-list"></div>
+        <p class="muted small">A <b>session</b> is one immutable parameter set, played as <b>28 rounds</b>
+        (4 warm-up and 24 scored, in two blocks). Once the first participant claims a code every parameter
+        that touches the task is locked; to change anything you <b>clone</b> the session and collect under a
+        new id. Every event, round and participant row carries its <span class="mono">run_id</span> — the
+        session's id, which the design brief calls a run — so two parameter sets can never be silently pooled.</p>
+
+        <div class="sess-sec">
+          <div class="sess-head"><h3>Active sessions</h3><span class="sess-count" id="runs-active-n"></span></div>
+          <p class="muted small">Open a session to check its parameters, watch progress and export its data.
+          Participants join with the session code, or are sent straight in by the Simulation Platform.</p>
+          <div id="runs-active"></div>
+        </div>
+
+        <div class="sess-sec">
+          <div class="sess-head"><h3>Completed sessions</h3><span class="sess-count" id="runs-done-n"></span></div>
+          <p class="muted small">Closed to new entrants and read-only. Export the data before deleting one &mdash;
+          deleting a session removes its event log with it.</p>
+          <div id="runs-done"></div>
+        </div>
       </div>
 
       <!-- ------- Screens 2 + 3: PARAMETERS beside CONSEQUENCES ------- -->
@@ -379,8 +434,8 @@
               <summary>Operations <span class="lock-tag">editable at any time</span></summary>
               <div class="pbody">
                 <div class="row2">
-                  <div class="field"><label>Run name</label><input type="text" id="p-ops-runName" placeholder="untitled"></div>
-                  <div class="field"><label>Run code <span class="defval">· goes in the participant link</span></label>
+                  <div class="field"><label>Session name</label><input type="text" id="p-ops-runName" placeholder="untitled"></div>
+                  <div class="field"><label>Session code <span class="defval">· goes in the participant link</span></label>
                     <div style="display:flex; gap:8px;"><input type="text" id="p-ops-code" placeholder="AUTO">
                     <button class="btn btn-ghost btn-sm" id="btn-gencode" title="Generate an unused code">Auto</button></div></div>
                 </div>
@@ -417,8 +472,8 @@
                   plan: the client sends a position, the server holds the mapping and returns one number, so the
                   prize mapping never reaches the browser. Deploy first &mdash;
                   <span class="mono">cd lab/search-v2 &amp;&amp; firebase deploy --only functions</span> &mdash; and set this
-                  BEFORE the run’s first participant. It locks with everything else, because mixing the two
-                  inside one run would put two kinds of row in one dataset.</div>
+                  BEFORE the session’s first participant. It locks with everything else, because mixing the two
+                  inside one session would put two kinds of row in one dataset.</div>
                 </div>
                 <div class="row2">
                   <div class="field"><label>Roster mode</label>
@@ -433,9 +488,9 @@
             </details>
 
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;">
-              <button class="btn btn-green" id="btn-save" title="Save this run">Save run</button>
+              <button class="btn btn-green" id="btn-save" title="Save this session">Save session</button>
               <button class="btn btn-ghost btn-sm" id="btn-cancel" style="display:none;">Cancel edit</button>
-              <button class="btn btn-ghost btn-sm" id="btn-makedefault" title="Save these settings as the starting point for new runs">Make this the default</button>
+              <button class="btn btn-ghost btn-sm" id="btn-makedefault" title="Save these settings as the starting point for new sessions">Make this the default</button>
               <button class="btn btn-ghost btn-sm" id="btn-restore" title="Reset the form to the built-in defaults">Restore built-in default</button>
             </div>
             <div class="admin-note" id="save-note" style="display:none;"></div>
@@ -513,7 +568,7 @@
             <h2 style="margin:0;">Data</h2>
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin:12px 0;">
               <button class="btn btn-ghost btn-sm" id="btn-fetch">&#8635; Load the event log</button>
-              <button class="btn btn-blue btn-sm" id="btn-dl-xlsx" title="One analysis-ready workbook: ReadMe, Run, Decisions, Rounds, Participants, Survey, Comprehension, Slider trace, Audit and the raw log.">&#11015; Download Excel (.xlsx)</button>
+              <button class="btn btn-blue btn-sm" id="btn-dl-xlsx" title="One analysis-ready workbook: ReadMe, Session, Decisions, Rounds, Participants, Survey, Comprehension, Slider trace, Audit and the raw log.">&#11015; Download Excel (.xlsx)</button>
               <button class="btn btn-ghost btn-sm" id="btn-dl-decisions">decisions.csv</button>
               <button class="btn btn-ghost btn-sm" id="btn-dl-rounds">rounds.csv</button>
               <button class="btn btn-ghost btn-sm" id="btn-dl-participants">participants.csv</button>
@@ -529,7 +584,7 @@
             <div class="card">
               <h3 style="margin-top:0;">Validation gate</h3>
               <p class="muted small">Runs the adjacency check over the pool, the acceptance filter over every
-              seeded spec, and the balance checks on shape and density. A run cannot open until it passes.</p>
+              seeded spec, and the balance checks on shape and density. A session cannot open until it passes.</p>
               <button class="btn btn-green btn-sm" id="btn-validate">Run the validation</button>
               <div id="validate-out" style="margin-top:10px;"></div>
             </div>
@@ -546,20 +601,52 @@
             </div>
             <div class="card">
               <h3 style="margin-top:0;">Dry run</h3>
-              <p class="muted small">Push a scripted bot through a whole session against this run&rsquo;s specs, in
+              <p class="muted small">Push a scripted bot through a whole session against its own specs, in
               memory, and check that every export column populates. Bot rows are never written anywhere.</p>
               <button class="btn btn-ghost btn-sm" id="btn-dryrun">Run the bot</button>
               <div id="dryrun-out" style="margin-top:10px;"></div>
             </div>
             <div class="card" style="border-color:#f3c9c9;">
               <h3 style="margin-top:0; color:var(--red);">Danger zone</h3>
-              <p class="muted small">Regenerating the mapping pool is blocked once any data exists for the run.</p>
+              <p class="muted small">Regenerating the mapping pool is blocked once any data exists for the session.</p>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="sBtn deleteBtn" id="btn-reset-participant">Reset one participant</button>
-                <button class="sBtn deleteBtn" id="btn-close-run">Close this run permanently</button>
+                <button class="sBtn deleteBtn" id="btn-close-run">Close this session permanently</button>
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- ---- every round of this session, drawn ---- -->
+        <div class="card" id="round-gallery-card" style="margin-top:18px;">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
+            <h3 style="margin:0;">Every round of this session</h3>
+            <button class="btn btn-ghost btn-sm" id="btn-rg-draw">&#8635; Redraw</button>
+          </div>
+          <p class="muted small">One plot per round of this session, in the frozen order. Tick what you want to
+          see: the hidden prize walk itself, the prizes that start already open, the positions the AI knows
+          exactly and the line it interpolates between them. Reading down the grid is the quickest way to check
+          that the session&rsquo;s parameters produced the geometry you intended.</p>
+          <div class="admin-note" style="margin:10px 0;"><b>Everything below is for you alone.</b>
+          The random walk is the study&rsquo;s ground truth and <b>a participant never sees it</b> &mdash; nor the
+          AI&rsquo;s line, nor its anchors. In a participant&rsquo;s browser the plot starts blank and fills in only
+          with what they have paid for; in server mode the walk never leaves the server at all.</div>
+          <div style="display:flex; gap:16px 20px; flex-wrap:wrap; align-items:center; margin:8px 0 2px;">
+            <label class="chk"><input type="checkbox" id="rg-truth" checked> <b>Ground truth</b> &mdash; the hidden random walk</label>
+            <label class="chk"><input type="checkbox" id="rg-ai" checked> The AI&rsquo;s interpolation line</label>
+            <label class="chk"><input type="checkbox" id="rg-anchors" checked> The AI&rsquo;s private anchors</label>
+            <label class="chk"><input type="checkbox" id="rg-pre" checked> Pre-opened prizes</label>
+            <label class="chk"><input type="checkbox" id="rg-best"> Mark the best position</label>
+            <label class="chk"><input type="checkbox" id="rg-scored"> Scored rounds only</label>
+          </div>
+          <div class="rg-legend">
+            <span><b>&mdash;</b> the true prize at every position (the walk)</span>
+            <span><b>- -</b> what the AI would answer, position by position</span>
+            <span><b>&#9679;</b> an AI anchor &mdash; a position it knows exactly</span>
+            <span><b>&#9644;</b> a pre-opened prize, with its value</span>
+          </div>
+          <div id="rg-note" class="muted small" style="margin-top:8px;"></div>
+          <div class="rg-grid" id="rg-grid"></div>
         </div>
       </div>
 
@@ -570,6 +657,7 @@
   <script src="../pool.js"></script>
   <script src="../specs.js"></script>
   <script src="../ai.js"></script>
+  <script src="../chart.js"></script>
   <script src="../content.js"></script>
   <script src="../firebase-config.js"></script>
   <script src="../svfirebase.js"></script>

@@ -140,7 +140,7 @@
         });
         if (t.dataset.tab === 'roster') renderRoster();
         if (t.dataset.tab === 'monitor') startMonitor();
-        if (t.dataset.tab === 'data') fillSpecPicker();
+        if (t.dataset.tab === 'data') { fillSpecPicker(); renderRoundGallery(); }
       };
     });
   }
@@ -158,7 +158,7 @@
       currentParams = savedDefaultParams();
       fillForm(currentParams, null);
       openTab('params');
-      note('save-note', 'A new run, seeded from the saved defaults. Give it a name and a code, then Save.');
+      note('save-note', 'A new session, seeded from the saved defaults. Give it a name and a code, then Save.');
     };
     $('btn-refresh-runs').onclick = loadRuns;
   }
@@ -214,39 +214,71 @@
     }).catch(function () { /* the rules may not be published yet — the rows just show dashes */ });
   }
 
-  function renderRuns() {
-    var host = $('runs-list');
-    if (!runs.length) {
-      host.innerHTML = '<div class="card muted">No runs yet. <b>+ New run</b> starts one from the recommended defaults.</div>';
-      return;
-    }
-    host.innerHTML = runs.map(function (r) {
-      var st = r.status || 'draft';
-      var bal = (r.counts ? (r.counts.nA || 0) + ' A / ' + (r.counts.nB || 0) + ' B' : '—');
-      return '<div class="run-card" data-id="' + esc(r.id) + '">' +
-        '<div class="run-head">' +
-          '<div><div class="run-title">' + esc(r.name || 'untitled') +
-            '<span class="status ' + esc(st) + '">' + esc(st) + '</span>' +
-            (r.locked ? ' <span class="lock-tag">🔒 locked</span>' : '') + '</div>' +
-            '<div class="run-meta">code <b>' + esc(r.code || '—') + '</b> · run_id <span class="mono">' + esc(r.id) + '</span><br>' +
-            'created ' + esc(r.createdAt ? new Date(r.createdAt).toLocaleString() : '—') +
-            ' · started ' + (r.stats ? (r.stats.started || 0) : 0) +
-            ' · completed ' + (r.stats ? (r.stats.completed || 0) : 0) +
-            ' · sequence balance ' + esc(bal) + '</div></div>' +
-          '<div class="run-meta">' + (r.code ? 'participant link:<br><span class="mono">' + esc(launchUrl(r.code)) + '</span>' : '') + '</div>' +
-        '</div>' +
-        '<div class="run-acts">' +
-          '<button class="sBtn sBtnPrimary" data-act="open">Open</button>' +
-          '<button class="sBtn sBtnSec" data-act="clone">Clone this run</button>' +
-          '<button class="sBtn sBtnSec" data-act="copy">Copy link</button>' +
-          '<button class="sBtn sBtnSec" data-act="testround">🧪 Test round</button>' +
-          '<button class="sBtn exportBtn" data-act="export">⬇ Export</button>' +
-          (st === 'open' ? '<button class="sBtn closeBtn" data-act="close">Close</button>'
-                         : '<button class="sBtn sBtnSec" data-act="open-entry">Open entry</button>') +
-          '<button class="sBtn deleteBtn" data-act="delete">Delete</button>' +
-        '</div></div>';
-    }).join('');
+  // A session is DONE once it is closed or archived; everything else — draft,
+  // validating, open — is still in play and belongs in the active list.
+  function isDone(r) { var st = r.status || 'draft'; return st === 'closed' || st === 'archived'; }
 
+  function runCardHTML(r) {
+    var st = r.status || 'draft';
+    var done = isDone(r);
+    var started = r.stats ? (r.stats.started || 0) : 0;
+    var completed = r.stats ? (r.stats.completed || 0) : 0;
+    var bal = (r.counts ? (r.counts.nA || 0) + ' A / ' + (r.counts.nB || 0) + ' B' : '—');
+    var p = Specs.withDefaults(r.params);
+    var rounds = 2 * (p.rounds.warmupPerBlock + p.rounds.scoredPerBlock);
+    var server = (r.serverMode || (r.ops && r.ops.compute === 'server'));
+    var created = r.createdAt
+      ? new Date(r.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '—';
+
+    // Active sessions offer the join link; a closed one would hand out a link
+    // that refuses the entrant, so it is left off exactly as the copy says.
+    var acts = ['<button class="sBtn sBtnPrimary" data-act="open">Open</button>'];
+    if (!done && r.code) acts.push('<button class="sBtn sBtnSec" data-act="copy">Copy link</button>');
+    acts.push('<button class="sBtn exportBtn" data-act="export">⬇ Export data</button>');
+    acts.push('<button class="sBtn sBtnSec" data-act="testround">🧪 Test round</button>');
+    acts.push('<button class="sBtn sBtnSec" data-act="clone">Clone</button>');
+    if (!done) {
+      acts.push(st === 'open' ? '<button class="sBtn closeBtn" data-act="close">Close session</button>'
+                              : '<button class="sBtn sBtnSec" data-act="open-entry">Open entry</button>');
+    }
+    acts.push('<button class="sBtn deleteBtn" data-act="delete">Delete</button>');
+
+    return '<div class="run-card" data-id="' + esc(r.id) + '">' +
+      '<div class="run-head">' +
+        '<div><div class="run-title"><span class="run-code">' + esc(r.code || '—') + '</span>' +
+          '<span class="status ' + esc(st) + '">' + esc(st) + '</span>' +
+          (r.locked ? ' <span class="lock-tag">🔒 locked</span>' : '') + '</div>' +
+          '<div class="run-name">' + esc(r.name || 'untitled') + '</div>' +
+          '<div class="run-meta">Created ' + esc(created) +
+            ' · id <span class="mono">' + esc(r.id) + '</span></div></div>' +
+        '<div class="run-right">' +
+          '<div class="run-people">' + started + ' participant' + (started === 1 ? '' : 's') + '</div>' +
+          '<div class="run-meta">' + completed + ' completed · sequence ' + esc(bal) + '<br>' +
+            rounds + ' rounds · AI in one block of two</div>' +
+          '<div style="margin-top:6px;"><span class="cond-chip ' + (server ? 'server' : 'client') + '">' +
+            (server ? 'Scored on the server' : 'Scored in the browser') + '</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="run-acts">' + acts.join('') + '</div></div>';
+  }
+
+  function renderRuns() {
+    var active = runs.filter(function (r) { return !isDone(r); });
+    var done = runs.filter(isDone);
+    fillRunSection('runs-active', 'runs-active-n', active,
+      'No active sessions. <b>+ New session</b> starts one from the recommended defaults.',
+      function (n) { return n + ' active'; });
+    fillRunSection('runs-done', 'runs-done-n', done,
+      'No completed sessions yet. Closing a session moves it here and keeps its data.',
+      function (n) { return n + ' total'; });
+  }
+
+  function fillRunSection(hostId, countId, list, emptyHtml, label) {
+    var host = $(hostId);
+    if (!host) return;
+    $(countId).textContent = list.length ? label(list.length) : '';
+    host.innerHTML = list.length ? list.map(runCardHTML).join('') : '<div class="empty-card">' + emptyHtml + '</div>';
     host.querySelectorAll('.run-card').forEach(function (card) {
       var run = runs.filter(function (r) { return r.id === card.dataset.id; })[0];
       card.querySelectorAll('button[data-act]').forEach(function (b) {
@@ -278,30 +310,164 @@
       }); return;
     }
     if (act === 'testround') { window.open(previewUrl(run.code), '_blank'); return; }
-    if (act === 'export') { selectRun(run); openTab('data'); loadEvents(); return; }
+    if (act === 'export') { exportRun(run, btn); return; }
     if (act === 'clone') { cloneRun(run); return; }
     if (act === 'close') { setStatus(run, 'closed'); return; }
     if (act === 'open-entry') { setStatus(run, 'open'); return; }
     if (act === 'delete') {
-      if (!confirm('Delete the run "' + (run.name || run.id) + '"? Collected event rows are kept — use the danger zone to remove data.')) return;
-      (LOCAL ? Promise.resolve(saveLocalRuns(localRuns().filter(function (r) { return r.id !== run.id; })))
-             : FB.deleteRun(run.id).then(function () { return FB.audit(run.id, 'delete_run', run.name); }))
-        .then(function () { current = null; loadRuns(); });
+      var n = run.stats ? (run.stats.started || 0) : 0;
+      if (!confirm('Delete the session "' + (run.code || run.id) + ' — ' + (run.name || 'untitled') + '"?\n\n' +
+        'This removes the session AND its event log' + (n ? ' (' + n + ' participant' + (n === 1 ? '' : 's') + ' so far)' : '') +
+        '. Export the data first if you want to keep it.\n\nThis cannot be undone.')) return;
+      var wipe = (LOCAL || !FB.isConfigured()) ? Promise.resolve(0) : FB.deleteRunData(run.id).catch(function () { return 0; });
+      wipe.then(function () {
+        return LOCAL ? Promise.resolve(saveLocalRuns(localRuns().filter(function (r) { return r.id !== run.id; })))
+                     : FB.deleteRun(run.id).then(function () { return FB.audit(run.id, 'delete_run', run.name); });
+      }).then(function () { current = null; editingId = null; loadRuns(); });
     }
+  }
+
+  // "Export data" from a card is the whole job in one press: select the session,
+  // read its event log, build the workbook and save it. The Data screen is opened
+  // behind it so the tables and the health checks are there to look at.
+  function exportRun(run, btn) {
+    selectRun(run); openTab('data');
+    var old = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = 'Preparing…'; btn.disabled = true; }
+    loadEvents().then(function () {
+      renderData();
+      if (!built || !built.raw.length) {
+        if (btn) { btn.textContent = old; btn.disabled = false; }
+        note('data-note', 'Nothing to export yet: this session has no event rows.', true);
+        return;
+      }
+      downloadXlsx();
+      if (btn) {
+        btn.textContent = '✓ Downloaded';
+        setTimeout(function () { btn.textContent = old; btn.disabled = false; }, 1600);
+      }
+    }, function () { if (btn) { btn.textContent = old; btn.disabled = false; } });
+  }
+
+  // ======================================================================
+  //  SESSION SUMMARY  —  shown before a session is created, and again before
+  //  it opens to participants
+  // ======================================================================
+  // Both moments are one-way in practice: creating freezes the pool and the
+  // specs, and the first entrant locks every task parameter for good. So the
+  // settings are put in front of the admin as prose, once, in the order they
+  // matter — rather than left spread over seven collapsed groups.
+  function summaryBoxes(p, extra) {
+    var rounds = 2 * (p.rounds.warmupPerBlock + p.rounds.scoredPerBlock);
+    var sigma = CFG.sigma(p.env.stepBound), sStar = CFG.sStar(p.costs.revealCost);
+    var sdS = sigma * Math.sqrt(p.env.positions / p.ai.sparseK) / 2;
+    var sdD = sigma * Math.sqrt(p.env.positions / p.ai.denseK) / 2;
+    var bracket = (sdS > sStar && sdD < sStar);
+    var box = [];
+    box.push(['The session', [
+      'Name: <b>' + esc(p.ops.runName || 'untitled') + '</b>',
+      'Code: <b>' + esc(p.ops.code || '—') + '</b>',
+      'Entry: <b>' + (p.ops.entryOpen ? 'open' : 'closed') + '</b> · roster <b>' + esc(p.ops.rosterMode) + '</b>',
+      'Scored: <b>' + (p.ops.compute === 'server' ? 'on the server (Cloud Functions)' : 'in the browser') + '</b>'
+    ]]);
+    box.push(['Rounds', [
+      '<b>' + rounds + '</b> rounds: ' + (2 * p.rounds.warmupPerBlock) + ' warm-up, ' +
+        (2 * p.rounds.scoredPerBlock) + ' scored',
+      'Two blocks of ' + p.rounds.scoredPerBlock + ' — <b>AI in one block only</b>',
+      'Per block: ' + p.rounds.openPerBlock + ' open, ' + p.rounds.seededPerBlock + ' seeded',
+      'Order within a block: ' + (p.rounds.shuffleWithinBlock ? 'shuffled per participant' : 'fixed')
+    ]]);
+    box.push(['The task', [
+      p.env.positions + ' positions, prizes ' + p.env.prizeMin + '–' + p.env.prizeMax,
+      'Neighbours differ by at most <b>' + p.env.stepBound + '</b>',
+      'Reveal <b>' + p.costs.revealCost + '</b> (cap ' + p.costs.revealCap + ') · ask <b>' +
+        p.costs.queryCost + '</b> (cap ' + p.costs.queryCap + ')',
+      'Score floor: ' + (p.costs.scoreFloor ? 'yes' : '<b>none</b> — a round may end negative')
+    ]]);
+    box.push(['The AI', [
+      'Sparse <b>K=' + p.ai.sparseK + '</b> · dense <b>K=' + p.ai.denseK + '</b>, ' + esc(p.ai.placement),
+      'Answers rounded: ' + esc(p.ai.answerRounding),
+      bracket ? 'The two settings <b>bracket s* = ' + sStar.toFixed(2) + '</b> — the prediction stays a change of sign'
+              : '<b>⚠ Both settings sit on the same side of s* = ' + sStar.toFixed(2) + '</b> — this tests a gradient, not a sign change',
+      (p.ai.drawCurve || p.ai.markAnchors)
+        ? '<b>⚠ A testing overlay is ON for participants</b> (' +
+          (p.ai.drawCurve ? 'the whole curve is drawn' : '') +
+          (p.ai.drawCurve && p.ai.markAnchors ? '; ' : '') +
+          (p.ai.markAnchors ? 'its anchors are marked' : '') + ')'
+        : 'Its curve and anchors stay hidden, as they must'
+    ]]);
+    box.push(['Assignment', [
+      'Sequence: ' + esc(p.assign.sequenceAssignment),
+      'Next entrant: ' + (p.assign.nextEntrantOverride === 'auto' ? 'automatic' : '<b>forced ' + esc(p.assign.nextEntrantOverride) + '</b>'),
+      'Seeds frozen: ' + (p.assign.freezeSeeds ? 'yes' : 'no') + ' · anchors frozen: ' + (p.assign.freezeAnchors ? 'yes' : 'no'),
+      'Mapping pool: ' + p.env.poolSize + ', seed ' + p.env.generatorSeed
+    ]]);
+    box.push(['After the task', [
+      'Exit survey: ' + (p.ops.exitSurvey ? 'yes' : 'no'),
+      'Debrief screen: ' + (p.ops.debrief ? 'yes' : 'no'),
+      'Resume within ' + p.ops.resumeWindowH + ' h: ' + (p.ops.allowResume ? 'yes' : 'no'),
+      'Completion code: ' + (p.ops.completionCode ? '<b>' + esc(p.ops.completionCode) + '</b>' : 'none shown')
+    ]]);
+    (extra || []).forEach(function (e) { box.push(e); });
+    return '<div class="sum-grid">' + box.map(function (b) {
+      return '<div class="sum-box"><h4>' + esc(b[0]) + '</h4><div>' + b[1].join('<br>') + '</div></div>';
+    }).join('') + '</div>';
+  }
+
+  // A modal, built and torn down per use so there is never a stale one in the
+  // DOM to click through. Resolves only on confirm.
+  function askSummary(title, lead, bodyHtml, okLabel, onOk) {
+    var back = document.createElement('div');
+    back.className = 'modal-back';
+    back.id = 'sess-summary';
+    back.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+      '<h2 style="margin:0 0 4px;">' + esc(title) + '</h2>' +
+      '<p class="muted small" style="margin:0;">' + lead + '</p>' +
+      bodyHtml +
+      '<div class="modal-acts">' +
+        '<button class="btn btn-ghost btn-sm" id="sum-cancel">Cancel</button>' +
+        '<button class="btn btn-green btn-sm" id="sum-ok">' + esc(okLabel) + '</button>' +
+      '</div></div>';
+    document.body.appendChild(back);
+    function close() { if (back.parentNode) back.parentNode.removeChild(back); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    back.querySelector('#sum-cancel').onclick = close;
+    back.onclick = function (e) { if (e.target === back) close(); };
+    back.querySelector('#sum-ok').onclick = function () { close(); onOk(); };
+    back.querySelector('#sum-ok').focus();
   }
 
   function setStatus(run, status) {
     if (status === 'open') {
-      // §17b Screen 6: a run cannot move from draft to open until the validation
-      // gate passes. (Built once — regenerating a 600-mapping pool twice for the
-      // same check is pure waste.)
+      // §17b Screen 6: a session cannot move from draft to open until the
+      // validation gate passes. (Built once — regenerating a 600-mapping pool
+      // twice for the same check is pure waste.)
       var a = artifacts(run);
       var v = Specs.validate(a.pool, a.specs, a.params);
       if (!v.pass) {
-        alert('This run cannot open until the validation gate passes:\n\n• ' + v.failures.join('\n• '));
+        alert('This session cannot open until the validation gate passes:\n\n• ' + v.failures.join('\n• '));
         return;
       }
+      // Opening is the point of no return: the first entrant locks every task
+      // parameter, so the whole session is summarised here before it can happen.
+      var p = Specs.withDefaults(run.params);
+      if (run.ops) Object.keys(run.ops).forEach(function (k) { p.ops[k] = run.ops[k]; });
+      p.ops.code = run.code || p.ops.code;
+      p.ops.runName = run.name || p.ops.runName;
+      askSummary('Open this session to participants?',
+        'The <b>first participant to enter locks every parameter below</b> for good — after that, changing anything ' +
+        'means cloning the session. The validation gate has passed. Read it once more:',
+        summaryBoxes(p, [['Participant link', [
+          run.code ? '<span class="mono">' + esc(launchUrl(run.code)) + '</span>' : 'no code set',
+          'Simulation Platform students arrive on this link with their student ID as their participant code.'
+        ]]]),
+        'Open entry', function () { writeStatus(run, status); });
+      return;
     }
+    writeStatus(run, status);
+  }
+  function writeStatus(run, status) {
     var patch = { status: status, ops: Object.assign({}, run.ops || {}, { entryOpen: status === 'open' }) };
     persist(run.id, patch).then(function () {
       FB.isConfigured() && !LOCAL && FB.audit(run.id, 'status_' + status, run.name);
@@ -311,7 +477,7 @@
 
   function cloneRun(run) {
     var p = clone(Specs.withDefaults(run.params));
-    var name = prompt('Name for the cloned run:', (run.name || 'untitled') + ' (clone)');
+    var name = prompt('Name for the cloned session:', (run.name || 'untitled') + ' (clone)');
     if (name == null) return;
     var obj = newRunDoc(p, name, autoCode());
     obj.clonedFrom = run.id;
@@ -409,6 +575,8 @@
     fillForm(currentParams, run);
     renderRoster();
     fillSpecPicker();
+    rgFor = null;   // a different session means different rounds
+    if ($('tab-data') && $('tab-data').style.display !== 'none') renderRoundGallery();
   }
 
   // ======================================================================
@@ -514,7 +682,7 @@
     $('btn-restore').onclick = function () {
       currentParams = Specs.withDefaults(null);
       fillForm(currentParams, current);
-      note('save-note', 'Form reset to the built-in defaults. Nothing is saved until you press Save run.');
+      note('save-note', 'Form reset to the built-in defaults. Nothing is saved until you press Save session.');
     };
   }
 
@@ -550,16 +718,16 @@
     });
     $('p-ops-code').value = (run && run.code) || p.ops.code || '';
 
-    $('params-title').textContent = run ? ('Parameters · ' + (run.name || 'untitled')) : 'Parameters · new run';
-    $('params-sub').textContent = run ? ('run_id ' + run.id + (run.locked ? ' · locked' : ' · draft')) : 'not saved yet';
-    $('btn-save').textContent = run ? 'Save run' : 'Create run';
+    $('params-title').textContent = run ? ('Parameters · ' + (run.name || 'untitled')) : 'Parameters · new session';
+    $('params-sub').textContent = run ? ('session ' + (run.code || run.id) + (run.locked ? ' · locked' : ' · draft')) : 'not saved yet';
+    $('btn-save').textContent = run ? 'Save session' : 'Create session';
     $('btn-cancel').style.display = run ? '' : 'none';
 
     if (locked) {
       note('lock-note', '🔒 <b>Locked since the first participant' +
         (run.lockedAt ? ', ' + new Date(run.lockedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '') +
-        '.</b> Every parameter that touches the task is fixed for this run. To change anything, ' +
-        '<b>clone the run</b> from the Runs screen and collect under a new run_id. Only the Operations group ' +
+        '.</b> Every parameter that touches the task is fixed for this session. To change anything, ' +
+        '<b>clone the session</b> from the Sessions screen and collect under a new id. Only the Operations group ' +
         'and the next-entrant override stay editable.', false);
     } else {
       note('lock-note', '');
@@ -591,11 +759,23 @@
     var code = currentParams.ops.code || autoCode();
     var name = currentParams.ops.runName || 'untitled';
     if (!editingId) {
-      var obj = newRunDoc(currentParams, name, code);
-      createRun(obj).then(function () {
-        note('save-note', 'Run created as a <b>draft</b>. Run the validation gate on the Data screen before opening entry.');
-        loadRuns();
-      }).catch(function (e) { note('save-note', 'Could not create the run: ' + esc(String(e && e.message || e)), true); });
+      // Creating freezes the mapping pool and the 28 round specs under these
+      // seeds, so the summary comes first — this is the last cheap moment to
+      // notice that something was set wrong.
+      var pending = clone(currentParams);
+      pending.ops.code = code; pending.ops.runName = name;
+      askSummary('Create this session?',
+        'Creating freezes the mapping pool and all <b>' +
+        (2 * (pending.rounds.warmupPerBlock + pending.rounds.scoredPerBlock)) +
+        ' round specs</b> under the seeds below. It opens as a <b>draft</b>, so nobody can enter yet.',
+        summaryBoxes(pending), 'Create session', function () {
+          var obj = newRunDoc(currentParams, name, code);
+          createRun(obj).then(function () {
+            note('save-note', 'Session <b>' + esc(code) + '</b> created as a <b>draft</b>. Run the validation gate on the ' +
+              'Data screen — and check the round plots at the bottom of it — before opening entry.');
+            loadRuns();
+          }).catch(function (e) { note('save-note', 'Could not create the session: ' + esc(String(e && e.message || e)), true); });
+        });
       return;
     }
     var run = current;
@@ -760,7 +940,7 @@
 
   function renderRoster() {
     if (!current) {
-      $('roster-table').innerHTML = '<tbody><tr><td class="muted">Open a run first.</td></tr></tbody>';
+      $('roster-table').innerHTML = '<tbody><tr><td class="muted">Open a session first.</td></tr></tbody>';
       $('roster-stats').innerHTML = '';
       return;
     }
@@ -799,7 +979,7 @@
   }
 
   function generateCodes() {
-    if (!current) { alert('Open a run first.'); return; }
+    if (!current) { alert('Open a session first.'); return; }
     var n = Math.max(1, Math.min(1000, parseInt($('ros-n').value, 10) || 0));
     var prefix = ($('ros-prefix').value || 'P').toUpperCase().replace(/[^A-Z0-9]/g, '');
     // Block randomisation over a shuffled list, so the split is exactly half and
@@ -825,7 +1005,7 @@
   }
 
   function applyOverride() {
-    if (!current) { alert('Open a run first.'); return; }
+    if (!current) { alert('Open a session first.'); return; }
     var to = segGet('ros-override') || 'auto';
     var reason = ($('ros-reason').value || '').trim();
     if (to !== 'auto' && !reason) { alert('A reason is required: forced assignment is no longer pure randomisation, and the analysis has to say so.'); return; }
@@ -847,7 +1027,7 @@
   }
   function startMonitor() {
     if (!current) {
-      $('mon-counters').innerHTML = '<div class="stat-box"><b>—</b><span>open a run first</span></div>';
+      $('mon-counters').innerHTML = '<div class="stat-box"><b>—</b><span>open a session first</span></div>';
       return;
     }
     if (unsubMon) unsubMon();
@@ -971,7 +1151,7 @@
     $('btn-dl-participants').onclick = function () { if (built) dl('participants.csv', X.toCSV(built.participants), 'text/csv'); };
     $('btn-dl-raw').onclick = function () { if (built) dl('raw_events.json', JSON.stringify(built.raw, null, 1), 'application/json'); };
     $('btn-reset-participant').onclick = function () {
-      if (!current) return alert('Open a run first.');
+      if (!current) return alert('Open a session first.');
       var code = prompt('Participant code to reset (their rows are deleted permanently):');
       if (!code) return;
       var why = prompt('Reason (logged with the reset):');
@@ -982,16 +1162,113 @@
       });
     };
     $('btn-close-run').onclick = function () {
-      if (!current) return alert('Open a run first.');
-      if (!confirm('Close "' + (current.name || current.id) + '" permanently? No new participant can enter.')) return;
+      if (!current) return alert('Open a session first.');
+      if (!confirm('Close "' + (current.code || current.id) + '" permanently? No new participant can enter.')) return;
       setStatus(current, 'closed');
     };
+    $('btn-rg-draw').onclick = function () { renderRoundGallery(true); };
+    ['rg-truth', 'rg-ai', 'rg-anchors', 'rg-pre', 'rg-best', 'rg-scored'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.onchange = function () { renderRoundGallery(); };
+    });
+  }
+
+  // ======================================================================
+  //  EVERY ROUND, DRAWN
+  // ======================================================================
+  // One plot per frozen spec: the ground-truth prize walk, the prizes that start
+  // open, the AI's private anchors and the line it interpolates through them.
+  //
+  // ALL OF IT IS ADMIN-ONLY. The participant's plot draws none of these: the
+  // truth and the AI's curve are debug overlays gated behind the preview key,
+  // and the anchors are never sent to a live browser at all in server mode. This
+  // grid exists so the person setting a session up can see the geometry their
+  // parameters produced — which is exactly what the participant must NOT see.
+  var rgFor = null;
+  function rgOpts() {
+    return {
+      truth: !$('rg-truth') || $('rg-truth').checked,
+      ai: !$('rg-ai') || $('rg-ai').checked,
+      anchors: !$('rg-anchors') || $('rg-anchors').checked,
+      pre: !$('rg-pre') || $('rg-pre').checked,
+      best: !!($('rg-best') && $('rg-best').checked),
+      scoredOnly: !!($('rg-scored') && $('rg-scored').checked)
+    };
+  }
+
+  function renderRoundGallery(force) {
+    var grid = $('rg-grid');
+    if (!grid) return;
+    if (!current) {
+      rgFor = null;
+      grid.innerHTML = '';
+      note('rg-note', 'Open a session first — its rounds are drawn here.');
+      return;
+    }
+    var o = rgOpts();
+    var key = current.id + '|' + JSON.stringify(o);
+    if (!force && key === rgFor) return;
+    rgFor = key;
+
+    var a;
+    try { a = artifacts(current); } catch (e) {
+      grid.innerHTML = '';
+      note('rg-note', 'The specs for this session could not be built: ' + esc(String(e && e.message || e)), true);
+      return;
+    }
+    var specs = a.specs.filter(function (s) { return o.scoredOnly ? s.scored : true; });
+    var N = a.params.env.positions;
+
+    note('rg-note', 'Showing <b>' + specs.length + '</b> of ' + a.specs.length + ' rounds, in the frozen order. ' +
+      'Block 1 is played with the AI by sequence B and without it by sequence A; block 2 is the other way round. ' +
+      '<b>None of these overlays is ever drawn for a participant.</b>');
+
+    grid.innerHTML = specs.map(function (s) {
+      return '<div class="rg-card" data-spec="' + esc(s.spec_id) + '">' +
+        '<div class="rg-top"><span class="rg-id">' + esc(s.spec_id) + '</span>' +
+          '<span class="rg-tags">block ' + s.block + ' · ' + (s.scored ? 'scored' : 'warm-up') + ' · ' +
+          esc(s.seed_shape) + ' · ' + esc(s.ai_density) + ' K=' + s.ai_k + '</span></div>' +
+        '<div class="rg-plot"></div>' +
+        '<div class="rg-foot"></div></div>';
+    }).join('');
+
+    specs.forEach(function (s, i) {
+      var card = grid.children[i];
+      var truth = a.pool[s.mapping_index];
+      if (!truth) return;
+      var anchors = Ai.anchorSet(s.ai_anchors, s.pre_opened, [], truth);
+      var curve = [];
+      for (var p = 1; p <= N; p++) curve.push(Ai.aiAnswer(anchors, p, a.params.ai.answerRounding));
+      var pre = (s.pre_opened || []).map(function (pp) { return { pos: pp, val: truth[pp - 1] }; });
+
+      var best = 1;
+      for (var q = 1; q < truth.length; q++) if (truth[q] > truth[best - 1]) best = q + 1;
+
+      var ch = SVChart.create(card.querySelector('.rg-plot'), { positions: N });
+      ch.render({
+        showTruth: o.truth, truth: truth,
+        showAiCurve: o.ai, aiCurve: curve,
+        showAnchors: o.anchors, anchors: anchors.filter(function (x) {
+          return (s.ai_anchors || []).indexOf(x.pos) >= 0;
+        }),
+        preOpened: o.pre ? pre : [],
+        nominated: o.best ? { pos: best, val: truth[best - 1] } : null,
+        tag: 'mapping #' + s.mapping_index
+      });
+
+      card.querySelector('.rg-foot').innerHTML =
+        (pre.length
+          ? 'Open at the start: ' + pre.map(function (x) { return 'p' + x.pos + ' = <b>' + x.val + '</b>'; }).join(' · ')
+          : 'Nothing pre-opened — the participant starts from a blank line.') +
+        '<br>Best prize <b>' + truth[best - 1] + '</b> at position ' + best +
+        ' · the AI knows ' + (s.ai_anchors || []).length + ' position' + ((s.ai_anchors || []).length === 1 ? '' : 's') + ' exactly';
+    });
   }
 
   function fillSpecPicker() {
     var sel = $('prev-spec');
     if (!sel) return;
-    if (!current) { sel.innerHTML = '<option value="">open a run first</option>'; return; }
+    if (!current) { sel.innerHTML = '<option value="">open a session first</option>'; return; }
     var a = artifacts(current);
     sel.innerHTML = a.specs.map(function (s) {
       return '<option value="' + esc(s.spec_id) + '">' + esc(s.spec_id) + ' · ' + esc(s.seed_shape) +
@@ -1000,7 +1277,7 @@
   }
 
   function runValidation() {
-    if (!current) { $('validate-out').innerHTML = '<span class="muted">Open a run first.</span>'; return; }
+    if (!current) { $('validate-out').innerHTML = '<span class="muted">Open a session first.</span>'; return; }
     var a = artifacts(current);
     var v = Specs.validate(a.pool, a.specs, a.params);
     $('validate-out').innerHTML = v.pass
@@ -1146,7 +1423,7 @@
   // The bot itself lives in export.js, so the panel and tools/selftest.js drive
   // exactly the same scripted session.
   function dryRun() {
-    if (!current) { $('dryrun-out').innerHTML = '<span class="muted">Open a run first.</span>'; return; }
+    if (!current) { $('dryrun-out').innerHTML = '<span class="muted">Open a session first.</span>'; return; }
     var a = artifacts(current);
     var rows = X.botSession(a, 'BOT001', 'A', current).concat(X.botSession(a, 'BOT002', 'B', current));
     var b = X.build(rows, current, { keepBots: true });

@@ -120,8 +120,8 @@ bypasses the minimum-window check so a narrow test window still works.
 
 ```bash
 node lab/search-v2/tools/selftest.js         # 202 checks, no browser
-node lab/search-v2/tools/smoke.mjs           # 137 checks, a whole session
-node lab/search-v2/tools/admin-smoke.mjs     #  55 checks, the admin panel
+node lab/search-v2/tools/smoke.mjs           # 141 checks, a whole session
+node lab/search-v2/tools/admin-smoke.mjs     # 104 checks, the admin panel
 node lab/search-v2/tools/platform-guard.mjs  #  26 checks, the platform contract
 node lab/search-v2/tools/layout-guard.mjs    #  89 checks, five window sizes
 node lab/search-v2/tools/preview-guard.mjs   #  the sandbox writes nothing
@@ -291,26 +291,59 @@ as a download on the done screen.
 
 `/lab/search-v2/admin/`, five tabs covering the brief's six screens.
 
-**The governing rule is clone, do not edit.** A run is an immutable parameter
+**The panel calls the unit a SESSION**, played as **28 rounds** (4 warm-up and 24
+scored, in two blocks). The brief calls the same object a *run*, and the data
+keeps that name — every event, round and participant row carries `run_id` — so
+the two words mean one thing and existing analysis scripts are untouched.
+
+**The governing rule is clone, do not edit.** A session is an immutable parameter
 set. Once its first participant claims a code every parameter that touches the
 task is locked; the fields render greyed with a padlock and the date, and the
-only way to change anything is **Clone this run**, which copies the parameters
-into a fresh `run_id` with its own pool, specs and roster. Every event, round and
-participant row carries `run_id`, so two parameter sets can never be silently
-pooled. The lock is a Security Rule, not a UI state.
+only way to change anything is **Clone**, which copies the parameters into a
+fresh id with its own pool, specs and roster. Two parameter sets can therefore
+never be silently pooled. The lock is a Security Rule, not a UI state.
+
+**A session is summarised before it can bite.** Creating one freezes the mapping
+pool and all 28 specs under its seeds; opening entry starts the clock on that
+lock, because the first entrant fixes everything. Both moments therefore put the
+whole configuration in front of you first — rounds, task, costs and caps, the two
+AI densities and whether they still bracket `s*`, assignment, what happens after
+the task, and the participant link — with **Cancel** as a real cancel.
 
 | Screen | What it does |
 |---|---|
-| **Runs** | every run: status, participants, sequence balance, launch link; open, clone, copy link, test round, export, close, delete |
+| **Sessions** | grouped **Active** and **Completed**, one card each in the shape of the other class admin panels: code, status, name, created date, participant count, sequence balance and where the score is computed; **Open · Copy link · ⬇ Export data · 🧪 Test round · Clone · Open entry / Close session · Delete**. Export data does the whole job in one press — read the log, build the workbook, save it. Delete removes the session **and its event log**, so export first |
 | **Parameters** | six collapsible groups — Environment, Costs and limits, AI, Round structure, Assignment, Acceptance filter — plus an always-editable Operations group. Two red-confirmed switches ("draw the full curve", "mark the AI's known positions") stay visible but must never be turned on |
 | **Consequences** | recomputed live beside the form: σ, `s*`, `g*`, the two gap-midpoint SDs, the benchmark frontier share per seed shape, session length, and **two badges** — green when sparse sits above `s*` and dense below it, red when the design has become a gradient rather than a sign change |
 | **Roster** | generate anonymous codes with an exact 50/50 block-randomised split; next-entrant override, which demands a reason and logs it into the export |
 | **Live monitor** | counters from a Firestore listener plus the health strip: median active time, median round time, comprehension failures, cap hits, immediate-stop rate, narrow viewports, long blurs, sub-500 ms deciders |
-| **Data & preview** | the validation gate, a spec preview that writes nothing, a scripted dry run, the export, and a danger zone |
+| **Data & preview** | the validation gate, a spec preview that writes nothing, a scripted dry run, the export, a danger zone, and the round gallery below |
 
 The four buttons under the parameter form are unchanged in number and colour from
-the previous panel: **Save run** (green), then **Cancel edit**, **Make this the
-default** and **Restore built-in default** (ghost).
+the previous panel: **Save session** (green), then **Cancel edit**, **Make this
+the default** and **Restore built-in default** (ghost).
+
+### Every round, drawn
+
+At the bottom of **Data & preview** the panel draws **one plot per round of the
+session**, in the frozen order: the hidden prize walk itself, the prizes that
+start already open (with their values), the positions the AI knows exactly, and
+the line it interpolates between them — each behind its own tick box, plus
+*mark the best position* and *scored rounds only*. Under every plot: what is
+pre-opened, where the best prize is, and how many positions the AI knows.
+
+It is the fastest way to see whether a session's parameters produced the geometry
+they were meant to — a FRONTIER round really putting its seeds in a cluster, a
+sparse round really leaving the AI guessing between anchors — before anyone plays
+it.
+
+**All of it is admin-only, and that is the point.** The ground truth is the whole
+secret of the study: a participant's plot starts blank and fills in only with
+what they have paid for. The truth and the AI's curve exist in the participant
+build solely as debug overlays behind the preview key, the anchors are never sent
+to a live browser at all in server mode, and `tools/smoke.mjs` asserts on a live
+round that none of `.gt-line`, `.ai-line` or `.anchor-dot` is in the participant's
+plot and that the testing panel is not displayed.
 
 ---
 
