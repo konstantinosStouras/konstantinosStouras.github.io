@@ -35,6 +35,13 @@
         if (params[g][k] != null) out[g][k] = clone(params[g][k]);
       });
     });
+    /* A group added to DEFAULTS after a session was stored must NOT change how
+       that session plays: filling it from the new defaults would give the
+       participants who arrive next a different interface from the ones who
+       already played, inside one dataset. `ui` arrived in 2026-08 with the
+       randomised action order, so a session that predates it keeps the fixed
+       order it actually ran with; new sessions get the default. */
+    if (!params.ui) { out.ui.buttonOrder = 'fixed'; out.ui.encouragement = false; }
     return out;
   }
 
@@ -344,8 +351,44 @@
     return { pass: failures.length === 0, failures: failures, notes: notes };
   }
 
+  /* Which of the two PAID actions sits on the LEFT, for a whole session.
+     A fixed column makes one button the standing default, and the nudge would
+     fall on exactly what this study measures — so the pair is swapped per
+     PARTICIPANT (never per round or per decision: see the note in config.js).
+       'participant' — jointly block-randomised with the crossover sequence at
+                       enrolment, which is the server's counter (or the roster
+                       generator). This function is the CLIENT-MODE FALLBACK
+                       for a run with no Function to enrol against: a hash of
+                       the participant code, deterministic so the order a
+                       participant saw is reproducible offline from the code.
+       'fixed'       — Ask on the left, always. */
+  function buttonOrder(params, code) {
+    var mode = (params && params.ui && params.ui.buttonOrder) || 'fixed';
+    if (mode !== 'participant') return 'ask_first';
+    return (Pool.hashSeed('btnorder:' + (code == null ? '' : code)) % 2) ? 'reveal_first' : 'ask_first';
+  }
+  /* The four cells of sequence × button order, in a block-randomised cycle —
+     what the roster generator lays out and what the server's enrolment counter
+     fills, so all four come out balanced (roughly N/4 each) rather than the
+     product of two independent coin flips. */
+  // The ORDER of the four matters: every consecutive PAIR carries one A and one
+  // B, and one ask-first and one reveal-first, so a roster whose size is not a
+  // multiple of four still splits both factors evenly (90 codes: 45/45 on each,
+  // 23/22 per cell). Cycling A,A,B,B would have given 46/44 on the sequence —
+  // the exact balance §11 asks for, lost to a change that was only about the
+  // buttons.
+  var CELLS = [
+    { sequence: 'A', buttonOrder: 'ask_first' },
+    { sequence: 'B', buttonOrder: 'reveal_first' },
+    { sequence: 'A', buttonOrder: 'reveal_first' },
+    { sequence: 'B', buttonOrder: 'ask_first' }
+  ];
+  function assignmentCells() { return CELLS.map(function (c) { return { sequence: c.sequence, buttonOrder: c.buttonOrder }; }); }
+
   return {
     withDefaults: withDefaults,
+    buttonOrder: buttonOrder,
+    assignmentCells: assignmentCells,
     placeSeeds: placeSeeds,
     placeAnchors: placeAnchors,
     densityK: densityK,

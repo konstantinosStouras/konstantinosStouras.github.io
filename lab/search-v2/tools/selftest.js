@@ -376,11 +376,13 @@ head('11 · the content: instructions, gates and the survey');
   ok(all.every(q => q.answer >= 0 && q.answer < q.options.length), 'every quiz answer indexes a real option');
   ok(new Set(all.map(q => q.id)).size === all.length, 'quiz ids are unique');
 
-  ok(Content.SURVEY.length === 24, 'the survey holds the twenty numbered items plus the four optional background items');
+  ok(Content.SURVEY.length === 20, 'the survey holds the twenty numbered items — background moved to registration');
   ok(new Set(Content.SURVEY.map(q => q.id)).size === Content.SURVEY.length, 'survey ids are unique');
-  ['A', 'B', 'C', 'D', 'E', 'F'].forEach(part => {
+  ['A', 'B', 'C', 'D', 'E'].forEach(part => {
     ok(Content.SURVEY.some(q => q.part === part), 'part ' + part + ' is present');
   });
+  ok(!Content.SURVEY.some(q => q.part === 'F'),
+    'the exit survey no longer asks background — it is the registration phase, before the study');
   // Free text before multiple choice within each part, so the options never
   // supply the vocabulary (§16.7).
   ['A', 'E'].forEach(part => {
@@ -390,9 +392,95 @@ head('11 · the content: instructions, gates and the survey');
     ok(firstChoice === -1 || lastText == null || part === 'E' || lastText < firstChoice,
       'part ' + part + ': free text comes before multiple choice');
   });
-  ok(Content.SURVEY.filter(q => q.part === 'F').every(q => q.optional), 'every Part F item is optional');
-  ok(Content.SURVEY.filter(q => q.part === 'F').every(q => q.platformKey),
-    'every Part F item names the platform field that would already answer it');
+  // Registration: the background block, asked once, before the study.
+  ok(Content.REGISTRATION.length === 4, 'registration asks the four background items');
+  ok(Content.REGISTRATION.every(q => q.optional), 'every registration item is optional');
+  ok(Content.REGISTRATION.every(q => q.platformKey),
+    'every registration item names the platform field that answers it instead');
+  ok(Content.REGISTRATION.every(q => Content.PLATFORM_BACKGROUND.indexOf(q.platformKey) >= 0),
+    'and that field is one the platform handoff actually carries');
+  // The button-order assignment: per participant, reproducible, balanced.
+  {
+    const pOn = Specs.withDefaults({ ui: { buttonOrder: 'participant' } });
+    const pFix = Specs.withDefaults({ ui: { buttonOrder: 'fixed' } });
+    ok(Specs.buttonOrder(pFix, 'ABC12') === 'ask_first', 'fixed order always puts Ask on the left');
+    ok(Specs.buttonOrder(pOn, 'ABC12') === Specs.buttonOrder(pOn, 'ABC12'),
+       'the fallback draw is deterministic — one participant, one order, for the whole session');
+    ok(Specs.withDefaults(null).ui.buttonOrder === 'participant', 'a new session randomises per participant by default');
+    ok(Specs.withDefaults({ costs: { revealCost: 4 } }).ui.buttonOrder === 'fixed' &&
+       Specs.withDefaults({ costs: { revealCost: 4 } }).ui.encouragement === false,
+       'a session stored before `ui` existed keeps the interface it actually ran with');
+    let revealFirst = 0, n = 0;
+    for (let p = 0; p < 400; p++) { n++; if (Specs.buttonOrder(pOn, 'P' + p) === 'reveal_first') revealFirst++; }
+    const share = revealFirst / n;
+    ok(share > 0.44 && share < 0.56,
+       'the client-mode fallback is balanced across participants (' + (100 * share).toFixed(1) + '% reveal-first)');
+
+    // The four cells of sequence × order, which the roster generator lays out
+    // and the enrolment counter fills — one block, not two coin flips.
+    const cells = Specs.assignmentCells();
+    ok(cells.length === 4, 'the assignment block has four cells');
+    ok(new Set(cells.map(c => c.sequence + '/' + c.buttonOrder)).size === 4, 'and they are distinct');
+    ['A', 'B'].forEach(sq => ok(cells.filter(c => c.sequence === sq).length === 2,
+      'sequence ' + sq + ' appears in exactly half the cells'));
+    ['ask_first', 'reveal_first'].forEach(o => ok(cells.filter(c => c.buttonOrder === o).length === 2,
+      o + ' appears in exactly half the cells, so the two factors are crossed'));
+    // Every consecutive PAIR must carry one of each level of BOTH factors, or a
+    // roster whose size is not a multiple of four loses the exact split.
+    ok(cells[0].sequence !== cells[1].sequence && cells[2].sequence !== cells[3].sequence &&
+       cells[0].buttonOrder !== cells[1].buttonOrder && cells[2].buttonOrder !== cells[3].buttonOrder,
+       'the cycle alternates both factors, so 90 codes still split 45/45 on each');
+    [90, 51, 7].forEach(n => {
+      var got = { A: 0, B: 0, ask_first: 0, reveal_first: 0 };
+      for (var i = 0; i < n; i++) { got[cells[i % 4].sequence]++; got[cells[i % 4].buttonOrder]++; }
+      ok(Math.abs(got.A - got.B) <= 1 && Math.abs(got.ask_first - got.reveal_first) <= 1,
+         'a roster of ' + n + ' splits evenly on both factors (' + got.A + '/' + got.B +
+         ' and ' + got.ask_first + '/' + got.reveal_first + ')');
+    });
+
+    // The cost colours are run parameters, and the pair must stay same-hue,
+    // same-saturation with a lightness step — the whole point of the rule.
+    const hsl = s => (String(s).match(/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%/) || [])
+      .slice(1).map(Number);
+    const cr = hsl(Specs.withDefaults(null).ui.costColorReveal);
+    const cq = hsl(Specs.withDefaults(null).ui.costColorQuery);
+    ok(cr.length === 3 && cq.length === 3, 'both cost colours are hsl() triples');
+    ok(cr[0] === cq[0] && cr[1] === cq[1], 'same hue and saturation — only the lightness differs');
+    ok(Math.abs(cr[2] - cq[2]) >= 10, 'the lightness step is big enough to read at a glance');
+    // Both sit on a WHITE chip, so both must clear 4.5:1 against white.
+    const lum = ([h, s2, l]) => {
+      const S = s2 / 100, L = l / 100, C = (1 - Math.abs(2 * L - 1)) * S;
+      const X = C * (1 - Math.abs(((h / 60) % 2) - 1)), m = L - C / 2;
+      const [r, g, b] = (h < 60 ? [C, X, 0] : h < 120 ? [X, C, 0] : h < 180 ? [0, C, X]
+        : h < 240 ? [0, X, C] : h < 300 ? [X, 0, C] : [C, 0, X]).map(v => v + m);
+      const f = v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    [['reveal', cr], ['query', cq]].forEach(([name, c]) => {
+      const ratio = 1.05 / (lum(c) + 0.05);
+      ok(ratio >= 4.5, 'the ' + name + ' cost colour clears 4.5:1 on the white chip (' + ratio.toFixed(2) + ':1)');
+    });
+  }
+
+  const regCols = Content.registrationColumns();
+  ok(new Set(regCols).size === regCols.length, 'registration export columns are unique');
+  ok(!regCols.some(c => Content.surveyColumns().indexOf(c) >= 0),
+    'no id is claimed by both the survey and the registration');
+
+  // Encouragement copy: motivational, never informational. Nothing may name a
+  // position or a prize — a message that pointed at the answer, or that only
+  // one arm could see, would move the very quantity the study measures.
+  const encTexts = [];
+  Object.keys(Content.ENCOURAGE.milestones).forEach(k => {
+    encTexts.push(Content.ENCOURAGE.milestones[k].title, Content.ENCOURAGE.milestones[k].body);
+  });
+  Object.keys(Content.ENCOURAGE.tips).forEach(k => encTexts.push(Content.ENCOURAGE.tips[k]));
+  ['title', 'bodyNone', 'bodyFew', 'stay', 'go'].forEach(k => encTexts.push(Content.ENCOURAGE.rush[k]));
+  ok(encTexts.every(t => typeof t === 'string' && t.length > 0), 'every encouragement message has text');
+  ok(!encTexts.some(t => /position\s+\d/i.test(t)),
+    'no encouragement message names a position');
+  ok(!encTexts.some(t => /\bAI\b/.test(t) && !/\{ask\}/.test(t)),
+    'no encouragement message differs by arm (only the idle tip, via its {ask} slot)');
   const cols = Content.surveyColumns();
   ok(new Set(cols).size === cols.length, 'survey export columns are unique');
   const num = Content.SURVEY.find(q => q.type === 'numeracy');

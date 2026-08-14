@@ -184,13 +184,13 @@ exports.claimCode = onCall(async (req) => {
           throw new HttpsError('permission-denied', 'That code is already in use.');
         }
         tx.set(ref, { claimedByUid: uid, rebindAt: Date.now() }, { merge: true });
-        return { ok: true, sequence: d.sequence, resumed: true };
+        return { ok: true, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: true };
       }
       if (!d.claimedByUid) {
         tx.set(ref, { claimedByUid: uid, claimedAt: Date.now(), status: 'started' }, { merge: true });
-        return { ok: true, sequence: d.sequence, resumed: false };
+        return { ok: true, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: false };
       }
-      return { ok: true, sequence: d.sequence, resumed: true };
+      return { ok: true, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: true };
     }
     if (mode === 'roster') throw new HttpsError('permission-denied', 'not-on-roster');
 
@@ -206,15 +206,30 @@ exports.claimCode = onCall(async (req) => {
     else if ((c.nB || 0) < (c.nA || 0)) seq = 'B';
     else seq = (((c.nA || 0) + (c.nB || 0)) % 2 === 0) ? 'A' : 'B';
 
-    tx.set(countRef, {
+    // Which paid action sits on the LEFT is assigned HERE, jointly with the
+    // sequence, from the same counter — so the four cells of
+    // sequence × button order fill evenly (roughly N/4 each) instead of being
+    // the product of two independent coin flips. It is a covariate in the
+    // primary analysis, so its balance matters as much as the sequence's.
+    const cellKey = s => 'n' + s.sequence + (s.buttonOrder === 'reveal_first' ? 'R' : 'K');
+    const seqCells = [{ sequence: seq, buttonOrder: 'ask_first' }, { sequence: seq, buttonOrder: 'reveal_first' }];
+    const nK = c[cellKey(seqCells[0])] || 0, nR = c[cellKey(seqCells[1])] || 0;
+    const order = (nK < nR) ? 'ask_first'
+      : (nR < nK) ? 'reveal_first'
+      : (((nK + nR) % 2 === 0) ? 'ask_first' : 'reveal_first');
+
+    const bump = {
       nA: (c.nA || 0) + (seq === 'A' ? 1 : 0),
       nB: (c.nB || 0) + (seq === 'B' ? 1 : 0)
-    }, { merge: true });
+    };
+    const ck = cellKey({ sequence: seq, buttonOrder: order });
+    bump[ck] = (c[ck] || 0) + 1;
+    tx.set(countRef, bump, { merge: true });
     tx.set(ref, {
-      runId: runId, code: code, sequence: seq, status: 'started',
+      runId: runId, code: code, sequence: seq, buttonOrder: order, status: 'started',
       claimedByUid: uid, claimedAt: Date.now(), autoEnrolled: true
     }, { merge: true });
-    return { ok: true, sequence: seq, resumed: false };
+    return { ok: true, sequence: seq, buttonOrder: order, resumed: false };
   });
 
   // The first claim locks the run: from here the Rules refuse every parameter

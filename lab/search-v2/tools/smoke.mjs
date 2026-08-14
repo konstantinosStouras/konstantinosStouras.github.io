@@ -135,6 +135,21 @@ async function runOne(name) {
   ok(!(await pg.locator('#btn-consent').isDisabled()), 'ticking the box enables Continue');
   await pg.locator('#btn-consent').click();
 
+  // ── registration ────────────────────────────────────────────────────────
+  // Background, asked once, before the study. A standalone participant (no
+  // platform handoff, which is this run) is asked all four items; they are all
+  // optional, so Continue works whether or not anything is ticked. The
+  // platform-launch path — where they are answered from the handoff and the
+  // screen is skipped — is pinned by tools/platform-guard.mjs.
+  await pg.waitForSelector('#s-registration.active');
+  const regQs = await pg.$$eval('#reg-body .survey-q', els => els.map(e => e.dataset.q));
+  ok(regQs.length === 4, `registration asks the four background items (got ${regQs.length})`);
+  await pg.evaluate(() => {
+    const r = document.querySelector('#reg-body .survey-q input[type=radio]');
+    if (r) r.checked = true;
+  });
+  await pg.locator('#btn-reg').click();
+
   // ── instructions ────────────────────────────────────────────────────────
   await pg.waitForSelector('#s-instructions.active');
   const nPages = await pg.evaluate(() => window.SVContent.INSTRUCTIONS.length);
@@ -169,7 +184,7 @@ async function runOne(name) {
   ok(seq === 'A' || seq === 'B', `a crossover sequence was assigned (${seq})`);
 
   let aiOffChecked = false, aiOnChecked = false, requeryChecked = false;
-  let capNoteSeen = false, scoreChecked = false;
+  let capNoteSeen = false, scoreChecked = false, rushSeen = false, milestoneSeen = false, parityChecked = false;
 
   for (let i = 0; i < rounds.length; i++) {
     const scr = await currentScreen(pg);
@@ -198,6 +213,15 @@ async function runOne(name) {
     }
     if (await visible(pg, 's-blockintro')) await pg.locator('#btn-bi').click();
     await pg.waitForSelector('#s-round.active', { timeout: 15000 });
+    // A milestone pop-up can open with the round; it has one button.
+    if (await pg.locator('#ov-encourage.show').count()) {
+      if (!milestoneSeen) {
+        milestoneSeen = true;
+        ok(/rounds? (to go|left)|Last round|Halfway/i.test(await pg.locator('#ov-encourage .modal').innerText()),
+           'a milestone pop-up says how much of this half is left');
+      }
+      await pg.locator('#btn-enc-ok').click();
+    }
 
     const r = rounds[i];
     const askVisible = await pg.locator('#btn-ask').isVisible();
@@ -205,6 +229,8 @@ async function runOne(name) {
     if (r.cond === 'AI_OFF' && !aiOffChecked) {
       aiOffChecked = true;
       ok(!askVisible, 'in an AI-off round the "Ask the AI" button is ABSENT, not merely disabled');
+      ok((await pg.locator('#btn-ask').count()) === 0,
+         'and it is out of the DOM entirely — not hidden, so it is not tabbable or inspectable either');
       const text = await pg.locator('#s-round').innerText();
       ok(!/\bAI\b/.test(text.replace(/No AI in this part\./g, '')),
         'an AI-off round mentions the AI only to say there is none',
@@ -216,6 +242,60 @@ async function runOne(name) {
     const selNow = await pg.evaluate(() => window.SVApp.selected());
     ok((await pg.locator('#c-selected').textContent()).trim() === String(selNow),
       i === 0 ? 'the left panel reports the currently selected position' : 'selection tracked');
+
+    if (r.cond === 'AI_ON' && askVisible && !parityChecked) {
+      parityChecked = true;
+      // §Action buttons: the two PAID buttons are the primary outcome, so
+      // neither may be easier to press. Everything except the label text and
+      // the cost numeral must compute identically.
+      const metrics = await pg.evaluate(() => {
+        const pick = el => {
+          const c = getComputedStyle(el), r = el.getBoundingClientRect();
+          return {
+            w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top),
+            pad: c.padding, radius: c.borderRadius, weight: c.fontWeight, size: c.fontSize,
+            family: c.fontFamily, spacing: c.letterSpacing, border: c.borderWidth,
+            shadow: c.boxShadow, opacity: c.opacity, fill: c.backgroundColor, colour: c.color
+          };
+        };
+        const a = document.getElementById('btn-ask'), b = document.getElementById('btn-reveal');
+        const cell = id => document.getElementById(id).querySelector('.act-note').textContent.trim().length;
+        return { a: pick(a), b: pick(b), askNote: cell('ask-panel'), revNote: cell('reveal-panel') };
+      });
+      const same = k => metrics.a[k] === metrics.b[k];
+      ['w', 'h', 'pad', 'radius', 'weight', 'size', 'family', 'spacing', 'border', 'shadow', 'opacity', 'colour']
+        .forEach(k => ok(same(k), 'the two paid buttons compute the same ' + k,
+                         metrics.a[k] + ' vs ' + metrics.b[k]));
+      ok(metrics.a.top === metrics.b.top,
+         'they sit side by side on one baseline, not stacked — vertical primacy is the strongest position bias',
+         metrics.a.top + ' vs ' + metrics.b.top);
+      ok(metrics.a.fill !== metrics.b.fill, 'their hues differ, so they stay distinguishable');
+      // Same saturation and lightness: neither hue may be the louder one.
+      const hsl = rgb => {
+        const [r, g, b] = rgb.match(/\d+/g).slice(0, 3).map(Number).map(v => v / 255);
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+        const s = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
+        return { s: Math.round(s * 100), l: Math.round(l * 100) };
+      };
+      const ha = hsl(metrics.a.fill), hb = hsl(metrics.b.fill);
+      ok(Math.abs(ha.s - hb.s) <= 1 && Math.abs(ha.l - hb.l) <= 1,
+         'and the two hues are matched on saturation and lightness, so neither reads as the primary action',
+         JSON.stringify(ha) + ' vs ' + JSON.stringify(hb));
+      ok(Math.abs(metrics.askNote - metrics.revNote) <= 12,
+         'the helper text under each is about the same length',
+         metrics.askNote + ' vs ' + metrics.revNote + ' characters');
+      // The cost numerals: same hue and saturation, different lightness, and
+      // red appears nowhere else on the screen.
+      const costs = await pg.evaluate(() => {
+        const c = id => getComputedStyle(document.getElementById(id)).color;
+        return { q: c('ask-cost'), r: c('reveal-cost') };
+      });
+      ok(costs.q !== costs.r, 'the two cost numerals are tinted apart, so the price gap reads at a glance');
+      const cq = hsl(costs.q), cr = hsl(costs.r);
+      ok(Math.abs(cq.s - cr.s) <= 3 && cq.l !== cr.l,
+         'same saturation, different lightness — a tint of one hue, not two colours',
+         JSON.stringify(cq) + ' vs ' + JSON.stringify(cr));
+    }
 
     if (r.cond === 'AI_ON' && askVisible) {
       // Ask, then check the answer landed and the truth was NOT revealed.
@@ -293,6 +373,18 @@ async function runOne(name) {
     ok(i > 0 || new RegExp('position ' + revealPos).test(label),
       'the nominate button names the position, so nomination is never accidental', label);
     await pg.locator('#btn-nominate').click();
+    // This bot buys one reveal and stops, which is exactly the "closed after
+    // almost no searching" pattern the focus prompt exists for. It must always
+    // be dismissible in one click, or it would coerce the choice being
+    // measured — so "Stop anyway" is what the bot presses.
+    if (await pg.locator('#ov-encourage.show').count()) {
+      if (!rushSeen) {
+        rushSeen = true;
+        ok(await pg.locator('#btn-enc-alt').isVisible(),
+           'stopping after almost no searching offers a focus prompt with a one-click way out');
+      }
+      await pg.locator('#btn-enc-alt').click();
+    }
     // A revealed position needs no confirmation; an untouched one does.
     if (await pg.locator('#ov-nominate.show').count()) await pg.locator('#btn-nom-ok').click();
 
@@ -473,6 +565,8 @@ async function runOne(name) {
   await rp.waitForSelector('#s-consent.active', { timeout: 20000 });
   await rp.locator('#consent-box').check();
   await rp.locator('#btn-consent').click();
+  await rp.waitForSelector('#s-registration.active');
+  await rp.locator('#btn-reg').click();            // background is optional
   for (let i = 0; i < 5; i++) await rp.locator('#btn-instr-next').click();
   await answerQuiz(rp, 'base');
   await rp.locator('#btn-quiz').click();

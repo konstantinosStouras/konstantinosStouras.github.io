@@ -53,6 +53,46 @@ Then the twenty-item exit survey, a debrief that redraws one of the
 participant's own rounds with the true prizes beside what the AI told them, and
 the done screen.
 
+**Registration comes first, and the exit survey no longer asks background.** The
+four background items (field of study, year or level, age band, gender) are a
+**registration phase** between consent and the instructions — asked once, before
+the task, all optional. On a Simulation Platform launch each item the platform's
+own registration already answered is **not asked again**: it travels with the
+row as `platform_<field>`, and when the platform covers everything the phase
+passes through without a screen. `tools/platform-guard.mjs` pins both halves.
+
+**The two paid buttons are the outcome, so the interface may not tilt them.**
+"Ask the AI" and "Reveal" are one button style at strict visual parity — same
+size, padding, radius, weight, border, shadow and states, two hues matched on
+saturation and lightness — placed **side by side** (vertical primacy is the
+strongest position bias) with "Stop and nominate" apart below a divider, never
+in the swap. Which is on the **left** is assigned once per participant and fixed
+for the session, block-randomised **jointly with the sequence** so all four
+cells of sequence × order fill evenly, and stamped on every row as
+`button_order` for the model to control with. It is deliberately never redrawn
+per round or per decision: ~300 actions with the buttons moving buys mis-clicks
+(one spends the higher cost and destroys the ground truth at that position) and
+inflates decision latency, which is itself a measure. The cost numeral inside
+each button is red — and nothing else on screen is — with the cheaper action in
+a lighter tint of the same hue; both colours are locked run parameters
+(`ui.costColorReveal` / `ui.costColorQuery`), because styling that touches a
+primary outcome is a treatment, not a theme. The Reveal cost renders identically
+in AI-off rounds, where the Ask button is absent from the DOM rather than
+hidden. `tools/smoke.mjs` measures the parity from computed styles.
+
+**Engagement, within the same rule.** Forty minutes of a repeated task loses
+people, and a bored participant produces fast empty rounds that look like
+decisions. So: a progress bar and "round n of 12 in this half" under the round
+title; a milestone pop-up at the halfway point, with three rounds left, and on
+the last round; one in-round encouragement tip; a friendly line between rounds;
+and a **focus prompt** when a scored round is about to be closed after
+`ui.rushMinActions` actions or fewer — always dismissible in one click, because
+a prompt that could not be dismissed would coerce the choice being measured.
+Every message is motivational and never informational: none names a position,
+none reacts to how the participant is scoring, none differs between the two
+arms, and each is logged as a `nudge`. The copy lives in `content.js`
+(`ENCOURAGE`) and the whole feature is one locked parameter, `ui.encouragement`.
+
 ---
 
 ## File structure
@@ -65,7 +105,8 @@ lab/search-v2/
   pool.js             the mapping generator + acceptance filter (§8, §9)
   specs.js            round specs, per-participant order, validation gate (§10, §11)
   ai.js               the AI's answer, and every derived measure of §16.8
-  content.js          instructions, both comprehension gates, the 20 survey items
+  content.js          instructions, both comprehension gates, the 20 survey items,
+                      the registration block and every encouragement message
   chart.js            the inline-SVG centre panel (§14)
   logger.js           append-only event log: records + batched telemetry (§16, §17.2)
   app.js              the state machine: screens, rounds, resume

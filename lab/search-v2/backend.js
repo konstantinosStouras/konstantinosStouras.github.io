@@ -21,7 +21,7 @@
    surfaced to the participant instead.
 
    The interface, all promise-returning:
-       claimCode(code)                       -> { ok, sequence, resumed, reason }
+       claimCode(code)                       -> { ok, sequence, buttonOrder, resumed, reason }
        startRound(roundIndex)                -> round descriptor + pre_opened values
        act('query'|'reveal', pos, actionId)  -> { value }
        nominate(pos, actionId)               -> { trueValue, score, … }
@@ -184,7 +184,7 @@ window.SVBackend = (function () {
 
       claimCode: function (code) {
         return call('claimCode', { code: code }).then(function (r) {
-          return { ok: true, sequence: r.sequence, resumed: !!r.resumed };
+          return { ok: true, sequence: r.sequence, buttonOrder: r.buttonOrder || null, resumed: !!r.resumed };
         }, function (e) {
           var msg = String((e && e.message) || e);
           return { ok: false, reason: /not-on-roster/.test(msg) ? 'notonroster' : 'server', detail: msg };

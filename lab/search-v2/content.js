@@ -326,29 +326,119 @@
       exclusive: 5
     },
     { part: 'E', id: 's19', type: 'text', prompt: 'Did anything go wrong technically?' },
-    { part: 'E', id: 's20', type: 'text', prompt: 'Anything else you would like to tell us?' },
+    { part: 'E', id: 's20', type: 'text', prompt: 'Anything else you would like to tell us?' }
+  ];
 
-    // Part F — background, ALL optional and stated as such on the screen. Coarse
-    // bands only: with ~90 participants from one population a fine-grained
-    // combination is close to identifying. Any field the Simulation Platform
-    // already collected is skipped, so the two datasets carry ONE answer each.
-    { part: 'F', id: 'f_field', type: 'choice', optional: true, platformKey: 'fieldOfStudy',
+  // ---- encouragement (config.ui.encouragement) -----------------------------
+  // Forty minutes of a repeated task loses people, and a bored participant does
+  // not stop producing data — they produce fast, empty rounds that look like
+  // decisions. These messages exist to keep attention on the task and to say
+  // how much is left.
+  //
+  // THE RULE EVERY ONE OF THEM OBEYS: say nothing that changes what the best
+  // move is. No message names a position, hints where the high prizes are,
+  // comments on how well the round is going, or tells the participant to buy
+  // anything — "keep searching" points at the task, "reveal position 60" would
+  // point at the answer, and a message that moved behaviour toward revealing
+  // would move the very quantity the study measures. They are motivational,
+  // never informational: identical text in the AI-on and AI-off arms, shown at
+  // fixed points in the plan (not in response to how the participant is
+  // scoring), and logged so any effect can be looked for rather than assumed.
+  var ENCOURAGE = {
+    // Between-round pop-ups, at fixed points of each half. {left} = scored
+    // rounds still to play in this half, {half} = 'first'/'second'.
+    milestones: {
+      half: {
+        title: 'Halfway through this half',
+        body: 'You are doing great so far. {left} rounds to go in this half — keep searching, ' +
+              'and see whether a higher prize is hiding somewhere you have not looked.'
+      },
+      nearEnd: {
+        title: 'Only {left} rounds left in this half',
+        body: 'Nearly there, and your attention still counts: each of these rounds is scored ' +
+              'exactly like the ones before it. Keep going.'
+      },
+      lastRound: {
+        title: 'Last round',
+        body: 'This is the final round of the study. Give it the same care as the first one — ' +
+              'then a few short questions and you are done.'
+      }
+    },
+    // Between-rounds line, rotated by round index — NOT by how the round went.
+    // Unconditional praise is a mood, contingent praise is feedback, and
+    // feedback on performance would be a treatment nobody agreed to run.
+    cheers: [
+      'Nice work — on to the next one.',
+      'Good. A fresh line of prizes, and everything you learned about the last one is now history.',
+      'Keep it up — every round is scored the same way.',
+      'Well played. Take the next one at your own pace.'
+    ],
+    // The progress line under the round title. {n}/{total} scored rounds of
+    // this half, {left} still to come.
+    progress: 'Round {n} of {total} in this half · {left} to go',
+    progressWarmup: 'Practice round — nothing here is scored',
+    // In-round tips (the small dismissible corner card, never a modal).
+    tips: {
+      encourage: 'You are doing great so far — keep searching, and check whether a higher prize ' +
+                 'is hiding somewhere you have not opened yet.',
+      idleStart: 'Take your time. When you are ready you can reveal a position, {ask}or stop where you are.',
+      idleMid: 'Still thinking? You can stop on the best position you have found whenever you like.'
+    },
+    // The focus pop-up, when a round is about to be closed after almost no
+    // searching. It states the position of the round in the study and what
+    // stopping means — never what to do instead.
+    rush: {
+      title: 'Finish this round already?',
+      bodyNone: 'You have not opened a single position in this round, so there is nothing yet to ' +
+                'tell you what is really out there. There is no time limit — a moment more here ' +
+                'can be worth a lot of points.',
+      bodyFew: 'You have opened {did} of the {J} positions in this round. There is no time limit — ' +
+               'a moment more here can be worth a lot of points.',
+      stay: 'Keep searching',
+      go: 'Stop anyway'
+    }
+  };
+
+  // ---- registration — background, asked ONCE, at the start -----------------
+  // These four were the exit survey's Part F. They are background, not
+  // outcomes: asking them at the END put them after the participant had spent
+  // forty minutes on the task, and on a Simulation Platform launch they were
+  // then dropped one by one, leaving a "Part F" that could be empty, complete
+  // or anything in between. They are now their own REGISTRATION phase, right
+  // after consent — the same shape every other class simulation has, and the
+  // one place this study records who the participant is.
+  //
+  // On a platform launch the answers COME FROM THE PLATFORM's registration
+  // (`platformKey`): those items are not asked again, they travel with the row
+  // flagged `platform_<key>`, and when the platform covers all of them the
+  // phase passes through without a screen. Standalone participants are asked
+  // here. Coarse bands only, all optional: with ~90 participants from one
+  // population a fine-grained combination is close to identifying.
+  //
+  // The ids are unchanged from the Part F era on purpose — sessions already
+  // collected carry them, and the exporter reads either source into the same
+  // column (see admin/export.js).
+  var REGISTRATION = [
+    { id: 'f_field', type: 'choice', optional: true, platformKey: 'fieldOfStudy',
       prompt: 'Field of study', options: ['Business or economics', 'Engineering or computer science', 'Natural sciences', 'Social sciences or humanities', 'Other', 'Prefer not to say'] },
-    { part: 'F', id: 'f_year', type: 'choice', optional: true, platformKey: 'levelOfStudy',
+    { id: 'f_year', type: 'choice', optional: true, platformKey: 'levelOfStudy',
       prompt: 'Year or level of study', options: ['Undergraduate', 'Master’s', 'PhD', 'Not a student', 'Prefer not to say'] },
-    { part: 'F', id: 'f_age', type: 'choice', optional: true, platformKey: 'age',
+    { id: 'f_age', type: 'choice', optional: true, platformKey: 'age',
       prompt: 'Age band', options: ['Under 20', '20 to 24', '25 to 29', '30 to 39', '40 or over', 'Prefer not to say'] },
-    { part: 'F', id: 'f_gender', type: 'choice', optional: true, platformKey: 'gender',
+    { id: 'f_gender', type: 'choice', optional: true, platformKey: 'gender',
       prompt: 'Gender', options: ['Woman', 'Man', 'Non-binary', 'Prefer to self-describe', 'Prefer not to say'] }
   ];
+  // The platform profile fields carried onto the row as `platform_<key>` — the
+  // four the registration items map to, plus the rest of what a launch supplies.
+  var PLATFORM_BACKGROUND = ['fieldOfStudy', 'levelOfStudy', 'age', 'gender',
+                             'nationality', 'country', 'workExperience', 'occupation'];
 
   var PART_INTRO = {
     A: { title: 'Part A · How you searched', note: 'Please answer in your own words — there are no right answers.' },
     B: { title: 'Part B · The AI', note: '' },
     C: { title: 'Part C · Trust and the decision', note: '' },
     D: { title: 'Part D · About you', note: '' },
-    E: { title: 'Part E · Finally', note: '' },
-    F: { title: 'Part F · Background', note: 'Every question in this part is optional — leave any of them blank.' }
+    E: { title: 'Part E · Finally', note: '' }
   };
 
   // ---- debrief (§16.7) -----------------------------------------------------
@@ -370,6 +460,9 @@
     QUIZ_AI: QUIZ_AI,
     UNDERSTOOD_FRONTIER_QID: UNDERSTOOD_FRONTIER_QID,
     SURVEY: SURVEY,
+    REGISTRATION: REGISTRATION,
+    ENCOURAGE: ENCOURAGE,
+    PLATFORM_BACKGROUND: PLATFORM_BACKGROUND,
     PART_INTRO: PART_INTRO,
     DEBRIEF: DEBRIEF,
     THANKS: THANKS,
@@ -384,6 +477,11 @@
         if (q.followText) cols.push(q.id + '_why');
       });
       return cols;
+    },
+
+    // Every registration answer column, in screen order (exported as reg_<id>).
+    registrationColumns: function () {
+      return REGISTRATION.map(function (q) { return q.id; });
     },
 
     quizColumns: function () {

@@ -94,8 +94,8 @@ ok(await shown('tab-runs'), 'it opens on the Runs screen');
 await tab('params');
 ok(await shown('tab-params'), 'the Parameters screen opens');
 const groups = await pg.$$eval('.pgroup > summary', els => els.map(e => e.textContent.replace(/locked.*|editable.*/i, '').trim()));
-ok(groups.length === 7,
-  'seven collapsible groups: the six parameter groups of §17b plus Operations', groups.join(' | '));
+ok(groups.length === 8,
+  'eight collapsible groups: the six of §17b, Operations, and Interface and engagement', groups.join(' | '));
 ok(groups[0] === 'Environment' && groups[groups.length - 1] === 'Operations',
   'Environment leads and Operations (the always-editable group) closes the form', groups.join(' | '));
 const collapsed = await pg.$$eval('.pgroup', els => els.filter(e => !e.open).length);
@@ -257,13 +257,24 @@ await pg.locator('#btn-ros-gen').click();
 await pg.waitForTimeout(600);
 const stats = await pg.locator('#roster-stats').innerText();
 ok(/90/.test(stats), '90 codes generated');
-const seqCounts = await pg.$$eval('#roster-table tbody tr td:nth-child(2)', els => {
-  const c = { A: 0, B: 0 };
-  els.forEach(e => { const v = e.textContent.trim(); if (c[v] != null) c[v]++; });
-  return c;
-});
+const cells = await pg.$$eval('#roster-table tbody tr', els => els.map(tr => ({
+  seq: tr.children[1].textContent.trim(), btn: tr.children[2].textContent.trim()
+})));
+const seqCounts = { A: 0, B: 0 };
+cells.forEach(c => { if (seqCounts[c.seq] != null) seqCounts[c.seq]++; });
 ok(seqCounts.A === 45 && seqCounts.B === 45,
   'block randomisation splits the roster exactly 45 / 45, not by coin flips', JSON.stringify(seqCounts));
+// Button order is a covariate, so it is block-randomised JOINTLY: all four
+// cells of sequence × order fill evenly, which two independent draws would not
+// guarantee.
+const joint = {};
+cells.forEach(c => { const k = c.seq + '/' + c.btn; joint[k] = (joint[k] || 0) + 1; });
+const jointVals = Object.values(joint);
+ok(Object.keys(joint).length === 4 && Math.max(...jointVals) - Math.min(...jointVals) <= 1,
+  'and the four cells of sequence × button order come out balanced', JSON.stringify(joint));
+const rosterStats = await pg.locator('#roster-stats').innerText();
+ok(/Ask on the left/.test(rosterStats) && /Reveal on the left/.test(rosterStats),
+  'the roster reports that balance, so it can be confirmed before the first session opens');
 const rosterText = await pg.locator('#tab-roster').innerText();
 ok(/no names, no e-mail addresses/i.test(rosterText), 'the roster screen states that it holds no identifying information');
 

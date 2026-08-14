@@ -2432,6 +2432,63 @@ pre-opened moves — smoke.mjs and data-audit.mjs now CHOOSE a revealable positi
 `window.CONFIG.DEFAULTS`, after waiting out the latency gate that disables every
 button.
 
+**Registration first; the exit survey no longer asks background** (owner
+2026-08). The four background items (field of study, year/level, age band,
+gender) moved out of the survey's Part F into their OWN registration phase
+between consent and the instructions — asked once, before the task, all
+optional (`Content.REGISTRATION`, `showRegistration` in app.js, screen
+`s-registration`). On a Simulation Platform launch every item the platform's
+registration already answered is NOT re-asked: it travels as
+`platform_<field>` and, when the platform covers all of them, the phase passes
+through with no screen at all. The ids are unchanged from the Part F era and
+the exporter reads either source into the same `reg_<id>` column, so sessions
+already collected keep their background. Pinned by `tools/platform-guard.mjs`.
+
+**The two paid buttons are the primary outcome, so the interface may not tilt
+them** (owner 2026-08, a written spec). "Ask the AI" and "Reveal" are ONE
+button style at strict visual parity — same size, padding, radius, weight,
+border, shadow and every state, two hues matched on saturation and lightness
+(`hsl(272,55%,40%)` / `hsl(211,55%,40%)`), neither styled as primary — placed
+SIDE BY SIDE in a full-width row under the plot (the old 220px action column
+could not hold two equal buttons; `.round-grid` is now 2 columns), with "Stop
+and nominate" apart below a divider and never in the swap. Which sits on the
+LEFT is assigned ONCE PER PARTICIPANT and fixed for the session
+(`ui.buttonOrder`, default `'participant'`), block-randomised JOINTLY with the
+crossover sequence — `Specs.assignmentCells()` cycles A/ask, B/reveal,
+A/reveal, B/ask so both marginals stay exact at any roster size, the server's
+`claimCode` counter and the admin's roster generator both fill the four cells,
+and a client-mode run falls back to `Specs.buttonOrder` (a hash of the code).
+It is stamped as a LOGGER BASE FIELD (`button_order`), so it reaches the
+participant record and every decision row for the model to control with.
+Deliberately NOT redrawn per round or per decision: ~300 actions with the
+buttons moving buys mis-clicks (one spends the higher cost and destroys the
+ground truth at that position) and inflates decision latency, itself a measure.
+The cost numeral inside each button is red — and nothing else on screen is —
+the cheaper action in a LIGHTER TINT OF THE SAME HUE, on a white chip because
+no red meets 4.5:1 against a saturated fill; against white the lighter tint is
+the lower-contrast one, so the step runs 38% (reveal) / 50% (ask), both above
+4.5:1. Both are LOCKED RUN PARAMETERS (`ui.costColorReveal`/`costColorQuery`,
+pushed into CSS custom properties at load) because styling that touches a
+primary outcome is a treatment, not a theme; the reveal colour is identical in
+AI-off rounds, where the Ask button is REMOVED FROM THE DOM rather than hidden
+(so it is not tabbable or inspectable either — everything touching `#btn-ask`
+is null-guarded). `tools/smoke.mjs` measures the parity from computed styles
+and `tools/layout-guard.mjs` pins the side-by-side row at five widths.
+
+**Engagement, under the same rule** (owner 2026-08): a progress bar + "round n
+of 12 in this half" under the round title, milestone pop-ups at the halfway
+point / three rounds left / the last round, one in-round encouragement tip, a
+friendly between-rounds line, and a FOCUS PROMPT when a scored round is about
+to be closed after `ui.rushMinActions` (default 2) actions or fewer — always
+dismissible in one click, since a prompt that could not be dismissed would
+coerce the choice being measured. Every message is motivational and never
+informational: none names a position, none reacts to the score, none differs
+between the arms, and each is logged as a `nudge`. Copy lives in `content.js`
+(`ENCOURAGE`), the whole feature behind `ui.encouragement`. A session stored
+before the `ui` group existed keeps the interface it actually ran with
+(`withDefaults` sets `buttonOrder:'fixed'`, `encouragement:false`), so a
+running session never changes under its participants.
+
 **28 rounds**, 4 warm-up + 24 scored, 12 per block, counterbalanced crossover
 (sequence A = AI off then on, B = the reverse). Per block: 4 open + 8 seeded
 (2 FRONTIER, 4 BALANCED, 2 GAP), densities balanced within each shape. Mappings,
@@ -2463,7 +2520,9 @@ nested arrays. **Every derived field of §16.8 is computed offline in
 
 **Admin panel** at `/lab/search-v2/admin/`, five tabs over the brief's six
 screens: Sessions · Parameters (+ Consequences beside it) · Roster · Live monitor ·
-Data & preview. **The UI calls the unit a SESSION** (28 rounds: 4 warm-up + 24
+Data & preview. Parameters carries an eighth group, **Interface and engagement**
+(button order, the two cost colours, encouragement), and the Roster reports the
+ask-left / reveal-left balance beside the sequence split. **The UI calls the unit a SESSION** (28 rounds: 4 warm-up + 24
 scored, two blocks) — the brief calls it a *run* and the DATA keeps that name
 (`run_id` on every row, the workbook's Run sheet), so the two words are one
 object and no analysis script moves; rename UI copy only. The governing rule is

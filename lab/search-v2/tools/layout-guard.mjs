@@ -148,9 +148,22 @@ for (const size of SIZES) {
     'the plot keeps its 960×400 aspect, so the vertical axis never stretches');
   ok(plot && plot.w <= plot.colW + 1, 'the plot does not overflow its column');
 
-  // The three-column layout must actually be three columns above the breakpoint.
+  // Left panel beside the plot above the breakpoint, with the actions in a full
+  // width row under them — the two PAID buttons need room to sit side by side
+  // at equal size, which a 220px column could not give them.
   const cols = await pg.evaluate(() => getComputedStyle(document.querySelector('.round-grid')).gridTemplateColumns.split(' ').length);
-  ok(cols === 3, `the round screen keeps its left panel, plot and action column (${cols} columns)`);
+  ok(cols === 2, `the round screen keeps its left panel beside the plot (${cols} columns)`);
+  const pair = await pg.evaluate(() => {
+    const a = document.getElementById('btn-ask'), b = document.getElementById('btn-reveal');
+    if (!a || !b) return null;
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    return { sameRow: Math.abs(ra.top - rb.top) < 2, sameW: Math.abs(ra.width - rb.width) < 2,
+             w: Math.round(ra.width) };
+  });
+  if (pair) {
+    ok(pair.sameRow && pair.sameW,
+      `the two paid buttons stay side by side and equal-width (${pair.w}px each)`);
+  }
 
   // The modals must sit inside the window at every size.
   await pg.locator('#btn-instr-open').click();

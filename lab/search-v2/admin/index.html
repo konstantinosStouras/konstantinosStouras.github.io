@@ -328,6 +328,56 @@
             </details>
 
             <details class="pgroup">
+              <summary>Interface and engagement <span class="lock-tag">locked after launch</span></summary>
+              <div class="pbody">
+                <div class="field"><label>Which paid action sits on the LEFT <span class="defval">· default: assigned per participant</span></label>
+                  <div class="seg" id="p-ui-buttonOrder">
+                    <button data-v="participant">Randomised per participant</button>
+                    <button data-v="fixed">Fixed &mdash; Ask on the left</button>
+                  </div>
+                  <div class="hint">&ldquo;Ask the AI&rdquo; and &ldquo;Reveal&rdquo; are the primary outcome of this
+                  study, so neither may be easier to press: they are one button style at strict visual parity, side by
+                  side, and which is on the left is assigned ONCE per participant and fixed for their whole session.
+                  It is block-randomised jointly with the crossover sequence &mdash; the enrolment counter and the
+                  roster generator both fill all four cells of sequence &times; order evenly &mdash; and stamped on
+                  the participant and every row they produce (<code>button_order</code>), so the size of any position
+                  effect is reported rather than assumed away. Deliberately never redrawn per round or per decision:
+                  ~300 actions with the buttons moving buys mis-clicks (a mis-click here spends the higher cost and
+                  destroys the ground truth at that position) and inflates decision latency, which is itself a
+                  measure. &ldquo;Stop and nominate&rdquo; is never in the swap.</div>
+                </div>
+                <div class="row2">
+                  <div class="field"><label>Cost colour &mdash; Reveal <span class="defval">· hsl(4, 65%, 38%)</span></label>
+                    <input type="text" id="p-ui-costColorReveal"></div>
+                  <div class="field"><label>Cost colour &mdash; Ask the AI <span class="defval">· hsl(4, 65%, 50%)</span></label>
+                    <input type="text" id="p-ui-costColorQuery"></div>
+                </div>
+                <div class="field"><div class="hint">The colour of the cost numeral inside each button &mdash; and of
+                  nothing else on the screen, so red means &ldquo;this is what an action costs&rdquo;. Same hue and
+                  saturation, a lightness step, so the price difference is legible at a glance. The numerals sit on a
+                  white chip (no red meets 4.5:1 against a saturated button fill), and against white the LIGHTER tint
+                  is the lower-contrast one, so the cheaper action takes the lighter value and both stay above 4.5:1.
+                  Styling that touches a primary outcome is a treatment parameter, not a theme: it locks with the task
+                  and travels with the exported data. The Reveal colour is identical in AI-off rounds, where it stands
+                  alone.</div></div>
+                <div class="field"><label>Encouragement <span class="defval">· default on</span></label>
+                  <div class="seg" id="p-ui-encouragement"><button data-v="true">On</button><button data-v="false">Off</button></div>
+                  <div class="hint">Between-round milestone pop-ups (&ldquo;{left} rounds to go in this half&rdquo;), one
+                  in-round encouragement tip, and a focus prompt when a scored round is about to be closed after almost
+                  no searching. Every message is motivational and never informational &mdash; none names a position,
+                  comments on how the participant is doing, or differs between the AI-on and AI-off arms &mdash; and each
+                  one is logged as a <code>nudge</code>.</div>
+                </div>
+                <div class="field"><label>Focus prompt at or below this many actions <span class="defval">· default 2</span></label>
+                  <input type="number" id="p-ui-rushMinActions" min="0" max="20">
+                  <div class="hint">Stopping a scored round having bought this much information or less asks once
+                  whether they meant to. 0 = only a completely untouched round. &ldquo;Stop anyway&rdquo; is always one
+                  click away: a prompt that could not be dismissed would coerce the choice being measured.</div>
+                </div>
+              </div>
+            </details>
+
+            <details class="pgroup">
               <summary>AI <span class="lock-tag">locked after launch</span></summary>
               <div class="pbody">
                 <div class="row2">

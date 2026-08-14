@@ -89,6 +89,14 @@ p{margin:.6em 0;}
 .round-label{font-weight:700; font-size:19px;}
 .round-sub{font-size:13.5px; color:var(--muted);}
 .round-sub.ai{color:var(--est-d);}
+/* Progress through this half — rounds played, never points scored. */
+.prog{display:flex; align-items:center; gap:9px; margin-top:7px;}
+.prog-bar{width:230px; height:8px; border-radius:999px; background:#e8ecf2; overflow:hidden;}
+.prog-fill{height:100%; width:0; border-radius:999px;
+  background:linear-gradient(90deg,#2f9e5e,#7bc96f); transition:width .35s ease;}
+.prog-txt{font-size:12.5px; font-weight:600; color:#2f7d52;}
+.prog.warm .prog-fill{background:linear-gradient(90deg,#e0a63c,#f0c674);}
+.prog.warm .prog-txt{color:#95651a;}
 
 /* Left panel · centre plot · right actions (§14).
    The stacked fallback starts BELOW 900px, not at it: 900 is the minimum window
@@ -96,11 +104,40 @@ p{margin:.6em 0;}
    the three-panel layout everyone else sees — the whole point of enforcing a
    minimum is that the picture does not vary. The single column survives only for
    the admin previewing on something narrow, which the gate would refuse anyway. */
-.round-grid{display:grid; grid-template-columns:230px 1fr 220px; gap:16px; align-items:start;}
-@media (max-width:1080px){ .round-grid{grid-template-columns:200px 1fr 200px; gap:12px;} }
+.round-grid{display:grid; grid-template-columns:230px 1fr; gap:16px; align-items:start;}
+@media (max-width:1080px){ .round-grid{grid-template-columns:200px 1fr; gap:12px;} }
 @media (max-width:899px){ .round-grid{grid-template-columns:1fr;} }
 
-.side-col, .act-col{border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--panel);}
+/* ---- the actions -------------------------------------------------------
+   The two PAID actions are the primary outcome of the study, so the pair is
+   at STRICT VISUAL PARITY: one class, one geometry, one set of states, and
+   two hues matched on saturation and lightness. Nothing here may make either
+   of them look like the primary action — no size, weight, shadow or contrast
+   difference, and no colour salience. Only the label and the cost differ.
+   They are SIDE BY SIDE (horizontal position bias is weaker than vertical),
+   and "Stop and nominate" sits apart below a divider, never in the swap. */
+.act-row{margin-top:14px; border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; background:var(--panel);}
+.act-pair{display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start;}
+@media (max-width:620px){ .act-pair{grid-template-columns:1fr;} }
+.act-cell{display:flex; flex-direction:column;}
+.act-row .btn{width:100%;}
+.act-sep{height:1px; background:var(--line); margin:14px 0 12px;}
+.act-stop{max-width:520px;}
+/* One class for both paid buttons: every property below is shared, so a change
+   can only ever be made to BOTH. The two hues differ in hue alone — the same
+   saturation and lightness, and therefore the same contrast against white
+   text — so they are distinguishable without either being louder. */
+.btn-act{font-weight:600; font-size:15px; padding:10px 20px; border-radius:26px;
+  line-height:1.35; letter-spacing:normal; border:1px solid transparent;
+  box-shadow:0 1px 3px rgba(0,0,0,.12); opacity:1;}
+.btn-act.ask{background:hsl(272,55%,40%);}
+.btn-act.reveal{background:hsl(211,55%,40%);}
+.btn-act.ask:hover:not(:disabled){background:hsl(272,55%,34%);}
+.btn-act.reveal:hover:not(:disabled){background:hsl(211,55%,34%);}
+.btn-act:disabled{opacity:.45;}
+
+.side-col{border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--panel);}
 .side-col h3{margin:0 0 8px; font-size:15px;}
 .touched{list-style:none; margin:0 0 10px; padding:0; max-height:260px; overflow-y:auto;
   display:flex; flex-direction:column; gap:4px;}
@@ -167,9 +204,21 @@ p{margin:.6em 0;}
 .controls input[type=number]{width:78px; padding:8px; font-size:16px; border:1px solid var(--line);
   border-radius:8px; text-align:center;}
 
-.act-col{display:flex; flex-direction:column; gap:2px;}
-.act-col .btn{width:100%; margin-top:8px;}
-.act-note{font-size:12px; color:var(--muted); margin:4px 0 8px; line-height:1.4;}
+.act-note{font-size:12px; color:var(--muted); margin:6px 0 0; line-height:1.4;}
+/* The price of an action, on its own button, red — and red ONLY here, so red
+   on this screen means "this is what an action costs" and nothing else. The
+   numeral sits on a WHITE chip because a red that meets 4.5:1 against a
+   saturated button fill does not exist; against white, the cheaper action's
+   lighter tint of the SAME hue still clears 4.5:1 (see config.js ui.costColor*,
+   which is where the two values live — they are run parameters, not theme).
+   The chip itself is identical on both buttons: same background, padding,
+   radius, weight and size, so only the numeral's lightness differs. */
+.cost-tag{display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px;
+  background:#fff; font-weight:800; font-size:13px; letter-spacing:.01em;
+  white-space:nowrap; vertical-align:baseline;}
+.cost-tag.r{color:var(--cost-reveal, hsl(4,65%,38%));}
+.cost-tag.q{color:var(--cost-query, hsl(4,65%,50%));}
+.btn:disabled .cost-tag{opacity:.85;}
 
 /* testing-only overlay controls (debug / Test round link) */
 .testview{display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin:8px 0 2px;
@@ -244,6 +293,13 @@ p{margin:.6em 0;}
 .tip{display:none; align-items:center; gap:10px; margin:0 0 12px; padding:10px 14px;
   background:#eef6ff; border:1px solid #cfe2fb; border-radius:10px; color:#1f4e79; font-size:14px;}
 .tip.show{display:flex;}
+/* The encouragement tip is warmer than the neutral ones, so a participant can
+   see at a glance that nothing is wrong. */
+.tip.good{background:#eefaf1; border-color:#c7ecd4; color:#1d6b3a;}
+/* The between-rounds friendly line, and the milestone pop-up's heading. */
+.res-cheer{margin:12px 0 2px; padding:9px 13px; border-radius:10px; display:inline-block;
+  background:#eefaf1; border:1px solid #c7ecd4; color:#1d6b3a; font-weight:600; font-size:14px;}
+#ov-encourage .modal h3{color:#1d6b3a;}
 .tip-x{margin-left:auto; border:none; background:none; color:inherit; font-size:20px;
   line-height:1; cursor:pointer; opacity:.6;}
 .tip-x:hover{opacity:1;}

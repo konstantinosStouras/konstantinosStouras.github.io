@@ -105,7 +105,35 @@ const leak = await pg.evaluate(p => {
 ok(!leak.name, 'the student’s NAME never reaches this study’s log');
 ok(!leak.email, 'nor their e-mail address — §11 keeps the study to anonymous codes');
 
-// ── the exit survey does not re-ask what the platform already knows ────────
+// ── registration takes what the platform already knows ────────────────────
+// Background is asked ONCE, before the study (it used to be the exit survey's
+// Part F). On a platform launch every item the profile covers is answered from
+// it and not shown; only what the platform does not collect is asked here.
+await pg.locator('#consent-box').check();
+await pg.locator('#btn-consent').click();
+await pg.waitForSelector('#s-registration.active, #s-instructions.active', { timeout: 20000 });
+const onReg = await pg.locator('#s-registration.active').count();
+ok(onReg === 1, 'consent leads into the registration phase, before the instructions');
+
+const regAsked = await pg.$$eval('#reg-body .survey-q', els => els.map(e => e.dataset.q));
+const regItems = await pg.evaluate(() =>
+  window.SVContent.REGISTRATION.map(q => ({ id: q.id, key: q.platformKey })));
+const covered = regItems.filter(q => ['levelOfStudy', 'age', 'gender'].indexOf(q.key) >= 0);
+ok(covered.length === 3, 'three background items are ones the platform already collects');
+ok(covered.every(q => regAsked.indexOf(q.id) < 0),
+  'and none of them is asked again — the two datasets carry ONE answer each',
+  'still asked: ' + covered.filter(q => regAsked.indexOf(q.id) >= 0).map(q => q.id).join(', '));
+const notCovered = regItems.filter(q => q.key === 'fieldOfStudy');
+ok(notCovered.every(q => regAsked.indexOf(q.id) >= 0),
+  'a background item the platform does NOT collect (field of study) is still asked');
+
+const bg = await pg.evaluate(() => window.Logger.getEvents()
+  .filter(e => e.event === 'registration' && String(e.question_id).indexOf('platform_') === 0)
+  .map(e => e.question_id + '=' + e.answer));
+ok(bg.length >= 3, 'the platform-supplied background travels with the data, flagged as its source', bg.join(' | '));
+ok(bg.some(x => /platform_levelOfStudy=Undergraduate/.test(x)), 'and carries the platform’s own answer verbatim');
+
+// ── the exit survey no longer asks background at all ──────────────────────
 await pg.evaluate(() => {
   // Jump to the survey through the app's own state, exactly as a resume would.
   const key = 'searchv2:v3:state:' + window.SVApp.state().code;
@@ -116,19 +144,11 @@ await pg.evaluate(() => {
 await pg.reload();
 await pg.waitForSelector('#s-survey.active', { timeout: 20000 });
 const asked = await pg.$$eval('#survey-body .survey-q', els => els.map(e => e.dataset.q));
-const platformKeys = await pg.evaluate(() =>
-  window.SVContent.SURVEY.filter(q => q.part === 'F').map(q => ({ id: q.id, key: q.platformKey })));
-const covered = platformKeys.filter(q => ['levelOfStudy', 'age', 'gender'].indexOf(q.key) >= 0);
-ok(covered.length === 3, 'three background items are ones the platform already collects');
-ok(covered.every(q => asked.indexOf(q.id) < 0),
-  'and none of them is asked again — the two datasets carry ONE answer each',
-  'still asked: ' + covered.filter(q => asked.indexOf(q.id) >= 0).map(q => q.id).join(', '));
-const notCovered = platformKeys.filter(q => q.key === 'fieldOfStudy');
-ok(notCovered.every(q => asked.indexOf(q.id) >= 0),
-  'a background item the platform does NOT collect (field of study) is still asked');
+ok(regItems.every(q => asked.indexOf(q.id) < 0),
+  'no background item is asked again at the end, whatever the platform supplied');
 ok(asked.indexOf('s01') >= 0 && asked.indexOf('s20') >= 0, 'the study’s own items are all still asked');
 
-// Answer and submit, so the platform-sourced background lands on the row.
+// Answer and submit.
 await pg.evaluate(() => {
   document.querySelectorAll('#survey-body .survey-q').forEach(q => {
     const r = q.querySelectorAll('input[type=radio]'); if (r.length) r[0].checked = true;
@@ -139,11 +159,6 @@ await pg.evaluate(() => {
 });
 await pg.locator('#btn-survey').click();
 await pg.waitForSelector('#s-debrief.active, #s-done.active', { timeout: 15000 });
-const bg = await pg.evaluate(() => window.Logger.getEvents()
-  .filter(e => e.event === 'survey' && String(e.question_id).indexOf('platform_') === 0)
-  .map(e => e.question_id + '=' + e.answer));
-ok(bg.length >= 3, 'the platform-supplied background travels with the data, flagged as its source', bg.join(' | '));
-ok(bg.some(x => /platform_levelOfStudy=Undergraduate/.test(x)), 'and carries the platform’s own answer verbatim');
 
 // ── STUDY → PLATFORM ───────────────────────────────────────────────────────
 if (await pg.locator('#s-debrief.active').count()) await pg.locator('#btn-debrief').click();

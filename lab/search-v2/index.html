@@ -104,6 +104,22 @@
       </div>
     </section>
 
+    <!-- ============ REGISTRATION ============
+         Background, asked ONCE, before the study. On a Simulation Platform
+         launch these answers come from the platform's own registration and
+         this screen is skipped entirely (see app.js showRegistration). -->
+    <section class="screen" id="s-registration">
+      <h1>About you</h1>
+      <p class="muted">A few background details before you start. They are stored against your
+      participant code and nothing else.</p>
+      <div class="card">
+        <div id="reg-body"></div>
+        <div class="right" style="margin-top:14px;">
+          <button class="btn btn-green" id="btn-reg">Continue</button>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ INSTRUCTIONS (5 screens) ============ -->
     <section class="screen" id="s-instructions">
       <div class="step-tag" id="instr-step"></div>
@@ -157,6 +173,12 @@
         <div>
           <div class="round-label" id="round-label"></div>
           <div class="round-sub" id="round-sub"></div>
+          <!-- How far through this half they are. Progress, never performance:
+               the bar counts rounds played, and says nothing about scores. -->
+          <div class="prog" id="prog">
+            <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
+            <span class="prog-txt" id="prog-txt"></span>
+          </div>
         </div>
         <button class="btn btn-ghost btn-sm" id="btn-instr-open" title="Reopen the instructions summary">&#9432; Instructions</button>
       </div>
@@ -207,17 +229,33 @@
           <div class="note warn" id="cap-note" style="display:none;"></div>
         </div>
 
-        <!-- RIGHT: the three actions -->
-        <aside class="act-col">
-          <div id="ask-panel">
-            <button class="btn btn-est" id="btn-ask">Ask the AI (<span id="ask-cost">2</span>)</button>
-            <p class="act-note">The AI gives its estimate. It does not reveal the truth.</p>
+      </div>
+
+      <!-- THE ACTIONS. The two PAID ones are a side-by-side PAIR at strict
+           visual parity — same size, radius, weight, and two hues matched on
+           saturation and lightness, so neither reads as the primary action.
+           Which one is on the LEFT is fixed for the whole session and assigned
+           per participant (config.ui.buttonOrder); horizontal placement is a
+           weaker position bias than vertical, which is why they are not
+           stacked. "Stop and nominate" is a different class of action: it is
+           never in the swap, always sits below the divider, and its label
+           names the selected position so nomination cannot be accidental. -->
+      <div class="act-row">
+        <div class="act-pair" id="act-pair">
+          <div class="act-cell" id="ask-panel">
+            <button class="btn btn-act ask" id="btn-ask">Ask the AI <span class="cost-tag q" id="ask-cost">&minus;2 points</span></button>
+            <p class="act-note">Its estimate of the prize here. Does not reveal the truth.</p>
           </div>
-          <button class="btn btn-blue" id="btn-reveal">Reveal (<span id="reveal-cost">5</span>)</button>
-          <p class="act-note">Shows the true prize at the selected position.</p>
+          <div class="act-cell" id="reveal-panel">
+            <button class="btn btn-act reveal" id="btn-reveal">Reveal <span class="cost-tag r" id="reveal-cost">&minus;4 points</span></button>
+            <p class="act-note">The true prize here. Stays open for the round.</p>
+          </div>
+        </div>
+        <div class="act-sep"></div>
+        <div class="act-stop">
           <button class="btn btn-amber" id="btn-nominate">Stop and nominate</button>
           <p class="act-note">Ends the round on the selected position. Your score is the true prize there, minus what you spent.</p>
-        </aside>
+        </div>
       </div>
     </section>
 
@@ -280,6 +318,20 @@
       <div class="modal-foot">
         <button class="btn btn-ghost" id="btn-nom-cancel">Keep going</button>
         <button class="btn btn-amber" id="btn-nom-ok">Yes, stop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Encouragement (config.ui.encouragement): the milestone pop-up between
+       rounds and the focus pop-up when a round is about to be closed after
+       almost no searching. Both are one button away from continuing. -->
+  <div class="overlay" id="ov-encourage">
+    <div class="modal">
+      <h3 id="enc-title"></h3>
+      <p id="enc-msg"></p>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="btn-enc-alt" style="display:none;"></button>
+        <button class="btn btn-green" id="btn-enc-ok">Continue</button>
       </div>
     </div>
   </div>
