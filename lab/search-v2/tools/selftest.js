@@ -462,6 +462,23 @@ const run = {
   ok(Dict.sheets.length === 3 && Dict.oneRowIs('Decisions').length > 10,
     'and each analysis sheet states what one of its rows is');
 
+  // A revealed position JOINS the AI's anchor set, so the curve moves to pass
+  // through it — which leaves any answer given BEFORE that reveal sitting off the
+  // line. That is the design (it is what the qai_update gate asks about), and the
+  // plot must keep showing what the AI said AT THE TIME rather than rewriting it.
+  {
+    const sp = art.specs.find(x => x.seed_shape === 'OPEN' && x.ai_density === 'SPARSE');
+    const mp = art.pool[sp.mapping_index];
+    const near = sp.ai_anchors[0] + 3;
+    const said = Ai.aiAnswer(Ai.anchorSet(sp.ai_anchors, sp.pre_opened, [], mp), near, P.ai.answerRounding);
+    const after = Ai.aiAnswer(Ai.anchorSet(sp.ai_anchors, sp.pre_opened, [near], mp), near, P.ai.answerRounding);
+    ok(after === mp[near - 1],
+      'revealing a position makes the AI answer the TRUTH there afterwards', String(after));
+    ok(said !== after,
+      'so an answer given before that reveal no longer lies on the curve — historical, not wrong',
+      'said ' + said + ', curve now ' + after);
+  }
+
   const r0 = built.rounds[0];
   ok(r0.global_max === Pool.maxOf(art.pool[r0.mapping_index]), 'global_max comes from the mapping');
   ok(r0.argmax_position === Pool.argmaxOf(art.pool[r0.mapping_index]), 'argmax_position comes from the mapping');

@@ -516,8 +516,30 @@
   // One comprehension screen, reusable for the base gate and the AI gate.
   // Attempts, time to the first answer and first-answer correctness are logged
   // per question (§16.6); only questions marked `strict` block progression.
+  // Everything a participant needs to ANSWER the questions, on the same screen as
+  // the questions. They read the instructions once, several screens ago; asking
+  // them to recall a number they saw in passing tests memory, not comprehension.
+  function quizReminder(withAi) {
+    var li = [];
+    li.push('Neighbouring positions differ by at most <b>' + P.env.stepBound + '</b> points.');
+    li.push('<b>Revealing</b> a position costs <b>' + P.costs.revealCost + '</b> and shows its true prize.');
+    if (withAi) {
+      li.push('<b>Asking the AI</b> about a position costs <b>' + P.costs.queryCost + '</b> and returns its estimate. ' +
+        'That number is <b>not a prize</b> — it can be wrong.');
+      li.push('The AI knows a few positions <b>exactly</b> and interpolates between them. Beyond the outermost ' +
+        'position it knows, it repeats that value. You are never told which positions it knows.');
+      li.push('Every answer looks and arrives the same way, whether it was known or guessed.');
+    }
+    li.push('<b>Stopping</b> is free. Your score is the <b>true prize where you stop, minus everything you spent</b> ' +
+      'that round — which can be negative.');
+    li.push('Prizes are drawn <b>afresh every round</b>.');
+    return '<h4>What you need to answer these</h4><ul><li>' + li.join('</li><li>') + '</li></ul>';
+  }
+
   function renderQuiz(qs, hostId, feedbackId, btnId, onDone) {
     var host = $(hostId), started = Date.now();
+    var rem = $(hostId === 'aiquiz-body' ? 'aiquiz-reminder' : 'quiz-reminder');
+    if (rem) rem.innerHTML = quizReminder(hostId === 'aiquiz-body');
     host.innerHTML = qs.map(function (q, qi) {
       return '<div class="quiz-q" data-q="' + esc(q.id) + '">' +
         '<div class="q-prompt">' + (qi + 1) + '. ' + esc(tokens(q.prompt)) + '</div>' +
@@ -563,11 +585,16 @@
         if (!ok) { anyWrong = true; if (q.strict) allStrictOk = false; }
         var fb = host.querySelector('.quiz-q[data-q="' + q.id + '"] .q-fb');
         if (fb) {
-          fb.style.display = ok ? 'none' : 'block';
-          fb.className = 'q-fb feedback bad';
-          fb.textContent = q.strict
-            ? 'Not quite — this one has to be right before you can continue. Re-read the instructions above.'
-            : 'Not quite. The correct answer is: ' + tokens(q.options[q.answer]);
+          // EVERY answered question says whether it was right. A correct one also
+          // carries the reason — the point of the gate is that the rule is
+          // understood, and a tick with no explanation teaches nothing.
+          fb.style.display = 'block';
+          fb.className = 'q-fb feedback ' + (ok ? 'good' : 'bad');
+          fb.innerHTML = ok
+            ? '<b>✓ Correct.</b> ' + esc(tokens(q.why || ''))
+            : esc(q.strict
+              ? 'Not quite — this one has to be right before you can continue. Re-read the reminder above.'
+              : 'Not quite. The correct answer is: ' + tokens(q.options[q.answer]));
         }
       });
       save();
@@ -863,22 +890,11 @@
       tag: DEBUG ? ((r.spec_id || '?') + ' · ' + (r.seed_shape || '?') + ' · ' + (r.ai_density || '?')) : null
     });
 
-    // Left panel: everything touched this round, plus the two counts and costs
-    // kept SEPARATE. Deliberately no running best — with claims and truths mixed
-    // together there is no single well-defined best, and computing one would do
-    // the trust-or-verify arithmetic on the participant's behalf (§14).
-    var rows = [];
-    preOpenedPairs().forEach(function (x) { rows.push({ pos: x.pos, kind: 'open', val: x.val, t: 0 }); });
-    S.round.queries.forEach(function (q) { rows.push({ pos: q.pos, kind: 'ask', val: q.val, t: q.t }); });
-    S.round.reveals.forEach(function (x) { rows.push({ pos: x.pos, kind: 'reveal', val: x.val, t: x.t }); });
-    rows.sort(function (a, b) { return a.t - b.t || a.pos - b.pos; });
-    $('touched-list').innerHTML = rows.length
-      ? rows.map(function (x) {
-          return '<li class="tl ' + x.kind + '"><span class="tl-pos">' + x.pos + '</span>' +
-            '<span class="tl-kind">' + (x.kind === 'open' ? 'open at start' : x.kind === 'ask' ? 'AI said' : 'revealed') + '</span>' +
-            '<span class="tl-val">' + x.val + '</span></li>';
-        }).join('')
-      : '<li class="tl empty">Nothing yet this round.</li>';
+    // The left panel is the LEDGER only. What was found lives on the plot, where
+    // every mark already carries its value; the panel used to repeat all of it in
+    // words, which asked the participant to read the same thing twice.
+    // Still deliberately no "best estimate" mixing claims with truths — the two
+    // costs stay apart and only TRUE prizes count towards the best below (§14).
 
     var qCost = S.round.queries.length * P.costs.queryCost;
     var rCost = S.round.reveals.length * P.costs.revealCost;
@@ -901,18 +917,38 @@
     knownPairs.forEach(function (x) { if (best == null || x.val > best.val) best = x; });
     $('c-best').textContent = best ? (best.val + ' at position ' + best.pos) : '—';
 
-    // What stopping on the SELECTED position is worth, but only when its prize
-    // is actually known — otherwise this would leak the truth for free.
-    var selKnown = null;
-    knownPairs.forEach(function (x) { if (x.pos === sel) selKnown = x.val; });
+    // What the round is worth if they stop now: the best TRUE prize they hold,
+    // minus everything spent. Always a number once they know anything, so there
+    // is no "unknown" message to read past — and it never leaks, because it is
+    // computed from prizes they have already paid to see. It deliberately does
+    // NOT use the selected position: an unopened one has no known value, and
+    // guessing at it here would hand over the truth for free.
     var netEl = $('c-net');
-    if (selKnown != null) {
-      var net = selKnown - (qCost + rCost);
-      netEl.textContent = net + ' (' + selKnown + ' − ' + (qCost + rCost) + ' spent)';
+    if (best) {
+      var net = best.val - (qCost + rCost);
+      netEl.textContent = net + '  (' + best.val + ' − ' + (qCost + rCost) + ' spent)';
       netEl.parentNode.classList.toggle('neg', net < 0);
     } else {
-      netEl.textContent = 'unknown — position ' + sel + ' is not open yet';
+      netEl.textContent = '—';
       netEl.parentNode.classList.remove('neg');
+    }
+
+    // The same four numbers, big, under the plot. Net value is what the round is
+    // actually worth: the best TRUE prize they hold, minus everything spent.
+    $('sb-best').innerHTML = best
+      ? best.val + '<span class="sub">at position ' + best.pos + '</span>'
+      : '—';
+    $('sb-reveal').textContent = rCost;
+    $('sb-ai').textContent = qCost;
+    $('sb-ai-wrap').style.display = aiOn ? '' : 'none';
+    var sbNet = $('sb-net');
+    if (best) {
+      var netB = best.val - (qCost + rCost);
+      sbNet.innerHTML = netB + '<span class="sub">' + best.val + ' − ' + (qCost + rCost) + ' spent</span>';
+      sbNet.parentNode.classList.toggle('neg', netB < 0);
+    } else {
+      sbNet.innerHTML = '—<span class="sub">reveal a position to start</span>';
+      sbNet.parentNode.classList.remove('neg');
     }
 
     $('c-prices').innerHTML = 'Revealing a position costs <b>' + P.costs.revealCost + '</b>' +
@@ -1674,7 +1710,15 @@
       '<label><input type="checkbox" id="tv-truth"> true prizes</label>' +
       '<label><input type="checkbox" id="tv-curve"> the AI’s whole curve</label>' +
       '<label><input type="checkbox" id="tv-anchors"> the AI’s private anchors</label>' +
-      '<span class="tv-opt" id="tv-readout"></span>';
+      '<span class="tv-opt" id="tv-readout"></span>' +
+      // The curve is CURRENT; a diamond is HISTORICAL. Revealing a position
+      // teaches the AI the truth there, so the curve moves to pass through it
+      // and any answer given before that reveal is left sitting off the line.
+      // That is the design working (it is what the AI comprehension gate asks
+      // about), not a drawing error — but it reads as one until it is said.
+      '<span class="tv-note">The dashed curve is what the AI would say <b>now</b>. ' +
+      'A diamond is what it said <b>then</b> — revealing a position teaches it the truth there, ' +
+      'so the curve moves and earlier answers are left off the line.</span>';
     ['truth', 'curve', 'anchors'].forEach(function (k) {
       var el = $('tv-' + k);
       el.checked = tv[k];
