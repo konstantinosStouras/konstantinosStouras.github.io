@@ -5,7 +5,8 @@
      1 Runs           — every run, its status, its participants, its balance
      2 Parameters     — six collapsible groups, locked once a run has an entrant
      3 Consequences   — recomputed live beside the form, with the two badges
-     4 Roster         — anonymous codes, sequence assignment, entrant override
+     4 Participants   — anonymous codes, sequence assignment, progress and status
+                        (the `roster` ids and collection keep that name in the DATA)
      5 Live monitor   — counters from a Firestore listener, plus the health strip
      6 Data & preview — validation gate, spec preview, dry run, export, danger zone
 
@@ -1129,20 +1130,70 @@
   //  SCREEN 4 · ROSTER
   // ======================================================================
   var roster = [];
+  var rosterRecs = {};   // participant_code (upper) → their session record
+
+  // A session runs TWO blocks, warm-ups first inside each (Specs.orderPlan), and
+  // that is what turns "rounds finished" into "scored rounds finished".
+  var BLOCKS = 2;
+
+  function scoredTotal(params) {
+    return BLOCKS * ((params && params.rounds && params.rounds.scoredPerBlock) || 0);
+  }
+  // The participant record carries `rounds_done` — every round they finished,
+  // warm-ups included. The warm-ups sit at the head of each block, so the scored
+  // count is the part of that total falling outside the two warm-up stretches,
+  // computed from THIS session's own parameters rather than the default 4 + 24.
+  function scoredDone(roundsDone, params) {
+    var w = (params && params.rounds && params.rounds.warmupPerBlock) || 0;
+    var s = (params && params.rounds && params.rounds.scoredPerBlock) || 0;
+    var n = roundsDone || 0, out = 0;
+    for (var b = 0; b < BLOCKS; b++) out += Math.max(0, Math.min(n - (b * (w + s) + w), s));
+    return out;
+  }
+  // "18/24 (75%)". Empty when there is no session record to read it from: an
+  // unclaimed code has finished nothing, but it has not finished zero rounds
+  // either, and the two must not look the same.
+  function roundCell(rec, params) {
+    var total = scoredTotal(params);
+    if (!rec || !total) return '—';
+    // A record with no `rounds_done` but `completed` set is a finished session
+    // written before that field existed: finishing means every round is behind
+    // them, so it reads as complete rather than as a blank.
+    var done = rec.rounds_done != null ? scoredDone(rec.rounds_done, params)
+      : (rec.completed ? total : null);
+    if (done == null) return '—';
+    return done + '/' + total + ' (' + Math.round(100 * done / total) + '%)';
+  }
+
+  // The roster document only ever learns that a code was CLAIMED — the study
+  // stamps it 'started' at entry. Whether the session was finished lives on the
+  // participant record (`completed`, written on the Done screen), so the status
+  // shown here is derived from the two together. app.js also writes 'completed'
+  // back onto the roster document now, but this reading is what heals every
+  // session recorded before it did.
+  function derivedStatus(r, rec) {
+    if (rec && rec.completed) return 'completed';
+    if (r && r.status === 'completed') return 'completed';
+    if (rec || (r && r.claimedByUid)) return 'started';
+    return r && r.status ? r.status : 'unused';
+  }
+
+  function recOf(r) { return rosterRecs[String(r && r.code).toUpperCase()] || null; }
+
   function wireRoster() {
-    $('btn-ros-gen').onclick = generateCodes;
     $('btn-ros-csv').onclick = function () {
-      var csv = 'code,sequence,button_order,status\n' + roster.map(function (r) {
-        return [r.code, r.sequence, r.buttonOrder || '', r.status || 'unused'].join(',');
-      }).join('\n');
-      dl((current ? current.code : 'run') + '_roster.csv', csv, 'text/csv');
+      var params = Specs.withDefaults(current && current.params);
+      var csv = 'code,sequence,button_order,status,scored_rounds_done,scored_rounds_total,claimed_at,enrolled\n' +
+        roster.map(function (r) {
+          var rec = recOf(r);
+          var done = rec ? (rec.rounds_done != null ? scoredDone(rec.rounds_done, params)
+            : (rec.completed ? scoredTotal(params) : '')) : '';
+          return [r.code, r.sequence, r.buttonOrder || '', derivedStatus(r, rec), done, scoredTotal(params),
+            r.claimedAt ? new Date(r.claimedAt).toISOString() : '',
+            r.autoEnrolled ? 'platform/open' : 'pre-generated'].join(',');
+        }).join('\n');
+      dl((current ? current.code : 'run') + '_participants.csv', csv, 'text/csv');
     };
-    $('ros-override').querySelectorAll('button').forEach(function (b) {
-      b.onclick = function () {
-        $('ros-override').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
-      };
-    });
-    $('btn-ros-override').onclick = applyOverride;
   }
 
   function renderRoster() {
@@ -1151,19 +1202,35 @@
       $('roster-stats').innerHTML = '';
       return;
     }
-    segSet('ros-override', (current.assign && current.assign.nextEntrantOverride) || 'auto');
-    $('ros-overrides').innerHTML = (current.overrides || []).length
-      ? '<b>Override log</b><br>' + current.overrides.map(function (o) {
-          return new Date(o.t).toLocaleString() + ' → ' + o.to + ' · ' + esc(o.reason || '');
-        }).join('<br>')
-      : 'No overrides recorded — assignment has been automatic throughout.';
+    var params = Specs.withDefaults(current.params);
+    // Both halves of a participant's state: the roster document (assignment,
+    // when they claimed) and their own session record (how far they got).
+    var pRoster = LOCAL ? Promise.resolve(current.roster || []) : FB.listRoster(current.id);
+    var pRecs = LOCAL ? Promise.resolve(current.participants || [])
+      : FB.listParticipants(current.id).catch(function () { return []; });
 
-    var p = LOCAL ? Promise.resolve(current.roster || []) : FB.listRoster(current.id);
-    p.then(function (list) {
-      roster = list || [];
+    Promise.all([pRoster, pRecs]).then(function (both) {
+      roster = (both[0] || []).slice();
+      rosterRecs = {};
+      (both[1] || []).forEach(function (rec) {
+        if (rec && rec.participant_code) rosterRecs[String(rec.participant_code).toUpperCase()] = rec;
+      });
+      // A session record whose code has no roster document (the claim wrote one
+      // half and not the other) still belongs on this screen: a participant who
+      // is playing must never be invisible here.
+      var have = {};
+      roster.forEach(function (r) { have[String(r.code).toUpperCase()] = 1; });
+      Object.keys(rosterRecs).forEach(function (code) {
+        if (have[code]) return;
+        var rec = rosterRecs[code];
+        roster.push({ code: rec.participant_code, sequence: rec.sequence || null,
+          buttonOrder: rec.button_order || null, status: 'started', orphan: true });
+      });
+
       var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0, ask: 0, reveal: 0 };
       roster.forEach(function (r) {
-        counts[r.status || 'unused'] = (counts[r.status || 'unused'] || 0) + 1;
+        var st = derivedStatus(r, recOf(r));
+        counts[st] = (counts[st] || 0) + 1;
         if (r.sequence) counts[r.sequence]++;
         if (r.buttonOrder === 'reveal_first') counts.reveal++;
         else if (r.buttonOrder === 'ask_first') counts.ask++;
@@ -1178,67 +1245,20 @@
       ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
 
       $('roster-table').innerHTML = roster.length
-        ? '<thead><tr><th>Code</th><th>Sequence</th><th>Buttons</th><th>Status</th><th>Claimed</th><th>Enrolled</th></tr></thead><tbody>' +
+        ? '<thead><tr><th>Code</th><th>Sequence</th><th>Buttons</th>' +
+          '<th title="Scored rounds finished out of the ' + scoredTotal(params) + ' this session assigns each participant">Round</th>' +
+          '<th>Status</th><th>Claimed</th><th>Enrolled</th></tr></thead><tbody>' +
           roster.map(function (r) {
             return '<tr><td class="mono">' + esc(r.code) + '</td><td>' + esc(r.sequence || '—') + '</td>' +
               '<td>' + (r.buttonOrder === 'reveal_first' ? 'Reveal left' : r.buttonOrder === 'ask_first' ? 'Ask left' : '—') + '</td>' +
-              '<td>' + esc(r.status || 'unused') + '</td>' +
+              '<td>' + esc(roundCell(recOf(r), params)) + '</td>' +
+              '<td>' + esc(derivedStatus(r, recOf(r))) + '</td>' +
               '<td>' + (r.claimedAt ? new Date(r.claimedAt).toLocaleString() : '—') + '</td>' +
-              '<td>' + (r.autoEnrolled ? 'platform / open' : 'pre-generated') + '</td></tr>';
+              '<td>' + (r.orphan ? 'no roster entry' : r.autoEnrolled ? 'platform / open' : 'pre-generated') + '</td></tr>';
           }).join('') + '</tbody>'
-        : '<tbody><tr><td class="muted">No codes yet. In <b>open</b> roster mode a class-platform student ID enrols itself on first entry.</td></tr></tbody>';
+        : '<tbody><tr><td class="muted">No participants yet. In <b>open</b> roster mode a class-platform student ID enrols itself on first entry.</td></tr></tbody>';
     }).catch(function (e) {
-      $('roster-table').innerHTML = '<tbody><tr><td class="muted">Could not read the roster: ' + esc(String(e && e.message || e)) + '</td></tr></tbody>';
-    });
-  }
-
-  function generateCodes() {
-    if (!current) { alert('Open a session first.'); return; }
-    var n = Math.max(1, Math.min(1000, parseInt($('ros-n').value, 10) || 0));
-    var prefix = ($('ros-prefix').value || 'P').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    // Block randomisation over a shuffled list, so the split is exact rather
-    // than a series of coin flips (§11) — and over the FOUR CELLS of
-    // sequence × button order jointly, not two independent draws, because the
-    // button order enters the primary analysis as a covariate and has to be
-    // balanced within each sequence as well as overall (§ config.js
-    // ui.buttonOrder).
-    var cells = Specs.assignmentCells(), cellFor = [];
-    for (var i = 0; i < n; i++) cellFor.push(cells[i % cells.length]);
-    Pool.shuffle(cellFor, Pool.rngFrom(Pool.hashSeed(current.id + ':' + n + ':' + prefix)));
-    var codes = [];
-    for (var j = 0; j < n; j++) {
-      codes.push({ code: prefix + String(j + 1).padStart(3, '0'),
-                   sequence: cellFor[j].sequence, buttonOrder: cellFor[j].buttonOrder });
-    }
-
-    if (LOCAL) {
-      current.roster = codes.map(function (c) {
-        return { code: c.code, sequence: c.sequence, buttonOrder: c.buttonOrder, status: 'unused' };
-      });
-      saveLocalRuns(localRuns().map(function (r) { return r.id === current.id ? current : r; }));
-      renderRoster();
-      return;
-    }
-    var chain = Promise.resolve();
-    codes.forEach(function (c) { chain = chain.then(function () { return FB.putRosterCode(current.id, c.code, c.sequence, c.buttonOrder); }); });
-    chain.then(function () {
-      FB.audit(current.id, 'generate_roster', n + ' codes, prefix ' + prefix);
-      renderRoster();
-    }).catch(function (e) { alert('Could not write the roster: ' + (e && e.message || e)); });
-  }
-
-  function applyOverride() {
-    if (!current) { alert('Open a session first.'); return; }
-    var to = segGet('ros-override') || 'auto';
-    var reason = ($('ros-reason').value || '').trim();
-    if (to !== 'auto' && !reason) { alert('A reason is required: forced assignment is no longer pure randomisation, and the analysis has to say so.'); return; }
-    var log = (current.overrides || []).concat([{ t: Date.now(), to: to, reason: reason }]);
-    var assign = Object.assign({}, current.assign || {}, { nextEntrantOverride: to });
-    persist(current.id, { overrides: log, assign: assign }).then(function () {
-      current.overrides = log; current.assign = assign;
-      if (!LOCAL) FB.audit(current.id, 'entrant_override', to + ' — ' + reason);
-      $('ros-reason').value = '';
-      renderRoster();
+      $('roster-table').innerHTML = '<tbody><tr><td class="muted">Could not read the participants: ' + esc(String(e && e.message || e)) + '</td></tr></tbody>';
     });
   }
 

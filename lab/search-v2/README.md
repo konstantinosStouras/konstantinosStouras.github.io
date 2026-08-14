@@ -330,8 +330,9 @@ secret and is not meant to be one. Security comes from the Rules and from Auth.
 4. **Rules** — copy `firestore.rules` into Firestore → Rules, replace
    `admin@admin.com` with your address, and **Publish**. The panel will tell you
    if it cannot read a collection because the rules are not yet published.
-5. Open `/lab/search-v2/admin/`, create a run, run the validation gate, generate
-   a roster, and open entry.
+5. Open `/lab/search-v2/admin/`, create a run, run the validation gate, and open
+   entry. Codes are not generated in the panel: leave **Roster mode** on *Open*
+   and each class-platform student ID enrols itself on first entry.
 
 Until Firebase is configured the admin panel opens in **local preview** (runs in
 browser storage) and the study still runs, logging locally and offering the data
@@ -378,7 +379,7 @@ session whose task differs from the defaults.
 | **Sessions** | a **Create a session** card first — name, optional Session ID, Create session — then grouped **Active** and **Completed**, one card each in the shape of the other class admin panels: code, status, name, created date, participant count, sequence balance and where the score is computed; **Open · Copy link · ⬇ Export data · 🧪 Test round · Clone · Open entry / Close session · Delete**. Export data does the whole job in one press — read the log, build the workbook, save it. Delete removes the session **and its event log**, so export first |
 | **Parameters** | six collapsible groups — Environment, Costs and limits, AI, Round structure, Assignment, Acceptance filter — plus an always-editable Operations group. Two red-confirmed switches ("draw the full curve", "mark the AI's known positions") stay visible but must never be turned on |
 | **Consequences** | recomputed live beside the form: σ, `s*`, `g*`, the two gap-midpoint SDs, the benchmark frontier share per seed shape, session length, and **two badges** — green when sparse sits above `s*` and dense below it, red when the design has become a gradient rather than a sign change |
-| **Roster** | generate anonymous codes with an exact 50/50 block-randomised split; next-entrant override, which demands a reason and logs it into the export |
+| **Participants** | one full-width table of everyone in the session: code, sequence, which button sat on the left, **Round** — the scored rounds they have finished out of the scored rounds the session assigns them, `18/24 (75%)` — status, when they claimed and how they enrolled, with the sequence and button-order balance in the tiles above and a CSV of the lot. **Status is read from the participant's own session record**, so it turns to `completed` the moment they reach the end; the roster document is stamped too, but the panel does not depend on it. The screen holds no code generator and no entrant override: participants enrol from the class platform, and the override is a parameter (Assignment → Next entrant). The data keeps the name `roster` — the collection, the document ids and the tab's own id are unchanged |
 | **Live monitor** | counters from a Firestore listener plus the health strip: median active time, median round time, comprehension failures, cap hits, immediate-stop rate, narrow viewports, long blurs, sub-500 ms deciders |
 | **Data & preview** | the validation gate, a spec preview that writes nothing, a scripted dry run, the export, a danger zone, and the round gallery below |
 | **Design notes** | the questions this design attracts, answered against the code — does the AI hold private data, what a pre-opened round is, gaps versus tails and `g = 4t`, why all three layouts are needed, whether the landscape changes each round — with **every number measured from the open session's own frozen pool**, never copied from the design document |
