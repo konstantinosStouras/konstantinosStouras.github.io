@@ -684,7 +684,21 @@
     var box = $('consent-box'), btn = $('btn-consent');
     box.checked = false; btn.disabled = true;
     box.onchange = function () { btn.disabled = !box.checked; };
-    btn.onclick = function () { L.log('consent', { answer: 'agree' }); goto('registration'); };
+    btn.onclick = function () {
+      L.log('consent', { answer: 'agree' });
+      // A phase with nothing to ask is never ENTERED, so it leaves no
+      // `phase_ms_registration` at all. Consent used to route into it
+      // unconditionally and showRegistration bounced straight out, which
+      // stamped the phase with a millisecond — and the workbook exports a 0
+      // rather than the blank its own rule reserves for "not applicable"
+      // (README: empty cell = not applicable, never 0). Nobody noticed while
+      // field of study kept the screen alive on every platform launch; with it
+      // gone, that would have been a whole platform cohort's column reading a
+      // dwell time for a screen none of them ever saw.
+      if (!S.regLogged) { S.regLogged = true; logPlatformBackground(); }
+      if (!registrationItems().length) { S.regDone = true; logRetiredAnswers(); save(); goto('instructions'); return; }
+      goto('registration');
+    };
     show('s-consent');
   }
 
@@ -721,7 +735,7 @@
       L.log('registration', { question_id: 'platform_' + k, answer: String(bg[k]).slice(0, 400), source: 'platform' });
     });
   }
-  // MIGRATION. This phase did not exist until 2026-08; the same four items were
+  // MIGRATION. This phase did not exist until 2026-08; the same items were
   // the exit survey's Part F, which is now gone. A participant who consented
   // under the previous build and is resumed under this one would therefore be
   // asked NOTHING and export a blank background — and that is precisely the
@@ -738,7 +752,7 @@
     // The platform's own answers must reach the log whatever phase they are in
     // — that data exists already and losing it is pure waste.
     if (!S.regLogged) { S.regLogged = true; logPlatformBackground(); save(); }
-    if (!registrationItems().length) { S.regDone = true; save(); return; }
+    if (!registrationItems().length) { S.regDone = true; logRetiredAnswers(); save(); return; }
     if (PRE_TASK_PHASES.indexOf(S.phase) >= 0) { S.phase = 'registration'; save(); }
   }
   function showRegistration() {
@@ -746,8 +760,18 @@
     S.reg = S.reg || {};
     if (!S.regLogged) { S.regLogged = true; logPlatformBackground(); save(); }
     // Nothing this study asks that the platform has not already answered — do
-    // not show an empty form, just carry on into the instructions.
-    if (!items.length) { S.regDone = true; save(); goto('instructions'); return; }
+    // not show an empty form, just carry on into the instructions. Reached only
+    // by a participant RESUMED into the phase (consent now routes past it), and
+    // the pass-through must not leave a dwell time behind either — but an
+    // earlier genuine one, from a build that did ask them something, is kept.
+    if (!items.length) {
+      S.regDone = true;
+      logRetiredAnswers();
+      var hadDwell = S.phaseMs.registration != null;
+      goto('instructions');
+      if (!hadDwell) { delete S.phaseMs.registration; save(); }
+      return;
+    }
 
     var host = $('reg-body'), html = [];
     html.push('<p class="muted small">Every question here is optional — leave any of them blank.</p>');
@@ -778,6 +802,26 @@
     $('btn-reg').onclick = function () { submitRegistration(items); };
     show('s-registration');
   }
+  // A RETIRED question's answer is still the participant's. Someone who was
+  // mid-registration when a build shipped holds it in S.reg under an id the
+  // block no longer lists — field of study went in 2026-08 — and the submit
+  // loop only logs what it ASKED, so their answer would sit in local state and
+  // never reach a row. Logged once (`retiredLogged` keeps it idempotent across
+  // reloads), as an ordinary registration row; admin/export.js gives it back
+  // its own reg_<id> column.
+  function logRetiredAnswers() {
+    if (!S.reg) return;
+    var asked = {};
+    CT.REGISTRATION.forEach(function (q) { asked[q.id] = 1; });
+    Object.keys(S.reg).forEach(function (id) {
+      if (asked[id] || !S.reg[id]) return;
+      S.retiredLogged = S.retiredLogged || {};
+      if (S.retiredLogged[id]) return;
+      S.retiredLogged[id] = 1;
+      L.log('registration', { question_id: id, answer: String(S.reg[id]).slice(0, 400), source: 'participant' });
+    });
+  }
+
   function submitRegistration(items) {
     var host = $('reg-body');
     items.forEach(function (q) {
@@ -785,6 +829,7 @@
       S.reg[q.id] = sel ? q.options[+sel.value] : '';
     });
     S.regDone = true;
+    logRetiredAnswers();
     save();
     // NOT L.setContext: that sets the ROUND context, which persists until it is
     // cleared, and everything logged afterwards — the comprehension answers,

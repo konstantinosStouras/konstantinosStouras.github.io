@@ -2433,16 +2433,40 @@ pre-opened moves — smoke.mjs and data-audit.mjs now CHOOSE a revealable positi
 button.
 
 **Registration first; the exit survey no longer asks background** (owner
-2026-08). The four background items (field of study, year/level, age band,
-gender) moved out of the survey's Part F into their OWN registration phase
-between consent and the instructions — asked once, before the task, all
-optional (`Content.REGISTRATION`, `showRegistration` in app.js, screen
+2026-08). The background items (year/level, age band, gender) moved out of the
+survey's Part F into their OWN registration phase between consent and the
+instructions — asked once, before the task, all optional
+(`Content.REGISTRATION`, `showRegistration` in app.js, screen
 `s-registration`). On a Simulation Platform launch every item the platform's
 registration already answered is NOT re-asked: it travels as
-`platform_<field>` and, when the platform covers all of them, the phase passes
-through with no screen at all. The ids are unchanged from the Part F era and
-the exporter reads either source into the same `reg_<id>` column, so sessions
-already collected keep their background. Pinned by `tools/platform-guard.mjs`.
+`platform_<field>`. The ids are unchanged from the Part F era and the exporter
+reads either source into the same `reg_<id>` column, so sessions already
+collected keep their background. Pinned by `tools/platform-guard.mjs`.
+**FIELD OF STUDY was removed** (owner 2026-08, "irrelevant") — the question and
+its six options, everywhere. Every other consumer is DERIVED from the
+`REGISTRATION` array (`registrationColumns()` → the `reg_<id>` workbook columns,
+`outline()` → the Wording tab's editable fields, `resolve()` → the per-session
+copy), so the deletion is one array entry; `fieldOfStudy` left
+`PLATFORM_BACKGROUND` with it, because the platform's own registration has no
+such answer set either (`simulation/answers.js`) — which is exactly why it was
+the ONE item a launch still had to ask. Three consequences, each pinned:
+(1) a platform launch now has **nothing left to ask**, so the phase passes
+through with **no screen at all** — no longer a contingency but the only
+behaviour a launch can have (a standalone participant is still asked the three);
+(2) **consent routes PAST a phase with nothing to ask** rather than entering it
+and bouncing out, because `goto` stamps the phase either way and the workbook
+would ship `phase_ms_registration = 0` for a screen a whole cohort never saw —
+against its own rule that an empty cell, never a 0, means not applicable
+(`showRegistration`'s pass-through, now reachable only on a resume, deletes the
+phantom stamp too but keeps a genuine earlier dwell);
+(3) a **retired question keeps exporting the answers it already collected** —
+the column list is the CURRENT block, so `admin/export.js` sweeps any answer
+held under a retired background id (from `reg` or, for the Part F era,
+`survey`) back into its `reg_<id>` column. Without it, re-exporting a session
+collected under the old shape would quietly differ from the export taken last
+term — at the study level exactly what the panel's own "clone, do not edit" rule
+forbids at the session level. `f_` is the background block's id namespace and
+selftest pins that nothing else uses it.
 
 **The two paid buttons are the primary outcome, so the interface may not tilt
 them** (owner 2026-08, a written spec). "Ask the AI" and "Reveal" are ONE
@@ -2913,9 +2937,9 @@ so the two cannot drift again.
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (299) ·
-`tools/smoke.mjs` (211 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
-`tools/admin-smoke.mjs` (199) · `tools/platform-guard.mjs` (28) ·
+`node lab/search-v2/tools/selftest.js` (307) ·
+`tools/smoke.mjs` (212 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
+`tools/admin-smoke.mjs` (199) · `tools/platform-guard.mjs` (30) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its
 participants, and the drift guard that `app.js` reads content only through the
 resolved copy: one `Content.SURVEY` slipping back would silently ignore that

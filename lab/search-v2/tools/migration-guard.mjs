@@ -4,15 +4,18 @@
 
        node lab/search-v2/tools/migration-guard.mjs
 
-   The registration phase (background: field of study, year or level, age band,
-   gender) arrived in 2026-08, and the exit survey's Part F — where those four
-   items used to live — went away in the same change. The phase is entered from
+   The registration phase (background: year or level, age band, gender — field
+   of study was among them until it was dropped as irrelevant, see CASE 3)
+   arrived in 2026-08, and the exit survey's Part F — where those items used to
+   live — went away in the same change. The phase is entered from
    the consent button, so a participant who had ALREADY consented under the
    previous build would have been asked by neither: their background would
    simply be blank, and that is exactly the class playing when a change like
    this deploys.
 
-   So app.js carries two catch-ups, and this pins both:
+   So app.js carries two catch-ups, and this pins both — plus the third case a
+   RETIRED question creates: an answer already given under the previous build,
+   to a question the current one no longer asks.
      · resumed BEFORE the task (instructions, either gate, a block intro) — they
        are routed into the phase, since they have not started yet;
      · resumed once they are IN the rounds — interrupting the task would be
@@ -75,9 +78,15 @@ let fails=0;const ok=(c,m,x)=>{console.log((c?'  ok   — ':'  FAIL — ')+m+(c?
   await pg.reload();
   await pg.waitForSelector('#s-survey.active',{timeout:20000});
   const asked=await pg.$$eval('#survey-body .survey-q',els=>els.map(e=>e.dataset.q));
-  ok(['f_field','f_year','f_age','f_gender'].every(id=>asked.includes(id)),
+  // The list comes from the study itself: field of study was dropped in 2026-08,
+  // and a hardcoded list would have gone on pinning a question that no longer
+  // exists rather than the migration path this guard is about.
+  const REG_IDS=await pg.evaluate(()=>window.SVContent.REGISTRATION.map(q=>q.id));
+  ok(REG_IDS.length>0 && REG_IDS.every(id=>asked.includes(id)),
      'a participant already past the rounds is asked the background at the end, as they always would have been',
      asked.join(','));
+  ok(!asked.includes('f_field'),
+     'and never field of study, which the study no longer asks anywhere');
   const part=await pg.$$eval('.survey-part',els=>els.map(e=>e.textContent.trim()));
   ok(part.some(t=>/Background/.test(t)),'and it is labelled',part.join(' | '));
   // answering must land as REGISTRATION rows, not survey ones
@@ -93,11 +102,44 @@ let fails=0;const ok=(c,m,x)=>{console.log((c?'  ok   — ':'  FAIL — ')+m+(c?
   await pg.waitForSelector('#s-debrief.active, #s-done.active',{timeout:15000});
   const rows=await pg.evaluate(()=>window.Logger.getEvents()
     .filter(e=>e.event==='registration').map(e=>e.question_id));
-  ok(['f_field','f_year','f_age','f_gender'].every(id=>rows.includes(id)),
+  ok(REG_IDS.every(id=>rows.includes(id)),
      'their answers are logged as registration rows, so they reach the same reg_* column',rows.join(','));
   const surveyRows=await pg.evaluate(()=>window.Logger.getEvents()
     .filter(e=>e.event==='survey').map(e=>e.question_id));
   ok(!surveyRows.some(id=>/^f_/.test(id)),'and not duplicated as survey rows',surveyRows.filter(i=>/^f_/.test(i)).join(','));
+  await ctx.close();
+}
+// CASE 3 — an answer to a RETIRED question, given under the previous build.
+// Field of study was dropped in 2026-08. A participant who ticked it and then
+// reloaded onto the new build holds the answer in their saved state under an id
+// the block no longer lists, and the submit loop only logs what it ASKED — so
+// without logRetiredAnswers() their answer would sit in localStorage and never
+// reach a row, let alone the reg_f_field column admin/export.js keeps for it.
+{
+  const ctx=await br.newContext({viewport:{width:1440,height:1000}});
+  await ctx.route(/gstatic\.com|googleapis\.com/,r=>r.abort());
+  const pg=await ctx.newPage();
+  await pg.goto(BASE+'?code=MIG&pcode=OLD003');
+  await pg.waitForSelector('#s-consent.active',{timeout:20000});
+  await pg.evaluate(()=>{
+    const k='searchv2:v3:state:OLD003';
+    const s=JSON.parse(localStorage.getItem(k)||'{}');
+    s.phase='registration'; s.reg={ f_field:'Natural sciences' };
+    delete s.regDone; delete s.retiredLogged;
+    localStorage.setItem(k,JSON.stringify(s));
+  });
+  await pg.reload();
+  await pg.waitForSelector('#s-registration.active',{timeout:20000});
+  const asked3=await pg.$$eval('#reg-body .survey-q',els=>els.map(e=>e.dataset.q));
+  ok(!asked3.includes('f_field'),'the retired question is not put back on the screen',asked3.join(','));
+  await pg.locator('#btn-reg').click();
+  await pg.waitForSelector('#s-instructions.active',{timeout:20000});
+  const rows3=await pg.evaluate(()=>window.Logger.getEvents()
+    .filter(e=>e.event==='registration').map(e=>e.question_id+'='+e.answer));
+  ok(rows3.some(r=>r==='f_field=Natural sciences'),
+     'but the answer they already gave to it is logged, so it still reaches its export column',rows3.join(' | '));
+  ok(rows3.filter(r=>/^f_field=/.test(r)).length===1,
+     'exactly once — a reload cannot log it twice',rows3.join(' | '));
   await ctx.close();
 }
 await br.close(); srv.close();

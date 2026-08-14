@@ -583,6 +583,23 @@
         var v = reg[sid] != null ? reg[sid] : (survey[sid] != null ? survey[sid] : null);
         row['reg_' + sid] = v;
       });
+      // A RETIRED question keeps exporting the answers it already collected.
+      // The column list is the CURRENT registration block, so retiring an item
+      // — field of study went in 2026-08 — would otherwise drop it from the
+      // Participants sheet of every future export, including a re-export of a
+      // session that holds real answers to it. They would survive only as raw
+      // event rows, and a re-export would quietly differ from the one taken
+      // last term. So any answer actually present under a retired background id
+      // gets its column back, from either source (`survey` covers the Part F
+      // era, where the same ids were exit-survey rows). A session that never
+      // held one gains no empty column, so nothing accumulates. `f_` is the
+      // background block's own id namespace — no survey or quiz item uses it,
+      // which tools/selftest.js pins.
+      [reg, survey].forEach(function (src) {
+        Object.keys(src).forEach(function (k) {
+          if (/^f_/.test(k) && row['reg_' + k] === undefined) row['reg_' + k] = src[k];
+        });
+      });
       Object.keys(reg).forEach(function (k) {
         if (k.indexOf('platform_') === 0) row['reg_' + k] = reg[k];
       });

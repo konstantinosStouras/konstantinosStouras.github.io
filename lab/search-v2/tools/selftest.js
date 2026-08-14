@@ -393,7 +393,19 @@ head('11 · the content: instructions, gates and the survey');
       'part ' + part + ': free text comes before multiple choice');
   });
   // Registration: the background block, asked once, before the study.
-  ok(Content.REGISTRATION.length === 4, 'registration asks the four background items');
+  // Field of study was dropped in 2026-08 as irrelevant to this study, which
+  // leaves exactly the three the Simulation Platform already answers — so a
+  // platform launch now asks nothing at all (tools/platform-guard.mjs pins it).
+  ok(Content.REGISTRATION.length === 3, 'registration asks the three background items');
+  ok(!Content.REGISTRATION.some(q => q.id === 'f_field' || q.platformKey === 'fieldOfStudy'),
+    'field of study is not among them — it is not asked anywhere in the study');
+  // `f_` is the background block's own id namespace, and admin/export.js relies
+  // on that to give a RETIRED question's already-collected answers their column
+  // back. A survey or quiz item taking an f_ id would turn into a reg_ column.
+  ok(Content.REGISTRATION.every(q => /^f_/.test(q.id)),
+    'every background item lives in the f_ id namespace');
+  ok(!Content.surveyColumns().concat(Content.quizColumns()).some(id => /^f_/.test(id)),
+    'and nothing else does — no survey or quiz item borrows it');
   ok(Content.REGISTRATION.every(q => q.optional), 'every registration item is optional');
   ok(Content.REGISTRATION.every(q => q.platformKey),
     'every registration item names the platform field that answers it instead');
@@ -588,6 +600,36 @@ const run = {
   });
   ok(Dict.sheets.length === 3 && Dict.oneRowIs('Decisions').length > 10,
     'and each analysis sheet states what one of its rows is');
+
+  // A RETIRED background question keeps its column. The column list is the
+  // CURRENT registration block, so without the sweep in buildParticipants a
+  // re-export of a session collected under an older shape would quietly drop
+  // answers it really holds — at the study level exactly what the panel's
+  // "clone, do not edit" rule forbids at the session level. Field of study was
+  // dropped in 2026-08; these rows are what such a session's log looks like.
+  {
+    const legacy = rows.concat([
+      { event: 'registration', participant_code: 'BOT001', run_id: 'test-run',
+        question_id: 'f_field', answer: 'Natural sciences', t: Date.now(), bot: true },
+      { event: 'survey', participant_code: 'BOT002', run_id: 'test-run',
+        question_id: 'f_field', answer: 'Business or economics', t: Date.now(), bot: true }
+    ]);
+    const lb = X.build(legacy, run, { keepBots: true });
+    const cols = X.columnsOf(lb.participants);
+    ok(cols.indexOf('reg_f_field') >= 0,
+      'an answer to a retired background question still gets its reg_ column', cols.filter(c => /^reg_/.test(c)).join(', '));
+    const byCode = {};
+    lb.participants.forEach(r => { byCode[r.participant_code] = r; });
+    ok(byCode.BOT001.reg_f_field === 'Natural sciences',
+      'carrying the answer as it was given');
+    ok(byCode.BOT002.reg_f_field === 'Business or economics',
+      'from the Part F era too, where the same ids were exit-survey rows');
+    ok(Dict.undocumented('Participants', cols).length === 0,
+      'and the recovered column is still described in the Dictionary',
+      Dict.undocumented('Participants', cols).join(', '));
+    ok(X.columnsOf(built.participants).indexOf('reg_f_field') < 0,
+      'while a session that never held one gains no empty column');
+  }
 
   // A revealed position JOINS the AI's anchor set, so the curve moves to pass
   // through it — which leaves any answer given BEFORE that reveal sitting off the

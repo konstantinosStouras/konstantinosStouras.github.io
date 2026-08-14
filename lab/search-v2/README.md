@@ -54,12 +54,15 @@ participant's own rounds with the true prizes beside what the AI told them, and
 the done screen.
 
 **Registration comes first, and the exit survey no longer asks background.** The
-four background items (field of study, year or level, age band, gender) are a
-**registration phase** between consent and the instructions — asked once, before
-the task, all optional. On a Simulation Platform launch each item the platform's
-own registration already answered is **not asked again**: it travels with the
-row as `platform_<field>`, and when the platform covers everything the phase
-passes through without a screen. `tools/platform-guard.mjs` pins both halves.
+three background items (year or level, age band, gender) are a **registration
+phase** between consent and the instructions — asked once, before the task, all
+optional. Field of study was dropped in 2026-08 as irrelevant to the study,
+which leaves exactly the items a Simulation Platform launch already answers:
+each travels with the row as `platform_<field>` and is **not asked again**, so a
+platform participant passes through the phase without seeing a screen — and
+without leaving a `phase_ms_registration` behind, since consent routes past a
+phase with nothing to ask. A standalone participant is asked all three.
+`tools/platform-guard.mjs` pins both halves.
 
 **The two paid buttons are the outcome, so the interface may not tilt them.**
 "Ask the AI" and "Reveal" are one button style at strict visual parity — same
@@ -403,7 +406,7 @@ session whose task differs from the defaults.
 | **Live monitor** | counters from a Firestore listener plus the health strip: median active time **over completed sessions only**, median round time, comprehension failures, cap hits, immediate-stop rate, narrow viewports, long blurs, sub-500 ms deciders. Every check states the threshold behind its ⚠, and the six that need the event log say so until you press **⟳ Refresh health checks** — the log is far heavier than the participant records the counters use, so it is never fetched on its own. The fourth tile is **Away 30+ min**, not "abandoned": it is `started − completed − in progress`, and anyone in it can come back and carry on. Per participant: their phase, round, active time, **resumptions** and **breaks** (how many, how long away in total) |
 | **Data & preview** | the validation gate, a spec preview that writes nothing, a scripted dry run, the export, a danger zone, and the round gallery below |
 | **Design notes** | the questions this design attracts, answered against the code — does the AI hold private data, what a pre-opened round is, gaps versus tails and `g = 4t`, why all three layouts are needed, whether the landscape changes each round — with **every number measured from the open session's own frozen pool**, never copied from the design document |
-| **Wording** | **everything the study says to a participant, in the order they meet it** — consent, both sets of instructions, both quick checks with their answer options, all twenty-four survey items, the part headings, debrief and thanks — each shown with this session's own numbers already substituted, and editable **for this session only** |
+| **Wording** | **everything the study says to a participant, in the order they meet it** — consent, the background questions asked before the study, both sets of instructions, both quick checks with their answer options, all twenty-four survey items, the encouragement messages, the part headings, debrief and thanks — each shown with this session's own numbers already substituted, and editable **for this session only** |
 
 The four buttons under the parameter form are unchanged in number and colour from
 the previous panel: **Save session** (green), then **Cancel edit**, **Make this
