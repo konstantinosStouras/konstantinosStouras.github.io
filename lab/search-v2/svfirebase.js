@@ -244,6 +244,23 @@ window.SVFirebase = (function () {
       return sdk.fs.setDoc(participantRef(runId, code), withUid, { merge: true });
     }).then(function () { return true; }).catch(function () { return false; });
   }
+  // The roster document is stamped 'started' when the code is claimed and was
+  // never touched again, so a participant who reached the Done screen still read
+  // as 'started' in the panel for the rest of the session's life. This closes
+  // that loop from the one place that knows the session ended. The claiming uid
+  // is what the Rules check on an update, and it is already ours (we claimed the
+  // code, or rebound it on a resume), so a merge write of the status is allowed.
+  // Entirely best-effort: it decides nothing the participant experiences, and a
+  // refusal must never surface on the Done screen.
+  function markRosterCompleted(runId, code) {
+    if (!configured || !runId || !code) return Promise.resolve(false);
+    var id = runId + '__' + String(code).toUpperCase();
+    return init().then(ensureAuth).then(function () {
+      return sdk.fs.setDoc(sdk.fs.doc(db, C.roster, id),
+        { status: 'completed', completedAt: Date.now(), claimedByUid: uid() }, { merge: true });
+    }).then(function () { return true; }).catch(function () { return false; });
+  }
+
   function getParticipant(runId, code) {
     if (!configured) return Promise.resolve(null);
     return init().then(ensureAuth)
@@ -456,6 +473,7 @@ window.SVFirebase = (function () {
     putRunPublic: putRunPublic, callable: callable,
     claimCode: claimCode, assignCell: assignCell,
     saveParticipant: saveParticipant, getParticipant: getParticipant,
+    markRosterCompleted: markRosterCompleted,
     writeEvent: writeEvent,
     adminSignIn: adminSignIn, adminSignOut: adminSignOut, onAuth: onAuth,
     listRuns: listRuns, createRun: createRun, updateRun: updateRun, deleteRun: deleteRun, codeExists: codeExists,

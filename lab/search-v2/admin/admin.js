@@ -5,7 +5,8 @@
      1 Runs           — every run, its status, its participants, its balance
      2 Parameters     — six collapsible groups, locked once a run has an entrant
      3 Consequences   — recomputed live beside the form, with the two badges
-     4 Roster         — anonymous codes, sequence assignment, entrant override
+     4 Participants   — anonymous codes, sequence assignment, progress and status
+                        (the `roster` ids and collection keep that name in the DATA)
      5 Live monitor   — counters from a Firestore listener, plus the health strip
      6 Data & preview — validation gate, spec preview, dry run, export, danger zone
 
@@ -22,6 +23,18 @@
       Dict = window.SVDictionary;
   var FB = window.SVFirebase;
 
+  // `current`   — the session every OTHER screen is looking at (roster, monitor,
+  //               data, notes). The panel picks one on load so those screens
+  //               have something to show.
+  // `editingId` — the session the PARAMETER FORM and the WORDING tab write to.
+  //               null means the form is composing a NEW session, and Save
+  //               creates one. These are deliberately NOT the same thing: the
+  //               panel auto-picks a session for the read screens, and binding
+  //               the form to that pick silently turned "set the parameters for
+  //               my next session, then Save" into "overwrite whichever session
+  //               happened to be picked" — with no summary and no confirmation.
+  //               The form is bound to a session ONLY when the admin opens one
+  //               from its card (see selectRun's `form` option).
   var runs = [], current = null, currentParams = null, editingId = null;
   // This session's wording overrides, as the flat key→string map content.js
   // defines. Empty means every word comes from content.js.
@@ -220,6 +233,7 @@
       el.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); createFromCard(); } };
     });
     $('btn-create-run').onclick = createFromCard;
+    if ($('btn-demo-run')) $('btn-demo-run').onclick = function () { clearCreated(); createDemoRun($('btn-demo-run')); };
   }
   function clearCreated() { $('nr-created').innerHTML = ''; note('nr-note', ''); }
 
@@ -305,6 +319,97 @@
     });
   }
 
+  /* ---- the demo session -------------------------------------------------
+     A 4-round session to show a class how the game works before they play the
+     real one: two rounds without the AI, then two with it, and inside each half
+     one round that starts with nothing open followed by one that starts with a
+     few prizes already open. It exists because the study itself is 28 rounds —
+     far too long to walk through on a projector — and because the two things a
+     new participant has to understand (the AI, and pre-opened prizes) are
+     exactly what a 4-round tour can show.
+
+     Every departure from the defaults below is deliberate:
+       · warm-ups off, 2 scored rounds a block  → 4 rounds in total
+       · 1 open + 1 seeded a block, no shuffle  → the open round always comes
+         first, so "nothing open" is met before "a few already open"
+       · nextEntrantOverride 'A'                → EVERY entrant gets the no-AI
+         half first. The control is labelled "next entrant" but it is not
+         consumed, so it holds for the whole session, which is what a
+         demonstration needs — the counterbalancing that makes the real study
+         a crossover would send half the room in the other order.
+       · densities                              → the open round runs the DENSE
+         AI (10 anchors, usually close) and the seeded one the SPARSE AI (3
+         anchors, wrong in the middle), so a class sees both faces of it.
+       · exit survey off, debrief on            → nobody should fill in 24
+         questions to see a demo, and the debrief is the teaching part.
+       · a different generator seed             → THE POINT. Round specs are
+         drawn from a pool shuffled by this seed, and two sessions sharing it
+         serve the same prize curves in the same slots. A class that had seen
+         the real round 1 in the demo would know where its best prize is, so the
+         demo must draw from a different shuffle. */
+  var DEMO = { code: 'TEST', name: 'For testing purposes' };
+  function demoParams() {
+    var p = Specs.withDefaults(null);
+    p.env.generatorSeed = 20260814;
+    p.rounds.warmupPerBlock = 0;
+    p.rounds.scoredPerBlock = 2;
+    p.rounds.openPerBlock = 1;
+    p.rounds.seededPerBlock = 1;
+    p.rounds.shapeMix = { FRONTIER: 0, BALANCED: 1, GAP: 0 };
+    p.rounds.densitySeeded = { SPARSE: 1, DENSE: 0 };
+    p.rounds.densityOpen = { SPARSE: 0, DENSE: 1 };
+    p.rounds.shuffleWithinBlock = false;
+    p.assign.sequenceAssignment = 'block';
+    p.assign.nextEntrantOverride = 'A';
+    p.ops.runName = DEMO.name;
+    p.ops.code = DEMO.code;
+    p.ops.entryOpen = false;
+    p.ops.exitSurvey = false;
+    p.ops.debrief = true;
+    return p;
+  }
+  // The one instruction screen whose default wording counts the practice rounds.
+  // A demo has none, so it is reworded for this session through the per-session
+  // wording system rather than by touching the study's own text.
+  function demoContent() {
+    return {
+      'instr.i5.body':
+        'This is a short **demonstration**: **2 rounds without the AI**, then **2 rounds with it**. ' +
+        'The full study is longer.\n\n' +
+        '**The prizes are drawn afresh in every round.** What you learned about the line in one round tells ' +
+        'you nothing about the next.\n\n' +
+        'The second round of each pair starts with a few positions already open, for free. Those are shown ' +
+        'to you at the start.\n\n' +
+        'You can reopen this summary at any time from the button at the top right of the game screen.'
+    };
+  }
+
+  function createDemoRun(btn) {
+    var existing = runs.filter(function (r) { return String(r.code || '').toUpperCase() === DEMO.code; })[0];
+    if (existing) {
+      note('nr-note', 'A session with the ID <b>' + esc(DEMO.code) + '</b> already exists (' +
+        esc(existing.name || 'untitled') + '). Delete it first, or open it from its card below.', true);
+      return;
+    }
+    var p = demoParams();
+    askSummary('Create the 4-round demo session?',
+      'A short session to show a class how the game works: <b>2 rounds without the AI, then 2 with it</b>, ' +
+      'and in each half one round that starts empty followed by one that starts with a few prizes already ' +
+      'open. Every entrant gets the same order, the exit survey is off and it draws its prize curves from a ' +
+      'different shuffle than a default session, so it gives nothing away about the real one.',
+      summaryBoxes(p), 'Create session', function () {
+        btn.disabled = true;
+        createRun(newRunDoc(p, DEMO.name, DEMO.code, demoContent())).then(function (id) {
+          btn.disabled = false;
+          showCreated(id, DEMO.code, DEMO.name);
+          loadRuns(id);
+        }, function (e) {
+          btn.disabled = false;
+          note('nr-note', 'Could not create the demo session: ' + esc(String(e && e.message || e)), true);
+        });
+      });
+  }
+
   function savedDefaultParams() {
     var d = null;
     try { d = JSON.parse(localStorage.getItem('searchv2:v3:admin:defaults') || 'null'); } catch (e) {}
@@ -320,8 +425,12 @@
       renderRuns();
       loadRunStats();
       var picked = selectId ? runs.filter(function (r) { return r.id === selectId; })[0] : null;
+      // A session named by the caller was just created or just opened — an
+      // explicit act, so the form follows it. The fallback pick is the panel's
+      // own choice, so it feeds the read screens ONLY: the form stays on a new
+      // session and Save cannot rewrite a session nobody asked to edit.
       if (picked) selectRun(picked);
-      else if (!current && runs.length) selectRun(runs[0]);
+      else if (!current && runs.length) selectRun(runs[0], { form: false });
       else if (!current) {
         currentParams = savedDefaultParams();
         fillForm(currentParams, null);
@@ -593,13 +702,22 @@
 
   // A modal, built and torn down per use so there is never a stale one in the
   // DOM to click through. Resolves only on confirm.
-  function askSummary(title, lead, bodyHtml, okLabel, onOk) {
+  // `opts.formHtml`  — controls shown ABOVE the summary (the name and session ID
+  //                    a new session is given here, rather than hunted for in the
+  //                    Operations group).
+  // `opts.validate`  — reads those controls and returns the value handed to
+  //                    onOk, or a string to show as an error and KEEP the dialog
+  //                    open. Without it the dialog is a plain confirm.
+  function askSummary(title, lead, bodyHtml, okLabel, onOk, opts) {
+    opts = opts || {};
     var back = document.createElement('div');
     back.className = 'modal-back';
     back.id = 'sess-summary';
     back.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
       '<h2 style="margin:0 0 4px;">' + esc(title) + '</h2>' +
       '<p class="muted small" style="margin:0;">' + lead + '</p>' +
+      (opts.formHtml || '') +
+      '<div class="admin-note bad" id="sum-err" style="display:none;"></div>' +
       bodyHtml +
       '<div class="modal-acts">' +
         '<button class="btn btn-ghost btn-sm" id="sum-cancel">Cancel</button>' +
@@ -611,8 +729,19 @@
     document.addEventListener('keydown', onKey);
     back.querySelector('#sum-cancel').onclick = close;
     back.onclick = function (e) { if (e.target === back) close(); };
-    back.querySelector('#sum-ok').onclick = function () { close(); onOk(); };
-    back.querySelector('#sum-ok').focus();
+    back.querySelector('#sum-ok').onclick = function () {
+      if (!opts.validate) { close(); onOk(); return; }
+      var v = opts.validate(back);
+      if (typeof v === 'string') {
+        var err = back.querySelector('#sum-err');
+        err.innerHTML = v; err.style.display = '';
+        return;
+      }
+      close(); onOk(v);
+    };
+    var first = opts.formHtml && back.querySelector('.modal-card input');
+    (first || back.querySelector('#sum-ok')).focus();
+    return back;
   }
 
   function setStatus(run, status) {
@@ -763,8 +892,27 @@
     return { params: params, pool: pool, specs: specs };
   }
 
-  function selectRun(run) {
-    current = run; editingId = run.id;
+  // `opts.form === false` — look at this session on the read screens WITHOUT
+  // pointing the parameter form at it. That is what the panel's own opening pick
+  // does: the form stays on a new session, so the obvious thing to do with it
+  // (change something, press Save) creates a session instead of rewriting one
+  // that may already have participants in it.
+  function selectRun(run, opts) {
+    var bindForm = !(opts && opts.form === false);
+    current = run;
+    editingId = bindForm ? run.id : null;
+    if (!bindForm) {
+      currentParams = savedDefaultParams();
+      currentContent = {};
+      fillForm(currentParams, null);
+      if ($('tab-wording') && $('tab-wording').style.display !== 'none') renderWording();
+      renderRoster();
+      fillSpecPicker();
+      rgFor = null; notesFor = null;
+      if ($('tab-data') && $('tab-data').style.display !== 'none') renderRoundGallery();
+      if ($('tab-notes') && $('tab-notes').style.display !== 'none') renderNotes();
+      return;
+    }
     currentParams = Specs.withDefaults(run.params);
     currentContent = Content.parseOverrides(run.contentJson || run.content);
     if ($('tab-wording') && $('tab-wording').style.display !== 'none') renderWording();
@@ -874,7 +1022,10 @@
     $('p-ops-code').oninput = function () { readForm(); };
 
     $('btn-save').onclick = saveRun;
-    $('btn-cancel').onclick = function () { if (current) selectRun(current); };
+    // Only meaningful while the form is bound to a session — it discards the
+    // edits by re-reading that session. It is hidden on a new session, where
+    // there is nothing to go back to.
+    $('btn-cancel').onclick = function () { if (editingId && current) selectRun(current); };
     $('btn-makedefault').onclick = function () {
       readForm();
       try { localStorage.setItem('searchv2:v3:admin:defaults', JSON.stringify(currentParams)); } catch (e) {}
@@ -883,7 +1034,7 @@
     $('btn-restore').onclick = function () {
       currentParams = Specs.withDefaults(null);
       fillForm(currentParams, current);
-      note('save-note', 'Form reset to the built-in defaults. Nothing is saved until you press Save session.');
+      note('save-note', 'Form reset to the built-in defaults. Nothing is written until you press the green button.');
     };
   }
 
@@ -920,9 +1071,25 @@
     $('p-ops-code').value = (run && run.code) || p.ops.code || '';
 
     $('params-title').textContent = run ? ('Parameters · ' + (run.name || 'untitled')) : 'Parameters · new session';
-    $('params-sub').textContent = run ? ('session ' + (run.code || run.id) + (run.locked ? ' · locked' : ' · draft')) : 'not saved yet';
-    $('btn-save').textContent = run ? 'Save session' : 'Create session';
+    $('params-sub').textContent = run ? ('session ' + (run.code || run.id) + (run.locked ? ' · locked' : ' · draft')) : 'not created yet';
+    // The button says which of the two things it does, because they are not
+    // undoable in the same way: one adds a session, the other rewrites one that
+    // may already be open. Naming the session on the button is the last cheap
+    // warning before the confirmation.
+    $('btn-save').textContent = run ? ('Save changes to ' + (run.code || 'this session')) : 'Create session';
+    $('btn-save').title = run
+      ? 'Write these parameters back to the session named on the button. It does NOT create a new one.'
+      : 'Create a NEW session with these parameters. You name it and give it a session ID next.';
     $('btn-cancel').style.display = run ? '' : 'none';
+    $('btn-cancel').textContent = 'Cancel edit';
+    note('edit-note', run
+      ? 'Editing the <b>existing</b> session <b>' + esc(run.code || run.id) + '</b> &mdash; ' +
+        esc(run.name || 'untitled') + '. Saving rewrites <b>that</b> session and creates nothing. ' +
+        'To build a different session from these settings instead, press ' +
+        '<b>Set the parameters first&hellip;</b> on the Sessions screen.'
+      : 'This is a <b>new session</b>, not created yet. Set whatever the task needs, then press ' +
+        '<b>Create session</b> &mdash; you choose the name and the session ID at that point. ' +
+        'No existing session is touched.', false);
 
     if (locked) {
       note('lock-note', '🔒 <b>Locked since the first participant' +
@@ -955,35 +1122,89 @@
     return currentParams;
   }
 
+  // The two things every session needs, asked in the create dialog itself. They
+  // mirror the Sessions screen's create card — same labels, same rules — so the
+  // two ways into a session ask the same question the same way.
+  function createFieldsHTML(name, code) {
+    return '<div class="create-card" style="margin:12px 0 0;"><div class="row2">' +
+      '<div class="field"><label for="sum-name">Session name</label>' +
+        '<input type="text" id="sum-name" maxlength="80" autocomplete="off" spellcheck="false" ' +
+        'placeholder="e.g. Spring MBA 2026" value="' + esc(name) + '"></div>' +
+      '<div class="field"><label for="sum-code">Session ID <span class="defval">&middot; goes in the participant link</span></label>' +
+        '<input type="text" id="sum-code" maxlength="40" autocomplete="off" spellcheck="false" ' +
+        'style="text-transform:uppercase; letter-spacing:.06em;" placeholder="(OPTIONAL) CUSTOM CODE" value="' + esc(code) + '">' +
+        '<div class="hint">Leave blank for an automatic code. Single word &mdash; capital letters and digits ' +
+        'only (3&ndash;40 chars).</div></div>' +
+      '</div></div>';
+  }
+  // Returns {name, code} — or an error string, which keeps the dialog open. The
+  // server-side check the Sessions card does (another admin may have taken the
+  // code since this list was read) cannot run here without making the dialog
+  // async; createRun's own write is the backstop, and a clash is reported.
+  function readCreateFields(back) {
+    var nameEl = back.querySelector('#sum-name'), codeEl = back.querySelector('#sum-code');
+    var name = (nameEl.value || '').trim() || 'untitled';
+    var typed = normCode(codeEl.value);
+    if (typed && typed.length < 3) {
+      codeEl.focus();
+      return 'A custom <b>Session ID</b> is 3&ndash;40 characters, capital letters and digits only. ' +
+             'Leave it blank for an automatic code.';
+    }
+    if (typed && codeInUse(typed)) {
+      codeEl.focus();
+      return 'Session ID <b>' + esc(typed) + '</b> is already taken by another session. Choose another, ' +
+             'or leave it blank for an automatic code.';
+    }
+    return { name: name, code: typed || freshCode() };
+  }
+
   function saveRun() {
     readForm();
-    var code = currentParams.ops.code || autoCode();
-    var name = currentParams.ops.runName || 'untitled';
+    var code = currentParams.ops.code || '';
+    var name = currentParams.ops.runName || '';
     if (!editingId) {
-      // Creating freezes the mapping pool and the 28 round specs under these
+      // Creating freezes the mapping pool and every round spec under these
       // seeds, so the summary comes first — this is the last cheap moment to
-      // notice that something was set wrong.
+      // notice that something was set wrong. The name and the session ID are
+      // chosen HERE, in the same breath, so "these are the parameters I want"
+      // and "this is the session they belong to" are one decision.
       var pending = clone(currentParams);
-      pending.ops.code = code; pending.ops.runName = name;
       pending.ops.entryOpen = false;   // what newRunDoc will write, so the summary can't promise otherwise
       askSummary('Create this session?',
         'Creating freezes the mapping pool and all <b>' +
         (2 * (pending.rounds.warmupPerBlock + pending.rounds.scoredPerBlock)) +
-        ' round specs</b> under the seeds below. It opens as a <b>draft</b>, so nobody can enter yet.',
-        summaryBoxes(pending), 'Create session', function () {
-          var obj = newRunDoc(currentParams, name, code, currentContent);
+        ' round specs</b> under the seeds below. It opens as a <b>draft</b>, so nobody can enter yet — ' +
+        'and no existing session is changed.',
+        summaryBoxes(pending), 'Create session',
+        function (v) {
+          var obj = newRunDoc(currentParams, v.name, v.code, currentContent);
           createRun(obj).then(function (id) {
-            note('save-note', 'Session <b>' + esc(code) + '</b> created as a <b>draft</b>. Run the validation gate on the ' +
+            note('save-note', 'Session <b>' + esc(v.code) + '</b> created as a <b>draft</b>. Run the validation gate on the ' +
               'Data screen — and check the round plots at the bottom of it — before opening entry.');
             // Select what was just created. Without this the form stayed on a
             // NEW session with editingId null, so pressing Save again created a
             // second session on the same code — and re-pointed the code at it.
             loadRuns(id);
+            // The created box carries Copy link and Open entry, so the session
+            // is one press from live rather than a hunt back through the cards.
+            showCreated(id, v.code, v.name);
+            openTab('runs');
           }).catch(function (e) { note('save-note', 'Could not create the session: ' + esc(String(e && e.message || e)), true); });
-        });
+        },
+        { formHtml: createFieldsHTML(name, code), validate: readCreateFields });
       return;
     }
     var run = current;
+    // Rewriting an existing session is named and confirmed. It used to be the
+    // silent default of a form the panel had bound to whichever session it
+    // picked at load, which is how a parameter change meant for the next session
+    // landed on an old one instead.
+    if (!confirm('Save these parameters to the EXISTING session "' + (run && run.code || editingId) +
+      ' — ' + ((run && run.name) || 'untitled') + '"?\n\n' +
+      'This rewrites that session. It does NOT create a new one.' +
+      (run && run.locked ? '\n\nIt is locked, so only the Operations group and the next-entrant override change.' : ''))) return;
+    code = code || (run && run.code) || autoCode();
+    name = name || (run && run.name) || 'untitled';
     var patch;
     if (run && run.locked) {
       // Locked: only Operations and the entrant override may move. The Rules
@@ -1129,20 +1350,152 @@
   //  SCREEN 4 · ROSTER
   // ======================================================================
   var roster = [];
+  var rosterRecs = {};   // participant_code (upper) → their session record
+
+  // A session runs TWO blocks, warm-ups first inside each (Specs.orderPlan), and
+  // that is what turns "rounds finished" into "scored rounds finished".
+  var BLOCKS = 2;
+
+  function scoredTotal(params) {
+    return BLOCKS * ((params && params.rounds && params.rounds.scoredPerBlock) || 0);
+  }
+  // The participant record carries `rounds_done` — every round they finished,
+  // warm-ups included. The warm-ups sit at the head of each block, so the scored
+  // count is the part of that total falling outside the two warm-up stretches,
+  // computed from THIS session's own parameters rather than the default 4 + 24.
+  function scoredDone(roundsDone, params) {
+    var w = (params && params.rounds && params.rounds.warmupPerBlock) || 0;
+    var s = (params && params.rounds && params.rounds.scoredPerBlock) || 0;
+    var n = roundsDone || 0, out = 0;
+    for (var b = 0; b < BLOCKS; b++) out += Math.max(0, Math.min(n - (b * (w + s) + w), s));
+    return out;
+  }
+  // "18/24 (75%)". Empty when there is no session record to read it from: an
+  // unclaimed code has finished nothing, but it has not finished zero rounds
+  // either, and the two must not look the same.
+  function roundCell(rec, params) {
+    var total = scoredTotal(params);
+    if (!rec || !total) return '—';
+    // A record with no `rounds_done` but `completed` set is a finished session
+    // written before that field existed: finishing means every round is behind
+    // them, so it reads as complete rather than as a blank.
+    var done = rec.rounds_done != null ? scoredDone(rec.rounds_done, params)
+      : (rec.completed ? total : null);
+    if (done == null) return '—';
+    return done + '/' + total + ' (' + Math.round(100 * done / total) + '%)';
+  }
+
+  // The roster document only ever learns that a code was CLAIMED — the study
+  // stamps it 'started' at entry. Whether the session was finished lives on the
+  // participant record (`completed`, written on the Done screen), so the status
+  // shown here is derived from the two together. app.js also writes 'completed'
+  // back onto the roster document now, but this reading is what heals every
+  // session recorded before it did.
+  function derivedStatus(r, rec) {
+    if (rec && rec.completed) return 'completed';
+    if (r && r.status === 'completed') return 'completed';
+    if (rec || (r && r.claimedByUid)) return 'started';
+    return r && r.status ? r.status : 'unused';
+  }
+
+  function recOf(r) { return rosterRecs[String(r && r.code).toUpperCase()] || null; }
+
+  // Which of the two paid buttons sat on the LEFT for this participant. The
+  // stored value is the raw `buttonOrder`; the column names the button itself,
+  // because "ask_first" told the reader nothing about what they were looking at.
+  function leftButton(r) {
+    return r.buttonOrder === 'reveal_first' ? 'Reveal'
+      : r.buttonOrder === 'ask_first' ? 'Ask the AI' : '—';
+  }
+  function enrolledAs(r) {
+    return r.orphan ? 'no roster entry' : r.autoEnrolled ? 'platform / open' : 'pre-generated';
+  }
+  // Scored rounds finished, as a number, for sorting and the CSV. null when
+  // there is no session record to read it from.
+  function scoredDoneOf(rec, params) {
+    if (!rec) return null;
+    if (rec.rounds_done != null) return scoredDone(rec.rounds_done, params);
+    return rec.completed ? scoredTotal(params) : null;
+  }
+
+  // ONE definition per column — its heading, what the cell says and what it
+  // sorts on — so a sorted table can never order itself by something other than
+  // what it is showing. A null sort value means "nothing to compare", and those
+  // rows sink to the bottom in BOTH directions.
+  function rosterCols(params) {
+    return [
+      { key: 'code', label: 'Code', cls: 'mono',
+        cell: function (r) { return esc(r.code); },
+        sort: function (r) { return r.code || null; } },
+      { key: 'sequence', label: 'Sequence',
+        title: 'The crossover order: A ran the AI-off block first, B the AI-on block first.',
+        cell: function (r) { return esc(r.sequence || '—'); },
+        sort: function (r) { return r.sequence || null; } },
+      { key: 'buttons', label: 'Left button',
+        title: 'Which of the two paid buttons — Ask the AI, or Reveal — sat on the LEFT of the screen for ' +
+               'this participant. Assigned once when they enrolled and fixed for their whole session, ' +
+               'block-randomised together with the sequence so all four cells fill evenly, and carried into ' +
+               'the analysis as the covariate button_order.',
+        cell: function (r) { return esc(leftButton(r)); },
+        sort: function (r) { return r.buttonOrder ? leftButton(r) : null; } },
+      { key: 'round', label: 'Round',
+        title: 'Scored rounds finished, out of the ' + scoredTotal(params) + ' this session assigns each ' +
+               'participant. Warm-up rounds are not counted. A participant can read 100% and still be ' +
+               'in progress: the survey and the debrief come after the last round.',
+        cell: function (r) { return esc(roundCell(recOf(r), params)); },
+        sort: function (r) { return scoredDoneOf(recOf(r), params); } },
+      { key: 'status', label: 'Status',
+        title: 'Read from the participant’s own session record: completed the moment they reach the end.',
+        cell: function (r) { return esc(derivedStatus(r, recOf(r))); },
+        // Ordered by how far they got, not alphabetically — "completed, started,
+        // unused" is an alphabetical accident, and progress is what is meant.
+        sort: function (r) { var st = derivedStatus(r, recOf(r)); return { unused: 0, started: 1, completed: 2 }[st]; } },
+      { key: 'claimed', label: 'Claimed',
+        title: 'When this code was first claimed.',
+        cell: function (r) { return r.claimedAt ? esc(new Date(r.claimedAt).toLocaleString()) : '—'; },
+        sort: function (r) { return r.claimedAt || null; } },
+      { key: 'enrolled', label: 'Enrolled',
+        cell: function (r) { return esc(enrolledAs(r)); },
+        sort: function (r) { return enrolledAs(r); } }
+    ];
+  }
+
+  // Clicking a heading sorts by that column; clicking it again reverses it.
+  var rosterSort = { key: null, dir: 1 };
+
+  function sortRoster(rows, cols) {
+    var col = cols.filter(function (c) { return c.key === rosterSort.key; })[0];
+    if (!col) return rows;
+    var dir = rosterSort.dir;
+    // Decorated with the load position, so ties keep the order they arrived in
+    // and a second sort on the same column is a clean reversal of the first.
+    return rows.map(function (r, i) { return { r: r, i: i }; }).sort(function (x, y) {
+      var a = col.sort(x.r), b = col.sort(y.r);
+      if (a == null && b == null) return x.i - y.i;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      var c = (typeof a === 'number' && typeof b === 'number') ? (a - b)
+        : String(a).localeCompare(String(b), undefined, { numeric: true });
+      return c ? c * dir : x.i - y.i;
+    }).map(function (x) { return x.r; });
+  }
+
   function wireRoster() {
-    $('btn-ros-gen').onclick = generateCodes;
     $('btn-ros-csv').onclick = function () {
-      var csv = 'code,sequence,button_order,status\n' + roster.map(function (r) {
-        return [r.code, r.sequence, r.buttonOrder || '', r.status || 'unused'].join(',');
-      }).join('\n');
-      dl((current ? current.code : 'run') + '_roster.csv', csv, 'text/csv');
+      var params = Specs.withDefaults(current && current.params);
+      // Exported in the order on screen, so a sorted table and its CSV agree.
+      var rows = sortRoster(roster, rosterCols(params));
+      var csv = 'code,sequence,button_order,left_button,status,scored_rounds_done,scored_rounds_total,claimed_at,enrolled\n' +
+        rows.map(function (r) {
+          var rec = recOf(r);
+          var done = scoredDoneOf(rec, params);
+          return [r.code, r.sequence, r.buttonOrder || '', r.buttonOrder ? leftButton(r) : '',
+            derivedStatus(r, rec), done == null ? '' : done, scoredTotal(params),
+            r.claimedAt ? new Date(r.claimedAt).toISOString() : '',
+            r.autoEnrolled ? 'platform/open' : (r.orphan ? 'no-roster-entry' : 'pre-generated')].join(',');
+        }).join('\n');
+      dl((current ? current.code : 'run') + '_participants.csv', csv, 'text/csv');
     };
-    $('ros-override').querySelectorAll('button').forEach(function (b) {
-      b.onclick = function () {
-        $('ros-override').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
-      };
-    });
-    $('btn-ros-override').onclick = applyOverride;
   }
 
   function renderRoster() {
@@ -1151,94 +1504,79 @@
       $('roster-stats').innerHTML = '';
       return;
     }
-    segSet('ros-override', (current.assign && current.assign.nextEntrantOverride) || 'auto');
-    $('ros-overrides').innerHTML = (current.overrides || []).length
-      ? '<b>Override log</b><br>' + current.overrides.map(function (o) {
-          return new Date(o.t).toLocaleString() + ' → ' + o.to + ' · ' + esc(o.reason || '');
-        }).join('<br>')
-      : 'No overrides recorded — assignment has been automatic throughout.';
+    var params = Specs.withDefaults(current.params);
+    // Both halves of a participant's state: the roster document (assignment,
+    // when they claimed) and their own session record (how far they got).
+    var pRoster = LOCAL ? Promise.resolve(current.roster || []) : FB.listRoster(current.id);
+    var pRecs = LOCAL ? Promise.resolve(current.participants || [])
+      : FB.listParticipants(current.id).catch(function () { return []; });
 
-    var p = LOCAL ? Promise.resolve(current.roster || []) : FB.listRoster(current.id);
-    p.then(function (list) {
-      roster = list || [];
-      var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0, ask: 0, reveal: 0 };
-      roster.forEach(function (r) {
-        counts[r.status || 'unused'] = (counts[r.status || 'unused'] || 0) + 1;
-        if (r.sequence) counts[r.sequence]++;
-        if (r.buttonOrder === 'reveal_first') counts.reveal++;
-        else if (r.buttonOrder === 'ask_first') counts.ask++;
+    Promise.all([pRoster, pRecs]).then(function (both) {
+      roster = (both[0] || []).slice();
+      rosterRecs = {};
+      (both[1] || []).forEach(function (rec) {
+        if (rec && rec.participant_code) rosterRecs[String(rec.participant_code).toUpperCase()] = rec;
       });
-      // Button order is a covariate in the primary analysis, so its balance is
-      // shown beside the sequence's — "confirm it is balanced before the first
-      // session opens" is a thing the panel has to make possible.
-      $('roster-stats').innerHTML = [
-        ['Codes', roster.length], ['Unused', counts.unused], ['In progress', counts.started],
-        ['Completed', counts.completed], ['Sequence A', counts.A], ['Sequence B', counts.B],
-        ['Ask on the left', counts.ask], ['Reveal on the left', counts.reveal]
-      ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
-
-      $('roster-table').innerHTML = roster.length
-        ? '<thead><tr><th>Code</th><th>Sequence</th><th>Buttons</th><th>Status</th><th>Claimed</th><th>Enrolled</th></tr></thead><tbody>' +
-          roster.map(function (r) {
-            return '<tr><td class="mono">' + esc(r.code) + '</td><td>' + esc(r.sequence || '—') + '</td>' +
-              '<td>' + (r.buttonOrder === 'reveal_first' ? 'Reveal left' : r.buttonOrder === 'ask_first' ? 'Ask left' : '—') + '</td>' +
-              '<td>' + esc(r.status || 'unused') + '</td>' +
-              '<td>' + (r.claimedAt ? new Date(r.claimedAt).toLocaleString() : '—') + '</td>' +
-              '<td>' + (r.autoEnrolled ? 'platform / open' : 'pre-generated') + '</td></tr>';
-          }).join('') + '</tbody>'
-        : '<tbody><tr><td class="muted">No codes yet. In <b>open</b> roster mode a class-platform student ID enrols itself on first entry.</td></tr></tbody>';
+      // A session record whose code has no roster document (the claim wrote one
+      // half and not the other) still belongs on this screen: a participant who
+      // is playing must never be invisible here.
+      var have = {};
+      roster.forEach(function (r) { have[String(r.code).toUpperCase()] = 1; });
+      Object.keys(rosterRecs).forEach(function (code) {
+        if (have[code]) return;
+        var rec = rosterRecs[code];
+        roster.push({ code: rec.participant_code, sequence: rec.sequence || null,
+          buttonOrder: rec.button_order || null, status: 'started', orphan: true });
+      });
+      paintRoster();
     }).catch(function (e) {
-      $('roster-table').innerHTML = '<tbody><tr><td class="muted">Could not read the roster: ' + esc(String(e && e.message || e)) + '</td></tr></tbody>';
+      $('roster-table').innerHTML = '<tbody><tr><td class="muted">Could not read the participants: ' + esc(String(e && e.message || e)) + '</td></tr></tbody>';
     });
   }
 
-  function generateCodes() {
-    if (!current) { alert('Open a session first.'); return; }
-    var n = Math.max(1, Math.min(1000, parseInt($('ros-n').value, 10) || 0));
-    var prefix = ($('ros-prefix').value || 'P').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    // Block randomisation over a shuffled list, so the split is exact rather
-    // than a series of coin flips (§11) — and over the FOUR CELLS of
-    // sequence × button order jointly, not two independent draws, because the
-    // button order enters the primary analysis as a covariate and has to be
-    // balanced within each sequence as well as overall (§ config.js
-    // ui.buttonOrder).
-    var cells = Specs.assignmentCells(), cellFor = [];
-    for (var i = 0; i < n; i++) cellFor.push(cells[i % cells.length]);
-    Pool.shuffle(cellFor, Pool.rngFrom(Pool.hashSeed(current.id + ':' + n + ':' + prefix)));
-    var codes = [];
-    for (var j = 0; j < n; j++) {
-      codes.push({ code: prefix + String(j + 1).padStart(3, '0'),
-                   sequence: cellFor[j].sequence, buttonOrder: cellFor[j].buttonOrder });
-    }
+  // Painting is separate from reading, so sorting a column re-renders what is
+  // already loaded instead of firing two more collection reads per click.
+  function paintRoster() {
+    var params = Specs.withDefaults(current && current.params);
+    var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0, ask: 0, reveal: 0 };
+    roster.forEach(function (r) {
+      var st = derivedStatus(r, recOf(r));
+      counts[st] = (counts[st] || 0) + 1;
+      if (r.sequence) counts[r.sequence]++;
+      if (r.buttonOrder === 'reveal_first') counts.reveal++;
+      else if (r.buttonOrder === 'ask_first') counts.ask++;
+    });
+    // Button order is a covariate in the primary analysis, so its balance is
+    // shown beside the sequence's — "confirm it is balanced before the first
+    // session opens" is a thing the panel has to make possible.
+    $('roster-stats').innerHTML = [
+      ['Codes', roster.length], ['Unused', counts.unused], ['In progress', counts.started],
+      ['Completed', counts.completed], ['Sequence A', counts.A], ['Sequence B', counts.B],
+      ['Ask on the left', counts.ask], ['Reveal on the left', counts.reveal]
+    ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
 
-    if (LOCAL) {
-      current.roster = codes.map(function (c) {
-        return { code: c.code, sequence: c.sequence, buttonOrder: c.buttonOrder, status: 'unused' };
-      });
-      saveLocalRuns(localRuns().map(function (r) { return r.id === current.id ? current : r; }));
-      renderRoster();
-      return;
-    }
-    var chain = Promise.resolve();
-    codes.forEach(function (c) { chain = chain.then(function () { return FB.putRosterCode(current.id, c.code, c.sequence, c.buttonOrder); }); });
-    chain.then(function () {
-      FB.audit(current.id, 'generate_roster', n + ' codes, prefix ' + prefix);
-      renderRoster();
-    }).catch(function (e) { alert('Could not write the roster: ' + (e && e.message || e)); });
-  }
+    var cols = rosterCols(params);
+    $('roster-table').innerHTML = roster.length
+      ? '<thead><tr>' + cols.map(function (c) {
+          var on = rosterSort.key === c.key;
+          return '<th class="sortable' + (on ? ' sorted' : '') + '" data-sk="' + c.key + '"' +
+            ' title="' + esc((c.title ? c.title + ' ' : '') + 'Click to sort.') + '">' +
+            esc(c.label) + '<span class="sarr">' + (on ? (rosterSort.dir > 0 ? '▲' : '▼') : '⇅') + '</span></th>';
+        }).join('') + '</tr></thead><tbody>' +
+        sortRoster(roster, cols).map(function (r) {
+          return '<tr>' + cols.map(function (c) {
+            return '<td' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + c.cell(r) + '</td>';
+          }).join('') + '</tr>';
+        }).join('') + '</tbody>'
+      : '<tbody><tr><td class="muted">No participants yet. In <b>open</b> roster mode a class-platform student ID enrols itself on first entry.</td></tr></tbody>';
 
-  function applyOverride() {
-    if (!current) { alert('Open a session first.'); return; }
-    var to = segGet('ros-override') || 'auto';
-    var reason = ($('ros-reason').value || '').trim();
-    if (to !== 'auto' && !reason) { alert('A reason is required: forced assignment is no longer pure randomisation, and the analysis has to say so.'); return; }
-    var log = (current.overrides || []).concat([{ t: Date.now(), to: to, reason: reason }]);
-    var assign = Object.assign({}, current.assign || {}, { nextEntrantOverride: to });
-    persist(current.id, { overrides: log, assign: assign }).then(function () {
-      current.overrides = log; current.assign = assign;
-      if (!LOCAL) FB.audit(current.id, 'entrant_override', to + ' — ' + reason);
-      $('ros-reason').value = '';
-      renderRoster();
+    $('roster-table').querySelectorAll('th[data-sk]').forEach(function (th) {
+      th.onclick = function () {
+        var k = th.dataset.sk;
+        if (rosterSort.key === k) rosterSort.dir = -rosterSort.dir;
+        else { rosterSort.key = k; rosterSort.dir = 1; }
+        paintRoster();
+      };
     });
   }
 
@@ -1257,32 +1595,62 @@
     if (LOCAL) { monRows = []; renderMonitor(); return; }
     unsubMon = FB.watchParticipants(current.id, function (list) { monRows = list || []; renderMonitor(); });
   }
+  // "Abandoned" was never observed — nobody tells us they have given up. It is
+  // this arithmetic: started − completed − (updated in the last half hour). With
+  // progress now mirrored to the participant record, an away participant can
+  // come back on any device and carry on, so the tile says what it actually
+  // knows — they have been AWAY for half an hour — and not that they are gone.
+  var AWAY_MS = 30 * 60 * 1000;
+  function fmtDur(ms) {
+    if (!ms) return '0m';
+    var m = Math.round(ms / 60000);
+    if (m < 60) return m + 'm';
+    var h = Math.floor(m / 60);
+    return h >= 24 ? Math.floor(h / 24) + 'd ' + (h % 24) + 'h' : h + 'h ' + (m % 60) + 'm';
+  }
   function renderMonitor() {
     var started = monRows.length;
     var completed = monRows.filter(function (r) { return r.completed; }).length;
-    var inProgress = monRows.filter(function (r) { return !r.completed && (Date.now() - (r.updatedAt || 0)) < 30 * 60 * 1000; }).length;
-    var abandoned = started - completed - inProgress;
+    var inProgress = monRows.filter(function (r) { return !r.completed && (Date.now() - (r.updatedAt || 0)) < AWAY_MS; }).length;
+    var away = started - completed - inProgress;
     var nA = monRows.filter(function (r) { return r.sequence === 'A'; }).length;
     var nB = monRows.filter(function (r) { return r.sequence === 'B'; }).length;
     var skew = Math.abs(nA - nB);
 
     $('mon-counters').innerHTML = [
-      ['Started', started], ['In progress', inProgress], ['Completed', completed], ['Abandoned', Math.max(0, abandoned)],
-      ['Sequence A', nA], ['Sequence B', nB]
-    ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('') +
+      ['Started', started, 'Participants who have claimed a code.'],
+      ['In progress', inProgress, 'Not finished, and their record was written in the last 30 minutes.'],
+      ['Completed', completed, 'They reached the end of the study.'],
+      ['Away 30+ min', Math.max(0, away),
+       'Not finished and nothing written for over 30 minutes. NOT a count of people who gave up: ' +
+       'it is started − completed − in progress, and any of them can come back and carry on from ' +
+       'exactly where they stopped, on this device or another one.'],
+      ['Sequence A', nA, 'Assigned the AI-off block first.'],
+      ['Sequence B', nB, 'Assigned the AI-on block first.']
+    ].map(function (s) {
+      return '<div class="stat-box" title="' + esc(s[2] || '') + '"><b>' + s[1] + '</b><span>' + esc(s[0]) + '</span></div>';
+    }).join('') +
       (skew > 3 ? '<div class="stat-box" style="background:#fff7ed;"><b>' + skew + '</b><span>sequence gap — force the next entrants</span></div>' : '');
 
     $('mon-table').innerHTML = monRows.length
-      ? '<thead><tr><th>Code</th><th>Sequence</th><th>Phase</th><th>Round</th><th>Active</th><th>Resumptions</th><th>Viewport</th><th>Flags</th><th></th></tr></thead><tbody>' +
+      ? '<thead><tr><th>Code</th><th>Sequence</th><th>Phase</th><th>Round</th><th>Active</th>' +
+        '<th title="How many times they came back to the study after leaving it.">Resumptions</th>' +
+        '<th title="Breaks between sittings: how many, and how long they were away in total. ' +
+        'A gap counts as a break only when it is at least ' + Math.round(CFG.BREAK_MIN_MS / 60000) +
+        ' minutes — a reload takes seconds.">Breaks</th>' +
+        '<th>Viewport</th><th>Flags</th><th></th></tr></thead><tbody>' +
         monRows.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); }).map(function (r) {
           var flags = [];
           if (r.viewport_width && current && current.ops && r.viewport_width < (current.ops.minViewport || 900)) flags.push('narrow');
           if ((r.resumptions || 0) > 0) flags.push('resumed');
+          if (r.resumed_from === 'cloud') flags.push('another device');
+          if (!r.completed && (Date.now() - (r.updatedAt || 0)) >= AWAY_MS) flags.push('away');
           if (r.completed) flags.push('done');
           return '<tr><td class="mono">' + esc(r.participant_code) + '</td><td>' + esc(r.sequence || '—') + '</td>' +
             '<td>' + esc(r.phase || '—') + '</td><td>' + (r.round_index || '—') + '</td>' +
             '<td>' + Math.round((r.active_ms || 0) / 60000) + ' min</td>' +
             '<td>' + (r.resumptions || 0) + '</td>' +
+            '<td>' + ((r.breaks_count || 0) ? r.breaks_count + ' · ' + fmtDur(r.break_total_ms || 0) : '—') + '</td>' +
             '<td>' + (r.viewport_width || '—') + '</td>' +
             '<td>' + esc(flags.join(', ')) + '</td>' +
             '<td><button class="link-btn" data-msg="' + esc(r.participant_code) + '">message</button></td></tr>';
@@ -1302,50 +1670,77 @@
   // whatever has been loaded; the counters above never scan it.
   function renderHealth() {
     var rows = [];
-    function add(label, value, warn) { rows.push({ label: label, value: value, warn: warn }); }
+    // `why` is the rule behind the ⚠ — a warning that does not say what it is
+    // warning about is just a mark on a screen. It is the row's tooltip, and it
+    // is shown in the cell whenever the check has actually tripped.
+    function add(label, value, warn, why) { rows.push({ label: label, value: value, warn: warn, why: why }); }
 
-    var actives = monRows.map(function (r) { return (r.active_ms || 0) / 60000; }).filter(function (v) { return v > 0; });
+    // COMPLETED sessions only. A participant who stopped after five minutes is
+    // not a fast one, and mixing them in drags the median toward whoever left;
+    // this row exists to answer "is the study the length we designed", which is
+    // a question about people who did the whole thing.
+    var doneRows = monRows.filter(function (r) { return r.completed; });
+    var actives = doneRows.map(function (r) { return (r.active_ms || 0) / 60000; }).filter(function (v) { return v > 0; });
     var medActive = med(actives);
-    add('Median active time per participant', medActive == null ? '—' : fmt(medActive, 1) + ' min',
-      medActive != null && (medActive < 30 || medActive > 70));
+    add('Median active time per COMPLETED participant',
+      medActive == null ? (monRows.length ? '— no completed sessions yet' : '—')
+        : fmt(medActive, 1) + ' min · ' + actives.length + ' session' + (actives.length === 1 ? '' : 's'),
+      medActive != null && (medActive < 30 || medActive > 70),
+      'Expected 30–70 minutes of active time for the whole study. Outside that band the task is running much ' +
+      'faster or much slower than it was designed for. Unfinished sessions are excluded.');
 
     if (built) {
       var durs = built.rounds.map(function (r) { return (r.duration_ms || 0) / 1000; });
       var medRound = med(durs);
-      add('Median time per round', medRound == null ? '—' : fmt(medRound, 1) + ' s', medRound != null && medRound < 20);
+      add('Median time per round', medRound == null ? '—' : fmt(medRound, 1) + ' s', medRound != null && medRound < 20,
+        'Under 20 seconds a round is being clicked through rather than played.');
 
       var q2 = built.participants.filter(function (p) { return p.quiz_qai_score_first_correct === false; }).length;
       var q2n = built.participants.filter(function (p) { return p.quiz_qai_score_first_correct != null; }).length;
-      add('Comprehension failures on the scoring question', q2n ? pct(q2 / q2n) : '—', q2n && (q2 / q2n) > 0.10);
+      add('Comprehension failures on the scoring question', q2n ? pct(q2 / q2n) : '—', q2n && (q2 / q2n) > 0.10,
+        'More than 10% getting the scoring question wrong first time means the instructions are not landing.');
 
       var q45 = built.participants.filter(function (p) {
         return p.quiz_qai_tell_first_correct === false || p.quiz_qai_outside_first_correct === false;
       }).length;
-      add('Comprehension failures on the jaggedness / frontier questions', q2n ? pct(q45 / q2n) : '—', q2n && (q45 / q2n) > 0.40);
+      add('Comprehension failures on the jaggedness / frontier questions', q2n ? pct(q45 / q2n) : '—', q2n && (q45 / q2n) > 0.40,
+        'More than 40% missing these means the AI screens are not landing — and they carry the mechanism.');
 
       var caps = built.rounds.filter(function (r) { return r.cap_hit; }).length;
       add('Query or reveal cap hit', built.rounds.length ? pct(caps / built.rounds.length) : '—',
-        built.rounds.length && (caps / built.rounds.length) > 0.03);
+        built.rounds.length && (caps / built.rounds.length) > 0.03,
+        'Over 3% of rounds hitting a cap means the caps are binding on behaviour, not just guarding against runaway clicking.');
 
       var seeded = built.rounds.filter(function (r) { return r.seed_shape !== 'OPEN' && r.scored; });
       var imm = seeded.filter(function (r) { return r.stopped_immediately; }).length;
       add('Immediate stop rate in seeded rounds', seeded.length ? pct(imm / seeded.length) : '—',
-        seeded.length && (imm / seeded.length) > 0.60);
+        seeded.length && (imm / seeded.length) > 0.60,
+        'Over 60% stopping on the first screen means the pre-opened geometry is too generous to search from.');
 
       var slow = built.participants.filter(function (p) { return p.median_decision_ms != null && p.median_decision_ms < 500; }).length;
-      add('Participants with a median decision under 500 ms', slow, slow > 0);
+      add('Participants with a median decision under 500 ms', slow, slow > 0,
+        'Half a second is not enough to read the plot: these participants are clicking, and the column disengaged flags them.');
 
       var blur = built.rounds.filter(function (r) { return (r.blur_total_ms || 0) > 120000; }).length;
-      add('Rounds with a blur longer than two minutes', blur, blur > 0);
+      add('Rounds with a blur longer than two minutes', blur, blur > 0,
+        'The window was left for over two minutes mid-round, so that round’s timings measure something else.');
     } else {
-      add('Round timing, comprehension, caps, stops', 'load the event log to compute', false);
+      add('Round timing, comprehension, caps, stops',
+        'press ⟳ Refresh health checks — these read the event log', false,
+        'These six checks are computed from the event log, which is far heavier than the participant records ' +
+        'the counters above use, so it is never fetched on its own. Pressing Refresh health checks loads it.');
     }
 
     var narrow = monRows.filter(function (r) { return r.viewport_width && r.viewport_width < ((current && current.ops && current.ops.minViewport) || 900); }).length;
-    add('Viewport below the minimum', narrow, narrow > 0);
+    add('Viewport below the minimum', narrow, narrow > 0,
+      'That many participants are on a window narrower than ops.minViewport (' +
+      ((current && current.ops && current.ops.minViewport) || 900) + 'px). The task is a picture, so a narrow ' +
+      'window is a different stimulus; they are blocked until they widen it.');
 
     $('mon-health').innerHTML = '<tbody>' + rows.map(function (r) {
-      return '<tr class="' + (r.warn ? 'warn' : '') + '"><td>' + esc(r.label) + (r.warn ? ' ⚠' : '') + '</td><td>' + esc(String(r.value)) + '</td></tr>';
+      return '<tr class="' + (r.warn ? 'warn' : '') + '" title="' + esc(r.why || '') + '">' +
+        '<td>' + esc(r.label) + (r.warn ? ' <span title="' + esc(r.why || '') + '">⚠</span>' : '') + '</td>' +
+        '<td>' + esc(String(r.value)) + (r.warn && r.why ? '<div class="why">' + esc(r.why) + '</div>' : '') + '</td></tr>';
     }).join('') + '</tbody>';
   }
   function med(a) {
@@ -1475,6 +1870,13 @@
   function renderWording() {
     var host = $('wording-body');
     if (!host) return;
+    note('wd-target', editingId
+      ? 'These words belong to session <b>' + esc((current && current.code) || editingId) + '</b> &mdash; ' +
+        esc((current && current.name) || 'untitled') + '. <b>Save changes to ' +
+        esc((current && current.code) || 'this session') + '</b> on the Parameters screen writes them.'
+      : 'These words belong to the <b>new session</b> the Parameters screen is composing, and are saved when ' +
+        'you create it. To edit an existing session&rsquo;s wording, open it from its card on the ' +
+        '<b>Sessions</b> screen first.', false);
     var q = ($('wd-search') && $('wd-search').value || '').trim().toLowerCase();
     var onlyChanged = !!($('wd-changed') && $('wd-changed').checked);
     var groups = Content.outline(), html = [], shown = 0;
@@ -1797,12 +2199,26 @@
         tag: 'mapping #' + s.mapping_index
       });
 
+      // What the AI knows is the UNION of its private anchors, the pre-opened
+      // positions and everything the participant has revealed — that is how
+      // Ai.anchorSet builds it, in this preview and in both backends alike, so
+      // the dashed line above already bends through the pre-opened squares.
+      // Reporting only the private K here (which this caption used to do) named
+      // a smaller AI than the one the participant actually meets.
+      var privN = (s.ai_anchors || []).length, startN = anchors.length;
+      var shared = privN + pre.length - startN;   // a pre-opened position it already knew
       card.querySelector('.rg-foot').innerHTML =
         (pre.length
-          ? 'Open at the start: ' + pre.map(function (x) { return 'p' + x.pos + ' = <b>' + x.val + '</b>'; }).join(' · ')
+          ? 'Open at the start (the ' + pre.length + ' position' + (pre.length === 1 ? '' : 's') +
+            ' the participant knows): ' +
+            pre.map(function (x) { return 'p' + x.pos + ' = <b>' + x.val + '</b>'; }).join(' · ')
           : 'Nothing pre-opened — the participant starts from a blank line.') +
         '<br>Best prize <b>' + truth[best - 1] + '</b> at position ' + best +
-        ' · the AI knows ' + (s.ai_anchors || []).length + ' position' + ((s.ai_anchors || []).length === 1 ? '' : 's') + ' exactly';
+        ' · the AI knows <b>' + startN + '</b> position' + (startN === 1 ? '' : 's') + ' exactly at the start' +
+        (pre.length ? ' (' + privN + ' private + ' + pre.length + ' pre-opened' +
+          (shared > 0 ? ', ' + shared + ' of them the same position' : '') + ')' : '') +
+        ', and one more with every prize the participant reveals — up to ' +
+        (startN + a.params.costs.revealCap) + ' of ' + N + '.';
     });
   }
 

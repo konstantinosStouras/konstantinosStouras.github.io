@@ -13,7 +13,9 @@
          and the same value is carried as `pid`, so the two datasets join on one
          key and no second identifier is ever invented;
        · a background question the platform already answered is NOT asked again,
-         and the platform's answer travels with the row, flagged as its source;
+         and the platform's answer travels with the row, flagged as its source
+         — and since field of study was dropped (2026-08) that is EVERY item
+         this study asks, so the phase shows no screen at all on a launch;
        · nothing else from the profile is stored — no name, no e-mail address.
 
      STUDY → PLATFORM
@@ -107,38 +109,56 @@ ok(!leak.email, 'nor their e-mail address — §11 keeps the study to anonymous 
 
 // ── registration takes what the platform already knows ────────────────────
 // Background is asked ONCE, before the study (it used to be the exit survey's
-// Part F). On a platform launch every item the profile covers is answered from
-// it and not shown; only what the platform does not collect is asked here.
+// Part F). Every item this study asks — level of study, age band, gender — is
+// one the platform's own registration answers, so on a launch there is nothing
+// left to ask and the phase passes through without a screen. Field of study was
+// the one exception until it was dropped in 2026-08 as irrelevant to the study.
+// A STANDALONE participant is still asked all three (tools/smoke.mjs).
 await pg.locator('#consent-box').check();
 await pg.locator('#btn-consent').click();
 await pg.waitForSelector('#s-registration.active, #s-instructions.active', { timeout: 20000 });
-const onReg = await pg.locator('#s-registration.active').count();
-ok(onReg === 1, 'consent leads into the registration phase, before the instructions');
 
-const regAsked = await pg.$$eval('#reg-body .survey-q', els => els.map(e => e.dataset.q));
 const regItems = await pg.evaluate(() =>
   window.SVContent.REGISTRATION.map(q => ({ id: q.id, key: q.platformKey })));
 const covered = regItems.filter(q => ['levelOfStudy', 'age', 'gender'].indexOf(q.key) >= 0);
-ok(covered.length === 3, 'three background items are ones the platform already collects');
-ok(covered.every(q => regAsked.indexOf(q.id) < 0),
-  'and none of them is asked again — the two datasets carry ONE answer each',
-  'still asked: ' + covered.filter(q => regAsked.indexOf(q.id) >= 0).map(q => q.id).join(', '));
-const notCovered = regItems.filter(q => q.key === 'fieldOfStudy');
-ok(notCovered.every(q => regAsked.indexOf(q.id) >= 0),
-  'a background item the platform does NOT collect (field of study) is still asked');
+ok(covered.length === regItems.length && covered.length === 3,
+  'the three background items this study asks are ALL ones the platform already collects',
+  regItems.map(q => q.id + '/' + q.key).join(', '));
+// Field of study was the one item the platform does not answer. With it gone
+// (2026-08, irrelevant to this study) a platform launch has nothing left to
+// ask, so the phase passes through WITHOUT A SCREEN rather than showing an
+// empty form — the behaviour showRegistration has always had for that case,
+// which until now no launch could reach.
+ok((await pg.locator('#s-registration.active').count()) === 0 &&
+   (await pg.locator('#s-instructions.active').count()) === 1,
+  'so consent leads straight to the instructions — no registration screen is shown at all');
+const regState = await pg.evaluate(() => {
+  const s = JSON.parse(localStorage.getItem('searchv2:v3:state:' + window.SVApp.state().code) || '{}');
+  return { done: s.regDone === true, ms: (s.phaseMs || {}).registration };
+});
+ok(regState.done === true,
+  'and the phase is marked done, so nothing puts the items back at the end of the survey either');
+// A phase nobody saw must leave no dwell time. The workbook's rule is that an
+// empty cell means not applicable and a 0 never does, so routing INTO the phase
+// and bouncing out would export a real zero for a screen that was never painted.
+ok(regState.ms === undefined,
+  'and it leaves no phase_ms_registration at all — a screen nobody saw exports blank, not 0',
+  String(regState.ms));
+ok(!regItems.some(q => q.key === 'fieldOfStudy'),
+  'field of study is not asked anywhere — the study does not collect it');
 
 const bg = await pg.evaluate(() => window.Logger.getEvents()
   .filter(e => e.event === 'registration' && String(e.question_id).indexOf('platform_') === 0)
   .map(e => e.question_id + '=' + e.answer));
 ok(bg.length >= 3, 'the platform-supplied background travels with the data, flagged as its source', bg.join(' | '));
 ok(bg.some(x => /platform_levelOfStudy=Undergraduate/.test(x)), 'and carries the platform’s own answer verbatim');
+// Nothing was thrown away by dropping the question: the platform's registration
+// has no field-of-study answer set either (simulation/answers.js), which is
+// exactly why it was the one item a launch still had to ask.
+ok(!bg.some(x => /platform_fieldOfStudy/.test(x)),
+  'and no field-of-study row — the platform never collected one to carry', bg.join(' | '));
 
 // ── the exit survey no longer asks background at all ──────────────────────
-// Finish the phase first: leaving it unsubmitted is the MID-SESSION case, where
-// app.js deliberately puts the items back at the end of the survey rather than
-// losing them (tools/migration-guard.mjs pins that path).
-await pg.locator('#btn-reg').click();
-await pg.waitForSelector('#s-instructions.active', { timeout: 15000 });
 await pg.evaluate(() => {
   // Jump to the survey through the app's own state, exactly as a resume would.
   const key = 'searchv2:v3:state:' + window.SVApp.state().code;

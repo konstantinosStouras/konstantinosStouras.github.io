@@ -444,10 +444,15 @@
       var P = byP[code];
       var start = P.events[0], end = P.events[P.events.length - 1];
       var sessionEnd = null, sessionStart = null, survey = {}, quiz = {}, reg = {};
+      // Every return to the study is one `resume` row carrying the gap since the
+      // participant was last seen. The counts and totals are DERIVED here, from
+      // those raw gaps — nothing in the client adds them up.
+      var gaps = [];
 
       P.events.forEach(function (e) {
         if (e.event === 'session_end') sessionEnd = e;
         if (e.event === 'session_start') sessionStart = e;
+        if (e.event === 'resume') { var g = num(e.duration_ms); if (g != null) gaps.push(g); }
         if (e.event === 'survey' && e.question_id) survey[e.question_id] = e.answer;
         else if (e.event === 'registration' && e.question_id) reg[e.question_id] = e.answer;
         if (e.event === 'comprehension' && e.question_id) {
@@ -462,6 +467,8 @@
 
       var rec = {};
       if (sessionEnd && sessionEnd.info) { try { rec = JSON.parse(sessionEnd.info) || {}; } catch (e) {} }
+      var breakMin = (CFG && CFG.BREAK_MIN_MS) || 300000;
+      var breaks = gaps.filter(function (g) { return g >= breakMin; });
 
       var myRounds = roundsBy[code] || [];
       var myDecisions = decisionsBy[code] || [];
@@ -518,7 +525,15 @@
         device_pixel_ratio: rec.device_pixel_ratio || (start && start.dpr) || null,
         input_mode: rec.input_mode || null,
         user_agent_parsed: rec.user_agent_parsed || ((start && start.ua_browser) ? start.ua_browser + '/' + start.ua_os : null),
-        resumptions: rec.resumptions != null ? rec.resumptions : null,
+        resumptions: gaps.length ? gaps.length : (rec.resumptions != null ? rec.resumptions : null),
+        // A gap counts as a break BETWEEN SITTINGS only when it is at least
+        // CONFIG.BREAK_MIN_MS (CFG here); below that it is a reload. `longest_break_ms`
+        // above is a different quantity — the longest quiet stretch INSIDE a
+        // sitting, measured between consecutive logged events.
+        breaks_count: breaks.length,
+        break_total_ms: breaks.reduce(function (a, b) { return a + b; }, 0),
+        longest_sitting_break_ms: breaks.length ? Math.max.apply(null, breaks) : null,
+        sittings: 1 + breaks.length,
         completed: !!(rec.completed || sessionEnd),
         rounds_done: myRounds.length,
         scored_rounds_done: scored.length,
@@ -567,6 +582,23 @@
       Content.registrationColumns().forEach(function (sid) {
         var v = reg[sid] != null ? reg[sid] : (survey[sid] != null ? survey[sid] : null);
         row['reg_' + sid] = v;
+      });
+      // A RETIRED question keeps exporting the answers it already collected.
+      // The column list is the CURRENT registration block, so retiring an item
+      // — field of study went in 2026-08 — would otherwise drop it from the
+      // Participants sheet of every future export, including a re-export of a
+      // session that holds real answers to it. They would survive only as raw
+      // event rows, and a re-export would quietly differ from the one taken
+      // last term. So any answer actually present under a retired background id
+      // gets its column back, from either source (`survey` covers the Part F
+      // era, where the same ids were exit-survey rows). A session that never
+      // held one gains no empty column, so nothing accumulates. `f_` is the
+      // background block's own id namespace — no survey or quiz item uses it,
+      // which tools/selftest.js pins.
+      [reg, survey].forEach(function (src) {
+        Object.keys(src).forEach(function (k) {
+          if (/^f_/.test(k) && row['reg_' + k] === undefined) row['reg_' + k] = src[k];
+        });
       });
       Object.keys(reg).forEach(function (k) {
         if (k.indexOf('platform_') === 0) row['reg_' + k] = reg[k];

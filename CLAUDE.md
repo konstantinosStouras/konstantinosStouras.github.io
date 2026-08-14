@@ -2433,16 +2433,40 @@ pre-opened moves — smoke.mjs and data-audit.mjs now CHOOSE a revealable positi
 button.
 
 **Registration first; the exit survey no longer asks background** (owner
-2026-08). The four background items (field of study, year/level, age band,
-gender) moved out of the survey's Part F into their OWN registration phase
-between consent and the instructions — asked once, before the task, all
-optional (`Content.REGISTRATION`, `showRegistration` in app.js, screen
+2026-08). The background items (year/level, age band, gender) moved out of the
+survey's Part F into their OWN registration phase between consent and the
+instructions — asked once, before the task, all optional
+(`Content.REGISTRATION`, `showRegistration` in app.js, screen
 `s-registration`). On a Simulation Platform launch every item the platform's
 registration already answered is NOT re-asked: it travels as
-`platform_<field>` and, when the platform covers all of them, the phase passes
-through with no screen at all. The ids are unchanged from the Part F era and
-the exporter reads either source into the same `reg_<id>` column, so sessions
-already collected keep their background. Pinned by `tools/platform-guard.mjs`.
+`platform_<field>`. The ids are unchanged from the Part F era and the exporter
+reads either source into the same `reg_<id>` column, so sessions already
+collected keep their background. Pinned by `tools/platform-guard.mjs`.
+**FIELD OF STUDY was removed** (owner 2026-08, "irrelevant") — the question and
+its six options, everywhere. Every other consumer is DERIVED from the
+`REGISTRATION` array (`registrationColumns()` → the `reg_<id>` workbook columns,
+`outline()` → the Wording tab's editable fields, `resolve()` → the per-session
+copy), so the deletion is one array entry; `fieldOfStudy` left
+`PLATFORM_BACKGROUND` with it, because the platform's own registration has no
+such answer set either (`simulation/answers.js`) — which is exactly why it was
+the ONE item a launch still had to ask. Three consequences, each pinned:
+(1) a platform launch now has **nothing left to ask**, so the phase passes
+through with **no screen at all** — no longer a contingency but the only
+behaviour a launch can have (a standalone participant is still asked the three);
+(2) **consent routes PAST a phase with nothing to ask** rather than entering it
+and bouncing out, because `goto` stamps the phase either way and the workbook
+would ship `phase_ms_registration = 0` for a screen a whole cohort never saw —
+against its own rule that an empty cell, never a 0, means not applicable
+(`showRegistration`'s pass-through, now reachable only on a resume, deletes the
+phantom stamp too but keeps a genuine earlier dwell);
+(3) a **retired question keeps exporting the answers it already collected** —
+the column list is the CURRENT block, so `admin/export.js` sweeps any answer
+held under a retired background id (from `reg` or, for the Part F era,
+`survey`) back into its `reg_<id>` column. Without it, re-exporting a session
+collected under the old shape would quietly differ from the export taken last
+term — at the study level exactly what the panel's own "clone, do not edit" rule
+forbids at the session level. `f_` is the background block's id namespace and
+selftest pins that nothing else uses it.
 
 **The two paid buttons are the primary outcome, so the interface may not tilt
 them** (owner 2026-08, a written spec). "Ask the AI" and "Reveal" are ONE
@@ -2533,12 +2557,13 @@ nested arrays. **Every derived field of §16.8 is computed offline in
 `admin/export.js` and nowhere else.**
 
 **Admin panel** at `/lab/search-v2/admin/`, seven tabs over the brief's six
-screens: Sessions · Parameters (+ Consequences beside it) · Roster · Live monitor ·
+screens: Sessions · Parameters (+ Consequences beside it) · Participants · Live
+monitor ·
 Data & preview · Design notes · Wording. The tab switcher derives its pane list
 from the buttons themselves — a hard-coded list silently fails to show any screen
 added after it was written, which is exactly how the Wording pane first shipped
 invisible. Parameters carries an eighth group, **Interface and engagement**
-(button order, the two cost colours, encouragement); the Roster reports the
+(button order, the two cost colours, encouragement); the Participants screen reports the
 ask-left / reveal-left balance beside the sequence split; and the Wording tab
 covers the registration questions and every encouragement message, like every
 other word a participant reads. **The UI calls the unit a SESSION** (28 rounds: 4 warm-up + 24
@@ -2555,6 +2580,52 @@ default / Restore built-in default (ghost). Export is one workbook (ReadMe, **Di
 Specs, Decisions, Rounds, Participants, Slider, Attention, Raw) plus the three
 CSVs, bundling the session's frozen configuration and a checksum; `interrupted`
 and `disengaged` are COLUMNS, not filters.
+**The third tab is PARTICIPANTS, and its status is read from the participant, not
+from the roster document** (owner 2026-08: "many participants have fully completed
+the game but the data shows them still as started"). The roster document learns
+one thing — that a code was CLAIMED, stamped `'started'` at entry — and nothing
+ever wrote to it again, so every finished participant read as in-progress for the
+rest of the session's life (47 of 47 on the live session, 0 completed). Two
+halves to the fix: `derivedStatus` in admin.js joins each roster row to that
+participant's own session record (`completed`, written on the Done screen) and
+prefers it, which HEALS every session already recorded; and `showDone` now calls
+`SVFirebase.markRosterCompleted`, a best-effort merge write allowed by the
+existing rule (`request.resource.data.claimedByUid == request.auth.uid` — it
+re-states the claiming uid, so no rules republish), which closes the loop going
+forward. The panel must keep deriving even so: the write is deliberately
+non-fatal and a refusal must never surface on a participant's Done screen. A new
+**Round** column reads `18/24 (75%)` — SCORED rounds finished out of the scored
+rounds this session assigns (`scoredDone`/`scoredTotal`, derived from the
+participant record's `rounds_done`, which counts warm-ups too, against THIS
+session's own `warmupPerBlock`/`scoredPerBlock` rather than the default 4 + 24;
+warm-ups head each of the two blocks, per `Specs.orderPlan`). A code with no
+session record shows `—`, never `0/24`: it has finished nothing, but it has not
+finished zero rounds either. A session record whose roster document is missing is
+appended as its own row rather than vanishing. **The screen's two side cards were
+REMOVED** (owner: "I will never use it") — code generation and the next-entrant
+override — so the table spans the full width; the override is still edited in
+Parameters (Assignment → Next entrant, the one control that stays unlocked) and
+its log still ships with the export, but a CONSEQUENCE is that `ops.rosterMode =
+'roster'` ("roster only") now has no way to be given codes, so leave it on Open,
+where a class-platform student ID enrols itself. Only the UI word changed: the
+`roster` collection, the `runId__CODE` document ids and the tab's own
+`data-tab="roster"` are untouched, exactly as SESSION/`run_id` is handled above.
+**The button column NAMES the button** (owner 2026-08: "what does the column
+Buttons mean really?"): heading **Left button**, cells "Ask the AI" / "Reveal"
+— which of the two paid buttons sat on the LEFT for that participant, assigned
+once at enrolment and fixed for the session, the covariate `button_order` — with
+a tooltip and a line of lead text saying so. The CSV keeps the raw
+`button_order` beside the readable `left_button`. **Every heading sorts, and
+reverses on a second press.** One `rosterCols(params)` spec owns each column's
+heading, its cell AND its sort key, so a sorted table can never order itself by
+something other than what it displays; `sortRoster` sinks null sort values to the
+bottom in BOTH directions (an unclaimed code has nothing to compare, which is not
+a zero) and decorates with the load index so ties are stable and a re-click is a
+clean reversal. Status sorts unused → started → completed — by how far they got,
+since alphabetical order here is an accident. Painting was split from reading
+(`paintRoster` vs `renderRoster`), so a sort click re-renders what is loaded
+instead of firing two more collection reads; the CSV exports in the displayed
+order. Covered by `tools/admin-smoke.mjs` (199).
 **The Dictionary sheet describes EVERY column** of Decisions/Rounds/Participants
 in a sentence + a type, generated from `admin/dictionary.js`; `selftest.js`
 FAILS when a column is exported without an entry, so the two can never drift —
@@ -2639,7 +2710,60 @@ created a draft, `app.js` treats a session as open when `entryOpen !== false` OR
 enterable before the validation gate had ever run. `.made-box` is deliberately
 NOT named `.code-box`: `../styles.css` already has one (the participant app's
 completion code) and the admin page loads it. Covered by `admin-smoke.mjs`
-(161 checks).
+(178 checks).
+**The parameter form COMPOSES a session; it does not silently rewrite one**
+(owner report 2026-08: "changing the parameters and hitting Save affects all the
+previously opened sessions"). Two variables that had been kept as one:
+`current` is the session the READ screens are on (roster, monitor, data, notes)
+and the panel picks one at load so they have something to show; `editingId` is
+what the parameter form and the Wording tab WRITE to, and `null` there means "a
+new session". Binding the form to the panel's own pick turned the obvious act —
+set the parameters for my next session, press Save — into an unconfirmed
+overwrite of whichever session had been picked, with no summary and no new
+session created (reproduced: reveal cost 4 → 9 landed on the existing session
+and nothing was added). So `selectRun(run, {form:false})` is what the fallback
+pick now uses, and the form is bound to a session ONLY by opening it from its
+card. Save therefore has two clearly-separated jobs, said on the button, in a
+banner above the form (`#edit-note`) and again in the confirmation: **Create
+session** — which asks for the **name and the Session ID in the create dialog
+itself** (`createFieldsHTML`/`readCreateFields`, same rules as the Sessions
+card, refusing a short or taken ID without closing the dialog) and then shows
+the created box with Copy link / Open entry — or **Save changes to `<CODE>`**,
+which names the session in a confirm before rewriting it. The Wording tab
+follows the same target and says so (`#wd-target`), since it is saved by the
+same button.
+**The 4-round demo session** (`demoParams`/`demoContent`/`createDemoRun`, the
+"🧪 Create the 4-round demo session" button on the Sessions screen; code `TEST`,
+name "For testing purposes"): a session for showing a class how the game works
+before they play the real one — **2 rounds without the AI, then 2 with it**, and
+in each half **one round that starts empty followed by one with three prizes
+already open**. Every departure from the defaults is deliberate and load-bearing:
+0 warm-ups + 2 scored a block (= 4 rounds), 1 open + 1 seeded with
+`shuffleWithinBlock:false` so the empty round always comes first,
+`nextEntrantOverride:'A'` so EVERY entrant gets the no-AI half first (the control
+is labelled "next entrant" but is never consumed, so it holds for the session —
+the crossover would otherwise send half the room the other way), the open round
+on the DENSE AI and the seeded one on SPARSE so a class sees both faces of it,
+the 24-question exit survey off and the debrief on, and — the one that matters
+for the data — **its own `generatorSeed`**, because specs are drawn from a pool
+shuffled by that seed and a demo sharing it would show the class the real
+session's round 1. Pressing the button twice refuses rather than making a second
+`TEST`. Two things had to change for a warm-up-free session to read correctly:
+`showBlockIntro` no longer announces "the next 0 rounds are practice" (a
+warm-up-free block introduces its scored rounds directly, in both the opening
+and the halfway branch), and the one instruction screen that counts practice
+rounds is reworded for this session through the per-session Wording system
+rather than by touching the study's own text.
+**A rehearsal reads the session it was launched from.** "🧪 Test round" is
+pressed on a particular card to see what THAT session gives a participant, but
+`boot()` skipped the run read whenever `PREVIEW` was set, so the sandbox always
+rehearsed the built-in defaults — a session that differs from them (the 4-round
+demo, say) could not be checked before it was shown to anyone. The read is now
+unconditional on the code; nothing is written either way (startPreview runs on a
+local backend with `run_id` null and every writer checks `PREVIEW` first), and
+`startPreview` passes the run's own `specSeed`, so a server-mode session — whose
+specs never reach the browser — rebuilds the same rounds locally instead of a
+different set drawn from the default seed.
 **A session is summarised before it can bite** (`summaryBoxes`/`askSummary`):
 CREATING freezes the pool and all 28 specs under its seeds, and OPENING ENTRY
 starts the lock, so both put the whole configuration in front of the admin first
@@ -2658,6 +2782,66 @@ truth and the AI curve exist in the participant build only as debug overlays
 behind the preview key, the anchors never reach a live browser in server mode,
 and `tools/smoke.mjs` asserts on a LIVE round that `#plot` holds no `.gt-line`,
 no `.ai-line`, no `.anchor-dot` and that `#testview` is not displayed.
+
+**A participant who comes back continues where they left off — on ANY device**
+(owner 2026-08). Resume was localStorage-only, so a returning participant whose
+browser had been cleared, or who came back on their phone, started the study
+again from consent. Their progress is now mirrored to their participant record
+as **`state_json`** on every save (alongside, never inside, `sessionRecord()` —
+that object is also the body of the `session_end` event, and a copy of the whole
+state in the log would be huge and redundant), and the boot reads it back after
+the claim. It continues from whichever copy got **FURTHER** —
+`progressOf`/`furtherAlong`: completed, then rounds finished, then phase, and
+only then the clock — so a sync that never landed can never replay finished
+rounds, in either direction. Carrying the state is safe because S holds only
+what the participant has already SEEN (their answers, their own queries and
+reveals, the values they paid for); the mapping and the AI's private anchors are
+not in it and must never be put there. Reading it on a new device needs the
+`firestore.rules` change that ships with it — a new browser is a new anonymous
+uid, so `data.uid` cannot be the test on that first read; the test is the roster
+document with the SAME id (`runId__CODE`), which `claimCode` rebinds on a resume,
+hence the read happens AFTER the claim. **Republish the rules**; until then the
+fetch is refused and the participant falls back to their own browser's copy,
+which is the old behaviour. Deliberately NOT resumed mid-way: an OPEN round,
+which still restarts from its beginning and is flagged `interrupted` — a round is
+one uninterrupted decision sequence and its timings are the measure. Guards: a
+6 s `CONFIG.RESUME_FETCH_MS` timeout so a slow network cannot strand anyone on a
+spinner, `getParticipant` checked by name (a cached older `svfirebase.js` must
+fall back, not die), a 400 KB blob cap, and nothing written in PREVIEW.
+**Resumptions and BREAKS BETWEEN SITTINGS are tracked** (same request): `save()`
+stamps `lastSeenAt`, and leaving stamps it too (`stampSeen` on
+`pagehide`/`visibilitychange`) so a break is measured from when they actually
+left rather than from the last 30 s heartbeat. `stampSeen` writes **only the
+timestamp onto whatever is stored**, never this tab's whole state — a second tab
+may have gone further, and rewriting S wholesale on the way out would push its
+progress back (that is also what made every localStorage-editing test resume into
+the wrong phase). Every return logs a `resume` RECORD row carrying the raw gap
+and where the progress came from (`local`/`cloud`); a gap ≥ `CONFIG.BREAK_MIN_MS`
+(5 min) is a break rather than a reload, and `admin/export.js` derives
+`breaks_count`/`break_total_ms`/`longest_sitting_break_ms`/`sittings` from those
+raw gaps (with Dictionary entries — `selftest.js` fails without them). The live
+monitor shows Resumptions beside a **Breaks** column. `logout()` sets `wiped`,
+which silences both writers — it promises to erase every trace on the device, and
+a stamp written a millisecond into the navigation would put the state key back.
+**The "Abandoned" tile is now "Away 30+ min"** (owner: "how do you know 15 users
+have abandoned?"): nothing observes abandonment — it is
+`started − completed − (record written in the last 30 min)`, and with
+cross-device resume anyone in it can come back and carry on, so the tile says
+what it actually knows. Every monitor tile and health check now carries the rule
+behind it (`why`, shown in the row when the ⚠ fires), the event-log placeholder
+names the button that computes it, and **the median active time counts COMPLETED
+sessions only** — someone who stopped after five minutes is not a fast
+participant, and the row exists to answer "is the study the length we designed".
+**The round gallery's caption reports what the AI ACTUALLY knows** (owner
+2026-08: "it says the AI knows 10 points; it knows 13"): the anchor set is the
+UNION of its private anchors, the pre-opened positions and every prize revealed
+so far — that is `Ai.anchorSet`, in the preview and in BOTH backends, which is
+why the dashed line already bent through the pre-opened squares — but the caption
+printed the private K alone. It now reads "the AI knows **13** positions exactly
+at the start (10 private + 3 pre-opened), and one more with every prize the
+participant reveals", counting a shared position once, and the pre-opened list
+above it is labelled as what the PARTICIPANT knows. Behaviour unchanged; only the
+label was wrong.
 
 **Firestore layout (§17.3):** `runs` · `runPublic` · `runCodes` · `runCounts` ·
 `roster` · `participants` (+ a server-only `rounds` subcollection) · `events` ·
@@ -2769,9 +2953,9 @@ the debrief prose still saying the AI knows 4 positions, and `dictionary.js`'s
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (299) ·
-`tools/smoke.mjs` (a whole 28-round session) ·
-`tools/admin-smoke.mjs` (161) · `tools/platform-guard.mjs` (28) ·
+`node lab/search-v2/tools/selftest.js` (307) ·
+`tools/smoke.mjs` (212 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
+`tools/admin-smoke.mjs` (199) · `tools/platform-guard.mjs` (30) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its
 participants, and the drift guard that `app.js` reads content only through the
 resolved copy: one `Content.SURVEY` slipping back would silently ignore that

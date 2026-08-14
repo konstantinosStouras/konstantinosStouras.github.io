@@ -219,19 +219,9 @@
           <div class="plot-wrap"><div id="plot"></div></div>
           <div class="legend" id="legend"></div>
 
-          <!-- The round in four numbers, under the plot where there is room to
-               make them legible. The left panel keeps the itemised ledger; this
-               is the headline, and NET VALUE is the one that matters. -->
-          <div class="score-band" id="score-band">
-            <div class="sb"><span class="sb-l">Best prize found</span><span class="sb-v" id="sb-best">&mdash;</span></div>
-            <div class="sb"><span class="sb-l">Spent revealing</span><span class="sb-v cost" id="sb-reveal">0</span></div>
-            <div class="sb" id="sb-ai-wrap"><span class="sb-l">Spent asking the AI</span><span class="sb-v cost" id="sb-ai">0</span></div>
-            <div class="sb net"><span class="sb-l">Net value if you stop right now</span><span class="sb-v" id="sb-net">&mdash;</span></div>
-          </div>
-
-          <div class="answer-flash" id="answer-flash"></div>
-          <div class="testview" id="testview" style="display:none;"></div>
-
+          <!-- The position picker sits directly under the plot it points at,
+               ABOVE the numbers: choose where you are looking, read what the
+               round is worth, then act. The two paid buttons follow below. -->
           <div class="controls">
             <span class="small muted">Position</span>
             <button class="btn btn-ghost btn-sm arrow" id="btn-pos-left" title="Previous position" aria-label="Previous position">&#8592;</button>
@@ -241,6 +231,23 @@
             <input type="number" id="pos-input" min="1" max="100" value="50" aria-label="Selected position" />
           </div>
           <div class="note warn" id="cap-note" style="display:none;"></div>
+
+          <!-- The round in four numbers, under the plot where there is room to
+               make them legible. The left panel keeps the itemised ledger; this
+               is the headline, and NET VALUE is the one that matters — so it
+               reads FIRST, in green, then the best prize found, then the two
+               running costs. Those two are cumulative totals for the round, and
+               the labels say so: "Spent revealing" was read as the cost of the
+               last reveal. -->
+          <div class="score-band" id="score-band">
+            <div class="sb net"><span class="sb-l">Net value if you stop right now</span><span class="sb-v" id="sb-net">&mdash;</span></div>
+            <div class="sb"><span class="sb-l">Best prize found</span><span class="sb-v" id="sb-best">&mdash;</span></div>
+            <div class="sb"><span class="sb-l">Total cost of revealing</span><span class="sb-v cost" id="sb-reveal">0</span></div>
+            <div class="sb" id="sb-ai-wrap"><span class="sb-l">Total cost of asking the AI</span><span class="sb-v cost" id="sb-ai">0</span></div>
+          </div>
+
+          <div class="answer-flash" id="answer-flash"></div>
+          <div class="testview" id="testview" style="display:none;"></div>
         </div>
 
       </div>

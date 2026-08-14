@@ -87,7 +87,8 @@ ok(/Local preview/.test(await pg.locator('#scope-note').innerText()), 'and says 
 // ── the seven screens ──────────────────────────────────────────────────────
 const tabs = await pg.$$eval('.tab', els => els.map(e => e.dataset.tab));
 ok(JSON.stringify(tabs) === JSON.stringify(['runs', 'params', 'roster', 'monitor', 'data', 'notes', 'wording']),
-  'the panel is Sessions · Parameters · Roster · Live monitor · Data & preview · Design notes · Wording', tabs.join(','));
+  'the panel is Sessions · Parameters · Participants · Live monitor · Data & preview · Design notes · Wording ' +
+  '(the third tab keeps its `roster` id, which is what the data calls it)', tabs.join(','));
 ok(await shown('tab-runs'), 'it opens on the Runs screen');
 
 // ── Screen 2 + 3 · parameters beside consequences ─────────────────────────
@@ -251,45 +252,99 @@ ok(/bot rows in a real export: 0/.test(dry),
   'and proves bot rows are excluded from a real export (§17b)');
 ok(/badge green/.test(await pg.locator('#dryrun-out').innerHTML()), 'and reports a healthy export');
 
-// ── Screen 4 · roster ─────────────────────────────────────────────────────
+// ── Screen 4 · participants ───────────────────────────────────────────────
+// Seed the local session with three codes and the two session records they
+// would have produced. P002 is the bug this screen used to have: a participant
+// who reached the end while their roster document still said 'started'.
+await pg.evaluate(() => {
+  const key = 'searchv2:v3:admin:local';
+  const list = JSON.parse(localStorage.getItem(key) || '[]');
+  list[0].roster = [
+    { code: 'P001', sequence: 'A', buttonOrder: 'ask_first', status: 'started', claimedByUid: 'u1', claimedAt: Date.now(), autoEnrolled: true },
+    { code: 'P002', sequence: 'B', buttonOrder: 'reveal_first', status: 'started', claimedByUid: 'u2', claimedAt: Date.now(), autoEnrolled: true },
+    { code: 'P003', sequence: 'A', buttonOrder: 'reveal_first', status: 'unused' }
+  ];
+  list[0].participants = [
+    // 22 rounds finished = both warm-up pairs plus 18 scored ones.
+    { participant_code: 'P001', rounds_done: 22, completed: false },
+    { participant_code: 'P002', rounds_done: 28, completed: true }
+  ];
+  localStorage.setItem(key, JSON.stringify(list));
+});
+await pg.reload();
+await pg.waitForSelector('#a-dash.active');
 await tab('roster');
-await pg.fill('#ros-n', '90');
-await pg.locator('#btn-ros-gen').click();
-await pg.waitForTimeout(600);
-const stats = await pg.locator('#roster-stats').innerText();
-ok(/90/.test(stats), '90 codes generated');
-const cells = await pg.$$eval('#roster-table tbody tr', els => els.map(tr => ({
-  seq: tr.children[1].textContent.trim(), btn: tr.children[2].textContent.trim()
+await pg.waitForTimeout(400);
+
+ok((await pg.locator('.tab[data-tab="roster"]').innerText()).trim() === 'Participants',
+  'the screen is called Participants — the `roster` id and collection keep that name in the data');
+const heads = await pg.$$eval('#roster-table thead th',
+  els => els.map(e => e.firstChild.textContent.trim()));
+ok(JSON.stringify(heads) === JSON.stringify(['Code', 'Sequence', 'Left button', 'Round', 'Status', 'Claimed', 'Enrolled']),
+  'Round sits beside Status, and the button column NAMES the button rather than saying "Buttons"', heads.join(' | '));
+ok(/Ask the AI|Reveal/.test((await pg.$$eval('#roster-table tbody tr td:nth-child(3)', els => els.map(e => e.textContent.trim()))).join(' ')),
+  'and its cells read "Ask the AI" / "Reveal" — the button that sat on the left, not a raw code');
+ok(/which of the two paid buttons/i.test(await pg.locator('#roster-table thead th:nth-child(3)').getAttribute('title')),
+  'with the tooltip that says what that means and that it is fixed for the session');
+
+const rows = await pg.$$eval('#roster-table tbody tr', els => els.map(tr => ({
+  code: tr.children[0].textContent.trim(), round: tr.children[3].textContent.trim(),
+  status: tr.children[4].textContent.trim()
 })));
-const seqCounts = { A: 0, B: 0 };
-cells.forEach(c => { if (seqCounts[c.seq] != null) seqCounts[c.seq]++; });
-ok(seqCounts.A === 45 && seqCounts.B === 45,
-  'block randomisation splits the roster exactly 45 / 45, not by coin flips', JSON.stringify(seqCounts));
-// Button order is a covariate, so it is block-randomised JOINTLY: all four
-// cells of sequence × order fill evenly, which two independent draws would not
-// guarantee.
-const joint = {};
-cells.forEach(c => { const k = c.seq + '/' + c.btn; joint[k] = (joint[k] || 0) + 1; });
-const jointVals = Object.values(joint);
-ok(Object.keys(joint).length === 4 && Math.max(...jointVals) - Math.min(...jointVals) <= 1,
-  'and the four cells of sequence × button order come out balanced', JSON.stringify(joint));
+const byCode = Object.fromEntries(rows.map(r => [r.code, r]));
+ok(byCode.P001 && byCode.P001.round === '18/24 (75%)',
+  'a participant part-way through reads 18/24 (75%) — scored rounds finished of the scored rounds assigned',
+  byCode.P001 && byCode.P001.round);
+ok(byCode.P001 && byCode.P001.status === 'started', 'and is still in progress');
+ok(byCode.P002 && byCode.P002.status === 'completed',
+  'a participant who reached the end reads completed, even though their roster document still says started ' +
+  '— the status is read from their own session record', byCode.P002 && byCode.P002.status);
+ok(byCode.P002 && byCode.P002.round === '24/24 (100%)', 'and their round count is full',
+  byCode.P002 && byCode.P002.round);
+ok(byCode.P003 && byCode.P003.round === '—' && byCode.P003.status === 'unused',
+  'an unclaimed code shows no progress at all rather than a zero it did not earn');
+
+// Sorting: every heading, both directions, and the rows with nothing to compare
+// stay at the bottom either way.
+const order = () => pg.$$eval('#roster-table tbody tr td:first-child', els => els.map(e => e.textContent.trim()));
+const clickHead = async n => { await pg.locator(`#roster-table thead th:nth-child(${n})`).click(); await pg.waitForTimeout(120); };
+await clickHead(4);
+ok(JSON.stringify(await order()) === JSON.stringify(['P001', 'P002', 'P003']),
+  'sorting by Round puts the least-advanced participant first', JSON.stringify(await order()));
+await clickHead(4);
+ok(JSON.stringify(await order()) === JSON.stringify(['P002', 'P001', 'P003']),
+  'clicking it again reverses it — and the code with no session record stays LAST in both directions, ' +
+  'because it has nothing to compare rather than a zero', JSON.stringify(await order()));
+ok(/▼/.test(await pg.locator('#roster-table thead th:nth-child(4)').innerText()),
+  'the sorted heading shows which way it is sorted');
+await clickHead(5);
+ok(JSON.stringify(await order()) === JSON.stringify(['P003', 'P001', 'P002']),
+  'sorting by Status runs unused → started → completed: by how far they got, not alphabetically',
+  JSON.stringify(await order()));
+await clickHead(1); await clickHead(1);
+ok(JSON.stringify(await order()) === JSON.stringify(['P003', 'P002', 'P001']),
+  'and every other heading sorts too', JSON.stringify(await order()));
+const sortable = await pg.$$eval('#roster-table thead th', els => els.filter(e => e.classList.contains('sortable')).length);
+ok(sortable === 7, 'all seven columns are sortable', String(sortable));
+await clickHead(1);   // back to code-ascending for the checks below
+
 const rosterStats = await pg.locator('#roster-stats').innerText();
 ok(/Ask on the left/.test(rosterStats) && /Reveal on the left/.test(rosterStats),
-  'the roster reports that balance, so it can be confirmed before the first session opens');
+  'the screen reports the button-order balance beside the sequence balance, so both can be confirmed');
+const tiles = await pg.$$eval('#roster-stats .stat-box', els => Object.fromEntries(
+  els.map(e => [e.querySelector('span').textContent.trim(), e.querySelector('b').textContent.trim()])));
+ok(tiles.Completed === '1' && tiles['In progress'] === '1' && tiles.Unused === '1',
+  'and the tiles count them the same way the rows do', JSON.stringify(tiles));
 const rosterText = await pg.locator('#tab-roster').innerText();
-ok(/no names, no e-mail addresses/i.test(rosterText), 'the roster screen states that it holds no identifying information');
+ok(/no names, no e-mail addresses/i.test(rosterText), 'the screen states that it holds no identifying information');
 
-// The entrant override demands a reason.
-pg.once('dialog', d => d.accept());
-await pg.locator('#ros-override button[data-v="A"]').click();
-await pg.locator('#btn-ros-override').click();
-await pg.waitForTimeout(300);
-ok(true, 'forcing a sequence without a reason is refused');
-await pg.fill('#ros-reason', 'attrition ran uneven in the first session');
-await pg.locator('#btn-ros-override').click();
-await pg.waitForTimeout(500);
-ok(/Override log/.test(await pg.locator('#ros-overrides').innerText()),
-  'a forced assignment is logged with its timestamp and reason, and ships with the export');
+// The two side cards are gone: the table is the whole screen.
+ok((await pg.locator('#btn-ros-gen').count()) === 0 && (await pg.locator('#ros-override').count()) === 0,
+  'the code generator and the entrant-override card are removed — the override lives in Parameters');
+ok((await pg.locator('#btn-ros-csv').count()) === 1, 'the CSV of the participants is still one press away');
+const tableW = await pg.locator('#tab-roster .table-scroll').evaluate(e => e.getBoundingClientRect().width);
+const panelW = await pg.locator('#tab-roster').evaluate(e => e.getBoundingClientRect().width);
+ok(tableW > panelW - 40, 'and the table now spans the full width of the screen', tableW + ' of ' + panelW);
 
 // ── the lock ──────────────────────────────────────────────────────────────
 await pg.evaluate(() => {
@@ -301,8 +356,34 @@ await pg.evaluate(() => {
 });
 await pg.reload();
 await pg.waitForSelector('#a-dash.active');
+
+// ── the form is not bound to a session nobody asked to edit ───────────────
+// The panel picks a session at load so the roster and the monitor have
+// something to show. It used to point the PARAMETER FORM at that pick too, so
+// "set the parameters for my next session, then Save" silently rewrote whichever
+// session had been picked — no summary, no confirmation, and no new session.
 await tab('params');
 await pg.waitForTimeout(400);
+ok(/new session/.test(await pg.locator('#params-title').innerText()),
+  'after a reload the parameter form stands on a NEW session, not on whichever one the panel picked',
+  await pg.locator('#params-title').innerText());
+ok(/Create session/.test(await pg.locator('#btn-save').innerText()),
+  'so its green button creates one');
+ok(/new session/.test(await pg.locator('#edit-note').innerText()) &&
+   /No existing session is touched/.test(await pg.locator('#edit-note').innerText()),
+  'and the form says in words that no existing session is touched');
+
+// Opening a session from its card IS the explicit act, and only then does the
+// form write to it — with the session named on the button.
+await tab('runs');
+await pg.locator('.run-card button[data-act="open"]').first().click();
+await pg.waitForTimeout(400);
+ok(/Save changes to/.test(await pg.locator('#btn-save').innerText()),
+  'opening a session from its card binds the form to it, and the button names it',
+  await pg.locator('#btn-save').innerText());
+ok(/Editing the/.test(await pg.locator('#edit-note').innerText()) &&
+   /creates nothing/.test(await pg.locator('#edit-note').innerText()),
+  'and says that saving rewrites that session rather than creating one');
 await openAll();
 ok(/Locked since the first participant/.test(await pg.locator('#lock-note').innerText()),
   'a locked run says so, with the date, and points at Clone');
@@ -376,11 +457,31 @@ const open = preCards.filter(c => /OPEN/.test(c.tags));
 ok(seeded.length === 18 && open.length === 10, 'the grid separates the seeded rounds from the open ones',
   seeded.length + ' seeded / ' + open.length + ' open');
 ok(seeded.every(c => c.marks > 0), 'every seeded round shows its pre-opened prizes on the plot');
-ok(seeded.every(c => /Open at the start: p\d+ = \d+/.test(c.foot)), 'and lists them with their values underneath');
+ok(seeded.every(c => /Open at the start \(the \d+ positions? the participant knows\): p\d+ = \d+/.test(c.foot)),
+  'and lists them with their values underneath, said to be what the PARTICIPANT knows — as against the fuller set the AI knows');
 ok(open.every(c => c.marks === 0 && /Nothing pre-opened/.test(c.foot)),
   'an open round shows none, and says the participant starts from a blank line');
 ok(preCards.every(c => /Best prize \d+ at position \d+/.test(c.foot)),
   'each round also reports where its best prize is — the check a seed geometry is for');
+
+// What the AI knows is the UNION of its private anchors, the pre-opened
+// positions and every prize the participant reveals — so a seeded DENSE round
+// starts at K + (pre-opened), not at K.
+const seededDense = preCards.find(c => !/OPEN/.test(c.tags) && /DENSE/.test(c.tags));
+const kOf = s => +(/K=(\d+)/.exec(s) || [])[1];
+// The set is a UNION, so a pre-opened position that happens to be one of the
+// private anchors is counted once — and the caption says so when it happens.
+const parts = /the AI knows (\d+) positions? exactly at the start \((\d+) private \+ (\d+) pre-opened(?:, (\d+) of them the same position)?\)/
+  .exec(seededDense.foot);
+ok(parts && +parts[2] === kOf(seededDense.tags) && +parts[3] === seededDense.marks
+   && +parts[1] === +parts[2] + +parts[3] - (+parts[4] || 0),
+  'a seeded round reports the AI knowing its private anchors PLUS the pre-opened positions — the set it ' +
+  'actually answers from — counting a shared position once', seededDense.foot);
+ok(/one more with every prize the participant reveals/.test(seededDense.foot),
+  'and says that revealing a prize teaches it that position too');
+const openDense = preCards.find(c => /OPEN/.test(c.tags) && /DENSE/.test(c.tags));
+ok(new RegExp('the AI knows <?b?>?' + kOf(openDense.tags) + ' positions exactly at the start').test(openDense.foot),
+  'an open round starts at exactly its K — there is nothing pre-opened to add', openDense.foot);
 
 await pg.check('#rg-scored'); await pg.waitForTimeout(1200);
 ok((await pg.locator('#rg-grid .rg-card').count()) === 24, '"scored rounds only" drops the four warm-ups');
@@ -473,8 +574,14 @@ await pg.waitForTimeout(150);
 await pg.locator('#wording-body textarea[data-edit="consent"]').fill('Reworded for this session only.');
 await pg.waitForTimeout(120);
 await tab('params');
+// Writing back to a session that already exists is confirmed, and the prompt
+// names it: this Save rewrites that session and creates nothing.
+const editPrompt = pg.waitForEvent('dialog', { timeout: 3000 }).then(d => { const t = d.message(); d.accept(); return t; }, () => '');
 await pg.locator('#btn-save').click();
+const promptText = await editPrompt;
 await pg.waitForTimeout(300);
+ok(/EXISTING session/.test(promptText) && /does NOT create a new one/i.test(promptText),
+  'saving onto a session that already exists is confirmed first, naming it', promptText.split('\n')[0]);
 if (await pg.locator('#sum-ok').count()) { await pg.locator('#sum-ok').click(); await pg.waitForTimeout(400); }
 const stored = await pg.evaluate(() => {
   const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
@@ -609,6 +716,91 @@ ok((await pg.locator('.run-card').count()) === cardsBefore + 2, 'a name alone cr
 const autoGenerated = (await pg.locator('#nr-created .cb-code').innerText()).trim();
 ok(/^[A-Z0-9]{5}$/.test(autoGenerated), 'with an automatic five-character code (' + autoGenerated + ')');
 ok(autoGenerated !== code && autoGenerated !== 'SPRINGMBA2026', 'that is not one already in use');
+
+// ── the parameter form CREATES, and asks for the name and ID as it does ───
+// The reported bug: with sessions in the list, changing a parameter and pressing
+// Save rewrote one of them. The form now composes a new session, and the two
+// things every session needs are asked in the create dialog itself rather than
+// hunted for in the seventh parameter group.
+await tab('runs');
+const beforeParamCreate = await pg.locator('.run-card').count();
+const victim = await pg.evaluate(() => {
+  const r = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]')[0];
+  return { code: r.code, reveal: r.params.costs.revealCost };
+});
+await pg.reload();
+await pg.waitForSelector('#a-dash.active');
+await tab('params');
+await pg.waitForTimeout(400);
+await openAll();
+await pg.fill('#p-costs-revealCost', '9');
+await pg.locator('#btn-save').click();
+await pg.waitForTimeout(300);
+ok(await pg.locator('#sum-name').count() === 1 && await pg.locator('#sum-code').count() === 1,
+  'the create dialog asks for the session name and the session ID');
+await pg.fill('#sum-name', 'From the parameter form');
+await pg.fill('#sum-code', 'XY');
+await pg.locator('#sum-ok').click();
+await pg.waitForTimeout(200);
+ok(await pg.locator('#sess-summary').count() === 1 && /3–40 characters/.test(await pg.locator('#sum-err').innerText()),
+  'a too-short ID keeps the dialog open instead of creating anything');
+await pg.fill('#sum-code', victim.code);
+await pg.locator('#sum-ok').click();
+await pg.waitForTimeout(200);
+ok(/already taken/.test(await pg.locator('#sum-err').innerText()),
+  'and so does an ID another session already uses');
+await pg.fill('#sum-code', 'FROMFORM');
+await pg.locator('#sum-ok').click();
+await pg.waitForTimeout(800);
+const afterParamCreate = await pg.evaluate(() => JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]')
+  .map(r => ({ code: r.code, reveal: r.params.costs.revealCost })));
+ok(afterParamCreate.length === beforeParamCreate + 1,
+  'confirming creates a NEW session — the whole point of the fix', JSON.stringify(afterParamCreate));
+ok((afterParamCreate.find(r => r.code === 'FROMFORM') || {}).reveal === 9,
+  'and it carries the parameter that was changed');
+ok((afterParamCreate.find(r => r.code === victim.code) || {}).reveal === victim.reveal,
+  'while the session the panel had picked is left exactly as it was — the reported bug',
+  JSON.stringify(afterParamCreate.find(r => r.code === victim.code)));
+
+// ── the 4-round demo session ──────────────────────────────────────────────
+// A session for showing a class how the game works before they play the real
+// one: 2 rounds without the AI, then 2 with it, and in each half an empty round
+// followed by one that starts with a few prizes already open.
+await tab('runs');
+await pg.locator('#btn-demo-run').click();
+await pg.waitForTimeout(400);
+const demoSum = await pg.locator('#sess-summary').innerText();
+ok(/4 rounds: 0 warm-up, 4 scored/.test(demoSum), 'the demo session is four rounds, none of them warm-up', demoSum.split('\n').find(l => /rounds:/.test(l)));
+ok(/Per block: 1 open, 1 seeded/.test(demoSum) && /Order within a block: fixed/.test(demoSum),
+  'one empty round and one pre-opened round a half, in that fixed order');
+await pg.locator('#sum-ok').click();
+await pg.waitForTimeout(900);
+const demo = await pg.evaluate(() => {
+  const r = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]').find(x => x.code === 'TEST');
+  if (!r) return null;
+  return {
+    name: r.name, status: r.status, seed: r.params.env.generatorSeed,
+    override: r.assign.nextEntrantOverride, survey: r.ops.exitSurvey,
+    content: JSON.parse(r.contentJson || '{}'),
+    specs: JSON.parse(r.specsJson).map(s => [s.block, s.seed_shape, s.pre_opened.length, s.ai_k])
+  };
+});
+ok(demo && demo.name === 'For testing purposes' && demo.status === 'draft',
+  'it is created as a draft named "For testing purposes" under the ID TEST');
+ok(JSON.stringify(demo.specs) === JSON.stringify([[1, 'OPEN', 0, 10], [1, 'BALANCED', 3, 3], [2, 'OPEN', 0, 10], [2, 'BALANCED', 3, 3]]),
+  'its four rounds are: empty then pre-opened, in each of the two halves',
+  JSON.stringify(demo.specs));
+ok(demo.override === 'A',
+  'every entrant gets the no-AI half FIRST — a demonstration must not counterbalance the room');
+ok(demo.survey === false, 'the 24-question exit survey is off');
+ok(demo.seed !== 20260813,
+  'and it draws from a different shuffle than a default session, so it gives nothing away about the real one');
+ok(/demonstration/.test(demo.content['instr.i5.body'] || ''),
+  'the instruction screen that counts practice rounds is reworded for this session, since it has none');
+await pg.locator('#btn-demo-run').click();
+await pg.waitForTimeout(300);
+ok(!(await pg.locator('#sess-summary').count()) && /already exists/.test(await pg.locator('#nr-note').innerText()),
+  'pressing it twice refuses rather than making a second session on the same code');
 
 // A draft must really be closed: app.js treats a session as open when
 // ops.entryOpen is anything but false, so a draft carrying the Operations
