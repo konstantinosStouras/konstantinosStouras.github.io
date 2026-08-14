@@ -119,9 +119,9 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 202 checks, no browser
+node lab/search-v2/tools/selftest.js         # 206 checks, no browser
 node lab/search-v2/tools/smoke.mjs           # 141 checks, a whole session
-node lab/search-v2/tools/admin-smoke.mjs     # 104 checks, the admin panel
+node lab/search-v2/tools/admin-smoke.mjs     # 117 checks, the admin panel
 node lab/search-v2/tools/platform-guard.mjs  #  26 checks, the platform contract
 node lab/search-v2/tools/layout-guard.mjs    #  89 checks, five window sizes
 node lab/search-v2/tools/preview-guard.mjs   #  the sandbox writes nothing
@@ -318,6 +318,7 @@ the task, and the participant link — with **Cancel** as a real cancel.
 | **Roster** | generate anonymous codes with an exact 50/50 block-randomised split; next-entrant override, which demands a reason and logs it into the export |
 | **Live monitor** | counters from a Firestore listener plus the health strip: median active time, median round time, comprehension failures, cap hits, immediate-stop rate, narrow viewports, long blurs, sub-500 ms deciders |
 | **Data & preview** | the validation gate, a spec preview that writes nothing, a scripted dry run, the export, a danger zone, and the round gallery below |
+| **Design notes** | the questions this design attracts, answered against the code — does the AI hold private data, what a pre-opened round is, gaps versus tails and `g = 4t`, why all three layouts are needed, whether the landscape changes each round — with **every number measured from the open session's own frozen pool**, never copied from the design document |
 
 The four buttons under the parameter form are unchanged in number and colour from
 the previous panel: **Save session** (green), then **Cancel edit**, **Make this
@@ -411,6 +412,32 @@ own. The `events` collection must therefore keep its name.
 round: a constant ribbon says nothing is saved, `SIMP_EXPECT` is switched off so
 the completion marker is never even defined, the student's ID is never adopted,
 and the rows carry no `run_id`, so they could never be pooled with real data.
+
+---
+
+### The ceiling plateau, and the tie rule it forced
+
+The walk reflects at the prize ceiling, so a mapping can reach 100 at several
+positions at once. Measured over the default pool of 600: **56.0%** touch the
+ceiling, only **49.7%** have their maximum at a single position, and **24.3%**
+have it at three or more.
+
+That makes "distance to the argmax" ill-defined for about half the mappings, and
+taking the first index — which `Pool.argmaxOf` returns — imports a leftward bias
+that is an artifact of the tie-break, not a property of the walk. It is visible:
+by first index the maximum's mean position is **41.1** and the first decile holds
+17.7% of the mass; counting every maximising position it is **47.8** and 11.4%,
+i.e. essentially uniform, which is what the generator actually produces.
+
+So `dist_best_to_argmax` is the distance to the **nearest** maximising position,
+and **`argmax_count`** ships beside it so a plateau is visible in the data rather
+than hidden in it. `argmax_position` remains the first index for continuity.
+
+The plateaus themselves are inherited from the source study's generator, so their
+data has the same property and this build does not silently diverge from it. To
+remove them, add an acceptance rule rejecting mappings whose maximum is attained
+at more than two positions — roughly a quarter of draws, affordable against a
+pool of 600. That changes the task, so it belongs to a new session.
 
 ---
 

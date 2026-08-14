@@ -230,6 +230,7 @@
         <button class="tab" data-tab="roster" title="Participant codes and sequence assignment">Roster</button>
         <button class="tab" data-tab="monitor" title="Live counters and health checks while a session is open">Live monitor</button>
         <button class="tab" data-tab="data" title="Preview, validate, dry-run and export">Data &amp; preview</button>
+        <button class="tab" data-tab="notes" title="What the AI knows, what a pre-opened round is, and what the numbers of this session actually are">Design notes</button>
       </div>
 
       <div class="admin-note" id="scope-note"></div>
@@ -285,13 +286,17 @@
                   <div class="field"><label>Prize minimum <span class="defval">· default 0</span></label><input type="number" id="p-env-prizeMin"></div>
                   <div class="field"><label>Prize maximum <span class="defval">· default 100</span></label><input type="number" id="p-env-prizeMax"></div>
                 </div>
+                <p class="muted small" style="margin:14px 0 0;"><b>Where the walk starts.</b> A mapping is drawn by
+                anchoring one randomly-chosen position at a starting value, then walking outwards from it in both
+                directions. These four numbers are that <b>starting value</b> — nothing to do with the positions a
+                participant starts with, which are set under Round structure and the Acceptance filter.</p>
                 <div class="row3">
-                  <div class="field"><label>Seed low band, from <span class="defval">· 20</span></label><input type="number" id="p-env-seedLowMin"></div>
+                  <div class="field"><label>Walk start value, low band from <span class="defval">· 20</span></label><input type="number" id="p-env-seedLowMin"></div>
                   <div class="field"><label>to <span class="defval">· 80</span></label><input type="number" id="p-env-seedLowMax"></div>
-                  <div class="field"><label>with probability <span class="defval">· 0.5</span></label><input type="number" id="p-env-seedHighProb" step="0.05" min="0" max="1"></div>
+                  <div class="field"><label>probability of the LOW band <span class="defval">· 0.5</span></label><input type="number" id="p-env-seedHighProb" step="0.05" min="0" max="1"></div>
                 </div>
                 <div class="row2">
-                  <div class="field"><label>Seed high band, from <span class="defval">· 80</span></label><input type="number" id="p-env-seedHighMin"></div>
+                  <div class="field"><label>Walk start value, high band from <span class="defval">· 80</span></label><input type="number" id="p-env-seedHighMin"></div>
                   <div class="field"><label>to <span class="defval">· 100</span></label><input type="number" id="p-env-seedHighMax"></div>
                 </div>
                 <div class="row2">
@@ -418,7 +423,7 @@
                   <div class="field"><label>Minimum headroom above the best seed <span class="defval">· 25</span></label><input type="number" id="p-filter-minHeadroom" min="0" max="100"></div>
                 </div>
                 <div class="row2">
-                  <div class="field"><label>Highest seeded value, from <span class="defval">· 30</span></label><input type="number" id="p-filter-seedHighestMin" min="0" max="100"></div>
+                  <div class="field"><label>Highest pre-opened value, from <span class="defval">· 30</span></label><input type="number" id="p-filter-seedHighestMin" min="0" max="100"></div>
                   <div class="field"><label>to <span class="defval">· 60</span></label><input type="number" id="p-filter-seedHighestMax" min="0" max="100"></div>
                 </div>
                 <div class="field"><label>Apply the filter to open rounds <span class="defval">· default off</span></label>
@@ -648,6 +653,15 @@
           <div id="rg-note" class="muted small" style="margin-top:8px;"></div>
           <div class="rg-grid" id="rg-grid"></div>
         </div>
+      </div>
+
+      <!-- ---------------- DESIGN NOTES ---------------- -->
+      <div class="tab-panel" id="tab-notes" style="display:none;">
+        <h2 style="margin:0 0 4px;">Design notes</h2>
+        <p class="muted small">What the AI knows, what a pre-opened round is and why there are three
+        layouts &mdash; with the numbers computed from <b>this session&rsquo;s own frozen pool</b>, not from the
+        design document. Open a session on the Sessions screen to fill them in.</p>
+        <div id="notes-body"></div>
       </div>
 
     </section>

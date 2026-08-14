@@ -2457,6 +2457,39 @@ default / Restore built-in default (ghost). Export is one workbook (ReadMe, Run,
 Specs, Decisions, Rounds, Participants, Slider, Attention, Raw) plus the three
 CSVs, bundling the session's frozen configuration and a checksum; `interrupted`
 and `disengaged` are COLUMNS, not filters.
+**A sixth tab, `Design notes`** (owner 2026-08 — the questions this design
+attracts, answered in the panel itself): does the AI hold private data (YES —
+K positions per round whose TRUE prize it knows exactly, plus every pre-opened
+and revealed one; it interpolates between the two nearest and repeats the
+nearest value beyond the outermost, so it CANNOT extrapolate; rounded + fixed
+latency so nothing leaks whether it knew); what a pre-opened ("seeded") round is
+and why (identification — the geometry at the first decision is
+experimenter-assigned); gaps vs tails (σ√g/2 vs σ√t → **g = 4t**) and the
+three layouts' own g/4t + benchmark frontier share; why all three are needed
+(the AI's blind spot IS the frontier, so a GAP-only design could never detect an
+AI pulling people off it); that the landscape is redrawn every round (28 specs,
+28 different mappings, same set for everyone, shuffled within block, sequence
+counterbalanced → mapping difficulty balanced by construction); and that
+"Brownian" here runs **across positions, not across time** (drawn once offline,
+static while played). **Every number is measured from the OPEN SESSION's own
+frozen pool at render time** (`poolStatsFor`), never copied from the design
+document — keep it that way. It also disambiguates the word **"seed"**, which
+carries three unrelated meanings (pre-opened positions · the walk's start value ·
+the RNG seed); the Environment labels now say "walk start value" and the filter
+says "highest pre-opened value" for exactly that reason (labels only — field ids
+and `seed*` param names are unchanged).
+**The ceiling plateau + the tie rule it forced:** the walk reflects at the prize
+ceiling, so measured over the default 600-pool **56.0%** of mappings touch it,
+only **49.7%** have a single-position maximum and **24.3%** have 3+. Taking "the"
+argmax as the FIRST index (what `Pool.argmaxOf` returns) imports a leftward
+tie-break artifact — mean position 41.1 and 17.7% in the first decile, against
+47.8 and 11.4% counting every maximising position, i.e. essentially uniform. So
+`dist_best_to_argmax` in the export is the distance to the **NEAREST** maximising
+position and **`argmax_count`** ships beside it; `argmax_position` stays the first
+index for continuity. The plateaus are inherited from the source study's
+generator, so this build does not silently diverge from it — removing them needs
+an acceptance rule (max attained at ≤2 positions, ~a quarter of draws) and that
+is a NEW session, never a change to a running one.
 **Session cards, like the other class admins** (owner 2026-08): the Sessions
 screen groups **Active** and **Completed** with a count each, and every card
 carries code · status · name · created · participant count · sequence balance ·
@@ -2536,9 +2569,9 @@ rows carry no `run_id`.
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (202) ·
+`node lab/search-v2/tools/selftest.js` (206) ·
 `tools/smoke.mjs` (141, a whole 28-round session) ·
-`tools/admin-smoke.mjs` (104) · `tools/platform-guard.mjs` (26) ·
+`tools/admin-smoke.mjs` (117) · `tools/platform-guard.mjs` (26) ·
 `tools/layout-guard.mjs` (89, reachability at five window sizes) ·
 `tools/preview-guard.mjs` · **`tools/emulator-test.mjs` (37, against the REAL
 Functions + Rules in the Firebase emulator — needs Java and firebase-tools, skips

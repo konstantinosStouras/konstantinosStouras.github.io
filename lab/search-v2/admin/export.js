@@ -207,7 +207,15 @@
         var queries = decodePairs(info.queries);
         var preOpened = spec.pre_opened.map(function (p) { return { pos: p, val: mapping[p - 1] }; });
 
+        // The walk reflects at the ceiling, so roughly half of all mappings have
+        // their maximum at MORE THAN ONE position. Measuring "distance to the
+        // argmax" against an arbitrary index (the first one) would import a
+        // leftward bias that is an artifact of the tie-break, not a property of
+        // the walk — so the distance below is to the NEAREST maximising position,
+        // and argmax_count ships beside it so a plateau is visible in the data.
         var gmax = Pool.maxOf(mapping), argmax = Pool.argmaxOf(mapping);
+        var argmaxAll = [];
+        for (var mi = 0; mi < mapping.length; mi++) if (mapping[mi] === gmax) argmaxAll.push(mi + 1);
         var knownFinal = preOpened.concat(reveals);
         var bestFound = knownFinal.reduce(function (m, x) { return (m == null || x.val > m) ? x.val : m; }, null);
 
@@ -275,10 +283,12 @@
           stopped_immediately: !!end.stopped_immediately,
           cap_hit: end.cap_hit || null,
 
-          global_max: gmax, argmax_position: argmax,
+          global_max: gmax, argmax_position: argmax, argmax_count: argmaxAll.length,
           best_found: bestFound,
           pct_of_max_attainable: (bestFound != null && gmax) ? bestFound / gmax : null,
-          dist_best_to_argmax: (nomPos != null) ? Math.abs(nomPos - argmax) : null,
+          dist_best_to_argmax: (nomPos != null) ? argmaxAll.reduce(function (m, x) {
+            var d = Math.abs(nomPos - x); return (m == null || d < m) ? d : m;
+          }, null) : null,
           final_best_is_last_reveal: reveals.length ? (reveals[reveals.length - 1].val === bestFound) : null,
           final_best_was_pre_opened: preOpened.length
             ? (preOpened.reduce(function (m, x) { return Math.max(m, x.val); }, -Infinity) === bestFound) : false,
