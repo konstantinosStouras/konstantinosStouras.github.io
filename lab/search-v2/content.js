@@ -430,9 +430,18 @@
   // The ids are unchanged from the Part F era on purpose — sessions already
   // collected carry them, and the exporter reads either source into the same
   // column (see admin/export.js).
+  //
+  // FIELD OF STUDY was dropped in 2026-08 (owner: irrelevant to this study).
+  // It was the only item the Simulation Platform does NOT answer, so removing
+  // it means a platform launch now has nothing left to ask and the phase passes
+  // through with no screen at all; a standalone participant is asked the three
+  // below. Nothing else needed changing, because every consumer is derived from
+  // this array — registrationColumns() (the reg_<id> workbook columns),
+  // outline() (the Wording tab's editable fields) and resolve() (the
+  // per-session copy). Sessions already collected keep the answers they hold;
+  // the exporter writes one column per item of THIS array, so a re-export of an
+  // older session simply stops carrying reg_f_field.
   var REGISTRATION = [
-    { id: 'f_field', type: 'choice', optional: true, platformKey: 'fieldOfStudy',
-      prompt: 'Field of study', options: ['Business or economics', 'Engineering or computer science', 'Natural sciences', 'Social sciences or humanities', 'Other', 'Prefer not to say'] },
     { id: 'f_year', type: 'choice', optional: true, platformKey: 'levelOfStudy',
       prompt: 'Year or level of study', options: ['Undergraduate', 'Master’s', 'PhD', 'Not a student', 'Prefer not to say'] },
     { id: 'f_age', type: 'choice', optional: true, platformKey: 'age',
@@ -441,8 +450,13 @@
       prompt: 'Gender', options: ['Woman', 'Man', 'Non-binary', 'Prefer to self-describe', 'Prefer not to say'] }
   ];
   // The platform profile fields carried onto the row as `platform_<key>` — the
-  // four the registration items map to, plus the rest of what a launch supplies.
-  var PLATFORM_BACKGROUND = ['fieldOfStudy', 'levelOfStudy', 'age', 'gender',
+  // three the registration items map to, plus the rest of what a launch
+  // supplies. `fieldOfStudy` left this list with the question: the platform's
+  // own registration does not collect it either (simulation/answers.js has no
+  // such answer set — it is why field of study was the one item a platform
+  // launch still had to ask), so no data is thrown away by dropping it. Every
+  // other key here IS supplied by a launch and is carried without being asked.
+  var PLATFORM_BACKGROUND = ['levelOfStudy', 'age', 'gender',
                              'nationality', 'country', 'workExperience', 'occupation'];
 
   var PART_INTRO = {
@@ -564,8 +578,9 @@
     });
     groups.push({
       id: 'registration', title: 'Registration',
-      when: 'Background, asked once between consent and the instructions. Every item is optional, ' +
-            'and any item the Simulation Platform already answered is not shown at all.',
+      when: 'Background, asked once between consent and the instructions. Every item is optional. ' +
+            'A Simulation Platform launch answers all three from the student\u2019s platform registration, ' +
+            'so those participants never see this screen \u2014 only a standalone participant is asked.',
       fields: REGISTRATION.reduce(function (acc, q) {
         acc.push({ key: 'reg.' + q.id + '.prompt', label: q.id + ' · question', kind: 'line', base: q.prompt });
         q.options.forEach(function (o, i) {

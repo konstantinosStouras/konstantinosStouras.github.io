@@ -137,13 +137,19 @@ async function runOne(name) {
 
   // ── registration ────────────────────────────────────────────────────────
   // Background, asked once, before the study. A standalone participant (no
-  // platform handoff, which is this run) is asked all four items; they are all
-  // optional, so Continue works whether or not anything is ticked. The
-  // platform-launch path — where they are answered from the handoff and the
-  // screen is skipped — is pinned by tools/platform-guard.mjs.
+  // platform handoff, which is this run) is asked every item the study still
+  // has; they are all optional, so Continue works whether or not anything is
+  // ticked. The count comes from the study itself — field of study was dropped
+  // in 2026-08 and a literal here would pin the wrong number rather than the
+  // behaviour. The platform-launch path — where they are all answered from the
+  // handoff and no screen is shown at all — is pinned by platform-guard.mjs.
   await pg.waitForSelector('#s-registration.active');
   const regQs = await pg.$$eval('#reg-body .survey-q', els => els.map(e => e.dataset.q));
-  ok(regQs.length === 4, `registration asks the four background items (got ${regQs.length})`);
+  const regWant = await pg.evaluate(() => window.SVContent.REGISTRATION.map(q => q.id));
+  ok(regQs.length === regWant.length && regWant.every(id => regQs.includes(id)),
+    `a standalone participant is asked every background item the study keeps (${regWant.length})`,
+    regQs.join(','));
+  ok(!regQs.includes('f_field'), 'and never field of study, which the study no longer asks');
   await pg.evaluate(() => {
     const r = document.querySelector('#reg-body .survey-q input[type=radio]');
     if (r) r.checked = true;
