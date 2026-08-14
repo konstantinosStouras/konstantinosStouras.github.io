@@ -229,6 +229,11 @@
     .data-table{width:100%; border-collapse:collapse; font-size:13px;}
     .data-table th, .data-table td{padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap;}
     .data-table th{background:var(--panel); position:sticky; top:0; font-weight:700;}
+    .data-table th.sortable{cursor:pointer; user-select:none;}
+    .data-table th.sortable:hover{color:var(--blue);}
+    .data-table th .sarr{display:inline-block; margin-left:5px; font-size:10px; color:var(--muted); opacity:.55;}
+    .data-table th.sorted{color:var(--blue);}
+    .data-table th.sorted .sarr{color:var(--blue); opacity:1;}
     .data-table td.warn{color:var(--red); font-weight:700;}
     .stat-row{display:flex; gap:10px; flex-wrap:wrap; margin:12px 0;}
     .stat-box{flex:1; min-width:120px; background:var(--panel); border:1px solid var(--line);
@@ -677,9 +682,13 @@
         <p class="muted small">Anonymous participant codes only &mdash; no names, no e-mail addresses, no
         free-text identifiers. A student arriving from the class platform enrols with their
         university student ID, which is the join key between this study&rsquo;s data and the platform roster.
-        <b>Round</b> is the scored rounds they have finished out of the scored rounds this session assigns
-        them; <b>Status</b> is read from their own session record, so it turns to <i>completed</i> the moment
-        they reach the end.</p>
+        <b>Left button</b> is which of the two paid buttons &mdash; Ask the AI, or Reveal &mdash; sat on the
+        left of their screen, assigned once at enrolment and fixed for the whole session (the covariate
+        <span class="mono">button_order</span>). <b>Round</b> is the scored rounds they have finished out of
+        the scored rounds this session assigns them; warm-ups are not counted, and 100% with a status of
+        <i>started</i> is a real state &mdash; the survey and the debrief come after the last round.
+        <b>Status</b> is read from their own session record, so it turns to <i>completed</i> the moment
+        they reach the end. <b>Click any heading to sort by that column, and again to reverse it.</b></p>
         <div class="stat-row" id="roster-stats"></div>
         <div class="table-scroll" style="max-height:70vh;"><table class="data-table" id="roster-table"></table></div>
       </div>

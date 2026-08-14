@@ -1180,17 +1180,99 @@
 
   function recOf(r) { return rosterRecs[String(r && r.code).toUpperCase()] || null; }
 
+  // Which of the two paid buttons sat on the LEFT for this participant. The
+  // stored value is the raw `buttonOrder`; the column names the button itself,
+  // because "ask_first" told the reader nothing about what they were looking at.
+  function leftButton(r) {
+    return r.buttonOrder === 'reveal_first' ? 'Reveal'
+      : r.buttonOrder === 'ask_first' ? 'Ask the AI' : '—';
+  }
+  function enrolledAs(r) {
+    return r.orphan ? 'no roster entry' : r.autoEnrolled ? 'platform / open' : 'pre-generated';
+  }
+  // Scored rounds finished, as a number, for sorting and the CSV. null when
+  // there is no session record to read it from.
+  function scoredDoneOf(rec, params) {
+    if (!rec) return null;
+    if (rec.rounds_done != null) return scoredDone(rec.rounds_done, params);
+    return rec.completed ? scoredTotal(params) : null;
+  }
+
+  // ONE definition per column — its heading, what the cell says and what it
+  // sorts on — so a sorted table can never order itself by something other than
+  // what it is showing. A null sort value means "nothing to compare", and those
+  // rows sink to the bottom in BOTH directions.
+  function rosterCols(params) {
+    return [
+      { key: 'code', label: 'Code', cls: 'mono',
+        cell: function (r) { return esc(r.code); },
+        sort: function (r) { return r.code || null; } },
+      { key: 'sequence', label: 'Sequence',
+        title: 'The crossover order: A ran the AI-off block first, B the AI-on block first.',
+        cell: function (r) { return esc(r.sequence || '—'); },
+        sort: function (r) { return r.sequence || null; } },
+      { key: 'buttons', label: 'Left button',
+        title: 'Which of the two paid buttons — Ask the AI, or Reveal — sat on the LEFT of the screen for ' +
+               'this participant. Assigned once when they enrolled and fixed for their whole session, ' +
+               'block-randomised together with the sequence so all four cells fill evenly, and carried into ' +
+               'the analysis as the covariate button_order.',
+        cell: function (r) { return esc(leftButton(r)); },
+        sort: function (r) { return r.buttonOrder ? leftButton(r) : null; } },
+      { key: 'round', label: 'Round',
+        title: 'Scored rounds finished, out of the ' + scoredTotal(params) + ' this session assigns each ' +
+               'participant. Warm-up rounds are not counted. A participant can read 100% and still be ' +
+               'in progress: the survey and the debrief come after the last round.',
+        cell: function (r) { return esc(roundCell(recOf(r), params)); },
+        sort: function (r) { return scoredDoneOf(recOf(r), params); } },
+      { key: 'status', label: 'Status',
+        title: 'Read from the participant’s own session record: completed the moment they reach the end.',
+        cell: function (r) { return esc(derivedStatus(r, recOf(r))); },
+        // Ordered by how far they got, not alphabetically — "completed, started,
+        // unused" is an alphabetical accident, and progress is what is meant.
+        sort: function (r) { var st = derivedStatus(r, recOf(r)); return { unused: 0, started: 1, completed: 2 }[st]; } },
+      { key: 'claimed', label: 'Claimed',
+        title: 'When this code was first claimed.',
+        cell: function (r) { return r.claimedAt ? esc(new Date(r.claimedAt).toLocaleString()) : '—'; },
+        sort: function (r) { return r.claimedAt || null; } },
+      { key: 'enrolled', label: 'Enrolled',
+        cell: function (r) { return esc(enrolledAs(r)); },
+        sort: function (r) { return enrolledAs(r); } }
+    ];
+  }
+
+  // Clicking a heading sorts by that column; clicking it again reverses it.
+  var rosterSort = { key: null, dir: 1 };
+
+  function sortRoster(rows, cols) {
+    var col = cols.filter(function (c) { return c.key === rosterSort.key; })[0];
+    if (!col) return rows;
+    var dir = rosterSort.dir;
+    // Decorated with the load position, so ties keep the order they arrived in
+    // and a second sort on the same column is a clean reversal of the first.
+    return rows.map(function (r, i) { return { r: r, i: i }; }).sort(function (x, y) {
+      var a = col.sort(x.r), b = col.sort(y.r);
+      if (a == null && b == null) return x.i - y.i;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      var c = (typeof a === 'number' && typeof b === 'number') ? (a - b)
+        : String(a).localeCompare(String(b), undefined, { numeric: true });
+      return c ? c * dir : x.i - y.i;
+    }).map(function (x) { return x.r; });
+  }
+
   function wireRoster() {
     $('btn-ros-csv').onclick = function () {
       var params = Specs.withDefaults(current && current.params);
-      var csv = 'code,sequence,button_order,status,scored_rounds_done,scored_rounds_total,claimed_at,enrolled\n' +
-        roster.map(function (r) {
+      // Exported in the order on screen, so a sorted table and its CSV agree.
+      var rows = sortRoster(roster, rosterCols(params));
+      var csv = 'code,sequence,button_order,left_button,status,scored_rounds_done,scored_rounds_total,claimed_at,enrolled\n' +
+        rows.map(function (r) {
           var rec = recOf(r);
-          var done = rec ? (rec.rounds_done != null ? scoredDone(rec.rounds_done, params)
-            : (rec.completed ? scoredTotal(params) : '')) : '';
-          return [r.code, r.sequence, r.buttonOrder || '', derivedStatus(r, rec), done, scoredTotal(params),
+          var done = scoredDoneOf(rec, params);
+          return [r.code, r.sequence, r.buttonOrder || '', r.buttonOrder ? leftButton(r) : '',
+            derivedStatus(r, rec), done == null ? '' : done, scoredTotal(params),
             r.claimedAt ? new Date(r.claimedAt).toISOString() : '',
-            r.autoEnrolled ? 'platform/open' : 'pre-generated'].join(',');
+            r.autoEnrolled ? 'platform/open' : (r.orphan ? 'no-roster-entry' : 'pre-generated')].join(',');
         }).join('\n');
       dl((current ? current.code : 'run') + '_participants.csv', csv, 'text/csv');
     };
@@ -1226,39 +1308,55 @@
         roster.push({ code: rec.participant_code, sequence: rec.sequence || null,
           buttonOrder: rec.button_order || null, status: 'started', orphan: true });
       });
-
-      var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0, ask: 0, reveal: 0 };
-      roster.forEach(function (r) {
-        var st = derivedStatus(r, recOf(r));
-        counts[st] = (counts[st] || 0) + 1;
-        if (r.sequence) counts[r.sequence]++;
-        if (r.buttonOrder === 'reveal_first') counts.reveal++;
-        else if (r.buttonOrder === 'ask_first') counts.ask++;
-      });
-      // Button order is a covariate in the primary analysis, so its balance is
-      // shown beside the sequence's — "confirm it is balanced before the first
-      // session opens" is a thing the panel has to make possible.
-      $('roster-stats').innerHTML = [
-        ['Codes', roster.length], ['Unused', counts.unused], ['In progress', counts.started],
-        ['Completed', counts.completed], ['Sequence A', counts.A], ['Sequence B', counts.B],
-        ['Ask on the left', counts.ask], ['Reveal on the left', counts.reveal]
-      ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
-
-      $('roster-table').innerHTML = roster.length
-        ? '<thead><tr><th>Code</th><th>Sequence</th><th>Buttons</th>' +
-          '<th title="Scored rounds finished out of the ' + scoredTotal(params) + ' this session assigns each participant">Round</th>' +
-          '<th>Status</th><th>Claimed</th><th>Enrolled</th></tr></thead><tbody>' +
-          roster.map(function (r) {
-            return '<tr><td class="mono">' + esc(r.code) + '</td><td>' + esc(r.sequence || '—') + '</td>' +
-              '<td>' + (r.buttonOrder === 'reveal_first' ? 'Reveal left' : r.buttonOrder === 'ask_first' ? 'Ask left' : '—') + '</td>' +
-              '<td>' + esc(roundCell(recOf(r), params)) + '</td>' +
-              '<td>' + esc(derivedStatus(r, recOf(r))) + '</td>' +
-              '<td>' + (r.claimedAt ? new Date(r.claimedAt).toLocaleString() : '—') + '</td>' +
-              '<td>' + (r.orphan ? 'no roster entry' : r.autoEnrolled ? 'platform / open' : 'pre-generated') + '</td></tr>';
-          }).join('') + '</tbody>'
-        : '<tbody><tr><td class="muted">No participants yet. In <b>open</b> roster mode a class-platform student ID enrols itself on first entry.</td></tr></tbody>';
+      paintRoster();
     }).catch(function (e) {
       $('roster-table').innerHTML = '<tbody><tr><td class="muted">Could not read the participants: ' + esc(String(e && e.message || e)) + '</td></tr></tbody>';
+    });
+  }
+
+  // Painting is separate from reading, so sorting a column re-renders what is
+  // already loaded instead of firing two more collection reads per click.
+  function paintRoster() {
+    var params = Specs.withDefaults(current && current.params);
+    var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0, ask: 0, reveal: 0 };
+    roster.forEach(function (r) {
+      var st = derivedStatus(r, recOf(r));
+      counts[st] = (counts[st] || 0) + 1;
+      if (r.sequence) counts[r.sequence]++;
+      if (r.buttonOrder === 'reveal_first') counts.reveal++;
+      else if (r.buttonOrder === 'ask_first') counts.ask++;
+    });
+    // Button order is a covariate in the primary analysis, so its balance is
+    // shown beside the sequence's — "confirm it is balanced before the first
+    // session opens" is a thing the panel has to make possible.
+    $('roster-stats').innerHTML = [
+      ['Codes', roster.length], ['Unused', counts.unused], ['In progress', counts.started],
+      ['Completed', counts.completed], ['Sequence A', counts.A], ['Sequence B', counts.B],
+      ['Ask on the left', counts.ask], ['Reveal on the left', counts.reveal]
+    ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
+
+    var cols = rosterCols(params);
+    $('roster-table').innerHTML = roster.length
+      ? '<thead><tr>' + cols.map(function (c) {
+          var on = rosterSort.key === c.key;
+          return '<th class="sortable' + (on ? ' sorted' : '') + '" data-sk="' + c.key + '"' +
+            ' title="' + esc((c.title ? c.title + ' ' : '') + 'Click to sort.') + '">' +
+            esc(c.label) + '<span class="sarr">' + (on ? (rosterSort.dir > 0 ? '▲' : '▼') : '⇅') + '</span></th>';
+        }).join('') + '</tr></thead><tbody>' +
+        sortRoster(roster, cols).map(function (r) {
+          return '<tr>' + cols.map(function (c) {
+            return '<td' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + c.cell(r) + '</td>';
+          }).join('') + '</tr>';
+        }).join('') + '</tbody>'
+      : '<tbody><tr><td class="muted">No participants yet. In <b>open</b> roster mode a class-platform student ID enrols itself on first entry.</td></tr></tbody>';
+
+    $('roster-table').querySelectorAll('th[data-sk]').forEach(function (th) {
+      th.onclick = function () {
+        var k = th.dataset.sk;
+        if (rosterSort.key === k) rosterSort.dir = -rosterSort.dir;
+        else { rosterSort.key = k; rosterSort.dir = 1; }
+        paintRoster();
+      };
     });
   }
 
