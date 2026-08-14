@@ -2943,7 +2943,32 @@ re-approves with one live click; completion markers restore too so a
 device switch earns no replay; `recoverByEmail`/`saveRecovery`/`emailKeyOf`
 in platform.js, the "Already registered before?" box in index.html;
 SIMP_PATHS defaults are MERGED under overrides so an older
-firebase-config.js can never leave a new path undefined). A card with nothing to ask (no session
+firebase-config.js can never leave a new path undefined).
+**A student can back SEVERAL roster docs, and the ✓ is read MERGED across
+them (`simulation/completions.js`)** — every registration mints a fresh
+anonymous uid, so a log-out + re-register, or a second device, gives the
+same student another `simPlatformStudents/{uid}` doc. Admin writes fan out
+to every uid behind the collapsed row, but the STUDENT's own push
+(`syncCompleted`) only reaches the doc they are signed into — and `logout()`
+clears the local markers — so the NEWEST doc, the one the row is built from,
+can be missing a ✓ that a duplicate carries. That is the
+"done in PortfolioFit's own admin, — on the platform" report (2026-08-14):
+the cell read one doc while `verifyFromSim` asked a DIFFERENT question
+("does ANY doc have it?"), so it counted the student as `already` matched,
+wrote nothing, and reported success while the cell stayed —. `completions.js`
+(`studentKey`/`rowKey`/`docNewer`/`groupByStudent`/`mergeCompleted`/`isDone`,
+loaded by the admin page before admin.js) is now the ONE reading both halves
+use: group newest-first, merge per simulation key, the NEWEST statement
+winning — so a tombstone on the current doc still hides an older mark (the
+instructor removed the ✓ on purpose) and a retake after it counts again.
+Two companion fixes: `stampCompleted` now also writes the e-mail RECOVERY
+replica (as `revokeCompletion` always did — else a verified ✓ vanished the
+moment the student logged in elsewhere, since the new device's doc becomes
+the newest with nothing to restore onto it), and it takes `{uid,email}` rows
+like revoke; and the failing-join guard now refuses only the REMOVALS
+instead of aborting the pass, which used to discard the safe additive
+stamps — the very thing the button was pressed for. Offline test:
+`node simulation/tools/completion-guard.mjs`. A card with nothing to ask (no session
 input, no copy chips) launches its sim DIRECTLY in a new tab — and NEVER pass
 'noopener' as window.open features: its by-spec null return reads as a
 blocked pop-up and made the fallback also navigate the platform tab (the
@@ -3007,7 +3032,9 @@ address has no spaces, so it otherwise sets the table's minimum width), with the
 actions column exempted so its button stays on one line. Offline tests that must
 stay green: `node simulation/tools/smoke.mjs` (Playwright over a local static
 server, LOCAL mode forced — registration → admin activation → cards → launch
-handoff/seeds → prefill) and `node simulation/tools/roster-width-guard.mjs`
+handoff/seeds → prefill), `node simulation/tools/completion-guard.mjs`
+(the merged completion reading — the roster cell and the reconciliation must
+answer the same question) and `node simulation/tools/roster-width-guard.mjs`
 (the Delete button unclipped at six window widths × simulation counts). That
 second guard measures containment inside `.roster-wrap` plus `elementFromPoint`,
 NOT viewport coordinates: a button clipped inside a scrolling ancestor still

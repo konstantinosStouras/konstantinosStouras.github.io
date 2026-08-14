@@ -278,14 +278,22 @@
   function activeSims() {
     return P.catalog().filter(function (s) { return CFG.sims[s.key] && CFG.sims[s.key].active; });
   }
+  var C = window.SIMP_COMPLETIONS;
+  /* What the ✓ / — cell reads. `_merged` is the union across every roster doc
+     behind the row (see completions.js): the student's own browser pushes its
+     markers to whichever doc it is signed into, which after a re-registration
+     is NOT the newest one the row is built from. Falls back to the doc's own
+     map for rows that were never grouped. */
+  function completedEntry(r, key) {
+    return ((r && (r._merged || r.completed)) || {})[key];
+  }
   /* A revoked completion is a TOMBSTONE inside the same map ({revoked:1,rts})
      — the student no longer counts as having done it (and may retake it). */
   function rowCompleted(r, key) {
-    var c = r.completed && r.completed[key];
-    return !!(c && !c.revoked);
+    return C.isDone(completedEntry(r, key));
   }
   function completedTip(r, key) {
-    var c = r.completed && r.completed[key];
+    var c = completedEntry(r, key);
     if (c && c.revoked) {
       var rd = c.rts ? new Date(Number(c.rts)) : null;
       return 'Completion removed' + (rd && !isNaN(rd) ? ' ' + rd.toISOString().slice(0, 16).replace('T', ' ') : '') +
@@ -307,23 +315,24 @@
     lastRows = rows;
     /* Newest first, one row per student: a log-out + re-registration (or a
        second device) mints a new uid, so collapse by student ID keeping the
-       most recent record. uidsByKey remembers EVERY uid behind a displayed
-       row, so deleting it also removes its collapsed duplicates. */
-    var seen = {}, uidsByKey = {}, rowsByKey = {};
-    var keyOf = function (r) { return (r.studentId || '').trim().toLowerCase() || ('uid:' + r.uid); };
-    rows.forEach(function (r) {
-      var k = keyOf(r);
-      (uidsByKey[k] = uidsByKey[k] || []).push(r.uid);
-      (rowsByKey[k] = rowsByKey[k] || []).push(r);
-    });
-    roster = rows.sort(function (a, b) {
-      return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '');
-    }).filter(function (r) {
+       most recent record. The group remembers EVERY uid behind a displayed
+       row, so deleting it also removes its collapsed duplicates — and its
+       merged completion map, so a ✓ that the student's browser pushed to a
+       duplicate is not hidden by the newest doc (completions.js). */
+    var seen = {};
+    var groups = C.groupByStudent(rows);
+    var keyOf = C.rowKey;
+    var uidsOf = function (r) { return (groups[keyOf(r)] || {}).uids || [r.uid]; };
+    var refsOf = function (r) {
+      return (groups[keyOf(r)] || {}).refs || [{ uid: r.uid, email: r.email || null }];
+    };
+    roster = rows.sort(C.docNewer).filter(function (r) {
       var k = keyOf(r);
       if (seen[k]) return false;
       seen[k] = 1;
       return true;
     });
+    roster.forEach(function (r) { r._merged = (groups[keyOf(r)] || {}).completed || r.completed || {}; });
     var dropped = rows.length - roster.length;
     var sims = activeSims();
 
@@ -405,7 +414,7 @@
       appr.onclick = function () {
         appr.disabled = true; appr.textContent = '…';
         P.firebase().then(function (F) {
-          return F.approveStudents(uidsByKey[keyOf(r)] || [r.uid], !r.approved);
+          return F.approveStudents(uidsOf(r), !r.approved);
         }).then(function () {
           /* Repaint the row locally too — the live snapshot normally does it,
              but on a network with a dead streaming channel the click would
@@ -450,14 +459,13 @@
             : 'Manually mark ' + who + ' as having completed ' + s.title + '?';
           if (!window.confirm(q)) return;
           td.textContent = '…';
-          var uids = uidsByKey[keyOf(r)] || [r.uid];
-          /* Revoking also writes the e-mail recovery replica, so it needs the
-             address as well as the uid (see revokeCompletion). */
-          var rowsFor = (rowsByKey[keyOf(r)] || [r]).map(function (x) { return { uid: x.uid, email: x.email }; });
+          /* Both directions also write the e-mail recovery replica, so they
+             need the address as well as the uid (see revokeCompletion). */
+          var rowsFor = refsOf(r);
           P.firebase().then(function (F) {
             return done
               ? F.revokeCompletion(rowsFor, s.key)
-              : F.stampCompleted(uids, s.key, { ts: new Date().getTime(), session: (CFG.sims[s.key] && CFG.sims[s.key].sessionId) || null, src: 'manual' });
+              : F.stampCompleted(rowsFor, s.key, { ts: new Date().getTime(), session: (CFG.sims[s.key] && CFG.sims[s.key].sessionId) || null, src: 'manual' });
           }).then(function () {
             r.completed = r.completed || {};
             if (done) r.completed[s.key] = { revoked: 1, rts: new Date().getTime() };
@@ -481,7 +489,7 @@
         if (!window.confirm('Delete the registration of ' + who + ' from the roster? This cannot be undone.')) return;
         del.disabled = true; del.textContent = 'Deleting…';
         P.firebase().then(function (F) {
-          return F.deleteStudents(uidsByKey[keyOf(r)] || [r.uid]);
+          return F.deleteStudents(uidsOf(r));
         }).then(function () {
           tr.remove();   // instant; the snapshot re-render follows
         }, function (e) {
@@ -534,7 +542,7 @@
         btn.textContent = approved ? 'Approving…' : 'Revoking…';
         var uids = [];
         targets.forEach(function (r) {
-          (uidsByKey[keyOf(r)] || [r.uid]).forEach(function (u) { uids.push(u); });
+          uidsOf(r).forEach(function (u) { uids.push(u); });
         });
         P.firebase().then(function (F) {
           return F.approveStudents(uids, approved);
@@ -586,7 +594,7 @@
         btn.textContent = 'Deleting…';
         var uids = [], gone = {};
         visible.forEach(function (r) {
-          (uidsByKey[keyOf(r)] || [r.uid]).forEach(function (u) { uids.push(u); gone[u] = 1; });
+          uidsOf(r).forEach(function (u) { uids.push(u); gone[u] = 1; });
         });
         P.firebase().then(function (F) {
           return F.deleteStudents(uids);
@@ -796,17 +804,23 @@
       if (!read.records) throw new Error(s.title + ' returned no participant records at all — nothing was changed. Check you signed in to the right project.');
       if (!Object.keys(doneById).length) throw new Error(s.title + ' lists no COMPLETED participant with a student ID — nothing was changed (a sync from here would have removed every ✓).');
 
-      var byPid = {};
-      rosterRows.forEach(function (row) {
-        var k = String(row.studentId || '').trim().toLowerCase();
-        if (k) (byPid[k] = byPid[k] || []).push(row);
+      /* Decide from the MERGED view of each student's roster docs — exactly
+         what the ✓ / — cell shows (completions.js). Deciding per-doc made the
+         two disagree: a student who re-registered carries their old ✓ on a
+         collapsed duplicate, so "does ANY doc have it?" counted them as
+         already matched while the row on screen still read "—" — this pass
+         reported success and wrote nothing, and the cell never healed.
+         Stamping writes every uid behind the row, so it converges. */
+      var groups = C.groupByStudent(rosterRows), byPid = {};
+      Object.keys(groups).forEach(function (k) {
+        if (groups[k].pid) byPid[groups[k].pid] = groups[k];
       });
       var stamps = [], already = 0, unmatched = [];
       Object.keys(doneById).forEach(function (pid) {
-        var rows = byPid[pid];
-        if (!rows) { unmatched.push(pid); return; }
-        if (rows.some(function (row) { return rowCompleted(row, s.key); })) { already++; return; }
-        stamps.push({ uids: rows.map(function (row) { return row.uid; }).filter(Boolean), mark: doneById[pid] });
+        var g = byPid[pid];
+        if (!g) { unmatched.push(pid); return; }
+        if (C.isDone(g.completed[s.key])) { already++; return; }
+        stamps.push({ rows: g.refs, mark: doneById[pid] });
       });
 
       /* TWO-WAY: a roster ✓ whose student is no longer a completed participant
@@ -815,21 +829,14 @@
          auto-revoked: one the instructor set BY HAND (that override exists
          precisely for students the automatic join cannot match), and one still
          matched in the simulation. */
-      var revokes = [], seenKey = {}, stampedTotal = 0;
-      rosterRows.forEach(function (row) {
-        var c = row.completed && row.completed[s.key];
-        if (!c || c.revoked) return;
+      var revokes = [], stampedTotal = 0;
+      Object.keys(groups).forEach(function (k) {
+        var g = groups[k], c = g.completed[s.key], head = g.rows[0] || {};
+        if (!C.isDone(c)) return;
         stampedTotal++;
         if (c.src === 'manual') return;
-        var pid = String(row.studentId || '').trim().toLowerCase();
-        if (pid && doneById[pid]) return;              // still completed over there
-        var k = pid || ('uid:' + row.uid);
-        if (seenKey[k]) return;
-        seenKey[k] = 1;
-        var group = byPid[pid] || [row];
-        revokes.push({ rows: group.map(function (x) { return { uid: x.uid, email: x.email }; })
-                                  .filter(function (x) { return x.uid; }),
-                       who: row.name || row.studentId || row.uid });
+        if (g.pid && doneById[g.pid]) return;          // still completed over there
+        revokes.push({ rows: g.refs, who: head.name || head.studentId || head.uid });
       });
 
       var tail = (unmatched.length
@@ -841,12 +848,15 @@
          be lossy (a typo, a leading zero). Unmatched IDs are direct evidence
          that it is lossy RIGHT NOW — so refuse a mass removal in that state
          rather than unlocking students who really did finish. */
-      var cancelled = 0;
+      var cancelled = 0, refused = 0;
       if (revokes.length && unmatched.length && revokes.length > Math.max(3, stampedTotal * 0.25)) {
-        throw new Error('refusing to remove ' + revokes.length + ' of ' + stampedTotal +
-          ' ✓ marks while ' + unmatched.length + ' completed ' + s.title + ' ID(s) do not match this roster — ' +
-          'that pattern means the student-ID join is failing, not that everyone was deleted. ' +
-          'Nothing was changed; fix the mismatched IDs (or remove the ✓ by clicking the cells).');
+        /* Only the DESTRUCTIVE half is refused. Aborting the whole pass (which
+           is what this used to do) also threw away the stamps — the additive,
+           always-safe half, and the very reason the instructor pressed the
+           button: students the simulation lists as finished stayed "—" on the
+           roster because OTHER students' IDs did not match. */
+        refused = revokes.length;
+        revokes.length = 0;
       }
       if (revokes.length && !window.confirm(
             s.title + ' no longer lists ' + revokes.length + ' student(s) as completed:\n\n' +
@@ -859,15 +869,22 @@
         revokes.length = 0;
       }
 
+      var refusedNote = (refused
+        ? ' · ⚠ ' + refused + ' ✓ mark(s) that ' + s.title + ' no longer lists were KEPT: ' + unmatched.length +
+          ' completed ID(s) do not match this roster, which means the student-ID join is failing, ' +
+          'not that those students were deleted (remove a ✓ by clicking the cell)'
+        : '');
+
       if (!stamps.length && !revokes.length) {
-        return cancelled
-          ? cancelled + ' proposed removal(s) were cancelled — the roster still differs from ' + s.title + tail
-          : 'Checked ' + Object.keys(doneById).length + ' completed ' + s.title + ' participant(s) — the roster already matches' + tail;
+        return (cancelled
+          ? cancelled + ' proposed removal(s) were cancelled — the roster still differs from ' + s.title
+          : 'Checked ' + Object.keys(doneById).length + ' completed ' + s.title + ' participant(s) — the roster already matches')
+          + refusedNote + tail;
       }
       return P.firebase().then(function (F) {
         /* allSettled: one failed row must not hide the rest of the run. */
         return Promise.allSettled(stamps.map(function (st) {
-          return F.stampCompleted(st.uids, s.key, { ts: st.mark.ts, session: st.mark.session, src: 'verify' });
+          return F.stampCompleted(st.rows, s.key, { ts: st.mark.ts, session: st.mark.session, src: 'verify' });
         }).concat(revokes.map(function (rv) {
           return F.revokeCompletion(rv.rows, s.key);
         })));
@@ -879,7 +896,7 @@
         return 'Synced with ' + s.title + '’s own records: ' + bits.join(' · ') +
           (already ? ' · ' + already + ' already matched' : '') +
           (cancelled ? ' · ' + cancelled + ' removal(s) cancelled' : '') +
-          (failed ? ' · ⚠ ' + failed + ' write(s) FAILED — click Verify again' : '') + tail +
+          (failed ? ' · ⚠ ' + failed + ' write(s) FAILED — click Verify again' : '') + refusedNote + tail +
           ' — the roster and the students’ own pages update live.';
       });
     });
