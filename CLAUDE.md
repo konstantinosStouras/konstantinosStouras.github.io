@@ -2489,6 +2489,20 @@ before the `ui` group existed keeps the interface it actually ran with
 (`withDefaults` sets `buttonOrder:'fixed'`, `encouragement:false`), so a
 running session never changes under its participants.
 
+**The enrolment rule lives in ONE place** (`Specs.nextCell`, shared by the Cloud
+Function's `claimCode`, svfirebase's client-mode `assignCell` and the tests):
+the under-filled arm takes the entrant, and the button order alternates on that
+arm's own PARITY, which keeps all four cells of sequence × order balanced
+WITHOUT a new counter field. That last part is load-bearing — the deployed
+`firestore.rules` pin `runCounts/{runId}` to `hasOnly(['nA','nB'])`, so an extra
+key makes the whole client-mode transaction permission-denied and the catch
+hands out a wall-clock coin flip while the counter never advances, silently
+destroying §11's exact crossover split for a whole class. Also: `publicDoc`
+MUST carry the `ui` group — in server mode the redacted copy is all the
+participant sees, and without it `withDefaults` takes the pre-`ui` branch and
+turns the whole interface treatment off; and the Run sheet exports `ui` with
+the other parameter groups, because it is a treatment, not a theme.
+
 **28 rounds**, 4 warm-up + 24 scored, 12 per block, counterbalanced crossover
 (sequence A = AI off then on, B = the reverse). Per block: 4 open + 8 seeded
 (2 FRONTIER, 4 BALANCED, 2 GAP), densities balanced within each shape. Mappings,
@@ -2658,10 +2672,15 @@ rows carry no `run_id`.
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (211) ·
-`tools/smoke.mjs` (169, a whole 28-round session) ·
-`tools/admin-smoke.mjs` (119) · `tools/platform-guard.mjs` (26) ·
+`node lab/search-v2/tools/selftest.js` (247) ·
+`tools/smoke.mjs` (192, a whole 28-round session) ·
+`tools/admin-smoke.mjs` (121) · `tools/platform-guard.mjs` (28) ·
 `tools/layout-guard.mjs` (89, reachability at five window sizes) ·
+`tools/data-audit.mjs` (46) ·
+**`tools/migration-guard.mjs`** (a participant MID-SESSION when a build ships
+must not lose data — the registration phase is entered from the consent button,
+so a resume from the previous build is caught up before the task or asked at the
+end of the survey, never skipped) ·
 `tools/preview-guard.mjs` · **`tools/emulator-test.mjs` (37, against the REAL
 Functions + Rules in the Firebase emulator — needs Java and firebase-tools, skips
 cleanly without them)** · `python3 tools/generate_rounds.py --validate`.

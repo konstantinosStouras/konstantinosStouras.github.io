@@ -386,10 +386,41 @@
   ];
   function assignmentCells() { return CELLS.map(function (c) { return { sequence: c.sequence, buttonOrder: c.buttonOrder }; }); }
 
+  /* The ENROLMENT rule, in one place because three writers need to agree on it:
+     the Cloud Function's claimCode, svfirebase's client-mode assignCell, and
+     the tests. Given the run's counter document {nA, nB} it returns the cell
+     the next entrant takes.
+
+     Sequence: the under-filled arm (§11), or the admin's forced override.
+     Button order: the PARITY of that arm's own count, so it alternates within
+     each sequence and all four cells of sequence × order fill evenly. It is
+     deliberately derived from nA/nB rather than from four new counter fields —
+     the deployed rules pin that document to `hasOnly(['nA','nB'])`, so an extra
+     key makes the whole transaction permission-denied, and the client would
+     then fall back to a wall-clock coin flip while the counter never advanced,
+     quietly destroying the exact crossover split for a whole class.
+     A run whose parameters keep the order FIXED gets 'ask_first': a session
+     locked before the `ui` group existed must not start randomising mid-study. */
+  function nextCell(counts, override, buttonOrderMode) {
+    var c = counts || {};
+    var nA = Number(c.nA) || 0, nB = Number(c.nB) || 0;
+    var seq;
+    if (override === 'A' || override === 'B') seq = override;
+    else if (nA < nB) seq = 'A';
+    else if (nB < nA) seq = 'B';
+    else seq = ((nA + nB) % 2 === 0) ? 'A' : 'B';
+    var nSeq = (seq === 'A') ? nA : nB;
+    var order = (buttonOrderMode === 'participant')
+      ? ((nSeq % 2 === 0) ? 'ask_first' : 'reveal_first')
+      : 'ask_first';
+    return { sequence: seq, buttonOrder: order, counts: { nA: nA + (seq === 'A' ? 1 : 0), nB: nB + (seq === 'B' ? 1 : 0) } };
+  }
+
   return {
     withDefaults: withDefaults,
     buttonOrder: buttonOrder,
     assignmentCells: assignmentCells,
+    nextCell: nextCell,
     placeSeeds: placeSeeds,
     placeAnchors: placeAnchors,
     densityK: densityK,

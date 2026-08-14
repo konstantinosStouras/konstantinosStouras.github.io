@@ -134,6 +134,11 @@ ok(bg.length >= 3, 'the platform-supplied background travels with the data, flag
 ok(bg.some(x => /platform_levelOfStudy=Undergraduate/.test(x)), 'and carries the platform’s own answer verbatim');
 
 // ── the exit survey no longer asks background at all ──────────────────────
+// Finish the phase first: leaving it unsubmitted is the MID-SESSION case, where
+// app.js deliberately puts the items back at the end of the survey rather than
+// losing them (tools/migration-guard.mjs pins that path).
+await pg.locator('#btn-reg').click();
+await pg.waitForSelector('#s-instructions.active', { timeout: 15000 });
 await pg.evaluate(() => {
   // Jump to the survey through the app's own state, exactly as a resume would.
   const key = 'searchv2:v3:state:' + window.SVApp.state().code;

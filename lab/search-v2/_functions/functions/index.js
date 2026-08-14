@@ -200,31 +200,14 @@ exports.claimCode = onCall(async (req) => {
     const cSnap = await tx.get(countRef);
     const c = cSnap.exists ? (cSnap.data() || {}) : { nA: 0, nB: 0 };
     const override = (art.run.assign && art.run.assign.nextEntrantOverride) || 'auto';
-    let seq;
-    if (override === 'A' || override === 'B') seq = override;
-    else if ((c.nA || 0) < (c.nB || 0)) seq = 'A';
-    else if ((c.nB || 0) < (c.nA || 0)) seq = 'B';
-    else seq = (((c.nA || 0) + (c.nB || 0)) % 2 === 0) ? 'A' : 'B';
-
-    // Which paid action sits on the LEFT is assigned HERE, jointly with the
-    // sequence, from the same counter — so the four cells of
-    // sequence × button order fill evenly (roughly N/4 each) instead of being
-    // the product of two independent coin flips. It is a covariate in the
-    // primary analysis, so its balance matters as much as the sequence's.
-    const cellKey = s => 'n' + s.sequence + (s.buttonOrder === 'reveal_first' ? 'R' : 'K');
-    const seqCells = [{ sequence: seq, buttonOrder: 'ask_first' }, { sequence: seq, buttonOrder: 'reveal_first' }];
-    const nK = c[cellKey(seqCells[0])] || 0, nR = c[cellKey(seqCells[1])] || 0;
-    const order = (nK < nR) ? 'ask_first'
-      : (nR < nK) ? 'reveal_first'
-      : (((nK + nR) % 2 === 0) ? 'ask_first' : 'reveal_first');
-
-    const bump = {
-      nA: (c.nA || 0) + (seq === 'A' ? 1 : 0),
-      nB: (c.nB || 0) + (seq === 'B' ? 1 : 0)
-    };
-    const ck = cellKey({ sequence: seq, buttonOrder: order });
-    bump[ck] = (c[ck] || 0) + 1;
-    tx.set(countRef, bump, { merge: true });
+    // ONE rule, in the shared engine (Specs.nextCell), so this and the
+    // client-mode path cannot drift: the under-filled arm takes the entrant,
+    // and the button order alternates on that arm's own parity — which keeps
+    // all four cells of sequence × order balanced without a counter field the
+    // client's rules would refuse.
+    const cell = Specs.nextCell(c, override, (art.params.ui && art.params.ui.buttonOrder) || 'fixed');
+    const seq = cell.sequence, order = cell.buttonOrder;
+    tx.set(countRef, cell.counts, { merge: true });
     tx.set(ref, {
       runId: runId, code: code, sequence: seq, buttonOrder: order, status: 'started',
       claimedByUid: uid, claimedAt: Date.now(), autoEnrolled: true

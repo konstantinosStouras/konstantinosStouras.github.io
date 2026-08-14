@@ -466,6 +466,15 @@
             return done
               ? F.revokeCompletion(rowsFor, s.key)
               : F.stampCompleted(rowsFor, s.key, { ts: new Date().getTime(), session: (CFG.sims[s.key] && CFG.sims[s.key].sessionId) || null, src: 'manual' });
+          }).then(function (res) {
+            /* A PARTIAL failure is a failure here. Both writers tolerate one
+               rejected row so the rest still land, and report the count — but
+               the row a student actually reads is their own, and the recovery
+               replica is written under a laxer rule than the roster doc, so
+               "some job succeeded" is not evidence the ✓ reached anybody.
+               Painting the cell on that would show an instructor a mark that
+               does not exist. */
+            if (res && res.failed) throw new Error(res.failed + ' write(s) were refused — nothing was changed for that student');
           }).then(function () {
             r.completed = r.completed || {};
             if (done) r.completed[s.key] = { revoked: 1, rts: new Date().getTime() };
@@ -889,7 +898,14 @@
           return F.revokeCompletion(rv.rows, s.key);
         })));
       }).then(function (rs) {
-        var failed = rs.filter(function (x) { return x.status === 'rejected'; }).length;
+        /* Both writers resolve with {failed:N} when SOME of their per-document
+           writes were refused (one bad row must not hide the rest), so a run
+           that counted only rejected promises reported a clean sync while the
+           ✓ never reached the student's own doc. Count both. */
+        var failed = rs.reduce(function (n, x) {
+          if (x.status === 'rejected') return n + 1;
+          return n + ((x.value && x.value.failed) || 0);
+        }, 0);
         var bits = [];
         if (stamps.length) bits.push('stamped ✓ for ' + stamps.length + ' student(s)');
         if (revokes.length) bits.push('removed the ✓ from ' + revokes.length + ' student(s) no longer in ' + s.title + ' (they can retake it)');

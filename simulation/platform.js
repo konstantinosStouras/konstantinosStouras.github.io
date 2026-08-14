@@ -146,7 +146,16 @@
           if (m[k] && (Number(m[k].ts) || 0) <= tombSeen(rv, k)) { delete m[k]; changed = true; }
           return;
         }
-        if (!m[k]) { m[k] = { ts: Number(e.ts) || 0, session: e.session || null }; changed = true; }
+        if (!m[k]) {
+          /* Carry `src` down with the mark. Without it, a completion the
+             INSTRUCTOR set by hand came back from the roster as an ordinary
+             local marker, went up again on the next sync stamped 'client',
+             and the reconciliation's "marks you set by hand are never removed"
+             guard — which tests src === 'manual' — no longer recognised it. */
+          m[k] = { ts: Number(e.ts) || 0, session: e.session || null };
+          if (e.src) m[k].src = e.src;
+          changed = true;
+        }
       });
       if (changed) {
         /* Tombstones FIRST: if the second write fails (quota), the guard that
@@ -395,13 +404,16 @@
           return ensureAnon().then(function (u) {
             var clean = {}, patch = {};
             Object.keys(m || {}).forEach(function (k) {
-              /* src names the LAST writer. Written on every push through a
-                 dotted path, which REPLACES the whole nested entry — a deep
-                 merge would fuse {ts,session} into a tombstone
-                 ({revoked:1,rts,ts,session}), leaving the row reading as
-                 revoked forever even after a genuine retake. */
+              /* src records WHO ESTABLISHED the completion, not who wrote it
+                 last: an instructor's manual mark keeps `src:'manual'` when
+                 this browser pushes it back, or the reconciliation would stop
+                 recognising the override it is required never to undo.
+                 Written on every push through a dotted path, which REPLACES
+                 the whole nested entry — a deep merge would fuse {ts,session}
+                 into a tombstone ({revoked:1,rts,ts,session}), leaving the row
+                 reading as revoked forever even after a genuine retake. */
               var v = m[k] || {};
-              clean[k] = { ts: Number(v.ts) || 0, session: v.session || null, src: 'client' };
+              clean[k] = { ts: Number(v.ts) || 0, session: v.session || null, src: v.src || 'client' };
               patch['completed.' + k] = clean[k];
             });
             if (!Object.keys(patch).length) return;

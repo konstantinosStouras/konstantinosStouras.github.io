@@ -91,6 +91,10 @@ await pg.goto(BASE + `?code=AUDIT&pcode=${CODE}&PROLIFIC_PID=${CODE}`);
 await pg.waitForSelector('#s-consent.active', { timeout: 20000 });
 await pg.locator('#consent-box').check();
 await pg.locator('#btn-consent').click();
+// Registration sits between consent and the instructions (background, all
+// optional); a standalone run like this one is asked, so click through it.
+await pg.waitForSelector('#s-registration.active, #s-instructions.active');
+if (await pg.locator('#s-registration.active').count()) await pg.locator('#btn-reg').click();
 await pg.waitForSelector('#s-instructions.active');
 const nInstr = await pg.evaluate(() => window.SVContent.INSTRUCTIONS.length);
 for (let i = 0; i < nInstr; i++) await pg.locator('#btn-instr-next').click();
@@ -118,6 +122,8 @@ for (let i = 0; i < plan.length; i++) {
   }
   if (await isOn('s-blockintro')) await pg.locator('#btn-bi').click();
   await pg.waitForSelector('#s-round.active', { timeout: 15000 });
+  // A milestone pop-up can open with the round and would swallow every click.
+  if (await pg.locator('#ov-encourage.show').count()) await pg.locator('#btn-enc-ok').click();
 
   const r = plan[i];
   const t = { round: i + 1, cond: r.cond, scored: r.scored, acts: [], nominated: null, shown: null, score: null };
@@ -180,6 +186,10 @@ for (let i = 0; i < plan.length; i++) {
   await pg.evaluate(p => window.SVApp.select(p), nomPos);
   await pg.waitForFunction(() => !document.getElementById('btn-nominate').disabled, null, { timeout: 8000 });
   await pg.locator('#btn-nominate').click();
+  // The focus prompt can interpose once per half when a round is closed after
+  // almost no searching; "Stop anyway" re-enters the normal path, so the
+  // untouched-position confirmation below still applies.
+  if (await pg.locator('#ov-encourage.show').count()) await pg.locator('#btn-enc-alt').click();
   if (await pg.locator('#ov-nominate.show').count()) await pg.locator('#btn-nom-ok').click();
   await pg.waitForSelector('#s-interstitial.active', { timeout: 15000 });
 
@@ -429,7 +439,8 @@ ok(/Round score/.test(led), 'and the round score closes the sum');
 // ── 9 · nothing was invented ──────────────────────────────────────────────
 head('9 · nothing in the log was invented');
 const known = new Set(['session_start', 'session_end', 'round_start', 'round_end', 'decision',
-  'comprehension', 'survey', 'instructions', 'telemetry', 'slider', 'attention', 'debrief', 'consent', 'block_start']);
+  'comprehension', 'registration', 'survey', 'instructions', 'telemetry', 'slider', 'attention',
+  'debrief', 'consent', 'block_start']);
 const unknown = [...new Set(events.map(e => e.event))].filter(e => !known.has(e));
 ok(unknown.length === 0, 'every row is of a known kind', unknown.join(', '));
 ok(events.every(e => e.bot !== true), 'no bot rows contaminated a real session');

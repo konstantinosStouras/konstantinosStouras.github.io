@@ -438,6 +438,30 @@ head('11 · the content: instructions, gates and the survey');
          ' and ' + got.ask_first + '/' + got.reveal_first + ')');
     });
 
+    // The ENROLMENT rule (Specs.nextCell) — one implementation shared by the
+    // Cloud Function, the client-mode path and this test.
+    {
+      var counts = { nA: 0, nB: 0 }, tally = {};
+      for (var e = 0; e < 90; e++) {
+        var cell = Specs.nextCell(counts, 'auto', 'participant');
+        var k = cell.sequence + '/' + cell.buttonOrder;
+        tally[k] = (tally[k] || 0) + 1;
+        counts = cell.counts;
+      }
+      ok(counts.nA === 45 && counts.nB === 45,
+         '90 enrolments split the sequence exactly 45/45 (' + counts.nA + '/' + counts.nB + ')');
+      var vals = Object.keys(tally).map(function (k) { return tally[k]; });
+      ok(Object.keys(tally).length === 4 && Math.max.apply(null, vals) - Math.min.apply(null, vals) <= 1,
+         'and all four cells of sequence × button order fill evenly ' + JSON.stringify(tally));
+      ok(Object.keys(Specs.nextCell({ nA: 3, nB: 3 }, 'auto', 'participant').counts).join(',') === 'nA,nB',
+         'the counter write carries ONLY nA and nB — the deployed rules refuse any other key');
+      var fixedCell = Specs.nextCell({ nA: 1, nB: 0 }, 'auto', 'fixed');
+      ok(fixedCell.buttonOrder === 'ask_first',
+         'a run whose order is FIXED gets no assignment, so a locked pre-`ui` session cannot start randomising');
+      ok(Specs.nextCell({ nA: 0, nB: 0 }, 'B', 'participant').sequence === 'B',
+         'the admin\u2019s next-entrant override still wins');
+    }
+
     // The cost colours are run parameters, and the pair must stay same-hue,
     // same-saturation with a lightness step — the whole point of the rule.
     const hsl = s => (String(s).match(/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%/) || [])
@@ -460,6 +484,21 @@ head('11 · the content: instructions, gates and the survey');
       const ratio = 1.05 / (lum(c) + 0.05);
       ok(ratio >= 4.5, 'the ' + name + ' cost colour clears 4.5:1 on the white chip (' + ratio.toFixed(2) + ':1)');
     });
+  }
+
+  // Wiring the three enrolment/redaction paths that no unit test can reach.
+  {
+    const fs2 = require('fs'), path2 = require('path');
+    const rd = f => fs2.readFileSync(path2.join(__dirname, '..', f), 'utf8');
+    const adminSrc = rd('admin/admin.js'), fbSrc = rd('svfirebase.js'), fnSrc = rd('_functions/functions/index.js');
+    ok(/ui:\s*clone\(p\.ui\)/.test(adminSrc),
+       'publicDoc carries the `ui` group — without it a server-mode session reads as pre-`ui` and silently loses the interface parameters');
+    ok(/'env', 'costs', 'ai', 'ui'/.test(adminSrc),
+       'the workbook\u2019s Run sheet exports the `ui` group with the other parameters');
+    ok(/SVSpecs\.nextCell\(/.test(fbSrc) && /Specs\.nextCell\(/.test(fnSrc),
+       'both enrolment paths use the one shared rule');
+    ok(!/nAK|nAR|nBK|nBR/.test(fbSrc) && !/nAK|nAR|nBK|nBR/.test(fnSrc),
+       'neither writes a counter field beyond nA/nB');
   }
 
   const regCols = Content.registrationColumns();

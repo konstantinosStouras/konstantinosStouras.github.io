@@ -438,7 +438,12 @@
     B: { title: 'Part B · The AI', note: '' },
     C: { title: 'Part C · Trust and the decision', note: '' },
     D: { title: 'Part D · About you', note: '' },
-    E: { title: 'Part E · Finally', note: '' }
+    E: { title: 'Part E · Finally', note: '' },
+    // Only reachable through the registration MIGRATION path (app.js
+    // surveyItems): a participant who was already in the rounds when the
+    // registration phase shipped answers the background block here instead,
+    // where it used to live.
+    F: { title: 'Part F · Background', note: 'Every question in this part is optional — leave any of them blank.' }
   };
 
   // ---- debrief (§16.7) -----------------------------------------------------

@@ -661,7 +661,17 @@
               <p class="muted small">Play any spec exactly as a participant would, writing nothing. The testing
               overlays show the true prizes, the AI&rsquo;s whole curve and its private anchors, so you can see at a
               glance whether a seed geometry looks the way it was meant to.</p>
-              <div class="field"><label>Spec</label><select id="prev-spec"></select></div>
+              <div class="row2">
+                <div class="field"><label>Spec</label><select id="prev-spec"></select></div>
+                <div class="field"><label>Button layout <span class="defval">· which paid action is on the left</span></label>
+                  <select id="prev-order">
+                    <option value="">As this sandbox falls</option>
+                    <option value="ask">Ask on the left</option>
+                    <option value="reveal">Reveal on the left</option>
+                  </select>
+                  <div class="hint">Participants see one or the other, assigned at enrolment. Rehearse both.</div>
+                </div>
+              </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="btn btn-ghost btn-sm" id="btn-preview" data-act="testround">&#129514; Test round</button>
                 <button class="btn btn-ghost btn-sm" id="btn-preview-full">&#129514; Test the whole session</button>

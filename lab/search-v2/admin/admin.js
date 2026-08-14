@@ -295,11 +295,16 @@
   }
   // ONE builder for every sandbox link, so the launch box and the cards can never
   // open different things.
-  function previewUrl(code, spec) {
+  // `order` ('ask' | 'reveal') rehearses one side of the button swap. Without
+  // it a sandbox always shows whichever layout the constant preview code hashes
+  // to, so half of what participants meet could never be checked before a
+  // session opened.
+  function previewUrl(code, spec, order) {
     var base = location.origin + location.pathname.replace(/admin\/?$/, '');
     return base + '?preview=1&debug=1&key=' + encodeURIComponent(CFG.DEBUG_KEY) +
       (code ? '&code=' + encodeURIComponent(code) : '') +
-      (spec ? '&spec=' + encodeURIComponent(spec) : '');
+      (spec ? '&spec=' + encodeURIComponent(spec) : '') +
+      (order ? '&order=' + encodeURIComponent(order) : '');
   }
 
   function runAction(act, run, btn) {
@@ -523,6 +528,12 @@
           warmupPerBlock: p.rounds.warmupPerBlock, scoredPerBlock: p.rounds.scoredPerBlock,
           openPerBlock: p.rounds.openPerBlock, seededPerBlock: p.rounds.seededPerBlock
         },
+        // The interface group must travel: it holds nothing secret, and
+        // WITHOUT it Specs.withDefaults on the participant's side takes the
+        // "stored before `ui` existed" branch and quietly forces the whole
+        // session to fixed buttons with no encouragement — in server mode,
+        // where the redacted copy is ALL the participant ever sees.
+        ui: clone(p.ui),
         ops: clone(p.ops)
       },
       updatedAt: Date.now()
@@ -1171,11 +1182,14 @@
   function wireData() {
     $('btn-fetch').onclick = function () { loadEvents().then(renderData); };
     $('btn-validate').onclick = runValidation;
+    var prevOrder = function () { return ($('prev-order') && $('prev-order').value) || ''; };
     $('btn-preview').onclick = function () {
       var spec = $('prev-spec').value;
-      window.open(previewUrl(current && current.code, spec), '_blank');
+      window.open(previewUrl(current && current.code, spec, prevOrder()), '_blank');
     };
-    $('btn-preview-full').onclick = function () { window.open(previewUrl(current && current.code), '_blank'); };
+    $('btn-preview-full').onclick = function () {
+      window.open(previewUrl(current && current.code, null, prevOrder()), '_blank');
+    };
     $('btn-dryrun').onclick = dryRun;
     $('btn-dl-xlsx').onclick = downloadXlsx;
     $('btn-dl-decisions').onclick = function () { if (built) dl('decisions.csv', X.toCSV(built.decisions), 'text/csv'); };
@@ -1588,7 +1602,11 @@
     ];
 
     var runRows = [['group', 'parameter', 'value']];
-    ['env', 'costs', 'ai', 'rounds', 'assign', 'filter', 'ops'].forEach(function (g) {
+    // `ui` is in the list because it is a TREATMENT group, not a theme: the
+    // button order and the two cost colours are properties of the interface a
+    // primary outcome was measured through, so they have to travel with the
+    // data like every other parameter.
+    ['env', 'costs', 'ai', 'ui', 'rounds', 'assign', 'filter', 'ops'].forEach(function (g) {
       Object.keys(a.params[g] || {}).forEach(function (k) {
         var v = a.params[g][k];
         runRows.push([g, k, (typeof v === 'object') ? JSON.stringify(v) : v]);

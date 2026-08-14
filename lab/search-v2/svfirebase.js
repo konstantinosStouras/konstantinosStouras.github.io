@@ -170,7 +170,7 @@ window.SVFirebase = (function () {
   //              student ID becomes a participant), taking the under-filled
   //              sequence from a transactional counter so the split stays exact.
   // Resolves { ok, code, sequence, buttonOrder, resumed, reason }.
-  function claimCode(runId, code, mode, override) {
+  function claimCode(runId, code, mode, override, buttonOrderMode) {
     if (!configured) return Promise.resolve({ ok: false, reason: 'offline' });
     code = String(code || '').trim().toUpperCase();
     if (!runId || !code) return Promise.resolve({ ok: false, reason: 'nocode' });
@@ -196,7 +196,7 @@ window.SVFirebase = (function () {
           return { ok: true, code: code, sequence: d.sequence, buttonOrder: d.buttonOrder || null, resumed: true };
         }
         if (mode === 'roster') return { ok: false, reason: 'notonroster' };
-        return assignCell(runId, override).then(function (cell) {
+        return assignCell(runId, override, buttonOrderMode).then(function (cell) {
           return sdk.fs.setDoc(ref, {
             runId: runId, code: code, sequence: cell.sequence, buttonOrder: cell.buttonOrder,
             status: 'started', claimedByUid: me, claimedAt: Date.now(), autoEnrolled: true
@@ -211,29 +211,17 @@ window.SVFirebase = (function () {
   // Transactional 50/50 assignment (§11). The admin's "next entrant override"
   // wins when set, and the forced choice is what the counter records, so the
   // export can always reconstruct how the balance was reached.
-  function assignCell(runId, override) {
+  function assignCell(runId, override, buttonOrderMode) {
     var ref = sdk.fs.doc(db, C.runCounts, runId);
-    var cellKey = function (c) { return 'n' + c.sequence + (c.buttonOrder === 'reveal_first' ? 'R' : 'K'); };
     return sdk.fs.runTransaction(db, function (tx) {
       return tx.get(ref).then(function (snap) {
         var d = snap.exists() ? (snap.data() || {}) : { nA: 0, nB: 0 };
-        var seq;
-        if (override === 'A' || override === 'B') seq = override;
-        else if ((d.nA || 0) < (d.nB || 0)) seq = 'A';
-        else if ((d.nB || 0) < (d.nA || 0)) seq = 'B';
-        else seq = (((d.nA || 0) + (d.nB || 0)) % 2 === 0) ? 'A' : 'B';
-        // The button order is taken from the SAME counter, within the assigned
-        // sequence, so all four cells of sequence × order fill evenly rather
-        // than being two independent coin flips (§ config.js ui.buttonOrder).
-        var kK = cellKey({ sequence: seq, buttonOrder: 'ask_first' });
-        var kR = cellKey({ sequence: seq, buttonOrder: 'reveal_first' });
-        var nK = d[kK] || 0, nR = d[kR] || 0;
-        var order = (nK < nR) ? 'ask_first' : (nR < nK) ? 'reveal_first'
-          : (((nK + nR) % 2 === 0) ? 'ask_first' : 'reveal_first');
-        var next = { nA: (d.nA || 0) + (seq === 'A' ? 1 : 0), nB: (d.nB || 0) + (seq === 'B' ? 1 : 0) };
-        next[cellKey({ sequence: seq, buttonOrder: order })] = (d[cellKey({ sequence: seq, buttonOrder: order })] || 0) + 1;
-        tx.set(ref, next, { merge: true });
-        return { sequence: seq, buttonOrder: order };
+        // ONE rule, in specs.js, shared with the Cloud Function's claimCode —
+        // and it writes nothing but nA/nB, which is all the deployed rules
+        // allow on this document (see Specs.nextCell).
+        var cell = window.SVSpecs.nextCell(d, override, buttonOrderMode);
+        tx.set(ref, cell.counts, { merge: true });
+        return { sequence: cell.sequence, buttonOrder: cell.buttonOrder };
       });
     }).catch(function () {
       // The counter is unavailable (rules not published yet, or offline): fall

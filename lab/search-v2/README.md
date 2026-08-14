@@ -80,6 +80,14 @@ primary outcome is a treatment, not a theme. The Reveal cost renders identically
 in AI-off rounds, where the Ask button is absent from the DOM rather than
 hidden. `tools/smoke.mjs` measures the parity from computed styles.
 
+**Nobody mid-session loses data.** The registration phase is entered from the
+consent button, so a participant who had already consented under the previous
+build would be asked by neither it nor the deleted Part F. Two catch-ups, in
+`app.js`: resumed *before* the task they are routed into the phase; resumed
+*inside* the rounds the items come back at the end of the exit survey, where
+they used to be, logged as `registration` rows so they still land in the same
+`reg_*` column. `tools/migration-guard.mjs` pins both.
+
 **Engagement, within the same rule.** Forty minutes of a repeated task loses
 people, and a bored participant produces fast empty rounds that look like
 decisions. So: a progress bar and "round n of 12 in this half" under the round

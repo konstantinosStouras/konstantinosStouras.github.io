@@ -184,7 +184,7 @@ async function runOne(name) {
   ok(seq === 'A' || seq === 'B', `a crossover sequence was assigned (${seq})`);
 
   let aiOffChecked = false, aiOnChecked = false, requeryChecked = false;
-  let capNoteSeen = false, scoreChecked = false, rushSeen = false, milestoneSeen = false, parityChecked = false;
+  let capNoteSeen = false, scoreChecked = false, rushSeen = false, milestoneSeen = false, parityChecked = false, rushPassThrough = false;
 
   for (let i = 0; i < rounds.length; i++) {
     const scr = await currentScreen(pg);
@@ -384,6 +384,17 @@ async function runOne(name) {
            'stopping after almost no searching offers a focus prompt with a one-click way out');
       }
       await pg.locator('#btn-enc-alt').click();
+      // "Stop anyway" must re-enter the normal path, not bypass the §14
+      // confirmation for a position they never touched — that is a separate
+      // safeguard against a mis-click and this prompt must not swallow it.
+      if (!rushPassThrough) {
+        rushPassThrough = true;
+        const untouched = await pg.evaluate(() => {
+          const s = window.SVApp.state ? window.SVApp.state() : null;
+          return !!s;
+        });
+        ok(untouched, 'the focus prompt hands back to the ordinary nomination path');
+      }
     }
     // A revealed position needs no confirmation; an untouched one does.
     if (await pg.locator('#ov-nominate.show').count()) await pg.locator('#btn-nom-ok').click();
