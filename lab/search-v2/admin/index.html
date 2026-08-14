@@ -365,29 +365,42 @@
               <summary>Round structure <span class="lock-tag">locked after launch</span></summary>
               <div class="pbody">
                 <div class="row2">
-                  <div class="field"><label>Warm-up rounds per block <span class="defval">· 2</span></label><input type="number" id="p-rounds-warmupPerBlock" min="0" max="10"></div>
-                  <div class="field"><label>Scored rounds per block <span class="defval">· 12</span></label><input type="number" id="p-rounds-scoredPerBlock" min="1" max="60"></div>
+                  <div class="field"><label>Warm-up rounds per block <span class="defval">· 2 &mdash; played, not analysed</span></label><input type="number" id="p-rounds-warmupPerBlock" min="0" max="10"></div>
+                  <div class="field"><label>Scored rounds per block <span class="defval">· 12 &mdash; these are the data</span></label><input type="number" id="p-rounds-scoredPerBlock" min="1" max="60"></div>
                 </div>
                 <div class="row2">
-                  <div class="field"><label>Open rounds per block <span class="defval">· 4</span></label><input type="number" id="p-rounds-openPerBlock" min="0" max="60"></div>
-                  <div class="field"><label>Seeded rounds per block <span class="defval">· 8</span></label><input type="number" id="p-rounds-seededPerBlock" min="0" max="60"></div>
+                  <div class="field"><label>Blank rounds per block <span class="defval">· 4 &mdash; nothing pre-opened</span></label><input type="number" id="p-rounds-openPerBlock" min="0" max="60"></div>
+                  <div class="field"><label>Pre-opened rounds per block <span class="defval">· 8</span></label><input type="number" id="p-rounds-seededPerBlock" min="0" max="60"></div>
                 </div>
-                <label style="font-weight:600; font-size:14px;">Seed shape mix <span class="defval">· 2 frontier, 4 balanced, 2 gap</span></label>
+                <p class="hint">Every scored round is one or the other, so these two must add up to the
+                scored rounds per block. A <b>blank</b> round starts with the whole line unknown. A
+                <b>pre-opened</b> round starts with three or four positions already open, showing their true
+                prizes &mdash; that is what makes the geometry at the first decision experimenter-assigned
+                rather than something the participant chose. (The data calls these <span class="mono">OPEN</span>
+                and <span class="mono">seeded</span>; see the Design notes tab.)</p>
+                <label style="font-weight:600; font-size:14px;">Layout mix, across the pre-opened rounds
+                  <span class="defval">· 2 frontier, 4 balanced, 2 gap</span></label>
+                <p class="hint">WHERE the pre-opened positions sit, which decides whether the value is more
+                likely to lie beyond them (frontier) or between them (gap). These three must add up to the
+                pre-opened rounds per block.</p>
                 <div class="row3">
-                  <div class="field"><label>Frontier</label><input type="number" id="p-shape-FRONTIER" min="0" max="30"></div>
-                  <div class="field"><label>Balanced</label><input type="number" id="p-shape-BALANCED" min="0" max="30"></div>
-                  <div class="field"><label>Gap</label><input type="number" id="p-shape-GAP" min="0" max="30"></div>
+                  <div class="field"><label>Frontier <span class="defval">· clustered, so the value is outside</span></label><input type="number" id="p-shape-FRONTIER" min="0" max="30"></div>
+                  <div class="field"><label>Balanced <span class="defval">· the knife edge</span></label><input type="number" id="p-shape-BALANCED" min="0" max="30"></div>
+                  <div class="field"><label>Gap <span class="defval">· spread, so the value is between</span></label><input type="number" id="p-shape-GAP" min="0" max="30"></div>
+                </div>
+                <label style="font-weight:600; font-size:14px;">AI density split</label>
+                <p class="hint">How many rounds of each kind give the AI its sparse K rather than its dense K.
+                Each pair must add up to that kind's rounds per block.</p>
+                <div class="row2">
+                  <div class="field"><label>Pre-opened: sparse <span class="defval">· 4</span></label><input type="number" id="p-dseed-SPARSE" min="0" max="30"></div>
+                  <div class="field"><label>Pre-opened: dense <span class="defval">· 4</span></label><input type="number" id="p-dseed-DENSE" min="0" max="30"></div>
                 </div>
                 <div class="row2">
-                  <div class="field"><label>Seeded: sparse <span class="defval">· 4</span></label><input type="number" id="p-dseed-SPARSE" min="0" max="30"></div>
-                  <div class="field"><label>Seeded: dense <span class="defval">· 4</span></label><input type="number" id="p-dseed-DENSE" min="0" max="30"></div>
+                  <div class="field"><label>Blank: sparse <span class="defval">· 2</span></label><input type="number" id="p-dopen-SPARSE" min="0" max="30"></div>
+                  <div class="field"><label>Blank: dense <span class="defval">· 2</span></label><input type="number" id="p-dopen-DENSE" min="0" max="30"></div>
                 </div>
                 <div class="row2">
-                  <div class="field"><label>Open: sparse <span class="defval">· 2</span></label><input type="number" id="p-dopen-SPARSE" min="0" max="30"></div>
-                  <div class="field"><label>Open: dense <span class="defval">· 2</span></label><input type="number" id="p-dopen-DENSE" min="0" max="30"></div>
-                </div>
-                <div class="row2">
-                  <div class="field"><label>Seed jitter <span class="defval">· plus or minus 2</span></label><input type="number" id="p-rounds-seedJitter" min="0" max="20"></div>
+                  <div class="field"><label>Pre-opened position jitter <span class="defval">· plus or minus 2</span></label><input type="number" id="p-rounds-seedJitter" min="0" max="20"></div>
                   <div class="field"><label>Shuffle round order within block <span class="defval">· on</span></label>
                     <div class="seg" id="p-rounds-shuffleWithinBlock"><button data-v="true">On</button><button data-v="false">Off</button></div>
                   </div>
