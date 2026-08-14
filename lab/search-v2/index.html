@@ -161,19 +161,32 @@
         <button class="btn btn-ghost btn-sm" id="btn-instr-open" title="Reopen the instructions summary">&#9432; Instructions</button>
       </div>
 
+      <!-- A friendly, dismissible nudge. Never blocks anything, and every
+           appearance is logged as telemetry so the analysis can control for it. -->
+      <div class="tip" id="tip" role="status" aria-live="polite">
+        <span id="tip-text"></span>
+        <button type="button" class="tip-x" id="tip-close" aria-label="Dismiss">&times;</button>
+      </div>
+
       <div class="round-grid">
         <!-- LEFT: everything touched this round, with the two costs kept apart -->
         <aside class="side-col">
           <h3>This round</h3>
           <ul class="touched" id="touched-list"></ul>
           <div class="side-stats">
-            <div class="ss"><span class="ss-l">Questions asked</span><span class="ss-v" id="c-queries">0</span></div>
-            <div class="ss"><span class="ss-l">Spent on questions</span><span class="ss-v cost" id="c-query-cost">0</span></div>
+            <div class="ss" id="ss-ai"><span class="ss-l">Questions asked to the AI</span><span class="ss-v" id="c-queries">0</span></div>
+            <div class="ss" id="ss-ai-cost"><span class="ss-l">Cost of asking the AI</span><span class="ss-v cost" id="c-query-cost">0</span></div>
             <div class="ss"><span class="ss-l">Positions revealed</span><span class="ss-v" id="c-reveals">0</span></div>
-            <div class="ss"><span class="ss-l">Spent on reveals</span><span class="ss-v cost" id="c-reveal-cost">0</span></div>
-            <div class="ss sel"><span class="ss-l">Selected position</span><span class="ss-v" id="c-selected">50</span></div>
+            <div class="ss"><span class="ss-l">Cost of revealing</span><span class="ss-v cost" id="c-reveal-cost">0</span></div>
+            <div class="ss tot"><span class="ss-l">Total spent this round</span><span class="ss-v cost" id="c-total-cost">0</span></div>
+            <div class="ss sel"><span class="ss-l">Best prize you have found</span><span class="ss-v" id="c-best">&mdash;</span></div>
+            <div class="ss"><span class="ss-l">Selected position</span><span class="ss-v" id="c-selected">50</span></div>
+            <div class="ss net"><span class="ss-l">Score if you stop here</span><span class="ss-v" id="c-net">&mdash;</span></div>
             <div class="ss"><span class="ss-l">Rounds remaining</span><span class="ss-v" id="c-remaining">0</span></div>
           </div>
+          <!-- The prices, always on screen: a participant who has forgotten them
+               should never have to open the reminder to keep playing. -->
+          <div class="price-note" id="c-prices"></div>
         </aside>
 
         <!-- CENTRE: the line -->

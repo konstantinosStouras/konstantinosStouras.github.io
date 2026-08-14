@@ -172,6 +172,11 @@ for (let i = 0; i < plan.length; i++) {
   if (await pg.locator('#ov-nominate.show').count()) await pg.locator('#btn-nom-ok').click();
   await pg.waitForSelector('#s-interstitial.active', { timeout: 15000 });
 
+  // What the participant is told, itemised — checked on the first round.
+  if (i === 0) {
+    const led = await pg.locator('#inter-body .ledger').innerText();
+    trace.ledger = led.replace(/\s+/g, ' ').trim();
+  }
   const body = await pg.locator('#inter-body').innerText();
   t.nominated = nomPos;
   t.shown = (body.match(/position\s+\d+[^0-9-]*?(-?\d+)/) || [])[1];
@@ -399,8 +404,19 @@ const surveyCols = Object.keys(pr || {}).filter(k => k.indexOf('survey_') === 0 
 ok(surveyCols.length >= 10, 'the survey answers reach the participant row as columns',
   surveyCols.length + ' populated');
 
-// ── 8 · nothing was invented ──────────────────────────────────────────────
-head('8 · nothing in the log was invented');
+// ── 8 · the participant was told where their score went ───────────────────
+head('8 · the round result is itemised for the participant');
+const led = trace.ledger || '';
+ok(/Prize at position/.test(led), 'the prize won is named with its position', led.slice(0, 140));
+ok(/Cost of revealing/.test(led), 'the cost of revealing is shown as its own line');
+ok(/Round score/.test(led), 'and the round score closes the sum');
+{
+  const nums = (led.match(/[+−-]?\d+/g) || []).map(x => +x.replace('−', '-'));
+  ok(nums.length >= 3, 'every line carries a number', led);
+}
+
+// ── 9 · nothing was invented ──────────────────────────────────────────────
+head('9 · nothing in the log was invented');
 const known = new Set(['session_start', 'session_end', 'round_start', 'round_end', 'decision',
   'comprehension', 'survey', 'instructions', 'telemetry', 'slider', 'attention', 'debrief', 'consent', 'block_start']);
 const unknown = [...new Set(events.map(e => e.event))].filter(e => !known.has(e));
