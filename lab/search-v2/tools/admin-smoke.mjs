@@ -87,7 +87,8 @@ ok(/Local preview/.test(await pg.locator('#scope-note').innerText()), 'and says 
 // ── the seven screens ──────────────────────────────────────────────────────
 const tabs = await pg.$$eval('.tab', els => els.map(e => e.dataset.tab));
 ok(JSON.stringify(tabs) === JSON.stringify(['runs', 'params', 'roster', 'monitor', 'data', 'notes', 'wording']),
-  'the panel is Sessions · Parameters · Roster · Live monitor · Data & preview · Design notes · Wording', tabs.join(','));
+  'the panel is Sessions · Parameters · Participants · Live monitor · Data & preview · Design notes · Wording ' +
+  '(the third tab keeps its `roster` id, which is what the data calls it)', tabs.join(','));
 ok(await shown('tab-runs'), 'it opens on the Runs screen');
 
 // ── Screen 2 + 3 · parameters beside consequences ─────────────────────────
@@ -251,45 +252,70 @@ ok(/bot rows in a real export: 0/.test(dry),
   'and proves bot rows are excluded from a real export (§17b)');
 ok(/badge green/.test(await pg.locator('#dryrun-out').innerHTML()), 'and reports a healthy export');
 
-// ── Screen 4 · roster ─────────────────────────────────────────────────────
+// ── Screen 4 · participants ───────────────────────────────────────────────
+// Seed the local session with three codes and the two session records they
+// would have produced. P002 is the bug this screen used to have: a participant
+// who reached the end while their roster document still said 'started'.
+await pg.evaluate(() => {
+  const key = 'searchv2:v3:admin:local';
+  const list = JSON.parse(localStorage.getItem(key) || '[]');
+  list[0].roster = [
+    { code: 'P001', sequence: 'A', buttonOrder: 'ask_first', status: 'started', claimedByUid: 'u1', claimedAt: Date.now(), autoEnrolled: true },
+    { code: 'P002', sequence: 'B', buttonOrder: 'reveal_first', status: 'started', claimedByUid: 'u2', claimedAt: Date.now(), autoEnrolled: true },
+    { code: 'P003', sequence: 'A', buttonOrder: 'reveal_first', status: 'unused' }
+  ];
+  list[0].participants = [
+    // 22 rounds finished = both warm-up pairs plus 18 scored ones.
+    { participant_code: 'P001', rounds_done: 22, completed: false },
+    { participant_code: 'P002', rounds_done: 28, completed: true }
+  ];
+  localStorage.setItem(key, JSON.stringify(list));
+});
+await pg.reload();
+await pg.waitForSelector('#a-dash.active');
 await tab('roster');
-await pg.fill('#ros-n', '90');
-await pg.locator('#btn-ros-gen').click();
-await pg.waitForTimeout(600);
-const stats = await pg.locator('#roster-stats').innerText();
-ok(/90/.test(stats), '90 codes generated');
-const cells = await pg.$$eval('#roster-table tbody tr', els => els.map(tr => ({
-  seq: tr.children[1].textContent.trim(), btn: tr.children[2].textContent.trim()
+await pg.waitForTimeout(400);
+
+ok((await pg.locator('.tab[data-tab="roster"]').innerText()).trim() === 'Participants',
+  'the screen is called Participants — the `roster` id and collection keep that name in the data');
+const heads = await pg.$$eval('#roster-table thead th', els => els.map(e => e.textContent.trim()));
+ok(JSON.stringify(heads) === JSON.stringify(['Code', 'Sequence', 'Buttons', 'Round', 'Status', 'Claimed', 'Enrolled']),
+  'Round sits beside Status, so progress is readable at a glance', heads.join(' | '));
+
+const rows = await pg.$$eval('#roster-table tbody tr', els => els.map(tr => ({
+  code: tr.children[0].textContent.trim(), round: tr.children[3].textContent.trim(),
+  status: tr.children[4].textContent.trim()
 })));
-const seqCounts = { A: 0, B: 0 };
-cells.forEach(c => { if (seqCounts[c.seq] != null) seqCounts[c.seq]++; });
-ok(seqCounts.A === 45 && seqCounts.B === 45,
-  'block randomisation splits the roster exactly 45 / 45, not by coin flips', JSON.stringify(seqCounts));
-// Button order is a covariate, so it is block-randomised JOINTLY: all four
-// cells of sequence × order fill evenly, which two independent draws would not
-// guarantee.
-const joint = {};
-cells.forEach(c => { const k = c.seq + '/' + c.btn; joint[k] = (joint[k] || 0) + 1; });
-const jointVals = Object.values(joint);
-ok(Object.keys(joint).length === 4 && Math.max(...jointVals) - Math.min(...jointVals) <= 1,
-  'and the four cells of sequence × button order come out balanced', JSON.stringify(joint));
+const byCode = Object.fromEntries(rows.map(r => [r.code, r]));
+ok(byCode.P001 && byCode.P001.round === '18/24 (75%)',
+  'a participant part-way through reads 18/24 (75%) — scored rounds finished of the scored rounds assigned',
+  byCode.P001 && byCode.P001.round);
+ok(byCode.P001 && byCode.P001.status === 'started', 'and is still in progress');
+ok(byCode.P002 && byCode.P002.status === 'completed',
+  'a participant who reached the end reads completed, even though their roster document still says started ' +
+  '— the status is read from their own session record', byCode.P002 && byCode.P002.status);
+ok(byCode.P002 && byCode.P002.round === '24/24 (100%)', 'and their round count is full',
+  byCode.P002 && byCode.P002.round);
+ok(byCode.P003 && byCode.P003.round === '—' && byCode.P003.status === 'unused',
+  'an unclaimed code shows no progress at all rather than a zero it did not earn');
+
 const rosterStats = await pg.locator('#roster-stats').innerText();
 ok(/Ask on the left/.test(rosterStats) && /Reveal on the left/.test(rosterStats),
-  'the roster reports that balance, so it can be confirmed before the first session opens');
+  'the screen reports the button-order balance beside the sequence balance, so both can be confirmed');
+const tiles = await pg.$$eval('#roster-stats .stat-box', els => Object.fromEntries(
+  els.map(e => [e.querySelector('span').textContent.trim(), e.querySelector('b').textContent.trim()])));
+ok(tiles.Completed === '1' && tiles['In progress'] === '1' && tiles.Unused === '1',
+  'and the tiles count them the same way the rows do', JSON.stringify(tiles));
 const rosterText = await pg.locator('#tab-roster').innerText();
-ok(/no names, no e-mail addresses/i.test(rosterText), 'the roster screen states that it holds no identifying information');
+ok(/no names, no e-mail addresses/i.test(rosterText), 'the screen states that it holds no identifying information');
 
-// The entrant override demands a reason.
-pg.once('dialog', d => d.accept());
-await pg.locator('#ros-override button[data-v="A"]').click();
-await pg.locator('#btn-ros-override').click();
-await pg.waitForTimeout(300);
-ok(true, 'forcing a sequence without a reason is refused');
-await pg.fill('#ros-reason', 'attrition ran uneven in the first session');
-await pg.locator('#btn-ros-override').click();
-await pg.waitForTimeout(500);
-ok(/Override log/.test(await pg.locator('#ros-overrides').innerText()),
-  'a forced assignment is logged with its timestamp and reason, and ships with the export');
+// The two side cards are gone: the table is the whole screen.
+ok((await pg.locator('#btn-ros-gen').count()) === 0 && (await pg.locator('#ros-override').count()) === 0,
+  'the code generator and the entrant-override card are removed — the override lives in Parameters');
+ok((await pg.locator('#btn-ros-csv').count()) === 1, 'the CSV of the participants is still one press away');
+const tableW = await pg.locator('#tab-roster .table-scroll').evaluate(e => e.getBoundingClientRect().width);
+const panelW = await pg.locator('#tab-roster').evaluate(e => e.getBoundingClientRect().width);
+ok(tableW > panelW - 40, 'and the table now spans the full width of the screen', tableW + ' of ' + panelW);
 
 // ── the lock ──────────────────────────────────────────────────────────────
 await pg.evaluate(() => {

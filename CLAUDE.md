@@ -2533,12 +2533,13 @@ nested arrays. **Every derived field of §16.8 is computed offline in
 `admin/export.js` and nowhere else.**
 
 **Admin panel** at `/lab/search-v2/admin/`, seven tabs over the brief's six
-screens: Sessions · Parameters (+ Consequences beside it) · Roster · Live monitor ·
+screens: Sessions · Parameters (+ Consequences beside it) · Participants · Live
+monitor ·
 Data & preview · Design notes · Wording. The tab switcher derives its pane list
 from the buttons themselves — a hard-coded list silently fails to show any screen
 added after it was written, which is exactly how the Wording pane first shipped
 invisible. Parameters carries an eighth group, **Interface and engagement**
-(button order, the two cost colours, encouragement); the Roster reports the
+(button order, the two cost colours, encouragement); the Participants screen reports the
 ask-left / reveal-left balance beside the sequence split; and the Wording tab
 covers the registration questions and every encouragement message, like every
 other word a participant reads. **The UI calls the unit a SESSION** (28 rounds: 4 warm-up + 24
@@ -2555,6 +2556,37 @@ default / Restore built-in default (ghost). Export is one workbook (ReadMe, **Di
 Specs, Decisions, Rounds, Participants, Slider, Attention, Raw) plus the three
 CSVs, bundling the session's frozen configuration and a checksum; `interrupted`
 and `disengaged` are COLUMNS, not filters.
+**The third tab is PARTICIPANTS, and its status is read from the participant, not
+from the roster document** (owner 2026-08: "many participants have fully completed
+the game but the data shows them still as started"). The roster document learns
+one thing — that a code was CLAIMED, stamped `'started'` at entry — and nothing
+ever wrote to it again, so every finished participant read as in-progress for the
+rest of the session's life (47 of 47 on the live session, 0 completed). Two
+halves to the fix: `derivedStatus` in admin.js joins each roster row to that
+participant's own session record (`completed`, written on the Done screen) and
+prefers it, which HEALS every session already recorded; and `showDone` now calls
+`SVFirebase.markRosterCompleted`, a best-effort merge write allowed by the
+existing rule (`request.resource.data.claimedByUid == request.auth.uid` — it
+re-states the claiming uid, so no rules republish), which closes the loop going
+forward. The panel must keep deriving even so: the write is deliberately
+non-fatal and a refusal must never surface on a participant's Done screen. A new
+**Round** column reads `18/24 (75%)` — SCORED rounds finished out of the scored
+rounds this session assigns (`scoredDone`/`scoredTotal`, derived from the
+participant record's `rounds_done`, which counts warm-ups too, against THIS
+session's own `warmupPerBlock`/`scoredPerBlock` rather than the default 4 + 24;
+warm-ups head each of the two blocks, per `Specs.orderPlan`). A code with no
+session record shows `—`, never `0/24`: it has finished nothing, but it has not
+finished zero rounds either. A session record whose roster document is missing is
+appended as its own row rather than vanishing. **The screen's two side cards were
+REMOVED** (owner: "I will never use it") — code generation and the next-entrant
+override — so the table spans the full width; the override is still edited in
+Parameters (Assignment → Next entrant, the one control that stays unlocked) and
+its log still ships with the export, but a CONSEQUENCE is that `ops.rosterMode =
+'roster'` ("roster only") now has no way to be given codes, so leave it on Open,
+where a class-platform student ID enrols itself. Only the UI word changed: the
+`roster` collection, the `runId__CODE` document ids and the tab's own
+`data-tab="roster"` are untouched, exactly as SESSION/`run_id` is handled above.
+Covered by `tools/admin-smoke.mjs` (167).
 **The Dictionary sheet describes EVERY column** of Decisions/Rounds/Participants
 in a sentence + a type, generated from `admin/dictionary.js`; `selftest.js`
 FAILS when a column is exported without an entry, so the two can never drift —
@@ -2639,7 +2671,7 @@ created a draft, `app.js` treats a session as open when `entryOpen !== false` OR
 enterable before the validation gate had ever run. `.made-box` is deliberately
 NOT named `.code-box`: `../styles.css` already has one (the participant app's
 completion code) and the admin page loads it. Covered by `admin-smoke.mjs`
-(161 checks).
+(167 checks).
 **A session is summarised before it can bite** (`summaryBoxes`/`askSummary`):
 CREATING freezes the pool and all 28 specs under its seeds, and OPENING ENTRY
 starts the lock, so both put the whole configuration in front of the admin first
@@ -2755,7 +2787,7 @@ installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
 `node lab/search-v2/tools/selftest.js` (299) ·
 `tools/smoke.mjs` (a whole 28-round session) ·
-`tools/admin-smoke.mjs` (161) · `tools/platform-guard.mjs` (28) ·
+`tools/admin-smoke.mjs` (167) · `tools/platform-guard.mjs` (28) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its
 participants, and the drift guard that `app.js` reads content only through the
 resolved copy: one `Content.SURVEY` slipping back would silently ignore that

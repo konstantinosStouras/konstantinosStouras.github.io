@@ -1890,6 +1890,11 @@
       }));
       if (window.SVFirebase && SVFirebase.isConfigured() && S.runId && !PREVIEW) {
         SVFirebase.saveParticipant(S.runId, S.code, sessionRecord());
+        // …and close the loop on the roster document, which otherwise keeps the
+        // 'started' it was stamped with at entry for ever. Best-effort: the
+        // panel derives the status from the session record anyway, so a refused
+        // write costs a tidier roster row and nothing else.
+        SVFirebase.markRosterCompleted(S.runId, S.code);
       }
       // Tell the platform the run is finished, so the student's card ticks over.
       // Defined only on a genuine platform launch — never in a rehearsal.

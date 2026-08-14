@@ -276,7 +276,7 @@
       <div class="tabs">
         <button class="tab on" data-tab="runs" title="Every session: status, participants, sequence balance">Sessions</button>
         <button class="tab" data-tab="params" title="The parameter set for the selected session, with its downstream consequences beside it">Parameters</button>
-        <button class="tab" data-tab="roster" title="Participant codes and sequence assignment">Roster</button>
+        <button class="tab" data-tab="roster" title="Every participant: their progress through the rounds, their status and their sequence assignment">Participants</button>
         <button class="tab" data-tab="monitor" title="Live counters and health checks while a session is open">Live monitor</button>
         <button class="tab" data-tab="data" title="Preview, validate, dry-run and export">Data &amp; preview</button>
         <button class="tab" data-tab="notes" title="What the AI knows, what a pre-opened round is, and what the numbers of this session actually are">Design notes</button>
@@ -634,7 +634,8 @@
                     <div class="seg" id="p-ops-rosterMode"><button data-v="open">Open &mdash; a class platform ID enrols itself</button><button data-v="roster">Roster only</button></div>
                     <div class="hint">Open is what the Simulation Platform needs: a student arrives with their
                     university student ID, which becomes their participant code and the join key between the two
-                    datasets. Roster-only refuses any code not already on the list.</div>
+                    datasets. Roster-only refuses any code not already on the list &mdash; and the panel no longer
+                    generates codes, so leave this on Open unless the list is being seeded another way.</div>
                   </div>
                   <div class="field"><label>Completion code <span class="defval">· blank = none shown</span></label><input type="text" id="p-ops-completionCode"></div>
                 </div>
@@ -662,42 +663,25 @@
         </div>
       </div>
 
-      <!-- ---------------- Screen 4: ROSTER ---------------- -->
+      <!-- ---------------- Screen 4: PARTICIPANTS ---------------- -->
+      <!-- The table is the whole screen. The two side cards that used to sit
+           beside it (code generation and the next-entrant override) were removed:
+           every participant here enrols from the class platform, and the override
+           is edited in Parameters (Assignment → Next entrant), where the rest of
+           the run parameters live. -->
       <div class="tab-panel" id="tab-roster" style="display:none;">
-        <h2 style="margin:0;">Roster and assignment</h2>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
+          <h2 style="margin:0;">Participants and assignment</h2>
+          <button class="btn btn-ghost btn-sm" id="btn-ros-csv">&#8681; Download participants (CSV)</button>
+        </div>
         <p class="muted small">Anonymous participant codes only &mdash; no names, no e-mail addresses, no
         free-text identifiers. A student arriving from the class platform enrols with their
-        university student ID, which is the join key between this study&rsquo;s data and the platform roster.</p>
+        university student ID, which is the join key between this study&rsquo;s data and the platform roster.
+        <b>Round</b> is the scored rounds they have finished out of the scored rounds this session assigns
+        them; <b>Status</b> is read from their own session record, so it turns to <i>completed</i> the moment
+        they reach the end.</p>
         <div class="stat-row" id="roster-stats"></div>
-        <div class="cols">
-          <div>
-            <div class="table-scroll" style="max-height:520px;"><table class="data-table" id="roster-table"></table></div>
-          </div>
-          <div>
-            <div class="card">
-              <h3 style="margin-top:0;">Generate codes</h3>
-              <div class="row2">
-                <div class="field"><label>How many</label><input type="number" id="ros-n" value="90" min="1" max="1000"></div>
-                <div class="field"><label>Prefix</label><input type="text" id="ros-prefix" value="P" maxlength="6"></div>
-              </div>
-              <p class="hint">Codes are assigned to sequences by block randomisation, so the split is exactly
-              half and half rather than a series of coin flips.</p>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button class="btn btn-green btn-sm" id="btn-ros-gen">Generate</button>
-                <button class="btn btn-ghost btn-sm" id="btn-ros-csv">Download codes (CSV)</button>
-              </div>
-            </div>
-            <div class="card">
-              <h3 style="margin-top:0;">Next entrant override</h3>
-              <p class="muted small">If attrition runs unevenly the crossover balance drifts. This forces the
-              next entrants into the under-filled sequence. A reason is required and is logged.</p>
-              <div class="seg" id="ros-override"><button data-v="auto">Automatic</button><button data-v="A">Force A</button><button data-v="B">Force B</button></div>
-              <div class="field" style="margin-top:10px;"><label>Reason</label><input type="text" id="ros-reason" placeholder="why the balance is being forced"></div>
-              <button class="btn btn-green btn-sm" id="btn-ros-override">Apply override</button>
-              <div id="ros-overrides" class="muted small" style="margin-top:10px;"></div>
-            </div>
-          </div>
-        </div>
+        <div class="table-scroll" style="max-height:70vh;"><table class="data-table" id="roster-table"></table></div>
       </div>
 
       <!-- ---------------- Screen 5: LIVE MONITOR ---------------- -->
