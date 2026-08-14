@@ -23,6 +23,9 @@
   var FB = window.SVFirebase;
 
   var runs = [], current = null, currentParams = null, editingId = null;
+  // This session's wording overrides, as the flat key→string map content.js
+  // defines. Empty means every word comes from content.js.
+  var currentContent = {};
   var events = [], built = null, unsubMon = null, monRows = [];
   var LOCAL_KEY = 'searchv2:v3:admin:local';
 
@@ -67,6 +70,7 @@
     wireRoster();
     wireMonitor();
     wireData();
+    wireWording();
 
     // The parameter form carries its values from the moment the panel opens, so a
     // box is never blank beside its own "default 100" hint. Selecting a run, or
@@ -136,13 +140,17 @@
     document.querySelectorAll('.tab').forEach(function (t) {
       t.onclick = function () {
         document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('on', x === t); });
-        ['runs', 'params', 'roster', 'monitor', 'data', 'notes'].forEach(function (k) {
-          $('tab-' + k).style.display = (k === t.dataset.tab) ? '' : 'none';
+        // Derived from the buttons themselves rather than listed here: a hard-coded
+        // list silently stops showing any screen added after it was written.
+        document.querySelectorAll('.tab').forEach(function (x) {
+          var pane = $('tab-' + x.dataset.tab);
+          if (pane) pane.style.display = (x === t) ? '' : 'none';
         });
         if (t.dataset.tab === 'roster') renderRoster();
         if (t.dataset.tab === 'monitor') startMonitor();
         if (t.dataset.tab === 'data') { fillSpecPicker(); renderRoundGallery(); }
         if (t.dataset.tab === 'notes') renderNotes();
+        if (t.dataset.tab === 'wording') renderWording();
       };
     });
   }
@@ -158,6 +166,7 @@
     $('btn-new-run').onclick = function () {
       current = null; editingId = null;
       currentParams = savedDefaultParams();
+      currentContent = {};        // a new session starts on the study's own words
       fillForm(currentParams, null);
       openTab('params');
       note('save-note', 'A new session, seeded from the saved defaults. Give it a name and a code, then Save.');
@@ -481,7 +490,7 @@
     var p = clone(Specs.withDefaults(run.params));
     var name = prompt('Name for the cloned session:', (run.name || 'untitled') + ' (clone)');
     if (name == null) return;
-    var obj = newRunDoc(p, name, autoCode());
+    var obj = newRunDoc(p, name, autoCode(), Content.parseOverrides(run.contentJson || run.content));
     obj.clonedFrom = run.id;
     createRun(obj).then(function () {
       note('save-note', 'Cloned. The clone is a <b>draft</b> with its own run_id, its own pool and its own specs.');
@@ -498,6 +507,12 @@
       name: run.name, code: run.code, status: run.status,
       serverMode: (p.ops.compute === 'server'),
       ops: clone(p.ops),
+      // This session's wording travels with the redacted copy. In server mode
+      // the run document is admin-only, so without this the participant app
+      // could never see an override and every session would read the defaults.
+      // A STRING, so that a revert actually removes the key: both writers use
+      // setDoc(merge:true), which deep-merges a map but replaces a string.
+      contentJson: Content.stringifyOverrides(run.contentJson || run.content),
       params: {
         env: {
           positions: p.env.positions, prizeMin: p.env.prizeMin, prizeMax: p.env.prizeMax,
@@ -518,7 +533,7 @@
     };
   }
 
-  function newRunDoc(p, name, code) {
+  function newRunDoc(p, name, code, contentOv) {
     var params = clone(p);
     params.ops.runName = name;
     var pool = Pool.buildPool(params.env, params.env.generatorSeed);
@@ -533,7 +548,8 @@
       poolChecksum: X.checksum(JSON.stringify(pool)),
       specsChecksum: X.checksum(JSON.stringify(specs)),
       seeds: { generatorSeed: params.env.generatorSeed, specSeed: specSeed },
-      overrides: []
+      overrides: [],
+      contentJson: Content.stringifyOverrides(contentOv)
     };
   }
   function createRun(obj) {
@@ -572,6 +588,8 @@
   function selectRun(run) {
     current = run; editingId = run.id;
     currentParams = Specs.withDefaults(run.params);
+    currentContent = Content.parseOverrides(run.contentJson || run.content);
+    if ($('tab-wording') && $('tab-wording').style.display !== 'none') renderWording();
     if (run.ops) Object.keys(run.ops).forEach(function (k) { currentParams.ops[k] = run.ops[k]; });
     if (run.code) currentParams.ops.code = run.code;
     fillForm(currentParams, run);
@@ -772,7 +790,7 @@
         (2 * (pending.rounds.warmupPerBlock + pending.rounds.scoredPerBlock)) +
         ' round specs</b> under the seeds below. It opens as a <b>draft</b>, so nobody can enter yet.',
         summaryBoxes(pending), 'Create session', function () {
-          var obj = newRunDoc(currentParams, name, code);
+          var obj = newRunDoc(currentParams, name, code, currentContent);
           createRun(obj).then(function () {
             note('save-note', 'Session <b>' + esc(code) + '</b> created as a <b>draft</b>. Run the validation gate on the ' +
               'Data screen — and check the round plots at the bottom of it — before opening entry.');
@@ -786,7 +804,8 @@
     if (run && run.locked) {
       // Locked: only Operations and the entrant override may move. The Rules
       // refuse anything else anyway; refusing it here too keeps the panel honest.
-      patch = { name: name, ops: clone(currentParams.ops), assign: Object.assign({}, run.assign || {}, { nextEntrantOverride: currentParams.assign.nextEntrantOverride }) };
+      patch = { name: name, ops: clone(currentParams.ops), assign: Object.assign({}, run.assign || {}, { nextEntrantOverride: currentParams.assign.nextEntrantOverride }),
+        contentJson: Content.stringifyOverrides(currentContent) };
     } else {
       var pool = Pool.buildPool(currentParams.env, currentParams.env.generatorSeed);
       var specSeed = currentParams.env.generatorSeed + 1;
@@ -795,7 +814,8 @@
         name: name, code: code, params: clone(currentParams), ops: clone(currentParams.ops),
         assign: clone(currentParams.assign), specSeed: specSeed, specsJson: JSON.stringify(specs),
         poolChecksum: X.checksum(JSON.stringify(pool)), specsChecksum: X.checksum(JSON.stringify(specs)),
-        seeds: { generatorSeed: currentParams.env.generatorSeed, specSeed: specSeed }
+        seeds: { generatorSeed: currentParams.env.generatorSeed, specSeed: specSeed },
+        contentJson: Content.stringifyOverrides(currentContent)
       };
     }
     patch.serverMode = (currentParams.ops.compute === 'server');
@@ -803,7 +823,7 @@
       if (!LOCAL) {
         FB.audit(editingId, 'save_run', name);
         FB.putRunPublic(editingId, publicDoc(
-          { name: name, code: code, status: (run && run.status) || 'draft' },
+          { name: name, code: code, status: (run && run.status) || 'draft', contentJson: Content.stringifyOverrides(currentContent) },
           currentParams, editingId)).catch(function () {});
       }
       note('save-note', 'Saved.');
@@ -1206,6 +1226,140 @@
       decFirst: decFirst.map(function (d) { return 100 * d / n; }),
       decAll: decAll.map(function (d) { return 100 * d / allN; }),
       meanFirst: sumFirst / n, meanMid: sumMid / n
+    };
+  }
+
+  // ======================================================================
+  //  SCREEN 7 · WORDING
+  // ======================================================================
+  // Every participant-facing string, in the order a participant meets it,
+  // shown WITH this session's numbers substituted — the panel's whole purpose
+  // is that the words here are the words on the screen, so a default rendered
+  // with the tokens still in it would defeat it. Editing writes into
+  // `currentContent`, which Save session persists; content.js owns the
+  // outline, the whitelist and the merge, so this screen only draws it.
+
+  // The participant app's token substitution, over the parameters in the form.
+  // Keep in step with `tokens()` in app.js.
+  function wdTokens(text) {
+    var p = currentParams || Specs.withDefaults(null);
+    var K = (p.ai.sparseK === p.ai.denseK) ? p.ai.sparseK : (p.ai.sparseK + ' or ' + p.ai.denseK);
+    return String(text == null ? '' : text)
+      .replace(/\{J\}/g, p.env.positions)
+      .replace(/\{L\}/g, p.env.stepBound)
+      .replace(/\{stepBound\}/g, p.env.stepBound)
+      .replace(/\{revealCost\}/g, p.costs.revealCost)
+      .replace(/\{queryCost\}/g, p.costs.queryCost)
+      .replace(/\{revealCap\}/g, p.costs.revealCap)
+      .replace(/\{queryCap\}/g, p.costs.queryCap)
+      .replace(/\{scored\}/g, p.rounds.scoredPerBlock)
+      .replace(/\{warmup\}/g, p.rounds.warmupPerBlock)
+      .replace(/\{K\}/g, K);
+  }
+  // `**bold**` is the only markup the participant screen renders, so it is the
+  // only markup shown here. Everything else is escaped first, exactly as prose()
+  // does it in app.js.
+  function wdShow(text) {
+    var t = String(text == null ? '' : text);
+    // Four of the survey part headings carry no note by default. An empty box
+    // reads as a rendering fault, so it says so instead.
+    if (!t.trim()) return '<span class="wd-blank">nothing is shown here by default</span>';
+    return esc(wdTokens(t)).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+  }
+
+  function wdEdited() { return Object.keys(Content.normalizeOverrides(currentContent)).length; }
+
+  function renderWording() {
+    var host = $('wording-body');
+    if (!host) return;
+    var q = ($('wd-search') && $('wd-search').value || '').trim().toLowerCase();
+    var onlyChanged = !!($('wd-changed') && $('wd-changed').checked);
+    var groups = Content.outline(), html = [], shown = 0;
+
+    groups.forEach(function (g) {
+      var rows = [], gEdits = 0;
+      g.fields.forEach(function (f) {
+        var over = currentContent[f.key];
+        var isEdited = typeof over === 'string' && over.trim() && over.trim() !== String(f.base).trim();
+        var live = isEdited ? over : f.base;
+        if (isEdited) gEdits++;
+        if (onlyChanged && !isEdited) return;
+        if (q && (String(live) + ' ' + f.label + ' ' + f.key).toLowerCase().indexOf(q) < 0) return;
+        shown++;
+        rows.push(
+          '<div class="wd-field' + (isEdited ? ' edited' : '') + '" data-key="' + esc(f.key) + '">' +
+            '<div class="wd-label"><span>' + esc(f.label) + '</span>' +
+              '<span class="wd-key">' + esc(f.key) + '</span>' +
+              '<button class="wd-revert" data-revert="' + esc(f.key) + '">Revert to default</button>' +
+            '</div>' +
+            '<div class="wd-shown">' + wdShow(live) + '</div>' +
+            '<div class="wd-edit">' +
+              '<textarea rows="' + (f.kind === 'prose' ? 4 : 2) + '" data-edit="' + esc(f.key) + '" ' +
+                'maxlength="' + Content.MAX_LEN + '" ' +
+                'placeholder="Leave blank to use the default wording">' + esc(isEdited ? over : '') + '</textarea>' +
+            '</div>' +
+          '</div>');
+      });
+      if (!rows.length) return;
+      html.push(
+        '<details class="wd-group"' + (q || onlyChanged ? ' open' : (g.id === 'consent' ? ' open' : '')) + '>' +
+          '<summary>' + esc(g.title) +
+            (gEdits ? '<span class="wd-badge">' + gEdits + ' changed</span>' : '') +
+            '<span class="wd-when">' + esc(g.when) + '</span>' +
+          '</summary>' + rows.join('') +
+        '</details>');
+    });
+
+    host.innerHTML = html.length ? html.join('')
+      : '<div class="wd-empty">Nothing matches that.</div>';
+
+    var total = groups.reduce(function (n, g) { return n + g.fields.length; }, 0);
+    var edits = wdEdited();
+    $('wd-count').innerHTML = shown + ' of ' + total + ' shown · <b>' + edits + '</b> changed for this session';
+
+    host.querySelectorAll('textarea[data-edit]').forEach(function (t) {
+      t.addEventListener('input', function () {
+        var k = t.dataset.edit, v = t.value;
+        if (!v.trim()) delete currentContent[k]; else currentContent[k] = v;
+        // Repaint only this row's rendered text, so the caret is never lost
+        // mid-sentence by a re-render of the whole screen.
+        var field = t.closest('.wd-field');
+        var base = wdBaseOf(k);
+        var isEdited = !!v.trim() && v.trim() !== String(base).trim();
+        field.querySelector('.wd-shown').innerHTML = wdShow(isEdited ? v : base);
+        field.classList.toggle('edited', isEdited);
+        $('wd-count').innerHTML = $('wd-count').innerHTML.replace(/<b>\d+<\/b>/, '<b>' + wdEdited() + '</b>');
+      });
+    });
+    host.querySelectorAll('button[data-revert]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        delete currentContent[b.dataset.revert];
+        renderWording();
+        note('wd-note', 'Reverted to the default wording. Press <b>Save session</b> on the Parameters screen to keep it.');
+      });
+    });
+  }
+
+  var _wdBase = null;
+  function wdBaseOf(key) {
+    if (!_wdBase) {
+      _wdBase = {};
+      Content.outline().forEach(function (g) {
+        g.fields.forEach(function (f) { _wdBase[f.key] = f.base; });
+      });
+    }
+    return _wdBase[key];
+  }
+
+  function wireWording() {
+    if ($('wd-search')) $('wd-search').addEventListener('input', renderWording);
+    if ($('wd-changed')) $('wd-changed').addEventListener('change', renderWording);
+    if ($('btn-wd-revert')) $('btn-wd-revert').onclick = function () {
+      if (!wdEdited()) { note('wd-note', 'This session already uses the default wording everywhere.'); return; }
+      if (!window.confirm('Put every word back to the study default for this session?')) return;
+      currentContent = {};
+      renderWording();
+      note('wd-note', 'Every word is back to the study default. Press <b>Save session</b> on the Parameters screen to keep it.');
     };
   }
 

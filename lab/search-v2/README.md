@@ -65,7 +65,8 @@ lab/search-v2/
   pool.js             the mapping generator + acceptance filter (§8, §9)
   specs.js            round specs, per-participant order, validation gate (§10, §11)
   ai.js               the AI's answer, and every derived measure of §16.8
-  content.js          instructions, both comprehension gates, the 20 survey items
+  content.js          instructions, both comprehension gates, the 20 survey items,
+                      and the per-session wording overrides that may replace them
   chart.js            the inline-SVG centre panel (§14)
   logger.js           append-only event log: records + batched telemetry (§16, §17.2)
   app.js              the state machine: screens, rounds, resume
@@ -87,6 +88,7 @@ lab/search-v2/
   tools/selftest.js            Node acceptance tests
   tools/smoke.mjs              a whole session in a browser
   tools/admin-smoke.mjs        the admin panel in a browser
+  tools/wording-guard.mjs      a session's own words reach its participants
   tools/platform-guard.mjs     the Simulation Platform contract, both directions
   tools/layout-guard.mjs       reachability at five window sizes
   tools/preview-guard.mjs      the admin test round writes nothing
@@ -119,11 +121,12 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 211 checks, no browser
-node lab/search-v2/tools/smoke.mjs           # 169 checks, a whole session
-node lab/search-v2/tools/admin-smoke.mjs     # 119 checks, the admin panel
+node lab/search-v2/tools/selftest.js         # 263 checks, no browser
+node lab/search-v2/tools/smoke.mjs           # 178 checks, a whole session
+node lab/search-v2/tools/admin-smoke.mjs     # 136 checks, the admin panel
+node lab/search-v2/tools/wording-guard.mjs   #  15 checks, a session's own words
 node lab/search-v2/tools/platform-guard.mjs  #  26 checks, the platform contract
-node lab/search-v2/tools/layout-guard.mjs    #  89 checks, five window sizes
+node lab/search-v2/tools/layout-guard.mjs    # 104 checks, five window sizes
 node lab/search-v2/tools/preview-guard.mjs   #  the sandbox writes nothing
 node lab/search-v2/tools/emulator-test.mjs   #  37 checks against the REAL Functions
                                              #  and Rules (needs Java + firebase-tools;
@@ -289,7 +292,7 @@ as a download on the done screen.
 
 ## The admin panel (§17b)
 
-`/lab/search-v2/admin/`, five tabs covering the brief's six screens.
+`/lab/search-v2/admin/`, seven tabs covering the brief's six screens.
 
 **The panel calls the unit a SESSION**, played as **28 rounds** (4 warm-up and 24
 scored, in two blocks). The brief calls the same object a *run*, and the data
@@ -319,10 +322,52 @@ the task, and the participant link — with **Cancel** as a real cancel.
 | **Live monitor** | counters from a Firestore listener plus the health strip: median active time, median round time, comprehension failures, cap hits, immediate-stop rate, narrow viewports, long blurs, sub-500 ms deciders |
 | **Data & preview** | the validation gate, a spec preview that writes nothing, a scripted dry run, the export, a danger zone, and the round gallery below |
 | **Design notes** | the questions this design attracts, answered against the code — does the AI hold private data, what a pre-opened round is, gaps versus tails and `g = 4t`, why all three layouts are needed, whether the landscape changes each round — with **every number measured from the open session's own frozen pool**, never copied from the design document |
+| **Wording** | **everything the study says to a participant, in the order they meet it** — consent, both sets of instructions, both quick checks with their answer options, all twenty-four survey items, the part headings, debrief and thanks — each shown with this session's own numbers already substituted, and editable **for this session only** |
 
 The four buttons under the parameter form are unchanged in number and colour from
 the previous panel: **Save session** (green), then **Cancel edit**, **Make this
 the default** and **Restore built-in default** (ghost).
+
+### Wording
+
+The words are in `content.js`, which is the study's default for every session.
+The **Wording** screen shows them all — with `{revealCost}` and the rest already
+resolved to this session's own numbers, because a screen that displayed the token
+would not answer the question it exists to answer — and lets you change any of
+them **for one session**. `content.js` itself is never touched, so every other
+session keeps the defaults.
+
+The screen covers the study text, which is what `content.js` holds. It does not
+cover the game screen's own buttons and labels, or the reminder box above each
+quick check — app.js builds those from the numbers, so they follow the parameters
+on their own. The screen says so, rather than implying it covers them.
+
+An edit is stored as a per-session override: a flat `key → string` map, held on
+the run document as a JSON string (`run.contentJson`, beside `specsJson`). The
+string matters. Both writers use `setDoc(merge:true)`, which deep-merges a map —
+so stored as a map, a reverted key would be merged straight back, and **revert
+would look right in the panel and change nothing for the participant**. A string
+field is replaced whole, so removing a key removes it.
+
+It travels with the redacted public copy as well, or a participant in server
+mode — who cannot read the run document at all — would never see it. Leaving a
+box blank, or pressing **Revert to default**, removes the override rather than
+freezing today's default into the session. A **clone** carries the wording of the
+session it was cloned from, which is what makes clone-do-not-edit workable for a
+session whose words were tuned.
+
+**Wording is editable; structure is not.** How many answers a question has, which
+one is correct, the question types, the order, and the numeracy answers always
+come from `content.js`, whatever a session says. This is not a UI simplification:
+`admin/dictionary.js` describes one entry per exported column and the column set
+is derived from these ids, so a session that could add a question or move an
+answer key would invalidate its own workbook. Rewording cannot — which is also
+why wording stays editable after a session locks, unlike the task parameters.
+
+`node tools/wording-guard.mjs` proves the round trip: a session carrying
+overrides is played in a browser and its own words appear on the consent screen,
+the instructions and the quick check, while the reworded question still grades on
+the answer key it always had.
 
 ### Every round, drawn
 
