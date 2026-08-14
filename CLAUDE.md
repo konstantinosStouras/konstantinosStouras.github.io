@@ -2408,9 +2408,29 @@ returned after a FIXED latency identical to a reveal's, so neither formatting no
 response time can leak whether the answer was exact. Never draws a curve, never
 marks its anchors; the two switches that would (`ai.drawCurve`, `ai.markAnchors`)
 stay visible in the panel behind a red confirmation and must never be turned on.
-Sparse sits ABOVE the verification threshold `s* = c_R·√(2π) = 12.53` and dense
-BELOW it, so the prediction is a SIGN CHANGE, not a gradient — the panel's badge
-goes red if a parameter edit breaks that.
+Sparse sits ABOVE the verification threshold `s* = c_R·√(2π)` and dense BELOW it,
+so the prediction is a SIGN CHANGE, not a gradient — the panel's badge goes red if
+a parameter edit breaks that.
+**The defaults MOVED on simulation evidence (owner 2026-08): reveal cost 5 → 4
+and sparse K 4 → 3**, so s* = 10.03, sparse mid-gap SD 16.67, dense 9.13. Reason,
+measured over 1000 simulated participants in `tools/simulate.mjs` (tables in
+`tools/SIMULATION-FINDINGS.md`): at the brief's values the AI-OFF arm is barely a
+search arm (unaided myopic search opens 1.88 positions and buys +5.84 over
+spending nothing) AND the sparse/dense contrast is a GRADIENT — trusting the AI
+gains +4.30 sparse against +7.85 dense, the same sign. Moving BOTH flips it
+(−1.56 against +5.83); neither alone does. **c_R must stay inside (3.64, 6.65)**
+— below 3.64 s* drops under the dense SD, verification pays everywhere and the
+density manipulation has nothing left to manipulate; that window is only this
+wide BECAUSE sparse K is 3 (at K = 4 it was (3.64, 5.76)). `selftest.js` asserts
+the window, so a future edit that breaks the straddle fails there rather than in
+the data. Change the two together or not at all. Every already-created session
+keeps its own stored `params`, so this affects new sessions only.
+**Tests must never hardcode a study parameter or a board position.** The specs
+are regenerated from the seeds whenever K changes, so which positions start
+pre-opened moves — smoke.mjs and data-audit.mjs now CHOOSE a revealable position
+(a pre-opened one has its reveal button correctly disabled) and read costs from
+`window.CONFIG.DEFAULTS`, after waiting out the latency gate that disables every
+button.
 
 **28 rounds**, 4 warm-up + 24 scored, 12 per block, counterbalanced crossover
 (sequence A = AI off then on, B = the reverse). Per block: 4 open + 8 seeded
@@ -2579,8 +2599,8 @@ rows carry no `run_id`.
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (210) ·
-`tools/smoke.mjs` (141, a whole 28-round session) ·
+`node lab/search-v2/tools/selftest.js` (211) ·
+`tools/smoke.mjs` (169, a whole 28-round session) ·
 `tools/admin-smoke.mjs` (119) · `tools/platform-guard.mjs` (26) ·
 `tools/layout-guard.mjs` (89, reachability at five window sizes) ·
 `tools/preview-guard.mjs` · **`tools/emulator-test.mjs` (37, against the REAL

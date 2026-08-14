@@ -263,11 +263,24 @@ head('8 · uncertainty, the threshold, and the exchange rate (§3.4, §16.8)');
   // Mean anchor gap = the stratum width J/K. §17b writes 100/(K+1) but quotes
   // 25.0 and 10.0, and the SDs beside them are sigma·sqrt(25)/2 and
   // sigma·sqrt(10)/2 — so the values are right and the formula is a slip.
+  // Sparse K is 3 here, not the brief's 4, and the reveal cost 4, not 5 — both
+  // moved on the evidence in SIMULATION-FINDINGS.md. The property that matters is
+  // unchanged and is asserted against the CONFIGURED values, not literals, so it
+  // keeps holding whatever the parameters become.
   const gapSparse = 100 / P.ai.sparseK, gapDense = 100 / P.ai.denseK;
-  near(sigma * Math.sqrt(gapSparse) / 2, 14.43, 0.05, 'sparse SD at gap midpoint is 14.43');
-  near(sigma * Math.sqrt(gapDense) / 2, 9.13, 0.05, 'dense SD at gap midpoint is 9.13');
-  ok(sigma * Math.sqrt(gapSparse) / 2 > CFG.sStar(5), 'sparse sits ABOVE s* — verification pays');
-  ok(sigma * Math.sqrt(gapDense) / 2 < CFG.sStar(5), 'dense sits BELOW s* — trusting is correct');
+  const sdSparse = sigma * Math.sqrt(gapSparse) / 2, sdDense = sigma * Math.sqrt(gapDense) / 2;
+  near(sdSparse, 16.67, 0.05, 'sparse SD at gap midpoint is 16.67 (K = ' + P.ai.sparseK + ')');
+  near(sdDense, 9.13, 0.05, 'dense SD at gap midpoint is 9.13 (K = ' + P.ai.denseK + ')');
+  const sStarNow = CFG.sStar(P.costs.revealCost);
+  ok(sdSparse > sStarNow, 'sparse sits ABOVE s* — verification pays');
+  ok(sdDense < sStarNow, 'dense sits BELOW s* — trusting is correct');
+  // The straddle is the whole design. State the window it has to live in, so a
+  // future parameter change that breaks it fails here rather than in the data.
+  ok(P.costs.revealCost > sdDense / Math.sqrt(2 * Math.PI) &&
+     P.costs.revealCost < sdSparse / Math.sqrt(2 * Math.PI),
+    'the reveal cost sits inside the window where the density manipulation works: ' +
+    (sdDense / Math.sqrt(2 * Math.PI)).toFixed(2) + ' < c_R < ' + (sdSparse / Math.sqrt(2 * Math.PI)).toFixed(2),
+    'c_R = ' + P.costs.revealCost);
 
   // g = 4t is where an interior gap and the frontier carry equal uncertainty.
   for (const t of [2, 5, 10, 16, 22.5]) {
@@ -532,7 +545,8 @@ head('13 · scoring arithmetic, end to end');
   const truthAt = map[askAt - 1];
   const cost = 2 * P.costs.queryCost + 1 * P.costs.revealCost;
   const score = truthAt - cost;
-  ok(score === truthAt - 9, 'two questions and one reveal cost 9 points');
+  ok(score === truthAt - cost && cost === 2 * P.costs.queryCost + P.costs.revealCost,
+    'two questions and one reveal cost ' + cost + ' points');
   ok(typeof said === 'number', 'the AI answered at the queried position');
   console.log('       worked example: AI said ' + said + ' at ' + askAt + ', truth ' + truthAt +
     ', score ' + score + ' (error ' + (said - truthAt) + ')');

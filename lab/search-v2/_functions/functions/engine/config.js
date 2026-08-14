@@ -53,8 +53,21 @@
     },
 
     // ---- Costs and limits (§7) --------------------------------------------
+    // c_R = 4, not the brief's 5, and sparseK = 3, not 4. Both come from
+    // tools/simulate.mjs over 1000 simulated participants; SIMULATION-FINDINGS.md
+    // carries the tables. At the brief's values the AI-OFF arm is barely a search
+    // arm (unaided search opens 1.88 positions and buys +5.84 over spending
+    // nothing) and the sparse/dense contrast is a GRADIENT, not the sign change
+    // the design rests on (+4.30 sparse against +7.85 dense — same sign). Moving
+    // BOTH flips it (-1.56 against +5.83); neither alone does.
+    //
+    // c_R cannot go below 3.64: there s* = c_R·sqrt(2π) falls under the dense
+    // mid-gap SD of 9.13, verification pays everywhere, and the density
+    // manipulation has nothing left to manipulate. sparseK = 3 widens the
+    // admissible window to (3.64, 6.65), so 4 sits inside it rather than on an
+    // edge. Change these two together or not at all.
     costs: {
-      revealCost: 5,           // c_R
+      revealCost: 4,           // c_R
       queryCost: 2,            // c_AI
       queryCap: 40,            // per round
       revealCap: 20,           // per round
@@ -63,7 +76,7 @@
 
     // ---- AI (§3, §12) ------------------------------------------------------
     ai: {
-      sparseK: 4,
+      sparseK: 3,              // see the note on revealCost above
       denseK: 10,
       placement: 'stratified', // 'stratified' | 'uniform' (never use uniform)
       answerRounding: 'nearest',

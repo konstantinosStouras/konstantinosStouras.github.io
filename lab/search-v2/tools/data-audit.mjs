@@ -151,19 +151,30 @@ for (let i = 0; i < plan.length; i++) {
     const txt = await pg.locator('#answer-flash').innerText();
     t.acts.push({ action: 'query', pos, shown: flashNumber(txt), text: txt.trim(), requery: true });
   }
+  // Reveal positions are CHOSEN, not fixed: a pre-opened position cannot be
+  // revealed, and which positions start open moves whenever the specs are
+  // regenerated. Wait out the latency (which disables every button), then take
+  // the first candidate the app will actually let us pay for.
+  const revealed = [];
   for (let k = 0; k < reveals; k++) {
-    const pos = revAt[(i + k) % revAt.length];
-    await pg.evaluate(p => window.SVApp.select(p), pos);
-    await pg.waitForFunction(() => !document.getElementById('btn-reveal').disabled, null, { timeout: 8000 });
+    await pg.waitForFunction(() => !document.getElementById('btn-nominate').disabled, null, { timeout: 8000 });
+    let pos = null;
+    for (const cand of [revAt[(i + k) % revAt.length], 24, 52, 71, 9, 95, 33, 66, 12, 87]) {
+      if (revealed.indexOf(cand) >= 0) continue;
+      await pg.evaluate(p => window.SVApp.select(p), cand);
+      if (!(await pg.locator('#btn-reveal').isDisabled())) { pos = cand; break; }
+    }
+    if (pos == null) break;
     await pg.locator('#btn-reveal').click();
     await pg.waitForSelector('.answer-flash.show', { timeout: 8000 });
     const txt = await pg.locator('#answer-flash').innerText();
+    revealed.push(pos);
     t.acts.push({ action: 'reveal', pos, shown: flashNumber(txt), text: txt.trim() });
   }
 
   // Where they stop: a revealed position, an untouched one, or an AI-known one.
   let nomPos;
-  if (reveals > 0 && mode !== 3) nomPos = revAt[i % revAt.length];
+  if (revealed.length && mode !== 3) nomPos = revealed[0];
   else if (asks > 0) nomPos = askAt[i % askAt.length];
   else nomPos = 50;
   await pg.evaluate(p => window.SVApp.select(p), nomPos);
