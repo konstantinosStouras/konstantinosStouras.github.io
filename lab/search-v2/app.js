@@ -34,6 +34,7 @@
   var PUB = null;           // the redacted, client-readable copy of the run
   var SERVER_MODE = false;  // score-bearing actions computed by Cloud Functions
   var P = null;             // resolved parameters (defaults merged)
+  var CT = Content;         // resolved content; the defaults until a run is applied
   var PLAN = null;          // the participant's 28-round plan
   var SPECS = null;
   var chart = null;
@@ -81,6 +82,10 @@
     return String(text || '')
       .replace(/\{J\}/g, P.env.positions)
       .replace(/\{L\}/g, P.env.stepBound)
+      // The quiz explanations spell the step bound out rather than calling it L,
+      // so both spellings resolve. Without this the three "differ by at most …"
+      // explanations reached the participant with the token still in them.
+      .replace(/\{stepBound\}/g, P.env.stepBound)
       .replace(/\{revealCost\}/g, P.costs.revealCost)
       .replace(/\{queryCost\}/g, P.costs.queryCost)
       .replace(/\{revealCap\}/g, P.costs.revealCap)
@@ -165,6 +170,11 @@
   function applyRun(run, runCode, pub) {
     RUN = run || null;
     PUB = pub || null;
+    // This session's wording. Read from the same two places as the parameters
+    // and for the same reason — in server mode the run document is admin-only,
+    // so the redacted public copy is the only thing the participant can see.
+    // With no overrides this returns the defaults of content.js unchanged.
+    CT = Content.resolve((run && run.content) || (pub && pub.content));
     // In server mode the run document is admin-only — it holds the seeds — so the
     // parameters come from the redacted public copy instead.
     var src = run ? run.params : (pub ? pub.params : null);
@@ -488,7 +498,7 @@
   //  CONSENT · INSTRUCTIONS · COMPREHENSION
   // ======================================================================
   function showConsent() {
-    $('consent-body').innerHTML = prose(tokens((RUN && RUN.content && RUN.content.consent) || Content.CONSENT));
+    $('consent-body').innerHTML = prose(tokens(CT.CONSENT));
     var box = $('consent-box'), btn = $('btn-consent');
     box.checked = false; btn.disabled = true;
     box.onchange = function () { btn.disabled = !box.checked; };
@@ -497,7 +507,7 @@
   }
 
   function showInstructions() {
-    var pages = Content.INSTRUCTIONS;
+    var pages = CT.INSTRUCTIONS;
     var i = Math.max(0, Math.min(pages.length - 1, S.instrIdx || 0));
     S.instrIdx = i;
     $('instr-step').textContent = 'Instructions ' + (i + 1) + ' of ' + pages.length;
@@ -617,12 +627,12 @@
   }
 
   function showQuiz() {
-    renderQuiz(Content.QUIZ_BASE, 'quiz-body', 'quiz-feedback', 'btn-quiz', function () { goto('blockintro'); });
+    renderQuiz(CT.QUIZ_BASE, 'quiz-body', 'quiz-feedback', 'btn-quiz', function () { goto('blockintro'); });
     show('s-quiz');
   }
 
   function showAiInstructions() {
-    var pages = Content.AI_INSTRUCTIONS;
+    var pages = CT.AI_INSTRUCTIONS;
     var i = Math.max(0, Math.min(pages.length - 1, S.aiInstrIdx || 0));
     S.aiInstrIdx = i;
     $('ai-step').textContent = 'About the AI · ' + (i + 1) + ' of ' + pages.length;
@@ -639,7 +649,7 @@
   }
 
   function showAiQuiz() {
-    renderQuiz(Content.QUIZ_AI, 'aiquiz-body', 'aiquiz-feedback', 'btn-aiquiz', function () {
+    renderQuiz(CT.QUIZ_AI, 'aiquiz-body', 'aiquiz-feedback', 'btn-aiquiz', function () {
       S.aiGateDone = true; save();
       goto('blockintro');
     });
@@ -1326,7 +1336,7 @@
   function surveyItems() {
     var playedAi = PLAN.rounds.some(function (r) { return r.condition === 'AI_ON'; });
     var have = platformBackground();
-    return Content.SURVEY.filter(function (q) {
+    return CT.SURVEY.filter(function (q) {
       if (q.aiOnly && !playedAi) return false;
       // A background item the Simulation Platform already answered is not asked
       // again — the two datasets must carry ONE answer each, joined on the
@@ -1348,7 +1358,7 @@
     items.forEach(function (q, i) {
       if (q.part !== lastPart) {
         lastPart = q.part;
-        var pi = Content.PART_INTRO[q.part] || { title: '', note: '' };
+        var pi = CT.PART_INTRO[q.part] || { title: '', note: '' };
         html.push('<h3 class="survey-part">' + esc(pi.title) + '</h3>' +
           (pi.note ? '<p class="muted small">' + esc(pi.note) + '</p>' : ''));
       }
@@ -1387,7 +1397,7 @@
       r.addEventListener('input', function () { out.textContent = r.value; });
     });
     // "None of these" is exclusive of every other option in item 18.
-    var multi = Content.SURVEY.filter(function (q) { return q.type === 'multi' && q.exclusive != null; });
+    var multi = CT.SURVEY.filter(function (q) { return q.type === 'multi' && q.exclusive != null; });
     multi.forEach(function (q) {
       host.querySelectorAll('input[name="' + q.id + '"]').forEach(function (cb) {
         cb.addEventListener('change', function () {
@@ -1433,7 +1443,7 @@
     });
     // Free-text items are never compulsory: forcing prose produces noise.
     missing = missing.filter(function (id) {
-      var q = Content.SURVEY.filter(function (x) { return x.id === id || (x.items || []).some(function (i) { return i.id === id; }); })[0];
+      var q = CT.SURVEY.filter(function (x) { return x.id === id || (x.items || []).some(function (i) { return i.id === id; }); })[0];
       return q && q.type !== 'text';
     });
     if (missing.length) {
@@ -1461,7 +1471,7 @@
   //  DEBRIEF (§16.7) + DONE
   // ======================================================================
   function showDebrief() {
-    $('debrief-body').innerHTML = prose(tokens(Content.DEBRIEF));
+    $('debrief-body').innerHTML = prose(tokens(CT.DEBRIEF));
     $('debrief-plot').innerHTML = '';
     $('debrief-caption').innerHTML = '';
     $('debrief-round').textContent = '';
@@ -1555,7 +1565,7 @@
         try { window.simpMarkCompleted(); } catch (e) {}
       }
     }
-    $('done-body').innerHTML = prose(tokens(Content.THANKS));
+    $('done-body').innerHTML = prose(tokens(CT.THANKS));
     var scored = S.results.filter(function (r) { return r.scored; });
     $('done-stats').innerHTML =
       '<div class="res-line">You completed <b>' + scored.length + '</b> scored rounds.</div>' +
@@ -1600,7 +1610,7 @@
       rounds_done: (S.results || []).length,
       phase: S.phase,
       round_index: (currentRound() || {}).round_index || null,
-      understood_frontier: !!(S.quiz[Content.UNDERSTOOD_FRONTIER_QID] && S.quiz[Content.UNDERSTOOD_FRONTIER_QID].firstCorrect),
+      understood_frontier: !!(S.quiz[CT.UNDERSTOOD_FRONTIER_QID] && S.quiz[CT.UNDERSTOOD_FRONTIER_QID].firstCorrect),
       platform: HANDOFF ? { sim: HANDOFF.sim, session: HANDOFF.session || null } : null,
       updatedAt: Date.now()
     };

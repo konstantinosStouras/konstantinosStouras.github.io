@@ -46,6 +46,35 @@
     .tab{border:none; background:none; padding:10px 16px; font-size:15px; font-weight:600; color:var(--muted);
       cursor:pointer; border-bottom:2px solid transparent;}
     .tab.on{color:var(--ink); border-bottom-color:var(--blue);}
+
+    /* ---- Wording ---- */
+    .wd-bar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:14px 0 10px;}
+    .wd-bar .grow{flex:1;}
+    .wd-bar input[type=search]{min-width:260px; padding:7px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px;}
+    .wd-only{font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px; cursor:pointer;}
+    .wd-group{border:1px solid var(--line); border-radius:10px; margin:0 0 12px; overflow:hidden;}
+    .wd-group > summary{padding:11px 14px; background:var(--panel); cursor:pointer; font-weight:700; font-size:14px;}
+    .wd-group > summary .wd-when{font-weight:400; color:var(--muted); font-size:12px; display:block; margin-top:2px;}
+    .wd-group > summary .wd-badge{float:right; font-weight:700; font-size:11.5px; color:var(--blue);}
+    .wd-field{padding:11px 14px; border-top:1px solid var(--line);}
+    .wd-field.edited{background:rgba(37,99,235,.05); border-left:3px solid var(--blue);}
+    .wd-label{font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;
+              display:flex; align-items:center; gap:8px; margin-bottom:5px;}
+    .wd-label .wd-key{font-weight:400; text-transform:none; letter-spacing:0; opacity:.65;}
+    .wd-label .wd-revert{margin-left:auto; border:none; background:none; color:var(--blue); cursor:pointer;
+                         font-size:11.5px; font-weight:700; padding:0; display:none;}
+    /* The revert affordance appears the moment a field differs from the default,
+       without waiting for a re-render of the screen. */
+    .wd-field.edited .wd-revert{display:inline;}
+    .wd-shown{font-size:13.5px; line-height:1.5; background:#fff; border:1px solid var(--line); border-radius:8px;
+              padding:8px 10px; white-space:pre-wrap;}
+    :root[data-theme="dark"] .wd-shown{background:#1a1d21;}
+    .wd-shown b{font-weight:700;}
+    .wd-field textarea{width:100%; font:inherit; font-size:13.5px; line-height:1.5; padding:8px 10px;
+                       border:1px solid var(--line); border-radius:8px; resize:vertical; margin-top:6px;}
+    .wd-edit{margin-top:6px;}
+    .wd-tokhint{font-size:11.5px; color:var(--muted); margin-top:4px;}
+    .wd-empty{padding:18px; text-align:center; color:var(--muted); font-size:13px;}
     .icon-btn{border:1px solid var(--line); background:transparent; color:var(--ink); border-radius:50%;
       width:34px; height:34px; cursor:pointer; font-size:15px; line-height:1;}
     .icon-btn:hover{background:var(--panel);}
@@ -231,6 +260,7 @@
         <button class="tab" data-tab="monitor" title="Live counters and health checks while a session is open">Live monitor</button>
         <button class="tab" data-tab="data" title="Preview, validate, dry-run and export">Data &amp; preview</button>
         <button class="tab" data-tab="notes" title="What the AI knows, what a pre-opened round is, and what the numbers of this session actually are">Design notes</button>
+        <button class="tab" data-tab="wording" title="Every word the participant reads, as they will see it — and editable for this session">Wording</button>
       </div>
 
       <div class="admin-note" id="scope-note"></div>
@@ -675,6 +705,32 @@
         layouts &mdash; with the numbers computed from <b>this session&rsquo;s own frozen pool</b>, not from the
         design document. Open a session on the Sessions screen to fill them in.</p>
         <div id="notes-body"></div>
+      </div>
+
+      <!-- ---------------- WORDING ---------------- -->
+      <div class="tab-panel" id="tab-wording" style="display:none;">
+        <h2 style="margin:0 0 4px;">Wording</h2>
+        <p class="muted small">Every word a participant reads, in the order they meet it &mdash; the consent
+        screen, both sets of instructions, both quick checks and all twenty-four survey items. The text is shown
+        <b>exactly as it will appear</b>, with this session&rsquo;s own numbers already filled in.
+        Edit any of it to change the wording <b>for this session only</b>; the study&rsquo;s defaults are untouched
+        and every other session keeps them.</p>
+        <p class="muted small"><b>Wording only.</b> How many answers a question has, which one is correct, and the
+        order of the questions are fixed &mdash; the exported workbook is built from those, so changing them here
+        would invalidate this session&rsquo;s own data. Wording stays editable even after a session is locked,
+        because it is not part of the design.</p>
+
+        <div class="wd-bar">
+          <input id="wd-search" type="search" placeholder="Find a word or a question…" autocomplete="off">
+          <label class="wd-only"><input type="checkbox" id="wd-changed"> Show only what I have changed</label>
+          <span class="grow"></span>
+          <span id="wd-count" class="muted small"></span>
+          <button class="btn-ghost" id="btn-wd-revert">Revert all to defaults</button>
+        </div>
+        <div id="wd-note" class="note" style="display:none;"></div>
+        <div id="wording-body"></div>
+        <p class="muted small" style="margin-top:14px;">Changes are kept on this screen until you press
+        <b>Save session</b> on the Parameters screen &mdash; the same Save as everything else.</p>
       </div>
 
     </section>
