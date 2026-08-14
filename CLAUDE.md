@@ -2601,7 +2601,7 @@ clean reversal. Status sorts unused → started → completed — by how far the
 since alphabetical order here is an accident. Painting was split from reading
 (`paintRoster` vs `renderRoster`), so a sort click re-renders what is loaded
 instead of firing two more collection reads; the CSV exports in the displayed
-order. Covered by `tools/admin-smoke.mjs` (178).
+order. Covered by `tools/admin-smoke.mjs` (199).
 **The Dictionary sheet describes EVERY column** of Decisions/Rounds/Participants
 in a sentence + a type, generated from `admin/dictionary.js`; `selftest.js`
 FAILS when a column is exported without an entry, so the two can never drift —
@@ -2687,6 +2687,59 @@ enterable before the validation gate had ever run. `.made-box` is deliberately
 NOT named `.code-box`: `../styles.css` already has one (the participant app's
 completion code) and the admin page loads it. Covered by `admin-smoke.mjs`
 (178 checks).
+**The parameter form COMPOSES a session; it does not silently rewrite one**
+(owner report 2026-08: "changing the parameters and hitting Save affects all the
+previously opened sessions"). Two variables that had been kept as one:
+`current` is the session the READ screens are on (roster, monitor, data, notes)
+and the panel picks one at load so they have something to show; `editingId` is
+what the parameter form and the Wording tab WRITE to, and `null` there means "a
+new session". Binding the form to the panel's own pick turned the obvious act —
+set the parameters for my next session, press Save — into an unconfirmed
+overwrite of whichever session had been picked, with no summary and no new
+session created (reproduced: reveal cost 4 → 9 landed on the existing session
+and nothing was added). So `selectRun(run, {form:false})` is what the fallback
+pick now uses, and the form is bound to a session ONLY by opening it from its
+card. Save therefore has two clearly-separated jobs, said on the button, in a
+banner above the form (`#edit-note`) and again in the confirmation: **Create
+session** — which asks for the **name and the Session ID in the create dialog
+itself** (`createFieldsHTML`/`readCreateFields`, same rules as the Sessions
+card, refusing a short or taken ID without closing the dialog) and then shows
+the created box with Copy link / Open entry — or **Save changes to `<CODE>`**,
+which names the session in a confirm before rewriting it. The Wording tab
+follows the same target and says so (`#wd-target`), since it is saved by the
+same button.
+**The 4-round demo session** (`demoParams`/`demoContent`/`createDemoRun`, the
+"🧪 Create the 4-round demo session" button on the Sessions screen; code `TEST`,
+name "For testing purposes"): a session for showing a class how the game works
+before they play the real one — **2 rounds without the AI, then 2 with it**, and
+in each half **one round that starts empty followed by one with three prizes
+already open**. Every departure from the defaults is deliberate and load-bearing:
+0 warm-ups + 2 scored a block (= 4 rounds), 1 open + 1 seeded with
+`shuffleWithinBlock:false` so the empty round always comes first,
+`nextEntrantOverride:'A'` so EVERY entrant gets the no-AI half first (the control
+is labelled "next entrant" but is never consumed, so it holds for the session —
+the crossover would otherwise send half the room the other way), the open round
+on the DENSE AI and the seeded one on SPARSE so a class sees both faces of it,
+the 24-question exit survey off and the debrief on, and — the one that matters
+for the data — **its own `generatorSeed`**, because specs are drawn from a pool
+shuffled by that seed and a demo sharing it would show the class the real
+session's round 1. Pressing the button twice refuses rather than making a second
+`TEST`. Two things had to change for a warm-up-free session to read correctly:
+`showBlockIntro` no longer announces "the next 0 rounds are practice" (a
+warm-up-free block introduces its scored rounds directly, in both the opening
+and the halfway branch), and the one instruction screen that counts practice
+rounds is reworded for this session through the per-session Wording system
+rather than by touching the study's own text.
+**A rehearsal reads the session it was launched from.** "🧪 Test round" is
+pressed on a particular card to see what THAT session gives a participant, but
+`boot()` skipped the run read whenever `PREVIEW` was set, so the sandbox always
+rehearsed the built-in defaults — a session that differs from them (the 4-round
+demo, say) could not be checked before it was shown to anyone. The read is now
+unconditional on the code; nothing is written either way (startPreview runs on a
+local backend with `run_id` null and every writer checks `PREVIEW` first), and
+`startPreview` passes the run's own `specSeed`, so a server-mode session — whose
+specs never reach the browser — rebuilds the same rounds locally instead of a
+different set drawn from the default seed.
 **A session is summarised before it can bite** (`summaryBoxes`/`askSummary`):
 CREATING freezes the pool and all 28 specs under its seeds, and OPENING ENTRY
 starts the lock, so both put the whole configuration in front of the admin first
@@ -2862,7 +2915,7 @@ installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
 `node lab/search-v2/tools/selftest.js` (299) ·
 `tools/smoke.mjs` (211 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
-`tools/admin-smoke.mjs` (178) · `tools/platform-guard.mjs` (28) ·
+`tools/admin-smoke.mjs` (199) · `tools/platform-guard.mjs` (28) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its
 participants, and the drift guard that `app.js` reads content only through the
 resolved copy: one `Content.SURVEY` slipping back would silently ignore that

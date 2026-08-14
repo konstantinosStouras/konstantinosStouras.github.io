@@ -184,7 +184,14 @@
 
     var runCode = (pr.code || '').trim().toUpperCase() || null;
 
-    if (window.SVFirebase && SVFirebase.isConfigured() && !PREVIEW && runCode) {
+    // A REHEARSAL READS THE SESSION TOO. "🧪 Test round" is pressed on a
+    // particular session's card to see what THAT session gives a participant —
+    // its rounds, its costs, its wording — and skipping this read rehearsed the
+    // built-in defaults instead, so a session that differs from them (a short
+    // demo, say) could not be checked before it was shown to anyone. Nothing is
+    // written either way: startPreview runs on a local backend with run_id null,
+    // and every writer checks PREVIEW first.
+    if (window.SVFirebase && SVFirebase.isConfigured() && runCode) {
       // Read both: the run document (readable only while the run is NOT in
       // server mode) and its redacted public copy (always readable). Whichever
       // arrives decides the mode, and a run that is unreachable falls back to the
@@ -955,16 +962,29 @@
 
     var prev = PLAN.rounds[S.roundPtr - 1];
     var title, body;
+    // A session may run with NO warm-up rounds — a short demo shown to a class
+    // is the case this exists for. Announcing "the next 0 rounds are practice"
+    // would be nonsense, so a warm-up-free block introduces its scored rounds
+    // directly. Every branch below reads correctly at warmupPerBlock = 0.
+    var warm = P.rounds.warmupPerBlock;
     if (!prev) {
-      title = 'Practice first';
-      body = 'The next ' + P.rounds.warmupPerBlock + ' rounds are **practice**. They do not count towards anything — they are there so the screen is familiar before the scored rounds start.' +
-        (r.condition === 'AI_ON' ? '\n\nThe AI is available in these rounds too.' : '');
+      if (warm > 0) {
+        title = 'Practice first';
+        body = 'The next ' + warm + ' rounds are **practice**. They do not count towards anything — they are there so the screen is familiar before the scored rounds start.' +
+          (r.condition === 'AI_ON' ? '\n\nThe AI is available in these rounds too.' : '');
+      } else {
+        title = 'The first part';
+        body = 'The next **' + P.rounds.scoredPerBlock + ' rounds count**.' +
+          (r.condition === 'AI_ON' ? ' The AI is available throughout.' : ' There is no AI in this part.');
+      }
     } else if (prev.block !== r.block) {
       title = 'Halfway — the second part';
       body = (r.condition === 'AI_ON'
         ? '**From here on you can also ask the AI.** Everything else about the game is exactly the same.'
         : '**From here on the AI is no longer available.** Everything else about the game is exactly the same.') +
-        '\n\nThe next ' + P.rounds.warmupPerBlock + ' rounds are practice again, then ' + P.rounds.scoredPerBlock + ' scored rounds.';
+        '\n\n' + (warm > 0
+          ? 'The next ' + warm + ' rounds are practice again, then ' + P.rounds.scoredPerBlock + ' scored rounds.'
+          : 'The next ' + P.rounds.scoredPerBlock + ' rounds count, just like the first part.');
     } else if (prev.scored === false && r.scored === true) {
       title = 'Practice over — the scored rounds start now';
       body = 'The next ' + P.rounds.scoredPerBlock + ' rounds count.' +
@@ -2272,7 +2292,11 @@
                  : Specs.buttonOrder(P, 'PREVIEW')
     };
     // A rehearsal is ALWAYS local — it must reach no Function and write nothing.
-    B = window.SVBackend.create({ serverMode: false, params: P, specs: SPECS });
+    // A server-mode session keeps its specs out of the browser, so there are
+    // none to hand over; its own specSeed rebuilds the same ones locally rather
+    // than a different set drawn from the default seed.
+    B = window.SVBackend.create({ serverMode: false, params: P, specs: SPECS,
+                                  specSeed: (RUN && RUN.specSeed) || null });
     SPECS = B.specs;
     PLAN = { rounds: B.plan('PREVIEW', S.sequence) };
     if (pr.spec) {
