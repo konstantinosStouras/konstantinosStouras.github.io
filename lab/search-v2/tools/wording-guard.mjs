@@ -77,6 +77,9 @@ const OV = {
   'instr.i1.body': 'INSTR-BODY-OVERRIDE for the first screen.',
   'quiz.q_cost.prompt': 'QUIZ-PROMPT-OVERRIDE: what does one reveal cost?',
   'quiz.q_cost.opt.2': 'QUIZ-OPTION-OVERRIDE',
+  'reg.f_field.prompt': 'REG-PROMPT-OVERRIDE: what do you study?',
+  'reg.f_field.opt.0': 'REG-OPT-OVERRIDE',
+  'enc.rush.title': 'ENC-RUSH-OVERRIDE',
   'ai.a1.title': 'AI-TITLE-OVERRIDE',
   'aiquiz.qai_score.prompt': 'AIQUIZ-PROMPT-OVERRIDE',
   'survey.s01.prompt': 'SURVEY-PROMPT-OVERRIDE: how did you choose?',
@@ -139,6 +142,16 @@ ok(/CONSENT-OVERRIDE/.test(await pg.locator('#consent-body').innerText()),
   'the consent screen shows this session’s own words');
 await pg.locator('#consent-box').check();
 await pg.locator('#btn-consent').click();
+
+// ---- registration --------------------------------------------------------
+// Background, between consent and the instructions. Its wording is overridable
+// like everything else a participant reads.
+await pg.waitForSelector('#s-registration.active', { timeout: 15000 });
+ok(/REG-PROMPT-OVERRIDE/.test(await pg.locator('#reg-body').innerText()),
+  'a registration question shows this session’s own words');
+ok(/REG-OPT-OVERRIDE/.test(await pg.locator('#reg-body').innerText()),
+  'and so does one of its answers');
+await pg.locator('#btn-reg').click();
 
 // ---- instructions --------------------------------------------------------
 await pg.waitForSelector('#s-instructions.active');

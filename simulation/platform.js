@@ -146,7 +146,16 @@
           if (m[k] && (Number(m[k].ts) || 0) <= tombSeen(rv, k)) { delete m[k]; changed = true; }
           return;
         }
-        if (!m[k]) { m[k] = { ts: Number(e.ts) || 0, session: e.session || null }; changed = true; }
+        if (!m[k]) {
+          /* Carry `src` down with the mark. Without it, a completion the
+             INSTRUCTOR set by hand came back from the roster as an ordinary
+             local marker, went up again on the next sync stamped 'client',
+             and the reconciliation's "marks you set by hand are never removed"
+             guard — which tests src === 'manual' — no longer recognised it. */
+          m[k] = { ts: Number(e.ts) || 0, session: e.session || null };
+          if (e.src) m[k].src = e.src;
+          changed = true;
+        }
       });
       if (changed) {
         /* Tombstones FIRST: if the second write fails (quota), the guard that
@@ -395,13 +404,16 @@
           return ensureAnon().then(function (u) {
             var clean = {}, patch = {};
             Object.keys(m || {}).forEach(function (k) {
-              /* src names the LAST writer. Written on every push through a
-                 dotted path, which REPLACES the whole nested entry — a deep
-                 merge would fuse {ts,session} into a tombstone
-                 ({revoked:1,rts,ts,session}), leaving the row reading as
-                 revoked forever even after a genuine retake. */
+              /* src records WHO ESTABLISHED the completion, not who wrote it
+                 last: an instructor's manual mark keeps `src:'manual'` when
+                 this browser pushes it back, or the reconciliation would stop
+                 recognising the override it is required never to undo.
+                 Written on every push through a dotted path, which REPLACES
+                 the whole nested entry — a deep merge would fuse {ts,session}
+                 into a tombstone ({revoked:1,rts,ts,session}), leaving the row
+                 reading as revoked forever even after a genuine retake. */
               var v = m[k] || {};
-              clean[k] = { ts: Number(v.ts) || 0, session: v.session || null, src: 'client' };
+              clean[k] = { ts: Number(v.ts) || 0, session: v.session || null, src: v.src || 'client' };
               patch['completed.' + k] = clean[k];
             });
             if (!Object.keys(patch).length) return;
@@ -477,7 +489,7 @@
            students whose own browser never mirrored the marker (platform tab
            closed, direct URL, another browser). The student's page pulls it
            down live via its own-doc watch. */
-        stampCompleted: function (uids, simKey, mark) {
+        stampCompleted: function (rows, simKey, mark) {
           /* Dotted path REPLACES the nested entry. A deep merge would fuse the
              new mark into an existing tombstone ({revoked:1,rts}) and the row
              would still read as revoked. src records who stamped it ('verify'
@@ -487,15 +499,43 @@
              undo a manual override. */
           var entry = { ts: Number(mark.ts) || 0, session: mark.session || null };
           if (mark.src) entry.src = mark.src;
-          return Promise.all((uids || []).map(function (uid) {
-            var patch = {};
-            patch['completed.' + simKey] = entry;
-            return D.updateDoc(D.doc(fs, PATHS.students + '/' + uid), patch)
+          var patch = {};
+          patch['completed.' + simKey] = entry;
+          /* Takes [{uid, email}] like revokeCompletion — bare uid strings are
+             still accepted (older callers), they just skip the replica. */
+          var list = (rows || []).map(function (r) {
+            return (typeof r === 'string') ? { uid: r } : (r || {});
+          }).filter(function (r) { return r.uid; });
+          var jobs = [];
+          list.forEach(function (r) {
+            jobs.push(D.updateDoc(D.doc(fs, PATHS.students + '/' + r.uid), patch)
               .catch(function () {
                 var p = { completed: {} }; p.completed[simKey] = entry;
-                return D.setDoc(D.doc(fs, PATHS.students + '/' + uid), p, { merge: true });
-              });
-          }));
+                return D.setDoc(D.doc(fs, PATHS.students + '/' + r.uid), p, { merge: true });
+              }));
+            /* The completion map is replicated on the e-mail RECOVERY doc —
+               that is what a student restores when they log in on another
+               device, and the new device's registration becomes their NEWEST
+               roster doc. Without this, a verified ✓ vanished from the roster
+               the moment the student logged in elsewhere: the replica never
+               carried it, so there was nothing to restore and nothing to push
+               onto the new doc. revokeCompletion has always written both, for
+               the mirror-image reason. */
+            if (r.email) {
+              jobs.push(emailKeyOf(r.email).then(function (key) {
+                var rref = D.doc(fs, PATHS.recovery + '/' + key);
+                return D.updateDoc(rref, patch).catch(function () {
+                  var p = { completed: {} }; p.completed[simKey] = entry;
+                  return D.setDoc(rref, p, { merge: true });
+                });
+              }));
+            }
+          });
+          return Promise.allSettled(jobs).then(function (rs) {
+            var bad = rs.filter(function (x) { return x.status === 'rejected'; });
+            if (bad.length === rs.length && rs.length) throw (bad[0].reason || new Error('stamp failed'));
+            return { failed: bad.length };
+          });
         },
         /* Admin-only: REVOKE a completion — the student no longer counts as
            having done it and may retake it. Writes a TOMBSTONE rather than

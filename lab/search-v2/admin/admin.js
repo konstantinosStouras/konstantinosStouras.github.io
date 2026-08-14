@@ -304,11 +304,16 @@
   }
   // ONE builder for every sandbox link, so the launch box and the cards can never
   // open different things.
-  function previewUrl(code, spec) {
+  // `order` ('ask' | 'reveal') rehearses one side of the button swap. Without
+  // it a sandbox always shows whichever layout the constant preview code hashes
+  // to, so half of what participants meet could never be checked before a
+  // session opened.
+  function previewUrl(code, spec, order) {
     var base = location.origin + location.pathname.replace(/admin\/?$/, '');
     return base + '?preview=1&debug=1&key=' + encodeURIComponent(CFG.DEBUG_KEY) +
       (code ? '&code=' + encodeURIComponent(code) : '') +
-      (spec ? '&spec=' + encodeURIComponent(spec) : '');
+      (spec ? '&spec=' + encodeURIComponent(spec) : '') +
+      (order ? '&order=' + encodeURIComponent(order) : '');
   }
 
   function runAction(act, run, btn) {
@@ -407,8 +412,19 @@
           (p.ai.markAnchors ? 'its anchors are marked' : '') + ')'
         : 'Its curve and anchors stay hidden, as they must'
     ]]);
+    box.push(['The interface', [
+      'The two paid buttons: <b>' + (p.ui.buttonOrder === 'participant'
+        ? 'order randomised per participant' : 'fixed — Ask on the left') + '</b>',
+      'Side by side, one style, matched hues — neither is the primary action',
+      'Encouragement: ' + (p.ui.encouragement
+        ? '<b>on</b> — milestones, one in-round tip, and a focus prompt at ≤' + p.ui.rushMinActions + ' actions'
+        : 'off'),
+      'Cost numerals: <b>' + esc(p.ui.costColorReveal) + '</b> reveal · <b>' + esc(p.ui.costColorQuery) + '</b> ask'
+    ]]);
     box.push(['Assignment', [
       'Sequence: ' + esc(p.assign.sequenceAssignment),
+      'Button order: ' + (p.ui.buttonOrder === 'participant'
+        ? 'block-randomised <b>jointly with the sequence</b>' : 'fixed for everyone'),
       'Next entrant: ' + (p.assign.nextEntrantOverride === 'auto' ? 'automatic' : '<b>forced ' + esc(p.assign.nextEntrantOverride) + '</b>'),
       'Seeds frozen: ' + (p.assign.freezeSeeds ? 'yes' : 'no') + ' · anchors frozen: ' + (p.assign.freezeAnchors ? 'yes' : 'no'),
       'Mapping pool: ' + p.env.poolSize + ', seed ' + p.env.generatorSeed
@@ -527,6 +543,12 @@
           warmupPerBlock: p.rounds.warmupPerBlock, scoredPerBlock: p.rounds.scoredPerBlock,
           openPerBlock: p.rounds.openPerBlock, seededPerBlock: p.rounds.seededPerBlock
         },
+        // The interface group must travel: it holds nothing secret, and
+        // WITHOUT it Specs.withDefaults on the participant's side takes the
+        // "stored before `ui` existed" branch and quietly forces the whole
+        // session to fixed buttons with no encouragement — in server mode,
+        // where the redacted copy is ALL the participant ever sees.
+        ui: clone(p.ui),
         ops: clone(p.ops)
       },
       updatedAt: Date.now()
@@ -611,6 +633,8 @@
     ['env', 'seedHighMin', 'num'], ['env', 'seedHighMax', 'num'], ['env', 'poolSize', 'num'], ['env', 'generatorSeed', 'num'],
     ['costs', 'revealCost', 'num'], ['costs', 'queryCost', 'num'], ['costs', 'queryCap', 'num'], ['costs', 'revealCap', 'num'],
     ['costs', 'scoreFloor', 'seg'],
+    ['ui', 'buttonOrder', 'seg'], ['ui', 'costColorReveal', 'txt'], ['ui', 'costColorQuery', 'txt'],
+    ['ui', 'encouragement', 'seg'], ['ui', 'rushMinActions', 'num'],
     ['ai', 'sparseK', 'num'], ['ai', 'denseK', 'num'], ['ai', 'placement', 'seg'], ['ai', 'answerRounding', 'seg'],
     ['ai', 'allowRequery', 'seg'], ['ai', 'drawCurve', 'seg'], ['ai', 'markAnchors', 'seg'],
     ['rounds', 'warmupPerBlock', 'num'], ['rounds', 'scoredPerBlock', 'num'], ['rounds', 'openPerBlock', 'num'],
@@ -948,8 +972,8 @@
   function wireRoster() {
     $('btn-ros-gen').onclick = generateCodes;
     $('btn-ros-csv').onclick = function () {
-      var csv = 'code,sequence,status\n' + roster.map(function (r) {
-        return [r.code, r.sequence, r.status || 'unused'].join(',');
+      var csv = 'code,sequence,button_order,status\n' + roster.map(function (r) {
+        return [r.code, r.sequence, r.buttonOrder || '', r.status || 'unused'].join(',');
       }).join('\n');
       dl((current ? current.code : 'run') + '_roster.csv', csv, 'text/csv');
     };
@@ -977,20 +1001,27 @@
     var p = LOCAL ? Promise.resolve(current.roster || []) : FB.listRoster(current.id);
     p.then(function (list) {
       roster = list || [];
-      var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0 };
+      var counts = { unused: 0, started: 0, completed: 0, abandoned: 0, A: 0, B: 0, ask: 0, reveal: 0 };
       roster.forEach(function (r) {
         counts[r.status || 'unused'] = (counts[r.status || 'unused'] || 0) + 1;
         if (r.sequence) counts[r.sequence]++;
+        if (r.buttonOrder === 'reveal_first') counts.reveal++;
+        else if (r.buttonOrder === 'ask_first') counts.ask++;
       });
+      // Button order is a covariate in the primary analysis, so its balance is
+      // shown beside the sequence's — "confirm it is balanced before the first
+      // session opens" is a thing the panel has to make possible.
       $('roster-stats').innerHTML = [
         ['Codes', roster.length], ['Unused', counts.unused], ['In progress', counts.started],
-        ['Completed', counts.completed], ['Sequence A', counts.A], ['Sequence B', counts.B]
+        ['Completed', counts.completed], ['Sequence A', counts.A], ['Sequence B', counts.B],
+        ['Ask on the left', counts.ask], ['Reveal on the left', counts.reveal]
       ].map(function (s) { return '<div class="stat-box"><b>' + s[1] + '</b><span>' + s[0] + '</span></div>'; }).join('');
 
       $('roster-table').innerHTML = roster.length
-        ? '<thead><tr><th>Code</th><th>Sequence</th><th>Status</th><th>Claimed</th><th>Enrolled</th></tr></thead><tbody>' +
+        ? '<thead><tr><th>Code</th><th>Sequence</th><th>Buttons</th><th>Status</th><th>Claimed</th><th>Enrolled</th></tr></thead><tbody>' +
           roster.map(function (r) {
             return '<tr><td class="mono">' + esc(r.code) + '</td><td>' + esc(r.sequence || '—') + '</td>' +
+              '<td>' + (r.buttonOrder === 'reveal_first' ? 'Reveal left' : r.buttonOrder === 'ask_first' ? 'Ask left' : '—') + '</td>' +
               '<td>' + esc(r.status || 'unused') + '</td>' +
               '<td>' + (r.claimedAt ? new Date(r.claimedAt).toLocaleString() : '—') + '</td>' +
               '<td>' + (r.autoEnrolled ? 'platform / open' : 'pre-generated') + '</td></tr>';
@@ -1005,22 +1036,31 @@
     if (!current) { alert('Open a session first.'); return; }
     var n = Math.max(1, Math.min(1000, parseInt($('ros-n').value, 10) || 0));
     var prefix = ($('ros-prefix').value || 'P').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    // Block randomisation over a shuffled list, so the split is exactly half and
-    // half rather than a series of coin flips (§11).
-    var seqs = [];
-    for (var i = 0; i < n; i++) seqs.push(i % 2 === 0 ? 'A' : 'B');
-    Pool.shuffle(seqs, Pool.rngFrom(Pool.hashSeed(current.id + ':' + n + ':' + prefix)));
+    // Block randomisation over a shuffled list, so the split is exact rather
+    // than a series of coin flips (§11) — and over the FOUR CELLS of
+    // sequence × button order jointly, not two independent draws, because the
+    // button order enters the primary analysis as a covariate and has to be
+    // balanced within each sequence as well as overall (§ config.js
+    // ui.buttonOrder).
+    var cells = Specs.assignmentCells(), cellFor = [];
+    for (var i = 0; i < n; i++) cellFor.push(cells[i % cells.length]);
+    Pool.shuffle(cellFor, Pool.rngFrom(Pool.hashSeed(current.id + ':' + n + ':' + prefix)));
     var codes = [];
-    for (var j = 0; j < n; j++) codes.push({ code: prefix + String(j + 1).padStart(3, '0'), sequence: seqs[j] });
+    for (var j = 0; j < n; j++) {
+      codes.push({ code: prefix + String(j + 1).padStart(3, '0'),
+                   sequence: cellFor[j].sequence, buttonOrder: cellFor[j].buttonOrder });
+    }
 
     if (LOCAL) {
-      current.roster = codes.map(function (c) { return { code: c.code, sequence: c.sequence, status: 'unused' }; });
+      current.roster = codes.map(function (c) {
+        return { code: c.code, sequence: c.sequence, buttonOrder: c.buttonOrder, status: 'unused' };
+      });
       saveLocalRuns(localRuns().map(function (r) { return r.id === current.id ? current : r; }));
       renderRoster();
       return;
     }
     var chain = Promise.resolve();
-    codes.forEach(function (c) { chain = chain.then(function () { return FB.putRosterCode(current.id, c.code, c.sequence); }); });
+    codes.forEach(function (c) { chain = chain.then(function () { return FB.putRosterCode(current.id, c.code, c.sequence, c.buttonOrder); }); });
     chain.then(function () {
       FB.audit(current.id, 'generate_roster', n + ' codes, prefix ' + prefix);
       renderRoster();
@@ -1162,11 +1202,14 @@
   function wireData() {
     $('btn-fetch').onclick = function () { loadEvents().then(renderData); };
     $('btn-validate').onclick = runValidation;
+    var prevOrder = function () { return ($('prev-order') && $('prev-order').value) || ''; };
     $('btn-preview').onclick = function () {
       var spec = $('prev-spec').value;
-      window.open(previewUrl(current && current.code, spec), '_blank');
+      window.open(previewUrl(current && current.code, spec, prevOrder()), '_blank');
     };
-    $('btn-preview-full').onclick = function () { window.open(previewUrl(current && current.code), '_blank'); };
+    $('btn-preview-full').onclick = function () {
+      window.open(previewUrl(current && current.code, null, prevOrder()), '_blank');
+    };
     $('btn-dryrun').onclick = dryRun;
     $('btn-dl-xlsx').onclick = downloadXlsx;
     $('btn-dl-decisions').onclick = function () { if (built) dl('decisions.csv', X.toCSV(built.decisions), 'text/csv'); };
@@ -1415,6 +1458,30 @@
       'and returned after a latency identical to a reveal&rsquo;s, so neither the number&rsquo;s shape nor its timing ' +
       'says whether the position was one it knew. That is what makes trust fallible rather than merely noisy: the ' +
       'AI&rsquo;s number is never a prize, and it is confidently wrong in exactly the places it has no data.</p></div>' +
+
+      '<div class="card"><h3 style="margin-top:0;">Why the two paid buttons look identical, and swap</h3>' +
+      '<p>Which of <b>Ask the AI</b> and <b>Reveal</b> a participant presses IS the outcome this study measures, so ' +
+      'the interface must not make either one easier to press. They are one button style at strict parity &mdash; ' +
+      'same size, padding, radius, weight, border, shadow, and two hues matched on saturation and lightness &mdash; ' +
+      'placed <b>side by side</b>, because vertical primacy is the strongest position bias and horizontal is weaker. ' +
+      'Neither is styled as the primary action. <b>Stop and nominate</b> is a different class of action: it sits ' +
+      'below a divider, never moves, and names the selected position so nomination cannot be accidental.</p>' +
+      '<p>Order is assigned <b>once per participant</b> (' +
+      (p.ui.buttonOrder === 'participant' ? 'randomised in this session' : '<b>fixed in this session</b>') +
+      ') and block-randomised jointly with the crossover sequence, so all four cells of sequence &times; order fill ' +
+      'evenly. It is <b>not</b> redrawn per round or per decision: a participant takes roughly 300 actions, and ' +
+      'moving the buttons under them buys mis-clicks &mdash; a mis-click here spends the higher cost and destroys ' +
+      'the ground truth at that position &mdash; and inflates decision latency with re-reading, when latency is ' +
+      'itself one of the measures. The assignment is stamped on the participant and on every row they produce ' +
+      '(<span class="mono">button_order</span>), so it enters the model as a covariate and the size of any position ' +
+      'effect is reported rather than assumed away.</p>' +
+      '<p>The cost numeral inside each button is red &mdash; and nothing else on the screen is &mdash; so red means ' +
+      '&ldquo;this is what an action costs&rdquo;. The cheaper action takes a lighter tint of the <b>same hue</b> ' +
+      '(' + esc(p.ui.costColorReveal) + ' and ' + esc(p.ui.costColorQuery) + ', both above 4.5:1 on their white ' +
+      'chip). Those two values are run parameters, locked with the task: styling that touches a primary outcome is a ' +
+      'treatment, not a theme. The Reveal cost is rendered identically in AI-off rounds, where it stands alone &mdash; ' +
+      'styling the same action differently across the two conditions would confound the reveal-rate comparison with ' +
+      'chrome. In an AI-off round the Ask button is <b>absent from the DOM</b>, not hidden.</p></div>' +
 
       '<div class="card"><h3 style="margin-top:0;">What is a &ldquo;seeded&rdquo; round, and what is the seed?</h3>' +
       '<p>A <b>pre-opened round</b> (the code calls it <span class="mono">seeded</span>) does not start blank: ' +
@@ -1689,7 +1756,11 @@
     ];
 
     var runRows = [['group', 'parameter', 'value']];
-    ['env', 'costs', 'ai', 'rounds', 'assign', 'filter', 'ops'].forEach(function (g) {
+    // `ui` is in the list because it is a TREATMENT group, not a theme: the
+    // button order and the two cost colours are properties of the interface a
+    // primary outcome was measured through, so they have to travel with the
+    // data like every other parameter.
+    ['env', 'costs', 'ai', 'ui', 'rounds', 'assign', 'filter', 'ops'].forEach(function (g) {
       Object.keys(a.params[g] || {}).forEach(function (k) {
         var v = a.params[g][k];
         runRows.push([g, k, (typeof v === 'object') ? JSON.stringify(v) : v]);

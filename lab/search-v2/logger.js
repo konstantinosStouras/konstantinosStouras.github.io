@@ -32,7 +32,10 @@ window.Logger = (function () {
   var FIELDS = [
     // identity
     'run_id', 'participant_code', 'pid', 'session', 'sessionCode', 'sessionName',
-    'sequence', 'event', 't', 'iso', 'seq',
+    // button_order is a BASE field: assigned once per participant, so it is
+    // stamped on every row rather than logged per decision, which is what
+    // denormalises it onto the decisions the analysis controls with.
+    'sequence', 'button_order', 'event', 't', 'iso', 'seq',
     // where in the study
     'phase', 'block', 'condition', 'scored', 'round_index', 'spec_id',
     'seed_shape', 'ai_density', 'mapping_index',
@@ -54,9 +57,9 @@ window.Logger = (function () {
     // appear here or it does not exist.
     'raw_score', 'nomination_type',
     'stopped_immediately', 'nominated_position', 'nominated_true_value',
-    // comprehension / survey
+    // comprehension / registration / survey
     'question_id', 'attempts', 'ms_to_first_answer', 'first_answer_correct',
-    'answer', 'correct',
+    'answer', 'correct', 'source',
     // environment
     'ua_browser', 'ua_os', 'vw', 'vh', 'dpr', 'input_mode', 'tz_offset',
     'appVersion', 'info'

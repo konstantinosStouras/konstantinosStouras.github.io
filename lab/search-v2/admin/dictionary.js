@@ -45,6 +45,7 @@
     decision_index: ['integer', 'Position of this action within the round, counting from 0.'],
     is_first_decision: ['boolean', 'TRUE on the first action of a round — the primary analysis moment.'],
     action: ['factor', 'query (asked the AI), reveal (paid for the truth), or stop (nominated and ended the round).'],
+    button_order: ['factor', 'Which paid action sat on the LEFT for this participant — ask_first or reveal_first. Assigned once at enrolment and fixed for the whole session, block-randomised jointly with sequence (config.ui.buttonOrder), and denormalised onto every row so it can enter the model as a covariate. In an AI-off round only Reveal is on screen; the assignment still applies and is still recorded.'],
     position: ['integer', 'The position on the line, 1…100, this action was about.'],
     value: ['points', 'What the participant was told: the AI’s estimate for a query, the true prize for a reveal. Blank on a stop.'],
     already_queried: ['boolean', 'On a reveal: had they asked the AI about this position first?'],
@@ -99,6 +100,7 @@
 
   // ---- Rounds: one row per round ------------------------------------------
   var ROUNDS = {
+    button_order: ['factor', 'Which paid action sat on the LEFT — the participant\u2019s own assignment, the same on every one of their rows. See the Decisions entry.'],
     pre_opened: ['text', 'Positions open from the start, as "position:value|…".'],
     ai_anchors: ['text', 'The positions the AI knew privately. Never shown to anyone during the study.'],
     started_at: ['timestamp', 'When the round opened.'],
@@ -182,6 +184,7 @@
     perceived_better_half: ['factor', 'Which half they believed they scored higher in.'],
     actual_better_half: ['factor', 'Which half they actually scored higher in.'],
     median_decision_ms: ['ms', 'Median time between their actions — a deliberation measure robust to one long pause.'],
+    button_order: ['factor', 'Which paid action sat on the LEFT for this participant, for their whole session — ask_first or reveal_first. Block-randomised jointly with sequence at enrolment (config.ui.buttonOrder), so all four cells of sequence × order come out balanced; it belongs in the model as a covariate, which is also what lets the position effect be reported rather than assumed away.'],
     platform_sim: ['id', 'The Simulation Platform app that launched them, when they arrived that way.'],
     platform_session: ['id', 'The platform session id they launched from.']
   };
@@ -198,7 +201,8 @@
     if (hit) return { type: hit[0], text: hit[1] };
     // Survey and comprehension columns are generated from content.js, so they
     // are described generically rather than one by one.
-    if (/^survey_platform_/.test(col)) return { type: 'text', text: 'Answered on the Simulation Platform and carried across, not asked again here.' };
+    if (/^reg_platform_/.test(col) || /^survey_platform_/.test(col)) return { type: 'text', text: 'Answered on the Simulation Platform and carried across, not asked again here.' };
+    if (/^reg_/.test(col)) return { type: 'text', text: 'Registration answer (background, asked before the study): ' + col.replace(/^reg_/, '') + '. Optional — blank means they skipped it.' };
     if (/^survey_/.test(col)) return { type: 'text', text: 'Exit-survey answer: ' + col.replace(/^survey_/, '') + '.' };
     if (/^quiz_/.test(col)) return { type: 'text', text: 'Comprehension answer: ' + col.replace(/^quiz_/, '') + '.' };
     if (/^phase_ms_/.test(col)) return { type: 'ms', text: 'Time spent in the ' + col.replace(/^phase_ms_/, '') + ' phase.' };

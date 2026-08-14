@@ -2432,6 +2432,77 @@ pre-opened moves — smoke.mjs and data-audit.mjs now CHOOSE a revealable positi
 `window.CONFIG.DEFAULTS`, after waiting out the latency gate that disables every
 button.
 
+**Registration first; the exit survey no longer asks background** (owner
+2026-08). The four background items (field of study, year/level, age band,
+gender) moved out of the survey's Part F into their OWN registration phase
+between consent and the instructions — asked once, before the task, all
+optional (`Content.REGISTRATION`, `showRegistration` in app.js, screen
+`s-registration`). On a Simulation Platform launch every item the platform's
+registration already answered is NOT re-asked: it travels as
+`platform_<field>` and, when the platform covers all of them, the phase passes
+through with no screen at all. The ids are unchanged from the Part F era and
+the exporter reads either source into the same `reg_<id>` column, so sessions
+already collected keep their background. Pinned by `tools/platform-guard.mjs`.
+
+**The two paid buttons are the primary outcome, so the interface may not tilt
+them** (owner 2026-08, a written spec). "Ask the AI" and "Reveal" are ONE
+button style at strict visual parity — same size, padding, radius, weight,
+border, shadow and every state, two hues matched on saturation and lightness
+(`hsl(272,55%,40%)` / `hsl(211,55%,40%)`), neither styled as primary — placed
+SIDE BY SIDE in a full-width row under the plot (the old 220px action column
+could not hold two equal buttons; `.round-grid` is now 2 columns), with "Stop
+and nominate" apart below a divider and never in the swap. Which sits on the
+LEFT is assigned ONCE PER PARTICIPANT and fixed for the session
+(`ui.buttonOrder`, default `'participant'`), block-randomised JOINTLY with the
+crossover sequence — `Specs.assignmentCells()` cycles A/ask, B/reveal,
+A/reveal, B/ask so both marginals stay exact at any roster size, the server's
+`claimCode` counter and the admin's roster generator both fill the four cells,
+and a client-mode run falls back to `Specs.buttonOrder` (a hash of the code).
+It is stamped as a LOGGER BASE FIELD (`button_order`), so it reaches the
+participant record and every decision row for the model to control with.
+Deliberately NOT redrawn per round or per decision: ~300 actions with the
+buttons moving buys mis-clicks (one spends the higher cost and destroys the
+ground truth at that position) and inflates decision latency, itself a measure.
+The cost numeral inside each button is red — and nothing else on screen is —
+the cheaper action in a LIGHTER TINT OF THE SAME HUE, on a white chip because
+no red meets 4.5:1 against a saturated fill; against white the lighter tint is
+the lower-contrast one, so the step runs 38% (reveal) / 50% (ask), both above
+4.5:1. Both are LOCKED RUN PARAMETERS (`ui.costColorReveal`/`costColorQuery`,
+pushed into CSS custom properties at load) because styling that touches a
+primary outcome is a treatment, not a theme; the reveal colour is identical in
+AI-off rounds, where the Ask button is REMOVED FROM THE DOM rather than hidden
+(so it is not tabbable or inspectable either — everything touching `#btn-ask`
+is null-guarded). `tools/smoke.mjs` measures the parity from computed styles
+and `tools/layout-guard.mjs` pins the side-by-side row at five widths.
+
+**Engagement, under the same rule** (owner 2026-08): a progress bar + "round n
+of 12 in this half" under the round title, milestone pop-ups at the halfway
+point / three rounds left / the last round, one in-round encouragement tip, a
+friendly between-rounds line, and a FOCUS PROMPT when a scored round is about
+to be closed after `ui.rushMinActions` (default 2) actions or fewer — always
+dismissible in one click, since a prompt that could not be dismissed would
+coerce the choice being measured. Every message is motivational and never
+informational: none names a position, none reacts to the score, none differs
+between the arms, and each is logged as a `nudge`. Copy lives in `content.js`
+(`ENCOURAGE`), the whole feature behind `ui.encouragement`. A session stored
+before the `ui` group existed keeps the interface it actually ran with
+(`withDefaults` sets `buttonOrder:'fixed'`, `encouragement:false`), so a
+running session never changes under its participants.
+
+**The enrolment rule lives in ONE place** (`Specs.nextCell`, shared by the Cloud
+Function's `claimCode`, svfirebase's client-mode `assignCell` and the tests):
+the under-filled arm takes the entrant, and the button order alternates on that
+arm's own PARITY, which keeps all four cells of sequence × order balanced
+WITHOUT a new counter field. That last part is load-bearing — the deployed
+`firestore.rules` pin `runCounts/{runId}` to `hasOnly(['nA','nB'])`, so an extra
+key makes the whole client-mode transaction permission-denied and the catch
+hands out a wall-clock coin flip while the counter never advances, silently
+destroying §11's exact crossover split for a whole class. Also: `publicDoc`
+MUST carry the `ui` group — in server mode the redacted copy is all the
+participant sees, and without it `withDefaults` takes the pre-`ui` branch and
+turns the whole interface treatment off; and the Run sheet exports `ui` with
+the other parameter groups, because it is a treatment, not a theme.
+
 **28 rounds**, 4 warm-up + 24 scored, 12 per block, counterbalanced crossover
 (sequence A = AI off then on, B = the reverse). Per block: 4 open + 8 seeded
 (2 FRONTIER, 4 BALANCED, 2 GAP), densities balanced within each shape. Mappings,
@@ -2466,7 +2537,11 @@ screens: Sessions · Parameters (+ Consequences beside it) · Roster · Live mon
 Data & preview · Design notes · Wording. The tab switcher derives its pane list
 from the buttons themselves — a hard-coded list silently fails to show any screen
 added after it was written, which is exactly how the Wording pane first shipped
-invisible. **The UI calls the unit a SESSION** (28 rounds: 4 warm-up + 24
+invisible. Parameters carries an eighth group, **Interface and engagement**
+(button order, the two cost colours, encouragement); the Roster reports the
+ask-left / reveal-left balance beside the sequence split; and the Wording tab
+covers the registration questions and every encouragement message, like every
+other word a participant reads. **The UI calls the unit a SESSION** (28 rounds: 4 warm-up + 24
 scored, two blocks) — the brief calls it a *run* and the DATA keeps that name
 (`run_id` on every row, the workbook's Run sheet), so the two words are one
 object and no analysis script moves; rename UI copy only. The governing rule is
@@ -2646,14 +2721,19 @@ so the two cannot drift again.
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (263) ·
-`tools/smoke.mjs` (178, a whole 28-round session) ·
-`tools/admin-smoke.mjs` (136) · `tools/platform-guard.mjs` (26) ·
-**`tools/wording-guard.mjs` (15 — a session's overrides actually REACH its
+`node lab/search-v2/tools/selftest.js` (299) ·
+`tools/smoke.mjs` (a whole 28-round session) ·
+`tools/admin-smoke.mjs` · `tools/platform-guard.mjs` (28) ·
+**`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its
 participants, and the drift guard that `app.js` reads content only through the
 resolved copy: one `Content.SURVEY` slipping back would silently ignore that
 session's wording for that one screen)** ·
-`tools/layout-guard.mjs` (104, reachability at five window sizes) ·
+`tools/layout-guard.mjs` (reachability at five window sizes) ·
+`tools/data-audit.mjs` (46) ·
+**`tools/migration-guard.mjs`** (a participant MID-SESSION when a build ships
+must not lose data — the registration phase is entered from the consent button,
+so a resume from the previous build is caught up before the task or asked at the
+end of the survey, never skipped) ·
 `tools/preview-guard.mjs` · **`tools/emulator-test.mjs` (37, against the REAL
 Functions + Rules in the Firebase emulator — needs Java and firebase-tools, skips
 cleanly without them)** · `python3 tools/generate_rounds.py --validate`.
@@ -2994,7 +3074,32 @@ re-approves with one live click; completion markers restore too so a
 device switch earns no replay; `recoverByEmail`/`saveRecovery`/`emailKeyOf`
 in platform.js, the "Already registered before?" box in index.html;
 SIMP_PATHS defaults are MERGED under overrides so an older
-firebase-config.js can never leave a new path undefined). A card with nothing to ask (no session
+firebase-config.js can never leave a new path undefined).
+**A student can back SEVERAL roster docs, and the ✓ is read MERGED across
+them (`simulation/completions.js`)** — every registration mints a fresh
+anonymous uid, so a log-out + re-register, or a second device, gives the
+same student another `simPlatformStudents/{uid}` doc. Admin writes fan out
+to every uid behind the collapsed row, but the STUDENT's own push
+(`syncCompleted`) only reaches the doc they are signed into — and `logout()`
+clears the local markers — so the NEWEST doc, the one the row is built from,
+can be missing a ✓ that a duplicate carries. That is the
+"done in PortfolioFit's own admin, — on the platform" report (2026-08-14):
+the cell read one doc while `verifyFromSim` asked a DIFFERENT question
+("does ANY doc have it?"), so it counted the student as `already` matched,
+wrote nothing, and reported success while the cell stayed —. `completions.js`
+(`studentKey`/`rowKey`/`docNewer`/`groupByStudent`/`mergeCompleted`/`isDone`,
+loaded by the admin page before admin.js) is now the ONE reading both halves
+use: group newest-first, merge per simulation key, the NEWEST statement
+winning — so a tombstone on the current doc still hides an older mark (the
+instructor removed the ✓ on purpose) and a retake after it counts again.
+Two companion fixes: `stampCompleted` now also writes the e-mail RECOVERY
+replica (as `revokeCompletion` always did — else a verified ✓ vanished the
+moment the student logged in elsewhere, since the new device's doc becomes
+the newest with nothing to restore onto it), and it takes `{uid,email}` rows
+like revoke; and the failing-join guard now refuses only the REMOVALS
+instead of aborting the pass, which used to discard the safe additive
+stamps — the very thing the button was pressed for. Offline test:
+`node simulation/tools/completion-guard.mjs`. A card with nothing to ask (no session
 input, no copy chips) launches its sim DIRECTLY in a new tab — and NEVER pass
 'noopener' as window.open features: its by-spec null return reads as a
 blocked pop-up and made the fallback also navigate the platform tab (the
@@ -3058,7 +3163,9 @@ address has no spaces, so it otherwise sets the table's minimum width), with the
 actions column exempted so its button stays on one line. Offline tests that must
 stay green: `node simulation/tools/smoke.mjs` (Playwright over a local static
 server, LOCAL mode forced — registration → admin activation → cards → launch
-handoff/seeds → prefill) and `node simulation/tools/roster-width-guard.mjs`
+handoff/seeds → prefill), `node simulation/tools/completion-guard.mjs`
+(the merged completion reading — the roster cell and the reconciliation must
+answer the same question) and `node simulation/tools/roster-width-guard.mjs`
 (the Delete button unclipped at six window widths × simulation counts). That
 second guard measures containment inside `.roster-wrap` plus `elementFromPoint`,
 NOT viewport coordinates: a button clipped inside a scrolling ancestor still

@@ -133,6 +133,10 @@
             ai_k: spec.ai_k, round_index: num(ri), decision_index: num(e.decision_index),
             is_first_decision: num(e.decision_index) === 0,
             action: e.action, position: pos, value: num(e.value),
+            // Assigned once per participant and stamped on every row by the
+            // logger's base fields, so it is here for the analysis to control
+            // with rather than being re-derived.
+            button_order: e.button_order || null,
             already_queried: e.already_queried,
             best_before: num(e.best_true_known_before),
             best_estimate_before: num(e.best_estimate_before),
@@ -346,6 +350,7 @@
           pre_opened: spec.pre_opened.join(' '),
           ai_anchors: spec.ai_anchors.join(' '),
           round_index: num(ri),
+          button_order: (end && end.button_order) || (start && start.button_order) || null,
           started_at: start ? start.iso : null, ended_at: end.iso,
           duration_ms: num(end.duration_ms),
           instruction_reopens: num(end.instruction_reopens),
@@ -438,12 +443,13 @@
     Object.keys(byP).forEach(function (code) {
       var P = byP[code];
       var start = P.events[0], end = P.events[P.events.length - 1];
-      var sessionEnd = null, sessionStart = null, survey = {}, quiz = {};
+      var sessionEnd = null, sessionStart = null, survey = {}, quiz = {}, reg = {};
 
       P.events.forEach(function (e) {
         if (e.event === 'session_end') sessionEnd = e;
         if (e.event === 'session_start') sessionStart = e;
         if (e.event === 'survey' && e.question_id) survey[e.question_id] = e.answer;
+        else if (e.event === 'registration' && e.question_id) reg[e.question_id] = e.answer;
         if (e.event === 'comprehension' && e.question_id) {
           var q = quiz[e.question_id] || { attempts: 0, first: null, ms: null };
           q.attempts = Math.max(q.attempts, num(e.attempts) || 0);
@@ -532,13 +538,15 @@
         actual_better_half: actualHalf,
         median_decision_ms: medDec,
         disengaged: !!((medDec != null && medDec < 500) || (totalReveals > 0 && revealsNoScan > totalReveals / 2)),
+        button_order: rec.button_order || (sessionStart && sessionStart.button_order) ||
+                      (start && start.button_order) || null,
         platform_sim: (rec.platform && rec.platform.sim) || null,
         platform_session: (rec.platform && rec.platform.session) || null
       };
 
       // Phase breakdown (§16.1), one column per phase.
       var ph = rec.phase_ms || {};
-      ['consent', 'instructions', 'quiz', 'aiinstructions', 'aiquiz', 'blockintro', 'round', 'interstitial', 'survey', 'debrief']
+      ['consent', 'registration', 'instructions', 'quiz', 'aiinstructions', 'aiquiz', 'blockintro', 'round', 'interstitial', 'survey', 'debrief']
         .forEach(function (k) { row['phase_ms_' + k] = ph[k] != null ? ph[k] : null; });
 
       // Comprehension: attempts + first-answer correctness, one pair per question.
@@ -548,10 +556,23 @@
         row['quiz_' + qid + '_ms'] = quiz[qid] ? quiz[qid].ms : null;
       });
 
-      // Every survey answer, in screen order, plus whatever the platform supplied.
+      // Every survey answer, in screen order.
       Content.surveyColumns().forEach(function (sid) { row['survey_' + sid] = survey[sid] != null ? survey[sid] : null; });
-      Object.keys(survey).forEach(function (k) {
-        if (k.indexOf('platform_') === 0) row['survey_' + k] = survey[k];
+
+      // Registration: the background block, plus whatever the Simulation
+      // Platform supplied instead of asking. The `survey[sid]` fallback reads
+      // sessions collected BEFORE this became its own phase, when the same
+      // items were the exit survey's Part F under the same ids — one column
+      // either way, so an older session still exports its background.
+      Content.registrationColumns().forEach(function (sid) {
+        var v = reg[sid] != null ? reg[sid] : (survey[sid] != null ? survey[sid] : null);
+        row['reg_' + sid] = v;
+      });
+      Object.keys(reg).forEach(function (k) {
+        if (k.indexOf('platform_') === 0) row['reg_' + k] = reg[k];
+      });
+      Object.keys(survey).forEach(function (k) {          // legacy rows
+        if (k.indexOf('platform_') === 0 && row['reg_' + k] == null) row['reg_' + k] = survey[k];
       });
 
       out.push(row);
@@ -572,11 +593,15 @@
     var params = art.params;
     var plan = Specs.sessionPlan(art.specs, code, sequence, params);
     var rows = [], t = Date.now() - 2400000, seq = 0, total = 0;
+    // The bot arrives through the same interface a participant would, so its
+    // rows carry the same per-participant button order — a base field on every
+    // row, exactly as the logger stamps it live.
+    var buttonOrder = Specs.buttonOrder(params, code);
 
     function push(ev, extra) {
       var r = Object.assign({
         run_id: (run && run.id) || null, participant_code: code, pid: code, session: code,
-        sessionCode: (run && run.code) || null, sequence: sequence, bot: true,
+        sessionCode: (run && run.code) || null, sequence: sequence, button_order: buttonOrder, bot: true,
         event: ev, t: t, iso: new Date(t).toISOString(), seq: seq++
       }, extra || {});
       rows.push(r); t += 900;

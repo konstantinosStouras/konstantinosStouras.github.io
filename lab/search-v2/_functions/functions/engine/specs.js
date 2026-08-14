@@ -36,6 +36,13 @@
         if (params[g][k] != null) out[g][k] = clone(params[g][k]);
       });
     });
+    /* A group added to DEFAULTS after a session was stored must NOT change how
+       that session plays: filling it from the new defaults would give the
+       participants who arrive next a different interface from the ones who
+       already played, inside one dataset. `ui` arrived in 2026-08 with the
+       randomised action order, so a session that predates it keeps the fixed
+       order it actually ran with; new sessions get the default. */
+    if (!params.ui) { out.ui.buttonOrder = 'fixed'; out.ui.encouragement = false; }
     return out;
   }
 
@@ -345,8 +352,75 @@
     return { pass: failures.length === 0, failures: failures, notes: notes };
   }
 
+  /* Which of the two PAID actions sits on the LEFT, for a whole session.
+     A fixed column makes one button the standing default, and the nudge would
+     fall on exactly what this study measures — so the pair is swapped per
+     PARTICIPANT (never per round or per decision: see the note in config.js).
+       'participant' — jointly block-randomised with the crossover sequence at
+                       enrolment, which is the server's counter (or the roster
+                       generator). This function is the CLIENT-MODE FALLBACK
+                       for a run with no Function to enrol against: a hash of
+                       the participant code, deterministic so the order a
+                       participant saw is reproducible offline from the code.
+       'fixed'       — Ask on the left, always. */
+  function buttonOrder(params, code) {
+    var mode = (params && params.ui && params.ui.buttonOrder) || 'fixed';
+    if (mode !== 'participant') return 'ask_first';
+    return (Pool.hashSeed('btnorder:' + (code == null ? '' : code)) % 2) ? 'reveal_first' : 'ask_first';
+  }
+  /* The four cells of sequence × button order, in a block-randomised cycle —
+     what the roster generator lays out and what the server's enrolment counter
+     fills, so all four come out balanced (roughly N/4 each) rather than the
+     product of two independent coin flips. */
+  // The ORDER of the four matters: every consecutive PAIR carries one A and one
+  // B, and one ask-first and one reveal-first, so a roster whose size is not a
+  // multiple of four still splits both factors evenly (90 codes: 45/45 on each,
+  // 23/22 per cell). Cycling A,A,B,B would have given 46/44 on the sequence —
+  // the exact balance §11 asks for, lost to a change that was only about the
+  // buttons.
+  var CELLS = [
+    { sequence: 'A', buttonOrder: 'ask_first' },
+    { sequence: 'B', buttonOrder: 'reveal_first' },
+    { sequence: 'A', buttonOrder: 'reveal_first' },
+    { sequence: 'B', buttonOrder: 'ask_first' }
+  ];
+  function assignmentCells() { return CELLS.map(function (c) { return { sequence: c.sequence, buttonOrder: c.buttonOrder }; }); }
+
+  /* The ENROLMENT rule, in one place because three writers need to agree on it:
+     the Cloud Function's claimCode, svfirebase's client-mode assignCell, and
+     the tests. Given the run's counter document {nA, nB} it returns the cell
+     the next entrant takes.
+
+     Sequence: the under-filled arm (§11), or the admin's forced override.
+     Button order: the PARITY of that arm's own count, so it alternates within
+     each sequence and all four cells of sequence × order fill evenly. It is
+     deliberately derived from nA/nB rather than from four new counter fields —
+     the deployed rules pin that document to `hasOnly(['nA','nB'])`, so an extra
+     key makes the whole transaction permission-denied, and the client would
+     then fall back to a wall-clock coin flip while the counter never advanced,
+     quietly destroying the exact crossover split for a whole class.
+     A run whose parameters keep the order FIXED gets 'ask_first': a session
+     locked before the `ui` group existed must not start randomising mid-study. */
+  function nextCell(counts, override, buttonOrderMode) {
+    var c = counts || {};
+    var nA = Number(c.nA) || 0, nB = Number(c.nB) || 0;
+    var seq;
+    if (override === 'A' || override === 'B') seq = override;
+    else if (nA < nB) seq = 'A';
+    else if (nB < nA) seq = 'B';
+    else seq = ((nA + nB) % 2 === 0) ? 'A' : 'B';
+    var nSeq = (seq === 'A') ? nA : nB;
+    var order = (buttonOrderMode === 'participant')
+      ? ((nSeq % 2 === 0) ? 'ask_first' : 'reveal_first')
+      : 'ask_first';
+    return { sequence: seq, buttonOrder: order, counts: { nA: nA + (seq === 'A' ? 1 : 0), nB: nB + (seq === 'B' ? 1 : 0) } };
+  }
+
   return {
     withDefaults: withDefaults,
+    buttonOrder: buttonOrder,
+    assignmentCells: assignmentCells,
+    nextCell: nextCell,
     placeSeeds: placeSeeds,
     placeAnchors: placeAnchors,
     densityK: densityK,

@@ -183,6 +183,15 @@
     if (ops) Object.keys(ops).forEach(function (k) { P.ops[k] = ops[k]; });
     if (runCode) P.ops.runCode = runCode;
 
+    // The two cost colours are RUN PARAMETERS (styling that touches a primary
+    // outcome travels with the data), so they are pushed into the stylesheet
+    // rather than hardcoded in it.
+    if (P.ui) {
+      var rootEl = document.documentElement;
+      if (P.ui.costColorReveal) rootEl.style.setProperty('--cost-reveal', P.ui.costColorReveal);
+      if (P.ui.costColorQuery) rootEl.style.setProperty('--cost-query', P.ui.costColorQuery);
+    }
+
     SERVER_MODE = !!((pub && pub.serverMode) || (run && run.serverMode));
 
     SPECS = null;
@@ -292,13 +301,17 @@
       B.claimCode(code).then(function (r) {
         if (r && !r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
         if (r && r.sequence) S.sequence = r.sequence;
+        if (r && r.buttonOrder) S.claimedButtonOrder = r.buttonOrder;
         finishBoot();
       }, function (err) { serverProblem(err); });
     } else if (window.SVFirebase && SVFirebase.isConfigured() && S.runId) {
-      SVFirebase.claimCode(S.runId, code, P.ops.rosterMode, (RUN && RUN.assign && RUN.assign.nextEntrantOverride) || 'auto')
+      SVFirebase.claimCode(S.runId, code, P.ops.rosterMode,
+                           (RUN && RUN.assign && RUN.assign.nextEntrantOverride) || 'auto',
+                           (P.ui && P.ui.buttonOrder) || 'fixed')
         .then(function (r) {
           if (!r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
           if (r.sequence) S.sequence = r.sequence;
+          if (r.buttonOrder) S.claimedButtonOrder = r.buttonOrder;
           finishBoot();
         }, function () { finishBoot(); });
     } else {
@@ -324,6 +337,11 @@
       S.sequence = (ov === 'A' || ov === 'B') ? ov
         : (Pool.hashSeed('seq:' + (S.runId || '') + ':' + S.code) % 2 ? 'B' : 'A');
     }
+    // Which paid action sits on the left, decided with the sequence and fixed
+    // for the session. The server hands it back from the enrolment counter, so
+    // the four cells of sequence × order stay balanced; a client-mode run falls
+    // back to a hash of the code.
+    S.buttonOrder = assignButtonOrder(S.claimedButtonOrder);
     PLAN = { rounds: B.plan(S.code, S.sequence) };
     if (B.mode === 'local') {
       var ord = Specs.orderForParticipant(SPECS, S.code, P);
@@ -335,7 +353,7 @@
     L.init({
       run_id: S.runId, participant_code: S.code, pid: S.pid,
       session: S.code, sessionCode: S.runCode, sessionName: (RUN && RUN.name) || null,
-      sequence: S.sequence, appVersion: CFG.APP_VERSION,
+      sequence: S.sequence, button_order: S.buttonOrder, appVersion: CFG.APP_VERSION,
       ua_browser: ua.browser, ua_os: ua.os,
       vw: window.innerWidth, vh: window.innerHeight,
       dpr: window.devicePixelRatio || 1,
@@ -357,7 +375,7 @@
       S.startLogged = true;
       L.log('session_start', {
         info: JSON.stringify({
-          sequence: S.sequence, shuffleSeed: S.shuffleSeed,
+          sequence: S.sequence, buttonOrder: S.buttonOrder, shuffleSeed: S.shuffleSeed,
           roundOrder: (S.roundOrder || []).map(function (b) { return b.block + ':' + b.specIds.join(','); }).join(' | '),
           platform: HANDOFF ? { sim: HANDOFF.sim, session: HANDOFF.session } : null,
           runCode: S.runCode
@@ -365,6 +383,11 @@
       });
     }
     save();
+
+    // A session that started under the previous build has no registration
+    // phase in its saved state — catch it up before routing (see the note on
+    // registrationCatchUp).
+    if (S.phase !== 'consent') registrationCatchUp();
 
     // §16.1: enforce a minimum viewport, then log the width anyway.
     if (!viewportOk()) { renderViewportBlock(); return; }
@@ -445,6 +468,7 @@
     L.setBase({ phase: S.phase });
     switch (S.phase) {
       case 'consent': return showConsent();
+      case 'registration': return showRegistration();
       case 'instructions': return showInstructions();
       case 'quiz': return showQuiz();
       case 'aiinstructions': return showAiInstructions();
@@ -502,8 +526,116 @@
     var box = $('consent-box'), btn = $('btn-consent');
     box.checked = false; btn.disabled = true;
     box.onchange = function () { btn.disabled = !box.checked; };
-    btn.onclick = function () { L.log('consent', { answer: 'agree' }); goto('instructions'); };
+    btn.onclick = function () { L.log('consent', { answer: 'agree' }); goto('registration'); };
     show('s-consent');
+  }
+
+  // ======================================================================
+  //  REGISTRATION — who the participant is, asked ONCE, before the study
+  // ======================================================================
+  // The background block that used to be the exit survey's Part F. On a
+  // Simulation Platform launch every item it can answer comes FROM THE
+  // PLATFORM's own registration — those items are not shown, they are logged
+  // as `platform_<key>` rows, and when nothing is left to ask the phase passes
+  // through without a screen. A standalone participant answers here.
+  function platformBackground() {
+    var out = {};
+    if (!HANDOFF || !HANDOFF.profile) return out;
+    CT.PLATFORM_BACKGROUND.forEach(function (k) {
+      if (HANDOFF.profile[k]) out[k] = String(HANDOFF.profile[k]);
+    });
+    return out;
+  }
+  function registrationItems() {
+    var have = platformBackground();
+    return CT.REGISTRATION.filter(function (q) {
+      // Asked on the platform → never asked again: the two datasets must carry
+      // ONE answer each, joined on the student ID, not two that can disagree.
+      return !(q.platformKey && have[q.platformKey]);
+    });
+  }
+  // Write the platform's answers to the log once, whether or not a screen was
+  // shown, so a silently-registered participant is as fully described as one
+  // who typed everything.
+  function logPlatformBackground() {
+    var bg = platformBackground();
+    Object.keys(bg).forEach(function (k) {
+      L.log('registration', { question_id: 'platform_' + k, answer: String(bg[k]).slice(0, 400), source: 'platform' });
+    });
+  }
+  // MIGRATION. This phase did not exist until 2026-08; the same four items were
+  // the exit survey's Part F, which is now gone. A participant who consented
+  // under the previous build and is resumed under this one would therefore be
+  // asked NOTHING and export a blank background — and that is precisely the
+  // class playing when this deploys. Two catch-ups, decided at boot:
+  //   · before the task (instructions, either gate, a block intro) they are
+  //     simply routed into the phase — they have not started yet;
+  //   · once they are in the rounds, interrupting the task would be worse than
+  //     the old behaviour, so the items are appended to the exit survey they
+  //     were always going to see. Either way the answers land in the same
+  //     `registration` rows and the same reg_* columns.
+  var PRE_TASK_PHASES = ['instructions', 'quiz', 'aiinstructions', 'aiquiz', 'blockintro'];
+  function registrationCatchUp() {
+    if (S.regDone) return;
+    // The platform's own answers must reach the log whatever phase they are in
+    // — that data exists already and losing it is pure waste.
+    if (!S.regLogged) { S.regLogged = true; logPlatformBackground(); save(); }
+    if (!registrationItems().length) { S.regDone = true; save(); return; }
+    if (PRE_TASK_PHASES.indexOf(S.phase) >= 0) { S.phase = 'registration'; save(); }
+  }
+  function showRegistration() {
+    var items = registrationItems();
+    S.reg = S.reg || {};
+    if (!S.regLogged) { S.regLogged = true; logPlatformBackground(); save(); }
+    // Nothing this study asks that the platform has not already answered — do
+    // not show an empty form, just carry on into the instructions.
+    if (!items.length) { S.regDone = true; save(); goto('instructions'); return; }
+
+    var host = $('reg-body'), html = [];
+    html.push('<p class="muted small">Every question here is optional — leave any of them blank.</p>');
+    items.forEach(function (q, i) {
+      html.push('<div class="survey-q" data-q="' + esc(q.id) + '">');
+      html.push('<div class="sq-prompt">' + (i + 1) + '. ' + esc(tokens(q.prompt)) +
+        ' <span class="muted small">(optional)</span></div>');
+      html.push('<div class="sq-opts">' + q.options.map(function (o, oi) {
+        return '<label class="quiz-opt"><input type="radio" name="' + esc(q.id) + '" value="' + oi + '"><span>' + esc(o) + '</span></label>';
+      }).join('') + '</div>');
+      html.push('</div>');
+    });
+    host.innerHTML = html.join('');
+    // A reload inside the phase must not lose what was already ticked — which
+    // means each answer is saved as it is given, not only at submit.
+    items.forEach(function (q) {
+      var prev = S.reg[q.id];
+      if (prev != null && prev !== '') {
+        var oi = q.options.indexOf(prev);
+        var el = oi >= 0 && host.querySelector('input[name="' + q.id + '"][value="' + oi + '"]');
+        if (el) el.checked = true;
+      }
+      var group = host.querySelectorAll('input[name="' + q.id + '"]');
+      Array.prototype.forEach.call(group, function (input) {
+        input.onchange = function () { S.reg[q.id] = q.options[+input.value]; save(); };
+      });
+    });
+    $('btn-reg').onclick = function () { submitRegistration(items); };
+    show('s-registration');
+  }
+  function submitRegistration(items) {
+    var host = $('reg-body');
+    items.forEach(function (q) {
+      var sel = host.querySelector('input[name="' + q.id + '"]:checked');
+      S.reg[q.id] = sel ? q.options[+sel.value] : '';
+    });
+    S.regDone = true;
+    save();
+    // NOT L.setContext: that sets the ROUND context, which persists until it is
+    // cleared, and everything logged afterwards — the comprehension answers,
+    // the first rounds — would have carried phase 'registration'. goto() has
+    // already put the phase on the base fields.
+    items.forEach(function (q) {
+      L.log('registration', { question_id: q.id, answer: String(S.reg[q.id] || ''), source: 'participant' });
+    });
+    goto('instructions');
   }
 
   function showInstructions() {
@@ -744,6 +876,7 @@
       renderRound();
       show('s-round');
       armNudges();
+      maybeMilestone();
     }, serverProblem);
   }
 
@@ -797,6 +930,67 @@
     return S.round.queries.length * P.costs.queryCost + S.round.reveals.length * P.costs.revealCost;
   }
 
+  // How far through this half the participant is. PROGRESS, not performance:
+  // the bar counts rounds played and the text counts rounds left, so a
+  // participant always knows how much is in front of them — which is what
+  // makes the last third of a 40-minute task survivable — without anything
+  // about their score feeding back into how they play.
+  function renderProgress(r) {
+    var box = $('prog'), fill = $('prog-fill'), txt = $('prog-txt');
+    if (!box || !fill || !txt) return;
+    var E = CT.ENCOURAGE;
+    if (!r.scored) {
+      box.className = 'prog warm';
+      fill.style.width = '0%';
+      txt.textContent = E.progressWarmup;
+      return;
+    }
+    var total = P.rounds.scoredPerBlock, n = 0;
+    for (var i = 0; i <= S.roundPtr && i < PLAN.rounds.length; i++) {
+      if (PLAN.rounds[i].scored && PLAN.rounds[i].block === r.block) n++;
+    }
+    box.className = 'prog';
+    fill.style.width = Math.round(100 * (n - 1) / Math.max(1, total)) + '%';
+    txt.textContent = E.progress.replace('{n}', n).replace('{total}', total).replace('{left}', total - n);
+  }
+
+  // ---- which paid action sits on the LEFT ---------------------------------
+  // Assigned ONCE per participant and fixed for the whole session
+  // (config.ui.buttonOrder — the reasoning, including why it is deliberately
+  // NOT redrawn per round or per decision, is in that file). It is stamped on
+  // every logged row through the logger's base fields, so it reaches the
+  // participant record and every decision as a covariate.
+  function assignButtonOrder(fromServer) {
+    if (fromServer === 'ask_first' || fromServer === 'reveal_first') return fromServer;
+    if (S.buttonOrder === 'ask_first' || S.buttonOrder === 'reveal_first') return S.buttonOrder;
+    return Specs.buttonOrder(P, S.code);      // client-mode fallback
+  }
+  // The Ask panel is REMOVED from the DOM in an AI-off round, not hidden: the
+  // brief requires the AI to be absent there, and a hidden node is still in the
+  // accessibility tree, still tabbable in some engines, and still findable by
+  // anyone who opens the inspector.
+  var askPanel = null;
+  function applyActionOrder() {
+    var pair = $('act-pair'), ask = $('ask-panel') || askPanel, rev = $('reveal-panel');
+    if (!pair || !rev) return;
+    var r = currentRound();
+    var aiOn = !!(r && r.condition === 'AI_ON');
+    if (ask) askPanel = ask;
+    if (!aiOn) {
+      if (askPanel && askPanel.parentNode) askPanel.parentNode.removeChild(askPanel);
+      return;
+    }
+    if (askPanel && !askPanel.parentNode) pair.appendChild(askPanel);
+    if (!askPanel) return;
+    // Tab order follows visual order, so the DOM order IS the visual order —
+    // no CSS `order`, which would leave the two out of step for the keyboard.
+    var wantRevealFirst = (S.buttonOrder === 'reveal_first');
+    var isRevealFirst = !!(rev.compareDocumentPosition(askPanel) & Node.DOCUMENT_POSITION_FOLLOWING);
+    if (wantRevealFirst !== isRevealFirst) {
+      if (wantRevealFirst) pair.insertBefore(rev, askPanel); else pair.insertBefore(askPanel, rev);
+    }
+  }
+
   function buildRoundUI() {
     var r = currentRound();
     var aiOn = (r.condition === 'AI_ON');
@@ -807,12 +1001,15 @@
       ? 'The AI knows ' + currentK() + ' of the ' + P.env.positions + ' positions exactly, and will answer about any position you ask.'
       : 'No AI in this part.';
     $('round-sub').className = 'round-sub' + (aiOn ? ' ai' : '');
+    renderProgress(r);
 
     // §14 right panel: Ask the AI (present only in AI-on rounds — absent, not
     // disabled), Reveal, and Stop and nominate, whose label names the position.
-    $('btn-ask').style.display = aiOn ? '' : 'none';
-    $('ask-cost').textContent = P.costs.queryCost;
-    $('reveal-cost').textContent = P.costs.revealCost;
+    // The prices come from the RUN CONFIGURATION — the same numbers the backend
+    // charges — never from a literal in the markup.
+    applyActionOrder();
+    if (aiOn && $('ask-cost')) $('ask-cost').textContent = '\u2212' + P.costs.queryCost + ' points';
+    $('reveal-cost').textContent = '\u2212' + P.costs.revealCost + ' points';
 
     if (!chart) {
       chart = window.SVChart.create($('plot'), {
@@ -845,7 +1042,9 @@
       if (isFinite(v)) setSel(v, 'click');
     };
 
-    $('btn-ask').onclick = doAsk;
+    // The Ask button does not exist in an AI-off round (it is removed from the
+    // DOM, not hidden), so everything that touches it is guarded.
+    if ($('btn-ask')) $('btn-ask').onclick = doAsk;
     $('btn-reveal').onclick = doReveal;
     $('btn-nominate').onclick = openNominate;
     $('btn-instr-open').onclick = openSummary;
@@ -915,7 +1114,8 @@
     $('c-total-cost').textContent = qCost + rCost;
     $('c-selected').textContent = sel;
     $('c-remaining').textContent = PLAN.rounds.length - S.roundPtr - 1;
-    $('ask-panel').style.display = aiOn ? '' : 'none';
+    // The Ask panel is not merely hidden in an AI-off round — it is out of the
+    // DOM (applyActionOrder), so there is nothing to toggle here.
     // The AI rows are meaningless in a round without it.
     $('ss-ai').style.display = aiOn ? '' : 'none';
     $('ss-ai-cost').style.display = aiOn ? '' : 'none';
@@ -971,9 +1171,11 @@
     $('btn-reveal').title = revealedHere ? 'This position is already open — you cannot pay for it twice.' : '';
     // Ask stays enabled even for a position already asked about: re-querying
     // after a reveal is a meaningful act, and it is logged (§14).
-    $('btn-ask').disabled = busy
-      || (!P.ai.allowRequery && wasQueried(sel))
-      || (S.round.queries.length >= P.costs.queryCap);
+    if ($('btn-ask')) {
+      $('btn-ask').disabled = busy
+        || (!P.ai.allowRequery && wasQueried(sel))
+        || (S.round.queries.length >= P.costs.queryCap);
+    }
     $('btn-nominate').disabled = busy;
     $('btn-nominate').textContent = 'Stop and nominate position ' + sel;
 
@@ -1081,6 +1283,7 @@
         flashAnswer(action === 'query'
           ? 'The AI says <b>' + value + '</b> at position ' + pos + '.'
           : 'Position ' + pos + ' holds <b>' + value + '</b>.', action === 'query' ? 'ask' : 'reveal');
+        encourageAfterAction();
       }, function (err) { done(); serverProblem(err); });
     });
   }
@@ -1098,6 +1301,36 @@
     if (busy) return;
     var pos = sel;
     var untouched = !isRevealed(pos) && !wasQueried(pos);
+    var did = S.round.queries.length + S.round.reveals.length;
+    var r = currentRound();
+    // Closing a scored round after almost nothing: usually boredom rather than
+    // a decision, and it is the one failure mode that costs the study a whole
+    // round of data. Asked ONCE per round, in the participant's own interest
+    // (there is no time limit), and "Stop anyway" is always right there — a
+    // prompt that could not be dismissed would coerce the very choice being
+    // measured. Nothing is said about where to look.
+    var rushMax = (P.ui && P.ui.rushMinActions != null) ? P.ui.rushMinActions : 2;
+    // ONCE PER BLOCK, not once per round. The trigger — "stopped after almost
+    // no searching" — is correlated with the arm being measured (an AI-off
+    // round is cheaper to leave alone), so a per-round prompt would land far
+    // more often on one half of the crossover and become a treatment that
+    // varies with the condition. Capping it at one per half keeps it a
+    // reminder rather than a differential intervention, and it is logged
+    // either way.
+    S.rushWarnedBlocks = S.rushWarnedBlocks || {};
+    if (encourageOn() && r && r.scored && did <= rushMax && !S.rushWarnedBlocks[r.block]) {
+      S.rushWarnedBlocks[r.block] = 1;
+      save();
+      var R = CT.ENCOURAGE.rush;
+      showEncourage('rush', R.title,
+        (did ? R.bodyFew.replace('{did}', did).replace('{J}', P.env.positions) : R.bodyNone),
+        // "Stop anyway" re-enters openNominate rather than nominating directly:
+        // the §14 confirmation for a position they have never touched is a
+        // SEPARATE safeguard against a mis-click, and this prompt must not
+        // swallow it. The block flag is already set, so it cannot loop.
+        R.stay, { text: R.go, onAlt: function () { openNominate(); } });
+      return;
+    }
     // §14: confirm when the position has never been asked about or revealed —
     // that is a pure gamble and more likely a misclick than an intention.
     if (untouched) {
@@ -1225,6 +1458,12 @@
     var passive = passiveNudgeText(result);
     if (passive) lines.push('<div class="res-line muted" style="margin-top:10px;">' + passive + '</div>');
     var left = PLAN.rounds.length - S.roundPtr - 1;
+    // A friendly line, rotated by ROUND INDEX — never by how the round went, so
+    // it is a mood and not feedback on their score (see content.js).
+    if (encourageOn() && left > 0) {
+      var cheers = CT.ENCOURAGE.cheers;
+      lines.push('<div class="res-cheer">' + esc(cheers[S.roundPtr % cheers.length]) + '</div>');
+    }
     lines.push('<div class="res-line muted">' + (left > 0 ? left + ' round' + (left === 1 ? '' : 's') + ' to go.' : 'That was the last round.') + '</div>');
     host.innerHTML = lines.join('');
     $('btn-continue').onclick = nextRound;
@@ -1248,6 +1487,7 @@
     var el = $('tip');
     if (!el) return;
     $('tip-text').textContent = text;
+    el.classList.toggle('good', kind === 'encourage');
     el.classList.add('show');
     nudgeShownThisRound[kind] = true;
     try { L.tele('nudge', { kind: kind, round_index: S.round ? S.roundPtr + 1 : null }); } catch (e) {}
@@ -1260,18 +1500,100 @@
     hideNudge();
     var x = $('tip-close');
     if (x) x.onclick = function () { hideNudge(); };
+    var T = CT.ENCOURAGE.tips;
     nudgeTimer = setInterval(function () {
       if (!S || !S.round || !S.round.open || S.phase !== 'round') return;
       var since = Date.now() - (S.round.lastActionAt || S.round.startedAt || Date.now());
       var did = S.round.queries.length + S.round.reveals.length;
       if (!did && since > IDLE_FIRST_MS && !nudgeShownThisRound.start) {
-        showNudge('start', 'Take your time. When you are ready you can reveal a position, ' +
-          (currentRound() && currentRound().condition === 'AI_ON' ? 'ask the AI, ' : '') +
-          'or stop where you are.');
+        showNudge('start', T.idleStart.replace('{ask}',
+          (currentRound() && currentRound().condition === 'AI_ON') ? 'ask the AI, ' : ''));
       } else if (did && since > IDLE_AGAIN_MS && !nudgeShownThisRound.mid) {
-        showNudge('mid', 'Still thinking? You can stop on the best position you have found whenever you like.');
+        showNudge('mid', T.idleMid);
       }
     }, 5000);
+  }
+  // Shown once per round, a moment after the participant's FIRST action: a
+  // long repetitive task loses attention, and the point where someone has
+  // looked once and may settle for it is where that shows. Says nothing about
+  // where to look or how they are doing — see the rule in content.js.
+  function encourageAfterAction() {
+    if (!encourageOn() || nudgeShownThisRound.encourage) return;
+    var r = currentRound();
+    if (!r || !r.scored) return;
+    if ((S.round.queries.length + S.round.reveals.length) !== 1) return;
+    nudgeShownThisRound.encourage = true;   // claim it now: the timer is async
+    setTimeout(function () {
+      if (S && S.round && S.round.open && S.phase === 'round') showNudge('encourage', CT.ENCOURAGE.tips.encourage);
+    }, 1200);
+  }
+
+  // ---- encouragement pop-ups (config.ui.encouragement) ---------------------
+  function encourageOn() { return !!(P.ui && P.ui.encouragement); }
+  // ONE modal, two uses: the between-rounds milestone (Continue only) and the
+  // focus prompt before an unusually quick finish (Keep searching / Stop
+  // anyway). `alt` is the second button; without it there is one way on.
+  function showEncourage(kind, title, msg, okText, alt) {
+    $('enc-title').textContent = title;
+    $('enc-msg').textContent = msg;
+    var ok = $('btn-enc-ok'), altBtn = $('btn-enc-alt');
+    ok.textContent = okText || 'Continue';
+    var close = function () { $('ov-encourage').classList.remove('show'); };
+    ok.onclick = function () { close(); if (alt && alt.onOk) alt.onOk(); };
+    if (alt && alt.text) {
+      altBtn.style.display = '';
+      altBtn.textContent = alt.text;
+      altBtn.onclick = function () { close(); if (alt.onAlt) alt.onAlt(); };
+    } else {
+      altBtn.style.display = 'none';
+      altBtn.onclick = null;
+    }
+    $('ov-encourage').classList.add('show');
+    try {
+      L.tele('nudge', { kind: kind, round_index: S && S.round ? S.roundPtr + 1 : null });
+    } catch (e) {}
+  }
+  // Where this round sits in its half, and therefore which milestone (if any)
+  // is due. Fixed points of the PLAN — never a reaction to how well they are
+  // doing, which would feed performance back into behaviour.
+  function milestoneFor(r) {
+    if (!r || !r.scored) return null;
+    var total = P.rounds.scoredPerBlock;
+    var n = 0;                                    // this round's ordinal in its half
+    for (var i = 0; i <= S.roundPtr && i < PLAN.rounds.length; i++) {
+      if (PLAN.rounds[i].scored && PLAN.rounds[i].block === r.block) n++;
+    }
+    var left = total - n + 1;                     // including this one
+    var lastBlock = r.block >= 2;
+    if (lastBlock && left === 1) return { key: 'lastRound', left: left };
+    if (total >= 6 && left === 3) return { key: 'nearEnd', left: left };
+    if (total >= 6 && n === Math.ceil(total / 2)) return { key: 'half', left: left - 1 };
+    return null;
+  }
+  function maybeMilestone() {
+    if (!encourageOn()) return;
+    var r = currentRound(), m = milestoneFor(r);
+    if (!m) return;
+    S.milestones = S.milestones || {};
+    var seen = r.block + ':' + m.key;
+    if (S.milestones[seen]) return;               // once each, and it survives a reload
+    S.milestones[seen] = 1;
+    save();
+    var t = CT.ENCOURAGE.milestones[m.key];
+    var fill = function (s) { return String(s).replace(/\{left\}/g, m.left); };
+    // The round's clock starts when the round opens, and this modal sits on top
+    // of it — so restart the clock when it is dismissed, or every millisecond
+    // spent reading it would be charged to ms_to_first_action and to the
+    // decision latency that is one of the study's measures.
+    showEncourage('milestone_' + m.key, fill(t.title), fill(t.body), 'Continue', {
+      onOk: function () {
+        if (S.round && S.round.open) {
+          S.round.startedAt = Date.now();
+          S.round.lastActionAt = Date.now();
+          L.resetActionClock();
+        }
+      }
+    });
   }
   function clearNudges() { if (nudgeTimer) { clearInterval(nudgeTimer); nudgeTimer = null; } }
 
@@ -1333,24 +1655,24 @@
   // ======================================================================
   //  EXIT SURVEY (§16.7)
   // ======================================================================
+  // Background is NOT asked here — it is the registration phase, before the
+  // study (see showRegistration). The survey asks only about what just
+  // happened, while it is fresh.
   function surveyItems() {
     var playedAi = PLAN.rounds.some(function (r) { return r.condition === 'AI_ON'; });
-    var have = platformBackground();
-    return CT.SURVEY.filter(function (q) {
-      if (q.aiOnly && !playedAi) return false;
-      // A background item the Simulation Platform already answered is not asked
-      // again — the two datasets must carry ONE answer each, joined on the
-      // student ID, not two that can disagree.
-      if (q.platformKey && have[q.platformKey]) return false;
-      return true;
-    });
-  }
-  function platformBackground() {
-    var out = {};
-    if (!HANDOFF || !HANDOFF.profile) return out;
-    ['fieldOfStudy', 'levelOfStudy', 'age', 'gender', 'nationality', 'country', 'workExperience', 'occupation']
-      .forEach(function (k) { if (HANDOFF.profile[k]) out[k] = String(HANDOFF.profile[k]); });
-    return out;
+    var items = CT.SURVEY.filter(function (q) { return !(q.aiOnly && !playedAi); });
+    // MIGRATION (see registrationCatchUp): a participant who was already in the
+    // rounds when the registration phase shipped never saw it, and Part F no
+    // longer exists — so for them, and only for them, the background items come
+    // back here, where they used to be. They are logged as `registration` rows
+    // either way, so the export column is the same.
+    if (!S.regDone) {
+      var late = registrationItems().map(function (q) {
+        return { part: 'F', id: q.id, type: 'choice', optional: true, prompt: q.prompt, options: q.options };
+      });
+      if (late.length) items = items.concat(late);
+    }
+    return items;
   }
 
   function showSurvey() {
@@ -1447,17 +1769,27 @@
       return q && q.type !== 'text';
     });
     if (missing.length) {
-      $('survey-feedback').textContent = 'Please answer the ' + missing.length + ' remaining question' + (missing.length === 1 ? '' : 's') + ' — only the free-text and Part F items are optional.';
+      $('survey-feedback').textContent = 'Please answer the ' + missing.length + ' remaining question' + (missing.length === 1 ? '' : 's') + ' — only the free-text items are optional.';
       $('survey-feedback').style.display = 'block';
       var first = host.querySelector('.survey-q[data-q="' + missing[0].replace(/[a-c]$/, '') + '"]') || host.querySelector('.survey-q');
       if (first) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
       return;
     }
-    // Background the platform already collected travels with the row, flagged as
-    // such, so the two datasets carry the same answer and the source is explicit.
-    var bg = platformBackground();
-    Object.keys(bg).forEach(function (k) { answers['platform_' + k] = bg[k]; });
-
+    // MIGRATION (see registrationCatchUp): background items appended to the
+    // survey for a participant who predates the registration phase are split
+    // back out here and logged as `registration` rows, so they reach the same
+    // reg_* column as everybody else's rather than a survey_ one.
+    if (!S.regDone) {
+      var lateIds = registrationItems().map(function (q) { return q.id; });
+      S.reg = S.reg || {};
+      lateIds.forEach(function (id) {
+        if (!(id in answers)) return;
+        S.reg[id] = answers[id];
+        delete answers[id];
+        L.log('registration', { question_id: id, answer: String(S.reg[id] || ''), source: 'participant' });
+      });
+      S.regDone = true;
+    }
     S.survey = answers;
     save();
     L.setContext({ phase: 'survey' });
@@ -1758,7 +2090,14 @@
     S = {
       code: 'PREVIEW', runId: null, runCode: pr.code || null, sequence: (pr.seq === 'B' ? 'B' : 'A'),
       quiz: {}, survey: {}, results: [], roundPtr: 0, totalScore: 0, phaseMs: {}, phase: 'consent',
-      startedAt: Date.now(), resumptions: 0
+      startedAt: Date.now(), resumptions: 0,
+      // A rehearsal must be able to show EITHER layout — the sandbox code is a
+      // constant, so without this the admin could only ever see whichever side
+      // its hash lands on, and half of what participants meet would never be
+      // checked before a session opens. ?order=reveal|ask picks one.
+      buttonOrder: (pr.order === 'reveal' || pr.order === 'reveal_first') ? 'reveal_first'
+                 : (pr.order === 'ask' || pr.order === 'ask_first') ? 'ask_first'
+                 : Specs.buttonOrder(P, 'PREVIEW')
     };
     // A rehearsal is ALWAYS local — it must reach no Function and write nothing.
     B = window.SVBackend.create({ serverMode: false, params: P, specs: SPECS });
