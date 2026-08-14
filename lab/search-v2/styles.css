@@ -328,7 +328,11 @@ p{margin:.6em 0;}
 .score-band .sb-v{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.2;}
 .score-band .sb-v.cost{color:var(--red);}
 .score-band .sb-v .sub{font-size:12.5px; font-weight:600; color:var(--muted); margin-left:6px;}
-.score-band .sb.net{background:#eef6ff; border-color:#cfe2fb;}
-.score-band .sb.net .sb-l{color:#1f4e79; font-weight:700;}
-.score-band .sb.net .sb-v{font-size:30px; color:#1f4e79;}
+/* NET VALUE is the number the round is actually worth, so it leads the band and
+   is the only GREEN thing on the screen — the two paid buttons keep their own
+   matched hues and must never be tinted to compete with it. Green on #eefaea:
+   #226b0c is 5.6:1, so the big value clears 4.5:1 as text. */
+.score-band .sb.net{background:#eefaea; border-color:#c9e7bd;}
+.score-band .sb.net .sb-l{color:#226b0c; font-weight:700;}
+.score-band .sb.net .sb-v{font-size:30px; color:#226b0c;}
 .score-band .sb.net.neg .sb-v{color:var(--red);}
