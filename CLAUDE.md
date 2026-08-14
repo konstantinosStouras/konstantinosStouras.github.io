@@ -2602,20 +2602,29 @@ rows carry no `run_id`.
 **A seventh tab, `Wording`** (owner 2026-08 — "include the exact words that will
 be shown to each participant right in the admin panel… I wanted to check these
 questions that participants see, and can't find them"): every participant-facing
-string, **in the order a participant meets it** — consent, the five instruction
-screens, the three AI screens, both quick checks with their answer options, all
-twenty-four survey items with their options and follow-ups, the part headings,
-debrief and thanks — each shown **with this session's own numbers substituted**,
+string content.js holds, **in the order a participant meets it** — consent, the
+five instruction screens, the three AI screens, both quick checks with their
+answer options, all twenty-four survey items with their options and follow-ups,
+the part headings, debrief and thanks. Deliberately NOT in scope (and said so on
+the screen): the game screen's own buttons and labels and the reminder box above
+each quick check, which app.js builds from the numbers themselves — interface
+rather than study text. Each is shown **with this session's own numbers substituted**,
 because a screen that displayed `{revealCost}` instead of `4` would defeat its
 own purpose. Editing a field writes a **per-session override**; the study's
 defaults in `content.js` are untouched and every other session keeps them.
 **`content.js` owns the whole mechanism** — `outline()` (the editable fields,
 which doubles as the whitelist), `normalizeOverrides()` and `resolve()` — so the
 panel only draws it and `app.js` only reads it. Storage is a **flat
-`key → string` map** on the run document (`run.content`, e.g.
-`quiz.q_cost.opt.2`), flat because Firestore cannot hold a directly-nested array;
-it is carried by **`publicDoc` too**, or a server-mode participant — for whom the
-run document is admin-only — could never see an override. **WORDING IS EDITABLE,
+`key → string` map** (keys like `quiz.q_cost.opt.2`), held on the run document as
+a JSON STRING — **`run.contentJson`, beside `specsJson`** — and that is not
+cosmetic: both writers use `setDoc(merge:true)`, which DEEP-MERGES a map, so
+stored as a map a reverted key would be merged straight back and "revert" would
+change nothing for the participant while looking right in the panel. A string
+field is replaced whole. It is carried by **`publicDoc` too**, or a server-mode
+participant — for whom the run document is admin-only — could never see an
+override. `newRunDoc` takes the wording as an ARGUMENT rather than reading the
+panel's current state, so **a clone carries the wording of the session it was
+cloned from** instead of whatever session happened to be open in the form. **WORDING IS EDITABLE,
 STRUCTURE IS NOT**: ids, answer keys, option COUNTS, question types, `strict`,
 `platformKey` and the numeracy answers always come from `content.js`. That is the
 safety argument, not a UI convenience — `admin/dictionary.js` describes one entry
@@ -2637,10 +2646,10 @@ so the two cannot drift again.
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (254) ·
+`node lab/search-v2/tools/selftest.js` (263) ·
 `tools/smoke.mjs` (178, a whole 28-round session) ·
-`tools/admin-smoke.mjs` (134) · `tools/platform-guard.mjs` (26) ·
-**`tools/wording-guard.mjs` (14 — a session's overrides actually REACH its
+`tools/admin-smoke.mjs` (136) · `tools/platform-guard.mjs` (26) ·
+**`tools/wording-guard.mjs` (15 — a session's overrides actually REACH its
 participants, and the drift guard that `app.js` reads content only through the
 resolved copy: one `Content.SURVEY` slipping back would silently ignore that
 session's wording for that one screen)** ·

@@ -70,6 +70,7 @@
               padding:8px 10px; white-space:pre-wrap;}
     :root[data-theme="dark"] .wd-shown{background:#1a1d21;}
     .wd-shown b{font-weight:700;}
+    .wd-blank{color:var(--muted); font-style:italic;}
     .wd-field textarea{width:100%; font:inherit; font-size:13.5px; line-height:1.5; padding:8px 10px;
                        border:1px solid var(--line); border-radius:8px; resize:vertical; margin-top:6px;}
     .wd-edit{margin-top:6px;}
@@ -710,11 +711,16 @@
       <!-- ---------------- WORDING ---------------- -->
       <div class="tab-panel" id="tab-wording" style="display:none;">
         <h2 style="margin:0 0 4px;">Wording</h2>
-        <p class="muted small">Every word a participant reads, in the order they meet it &mdash; the consent
-        screen, both sets of instructions, both quick checks and all twenty-four survey items. The text is shown
+        <p class="muted small">Everything the study <i>says</i> to a participant, in the order they meet it
+        &mdash; the consent screen, both sets of instructions, both quick checks with their answers, all
+        twenty-four survey questions, the debrief and the thank-you. The text is shown
         <b>exactly as it will appear</b>, with this session&rsquo;s own numbers already filled in.
         Edit any of it to change the wording <b>for this session only</b>; the study&rsquo;s defaults are untouched
         and every other session keeps them.</p>
+        <p class="muted small">Not here: the game screen&rsquo;s own buttons and labels
+        (&ldquo;Stop and nominate position 42&rdquo;, the running cost panel) and the reminder box above each
+        quick check, which restates the rules from the numbers themselves. Those are part of the interface
+        rather than the study text, and they follow the parameters automatically.</p>
         <p class="muted small"><b>Wording only.</b> How many answers a question has, which one is correct, and the
         order of the questions are fixed &mdash; the exported workbook is built from those, so changing them here
         would invalidate this session&rsquo;s own data. Wording stays editable even after a session is locked,

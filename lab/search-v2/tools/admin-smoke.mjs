@@ -466,7 +466,9 @@ await pg.waitForTimeout(300);
 if (await pg.locator('#sum-ok').count()) { await pg.locator('#sum-ok').click(); await pg.waitForTimeout(400); }
 const stored = await pg.evaluate(() => {
   const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
-  return runs.map(r => (r.content && r.content.consent) || null);
+  return runs.map(r => {
+    try { return JSON.parse(r.contentJson || '{}').consent || null; } catch { return null; }
+  });
 });
 ok(stored.some(c => c === 'Reworded for this session only.'),
   'Save session persists the wording with the session — a LOCKED one included, since ' +
@@ -476,10 +478,32 @@ ok(stored.some(c => c === 'Reworded for this session only.'),
 // invisible in server mode, where the run document is admin-only.
 const pub = await pg.evaluate(() => {
   const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
-  const r = runs.find(x => x.content && x.content.consent);
-  return r ? JSON.stringify(Object.keys(r.content)) : null;
+  const r = runs.find(x => (x.contentJson || '').includes('consent'));
+  return r ? typeof r.contentJson : null;
 });
-ok(pub && /consent/.test(pub), 'the stored wording is the flat key map content.js defines', String(pub));
+ok(pub === 'string',
+  'and it is stored as a STRING, so a later revert can actually remove a key — ' +
+  'a map would be deep-merged by setDoc(merge:true) and never lose one', String(pub));
+
+// A CLONE carries the wording of the session it was cloned FROM. newRunDoc used
+// to read the panel's in-form wording, so cloning session B while session A was
+// open gave the clone A's words on B's parameters.
+await tab('runs');
+const beforeClone = await pg.locator('.run-card').count();
+pg.once('dialog', d => d.accept('Cloned by the smoke test'));
+await pg.locator('.run-card [data-act="clone"]').first().click();
+await pg.waitForTimeout(600);
+const cloned = await pg.evaluate(() => {
+  const runs = JSON.parse(localStorage.getItem('searchv2:v3:admin:local') || '[]');
+  const c = runs.find(r => r.clonedFrom);
+  if (!c) return { found: false };
+  let consent = null;
+  try { consent = JSON.parse(c.contentJson || '{}').consent || null; } catch {}
+  return { found: true, consent };
+});
+ok(cloned.found, 'cloning a session from its card creates the clone');
+ok(cloned.consent === 'Reworded for this session only.',
+  'and the clone carries the wording of the session it was cloned FROM', String(cloned.consent));
 
 ok(errors.length === 0, 'no page errors anywhere in the panel', errors.slice(0, 5).join(' | '));
 

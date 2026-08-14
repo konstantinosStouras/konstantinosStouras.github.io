@@ -391,6 +391,13 @@
   //
   //  Flat, because Firestore cannot store a directly-nested array and a flat
   //  string→string map is the shape that survives a round trip unexamined.
+  //
+  //  It is STORED as a JSON string (`run.contentJson`), like `specsJson` beside
+  //  it, and for a sharper reason than convention: the admin writes runs with
+  //  setDoc(merge:true), which DEEP-MERGES a nested map. Stored as a map, a
+  //  reverted field would be merged back out of existence — "revert" would
+  //  appear to work in the panel and change nothing for the participant. A
+  //  string field is replaced whole, so removing a key actually removes it.
   // ==========================================================================
   var MAX_LEN = 4000;          // a generous ceiling; the longest default is ~700
 
@@ -521,10 +528,21 @@
     return out;
   }
 
+  // Overrides as they are STORED: a JSON string, or nothing. Anything
+  // unparseable is no overrides at all — a session whose wording cannot be read
+  // shows the study's own words rather than failing to open.
+  function parseOverrides(json) {
+    if (!json) return {};
+    if (typeof json === 'object') return normalizeOverrides(json);
+    try { return normalizeOverrides(JSON.parse(String(json))); } catch (e) { return {}; }
+  }
+  function stringifyOverrides(raw) { return JSON.stringify(normalizeOverrides(raw)); }
+
   // The content this session actually shows. Same shape as the defaults, so a
   // caller reads `C.SURVEY` exactly as it used to read `Content.SURVEY`.
+  // Accepts either the stored string or an already-parsed map.
   function resolve(raw) {
-    var o = normalizeOverrides(raw);
+    var o = parseOverrides(raw);
     function P(key, base) { return Object.prototype.hasOwnProperty.call(o, key) ? o[key] : base; }
 
     function screens(list, ns) {
@@ -610,6 +628,8 @@
     MAX_LEN: MAX_LEN,
     outline: outline,
     normalizeOverrides: normalizeOverrides,
+    parseOverrides: parseOverrides,
+    stringifyOverrides: stringifyOverrides,
     resolve: resolve
   };
 

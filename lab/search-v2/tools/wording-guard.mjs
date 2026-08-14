@@ -51,14 +51,18 @@ console.log('\n1 · app.js reads content only through the resolved copy');
     'every participant-facing read goes through CT, not the defaults directly',
     bad.length ? 'still reading: ' + [...new Set(bad)].join(', ') : '');
   ok(/CT = Content\.resolve\(/.test(app), 'the resolved copy is built from the run’s own content');
-  ok(/\(run && run\.content\) \|\| \(pub && pub\.content\)/.test(app),
+  ok(/pub && \(pub\.contentJson \|\| pub\.content\)/.test(app),
     'and it is read from the public copy too, which is all a server-mode participant can see');
 
   const admin = readFileSync(join(HERE, '..', 'admin', 'admin.js'), 'utf8');
-  ok(/content: Content\.normalizeOverrides\(run\.content\)/.test(admin),
+  ok(/contentJson: Content\.stringifyOverrides\(run\.contentJson/.test(admin),
     'the redacted public document carries the wording');
-  ok((admin.match(/content: Content\.normalizeOverrides\(currentContent\)/g) || []).length >= 3,
+  ok((admin.match(/contentJson: Content\.stringifyOverrides\(currentContent\)/g) || []).length >= 3,
     'creating, saving and saving-while-locked all persist it');
+  // Stored as a STRING on purpose: both writers use setDoc(merge:true), which
+  // deep-merges a map, so a reverted key would survive the write.
+  ok(!/\bcontent: Content\./.test(admin),
+    'and none of them writes it as a map, which merge would never let a revert delete');
 }
 
 // ======================================================================
@@ -87,7 +91,7 @@ window.SVFirebase = (function () {
   var RUN = {
     id: 'guard-run', name: 'Wording guard', code: 'WORD', status: 'open',
     serverMode: false, ops: {}, params: null,
-    content: ${JSON.stringify(OV)}
+    contentJson: ${JSON.stringify(JSON.stringify(OV))}
   };
   return {
     isConfigured: function () { return true; },

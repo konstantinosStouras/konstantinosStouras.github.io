@@ -121,10 +121,10 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 254 checks, no browser
+node lab/search-v2/tools/selftest.js         # 263 checks, no browser
 node lab/search-v2/tools/smoke.mjs           # 178 checks, a whole session
-node lab/search-v2/tools/admin-smoke.mjs     # 134 checks, the admin panel
-node lab/search-v2/tools/wording-guard.mjs   #  14 checks, a session's own words
+node lab/search-v2/tools/admin-smoke.mjs     # 136 checks, the admin panel
+node lab/search-v2/tools/wording-guard.mjs   #  15 checks, a session's own words
 node lab/search-v2/tools/platform-guard.mjs  #  26 checks, the platform contract
 node lab/search-v2/tools/layout-guard.mjs    # 104 checks, five window sizes
 node lab/search-v2/tools/preview-guard.mjs   #  the sandbox writes nothing
@@ -322,7 +322,7 @@ the task, and the participant link — with **Cancel** as a real cancel.
 | **Live monitor** | counters from a Firestore listener plus the health strip: median active time, median round time, comprehension failures, cap hits, immediate-stop rate, narrow viewports, long blurs, sub-500 ms deciders |
 | **Data & preview** | the validation gate, a spec preview that writes nothing, a scripted dry run, the export, a danger zone, and the round gallery below |
 | **Design notes** | the questions this design attracts, answered against the code — does the AI hold private data, what a pre-opened round is, gaps versus tails and `g = 4t`, why all three layouts are needed, whether the landscape changes each round — with **every number measured from the open session's own frozen pool**, never copied from the design document |
-| **Wording** | **every word a participant reads, in the order they meet it** — consent, both sets of instructions, both quick checks with their answer options, all twenty-four survey items, the part headings, debrief and thanks — each shown with this session's own numbers already substituted, and editable **for this session only** |
+| **Wording** | **everything the study says to a participant, in the order they meet it** — consent, both sets of instructions, both quick checks with their answer options, all twenty-four survey items, the part headings, debrief and thanks — each shown with this session's own numbers already substituted, and editable **for this session only** |
 
 The four buttons under the parameter form are unchanged in number and colour from
 the previous panel: **Save session** (green), then **Cancel edit**, **Make this
@@ -337,12 +337,24 @@ would not answer the question it exists to answer — and lets you change any of
 them **for one session**. `content.js` itself is never touched, so every other
 session keeps the defaults.
 
-An edit is stored as a per-session override: a flat `key → string` map on the run
-document (`run.content`), flat because Firestore cannot store a directly-nested
-array. It travels with the redacted public copy as well, or a participant in
-server mode — who cannot read the run document at all — would never see it.
-Leaving a box blank, or pressing **Revert to default**, removes the override
-rather than freezing today's default into the session.
+The screen covers the study text, which is what `content.js` holds. It does not
+cover the game screen's own buttons and labels, or the reminder box above each
+quick check — app.js builds those from the numbers, so they follow the parameters
+on their own. The screen says so, rather than implying it covers them.
+
+An edit is stored as a per-session override: a flat `key → string` map, held on
+the run document as a JSON string (`run.contentJson`, beside `specsJson`). The
+string matters. Both writers use `setDoc(merge:true)`, which deep-merges a map —
+so stored as a map, a reverted key would be merged straight back, and **revert
+would look right in the panel and change nothing for the participant**. A string
+field is replaced whole, so removing a key removes it.
+
+It travels with the redacted public copy as well, or a participant in server
+mode — who cannot read the run document at all — would never see it. Leaving a
+box blank, or pressing **Revert to default**, removes the override rather than
+freezing today's default into the session. A **clone** carries the wording of the
+session it was cloned from, which is what makes clone-do-not-edit workable for a
+session whose words were tuned.
 
 **Wording is editable; structure is not.** How many answers a question has, which
 one is correct, the question types, the order, and the numeracy answers always

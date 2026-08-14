@@ -174,7 +174,7 @@
     // and for the same reason — in server mode the run document is admin-only,
     // so the redacted public copy is the only thing the participant can see.
     // With no overrides this returns the defaults of content.js unchanged.
-    CT = Content.resolve((run && run.content) || (pub && pub.content));
+    CT = Content.resolve((run && (run.contentJson || run.content)) || (pub && (pub.contentJson || pub.content)));
     // In server mode the run document is admin-only — it holds the seeds — so the
     // parameters come from the redacted public copy instead.
     var src = run ? run.params : (pub ? pub.params : null);

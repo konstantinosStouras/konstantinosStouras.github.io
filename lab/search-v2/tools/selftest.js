@@ -694,6 +694,25 @@ head('16 · per-session wording overrides change words and nothing else');
   ok(Content.SURVEY.find(q => q.id === 's17').items[0].prompt.indexOf('Reworded') < 0,
     'resolving does not touch the default survey');
 
+  // ---- how it is stored --------------------------------------------------
+  // A JSON STRING, not a map: the admin writes runs with setDoc(merge:true),
+  // which deep-merges a map, so a reverted key would be merged straight back
+  // and "revert" would change nothing for the participant.
+  const json = Content.stringifyOverrides({ consent: 'Short consent.', bogus: 'x' });
+  ok(typeof json === 'string', 'overrides stringify to a string');
+  ok(JSON.parse(json).consent === 'Short consent.' && !('bogus' in JSON.parse(json)),
+    'and are normalized on the way in, so an unknown key is never stored');
+  ok(Content.stringifyOverrides({}) === '{}', 'reverting everything stores an EMPTY map, not a stale one');
+  ok(Object.keys(Content.parseOverrides(Content.stringifyOverrides({}))).length === 0,
+    'which reads back as no overrides at all');
+  ok(Content.parseOverrides(json).consent === 'Short consent.', 'a stored string round-trips');
+  ok(Object.keys(Content.parseOverrides('not json at all')).length === 0,
+    'unreadable wording is no wording, never a broken session');
+  ok(Object.keys(Content.parseOverrides(null)).length === 0, 'and neither is nothing');
+  ok(Content.resolve(json).CONSENT === 'Short consent.', 'resolve accepts the stored string directly');
+  ok(Content.resolve({ consent: 'Short consent.' }).CONSENT === 'Short consent.',
+    'and an already-parsed map, so both callers work');
+
   const plain = Content.resolve(null);
   ok(plain.CONSENT === Content.CONSENT && plain.DEBRIEF === Content.DEBRIEF && plain.THANKS === Content.THANKS,
     'a session with no overrides reads exactly the defaults');

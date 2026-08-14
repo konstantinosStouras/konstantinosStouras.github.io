@@ -490,7 +490,7 @@
     var p = clone(Specs.withDefaults(run.params));
     var name = prompt('Name for the cloned session:', (run.name || 'untitled') + ' (clone)');
     if (name == null) return;
-    var obj = newRunDoc(p, name, autoCode());
+    var obj = newRunDoc(p, name, autoCode(), Content.parseOverrides(run.contentJson || run.content));
     obj.clonedFrom = run.id;
     createRun(obj).then(function () {
       note('save-note', 'Cloned. The clone is a <b>draft</b> with its own run_id, its own pool and its own specs.');
@@ -510,7 +510,9 @@
       // This session's wording travels with the redacted copy. In server mode
       // the run document is admin-only, so without this the participant app
       // could never see an override and every session would read the defaults.
-      content: Content.normalizeOverrides(run.content),
+      // A STRING, so that a revert actually removes the key: both writers use
+      // setDoc(merge:true), which deep-merges a map but replaces a string.
+      contentJson: Content.stringifyOverrides(run.contentJson || run.content),
       params: {
         env: {
           positions: p.env.positions, prizeMin: p.env.prizeMin, prizeMax: p.env.prizeMax,
@@ -531,7 +533,7 @@
     };
   }
 
-  function newRunDoc(p, name, code) {
+  function newRunDoc(p, name, code, contentOv) {
     var params = clone(p);
     params.ops.runName = name;
     var pool = Pool.buildPool(params.env, params.env.generatorSeed);
@@ -547,7 +549,7 @@
       specsChecksum: X.checksum(JSON.stringify(specs)),
       seeds: { generatorSeed: params.env.generatorSeed, specSeed: specSeed },
       overrides: [],
-      content: Content.normalizeOverrides(currentContent)
+      contentJson: Content.stringifyOverrides(contentOv)
     };
   }
   function createRun(obj) {
@@ -586,7 +588,7 @@
   function selectRun(run) {
     current = run; editingId = run.id;
     currentParams = Specs.withDefaults(run.params);
-    currentContent = Content.normalizeOverrides(run.content);
+    currentContent = Content.parseOverrides(run.contentJson || run.content);
     if ($('tab-wording') && $('tab-wording').style.display !== 'none') renderWording();
     if (run.ops) Object.keys(run.ops).forEach(function (k) { currentParams.ops[k] = run.ops[k]; });
     if (run.code) currentParams.ops.code = run.code;
@@ -788,7 +790,7 @@
         (2 * (pending.rounds.warmupPerBlock + pending.rounds.scoredPerBlock)) +
         ' round specs</b> under the seeds below. It opens as a <b>draft</b>, so nobody can enter yet.',
         summaryBoxes(pending), 'Create session', function () {
-          var obj = newRunDoc(currentParams, name, code);
+          var obj = newRunDoc(currentParams, name, code, currentContent);
           createRun(obj).then(function () {
             note('save-note', 'Session <b>' + esc(code) + '</b> created as a <b>draft</b>. Run the validation gate on the ' +
               'Data screen — and check the round plots at the bottom of it — before opening entry.');
@@ -803,7 +805,7 @@
       // Locked: only Operations and the entrant override may move. The Rules
       // refuse anything else anyway; refusing it here too keeps the panel honest.
       patch = { name: name, ops: clone(currentParams.ops), assign: Object.assign({}, run.assign || {}, { nextEntrantOverride: currentParams.assign.nextEntrantOverride }),
-        content: Content.normalizeOverrides(currentContent) };
+        contentJson: Content.stringifyOverrides(currentContent) };
     } else {
       var pool = Pool.buildPool(currentParams.env, currentParams.env.generatorSeed);
       var specSeed = currentParams.env.generatorSeed + 1;
@@ -813,7 +815,7 @@
         assign: clone(currentParams.assign), specSeed: specSeed, specsJson: JSON.stringify(specs),
         poolChecksum: X.checksum(JSON.stringify(pool)), specsChecksum: X.checksum(JSON.stringify(specs)),
         seeds: { generatorSeed: currentParams.env.generatorSeed, specSeed: specSeed },
-        content: Content.normalizeOverrides(currentContent)
+        contentJson: Content.stringifyOverrides(currentContent)
       };
     }
     patch.serverMode = (currentParams.ops.compute === 'server');
@@ -821,7 +823,7 @@
       if (!LOCAL) {
         FB.audit(editingId, 'save_run', name);
         FB.putRunPublic(editingId, publicDoc(
-          { name: name, code: code, status: (run && run.status) || 'draft', content: currentContent },
+          { name: name, code: code, status: (run && run.status) || 'draft', contentJson: Content.stringifyOverrides(currentContent) },
           currentParams, editingId)).catch(function () {});
       }
       note('save-note', 'Saved.');
@@ -1258,7 +1260,11 @@
   // only markup shown here. Everything else is escaped first, exactly as prose()
   // does it in app.js.
   function wdShow(text) {
-    return esc(wdTokens(text)).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    var t = String(text == null ? '' : text);
+    // Four of the survey part headings carry no note by default. An empty box
+    // reads as a rendering fault, so it says so instead.
+    if (!t.trim()) return '<span class="wd-blank">nothing is shown here by default</span>';
+    return esc(wdTokens(t)).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
   }
 
   function wdEdited() { return Object.keys(Content.normalizeOverrides(currentContent)).length; }
