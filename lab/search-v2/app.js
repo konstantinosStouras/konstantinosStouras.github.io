@@ -248,7 +248,11 @@
     var fresh = !saved;
     S.version = CFG.APP_VERSION;
     S.code = code;
-    S.runId = RUN ? RUN.id : (S.runId || null);
+    // In SERVER mode the run document is admin-only (it holds the seeds), so the
+    // id comes from the redacted public copy. Without this S.runId stayed null,
+    // which skipped the roster claim below (so no round could ever start) and
+    // stamped run_id:null on every client row (so the export dropped them all).
+    S.runId = (RUN && RUN.id) || (PUB && PUB.id) || S.runId || null;
     S.runCode = (RUN && RUN.code) || (pr.code || '').toUpperCase() || S.runCode || null;
     S.pid = pr.PROLIFIC_PID || (HANDOFF && HANDOFF.profile && HANDOFF.profile.studentId) || S.pid || code;
     S.study = pr.STUDY_ID || S.study || null;
@@ -270,7 +274,17 @@
 
     if (closed && !S.completed && S.phase === 'consent') { show('s-closed'); return; }
 
-    if (window.SVFirebase && SVFirebase.isConfigured() && S.runId) {
+    // Claiming the code is what creates the roster entry, and in server mode
+    // EVERY other callable refuses without one (requireOwner). So server mode
+    // claims through the callable — which also assigns the sequence
+    // transactionally — and client mode keeps the direct Firestore write.
+    if (SERVER_MODE) {
+      B.claimCode(code).then(function (r) {
+        if (r && !r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
+        if (r && r.sequence) S.sequence = r.sequence;
+        finishBoot();
+      }, function (err) { serverProblem(err); });
+    } else if (window.SVFirebase && SVFirebase.isConfigured() && S.runId) {
       SVFirebase.claimCode(S.runId, code, P.ops.rosterMode, (RUN && RUN.assign && RUN.assign.nextEntrantOverride) || 'auto')
         .then(function (r) {
           if (!r.ok && r.reason === 'notonroster') { showCodeRefused(); return; }
@@ -360,17 +374,39 @@
   function startEventSync() {
     if (PREVIEW || !(window.SVFirebase && SVFirebase.isConfigured())) return;
     var key = 'searchv2:v3:synced:' + S.code;
+    // The watermark is CONTIGUOUS, not a maximum. Rows are written concurrently,
+    // so a row that fails while a later one succeeds used to be jumped over and
+    // never retried — the backfill on the next load starts at watermark+1. Acked
+    // sequence numbers are therefore held until the run below them is complete.
+    var acked = {}, failed = {};
+    function readMark() { try { return parseInt(localStorage.getItem(key) || '-1', 10); } catch (e) { return -1; } }
     function mark(seq) {
-      try { var cur = parseInt(localStorage.getItem(key) || '-1', 10); if (seq > cur) localStorage.setItem(key, String(seq)); } catch (e) {}
+      acked[seq] = 1;
+      delete failed[seq];
+      var cur = readMark();
+      while (acked[cur + 1]) { cur++; delete acked[cur]; }
+      try { localStorage.setItem(key, String(cur)); } catch (e) {}
     }
-    L.onEvent(function (ev, seq) { SVFirebase.writeEvent(ev, seq).then(function (ok) { if (ok) mark(seq); }); });
-    SVFirebase.signInAnon().then(function () {
-      var synced = -1;
-      try { synced = parseInt(localStorage.getItem(key) || '-1', 10); } catch (e) {}
-      var evs = L.getEvents();
-      for (var i = synced + 1; i < evs.length; i++) {
-        (function (idx) { SVFirebase.writeEvent(evs[idx], idx).then(function (ok) { if (ok) mark(idx); }); })(i);
+    function send(ev, seq) {
+      return SVFirebase.writeEvent(ev, seq).then(function (okWrite) {
+        if (okWrite) mark(seq); else failed[seq] = ev;
+      }, function () { failed[seq] = ev; });
+    }
+    L.onEvent(send);
+    // Retry within the session too. Without this, every write that failed while
+    // the connection was down survived only until the tab closed — and for the
+    // last participant of the day, that is the end of the study.
+    setInterval(function () {
+      var pending = Object.keys(failed);
+      for (var j = 0; j < pending.length && j < 40; j++) {
+        var sq = +pending[j], row = failed[sq];
+        delete failed[sq];
+        send(row, sq);
       }
+    }, 20000);
+    SVFirebase.signInAnon().then(function () {
+      var evs = L.getEvents();
+      for (var i = readMark() + 1; i < evs.length; i++) send(evs[i], i);
     }).catch(function () {});
   }
 
@@ -1122,7 +1158,10 @@
       '<ul>' +
       '<li>Neighbouring positions differ by at most <b>' + P.env.stepBound + '</b> points.</li>' +
       '<li>Revealing a position costs <b>' + P.costs.revealCost + '</b> points and shows the true prize.</li>' +
-      (aiOn ? '<li>Asking the AI costs <b>' + P.costs.queryCost + '</b> points. It knows <b>' + (r.spec.ai_k) +
+      // currentK(), never r.spec.ai_k — a server-mode plan deliberately carries no
+      // spec, so that dereference threw and the reminder overlay never opened,
+      // after the open had already been counted against the attention measure.
+      (aiOn ? '<li>Asking the AI costs <b>' + P.costs.queryCost + '</b> points. It knows <b>' + currentK() +
         '</b> of the ' + P.env.positions + ' positions exactly and guesses everywhere else — you are not told which.</li>' : '') +
       '<li>Your score is the <b>true prize at the position you stop on</b>, minus everything you spent this round.</li>' +
       '<li>Prizes are drawn afresh every round.</li>' +

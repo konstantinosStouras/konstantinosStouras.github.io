@@ -261,14 +261,25 @@ window.SVFirebase = (function () {
   // for the rest of the session.
   function writeEvent(ev, seq) {
     if (!configured) return Promise.resolve(false);
-    return init().then(function () {
+    // ensureAuth, like every other call in this file. Without it the write went
+    // out unauthenticated, the Rules refused it (`allow create: if isSignedIn()`),
+    // and the catch below reported that refusal as SUCCESS — so a browser where
+    // anonymous auth is unavailable completed the whole study while Firestore
+    // received nothing and the sync watermark recorded it all as written.
+    return init().then(ensureAuth).then(function () {
       var who = ev.participant_code || ev.session || 'anon';
       var id = String(who).replace(/[^\w-]/g, '_') + '__' + String(seq).padStart(6, '0');
-      return sdk.fs.setDoc(sdk.fs.doc(db, C.events, id), ev);
-    }).then(function () { return true; }).catch(function (e) {
-      var code = (e && (e.code || e.message)) || '';
-      return /permission-denied|PERMISSION_DENIED/.test(String(code));
-    });
+      var ref = sdk.fs.doc(db, C.events, id);
+      return sdk.fs.setDoc(ref, ev).then(function () { return true; }, function (e) {
+        var code = String((e && (e.code || e.message)) || '');
+        if (!/permission-denied|PERMISSION_DENIED/.test(code)) throw e;
+        // The log is append-only: a refused UPDATE means the row is already
+        // there, which is success. A refused CREATE means it is not, which is
+        // failure. Only the document itself can tell the two apart — and
+        // treating every denial as success is what made the loss above silent.
+        return sdk.fs.getDoc(ref).then(function (snap) { return snap.exists(); }, function () { return false; });
+      });
+    }).catch(function () { return false; });
   }
 
   // ---- admin --------------------------------------------------------------
