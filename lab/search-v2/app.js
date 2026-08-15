@@ -1344,10 +1344,8 @@
         onSelect: function (p, via) { setSel(p, via || 'click'); }
       });
     }
-    $('legend').innerHTML =
-      '<span class="lg"><i class="sw pre"></i> open at the start (true prize)</span>' +
-      '<span class="lg"><i class="sw rev"></i> you revealed (true prize)</span>' +
-      (aiOn ? '<span class="lg"><i class="sw ask"></i> the AI’s answer (may be wrong)</span>' : '');
+    // The key is NOT built here: it describes what is on the plot, which changes
+    // with every action, so renderRound owns it (see renderLegend).
 
     var slider = $('pos-slider');
     slider.min = 1; slider.max = P.env.positions; slider.value = sel;
@@ -1414,9 +1412,35 @@
     L.tele('slider', { position: p, via: via, ms: now - S.round.startedAt });
   }
 
+  // THE KEY EXPLAINS MARKS THAT ARE ON THE PLOT — nothing else (owner 2026-08,
+  // from a screenshot of an OPEN round at its first paint: an empty plot under a
+  // key naming two kinds of mark, so a participant with nothing yet revealed goes
+  // hunting for pre-opened prizes that this round does not have). An entry
+  // therefore appears the moment its first mark is drawn and not before: the
+  // pre-opened one only in a seeded round, the revealed one from the first
+  // reveal, the AI one from the first answer paid for. With nothing on the plot
+  // the key is empty and out of the flow, so it leaves no gap above the chart.
+  function renderLegend(aiOn) {
+    var el = $('legend');
+    if (!el) return;
+    var html = '';
+    if (preOpenedPairs().length) {
+      html += '<span class="lg"><i class="sw pre"></i> open at the start (true prize)</span>';
+    }
+    if (revealedPairs().length) {
+      html += '<span class="lg"><i class="sw rev"></i> you revealed (true prize)</span>';
+    }
+    if (aiOn && askedPairs().length) {
+      html += '<span class="lg"><i class="sw ask"></i> the AI’s answer (may be wrong)</span>';
+    }
+    el.innerHTML = html;
+    el.style.display = html ? '' : 'none';
+  }
+
   function renderRound() {
     var r = currentRound(), aiOn = (r.condition === 'AI_ON');
     var peek = (DEBUG && B.canSeeTruth) ? B.peek() : null;
+    renderLegend(aiOn);
     chart.render({
       selected: sel,
       preOpened: preOpenedPairs(),
@@ -2196,12 +2220,19 @@
         preOpened: pick.pre, revealed: pick.revealed, asked: pick.asked,
         nominated: pick.nominated
       });
+      // Same rule as the round key: an entry only for a mark that is on THIS
+      // plot. The truth, the AI's line and its anchors are always drawn here;
+      // the participant's own asks and reveals may be empty for the round shown.
       $('debrief-caption').innerHTML =
         '<span class="lg"><i class="sw truth"></i> the true prizes</span>' +
         '<span class="lg"><i class="sw aicurve"></i> what the AI would have said everywhere</span>' +
         '<span class="lg"><i class="sw anchor"></i> the positions it actually knew</span>' +
-        '<span class="lg"><i class="sw ask"></i> the answers you paid for</span>' +
-        '<span class="lg"><i class="sw rev"></i> what you revealed</span>';
+        ((pick.pre && pick.pre.length)
+          ? '<span class="lg"><i class="sw pre"></i> open at the start</span>' : '') +
+        ((pick.asked && pick.asked.length)
+          ? '<span class="lg"><i class="sw ask"></i> the answers you paid for</span>' : '') +
+        ((pick.revealed && pick.revealed.length)
+          ? '<span class="lg"><i class="sw rev"></i> what you revealed</span>' : '');
       $('debrief-round').textContent = 'Your round ' + pick.round_index + ' (part ' + pick.block + ').';
     }
   }

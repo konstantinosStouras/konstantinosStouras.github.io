@@ -919,7 +919,7 @@ them while deciding, and what is repetition?*
   stopping settles. It opens "**Remember**:" in plain bold, part of the sentence
   flow rather than a label bolted on (as a small muted uppercase lead, it copied and
   pasted as "Rememberprizes"), and it strings nothing together with "·" separators,
-  which read as a run-on rather than a list. Then the plot and its legend; then the
+  which read as a run-on rather than a list. Then the plot and its key; then the
   **position picker** directly under the plot it points at; then the **actions**, in
   the same column, under the picker that aims them. Read what the round is worth, look at the line, choose where you are
   looking, act — **no lane change and nothing to scroll past in between**.
@@ -948,6 +948,28 @@ them while deciding, and what is repetition?*
   the session's stop rule. **Every value on screen carries its unit** — "the AI says
   70 points about position 40" — because a bare number beside a position number is
   ambiguous exactly where the study needs it not to be.
+
+**The key under the reminder explains marks that are on the plot — and only
+those** (owner 2026-08, from a screenshot of an *open* round at its first paint: an
+empty chart standing under a key that named two kinds of mark, which sends a
+participant hunting for pre-opened prizes this round does not have). Each entry
+therefore appears the moment its first mark is drawn and not before — the
+pre-opened one only in a seeded round, the revealed one from the first reveal, the
+AI one from the first answer paid for — and with nothing yet on the plot there is
+no key at all, out of the flow so it leaves no gap above the chart. That means the
+key is **not built once with the round**: it describes state that changes with
+every action, so `renderLegend` is called from `renderRound` like everything else
+that reads the round's marks. The debrief plot follows the same rule; there the
+truth, the AI's line and its anchors are always drawn, while the participant's own
+asks and reveals may be empty for the round shown. It is checked as an
+**invariant against the SVG itself**, not against what a round is supposed to
+hold: for each kind of mark, an entry exists exactly when at least one such mark
+is drawn — sampled twice in each of the 28 rounds by `tools/smoke.mjs` (which also
+asserts the run actually met an empty plot, a seeded round, a reveal and an AI
+answer, since a green run that met none of them would be saying nothing about the
+case reported), and measured geometrically by `tools/layout-guard.mjs`, which now
+reveals a position before checking that the key sits flush above the plot — a key
+for nothing is not drawn, and so cannot be measured.
 
 **Every number in that reminder is read from the run's own parameters and rebuilt
 each round — never written into the markup.** A session that moves a cost, the step
@@ -1748,13 +1770,13 @@ other five.
 
 ```bash
 node lab/search-v2/tools/selftest.js          # 310 checks, no browser
-node lab/search-v2/tools/smoke.mjs            # 212, a whole 28-round session
+node lab/search-v2/tools/smoke.mjs            # 217, a whole 28-round session
 node lab/search-v2/tools/admin-smoke.mjs      # 178, the admin panel
 node lab/search-v2/tools/platform-guard.mjs   # 28, the platform contract, both ways
 node lab/search-v2/tools/wording-guard.mjs    # 17, overrides reach participants
 node lab/search-v2/tools/migration-guard.mjs  # a mid-session build never loses data
 node lab/search-v2/tools/data-audit.mjs       # 56, the log is faithful to the session
-node lab/search-v2/tools/layout-guard.mjs     # reachability at five window sizes
+node lab/search-v2/tools/layout-guard.mjs     # 219, reachability at five window sizes
 node lab/search-v2/tools/preview-guard.mjs    # the sandbox writes nothing
 node lab/search-v2/tools/emulator-test.mjs    # 37, the REAL Functions + Rules
 python3 lab/search-v2/tools/generate_rounds.py --validate

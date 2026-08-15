@@ -174,14 +174,15 @@ for (const size of SIZES) {
 
   // ALIGNMENT (owner 2026-08, from a hand-drawn layout). The boxes are meant to
   // line up, so the edges are measured rather than eyeballed: the reminder spans
-  // the whole round, the key sits above the plot, and the action block is
-  // centred with the stop button sharing the paid pair's exact edges.
+  // the whole round and the action block is centred with the stop button sharing
+  // the paid pair's exact edges. The key is measured further down, after a
+  // reveal — it is drawn only once the plot has a mark for it to explain.
   const align = await pg.evaluate(() => {
     const r = s => { const e = document.querySelector(s); if (!e) return null;
       const b = e.getBoundingClientRect();
       return { l: Math.round(b.left), r: Math.round(b.right), t: Math.round(b.top), b: Math.round(b.bottom) }; };
     return { strip: r('#round-reminder'), grid: r('.round-grid'), side: r('.side-col'),
-             col: r('.chart-col'), legend: r('.legend'), plot: r('.plot-wrap'),
+             col: r('.chart-col'), plot: r('.plot-wrap'),
              act: r('.act-row'), pair: r('.act-pair'), stop: r('#btn-nominate') };
   });
   ok(align.strip && Math.abs(align.strip.l - align.grid.l) <= 1 && Math.abs(align.strip.r - align.grid.r) <= 1,
@@ -189,9 +190,6 @@ for (const size of SIZES) {
     align.strip && `strip ${align.strip.l}–${align.strip.r} vs grid ${align.grid.l}–${align.grid.r}`);
   ok(Math.abs(align.side.t - align.col.t) <= 1,
     'the KPI column and the chart column start on the same line');
-  ok(align.legend.b <= align.plot.t + 1 && Math.abs(align.legend.l - align.plot.l) <= 1,
-    'the key sits directly above the plot it explains, flush with it',
-    `legend ${align.legend.t}–${align.legend.b} vs plot top ${align.plot.t}`);
   ok(Math.abs(align.act.l - align.col.l) <= 1 && Math.abs(align.act.r - align.col.r) <= 1,
     'the action block is flush with the chart column');
   ok(Math.abs(align.pair.l - align.stop.l) <= 1 && Math.abs(align.pair.r - align.stop.r) <= 1,
@@ -200,6 +198,69 @@ for (const size of SIZES) {
   {
     const centred = Math.abs(((align.pair.l + align.pair.r) / 2) - ((align.act.l + align.act.r) / 2));
     ok(centred <= 2, `and the block is centred in its row (off by ${Math.round(centred)}px)`);
+  }
+
+  // THE KEY NAMES THE MARKS THAT ARE ON THE PLOT — no more, no less (owner
+  // 2026-08). The invariant is checked against the SVG itself rather than
+  // against what the round is supposed to hold: for each kind of mark, an entry
+  // in the key exists exactly when at least one of those marks is drawn. It is
+  // measured twice — at first paint, where an OPEN round has an empty plot and
+  // must therefore carry no key at all, and again after a reveal, where the
+  // revealed entry must have appeared.
+  const keyState = () => pg.evaluate(() => {
+    const el = document.querySelector('.legend');
+    const live = !!el && getComputedStyle(el).display !== 'none';
+    const named = k => live && !!el.querySelector('.sw.' + k);
+    const drawn = k => document.querySelectorAll('#plot .' + k).length > 0;
+    return {
+      entries: live ? el.querySelectorAll('.lg').length : 0,
+      pre: [named('pre'), drawn('pre-mark')],
+      rev: [named('rev'), drawn('rev-mark')],
+      ask: [named('ask'), drawn('ask-diamond')]
+    };
+  });
+  const KINDS = [['pre', 'the pre-opened prizes'], ['rev', 'the prizes you revealed'],
+                 ['ask', 'the AI\'s answers']];
+  {
+    const k = await keyState();
+    for (const [id, name] of KINDS) {
+      ok(k[id][0] === k[id][1],
+        `at first paint the key mentions ${name} only if any are drawn`,
+        `key ${k[id][0]}, on the plot ${k[id][1]}`);
+    }
+    const marks = k.pre[1] || k.rev[1] || k.ask[1];
+    ok(marks ? k.entries > 0 : k.entries === 0,
+      marks ? 'a plot with marks on it carries a key' : 'an empty plot carries no key at all',
+      `${k.entries} entries`);
+  }
+
+  // Reveal a position, then the key must have gained its entry — and only then
+  // can it be measured against the plot, since a key for nothing is not drawn.
+  // The position is CHOSEN, never hardcoded: a pre-opened one cannot be
+  // revealed, and which positions start open moves with the specs.
+  await pg.waitForFunction(() => !document.getElementById('btn-nominate').disabled, null, { timeout: 8000 });
+  for (const cand of [62, 71, 29, 84, 15, 45, 96]) {
+    await pg.evaluate(p => window.SVApp.select(p), cand);
+    if (!(await pg.locator('#btn-reveal').isDisabled())) break;
+  }
+  await pg.locator('#btn-reveal').click();
+  await pg.waitForSelector('#plot .rev-mark', { timeout: 8000 });
+  {
+    const k = await keyState();
+    for (const [id, name] of KINDS) {
+      ok(k[id][0] === k[id][1],
+        `after a reveal the key mentions ${name} only if any are drawn`,
+        `key ${k[id][0]}, on the plot ${k[id][1]}`);
+    }
+    const lg = await pg.evaluate(() => {
+      const r = s => { const e = document.querySelector(s); if (!e) return null;
+        const b = e.getBoundingClientRect();
+        return { l: Math.round(b.left), t: Math.round(b.top), b: Math.round(b.bottom) }; };
+      return { legend: r('.legend'), plot: r('.plot-wrap') };
+    });
+    ok(lg.legend && lg.legend.b <= lg.plot.t + 1 && Math.abs(lg.legend.l - lg.plot.l) <= 1,
+      'the key sits directly above the plot it explains, flush with it',
+      lg.legend && `legend ${lg.legend.t}–${lg.legend.b} vs plot top ${lg.plot.t}`);
   }
 
   // The plot keeps its aspect and fills the middle column.

@@ -224,6 +224,37 @@ async function runOne(name) {
   const seq = (await state()).sequence;
   ok(seq === 'A' || seq === 'B', `a crossover sequence was assigned (${seq})`);
 
+  // THE KEY NAMES WHAT IS ON THE PLOT, and only that (owner 2026-08). Read
+  // straight off the SVG, so it is an invariant rather than a claim about what
+  // the round was supposed to contain: for each kind of mark, an entry in the
+  // key exists exactly when at least one such mark is drawn. Sampled in every
+  // round — before any action and again once the round has been played — which
+  // between them cover the seeded rounds (pre-opened marks from the first
+  // paint), the open ones (an empty plot, and no key at all) and both
+  // conditions. The layout guard measures the same rule geometrically.
+  const keyVsPlot = pg => pg.evaluate(() => {
+    const el = document.querySelector('#s-round .legend');
+    const live = !!el && getComputedStyle(el).display !== 'none';
+    const named = k => live && !!el.querySelector('.sw.' + k);
+    const drawn = k => document.querySelectorAll('#plot .' + k).length > 0;
+    const kinds = { pre: 'pre-mark', rev: 'rev-mark', ask: 'ask-diamond' };
+    const bad = [], seen = {};
+    for (const k in kinds) {
+      const d = drawn(kinds[k]);
+      seen[k] = d;
+      if (named(k) !== d) bad.push(k + ': key ' + named(k) + ', plot ' + d);
+    }
+    seen.none = !seen.pre && !seen.rev && !seen.ask;
+    if (seen.none && live && el.querySelectorAll('.lg').length) bad.push('key drawn over an empty plot');
+    return { bad: bad, seen: seen };
+  });
+  const keyCover = { pre: 0, rev: 0, ask: 0, none: 0, bad: [] };
+  const sampleKey = async pg => {
+    const s = await keyVsPlot(pg);
+    for (const k in keyCover) if (k !== 'bad' && s.seen[k]) keyCover[k]++;
+    if (s.bad.length && keyCover.bad.length < 4) keyCover.bad.push(s.bad.join('; '));
+  };
+
   let aiOffChecked = false, aiOnChecked = false, requeryChecked = false;
   let capNoteSeen = false, scoreChecked = false, rushSeen = false, milestoneSeen = false, parityChecked = false, rushPassThrough = false;
 
@@ -277,6 +308,7 @@ async function runOne(name) {
 
     const r = rounds[i];
     const askVisible = await pg.locator('#btn-ask').isVisible();
+    await sampleKey(pg);   // at first paint, before anything has been paid for
 
     if (r.cond === 'AI_OFF' && !aiOffChecked) {
       aiOffChecked = true;
@@ -441,6 +473,8 @@ async function runOne(name) {
         'the reveal cost is charged once (' + want + '), and shown separately from the query cost', cost.trim());
     }
 
+    await sampleKey(pg);   // and again with this round's marks on the plot
+
     // Stopping. The button must say what it will do — under 'best_found' the
     // prize it takes (it can only ever take one already found), under
     // 'nominate' the position it would land on.
@@ -493,6 +527,17 @@ async function runOne(name) {
     await pg.locator('#btn-continue').click();
     await pg.waitForTimeout(60);
   }
+
+  // The key invariant, over every round of the session. The coverage counts are
+  // asserted too: a green run that never met an empty plot, a seeded round or an
+  // AI answer would be saying nothing about the case that was reported.
+  ok(keyCover.bad.length === 0,
+    'in every round the key names exactly the kinds of mark drawn on the plot',
+    keyCover.bad.join(' | '));
+  ok(keyCover.none > 0, `and an empty plot carries no key at all (${keyCover.none} samples)`);
+  ok(keyCover.pre > 0, `a seeded round names its pre-opened prizes from the first paint (${keyCover.pre})`);
+  ok(keyCover.rev > 0, `a revealed prize adds its entry (${keyCover.rev})`);
+  ok(keyCover.ask > 0, `and an AI answer adds its own (${keyCover.ask})`);
 
   // ── exit survey ─────────────────────────────────────────────────────────
   await pg.waitForSelector('#s-survey.active', { timeout: 20000 });
