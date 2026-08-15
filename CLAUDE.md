@@ -2969,6 +2969,22 @@ three quick-check explanations reached participants reading "differ by at most
 itself and fails on any token `content.js` uses that the app does not substitute,
 so the two cannot drift again.
 
+**`lab/search-v2/DESIGN.md` is the design document — keep it in sync.** It is the
+single place that explains how the participant app AND the admin panel are built
+and **why every default parameter is the number it is** (the c_R = 4 / sparse
+K = 3 straddle window, the 600-mapping pool, the three layouts' `g = 4t`
+ordering, the caps, the gates, the button-parity and engagement `ui` group, the
+lock semantics and what stays editable after a lock), with every derived figure
+recomputed from `config.js` and a one-command recipe to re-verify them. **Whenever
+a parameter default, a screen, a security rule, an export column, an admin tab or
+the platform contract changes, update the matching section of `DESIGN.md` in the
+same change** — the same discipline as the `fun/index.html` cards and `/lit`'s
+About page. `README.md` stays the operator's guide, `SEEDS.md` the frozen seeds,
+`tools/SIMULATION-FINDINGS.md` the measurements. Its "Known drift" section is the
+live to-do list of stale participant-facing copy (currently: the survey item and
+the debrief prose still saying the AI knows 4 positions, and `dictionary.js`'s
+"SPARSE (K=4)", when sparse K is 3) — the data is unaffected, the prose is not.
+
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):

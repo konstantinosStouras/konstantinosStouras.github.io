@@ -129,6 +129,8 @@ lab/search-v2/
   backend.js          local vs server: where the score-bearing actions run
   _functions/functions/index.js   the callables of §17.2 (deploy with firebase)
   firebase.json, .firebaserc      deploy + emulator config
+  DESIGN.md           how the app AND the admin panel are designed, and the reason
+                      behind every default parameter — keep it in sync with changes
   SEEDS.md            every random seed, and why the pool size differs from the brief
   admin/index.html    the admin panel — six screens (§17b)
   admin/admin.js
