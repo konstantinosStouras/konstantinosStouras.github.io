@@ -1273,7 +1273,9 @@
     out.push('<b>Stopping</b> is free: you score the ' + (bestFoundRule()
       ? '<b>best prize you have found</b>' : '<b>true prize where you stop</b>') +
       ', minus everything you spent.');
-    el.innerHTML = '<span class="rr-lead">Remember:</span> ' + out.join(' ');
+    // Plain bold word, then the colon, then the sentences — the lead reads as
+    // the start of the line rather than as a label bolted onto it.
+    el.innerHTML = '<b>Remember</b>: ' + out.join(' ');
   }
 
   function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
