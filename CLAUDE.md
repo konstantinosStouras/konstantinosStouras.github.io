@@ -2514,9 +2514,10 @@ plot they aim at** (moved up out of a full-width row below the whole grid —
 look at the line, choose a position, act, with no lane change in between; the
 pair keeps its strict visual parity, which the ~640px column still gives it).
 **The reminder strip on top of the plot** is the comprehension gate's own
-reminder list, shortened for a glance, rebuilt from the RUN's parameters every
-round so a session that moves a cost or the step bound can never leave a stale
-number on screen — deliberately dropping the two points that change no decision
+reminder list as THREE OR FOUR SHORT SENTENCES (owner 2026-08 — as a chain of
+fragments divided by `·` it read as a run-on, and copied as one word), rebuilt
+from the RUN's parameters every round so a session that moves a cost or the step
+bound can never leave a stale number on screen — deliberately dropping the two points that change no decision
 inside a round (that every AI answer looks the same whether known or guessed,
 and that prizes are drawn afresh each round; both stay in the gate). Like the
 price note and the quiz reminder, copy derived from the numbers is built in
