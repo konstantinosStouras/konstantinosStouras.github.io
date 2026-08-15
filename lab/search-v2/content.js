@@ -435,8 +435,7 @@
     ],
     // The progress line under the round title. {n}/{total} scored rounds of
     // this half, {left} still to come.
-    progress: 'Round {n} of {total} in this half · {left} to go',
-    progressWarmup: 'Practice round — nothing here is scored',
+
     // In-round tips (the small dismissible corner card, never a modal).
     tips: {
       encourage: 'You are doing great so far — keep searching, and check whether a higher prize ' +
@@ -606,8 +605,6 @@
     ENCOURAGE.cheers.forEach(function (c, i) {
       out.push({ key: 'enc.cheer.' + i, label: 'between rounds · line ' + (i + 1), kind: 'line', base: c });
     });
-    out.push({ key: 'enc.progress', label: 'progress line under the round title', kind: 'line', base: ENCOURAGE.progress });
-    out.push({ key: 'enc.progressWarmup', label: 'progress line in a practice round', kind: 'line', base: ENCOURAGE.progressWarmup });
     ['title', 'bodyNone', 'bodyFew', 'stay', 'go'].forEach(function (k) {
       out.push({ key: 'enc.rush.' + k, label: 'focus prompt · ' + k, kind: (k.indexOf('body') === 0 ? 'prose' : 'line'), base: ENCOURAGE.rush[k] });
     });
@@ -804,8 +801,6 @@
         });
         Object.keys(ENCOURAGE.tips).forEach(function (k) { e.tips[k] = P('enc.tip.' + k, ENCOURAGE.tips[k]); });
         e.cheers = ENCOURAGE.cheers.map(function (c, i) { return P('enc.cheer.' + i, c); });
-        e.progress = P('enc.progress', ENCOURAGE.progress);
-        e.progressWarmup = P('enc.progressWarmup', ENCOURAGE.progressWarmup);
         ['title', 'bodyNone', 'bodyFew', 'stay', 'go'].forEach(function (k) {
           e.rush[k] = P('enc.rush.' + k, ENCOURAGE.rush[k]);
         });

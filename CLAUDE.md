@@ -2500,23 +2500,35 @@ is null-guarded). `tools/smoke.mjs` measures the parity from computed styles
 and `tools/layout-guard.mjs` pins the side-by-side row at five widths.
 
 **Where the round screen puts things** (owner 2026-08, from screenshots).
-LEFT COLUMN = **the round in four numbers and nothing else**: a "Round n / 28"
-counter over the KPI cards — net value if you stop right now (green, the one
-that matters), best prize found, total cost of revealing, total cost of asking
-the AI (hidden in an AI-off round, so that screen carries no mention of the AI
-at all), each cost carrying its own count as a qualifier. The itemised ledger
+HEADER = the title **"Practice round (not scored) · Part 1 (out of 2)"** — the
+qualifier sits with the thing it qualifies and the part says how many there are
+(the count comes from the plan, never written down) — with the whole-study counter **"Round n / 28 · N rounds to go"**. **There is
+no Instructions button** (owner 2026-08): the rules that matter while playing
+are on the reminder strip in every round, so a reopenable summary had nothing
+to add. `#ov-summary` and its builder are kept intact and unreachable, so
+restoring the button is one line, and `instruction_reopens` stays in the schema
+— constant at 0 for any session run without it, which its dictionary entry
+says. The progress BAR and its per-half line under the title are gone: the
+title already names the part and the counter says how much is left, and the two
+together said it three times. LEFT COLUMN = **the round in four numbers and
+nothing else**: net value if you stop right now (green, the one that matters),
+best prize found, total cost of revealing, total cost of asking the AI (hidden
+in an AI-off round, so that screen carries no mention of the AI at all), each
+cost carrying its own count as a qualifier. The itemised ledger
 that used to stand there, and the same four numbers as a band UNDER the plot,
 are both gone: the ledger repeated in words what the plot, the number box, the
 nominate button and the progress bar already said, and a band under the plot
 was something to scroll to. CENTRE COLUMN = the reminder strip, the plot, the
-legend, the position picker, then **the two paid buttons directly under the
-plot they aim at** (moved up out of a full-width row below the whole grid —
+legend, the position picker, the in-round nudge (moved down from the top of the
+screen, so it speaks where the participant is looking), then **the two paid
+buttons directly under the plot they aim at** (moved up out of a full-width row below the whole grid —
 look at the line, choose a position, act, with no lane change in between; the
 pair keeps its strict visual parity, which the ~640px column still gives it).
 **The reminder strip on top of the plot** is the comprehension gate's own
-reminder list, shortened for a glance, rebuilt from the RUN's parameters every
-round so a session that moves a cost or the step bound can never leave a stale
-number on screen — deliberately dropping the two points that change no decision
+reminder list as THREE OR FOUR SHORT SENTENCES (owner 2026-08 — as a chain of
+fragments divided by `·` it read as a run-on, and copied as one word), rebuilt
+from the RUN's parameters every round so a session that moves a cost or the step
+bound can never leave a stale number on screen — deliberately dropping the two points that change no decision
 inside a round (that every AI answer looks the same whether known or guessed,
 and that prizes are drawn afresh each round; both stay in the gate). Like the
 price note and the quiz reminder, copy derived from the numbers is built in
@@ -2620,14 +2632,18 @@ deliberate. The three arithmetic items state their numbers outright, so
 if either default moves. Every prompt and option stays editable per session in
 the Wording tab; only the answer KEY is structure.
 
-**Each running cost is shown in its own action's hue** (owner 2026-08): the AI's
-in the purple of "Ask the AI", revealing's in the blue of "Reveal" — both, not
-just the AI's, because leaving one cost in alarm-red beside the other in the
-AI's brand colour would make one of the two PAID actions look more expensive
-than the other, and which of them a participant presses is the primary outcome.
-Red stays on the cost tag INSIDE each button, where it means "this is what it
-costs". "Stop and nominate" is centred under the pair rather than aligned to the
-left one, so it reads as belonging to neither.
+**A cost is RED, except the AI's, which is purple** (owner 2026-08): red is what
+a cost is on this screen — on the KPI and on the tag inside the button alike —
+and the one exception ties the AI's running cost to the purple of "Ask the AI",
+so the number and the button that produces it read as the same thing. "Stop and
+nominate" is centred under the pair rather than aligned to the left one, so it
+reads as belonging to neither. **Neither paid button carries helper text**: what
+each does, and what it costs, is on the reminder strip at the top of every round,
+and a line under each one only pushed the actions further from the plot they aim
+at (smoke pins that there is none under EITHER, which is a stronger parity claim
+than the old "about the same length"). The STOP button keeps its note — it is
+the only one that ends the round, and its wording follows the session's stop
+rule.
 
 **Engagement, under the same rule** (owner 2026-08): a progress bar + "round n
 of 12 in this half" under the round title, milestone pop-ups at the halfway

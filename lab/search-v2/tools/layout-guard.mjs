@@ -121,7 +121,6 @@ for (const size of SIZES) {
     ['#pos-input', 'the position number box'],
     ['#btn-pos-left', 'the ← arrow'],
     ['#btn-pos-right', 'the → arrow'],
-    ['#btn-instr-open', 'the instructions button'],
     ['#sb-net', 'the NET VALUE KPI in the left column'],
     ['#sb-best', 'the best prize found'],
     ['#sb-reveal', 'the running cost of revealing'],
@@ -259,14 +258,16 @@ for (const size of SIZES) {
     // How many positions the AI knows is the MANIPULATION. No participant-facing
     // text may carry it — not the reminder, not the round subtitle, not the
     // summary the Instructions button reopens over the round screen.
-    const kLeak = await ai.evaluate(async () => {
-      document.getElementById('btn-instr-open').click();
-      await new Promise(r => setTimeout(r, 60));
-      const t = document.getElementById('s-round').innerText + ' ' +
-                document.getElementById('summary-body').innerText;
-      document.getElementById('btn-summary-close').click();
+    // The Instructions button was removed, so the round screen is all there is
+    // to check — and the admin-only Testing view names the AI by design.
+    const kLeak = await ai.evaluate(() => {
+      const c = document.getElementById('s-round').cloneNode(true);
+      const tv = c.querySelector('#testview'); if (tv) tv.remove();
+      document.body.appendChild(c); const t = c.innerText; c.remove();
       return t;
     });
+    ok((await ai.locator('#btn-instr-open').count()) === 0,
+      'and the round carries no Instructions button to reopen a summary with');
     ok(!/knows\s+\d+/.test(kLeak) && !/\d+\s+of the \d+ positions/.test(kLeak),
       'and nothing on the round screen says HOW MANY positions the AI knows',
       (kLeak.match(/[^.]*knows[^.]*\./) || [''])[0].trim());
@@ -278,17 +279,22 @@ for (const size of SIZES) {
     await ai.close();
   }
 
-  // The modals must sit inside the window at every size.
-  await pg.locator('#btn-instr-open').click();
-  await pg.waitForSelector('#ov-summary.show');
+  // The modals must sit inside the window at every size. Driven directly rather
+  // than through a control: the summary's own button was removed, and what is
+  // being measured here is the overlay's GEOMETRY, not how it opens. The
+  // confirmation modal is the one a participant can still reach, and it shares
+  // the same .modal box.
   const modal = await pg.evaluate(() => {
-    const m = document.querySelector('#ov-summary .modal').getBoundingClientRect();
-    return { top: m.top, bottom: m.bottom, left: m.left, right: m.right, vh: innerHeight, vw: innerWidth };
+    const ov = document.getElementById('ov-nominate');
+    ov.classList.add('show');
+    const m = ov.querySelector('.modal').getBoundingClientRect();
+    const r = { top: m.top, bottom: m.bottom, left: m.left, right: m.right, vh: innerHeight, vw: innerWidth };
+    ov.classList.remove('show');
+    return r;
   });
   ok(modal.top >= -1 && modal.left >= -1 && modal.right <= modal.vw + 1,
-    'the instructions modal fits the window');
+    'a modal overlay fits the window');
   ok(modal.bottom <= modal.vh + 1 || true, 'and scrolls internally when it is taller than the window');
-  await pg.locator('#btn-summary-close').click();
 
   // The survey, which is the longest screen.
   await pg.evaluate(() => {

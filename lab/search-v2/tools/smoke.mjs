@@ -324,7 +324,10 @@ async function runOne(name) {
           };
         };
         const a = document.getElementById('btn-ask'), b = document.getElementById('btn-reveal');
-        const cell = id => document.getElementById(id).querySelector('.act-note').textContent.trim().length;
+        // Neither paid button carries a note any more — what each does is on the
+        // reminder strip at the top of the round — so "equal amounts of text"
+        // is now the stronger claim that there is NONE under either.
+        const cell = id => document.getElementById(id).querySelectorAll('.act-note').length;
         return { a: pick(a), b: pick(b), askNote: cell('ask-panel'), revNote: cell('reveal-panel') };
       });
       const same = k => metrics.a[k] === metrics.b[k];
@@ -346,9 +349,9 @@ async function runOne(name) {
       ok(Math.abs(ha.s - hb.s) <= 1 && Math.abs(ha.l - hb.l) <= 1,
          'and the two hues are matched on saturation and lightness, so neither reads as the primary action',
          JSON.stringify(ha) + ' vs ' + JSON.stringify(hb));
-      ok(Math.abs(metrics.askNote - metrics.revNote) <= 12,
-         'the helper text under each is about the same length',
-         metrics.askNote + ' vs ' + metrics.revNote + ' characters');
+      ok(metrics.askNote === 0 && metrics.revNote === 0,
+         'neither paid button carries helper text — what each does is on the reminder above the plot',
+         metrics.askNote + ' vs ' + metrics.revNote + ' notes');
       // The cost numerals: same hue and saturation, different lightness, and
       // red appears nowhere else on the screen.
       const costs = await pg.evaluate(() => {
@@ -591,13 +594,14 @@ async function runOne(name) {
   await mp.goto(BASE + '?preview=1&debug=1&key=stouras&code=SMOKE');
   await mp.waitForSelector('#s-round.active', { timeout: 15000 });
 
-  // The instructions summary, reopenable at any time (§14).
-  await mp.locator('#btn-instr-open').click();
-  await mp.waitForSelector('#ov-summary.show');
-  const sum = await mp.locator('#summary-body').innerText();
-  ok(/at most/.test(sum) && /costs/.test(sum), 'the instructions summary reopens over the round and restates the rules');
-  await mp.keyboard.press('Escape');
-  ok(!(await mp.locator('#ov-summary.show').count()), 'Escape closes the summary');
+  // No Instructions button in a round (owner 2026-08): the rules that matter
+  // while playing are on the reminder strip, in every round, so the round screen
+  // states them without anything to open. What replaced it is checked here.
+  ok((await mp.locator('#btn-instr-open').count()) === 0,
+    'a round carries no Instructions button — the reminder above the plot is the reminder');
+  const strip = await mp.locator('#round-reminder').innerText();
+  ok(/at most/.test(strip) && /costs/.test(strip),
+    'and that strip states the step bound and what an action costs, in every round', strip.slice(0, 120));
 
   // The confirmation. Under 'best_found' stopping can never land on an unknown
   // prize, so the only case worth a question is stopping with NOTHING found —
