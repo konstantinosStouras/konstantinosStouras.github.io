@@ -898,10 +898,10 @@ them while deciding, and what is repetition?*
   is actually worth, and nothing else on the screen may compete with that tile,
   which is why the two paid buttons keep their own matched hues. Then **best prize
   found**, then the two cumulative costs, **"Total cost of revealing"** and **"Total
-  cost of asking the AI"**, each carrying its own count beneath it. Above them, a
-  whole-study counter — "Round 1 / 28" — which counts **every** round including
-  practice, because that is the number answering *how much is left*; the header's
-  "Round n of 12 · Part 1" counts scored rounds inside the current half.
+  cost of asking the AI"**, each carrying its own count beneath it.
+  The **whole-study counter** — "Round 1 / 28", counting every round including
+  practice — sits in the **header** instead, right-aligned: this column is the round
+  in four numbers, and where the *session* has got to is not one of them.
 
   The itemised **ledger that used to stand here is gone**: positions revealed,
   selected position and rounds remaining repeated in words what the plot, the
@@ -913,11 +913,15 @@ them while deciding, and what is repetition?*
   for free.
 
 - **Centre — the line, and directly under it everything used to act on it.** A
-  **rules reminder sits on top of the plot**, so a participant never has to reopen
-  the instructions to recall what the line can do or what an action costs; then the
-  plot and its legend; then the **position picker** directly under the plot it
-  points at; then the **actions**, in the same column, under the picker that aims
-  them. Read what the round is worth, look at the line, choose where you are
+  **rules reminder sits on top of the plot** — the reason there is no Instructions
+  button any more — written as **three short sentences in an AI-off round and four
+  in an AI round**: the line's shape, what each action costs and does, and how
+  stopping settles. It opens "**Remember**:" in plain bold, part of the sentence
+  flow rather than a label bolted on (as a small muted uppercase lead, it copied and
+  pasted as "Rememberprizes"), and it strings nothing together with "·" separators,
+  which read as a run-on rather than a list. Then the plot and its legend; then the
+  **position picker** directly under the plot it points at; then the **actions**, in
+  the same column, under the picker that aims them. Read what the round is worth, look at the line, choose where you are
   looking, act — **no lane change and nothing to scroll past in between**.
 
   The two **paid** actions are a side-by-side **pair** at strict visual parity
@@ -932,14 +936,18 @@ them while deciding, and what is repetition?*
   does not change with the condition. `tools/smoke.mjs` measures the parity from
   computed styles rather than trusting the stylesheet.
 
-  **Each running cost is shown in its own action's hue** — the AI's in the purple
-  of "Ask the AI", revealing's in the blue of "Reveal". Both, not just one: leaving
-  a cost in alarm-red beside the other in its brand colour would make one of the two
-  **paid** actions look more expensive than the other, and which of them a
-  participant presses is what this study measures. Red stays on the cost tag inside
-  each button. **Every value on screen carries its unit** — "the AI says 70 points
-  about position 40" — because a bare number beside a position number is ambiguous
-  exactly where the study needs it not to be.
+  **A cost is red** — on the KPI and on the cost tag inside the button alike,
+  because that is what red means on this screen. The one exception is the **AI's**
+  cost, shown in the purple of "Ask the AI", so the number and the button that
+  produces it read as the same thing. **Neither paid button carries helper text**:
+  "the true prize here" and "its estimate of the prize here" are already on the
+  reminder strip at the top of every round, and under the buttons they only pushed
+  the actions further from the plot they aim at — the smoke test's parity check is
+  correspondingly the stronger claim that there is *no* note under either. Stop
+  keeps its note, being the only action that ends the round, and its wording follows
+  the session's stop rule. **Every value on screen carries its unit** — "the AI says
+  70 points about position 40" — because a bare number beside a position number is
+  ambiguous exactly where the study needs it not to be.
 
 **Every number in that reminder is read from the run's own parameters and rebuilt
 each round — never written into the markup.** A session that moves a cost, the step
@@ -949,8 +957,22 @@ price note under the KPIs and the reminder above each quick check: **copy derive
 from the numbers is built in `app.js` and is deliberately not an editable Wording
 field**, which is what stops it ever contradicting them.
 
-Under the round title sits a **progress line** — "Round *n* of 12 in this half ·
-*k* to go", or "Practice round — nothing here is scored".
+**The round title carries the qualifier with the thing it qualifies** — "Practice
+round (not scored) · Part 1 (out of 2)", the part count taken from the plan rather
+than written down. The **progress bar and its per-half line are gone**: between the
+title, the bar and the counter, how far along a participant was got said three
+times, and the title plus the counter says it once. Their two wording strings went
+with them, because the Wording tab lists what a participant *reads*, and a field
+nobody sees must not sit in it.
+
+**There is no Instructions button on a round, in either condition.** The rules that
+matter while playing are on the reminder strip in every round — the step bound, the
+prize range, what each action costs and how stopping settles — so a button
+reopening a summary of the same facts had nothing to add, and sat in the corner of
+every round inviting a detour from the task. The overlay and its builder are kept
+intact and unreachable, so restoring it is one line, and `instruction_reopens`
+stays in the export schema, constant at 0 for a session run without the button —
+which its Dictionary entry now says, rather than leaving an analyst to wonder.
 
 **The keyboard works everywhere.** Arrow keys move the selection by one wherever
 focus sits — except inside a form control, which handles arrows itself. Buttons
@@ -1726,12 +1748,12 @@ other five.
 
 ```bash
 node lab/search-v2/tools/selftest.js          # 310 checks, no browser
-node lab/search-v2/tools/smoke.mjs            # 211, a whole 28-round session
+node lab/search-v2/tools/smoke.mjs            # 212, a whole 28-round session
 node lab/search-v2/tools/admin-smoke.mjs      # 178, the admin panel
 node lab/search-v2/tools/platform-guard.mjs   # 28, the platform contract, both ways
 node lab/search-v2/tools/wording-guard.mjs    # 17, overrides reach participants
 node lab/search-v2/tools/migration-guard.mjs  # a mid-session build never loses data
-node lab/search-v2/tools/data-audit.mjs       # 54, the log is faithful to the session
+node lab/search-v2/tools/data-audit.mjs       # 56, the log is faithful to the session
 node lab/search-v2/tools/layout-guard.mjs     # reachability at five window sizes
 node lab/search-v2/tools/preview-guard.mjs    # the sandbox writes nothing
 node lab/search-v2/tools/emulator-test.mjs    # 37, the REAL Functions + Rules
