@@ -2620,14 +2620,18 @@ deliberate. The three arithmetic items state their numbers outright, so
 if either default moves. Every prompt and option stays editable per session in
 the Wording tab; only the answer KEY is structure.
 
-**Each running cost is shown in its own action's hue** (owner 2026-08): the AI's
-in the purple of "Ask the AI", revealing's in the blue of "Reveal" — both, not
-just the AI's, because leaving one cost in alarm-red beside the other in the
-AI's brand colour would make one of the two PAID actions look more expensive
-than the other, and which of them a participant presses is the primary outcome.
-Red stays on the cost tag INSIDE each button, where it means "this is what it
-costs". "Stop and nominate" is centred under the pair rather than aligned to the
-left one, so it reads as belonging to neither.
+**A cost is RED, except the AI's, which is purple** (owner 2026-08): red is what
+a cost is on this screen — on the KPI and on the tag inside the button alike —
+and the one exception ties the AI's running cost to the purple of "Ask the AI",
+so the number and the button that produces it read as the same thing. "Stop and
+nominate" is centred under the pair rather than aligned to the left one, so it
+reads as belonging to neither. **Neither paid button carries helper text**: what
+each does, and what it costs, is on the reminder strip at the top of every round,
+and a line under each one only pushed the actions further from the plot they aim
+at (smoke pins that there is none under EITHER, which is a stronger parity claim
+than the old "about the same length"). The STOP button keeps its note — it is
+the only one that ends the round, and its wording follows the session's stop
+rule.
 
 **Engagement, under the same rule** (owner 2026-08): a progress bar + "round n
 of 12 in this half" under the round title, milestone pop-ups at the halfway
