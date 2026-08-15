@@ -175,12 +175,12 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 299 checks, no browser
-node lab/search-v2/tools/smoke.mjs           # 201 checks, a whole session
-node lab/search-v2/tools/admin-smoke.mjs     # 161 checks, the admin panel
+node lab/search-v2/tools/selftest.js         # 310 checks, no browser
+node lab/search-v2/tools/smoke.mjs           # 217 checks, a whole session
+node lab/search-v2/tools/admin-smoke.mjs     # 199 checks, the admin panel
 node lab/search-v2/tools/wording-guard.mjs   #  17 checks, a session's own words
 node lab/search-v2/tools/platform-guard.mjs  #  28 checks, the platform contract
-node lab/search-v2/tools/layout-guard.mjs    # 104 checks, five window sizes
+node lab/search-v2/tools/layout-guard.mjs    # 219 checks, five window sizes
 node lab/search-v2/tools/preview-guard.mjs   #  the sandbox writes nothing
 node lab/search-v2/tools/emulator-test.mjs   #  37 checks against the REAL Functions
                                              #  and Rules (needs Java + firebase-tools;

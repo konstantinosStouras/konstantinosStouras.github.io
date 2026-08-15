@@ -2556,6 +2556,24 @@ strip on top of it and short enough not to push it down, the buttons within
 220px of the plot's bottom in the same column, every alignment above measured
 edge-to-edge, and no "knows N" anywhere on the round screen or in its reopened
 summary.
+**THE KEY NAMES THE MARKS THAT ARE ON THE PLOT, AND ONLY THOSE** (owner
+2026-08, from a screenshot of an OPEN round at its first paint: an empty chart
+under a key naming two kinds of mark, sending a participant hunting for
+pre-opened prizes the round does not have). Each entry appears the moment its
+first mark is drawn and not before — pre-opened only in a seeded round,
+revealed from the first reveal, the AI's from the first answer paid for — and
+with nothing on the plot the key is empty and OUT OF THE FLOW, so it leaves no
+gap above the chart. It therefore cannot be built once with the round:
+`renderLegend` is called from `renderRound`, like everything else that reads
+the round's marks. The debrief caption follows the same rule (its truth/AI
+line/anchors are always drawn; the participant's own asks and reveals may be
+empty). Tested as an invariant against the SVG itself rather than against what
+a round should hold — an entry exists exactly when ≥1 such mark is drawn —
+sampled twice per round by `smoke.mjs` (which also asserts the run really met
+an empty plot, a seeded round, a reveal and an AI answer) and measured
+geometrically by `layout-guard.mjs`, which now REVEALS a position before
+checking the key sits flush above the plot, since a key for nothing is not
+drawn and cannot be measured.
 
 **STOPPING TAKES THE BEST PRIZE ALREADY FOUND** (owner 2026-08, a deliberate
 change to the brief's §7, made with its consequence stated and accepted).
@@ -3099,15 +3117,15 @@ the debrief prose still saying the AI knows 4 positions, and `dictionary.js`'s
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (307) ·
-`tools/smoke.mjs` (212 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
+`node lab/search-v2/tools/selftest.js` (310) ·
+`tools/smoke.mjs` (217 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
 `tools/admin-smoke.mjs` (199) · `tools/platform-guard.mjs` (30) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its
 participants, and the drift guard that `app.js` reads content only through the
 resolved copy: one `Content.SURVEY` slipping back would silently ignore that
 session's wording for that one screen)** ·
-`tools/layout-guard.mjs` (reachability at five window sizes) ·
-`tools/data-audit.mjs` (54) ·
+`tools/layout-guard.mjs` (219 — reachability at five window sizes) ·
+`tools/data-audit.mjs` (56) ·
 **`tools/migration-guard.mjs`** (a participant MID-SESSION when a build ships
 must not lose data — the registration phase is entered from the consent button,
 so a resume from the previous build is caught up before the task or asked at the

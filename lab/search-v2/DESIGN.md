@@ -17,9 +17,10 @@ reasoning, and it cites the other three rather than repeating them.
 > change — the same keep-in-sync discipline the repository applies to
 > `fun/index.html` cards and `/lit`'s About page. Every number in this document
 > was recomputed from `config.js` on **2026-08-14** (app version `v3.0.0`,
-> covering the registration phase, the `ui` treatment group, cross-device resume,
-> the admin's Wording tab and its Participants screen); the section *Verifying the
-> numbers in this document* at the end says how to redo that in one command.
+> covering the `best_found` stop rule, the registration phase, the `ui` treatment
+> group, cross-device resume, the applied comprehension gates, and the admin's
+> Wording tab and Participants screen); the section *Verifying the numbers in this
+> document* at the end says how to redo that in one command.
 
 ---
 
@@ -63,16 +64,27 @@ Three actions, and only three:
 |---|---|---|
 | **Ask the AI** | **2** points | Returns the AI's *estimate* at that position. Does **not** reveal the truth. The button is **absent** (not disabled) in AI-off rounds |
 | **Reveal** | **4** points | Shows the **true** prize there. It stays visible, cannot be bought twice, and **joins the AI's anchor set** |
-| **Stop and nominate** | free | Ends the round on the selected position. The button **names** the position; an untouched position asks for confirmation |
+| **Stop** | free | Ends the round. **Stopping is the end of searching, not an action with an outcome** — it never opens a new position. The button names what it will take: *"Stop and take your best prize: 71 points"* |
 
-> **Score for the round = the TRUE prize at the nominated position, minus every
-> point spent that round.**
+> **Score for the round = the best TRUE prize the participant HOLDS — open at the
+> start or revealed — minus every point spent that round.**
 
-That one rule is the study. The AI's number is **never** a prize. Without that,
-trusting a machine that says 95 where the truth is 60 would pay 95, and the
-experiment would measure the opposite of what it exists for. It is also the
-**strict comprehension gate** (`qai_score` in `content.js`): a participant cannot
-start an AI block until they have answered it correctly.
+So the green *"net value if you stop right now"* tile **is** the score: what is on
+screen is what will be banked. Finding nothing takes **0**, and that is the one
+case the button confirms, since it is almost always a mis-click.
+
+That rule is a **locked run parameter**, `costs.stopRule`, and this is its
+`'best_found'` setting — the default since 2026-08 and the owner's decision. The
+brief's original rule is still available as `'nominate'`: the participant picks a
+position and is paid the true prize *there*, whatever they believed about it. §7.2
+records what changes between them, because the difference is not cosmetic.
+
+Under **either** rule the AI's number is **never** a prize. Without that, trusting
+a machine that says 95 where the truth is 60 would pay 95, and the experiment would
+measure the opposite of what it exists for. It is also the **strict comprehension
+gate** (`qai_score` in `content.js`), rewritten to a form that is true under both
+rules — *an AI estimate is not a prize you have found* — which a participant must
+answer correctly before an AI block starts.
 
 There is **no score floor**: a round can end negative, and that is logged rather
 than clipped (`costs.scoreFloor: false`). Caps of **40 questions** and **20
@@ -122,6 +134,17 @@ deliberately different starting layouts (§8).
 the AI's error and hit rate were; the export computes what they *actually
 experienced*, from the answers they paid for, and ships the difference
 (`error_belief_gap`, `hit_rate_belief_gap`, `perceived_vs_actual_half`).
+
+> **What the `best_found` stop rule costs, stated because it cannot be recovered
+> from the data afterwards.** An unverified position **can no longer be taken**, so
+> `nomination_type` stops being a behavioural outcome and the
+> **trust-without-verification measure does not exist** — nobody can act on an AI
+> answer without first paying to check it. Under this rule **the AI is purely
+> navigational**: it can only tell you where a reveal might be worth spending.
+> Outcomes 1 and 2 are unaffected — the score comparison and the frontier share
+> are both still measured — and the belief items above still work, because they
+> ask about answers the participant paid for. A study that needs outcome 3 must
+> set `costs.stopRule: 'nominate'` before its first participant.
 
 A supporting design goal runs underneath all three: **every quantity must be
 reconstructible offline.** The browser logs raw state; nothing is derived in it
@@ -445,9 +468,38 @@ a mapping, so this cannot regress silently.
 | `queryCap` | **40** | A guard rail, not a constraint. The heaviest simulated questioner asks **4.90** per round. 0.0% of rounds touch either cap |
 | `revealCap` | **20** | Same. The heaviest simulated revealer opens **10.54**. The brief contradicts itself here (§7, §17b and §20b say 20; the §20c table says 30) — **the three-to-one reading wins**, and the choice is inconsequential because what limits search is the reveal *cost*, not the cap |
 | `scoreFloor` | **false** | A round may end negative, and that is **recorded**. A floor would censor exactly the observations that show a participant over-spending on a machine they trusted |
+| `stopRule` | `'best_found'` | How a round settles — see below. `'nominate'` is the brief's original rule |
+
+**The stop rule, and why it is a locked parameter rather than a constant.**
+`'best_found'` settles the round on the best true prize the participant holds;
+`'nominate'` pays the true prize at a position they pick, verified or not. The two
+imply **different payoff functions**, so one dataset must never hold both with
+nothing in the rows to say which — hence `stop_rule` on every round row, a
+Dictionary entry for it, and `logger.js`'s field whitelist extended to carry it
+(the same trap that once silently dropped `raw_score` from every real session would
+have dropped this). A session stored **before the parameter existed** is given
+`'nominate'` by `withDefaults` — the rule its participants actually played under,
+not today's default.
+
+> ### ⚠ The two simulation-derived defaults were measured under the OTHER rule
+>
+> `tools/simulate.mjs` — whose 1,000-participant runs motivated **`revealCost` 4**
+> and **`sparseK` 3** below — models the **`nominate`** rule. Its numbers **do not
+> carry over unchanged to a `best_found` session**: policies like TRUSTING are
+> defined by taking an unverified position, which that rule forbids.
+>
+> What survives untouched is the **arithmetic**, because it never depended on how a
+> round settles: σ, `s*`, `g*`, the sparse/dense straddle and the admissible window
+> `c_R ∈ (3.64, 6.65)` are all properties of the walk and the anchor geometry (§6),
+> and `selftest.js` still asserts the straddle against the configured values. What
+> needs re-measuring before a `best_found` study is pre-registered is the
+> **behavioural** half: the effect sizes, the power table, and whether c_R = 4 still
+> sits where it should when search is the *only* way to bank a prize. Re-running the
+> simulator under the new rule is the outstanding piece of work (§21).
 
 **Why the reveal cost moved from 5 to 4** (with sparse K, below — the two move
-together or not at all). Measured over 1,000 simulated participants playing all 28
+together or not at all), *measured under the `nominate` rule; see the box above*.
+Measured over 1,000 simulated participants playing all 28
 rounds of the real frozen artifacts under seven policies
 (`tools/simulate.mjs`; tables in `tools/SIMULATION-FINDINGS.md`):
 
@@ -776,12 +828,44 @@ live session is a data-loss risk, not a deployment detail.
 
 **Instructions** are five pages (the line; neighbours differ by at most L; revealing costs; stopping and
 scoring; rounds are independent). All prose lives in `content.js` as data, with
-tokens (`{J}`, `{L}`, `{revealCost}`, `{queryCost}`, `{revealCap}`, `{queryCap}`,
-`{scored}`, `{warmup}`, `{K}`) substituted at render time, so the words cannot
-drift from the parameters.
+tokens (`{J}`, `{L}`, `{stepBound}`, `{revealCost}`, `{queryCost}`, `{revealCap}`,
+`{queryCap}`, `{scored}`, `{warmup}`, `{K}`) substituted at render time, so the
+words cannot drift from the parameters.
 
-**The comprehension gates** (6 base questions, 6 AI questions) carry three
-deliberate design choices:
+**Every piece of copy that describes scoring asks the rule rather than assuming
+it**, through three further tokens — `{scoreRule}`, `{scoreRuleNote}` and
+`{stopVerb}` — which resolve to the sentences for *this* session's
+`costs.stopRule`. That is what keeps the instructions **one editable Wording field**
+under both settlement rules instead of two divergent copies, and the admin's
+Wording tab substitutes the same three when it previews them.
+
+**The comprehension gates** (6 base questions, 6 AI questions) **test use, not
+recall.** Once the round screen gained its own rules strip and each gate its
+reminder, both costs and the step bound were stated outright on the page — so an
+item like *"what does it cost to reveal?"* was answered by copying. All twelve are
+now **applied cases**: the step bound decaying with distance, working leftwards as
+well as rightwards, the prize ceiling binding before the bound does, scoring
+arithmetic, a round ending below zero, prizes redrawn each round; and for the AI,
+the ask-versus-reveal trade-off, that an earlier exact answer certifies nothing
+(the strict gate), where its answers are likeliest to be wrong, that known and
+guessed answers are indistinguishable, that a flat run marks the edge of its
+knowledge, and that a reveal moves its line. `selftest.js` **fails any item whose
+correct option is nothing but a cost token**.
+
+**The twelve ids are unchanged**, deliberately: they are the export's own column
+names, and renaming one would break every session already collected. Several no
+longer describe what they ask — `q_adj_lo1` is a "highest" question — and that is
+accepted as the price of not breaking the data.
+
+**Grade, then continue.** A correct answer has always earned a green tick and its
+explanation, but when everything was right the screen used to advance on the same
+click, so the explanation was drawn onto a screen already leaving. The first press
+now **grades and freezes** the answers, the button becomes *Continue*, and a second
+press advances. Attempts and first-answer correctness are recorded on the press
+that graded them, so the measure is untouched; `selftest.js` fails if any item
+lacks an explanation to hold the participant on.
+
+Three further design choices:
 
 - **The facts needed to answer are on the same screen as the questions.** The
   participant read the instructions several screens ago; asking them to recall a
@@ -803,40 +887,114 @@ blocks. The brief orders them warm-up → AI instructions for block 1 but the
 reverse for block 2; block 1's order would put an unexplained "Ask the AI" button
 in front of a participant, so block 2's order is followed in both.
 
-**The round screen** is three columns:
+**The round screen** is two working columns, and the arrangement is the product of
+several passes over the same question — *what does a participant need in front of
+them while deciding, and what is repetition?*
 
-- **Left — the ledger only.** Questions asked and their cost, positions revealed
-  and their cost, total spent, best prize **found**, selected position, **score if
-  you stop right now**, rounds remaining, and the prices, always on screen. What
-  was *found* lives on the plot, where every mark already carries its value; the
-  panel used to repeat it in words, which asked the participant to read the same
-  thing twice. There is deliberately **no "best estimate"** mixing claims with
-  truths, and the "score if you stop now" line uses the best **true** prize held,
-  never the selected position — an unopened position has no known value and
-  guessing at it there would hand over the truth for free.
-- **Centre — the plot**, a legend, then the position controls (arrows, slider,
-  number box) **directly under the plot they point at**, and only then the four
-  big numbers. That order is deliberate: choose where you are looking, read what
-  the round is worth there, then act on the buttons below. With the picker between
-  the numbers and the buttons, the band described a position the participant had
-  not chosen yet. The band **leads with NET VALUE**, in green (#226b0c on #eefaea
-  is 5.6:1, so the big number clears 4.5:1 as text) — it is what the round is
-  actually worth, and nothing else on the screen may compete with that tile, which
-  is why the two paid buttons keep their own matched hues. Then best prize found,
-  then the two running costs, named **"Total cost of revealing"** and **"Total cost
-  of asking the AI"** — they are what the round has cost so far, and the earlier
-  "Spent revealing" read as the price of the last action.
-- **Right — the three actions.** The two **paid** ones sit **side by side** at
-  strict visual parity (same size, padding, radius, weight, border, shadow and
-  states; two hues matched on saturation and lightness), in the order this
-  participant was assigned; "Stop and nominate" is apart, below a divider, and
-  never in the swap. The only red on the screen is the **cost numeral** inside
-  each paid button. "Ask the AI" is **removed from the DOM** in AI-off rounds, not
-  disabled and not hidden. `tools/smoke.mjs` measures the parity from computed
-  styles rather than trusting the stylesheet.
+- **Left — the round in four numbers, and nothing else.** They stand **beside** the
+  line they describe, always on screen and never scrolled to, which is why they are
+  here rather than under the plot. **NET VALUE reads first, in green** (#226b0c on
+  #eefaea is 5.6:1, so the big number clears 4.5:1 as text) — it is what the round
+  is actually worth, and nothing else on the screen may compete with that tile,
+  which is why the two paid buttons keep their own matched hues. Then **best prize
+  found**, then the two cumulative costs, **"Total cost of revealing"** and **"Total
+  cost of asking the AI"**, each carrying its own count beneath it.
+  The **whole-study counter** — "Round 1 / 28", counting every round including
+  practice — sits in the **header** instead, right-aligned: this column is the round
+  in four numbers, and where the *session* has got to is not one of them.
 
-Under the round title sits a **progress line** — "Round *n* of 12 in this half ·
-*k* to go", or "Practice round — nothing here is scored".
+  The itemised **ledger that used to stand here is gone**: positions revealed,
+  selected position and rounds remaining repeated in words what the plot, the
+  number box, the nominate button and the progress bar each already say. What was
+  *found* lives on the plot, where every mark already carries its value. There is
+  deliberately **no "best estimate"** mixing claims with truths, and the net-value
+  tile uses the best **true** prize held, never the selected position — an unopened
+  position has no known value, and guessing at it there would hand over the truth
+  for free.
+
+- **Centre — the line, and directly under it everything used to act on it.** A
+  **rules reminder sits on top of the plot** — the reason there is no Instructions
+  button any more — written as **three short sentences in an AI-off round and four
+  in an AI round**: the line's shape, what each action costs and does, and how
+  stopping settles. It opens "**Remember**:" in plain bold, part of the sentence
+  flow rather than a label bolted on (as a small muted uppercase lead, it copied and
+  pasted as "Rememberprizes"), and it strings nothing together with "·" separators,
+  which read as a run-on rather than a list. Then the plot and its key; then the
+  **position picker** directly under the plot it points at; then the **actions**, in
+  the same column, under the picker that aims them. Read what the round is worth, look at the line, choose where you are
+  looking, act — **no lane change and nothing to scroll past in between**.
+
+  The two **paid** actions are a side-by-side **pair** at strict visual parity
+  (same size, radius, weight; two hues matched on saturation and lightness), in the
+  order this participant was assigned — horizontal placement is a weaker position
+  bias than vertical, which is why they are not stacked. **Stop is a different class
+  of action**: never in the swap, centred below the divider sharing the pair's exact
+  edges, and its label names what it will take (*"Stop and take your best prize: 71
+  points"*) so ending a round cannot be accidental. "Ask the AI" is **removed from
+  the DOM** in AI-off rounds, not disabled and not hidden — and there the lone
+  Reveal is a **centred pill rather than a full-width banner**, so its prominence
+  does not change with the condition. `tools/smoke.mjs` measures the parity from
+  computed styles rather than trusting the stylesheet.
+
+  **A cost is red** — on the KPI and on the cost tag inside the button alike,
+  because that is what red means on this screen. The one exception is the **AI's**
+  cost, shown in the purple of "Ask the AI", so the number and the button that
+  produces it read as the same thing. **Neither paid button carries helper text**:
+  "the true prize here" and "its estimate of the prize here" are already on the
+  reminder strip at the top of every round, and under the buttons they only pushed
+  the actions further from the plot they aim at — the smoke test's parity check is
+  correspondingly the stronger claim that there is *no* note under either. Stop
+  keeps its note, being the only action that ends the round, and its wording follows
+  the session's stop rule. **Every value on screen carries its unit** — "the AI says
+  70 points about position 40" — because a bare number beside a position number is
+  ambiguous exactly where the study needs it not to be.
+
+**The key under the reminder explains marks that are on the plot — and only
+those** (owner 2026-08, from a screenshot of an *open* round at its first paint: an
+empty chart standing under a key that named two kinds of mark, which sends a
+participant hunting for pre-opened prizes this round does not have). Each entry
+therefore appears the moment its first mark is drawn and not before — the
+pre-opened one only in a seeded round, the revealed one from the first reveal, the
+AI one from the first answer paid for — and with nothing yet on the plot there is
+no key at all, out of the flow so it leaves no gap above the chart. That means the
+key is **not built once with the round**: it describes state that changes with
+every action, so `renderLegend` is called from `renderRound` like everything else
+that reads the round's marks. The debrief plot follows the same rule; there the
+truth, the AI's line and its anchors are always drawn, while the participant's own
+asks and reveals may be empty for the round shown. It is checked as an
+**invariant against the SVG itself**, not against what a round is supposed to
+hold: for each kind of mark, an entry exists exactly when at least one such mark
+is drawn — sampled twice in each of the 28 rounds by `tools/smoke.mjs` (which also
+asserts the run actually met an empty plot, a seeded round, a reveal and an AI
+answer, since a green run that met none of them would be saying nothing about the
+case reported), and measured geometrically by `tools/layout-guard.mjs`, which now
+reveals a position before checking that the key sits flush above the plot — a key
+for nothing is not drawn, and so cannot be measured.
+
+**Every number in that reminder is read from the run's own parameters and rebuilt
+each round — never written into the markup.** A session that moves a cost, the step
+bound or the prize range therefore cannot leave a stale figure on screen, and an
+AI-off round never mentions the AI at all. It follows the same convention as the
+price note under the KPIs and the reminder above each quick check: **copy derived
+from the numbers is built in `app.js` and is deliberately not an editable Wording
+field**, which is what stops it ever contradicting them.
+
+**The round title carries the qualifier with the thing it qualifies** — "Practice
+round (not scored) · Part 1 (out of 2)", the part count taken from the plan rather
+than written down. The **progress bar and its per-half line are gone**: between the
+title, the bar and the counter, how far along a participant was got said three
+times, and the title plus the counter says it once. Their two wording strings went
+with them, because the Wording tab lists what a participant *reads*, and a field
+nobody sees must not sit in it.
+
+**There is no Instructions button on a round, in either condition.** The rules that
+matter while playing are on the reminder strip in every round — the step bound, the
+prize range, what each action costs and how stopping settles — so a button
+reopening a summary of the same facts had nothing to add, and sat in the corner of
+every round inviting a detour from the task. The overlay and its builder are kept
+intact and unreachable, so restoring it is one line, and `instruction_reopens`
+stays in the export schema, constant at 0 for a session run without the button —
+which its Dictionary entry now says, rather than leaving an analyst to wonder.
 
 **The keyboard works everywhere.** Arrow keys move the selection by one wherever
 focus sits — except inside a form control, which handles arrows itself. Buttons
@@ -971,7 +1129,17 @@ emulator:
 2. **Idempotent on a client-generated `actionId`** — a retried reveal after a
    dropped connection returns the recorded answer and charges nothing further,
    while a *different* action id on an already-open position is refused outright.
-3. **`nominate` computes the score.** A client total is never trusted.
+3. **`nominate` computes the score.** A client total is never trusted — and under
+   `best_found` the server **ignores the position the client sends** altogether,
+   settling from its own record of what was revealed.
+
+**One settlement function, `Specs.settle`**, used by the local backend and
+**vendored into the Cloud Function**: the score is the one thing a client must
+never be able to differ with the server about, so both arms call the same code
+rather than two implementations of one rule. It returns the taken value and
+position, the `nomination_type` (`best_revealed` / `best_pre_opened` /
+`nothing_found` under `best_found`; `verified` / `queried_only` / `untouched` under
+`nominate`), the total cost and both scores.
 
 In server mode the client is not even told the specs: no spec id, no seed shape,
 no density, no pre-opened positions, no anchors. What it *does* get is the
@@ -1464,8 +1632,10 @@ field writes a **per-session override**; the study's defaults in `content.js` ar
 untouched and every other session keeps them.
 
 **Deliberately out of scope**, and the screen says so: the game screen's own
-buttons and labels, and the reminder box above each quick check, which `app.js`
-builds from the numbers themselves. Those are interface, not study text.
+buttons and labels, the rules reminder above the plot, and the reminder box above
+each quick check — all of which `app.js` builds from the run's own numbers. Those
+are interface, not study text, and keeping them out of the editable set is what
+stops a reworded reminder contradicting the costs the session actually charges.
 
 Three design decisions carry the weight:
 
@@ -1542,6 +1712,12 @@ a gap of at least `BREAK_MIN_MS`), **`break_total_ms`** (time spent *away* betwe
 sittings — not `idle_ms`, which is quiet time *inside* one),
 **`longest_sitting_break_ms`** and **`sittings`** (`breaks_count + 1`).
 
+**Every round row carries `stop_rule`**, so a workbook always says which payoff
+function produced its scores. `nomination_type` reads `best_revealed` /
+`best_pre_opened` / `nothing_found` under `best_found`, and `verified` /
+`queried_only` / `untouched` under `nominate` — which is also why it is a
+behavioural outcome only in the second case (§2).
+
 Each export bundles the session's **frozen configuration, seeds, checksums and
 override log**, so the parameters always travel with the data. `xlsx.js` is a
 dependency-free OOXML writer — no CDN.
@@ -1593,14 +1769,14 @@ other five.
 ## 18 · Tests, and what each one pins
 
 ```bash
-node lab/search-v2/tools/selftest.js          # 307 checks, no browser
-node lab/search-v2/tools/smoke.mjs            # 211, a whole 28-round session
+node lab/search-v2/tools/selftest.js          # 310 checks, no browser
+node lab/search-v2/tools/smoke.mjs            # 217, a whole 28-round session
 node lab/search-v2/tools/admin-smoke.mjs      # 178, the admin panel
 node lab/search-v2/tools/platform-guard.mjs   # 28, the platform contract, both ways
 node lab/search-v2/tools/wording-guard.mjs    # 17, overrides reach participants
 node lab/search-v2/tools/migration-guard.mjs  # a mid-session build never loses data
-node lab/search-v2/tools/data-audit.mjs       # 54, the log is faithful to the session
-node lab/search-v2/tools/layout-guard.mjs     # reachability at five window sizes
+node lab/search-v2/tools/data-audit.mjs       # 56, the log is faithful to the session
+node lab/search-v2/tools/layout-guard.mjs     # 219, reachability at five window sizes
 node lab/search-v2/tools/preview-guard.mjs    # the sandbox writes nothing
 node lab/search-v2/tools/emulator-test.mjs    # 37, the REAL Functions + Rules
 python3 lab/search-v2/tools/generate_rounds.py --validate
@@ -1690,6 +1866,7 @@ recorded because an appendix will need them.
 
 | Deviation | Why |
 |---|---|
+| **Stopping takes the best prize found** (`costs.stopRule: 'best_found'`), not the prize at a nominated position | The owner's decision, with its consequence stated and accepted: stopping is the end of searching, not an action with an outcome. It removes the trust-without-verification measure and makes the AI purely navigational (§1, §2). The brief's rule remains available as `'nominate'`, and a session predating the parameter is given it |
 | Reveal cost **4**, not 5, and sparse **K = 3**, not 4 | Measured over 1,000 simulated participants: at the brief's values the AI-OFF arm is barely a search arm and the sparse/dense contrast is a gradient, not the sign change the design rests on. Moving both flips it; neither alone does (§7.2, §7.3) |
 | Mapping pool of **600**, not 200 | Measured: ~2% of pairings pass the §9 filter, so 200 cannot give 16 seeded specs a distinct curve each (§7.1) |
 | Reveal cap **20** | §7, §17b and §20b say 20; the §20c table says 30. The three-to-one reading wins, and the choice is inconsequential |
@@ -1722,14 +1899,23 @@ about participant-facing text or documentation, not a behaviour change. **Verifi
    most sessions will use.*
 3. **`admin/dictionary.js` describes `ai_density` as "SPARSE (K=4)".** Same
    provenance; it reaches the exported Dictionary sheet.
-4. **`tools/SIMULATION-FINDINGS.md` reads oddly because it was regenerated after
+4. **The simulator has not been re-run under the `best_found` stop rule.**
+   `tools/simulate.mjs` models `'nominate'`, so the effect sizes, the power table
+   and the policy comparisons in `tools/SIMULATION-FINDINGS.md` describe a payoff
+   function the default session no longer uses. The **arithmetic** carries over
+   untouched (§6 depends on the walk and the anchors, not on how a round settles),
+   but the behavioural half needs re-measuring before a `best_found` study is
+   pre-registered — including whether `c_R = 4` still sits where it should when
+   search is the only way to bank a prize. *This is the largest open item in this
+   list.*
+5. **`tools/SIMULATION-FINDINGS.md` reads oddly because it was regenerated after
    the recommendation was adopted** — the simulator's "current settings" are now the
    recommended ones, so §6 reads *"Move the REVEAL COST from 4 to 4"* and some
    before/after comparisons quote the same number twice. Every measured table in it
    is correct and current; only the recommendation prose is self-referential. *Fix:
    either leave a note at its head, or re-run the sweep with the brief's values
    pinned as the baseline.*
-5. **`SEEDS.md`'s run log is empty.** Add a row whenever a session is frozen for
+6. **`SEEDS.md`'s run log is empty.** Add a row whenever a session is frozen for
    data collection — the export's Run sheet carries the same values, but the
    repository should be able to answer "which sessions were real" on its own.
 
