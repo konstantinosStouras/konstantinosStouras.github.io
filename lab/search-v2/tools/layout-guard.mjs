@@ -122,11 +122,11 @@ for (const size of SIZES) {
     ['#btn-pos-left', 'the ← arrow'],
     ['#btn-pos-right', 'the → arrow'],
     ['#btn-instr-open', 'the instructions button'],
-    ['#c-net', 'the running score if you stop right now'],
-    ['#sb-net', 'the NET VALUE band under the plot'],
-    ['#sb-best', 'the best prize found, under the plot'],
-    ['#c-total-cost', 'the total spent this round'],
-    ['#c-selected', 'the selected-position readout']
+    ['#sb-net', 'the NET VALUE KPI in the left column'],
+    ['#sb-best', 'the best prize found'],
+    ['#sb-reveal', 'the running cost of revealing'],
+    ['#round-reminder', 'the rules reminder on top of the plot'],
+    ['#side-round-n', 'the round counter']
   ]) {
     const r = await pg.evaluate(`(${REACHABLE})(${JSON.stringify(sel)})`);
     ok(r.ok, `${name} is reachable`, r.why);
@@ -137,6 +137,41 @@ for (const size of SIZES) {
     const r = await pg.evaluate(`(${REACHABLE})('#btn-ask')`);
     ok(r.ok, 'Ask the AI is reachable', r.why);
   }
+
+  // WHERE THE PARTS OF THE ROUND SCREEN SIT, at every size.
+  //  · the KPIs stand in the LEFT column, beside the plot — never under it,
+  //    where they were something to scroll to;
+  //  · the reminder of the rules is on TOP of the plot;
+  //  · the two paid buttons sit directly under the plot they aim at, close
+  //    enough that acting never means leaving the picture behind.
+  const geo = await pg.evaluate(() => {
+    const q = s => document.querySelector(s);
+    const r = el => el ? el.getBoundingClientRect() : null;
+    const band = r(q('#score-band')), plot = r(q('.plot-wrap')),
+          rem = r(q('#round-reminder')), rev = r(q('#btn-reveal')), col = r(q('.chart-col'));
+    if (!band || !plot || !rem || !rev || !col) return null;
+    const tops = [...document.querySelectorAll('#score-band .sb')]
+      .filter(t => t.getBoundingClientRect().height > 2)
+      .map(t => Math.round(t.getBoundingClientRect().top));
+    return {
+      bandRight: band.right, plotLeft: plot.left, bandTop: band.top,
+      remBottom: rem.bottom, remTop: rem.top, remH: Math.round(rem.height), plotTop: plot.top,
+      gap: Math.round(rev.top - plot.bottom), cards: new Set(tops).size,
+      inColumn: rev.left >= col.left - 1 && rev.right <= col.right + 1, vh: innerHeight
+    };
+  });
+  ok(geo && geo.bandRight <= geo.plotLeft + 1,
+    'the KPIs stand in the left column, beside the plot',
+    geo && `band right ${Math.round(geo.bandRight)} vs plot left ${Math.round(geo.plotLeft)}`);
+  ok(geo && geo.cards >= 3,
+    `each KPI gets its own row in that column (${geo && geo.cards} stacked)`);
+  ok(geo && geo.remBottom <= geo.plotTop + 1 && geo.remTop >= -1,
+    'the rules reminder sits on top of the plot, on screen from the first paint',
+    geo && `reminder ${Math.round(geo.remTop)}–${Math.round(geo.remBottom)}, plot top ${Math.round(geo.plotTop)}`);
+  ok(geo && geo.remH <= 90,
+    `and stays short enough not to push the plot down (${geo && geo.remH}px)`);
+  ok(geo && geo.gap <= 220 && geo.inColumn,
+    `the paid buttons sit directly under the plot, in the same column (${geo && geo.gap}px below it)`);
 
   // The plot keeps its aspect and fills the middle column.
   const plot = await pg.evaluate(() => {
@@ -166,6 +201,51 @@ for (const size of SIZES) {
   if (pair) {
     ok(pair.sameRow && pair.sameW,
       `the two paid buttons stay side by side and equal-width (${pair.w}px each)`);
+  }
+
+  // An AI ROUND's reminder carries two more clauses than an AI-off one, so it
+  // is the case that can grow a line and push the plot down — measure THAT,
+  // not only whichever condition round 1 happens to be. Sequence B opens with
+  // the AI on, which is why the rehearsal is entered that way here.
+  {
+    const ai = await ctx.newPage();
+    await ai.goto(BASE + '?preview=1&debug=1&key=stouras&code=LAYOUT&seq=B');
+    await ai.waitForSelector('#s-round.active', { timeout: 20000 });
+    const m = await ai.evaluate(() => {
+      const rem = document.getElementById('round-reminder');
+      const plot = document.querySelector('.plot-wrap');
+      const ask = document.getElementById('btn-ask');
+      return { h: Math.round(rem.getBoundingClientRect().height),
+               txt: rem.textContent,
+               bottom: rem.getBoundingClientRect().bottom,
+               plotTop: plot.getBoundingClientRect().top,
+               hasAsk: !!ask,
+               aiKpi: !!document.getElementById('sb-ai-wrap') &&
+                      getComputedStyle(document.getElementById('sb-ai-wrap')).display !== 'none' };
+    });
+    ok(m.hasAsk, 'the AI-round rehearsal really is an AI round');
+    ok(/asking the AI/.test(m.txt) && /interpolates/.test(m.txt),
+      'an AI round\'s reminder also states what the AI costs and what it does');
+    // How many positions the AI knows is the MANIPULATION. No participant-facing
+    // text may carry it — not the reminder, not the round subtitle, not the
+    // summary the Instructions button reopens over the round screen.
+    const kLeak = await ai.evaluate(async () => {
+      document.getElementById('btn-instr-open').click();
+      await new Promise(r => setTimeout(r, 60));
+      const t = document.getElementById('s-round').innerText + ' ' +
+                document.getElementById('summary-body').innerText;
+      document.getElementById('btn-summary-close').click();
+      return t;
+    });
+    ok(!/knows\s+\d+/.test(kLeak) && !/\d+\s+of the \d+ positions/.test(kLeak),
+      'and nothing on the round screen says HOW MANY positions the AI knows',
+      (kLeak.match(/[^.]*knows[^.]*\./) || [''])[0].trim());
+    ok(m.aiKpi, 'and the AI cost gets its own KPI in the left column');
+    // Two lines on a laptop and up; three at the 900px floor, where the column
+    // is at its narrowest — still a strip, never a paragraph.
+    ok(m.h <= (size.w >= 1280 ? 90 : 112) && m.bottom <= m.plotTop + 1,
+      `the longer AI reminder still sits above the plot as a strip (${m.h}px)`);
+    await ai.close();
   }
 
   // The modals must sit inside the window at every size.

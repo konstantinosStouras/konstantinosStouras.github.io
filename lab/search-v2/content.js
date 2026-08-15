@@ -9,7 +9,9 @@
 
    Tokens in the prose are substituted at render time: {J} positions,
    {revealCost}, {queryCost}, {L} step bound, {scored} scored rounds per block,
-   {warmup} warm-up rounds per block, {K} anchors this round.
+   {warmup} warm-up rounds per block. ({K} — how many positions the AI knows —
+   is substituted too, but no participant-facing text uses it: that number is the
+   study's own manipulation and is never disclosed.)
 
    Browser: window.SVContent.  Node: require('./content.js').
    ========================================================================== */
@@ -86,7 +88,7 @@
       id: 'a2',
       title: 'What the AI actually knows',
       body:
-        "At the start of each round the AI knows the **true prize at a small number of positions** — {K} of the {J}, in this round. It is not told which ones you can see, and **you are never told which ones it knows**.\n\n" +
+        "At the start of each round the AI knows the **true prize at a small number of positions**. It is not told which ones you can see, and **you are never told which ones it knows, or how many**.\n\n" +
         "For any other position, it **guesses by drawing a straight line between the two positions it knows on either side**. Beyond the outermost position it knows, it simply **repeats that position's value**.\n\n" +
         "So some of its answers are exactly right and others are inventions, and **an answer never looks any different in the two cases**."
     },

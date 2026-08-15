@@ -193,35 +193,57 @@
       </div>
 
       <div class="round-grid">
-        <!-- LEFT: the ledger. What was found is on the PLOT, where every mark
-             already carries its value — listing it again in words here only
-             asked the participant to read the same thing twice. -->
+        <!-- LEFT: THE ROUND IN FOUR NUMBERS — the KPIs, and nothing else.
+             They stand beside the line they describe, always on screen and
+             never scrolled to, which is why they are here rather than under
+             the plot. NET VALUE is the one that matters, so it reads first
+             and in green; then the best prize found, then the two running
+             costs. Those two are cumulative totals for the round and each
+             carries its own count beneath it.
+             What was FOUND is on the PLOT, where every mark already carries
+             its value: the itemised ledger that used to stand here (positions
+             revealed, selected position, rounds remaining) repeated in words
+             what the plot, the number box, the nominate button and the
+             progress bar each already say. -->
         <aside class="side-col">
-          <h3>This round</h3>
-          <div class="side-stats">
-            <div class="ss" id="ss-ai"><span class="ss-l">Questions asked to the AI</span><span class="ss-v" id="c-queries">0</span></div>
-            <div class="ss" id="ss-ai-cost"><span class="ss-l">Cost of asking the AI</span><span class="ss-v cost" id="c-query-cost">0</span></div>
-            <div class="ss"><span class="ss-l">Positions revealed</span><span class="ss-v" id="c-reveals">0</span></div>
-            <div class="ss"><span class="ss-l">Cost of revealing</span><span class="ss-v cost" id="c-reveal-cost">0</span></div>
-            <div class="ss tot"><span class="ss-l">Total spent this round</span><span class="ss-v cost" id="c-total-cost">0</span></div>
-            <div class="ss sel"><span class="ss-l">Best prize you have found</span><span class="ss-v" id="c-best">&mdash;</span></div>
-            <div class="ss"><span class="ss-l">Selected position</span><span class="ss-v" id="c-selected">50</span></div>
-            <div class="ss net"><span class="ss-l">Score if you stop right now</span><span class="ss-v" id="c-net">&mdash;</span></div>
-            <div class="ss"><span class="ss-l">Rounds remaining</span><span class="ss-v" id="c-remaining">0</span></div>
+          <!-- How far through the WHOLE study they are. The header's "Round n
+               of 12 · Part 1" counts scored rounds inside the current half;
+               this counts every round of the session, practice included, which
+               is the number that answers "how much is left". -->
+          <div class="side-round" title="Rounds in the whole study, practice rounds included.">
+            <span class="side-round-n" id="side-round-n">Round 1 / 28</span>
+            <span class="side-round-left" id="side-round-left"></span>
           </div>
-          <!-- The prices, always on screen: a participant who has forgotten them
-               should never have to open the reminder to keep playing. -->
-          <div class="price-note" id="c-prices"></div>
+          <div class="score-band" id="score-band">
+            <div class="sb net"><span class="sb-l">Net value if you stop right now</span><span class="sb-v" id="sb-net">&mdash;</span></div>
+            <div class="sb"><span class="sb-l">Best prize found</span><span class="sb-v" id="sb-best">&mdash;</span></div>
+            <div class="sb"><span class="sb-l">Total cost of revealing</span><span class="sb-v cost"><span id="sb-reveal">0</span><span class="sub" id="sb-reveal-n"></span></span></div>
+            <div class="sb" id="sb-ai-wrap"><span class="sb-l">Total cost of asking the AI</span><span class="sb-v cost"><span id="sb-ai">0</span><span class="sub" id="sb-ai-n"></span></span></div>
+          </div>
         </aside>
 
-        <!-- CENTRE: the line -->
+        <!-- CENTRE: the line, and directly under it everything used to act on
+             it — picker, then the buttons. -->
         <div class="chart-col">
+          <!-- The rules that matter WHILE PLAYING, on top of the plot, so a
+               participant never has to reopen the instructions to remember
+               what the line can do or what an action costs. Every number in it
+               is read from the RUN's own parameters and rebuilt each round —
+               never written into the markup — so a session that moves a cost,
+               the step bound or the prize range can never leave a stale figure
+               on screen, and an AI-off round never mentions the AI at all.
+               Same convention as the price note under the KPIs and the
+               reminder above each quick check: copy derived from the numbers
+               is built in app.js and is therefore not an editable Wording
+               field, which is what keeps it from ever contradicting them. -->
+          <div class="round-reminder" id="round-reminder"></div>
+
           <div class="plot-wrap"><div id="plot"></div></div>
           <div class="legend" id="legend"></div>
 
-          <!-- The position picker sits directly under the plot it points at,
-               ABOVE the numbers: choose where you are looking, read what the
-               round is worth, then act. The two paid buttons follow below. -->
+          <!-- The position picker sits directly under the plot it points at:
+               read what the round is worth, look at the line, choose where you
+               are looking, then act. The two paid buttons follow below. -->
           <div class="controls">
             <span class="small muted">Position</span>
             <button class="btn btn-ghost btn-sm arrow" id="btn-pos-left" title="Previous position" aria-label="Previous position">&#8592;</button>
@@ -231,52 +253,42 @@
             <input type="number" id="pos-input" min="1" max="100" value="50" aria-label="Selected position" />
           </div>
           <div class="note warn" id="cap-note" style="display:none;"></div>
+          <div class="answer-flash" id="answer-flash"></div>
 
-          <!-- The round in four numbers, under the plot where there is room to
-               make them legible. The left panel keeps the itemised ledger; this
-               is the headline, and NET VALUE is the one that matters — so it
-               reads FIRST, in green, then the best prize found, then the two
-               running costs. Those two are cumulative totals for the round, and
-               the labels say so: "Spent revealing" was read as the cost of the
-               last reveal. -->
-          <div class="score-band" id="score-band">
-            <div class="sb net"><span class="sb-l">Net value if you stop right now</span><span class="sb-v" id="sb-net">&mdash;</span></div>
-            <div class="sb"><span class="sb-l">Best prize found</span><span class="sb-v" id="sb-best">&mdash;</span></div>
-            <div class="sb"><span class="sb-l">Total cost of revealing</span><span class="sb-v cost" id="sb-reveal">0</span></div>
-            <div class="sb" id="sb-ai-wrap"><span class="sb-l">Total cost of asking the AI</span><span class="sb-v cost" id="sb-ai">0</span></div>
+          <!-- THE ACTIONS, in the same column as the plot and directly under
+               the picker that aims them: look at the line, choose a position,
+               act — with no lane change and nothing to scroll past in between.
+               The two PAID ones are a side-by-side PAIR at strict visual
+               parity — same size, radius, weight, and two hues matched on
+               saturation and lightness, so neither reads as the primary
+               action. Which one is on the LEFT is fixed for the whole session
+               and assigned per participant (config.ui.buttonOrder);
+               horizontal placement is a weaker position bias than vertical,
+               which is why they are not stacked. "Stop and nominate" is a
+               different class of action: it is never in the swap, always sits
+               below the divider, and its label names the selected position so
+               nomination cannot be accidental. -->
+          <div class="act-row">
+            <div class="act-pair" id="act-pair">
+              <div class="act-cell" id="ask-panel">
+                <button class="btn btn-act ask" id="btn-ask">Ask the AI <span class="cost-tag q" id="ask-cost">&minus;2 points</span></button>
+                <p class="act-note">Its estimate of the prize here. Does not reveal the truth.</p>
+              </div>
+              <div class="act-cell" id="reveal-panel">
+                <button class="btn btn-act reveal" id="btn-reveal">Reveal <span class="cost-tag r" id="reveal-cost">&minus;4 points</span></button>
+                <p class="act-note">The true prize here. Stays open for the round.</p>
+              </div>
+            </div>
+            <div class="act-sep"></div>
+            <div class="act-stop">
+              <button class="btn btn-amber" id="btn-nominate">Stop and nominate</button>
+              <p class="act-note">Ends the round on the selected position. Your score is the true prize there, minus what you spent.</p>
+            </div>
           </div>
 
-          <div class="answer-flash" id="answer-flash"></div>
           <div class="testview" id="testview" style="display:none;"></div>
         </div>
 
-      </div>
-
-      <!-- THE ACTIONS. The two PAID ones are a side-by-side PAIR at strict
-           visual parity — same size, radius, weight, and two hues matched on
-           saturation and lightness, so neither reads as the primary action.
-           Which one is on the LEFT is fixed for the whole session and assigned
-           per participant (config.ui.buttonOrder); horizontal placement is a
-           weaker position bias than vertical, which is why they are not
-           stacked. "Stop and nominate" is a different class of action: it is
-           never in the swap, always sits below the divider, and its label
-           names the selected position so nomination cannot be accidental. -->
-      <div class="act-row">
-        <div class="act-pair" id="act-pair">
-          <div class="act-cell" id="ask-panel">
-            <button class="btn btn-act ask" id="btn-ask">Ask the AI <span class="cost-tag q" id="ask-cost">&minus;2 points</span></button>
-            <p class="act-note">Its estimate of the prize here. Does not reveal the truth.</p>
-          </div>
-          <div class="act-cell" id="reveal-panel">
-            <button class="btn btn-act reveal" id="btn-reveal">Reveal <span class="cost-tag r" id="reveal-cost">&minus;4 points</span></button>
-            <p class="act-note">The true prize here. Stays open for the round.</p>
-          </div>
-        </div>
-        <div class="act-sep"></div>
-        <div class="act-stop">
-          <button class="btn btn-amber" id="btn-nominate">Stop and nominate</button>
-          <p class="act-note">Ends the round on the selected position. Your score is the true prize there, minus what you spent.</p>
-        </div>
       </div>
     </section>
 

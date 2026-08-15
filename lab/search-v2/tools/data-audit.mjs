@@ -198,10 +198,11 @@ for (let i = 0; i < plan.length; i++) {
   if (i === 0) {
     trace.panel = await pg.evaluate(() => ({
       hasList: !!document.getElementById('touched-list'),
-      net: (document.querySelector('.ss.net .ss-l') || {}).textContent || '',
-      netVal: (document.getElementById('c-net') || {}).textContent || '',
-      best: (document.getElementById('c-best') || {}).textContent || '',
-      total: (document.getElementById('c-total-cost') || {}).textContent || '',
+      net: (document.querySelector('.sb.net .sb-l') || {}).textContent || '',
+      netVal: (document.getElementById('sb-net') || {}).textContent || '',
+      best: (document.getElementById('sb-best') || {}).textContent || '',
+      total: (document.getElementById('sb-reveal-n') || {}).textContent || '',
+      reminder: (document.getElementById('round-reminder') || {}).textContent || '',
       bandNet: (document.getElementById('sb-net') || {}).textContent || '',
       bandBest: (document.getElementById('sb-best') || {}).textContent || '',
       bandReveal: (document.getElementById('sb-reveal') || {}).textContent || ''
@@ -447,10 +448,12 @@ head('8 · the running ledger on the round screen');
     'the list that repeated every mark in words is gone — the plot already carries them');
   ok(/stop right now/.test(pnl.net), 'the running score is labelled "if you stop right now"', pnl.net);
   ok(!/unknown/.test(pnl.netVal), 'and it never reads "unknown" — it is the best prize held minus what was spent', pnl.netVal);
-  ok(/\d/.test(pnl.total), 'the total spent this round is on screen', pnl.total);
+  ok(/\d/.test(pnl.total), 'each running cost carries its own count', pnl.total);
+  ok(/differ by at most/.test(pnl.reminder) && /revealing/i.test(pnl.reminder),
+    'the rules that matter while playing are on top of the plot, every round', pnl.reminder.slice(0, 120));
   ok(/\d/.test(pnl.best) || pnl.best.trim() === '—', 'so is the best prize found', pnl.best);
-  // The headline band under the plot: the four numbers that decide the round.
-  ok(/\d/.test(pnl.bandBest), 'the band under the plot shows the best prize found', pnl.bandBest);
+  // The headline band on top of the plot: the four numbers that decide the round.
+  ok(/\d/.test(pnl.bandBest), 'the band on top of the plot shows the best prize found', pnl.bandBest);
   ok(/\d/.test(pnl.bandReveal), 'and what was spent revealing', pnl.bandReveal);
   ok(/\d/.test(pnl.bandNet) && /spent/.test(pnl.bandNet),
     'and the NET VALUE, with the arithmetic beside it', pnl.bandNet);

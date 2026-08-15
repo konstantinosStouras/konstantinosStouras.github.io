@@ -264,8 +264,10 @@ async function runOne(name) {
     // Move the slider with the arrow control and check the label follows.
     await pg.locator('#btn-pos-right').click();
     const selNow = await pg.evaluate(() => window.SVApp.selected());
-    ok((await pg.locator('#c-selected').textContent()).trim() === String(selNow),
-      i === 0 ? 'the left panel reports the currently selected position' : 'selection tracked');
+    ok((await pg.locator('#pos-input').inputValue()).trim() === String(selNow)
+       && new RegExp('position ' + selNow + '$').test((await pg.locator('#btn-nominate').textContent()).trim()),
+      i === 0 ? 'the number box and the nominate button both name the selected position'
+              : 'selection tracked');
 
     if (r.cond === 'AI_ON' && askVisible && !parityChecked) {
       parityChecked = true;
@@ -392,7 +394,7 @@ async function runOne(name) {
       // Against the CONFIGURED cost, not a literal — the reveal cost is a study
       // parameter and has already moved once (5 → 4, see SIMULATION-FINDINGS.md).
       const want = await pg.evaluate(() => String(window.CONFIG.DEFAULTS.costs.revealCost));
-      const cost = await pg.locator('#c-reveal-cost').textContent();
+      const cost = await pg.locator('#sb-reveal').textContent();
       ok(cost.trim() === want,
         'the reveal cost is charged once (' + want + '), and shown separately from the query cost', cost.trim());
     }
@@ -588,7 +590,7 @@ async function runOne(name) {
     await mp.locator('#btn-reveal').click();
     await mp.waitForTimeout(380);
   }
-  const nRev = await mp.evaluate(() => +document.getElementById('c-reveals').textContent);
+  const nRev = await mp.evaluate(() => parseInt(document.getElementById('sb-reveal-n').textContent, 10));
   ok(nRev === cap, `the reveal cap binds at exactly ${cap} (got ${nRev})`);
   ok(await mp.locator('#btn-reveal').isDisabled(), 'and the Reveal button is disabled once it binds');
   ok(await mp.locator('#cap-note').isVisible(), 'and the participant is told why');
@@ -622,7 +624,7 @@ async function runOne(name) {
   await rp.reload();
   await rp.waitForSelector('#s-round.active', { timeout: 20000 });
   ok(true, 'a reload mid-round resumes inside the study rather than starting over');
-  ok((await rp.evaluate(() => +document.getElementById('c-reveals').textContent)) === 0,
+  ok((await rp.evaluate(() => parseInt(document.getElementById('sb-reveal-n').textContent, 10))) === 0,
     'the interrupted round restarts from its beginning, not from where it stopped');
   const interrupted = await rp.evaluate(() => {
     const e = window.Logger.getEvents().filter(x => x.event === 'round_start').pop();
