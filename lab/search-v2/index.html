@@ -183,8 +183,14 @@
              nothing about scores. The bar and the per-half line that used to
              sit under the title are gone: the title already names the part,
              and this says how much is left. -->
+        <!-- No Instructions button (owner 2026-08): the rules that matter while
+             playing are on the reminder strip below, in every round, so there
+             is nothing left for a reopenable summary to add. The #ov-summary
+             overlay and its builder are kept intact and unreachable, so
+             restoring the button is one line if the decision is revisited —
+             and `instruction_reopens` therefore stays in the schema, now
+             constant at 0 for any session run without it. -->
         <div class="round-head-right">
-          <button class="btn btn-ghost btn-sm" id="btn-instr-open" title="Reopen the instructions summary">&#9432; Instructions</button>
           <div class="side-round" title="Rounds in the whole study, practice rounds included.">
             <span class="side-round-n" id="side-round-n">Round 1 / 28</span>
             <span class="side-round-left" id="side-round-left"></span>
