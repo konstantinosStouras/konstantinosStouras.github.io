@@ -1254,21 +1254,26 @@
   function renderReminder(aiOn) {
     var el = $('round-reminder');
     if (!el) return;
-    var bits = [
-      'prizes run from <b>' + P.env.prizeMin + '</b> to <b>' + P.env.prizeMax +
-        ' points</b>, and neighbours differ by at most <b>&plusmn;' + P.env.stepBound + ' points</b>',
-      '<b>revealing</b> costs <b>' + P.costs.revealCost + ' points</b> and shows the true prize'
-    ];
+    // SENTENCES, not a list of fragments strung together with separators: the
+    // strip is read at a glance, but a glance still parses prose faster than a
+    // chain of clauses divided by dots (owner 2026-08 — it also copied and
+    // pasted as one run-on word).
+    var out = ['Prizes run from <b>' + P.env.prizeMin + '</b> to <b>' + P.env.prizeMax +
+      ' points</b>, and neighbouring positions differ by at most <b>&plusmn;' +
+      P.env.stepBound + ' points</b>.'];
     if (aiOn) {
-      bits.push('<b>asking the AI</b> costs <b>' + P.costs.queryCost +
-        ' points</b> and returns an estimate &mdash; <b>not a prize</b>, and it can be wrong');
-      bits.push('it interpolates from the prizes it knows, and every one you reveal is added to them');
+      out.push('<b>Revealing</b> a position costs <b>' + P.costs.revealCost +
+        ' points</b> and shows its true prize, while <b>asking the AI</b> costs <b>' +
+        P.costs.queryCost + ' points</b> and returns an estimate that can be wrong.');
+      out.push('It interpolates from the prizes it knows, and every position you reveal is added to them.');
+    } else {
+      out.push('<b>Revealing</b> a position costs <b>' + P.costs.revealCost +
+        ' points</b> and shows its true prize.');
     }
-    bits.push(bestFoundRule()
-      ? '<b>stopping</b> is free: you score the <b>best prize you have found</b>, minus what you spent'
-      : '<b>stopping</b> is free: you score the <b>true prize where you stop</b>, minus what you spent');
-    el.innerHTML = '<span class="rr-lead">Remember</span>' +
-      bits.join('<span class="rr-sep">·</span>');
+    out.push('<b>Stopping</b> is free: you score the ' + (bestFoundRule()
+      ? '<b>best prize you have found</b>' : '<b>true prize where you stop</b>') +
+      ', minus everything you spent.');
+    el.innerHTML = '<span class="rr-lead">Remember:</span> ' + out.join(' ');
   }
 
   function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
