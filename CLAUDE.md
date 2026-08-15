@@ -2500,17 +2500,24 @@ is null-guarded). `tools/smoke.mjs` measures the parity from computed styles
 and `tools/layout-guard.mjs` pins the side-by-side row at five widths.
 
 **Where the round screen puts things** (owner 2026-08, from screenshots).
-LEFT COLUMN = **the round in four numbers and nothing else**: a "Round n / 28"
-counter over the KPI cards — net value if you stop right now (green, the one
-that matters), best prize found, total cost of revealing, total cost of asking
-the AI (hidden in an AI-off round, so that screen carries no mention of the AI
-at all), each cost carrying its own count as a qualifier. The itemised ledger
+HEADER = the title **"Practice round (not scored) · Part 1 (out of 2)"** — the
+qualifier sits with the thing it qualifies and the part says how many there are
+(the count comes from the plan, never written down) — with the Instructions
+button and, beneath it, the whole-study counter **"Round n / 28 · N rounds to
+go"**. The progress BAR and its per-half line under the title are gone: the
+title already names the part and the counter says how much is left, and the two
+together said it three times. LEFT COLUMN = **the round in four numbers and
+nothing else**: net value if you stop right now (green, the one that matters),
+best prize found, total cost of revealing, total cost of asking the AI (hidden
+in an AI-off round, so that screen carries no mention of the AI at all), each
+cost carrying its own count as a qualifier. The itemised ledger
 that used to stand there, and the same four numbers as a band UNDER the plot,
 are both gone: the ledger repeated in words what the plot, the number box, the
 nominate button and the progress bar already said, and a band under the plot
 was something to scroll to. CENTRE COLUMN = the reminder strip, the plot, the
-legend, the position picker, then **the two paid buttons directly under the
-plot they aim at** (moved up out of a full-width row below the whole grid —
+legend, the position picker, the in-round nudge (moved down from the top of the
+screen, so it speaks where the participant is looking), then **the two paid
+buttons directly under the plot they aim at** (moved up out of a full-width row below the whole grid —
 look at the line, choose a position, act, with no lane change in between; the
 pair keeps its strict visual parity, which the ~640px column still gives it).
 **The reminder strip on top of the plot** is the comprehension gate's own
