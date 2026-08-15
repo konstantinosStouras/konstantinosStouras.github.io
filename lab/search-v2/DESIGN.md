@@ -803,37 +803,56 @@ blocks. The brief orders them warm-up → AI instructions for block 1 but the
 reverse for block 2; block 1's order would put an unexplained "Ask the AI" button
 in front of a participant, so block 2's order is followed in both.
 
-**The round screen** is three columns:
+**The round screen** is two working columns, and the arrangement is the product of
+several passes over the same question — *what does a participant need in front of
+them while deciding, and what is repetition?*
 
-- **Left — the ledger only.** Questions asked and their cost, positions revealed
-  and their cost, total spent, best prize **found**, selected position, **score if
-  you stop right now**, rounds remaining, and the prices, always on screen. What
-  was *found* lives on the plot, where every mark already carries its value; the
-  panel used to repeat it in words, which asked the participant to read the same
-  thing twice. There is deliberately **no "best estimate"** mixing claims with
-  truths, and the "score if you stop now" line uses the best **true** prize held,
-  never the selected position — an unopened position has no known value and
-  guessing at it there would hand over the truth for free.
-- **Centre — the plot**, a legend, then the position controls (arrows, slider,
-  number box) **directly under the plot they point at**, and only then the four
-  big numbers. That order is deliberate: choose where you are looking, read what
-  the round is worth there, then act on the buttons below. With the picker between
-  the numbers and the buttons, the band described a position the participant had
-  not chosen yet. The band **leads with NET VALUE**, in green (#226b0c on #eefaea
-  is 5.6:1, so the big number clears 4.5:1 as text) — it is what the round is
-  actually worth, and nothing else on the screen may compete with that tile, which
-  is why the two paid buttons keep their own matched hues. Then best prize found,
-  then the two running costs, named **"Total cost of revealing"** and **"Total cost
-  of asking the AI"** — they are what the round has cost so far, and the earlier
-  "Spent revealing" read as the price of the last action.
-- **Right — the three actions.** The two **paid** ones sit **side by side** at
-  strict visual parity (same size, padding, radius, weight, border, shadow and
-  states; two hues matched on saturation and lightness), in the order this
-  participant was assigned; "Stop and nominate" is apart, below a divider, and
-  never in the swap. The only red on the screen is the **cost numeral** inside
-  each paid button. "Ask the AI" is **removed from the DOM** in AI-off rounds, not
-  disabled and not hidden. `tools/smoke.mjs` measures the parity from computed
-  styles rather than trusting the stylesheet.
+- **Left — the round in four numbers, and nothing else.** They stand **beside** the
+  line they describe, always on screen and never scrolled to, which is why they are
+  here rather than under the plot. **NET VALUE reads first, in green** (#226b0c on
+  #eefaea is 5.6:1, so the big number clears 4.5:1 as text) — it is what the round
+  is actually worth, and nothing else on the screen may compete with that tile,
+  which is why the two paid buttons keep their own matched hues. Then **best prize
+  found**, then the two cumulative costs, **"Total cost of revealing"** and **"Total
+  cost of asking the AI"**, each carrying its own count beneath it. Above them, a
+  whole-study counter — "Round 1 / 28" — which counts **every** round including
+  practice, because that is the number answering *how much is left*; the header's
+  "Round n of 12 · Part 1" counts scored rounds inside the current half.
+
+  The itemised **ledger that used to stand here is gone**: positions revealed,
+  selected position and rounds remaining repeated in words what the plot, the
+  number box, the nominate button and the progress bar each already say. What was
+  *found* lives on the plot, where every mark already carries its value. There is
+  deliberately **no "best estimate"** mixing claims with truths, and the net-value
+  tile uses the best **true** prize held, never the selected position — an unopened
+  position has no known value, and guessing at it there would hand over the truth
+  for free.
+
+- **Centre — the line, and directly under it everything used to act on it.** A
+  **rules reminder sits on top of the plot**, so a participant never has to reopen
+  the instructions to recall what the line can do or what an action costs; then the
+  plot and its legend; then the **position picker** directly under the plot it
+  points at; then the **actions**, in the same column, under the picker that aims
+  them. Read what the round is worth, look at the line, choose where you are
+  looking, act — **no lane change and nothing to scroll past in between**.
+
+  The two **paid** actions are a side-by-side **pair** at strict visual parity
+  (same size, radius, weight; two hues matched on saturation and lightness), in the
+  order this participant was assigned — horizontal placement is a weaker position
+  bias than vertical, which is why they are not stacked. **"Stop and nominate" is a
+  different class of action**: never in the swap, always below the divider, and its
+  label names the selected position so nomination cannot be accidental. "Ask the
+  AI" is **removed from the DOM** in AI-off rounds, not disabled and not hidden.
+  `tools/smoke.mjs` measures the parity from computed styles rather than trusting
+  the stylesheet.
+
+**Every number in that reminder is read from the run's own parameters and rebuilt
+each round — never written into the markup.** A session that moves a cost, the step
+bound or the prize range therefore cannot leave a stale figure on screen, and an
+AI-off round never mentions the AI at all. It follows the same convention as the
+price note under the KPIs and the reminder above each quick check: **copy derived
+from the numbers is built in `app.js` and is deliberately not an editable Wording
+field**, which is what stops it ever contradicting them.
 
 Under the round title sits a **progress line** — "Round *n* of 12 in this half ·
 *k* to go", or "Practice round — nothing here is scored".
@@ -1464,8 +1483,10 @@ field writes a **per-session override**; the study's defaults in `content.js` ar
 untouched and every other session keeps them.
 
 **Deliberately out of scope**, and the screen says so: the game screen's own
-buttons and labels, and the reminder box above each quick check, which `app.js`
-builds from the numbers themselves. Those are interface, not study text.
+buttons and labels, the rules reminder above the plot, and the reminder box above
+each quick check — all of which `app.js` builds from the run's own numbers. Those
+are interface, not study text, and keeping them out of the editable set is what
+stops a reworded reminder contradicting the costs the session actually charges.
 
 Three design decisions carry the weight:
 
