@@ -116,8 +116,8 @@ p{margin:.6em 0;}
    difference, and no colour salience. Only the label and the cost differ.
    They are SIDE BY SIDE (horizontal position bias is weaker than vertical),
    and "Stop and nominate" sits apart below a divider, never in the swap. */
-.act-row{margin-top:14px; border:1px solid var(--line); border-radius:10px;
-  padding:14px 16px; background:var(--panel);}
+.act-row{margin-top:8px; border:1px solid var(--line); border-radius:10px;
+  padding:12px 14px; background:var(--panel);}
 .act-pair{display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start;}
 @media (max-width:620px){ .act-pair{grid-template-columns:1fr;} }
 .act-cell{display:flex; flex-direction:column;}
@@ -150,12 +150,12 @@ p{margin:.6em 0;}
 .touched .tl.reveal{border-color:#cfe2fb;} .touched .tl.reveal .tl-val{color:var(--blue-d);}
 .touched .tl.open{border-color:#d7dbe0;}
 .touched .tl.empty{display:block; color:var(--muted); background:transparent; border-style:dashed;}
-.side-stats{display:flex; flex-direction:column; gap:3px; border-top:1px solid var(--line); padding-top:9px;}
-.side-stats .ss{display:flex; justify-content:space-between; gap:8px; font-size:13px;}
-.side-stats .ss-l{color:var(--muted);}
-.side-stats .ss-v{font-weight:700;}
-.side-stats .ss-v.cost{color:var(--red);}
-.side-stats .ss.sel{margin-top:6px; padding-top:6px; border-top:1px dashed var(--line);}
+/* Where they are in the whole study — the one thing in this column that is not
+   about the current round, so it sits above the KPIs and reads quieter. */
+.side-round{display:flex; flex-direction:column; gap:1px; margin:0 0 10px; padding-bottom:9px;
+  border-bottom:1px solid var(--line);}
+.side-round-n{font-weight:700; font-size:15px;}
+.side-round-left{font-size:12px; color:var(--muted);}
 
 .plot-wrap{border:1px solid var(--line); border-radius:10px; padding:8px 6px 2px; background:#fff;}
 .plot-svg{width:100%; height:auto; display:block; cursor:crosshair;}
@@ -275,12 +275,14 @@ p{margin:.6em 0;}
   text-align:center; padding:7px 14px; font-size:13px; box-shadow:0 -2px 10px rgba(0,0,0,.18);
   pointer-events:none;}
 
-/* ---- the round ledger: the two costs, the total, and what stopping is worth ---- */
-.side-stats .ss.tot{margin-top:6px; padding-top:6px; border-top:1px solid var(--line);}
-.side-stats .ss.net .ss-v{color:var(--blue);}
-.side-stats .ss.net.neg .ss-v{color:var(--red);}
-.price-note{margin-top:9px; font-size:12px; color:var(--muted); line-height:1.6;}
-.price-note b{color:var(--ink);}
+/* ---- the rules that matter while playing, on top of the plot ---- */
+.round-reminder{background:#f6f8fa; border:1px solid var(--line); border-radius:10px;
+  padding:9px 13px; margin:0 0 10px; font-size:13px; line-height:1.65; color:var(--ink);}
+.round-reminder b{font-weight:700;}
+.round-reminder .rr-lead{text-transform:uppercase; letter-spacing:.06em; font-size:11.5px;
+  color:var(--muted); margin-right:6px;}
+.round-reminder .rr-sep{color:#c3c8cf; margin:0 3px;}
+
 
 /* ---- the result ledger on the between-rounds screen ---- */
 .ledger{margin:12px auto 0; max-width:420px; text-align:left; font-size:14.5px;}
@@ -319,15 +321,24 @@ p{margin:.6em 0;}
 
 .tv-note{display:block; flex-basis:100%; margin-top:6px; font-size:12.5px; color:var(--muted); line-height:1.6;}
 
-/* ---- the round in four numbers, under the plot ---- */
-.score-band{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;
-  margin:14px 0 0;}
+/* ---- the round in four numbers: THE LEFT COLUMN ----
+   The KPIs stand beside the line they describe, so they are on screen from the
+   first paint of every round and are never something to scroll to — and the
+   plot keeps the full width of its own column. auto-fit does the rest: one
+   card per row in a 200–230px column here, and the same markup would still
+   lay itself out as a row if it were ever placed in a wide container. */
+.score-band{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px;
+  margin:0;}
 .score-band .sb{border:1px solid var(--line); border-radius:12px; padding:10px 14px; background:#fff;
   display:flex; flex-direction:column; gap:2px; min-width:0;}
 .score-band .sb-l{font-size:12.5px; color:var(--muted); line-height:1.35;}
 .score-band .sb-v{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.2;}
 .score-band .sb-v.cost{color:var(--red);}
-.score-band .sb-v .sub{font-size:12.5px; font-weight:600; color:var(--muted); margin-left:6px;}
+/* The qualifier under a headline number — "at position 45", the arithmetic
+   behind the net value, the count behind a cost. It is a BLOCK: in a 200px
+   column an inline qualifier wraps under the numeral anyway, and ragged. */
+.score-band .sb-v .sub{display:block; font-size:12.5px; font-weight:600; color:var(--muted);
+  margin-top:1px; line-height:1.35;}
 /* NET VALUE is the number the round is actually worth, so it leads the band and
    is the only GREEN thing on the screen — the two paid buttons keep their own
    matched hues and must never be tinted to compete with it. Green on #eefaea:

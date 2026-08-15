@@ -1170,6 +1170,55 @@
     txt.textContent = E.progress.replace('{n}', n).replace('{total}', total).replace('{left}', total - n);
   }
 
+  // Where they are in the WHOLE study, in the left column. Deliberately a
+  // different count from the header's "Round n of 12 · Part 1", which counts
+  // scored rounds inside the current half: this one counts every round of the
+  // session, practice included, because "how much is left" is a question about
+  // the sitting, not about the half. Both are labelled, and the left one
+  // carries a tooltip saying which it is.
+  function renderRoundCounter() {
+    var el = $('side-round-n'), left = $('side-round-left');
+    if (!el || !PLAN) return;
+    var total = PLAN.rounds.length, n = Math.min(S.roundPtr + 1, total);
+    el.textContent = 'Round ' + n + ' / ' + total;
+    if (left) {
+      var togo = total - n;
+      left.textContent = togo === 0 ? 'last round of the study'
+        : plural(togo, 'round') + ' to go after this one';
+    }
+  }
+
+  // The rules that matter WHILE PLAYING, on top of the plot (§14). Every figure
+  // is read from the RUN's own parameters, so a session that moves a cost, the
+  // step bound or the prize range cannot leave a stale number on screen, and
+  // the AI clause appears ONLY in an AI-on round — in an AI-off round the whole
+  // screen must not mention the AI except to say there is none.
+  // It is the comprehension gate's own reminder list, shortened for a glance
+  // and with the two points that are not about playing THIS round dropped: that
+  // every AI answer looks the same whether it was known or guessed, and that
+  // prizes are drawn afresh each round. Both stay in the gate, which is where
+  // they are needed; carrying them here would cost two lines above the plot for
+  // facts that change no decision inside a round.
+  function renderReminder(aiOn) {
+    var el = $('round-reminder');
+    if (!el) return;
+    var bits = [
+      'prizes run from <b>' + P.env.prizeMin + '</b> to <b>' + P.env.prizeMax +
+        '</b>, and neighbours differ by at most <b>&plusmn;' + P.env.stepBound + '</b>',
+      '<b>revealing</b> costs <b>' + P.costs.revealCost + '</b> and shows the true prize'
+    ];
+    if (aiOn) {
+      bits.push('<b>asking the AI</b> costs <b>' + P.costs.queryCost +
+        '</b> and returns an estimate &mdash; <b>not a prize</b>, and it can be wrong');
+      bits.push('it interpolates from the prizes it knows, and every one you reveal is added to them');
+    }
+    bits.push('<b>stopping</b> is free: you score the <b>true prize where you stop</b>, minus what you spent');
+    el.innerHTML = '<span class="rr-lead">Remember</span>' +
+      bits.join('<span class="rr-sep">·</span>');
+  }
+
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
   // ---- which paid action sits on the LEFT ---------------------------------
   // Assigned ONCE per participant and fixed for the whole session
   // (config.ui.buttonOrder — the reasoning, including why it is deliberately
@@ -1214,10 +1263,18 @@
     $('round-label').textContent = (r.scored ? 'Round ' + scoredOrdinal(r) : 'Practice round') +
       ' · Part ' + r.block + (r.scored ? '' : ' (not scored)');
     $('round-sub').textContent = aiOn
-      ? 'The AI knows ' + currentK() + ' of the ' + P.env.positions + ' positions exactly, and will answer about any position you ask.'
+      // NEVER currentK() here: how many positions the AI knows IS the study's
+      // manipulation (sparse vs dense), and a participant told the number can
+      // reason straight to the expected size of the gaps — which is the very
+      // inference the design asks them to make from experience instead. They
+      // are told what it DOES, never how much it holds.
+      ? 'The AI\u2019s interpolative prediction technology is updated by the locations and ' +
+        'values of any new prizes you find, and it will answer about any position you ask.'
       : 'No AI in this part.';
     $('round-sub').className = 'round-sub' + (aiOn ? ' ai' : '');
     renderProgress(r);
+    renderRoundCounter();
+    renderReminder(aiOn);
 
     // §14 right panel: Ask the AI (present only in AI-on rounds — absent, not
     // disabled), Reveal, and Stop and nominate, whose label names the position.
@@ -1323,49 +1380,28 @@
 
     var qCost = S.round.queries.length * P.costs.queryCost;
     var rCost = S.round.reveals.length * P.costs.revealCost;
-    $('c-queries').textContent = S.round.queries.length;
-    $('c-query-cost').textContent = qCost;
-    $('c-reveals').textContent = S.round.reveals.length;
-    $('c-reveal-cost').textContent = rCost;
-    $('c-total-cost').textContent = qCost + rCost;
-    $('c-selected').textContent = sel;
-    $('c-remaining').textContent = PLAN.rounds.length - S.roundPtr - 1;
-    // The Ask panel is not merely hidden in an AI-off round — it is out of the
-    // DOM (applyActionOrder), so there is nothing to toggle here.
-    // The AI rows are meaningless in a round without it.
-    $('ss-ai').style.display = aiOn ? '' : 'none';
-    $('ss-ai-cost').style.display = aiOn ? '' : 'none';
 
     // Best prize FOUND — true prizes only. An AI answer is not a prize, and
     // showing one here would be the one place the study contradicts itself.
     var knownPairs = preOpenedPairs().concat(revealedPairs());
     var best = null;
     knownPairs.forEach(function (x) { if (best == null || x.val > best.val) best = x; });
-    $('c-best').textContent = best ? (best.val + ' at position ' + best.pos) : '—';
 
-    // What the round is worth if they stop now: the best TRUE prize they hold,
-    // minus everything spent. Always a number once they know anything, so there
-    // is no "unknown" message to read past — and it never leaks, because it is
-    // computed from prizes they have already paid to see. It deliberately does
-    // NOT use the selected position: an unopened one has no known value, and
-    // guessing at it here would hand over the truth for free.
-    var netEl = $('c-net');
-    if (best) {
-      var net = best.val - (qCost + rCost);
-      netEl.textContent = net + '  (' + best.val + ' − ' + (qCost + rCost) + ' spent)';
-      netEl.parentNode.classList.toggle('neg', net < 0);
-    } else {
-      netEl.textContent = '—';
-      netEl.parentNode.classList.remove('neg');
-    }
-
-    // The same four numbers, big, under the plot. Net value is what the round is
-    // actually worth: the best TRUE prize they hold, minus everything spent.
+    // THE ROUND IN FOUR NUMBERS, in the left column beside the plot. The
+    // itemised ledger that used to stand here (positions revealed, selected
+    // position, rounds remaining, each cost twice over) said in words what the
+    // plot, the number box, the nominate button and the progress bar already
+    // say; each cost now carries its own count as a qualifier instead.
     $('sb-best').innerHTML = best
       ? best.val + '<span class="sub">at position ' + best.pos + '</span>'
       : '—';
     $('sb-reveal').textContent = rCost;
+    $('sb-reveal-n').textContent = plural(S.round.reveals.length, 'position') + ' revealed';
+    // The Ask panel is not merely hidden in an AI-off round — it is out of the
+    // DOM (applyActionOrder); its KPI is hidden, so an AI-off round's screen
+    // carries no mention of the AI at all.
     $('sb-ai').textContent = qCost;
+    $('sb-ai-n').textContent = plural(S.round.queries.length, 'question') + ' asked';
     $('sb-ai-wrap').style.display = aiOn ? '' : 'none';
     var sbNet = $('sb-net');
     if (best) {
@@ -1376,11 +1412,6 @@
       sbNet.innerHTML = '—<span class="sub">reveal a position to start</span>';
       sbNet.parentNode.classList.remove('neg');
     }
-
-    $('c-prices').innerHTML = 'Revealing a position costs <b>' + P.costs.revealCost + '</b>' +
-      (aiOn ? ' · asking the AI costs <b>' + P.costs.queryCost + '</b>' : '') +
-      ' · stopping is free.<br>Your score is the <b>true prize where you stop</b>, minus everything you spent this round.' +
-      (aiOn ? '<br>The AI\u2019s answer is an <b>estimate, not a prize</b>.' : '');
 
     var revealedHere = isRevealed(sel);
     $('btn-reveal').disabled = busy || revealedHere || S.round.reveals.length >= P.costs.revealCap;
@@ -1853,8 +1884,10 @@
       // currentK(), never r.spec.ai_k — a server-mode plan deliberately carries no
       // spec, so that dereference threw and the reminder overlay never opened,
       // after the open had already been counted against the attention measure.
-      (aiOn ? '<li>Asking the AI costs <b>' + P.costs.queryCost + '</b> points. It knows <b>' + currentK() +
-        '</b> of the ' + P.env.positions + ' positions exactly and guesses everywhere else — you are not told which.</li>' : '') +
+      // Same rule as the round subtitle: what it does, never how much it holds.
+      (aiOn ? '<li>Asking the AI costs <b>' + P.costs.queryCost + '</b> points. It knows the true prize ' +
+        'at some positions and guesses everywhere else &mdash; you are not told which, or how many. ' +
+        'Everything you reveal is added to what it knows.</li>' : '') +
       '<li>Your score is the <b>true prize at the position you stop on</b>, minus everything you spent this round.</li>' +
       '<li>Prizes are drawn afresh every round.</li>' +
       '</ul>';

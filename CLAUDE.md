@@ -2473,8 +2473,8 @@ them** (owner 2026-08, a written spec). "Ask the AI" and "Reveal" are ONE
 button style at strict visual parity — same size, padding, radius, weight,
 border, shadow and every state, two hues matched on saturation and lightness
 (`hsl(272,55%,40%)` / `hsl(211,55%,40%)`), neither styled as primary — placed
-SIDE BY SIDE in a full-width row under the plot (the old 220px action column
-could not hold two equal buttons; `.round-grid` is now 2 columns), with "Stop
+SIDE BY SIDE in an equal-width row (the old 220px action column could not hold
+two equal buttons; `.round-grid` is 2 columns), with "Stop
 and nominate" apart below a divider and never in the swap. Which sits on the
 LEFT is assigned ONCE PER PARTICIPANT and fixed for the session
 (`ui.buttonOrder`, default `'participant'`), block-randomised JOINTLY with the
@@ -2498,6 +2498,41 @@ AI-off rounds, where the Ask button is REMOVED FROM THE DOM rather than hidden
 (so it is not tabbable or inspectable either — everything touching `#btn-ask`
 is null-guarded). `tools/smoke.mjs` measures the parity from computed styles
 and `tools/layout-guard.mjs` pins the side-by-side row at five widths.
+
+**Where the round screen puts things** (owner 2026-08, from screenshots).
+LEFT COLUMN = **the round in four numbers and nothing else**: a "Round n / 28"
+counter over the KPI cards — net value if you stop right now (green, the one
+that matters), best prize found, total cost of revealing, total cost of asking
+the AI (hidden in an AI-off round, so that screen carries no mention of the AI
+at all), each cost carrying its own count as a qualifier. The itemised ledger
+that used to stand there, and the same four numbers as a band UNDER the plot,
+are both gone: the ledger repeated in words what the plot, the number box, the
+nominate button and the progress bar already said, and a band under the plot
+was something to scroll to. CENTRE COLUMN = the reminder strip, the plot, the
+legend, the position picker, then **the two paid buttons directly under the
+plot they aim at** (moved up out of a full-width row below the whole grid —
+look at the line, choose a position, act, with no lane change in between; the
+pair keeps its strict visual parity, which the ~640px column still gives it).
+**The reminder strip on top of the plot** is the comprehension gate's own
+reminder list, shortened for a glance, rebuilt from the RUN's parameters every
+round so a session that moves a cost or the step bound can never leave a stale
+number on screen — deliberately dropping the two points that change no decision
+inside a round (that every AI answer looks the same whether known or guessed,
+and that prizes are drawn afresh each round; both stay in the gate). Like the
+price note and the quiz reminder, copy derived from the numbers is built in
+app.js and is therefore NOT an editable Wording field, which is what keeps it
+from contradicting them. **HOW MANY positions the AI knows is NEVER disclosed**
+(owner 2026-08: "it seems we reveal AI's private information here") — K is the
+study's own manipulation, and a participant told the number can reason straight
+to the expected gap size, which is the inference the design asks them to make
+from experience. It was leaking in three places at once (the round subtitle,
+the summary the Instructions button reopens, and the AI instruction screen's
+"{K} of the {J}"); all three now say what the AI DOES — it interpolates from
+the prizes it knows, and every position you reveal is added to them — never how
+much it holds. `layout-guard.mjs` pins all of it: the KPIs beside the plot, the
+strip on top of it and short enough not to push it down, the buttons within
+220px of the plot's bottom in the same column, and no "knows N" anywhere on the
+round screen or in its reopened summary.
 
 **Engagement, under the same rule** (owner 2026-08): a progress bar + "round n
 of 12 in this half" under the round title, milestone pop-ups at the halfway
