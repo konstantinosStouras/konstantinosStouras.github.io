@@ -105,58 +105,89 @@
   // ---- comprehension gate, base instructions (§15) ------------------------
   // Adapted from the source instruction screens: the highest and lowest possible
   // prize one and two steps away from a revealed prize.
+  // The gate tests whether the rules can be USED, not whether a number can be
+  // read back off the screen. The reminder above these questions — and, since
+  // 2026-08, the strip on top of every plot — state both costs and the step
+  // bound outright, so an item that merely asks for one of them is answered by
+  // copying. Every item below therefore puts the rule to work on a case.
+  //
+  // The ids are the export's own column names and never change; several no
+  // longer describe what the item asks (q_adj_lo1 is a "highest" question), and
+  // that is deliberate — a renamed column would break every session already
+  // collected, while the question behind it is free to improve.
+  //
+  // The three arithmetic items state their numbers outright, so they assume the
+  // study's own step bound and prize range; selftest.js fails if those defaults
+  // ever move, rather than letting a wrong answer key reach a participant.
   var QUIZ_BASE = [
     {
       id: 'q_adj_hi1',
-      prompt: 'Position 40 has been revealed and its prize is 50 points. What is the HIGHEST the prize at position 41 could be?',
-      options: ['50 points', '55 points', '60 points', 'It could be anything from 0 to 100'],
-      answer: 2,
-      why: 'Neighbouring positions differ by at most {stepBound}, so from 50 the next one can reach 50 + {stepBound}.'
-    },
-    {
-      id: 'q_adj_lo1',
-      prompt: 'Same situation: position 40 is 50 points. What is the LOWEST the prize at position 41 could be?',
-      options: ['0 points', '40 points', '45 points', '50 points'],
-      answer: 1,
-      why: 'The same bound works downwards: 50 − {stepBound}. The prize can never jump further than {stepBound} in one step.'
+      prompt: 'You revealed position 50 and it holds 80 points. How much does that tell you about the prize at position 90?',
+      options: [
+        'Almost nothing \u2014 40 steps of up to {stepBound} each cover the whole range',
+        'It is at least 40 points',
+        'It is at most 80 points',
+        'It is about 80 points, give or take a little'
+      ],
+      answer: 0,
+      why: 'The bound binds one STEP at a time. Over 40 positions it allows a change of 40 \u00d7 {stepBound}, ' +
+           'which is more than the whole range \u2014 so a far-away position is barely constrained at all. ' +
+           'What you reveal tells you most about what is NEAR it.'
     },
     {
       id: 'q_adj_hi2',
-      prompt: 'Still with position 40 at 50 points — what is the HIGHEST the prize at position 42 could be?',
-      options: ['60 points', '65 points', '70 points', '100 points'],
+      prompt: 'Position 15 was revealed and holds 50 points. What is the HIGHEST the prize at position 14 \u2014 one position to its LEFT \u2014 could be?',
+      options: ['50 points', '55 points', '60 points', 'It could be anything from 0 to 100'],
       answer: 2,
-      why: 'Two steps, so at most 2 × {stepBound} away from 50. The further you go, the less the bound tells you.'
+      why: 'The bound works in both directions: from 50, one step to the LEFT can reach 50 + {stepBound}, ' +
+           'exactly as one step to the right can. There is nothing special about the direction you look in.'
+    },
+    {
+      id: 'q_adj_lo1',
+      prompt: 'Position 80 was revealed and holds 95 points. What is the HIGHEST the prize at position 82 could be?',
+      options: ['100 points', '105 points', '115 points', '95 points'],
+      answer: 0,
+      why: 'Two steps allow 2 \u00d7 {stepBound}, which would be 115 \u2014 but no prize on the line is above ' +
+           '{prizeMax}, so 100 is the most it can be. Near the top of the range the ceiling binds before the step bound does.'
     },
     {
       id: 'q_cost',
-      prompt: 'What does it cost to reveal one position?',
-      options: ['Nothing', '{queryCost} points', '{revealCost} points', 'It depends on the position'],
-      answer: 2,
-      why: 'Revealing costs {revealCost} and shows the true prize. Stopping is free.'
+      prompt: 'In one round you reveal three positions and stop on the best of them, which holds 60 points. What is your score for that round?',
+      options: [
+        'The prize where I stopped, minus 3 \u00d7 {revealCost}',
+        'The prize where I stopped, with nothing deducted',
+        'The best prize I revealed, minus {revealCost}',
+        'The three prizes added together, minus 3 \u00d7 {revealCost}'
+      ],
+      answer: 0,
+      why: 'Each reveal costs {revealCost} whatever it turns out to show, and every one of them comes off the ' +
+           'prize where you stop. Only ONE prize is ever paid \u2014 the one where you stopped.'
     },
     {
       id: 'q_score',
-      prompt: 'You reveal three positions and then stop on one of them. How is your score for the round worked out?',
+      prompt: 'You reveal six positions, the best of them holds 20 points, and you stop there. What is your score for that round?',
       options: [
-        'The prize at the position you stopped on, minus everything you spent',
-        'The highest prize you revealed, with no deduction',
-        'The sum of the three prizes you revealed',
-        'The prize at the position you stopped on, with no deduction'
+        'Below zero \u2014 the prize minus everything I spent, which can be negative',
+        'Zero \u2014 a round can never score below zero',
+        '20 points \u2014 what I spent does not come off the prize',
+        'The round does not count, and it is replayed'
       ],
       answer: 0,
-      why: 'Your score is the TRUE prize where you stop, minus everything you spent that round. It can be negative.'
+      why: 'Six reveals cost 6 \u00d7 {revealCost}, which is more than the 20 you stop on, so the round ends ' +
+           'below zero. That is allowed \u2014 which is why searching on and on is a real risk, not a free one.'
     },
     {
       id: 'q_reset',
-      prompt: 'The next round starts. What do you know about its prizes?',
+      prompt: 'In this round the biggest prize you found was near position 80. What does that tell you about where the biggest prize will be in the NEXT round?',
       options: [
-        'They are the same as this round',
-        'They are drawn afresh, so this round tells me nothing about them',
-        'They are always higher than this round',
-        'Only the positions that were open stay the same'
+        'Nothing \u2014 every round is a fresh draw',
+        'It will be near position 80 again',
+        'It will be far from position 80',
+        'It will be somewhere in the same half of the line'
       ],
-      answer: 1,
-      why: 'Every round is a fresh draw. Nothing you learn in one round applies to the next.'
+      answer: 0,
+      why: 'Every round draws a whole new line of prizes. Where they happened to sit this round carries no ' +
+           'information at all about the next one.'
     }
   ];
 
@@ -166,71 +197,83 @@
   var QUIZ_AI = [
     {
       id: 'qai_costs',
-      prompt: 'What does it cost to ask the AI about a position, and what does it cost to reveal one?',
+      prompt: 'You are choosing between asking the AI about a position and revealing it. Which of these is true?',
       options: [
-        'Asking {queryCost}, revealing {revealCost}',
-        'Asking {revealCost}, revealing {queryCost}',
-        'Both cost {revealCost}',
-        'Asking is free, revealing costs {revealCost}'
+        'Asking is cheaper, but only revealing tells me the true prize',
+        'Asking is cheaper, and both of them tell me the true prize',
+        'Revealing is cheaper, and the AI is the more accurate of the two',
+        'They cost the same, so it makes no difference which I use'
       ],
       answer: 0,
-      why: 'Asking the AI costs {queryCost}; revealing the truth costs {revealCost}. Asking is cheaper because it does not tell you the prize.'
+      why: 'Asking costs {queryCost} and revealing costs {revealCost}. Asking is cheaper precisely BECAUSE it ' +
+           'does not tell you the prize \u2014 it returns an estimate, which can be wrong.'
     },
     {
       id: 'qai_score',
       strict: true,
-      prompt: 'You ask the AI about position 40 and it says 70. You stop on position 40 without revealing it. What do you get?',
+      prompt: 'Earlier this round the AI said 55 about a position you then revealed, and it was exactly 55. Now it says 70 about position 40. You stop on position 40 without revealing it. What are you paid?',
       options: [
-        '70 points, because that is what the AI said',
-        'The true prize at position 40, whatever it turns out to be — it may not be 70',
-        'Nothing, because I did not reveal it',
+        'The true prize at position 40, whatever it turns out to be \u2014 the AI being right before says nothing about now',
+        '70 points, because the AI has been accurate this round',
+        '55 points, the last number it got right',
         'The average of 70 and the true prize'
       ],
-      answer: 1,
-      why: 'The AI\'s number is an ESTIMATE, never a prize. You are paid the true prize where you stop, whatever it turns out to be.'
+      answer: 0,
+      why: 'The AI is exactly right at the positions it knows and guesses everywhere else, and nothing in an ' +
+           'answer tells you which of the two you have just been given. You are always paid the TRUE prize ' +
+           'where you stop.'
     },
     {
       id: 'qai_right',
-      prompt: 'Is the AI always right?',
+      prompt: 'Where is the AI\u2019s answer most likely to be far from the truth?',
       options: [
-        'Yes, its answers are the true prizes',
-        'No — it knows some positions exactly and guesses everywhere else',
-        'It is right in the middle of the line and wrong at the ends',
-        'It is right about half the time, at random'
+        'Far from any position it knows \u2014 a long stretch with nothing revealed in it',
+        'Close to a position it knows',
+        'At a position you have just revealed',
+        'It is equally likely to be far out anywhere on the line'
       ],
-      answer: 1,
-      why: 'It knows a few positions exactly and interpolates between them. It is confident everywhere, right only in places.'
+      answer: 0,
+      why: 'Between two positions it knows, it simply draws a straight line. The further you are from either ' +
+           'of them, the more room the real prizes have had to wander away from that line.'
     },
     {
       id: 'qai_tell',
-      prompt: 'Can you tell, from a single answer, whether the AI knew that position or guessed it?',
-      options: ['Yes, a guess is shown differently', 'Yes, a guess takes longer to arrive', 'No', 'Only if the answer is a round number'],
-      answer: 2,
-      why: 'No — every answer is rounded the same way and arrives after the same delay, so nothing in it says whether it was known or guessed.'
+      prompt: 'The AI answers 62 about a position \u2014 quickly, and to the nearest point, as always. What does that tell you about whether it knew that position or guessed it?',
+      options: [
+        'Nothing \u2014 every answer is rounded the same way and arrives after the same delay',
+        'It knew it, because the answer came back quickly',
+        'It guessed, because 62 is not a round number',
+        'It knew it, because it gave a single number rather than a range'
+      ],
+      answer: 0,
+      why: 'Known and guessed answers are presented identically, on purpose. You cannot tell them apart from ' +
+           'the answer itself \u2014 only revealing a position ever settles what is there.'
     },
     {
       id: 'qai_outside',
-      prompt: 'Outside the leftmost and rightmost positions the AI knows, what is its answer based on?',
+      prompt: 'The AI says 45 at position 92, 45 at position 97 and 45 at position 100. What is the most likely explanation?',
       options: [
-        'Nothing beyond the nearest position it knows — it repeats that value',
-        'The overall average of the line',
-        'It continues the slope it had at the edge',
-        'It refuses to answer out there'
+        'The outermost position it knows is at or before 92, and beyond that it just repeats that value',
+        'The prizes really are 45 all the way to the end of the line',
+        'The AI has stopped working',
+        'Out there it answers with the average of the whole line'
       ],
       answer: 0,
-      why: 'Beyond the outermost position it knows, it simply repeats that value. It cannot see further out than its own knowledge.'
+      why: 'Beyond the outermost position it knows, the AI has nothing to interpolate between, so it repeats ' +
+           'that position\u2019s value. A flat run of identical answers is what the edge of its knowledge looks like.'
     },
     {
       id: 'qai_update',
-      prompt: 'What happens to the AI’s answers after you reveal a position?',
+      prompt: 'The AI said 30 at position 60. You then reveal position 58, which holds 90. You ask about position 60 again, at full cost. What should you expect?',
       options: [
-        'Nothing — it never changes',
-        'They can change, because your reveal becomes something it knows',
-        'It stops answering about that position',
-        'They become exactly right everywhere'
+        'A different answer is quite possible \u2014 what I revealed is now part of what it knows',
+        'Exactly 30 again \u2014 its answers never change',
+        'Exactly 90, the value I have just revealed',
+        'It will refuse, because I have already asked about position 60'
       ],
-      answer: 1,
-      why: 'Anything you reveal becomes something the AI knows, so its later answers can change.'
+      answer: 0,
+      why: 'Everything you reveal is added to what the AI knows, so the line it draws moves and its later ' +
+           'answers can change \u2014 which is why asking again can be worth the {queryCost}.'
     }
   ];
 

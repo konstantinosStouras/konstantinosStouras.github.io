@@ -2534,6 +2534,44 @@ strip on top of it and short enough not to push it down, the buttons within
 220px of the plot's bottom in the same column, and no "knows N" anywhere on the
 round screen or in its reopened summary.
 
+**The comprehension gates ask participants to USE the rules, and hold them on
+the explanation** (owner 2026-08). Two changes that go together. (1) **The gate
+grades on the first press and continues on the second** (`reviewing` in
+`renderQuiz`): a correct answer has always been given a green "✓ Correct." plus
+its `why`, but when EVERYTHING was right the screen advanced in the same click,
+so the explanation was drawn onto a screen already leaving — nobody ever read
+one. The first press now grades, freezes the answers (radios disabled, so
+nothing can be changed after grading) and turns the button into **Continue**;
+attempts and first-answer correctness are still recorded on the press that
+graded them, so the measure is untouched. `selftest` fails if any item lacks a
+`why`. (2) **Every question was rewritten to be applied rather than recall.**
+The reminder above the gate — and now the strip on top of every plot — states
+both costs and the step bound outright, so "what does it cost to reveal?" was
+answered by copying; `selftest` fails any item whose correct option is nothing
+but a cost token. The twelve items now test: that the step bound decays with
+distance, that it works leftwards as well as rightwards, that the prize ceiling
+binds before it does, applied scoring arithmetic, that a round can end below
+zero, that prizes are redrawn; and for the AI, the ask-vs-reveal trade-off, that
+an earlier exact answer certifies nothing (the strict gate), where its answers
+are likeliest to be wrong, that a known and a guessed answer are indistinguishable,
+that a flat run marks the edge of its knowledge, and that a reveal moves its
+line. **The twelve ids are unchanged** — they are the export's own column names,
+so a rename would break every session already collected; several no longer
+describe what they ask (`q_adj_lo1` is a "highest" question) and that is
+deliberate. The three arithmetic items state their numbers outright, so
+`selftest` pins the step bound and prize range they were written for and fails
+if either default moves. Every prompt and option stays editable per session in
+the Wording tab; only the answer KEY is structure.
+
+**Each running cost is shown in its own action's hue** (owner 2026-08): the AI's
+in the purple of "Ask the AI", revealing's in the blue of "Reveal" — both, not
+just the AI's, because leaving one cost in alarm-red beside the other in the
+AI's brand colour would make one of the two PAID actions look more expensive
+than the other, and which of them a participant presses is the primary outcome.
+Red stays on the cost tag INSIDE each button, where it means "this is what it
+costs". "Stop and nominate" is centred under the pair rather than aligned to the
+left one, so it reads as belonging to neither.
+
 **Engagement, under the same rule** (owner 2026-08): a progress bar + "round n
 of 12 in this half" under the round title, milestone pop-ups at the halfway
 point / three rounds left / the last round, one in-round encouragement tip, a

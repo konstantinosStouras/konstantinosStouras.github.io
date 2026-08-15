@@ -92,6 +92,8 @@
       .replace(/\{queryCap\}/g, P.costs.queryCap)
       .replace(/\{scored\}/g, P.rounds.scoredPerBlock)
       .replace(/\{warmup\}/g, P.rounds.warmupPerBlock)
+      .replace(/\{prizeMin\}/g, P.env.prizeMin)
+      .replace(/\{prizeMax\}/g, P.env.prizeMax)
       .replace(/\{K\}/g, currentK());
   }
   function currentK() {
@@ -883,6 +885,13 @@
 
   function renderQuiz(qs, hostId, feedbackId, btnId, onDone) {
     var host = $(hostId), started = Date.now();
+    // Grading and continuing are TWO presses. Until now a participant who got
+    // everything right never saw a single explanation: the screen advanced in
+    // the same click that graded it, so the green "why" under each question was
+    // drawn onto a screen already on its way out. The point of a comprehension
+    // gate is that the rule is understood, not that the click was correct — so
+    // the first press grades and freezes the answers, and the second continues.
+    var reviewing = false;
     var rem = $(hostId === 'aiquiz-body' ? 'aiquiz-reminder' : 'quiz-reminder');
     if (rem) rem.innerHTML = quizReminder(hostId === 'aiquiz-body');
     host.innerHTML = qs.map(function (q, qi) {
@@ -895,8 +904,12 @@
         '</div>';
     }).join('');
     $(feedbackId).style.display = 'none';
+    $(feedbackId).className = 'feedback bad';
+    $(btnId).textContent = 'Submit answers';
 
     $(btnId).onclick = function () {
+      // Second press: the explanations have been on screen since the first.
+      if (reviewing) { onDone(); return; }
       var allStrictOk = true, anyWrong = false, unanswered = 0;
       // Every question must be ANSWERED before anyone moves on — leaving one
       // blank is not the same as getting it wrong, and an unanswered question
@@ -957,7 +970,20 @@
         $(feedbackId).style.display = 'block';
         return;
       }
-      onDone();
+      // PASSED. Hold the screen on the explanations rather than advancing
+      // through them. The answers are frozen at the moment they were graded, so
+      // nothing can be changed after the fact, and the button says what it now
+      // does. Attempts and first-answer correctness were recorded above, on the
+      // press that graded them, so the measure is untouched by this stage.
+      reviewing = true;
+      var inputs = host.querySelectorAll('input[type=radio]');
+      for (var ii = 0; ii < inputs.length; ii++) inputs[ii].disabled = true;
+      $(btnId).textContent = 'Continue';
+      $(feedbackId).className = 'feedback good';
+      $(feedbackId).textContent = anyWrong
+        ? 'Have a look at the answers below \u2014 each one says why. Continue when you are ready.'
+        : 'All correct. Each answer below says why \u2014 continue when you are ready.';
+      $(feedbackId).style.display = 'block';
     };
   }
 

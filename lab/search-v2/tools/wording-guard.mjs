@@ -25,11 +25,19 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs';
 const { chromium } = await import(PW);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// The item whose CORRECT option this run rewords. Read from the content module
+// rather than written down: the questions themselves are rewritten from time to
+// time, and what this guard is about is that rewording cannot move an answer
+// key — not what any one question happens to ask.
+const Q_ID = 'q_cost';
+const Q_ANSWER = createRequire(import.meta.url)('../content.js')
+  .QUIZ_BASE.find(q => q.id === Q_ID).answer;
 const ROOT = resolve(HERE, '..', '..', '..');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
 
@@ -39,6 +47,24 @@ const ok = (c, m, extra) => {
   if (c) console.log('  ok   — ' + m);
   else { fails++; console.log('  FAIL — ' + m + (extra ? '\n         ' + extra : '')); }
 };
+
+// The comprehension gate grades on the first press and continues on the second,
+// so the explanations under each question are actually read. Click through both,
+// and only the second one if the screen is already past the gate.
+async function submitQuiz(page, btn, screenId) {
+  await page.locator(btn).click();
+  for (let i = 0; i < 3; i++) {
+    const still = await page.evaluate(id => {
+      const el = document.getElementById(id);
+      return !!el && el.classList.contains('active');
+    }, screenId);
+    if (!still) return;
+    const label = (await page.locator(btn).textContent() || '').trim();
+    if (!/^Continue$/i.test(label)) return;      // held back by a wrong answer
+    await page.locator(btn).click();
+    await page.waitForTimeout(60);
+  }
+}
 
 // ======================================================================
 console.log('\n1 · app.js reads content only through the resolved copy');
@@ -76,7 +102,7 @@ const OV = {
   'instr.i1.title': 'INSTR-TITLE-OVERRIDE',
   'instr.i1.body': 'INSTR-BODY-OVERRIDE for the first screen.',
   'quiz.q_cost.prompt': 'QUIZ-PROMPT-OVERRIDE: what does one reveal cost?',
-  'quiz.q_cost.opt.2': 'QUIZ-OPTION-OVERRIDE',
+  ['quiz.' + Q_ID + '.opt.' + Q_ANSWER]: 'QUIZ-OPTION-OVERRIDE',   // the CORRECT option, reworded
   'reg.f_year.prompt': 'REG-PROMPT-OVERRIDE: how far through are you?',
   'reg.f_year.opt.0': 'REG-OPT-OVERRIDE',
   'enc.rush.title': 'ENC-RUSH-OVERRIDE',
@@ -171,9 +197,9 @@ ok(!/\{revealCost\}|\{stepBound\}/.test(quizText),
 
 // Rewording must not disturb grading: the overridden option is still the
 // correct one, because the answer key is an index the session cannot move.
-const answered = await pg.evaluate(() => {
+const answered = await pg.evaluate((QID) => {
   const C = window.SVContent;
-  const q = C.QUIZ_BASE.find(x => x.id === 'q_cost');
+  const q = C.QUIZ_BASE.find(x => x.id === QID);
   document.querySelectorAll('#quiz-body .quiz-q').forEach(el => {
     const id = el.dataset.q;
     const want = C.QUIZ_BASE.find(x => x.id === id).answer;
@@ -181,9 +207,10 @@ const answered = await pg.evaluate(() => {
     if (input) input.checked = true;
   });
   return q.answer;
-});
-ok(answered === 2, 'the answer key for the reworded question is where it always was');
-await pg.locator('#btn-quiz').click();
+}, Q_ID);
+ok(answered === Q_ANSWER,
+  'the answer key for the reworded question is where the study put it, not where the session did');
+await submitQuiz(pg, '#btn-quiz', 's-quiz');
 await pg.waitForTimeout(400);
 ok(!(await pg.locator('#s-quiz').evaluate(el => el.classList.contains('active'))),
   'answering by the UNCHANGED key passes the gate, so rewording did not break grading');

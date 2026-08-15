@@ -64,6 +64,24 @@ const ok = (c, m, extra) => {
   if (c) console.log('  ok   — ' + m);
   else { fails++; console.log('  FAIL — ' + m + (extra ? '\n         ' + extra : '')); }
 };
+
+// The comprehension gate grades on the first press and continues on the second,
+// so the explanations under each question are actually read. Click through both,
+// and only the second one if the screen is already past the gate.
+async function submitQuiz(page, btn, screenId) {
+  await page.locator(btn).click();
+  for (let i = 0; i < 3; i++) {
+    const still = await page.evaluate(id => {
+      const el = document.getElementById(id);
+      return !!el && el.classList.contains('active');
+    }, screenId);
+    if (!still) return;
+    const label = (await page.locator(btn).textContent() || '').trim();
+    if (!/^Continue$/i.test(label)) return;      // held back by a wrong answer
+    await page.locator(btn).click();
+    await page.waitForTimeout(60);
+  }
+}
 const head = t => console.log('\n' + t);
 
 // ── the session ────────────────────────────────────────────────────────────
@@ -100,7 +118,7 @@ const nInstr = await pg.evaluate(() => window.SVContent.INSTRUCTIONS.length);
 for (let i = 0; i < nInstr; i++) await pg.locator('#btn-instr-next').click();
 await pg.waitForSelector('#s-quiz.active');
 await quiz('base');
-await pg.locator('#btn-quiz').click();
+await submitQuiz(pg, '#btn-quiz', 's-quiz');
 await pg.waitForSelector('#s-blockintro.active, #s-round.active');
 
 const plan = await pg.evaluate(() => window.SVApp.plan());
@@ -116,7 +134,7 @@ for (let i = 0; i < plan.length; i++) {
     for (let k = 0; k < n; k++) await pg.locator('#btn-ai-next').click();
     await pg.waitForSelector('#s-aiquiz.active');
     await quiz('ai');
-    await pg.locator('#btn-aiquiz').click();
+    await submitQuiz(pg, '#btn-aiquiz', 's-aiquiz');
     await pg.waitForSelector('#s-blockintro.active, #s-round.active');
     if (await isOn('s-blockintro')) await pg.locator('#btn-bi').click();
   }

@@ -51,6 +51,24 @@ const ok = (c, m, extra) => {
   else { fails++; console.log('    FAIL — ' + m + (extra ? '\n           ' + extra : '')); }
 };
 
+// The comprehension gate grades on the first press and continues on the second,
+// so the explanations under each question are actually read. Click through both,
+// and only the second one if the screen is already past the gate.
+async function submitQuiz(page, btn, screenId) {
+  await page.locator(btn).click();
+  for (let i = 0; i < 3; i++) {
+    const still = await page.evaluate(id => {
+      const el = document.getElementById(id);
+      return !!el && el.classList.contains('active');
+    }, screenId);
+    if (!still) return;
+    const label = (await page.locator(btn).textContent() || '').trim();
+    if (!/^Continue$/i.test(label)) return;      // held back by a wrong answer
+    await page.locator(btn).click();
+    await page.waitForTimeout(60);
+  }
+}
+
 const WANTED = (process.env.SV_BROWSERS || 'chromium,firefox,webkit').split(',').map(s => s.trim());
 const EXEC = { chromium: process.env.CHROMIUM || '/opt/pw-browsers/chromium' };
 
@@ -175,7 +193,7 @@ async function runOne(name) {
   // A wrong answer on the scoring question must not let anyone through when the
   // gate is strict — but the base gate's strict question is the AI one, so here
   // we simply check that an unanswered form does not advance.
-  await pg.locator('#btn-quiz').click();
+  await submitQuiz(pg, '#btn-quiz', 's-quiz');
   ok(await visible(pg, 's-quiz'), 'submitting an empty comprehension form does not advance');
   // The reminder carries what a participant needs to ANSWER, on the same screen.
   const rem = await pg.locator('#quiz-reminder').innerText();
@@ -185,7 +203,7 @@ async function runOne(name) {
   ok(/at most/.test(rem), 'and the step bound the adjacency questions turn on');
 
   await answerQuiz(pg, 'base');
-  await pg.locator('#btn-quiz').click();
+  await submitQuiz(pg, '#btn-quiz', 's-quiz');
   await pg.waitForSelector('#s-blockintro.active, #s-round.active');
   ok(true, 'answering correctly clears the base gate');
 
@@ -216,7 +234,7 @@ async function runOne(name) {
       });
       await answerQuiz(pg, 'ai');
       await pg.locator(`input[name="${wrong.id}"][value="${wrong.wrong}"]`).check();
-      await pg.locator('#btn-aiquiz').click();
+      await submitQuiz(pg, '#btn-aiquiz', 's-aiquiz');
       ok(await visible(pg, 's-aiquiz'),
         'the STRICT gate blocks: getting "the AI’s number is not your prize" wrong does not let you through');
       // Every answered question is marked, and a correct one carries the reason.
@@ -231,7 +249,7 @@ async function runOne(name) {
       const aiRem = await pg.locator('#aiquiz-reminder').innerText();
       ok(/not a prize/.test(aiRem), 'the AI gate reminds them the AI’s number is not a prize', aiRem.split('\n')[2]);
       await answerQuiz(pg, 'ai');
-      await pg.locator('#btn-aiquiz').click();
+      await submitQuiz(pg, '#btn-aiquiz', 's-aiquiz');
       await pg.waitForSelector('#s-blockintro.active, #s-round.active');
       if (await visible(pg, 's-blockintro')) await pg.locator('#btn-bi').click();
     }
@@ -611,7 +629,7 @@ async function runOne(name) {
   await rp.locator('#btn-reg').click();            // background is optional
   for (let i = 0; i < 5; i++) await rp.locator('#btn-instr-next').click();
   await answerQuiz(rp, 'base');
-  await rp.locator('#btn-quiz').click();
+  await submitQuiz(rp, '#btn-quiz', 's-quiz');
   await rp.waitForSelector('#s-blockintro.active, #s-round.active');
   if (await visible(rp, 's-blockintro')) await rp.locator('#btn-bi').click();
   await rp.waitForSelector('#s-round.active');
