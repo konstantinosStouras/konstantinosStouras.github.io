@@ -13,7 +13,7 @@
    screen — and asserts, along the way, the things the design brief is strict
    about: that the "Ask the AI" button is ABSENT (not disabled) in an AI-off
    round, that a query never reveals the truth, that a reveal cannot be charged
-   twice, that the score is the true prize at the nominated position minus what
+   twice, that the score is what the session's stop rule settles on minus what
    was spent, and that every decision reaches the log with its full information
    state.
 
@@ -23,6 +23,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs';
 const pw = await import(PW);
@@ -44,12 +45,38 @@ const srv = createServer(async (req, res) => {
 await new Promise(r => srv.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${srv.address().port}/lab/search-v2/`;
 
+// Which settlement rule this build runs (costs.stopRule): 'best_found' —
+// stopping takes the best prize already found and opens nothing new — or the
+// legacy 'nominate'. Read from CONFIG, never assumed, so this file keeps
+// testing whichever rule the study is actually using.
+const CFG = createRequire(import.meta.url)('../config.js');
+const STOP_RULE = CFG.DEFAULTS.costs.stopRule || 'nominate';
+const BEST_FOUND = STOP_RULE !== 'nominate';
+
 let fails = 0, checks = 0;
 const ok = (c, m, extra) => {
   checks++;
   if (c) console.log('    ok   — ' + m);
   else { fails++; console.log('    FAIL — ' + m + (extra ? '\n           ' + extra : '')); }
 };
+
+// The comprehension gate grades on the first press and continues on the second,
+// so the explanations under each question are actually read. Click through both,
+// and only the second one if the screen is already past the gate.
+async function submitQuiz(page, btn, screenId) {
+  await page.locator(btn).click();
+  for (let i = 0; i < 3; i++) {
+    const still = await page.evaluate(id => {
+      const el = document.getElementById(id);
+      return !!el && el.classList.contains('active');
+    }, screenId);
+    if (!still) return;
+    const label = (await page.locator(btn).textContent() || '').trim();
+    if (!/^Continue$/i.test(label)) return;      // held back by a wrong answer
+    await page.locator(btn).click();
+    await page.waitForTimeout(60);
+  }
+}
 
 const WANTED = (process.env.SV_BROWSERS || 'chromium,firefox,webkit').split(',').map(s => s.trim());
 const EXEC = { chromium: process.env.CHROMIUM || '/opt/pw-browsers/chromium' };
@@ -175,17 +202,18 @@ async function runOne(name) {
   // A wrong answer on the scoring question must not let anyone through when the
   // gate is strict — but the base gate's strict question is the AI one, so here
   // we simply check that an unanswered form does not advance.
-  await pg.locator('#btn-quiz').click();
+  await submitQuiz(pg, '#btn-quiz', 's-quiz');
   ok(await visible(pg, 's-quiz'), 'submitting an empty comprehension form does not advance');
   // The reminder carries what a participant needs to ANSWER, on the same screen.
   const rem = await pg.locator('#quiz-reminder').innerText();
   ok(/Revealing/.test(rem) && new RegExp(String(await pg.evaluate(() => window.CONFIG.DEFAULTS.costs.revealCost))).test(rem),
     'the comprehension gate reminds the participant what revealing costs', rem.split('\n')[1]);
-  ok(/true prize where you stop/.test(rem), 'and how the round is scored');
+  ok(BEST_FOUND ? /best prize you have found/.test(rem) : /true prize where you stop/.test(rem),
+    'and how the round is scored, in the words of THIS session\'s stop rule');
   ok(/at most/.test(rem), 'and the step bound the adjacency questions turn on');
 
   await answerQuiz(pg, 'base');
-  await pg.locator('#btn-quiz').click();
+  await submitQuiz(pg, '#btn-quiz', 's-quiz');
   await pg.waitForSelector('#s-blockintro.active, #s-round.active');
   ok(true, 'answering correctly clears the base gate');
 
@@ -216,7 +244,7 @@ async function runOne(name) {
       });
       await answerQuiz(pg, 'ai');
       await pg.locator(`input[name="${wrong.id}"][value="${wrong.wrong}"]`).check();
-      await pg.locator('#btn-aiquiz').click();
+      await submitQuiz(pg, '#btn-aiquiz', 's-aiquiz');
       ok(await visible(pg, 's-aiquiz'),
         'the STRICT gate blocks: getting "the AI’s number is not your prize" wrong does not let you through');
       // Every answered question is marked, and a correct one carries the reason.
@@ -231,7 +259,7 @@ async function runOne(name) {
       const aiRem = await pg.locator('#aiquiz-reminder').innerText();
       ok(/not a prize/.test(aiRem), 'the AI gate reminds them the AI’s number is not a prize', aiRem.split('\n')[2]);
       await answerQuiz(pg, 'ai');
-      await pg.locator('#btn-aiquiz').click();
+      await submitQuiz(pg, '#btn-aiquiz', 's-aiquiz');
       await pg.waitForSelector('#s-blockintro.active, #s-round.active');
       if (await visible(pg, 's-blockintro')) await pg.locator('#btn-bi').click();
     }
@@ -264,10 +292,21 @@ async function runOne(name) {
     // Move the slider with the arrow control and check the label follows.
     await pg.locator('#btn-pos-right').click();
     const selNow = await pg.evaluate(() => window.SVApp.selected());
-    ok((await pg.locator('#pos-input').inputValue()).trim() === String(selNow)
-       && new RegExp('position ' + selNow + '$').test((await pg.locator('#btn-nominate').textContent()).trim()),
-      i === 0 ? 'the number box and the nominate button both name the selected position'
-              : 'selection tracked');
+    {
+      const boxOk = (await pg.locator('#pos-input').inputValue()).trim() === String(selNow);
+      const label = (await pg.locator('#btn-nominate').textContent()).trim();
+      // Under 'best_found' the stop button deliberately does NOT name the
+      // selection — it names what stopping would take, which is the point of
+      // the rule; under 'nominate' it must name the position it would take.
+      const labelOk = BEST_FOUND
+        ? /^Stop and take your best prize: -?\d+ points$|^Stop with no prize found$/.test(label)
+        : new RegExp('position ' + selNow + '$').test(label);
+      ok(boxOk && labelOk,
+        i === 0 ? (BEST_FOUND
+          ? 'the number box names the selection, and the stop button names what stopping would take'
+          : 'the number box and the nominate button both name the selected position')
+                : 'selection tracked', label);
+    }
 
     if (r.cond === 'AI_ON' && askVisible && !parityChecked) {
       parityChecked = true;
@@ -399,10 +438,15 @@ async function runOne(name) {
         'the reveal cost is charged once (' + want + '), and shown separately from the query cost', cost.trim());
     }
 
-    // Stop and nominate. The button must name the position.
+    // Stopping. The button must say what it will do — under 'best_found' the
+    // prize it takes (it can only ever take one already found), under
+    // 'nominate' the position it would land on.
     const label = await pg.locator('#btn-nominate').textContent();
-    ok(i > 0 || new RegExp('position ' + revealPos).test(label),
-      'the nominate button names the position, so nomination is never accidental', label);
+    ok(i > 0 || (BEST_FOUND
+        ? /Stop and take your best prize: -?\d+ points/.test(label)
+        : new RegExp('position ' + revealPos).test(label)),
+      BEST_FOUND ? 'the stop button names the prize it takes, so stopping is never a surprise'
+                 : 'the nominate button names the position, so nomination is never accidental', label);
     await pg.locator('#btn-nominate').click();
     // This bot buys one reveal and stops, which is exactly the "closed after
     // almost no searching" pattern the focus prompt exists for. It must always
@@ -435,7 +479,9 @@ async function runOne(name) {
       scoreChecked = true;
       const body = await pg.locator('#inter-body').innerText();
       ok(/Round score/.test(body), 'the between-rounds screen reports the round score');
-      ok(/You stopped on position/.test(body), 'the true prize at the nominated position is shown before moving on');
+      ok(BEST_FOUND ? /You stopped and took the best prize you had found, at position/.test(body)
+                    : /You stopped on position/.test(body),
+        'the prize the round settled on is shown before moving on', body.split('\n')[0]);
       ok(/to go\.|last round/.test(body), 'the between-rounds screen says how many rounds remain');
       const marks = await pg.evaluate(() => document.querySelectorAll('#inter-plot .nom-mark').length);
       ok(marks === 1, 'the nominated position is marked on the plot');
@@ -553,17 +599,38 @@ async function runOne(name) {
   await mp.keyboard.press('Escape');
   ok(!(await mp.locator('#ov-summary.show').count()), 'Escape closes the summary');
 
-  // Nominating a position never touched must confirm — it is a pure gamble and
-  // more likely a misclick than an intention (§14).
+  // The confirmation. Under 'best_found' stopping can never land on an unknown
+  // prize, so the only case worth a question is stopping with NOTHING found —
+  // which scores zero and is almost always a mis-click. Under the legacy rule
+  // it is nominating a position never touched, which is a pure gamble (§14).
   await mp.evaluate(() => window.SVApp.select(7));
-  await mp.locator('#btn-nominate').click();
-  ok(await mp.locator('#ov-nominate.show').count() === 1,
-    'stopping on a position that was never asked about or revealed asks for confirmation');
-  ok(/asked about or revealed/.test(await mp.locator('#nom-msg').innerText()) &&
-     /whatever prize is actually there/.test(await mp.locator('#nom-msg').innerText()),
-    'and says plainly what the gamble is');
-  await mp.locator('#btn-nom-cancel').click();
-  ok(await visible(mp, 's-round'), 'declining the confirmation keeps the round going');
+  if (BEST_FOUND) {
+    const hasFound = await mp.evaluate(() =>
+      /Stop and take your best prize/.test(document.getElementById('btn-nominate').textContent));
+    await mp.locator('#btn-nominate').click();
+    const asked = await mp.locator('#ov-nominate.show').count() === 1;
+    if (hasFound) {
+      ok(!asked, 'with a prize already found, stopping asks nothing — it cannot be a gamble');
+      // Nothing opened; the round is still going, and no new prize was revealed.
+      ok(await visible(mp, 's-interstitial') || await visible(mp, 's-round'),
+        'and stopping settles the round straight away');
+    } else {
+      ok(asked, 'stopping with no prize found asks for confirmation');
+      ok(/no prize to take|scores <b>0<\/b>|scores 0/.test(await mp.locator('#nom-msg').innerHTML()),
+        'and says plainly that it scores zero');
+      await mp.locator('#btn-nom-cancel').click();
+      ok(await visible(mp, 's-round'), 'declining the confirmation keeps the round going');
+    }
+  } else {
+    await mp.locator('#btn-nominate').click();
+    ok(await mp.locator('#ov-nominate.show').count() === 1,
+      'stopping on a position that was never asked about or revealed asks for confirmation');
+    ok(/asked about or revealed/.test(await mp.locator('#nom-msg').innerText()) &&
+       /whatever prize is actually there/.test(await mp.locator('#nom-msg').innerText()),
+      'and says plainly what the gamble is');
+    await mp.locator('#btn-nom-cancel').click();
+    ok(await visible(mp, 's-round'), 'declining the confirmation keeps the round going');
+  }
 
   // Arrow keys move by exactly one, from the keyboard alone — INCLUDING when the
   // focus happens to sit on a button, which is where a click leaves it.
@@ -611,7 +678,7 @@ async function runOne(name) {
   await rp.locator('#btn-reg').click();            // background is optional
   for (let i = 0; i < 5; i++) await rp.locator('#btn-instr-next').click();
   await answerQuiz(rp, 'base');
-  await rp.locator('#btn-quiz').click();
+  await submitQuiz(rp, '#btn-quiz', 's-quiz');
   await rp.waitForSelector('#s-blockintro.active, #s-round.active');
   if (await visible(rp, 's-blockintro')) await rp.locator('#btn-bi').click();
   await rp.waitForSelector('#s-round.active');

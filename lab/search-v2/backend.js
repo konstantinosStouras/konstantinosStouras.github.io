@@ -94,15 +94,20 @@ window.SVBackend = (function () {
         return Promise.resolve({ value: value });
       },
 
+      // Settled by Specs.settle, the SAME function the Cloud Function runs, so
+      // the two modes cannot drift on the one thing a client must never decide.
       nominate: function (position) {
         if (!cur) return Promise.reject(new Error('round not started'));
-        var trueValue = cur.map[position - 1];
-        var totalCost = cur.queries.length * P.costs.queryCost + cur.reveals.length * P.costs.revealCost;
-        var raw = trueValue - totalCost;
+        var st = Specs.settle(P, {
+          map: cur.map, preOpened: cur.spec.pre_opened,
+          reveals: cur.reveals, queries: cur.queries, position: position
+        });
         return Promise.resolve({
-          trueValue: trueValue,
-          score: P.costs.scoreFloor ? Math.max(0, raw) : raw,
-          raw_score: raw, totalCost: totalCost,
+          trueValue: st.trueValue,
+          nominatedPosition: st.position,
+          nominationType: st.nominationType,
+          stopRule: st.rule,
+          score: st.score, raw_score: st.raw_score, totalCost: st.totalCost,
           nQueries: cur.queries.length, nReveals: cur.reveals.length
         });
       },

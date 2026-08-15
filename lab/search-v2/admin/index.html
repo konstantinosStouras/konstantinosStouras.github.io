@@ -425,6 +425,16 @@
                   <div class="field"><label>Query cap per round <span class="defval">· default 40</span></label><input type="number" id="p-costs-queryCap" min="1" max="500"></div>
                   <div class="field"><label>Reveal cap per round <span class="defval">· default 20</span></label><input type="number" id="p-costs-revealCap" min="1" max="500"></div>
                 </div>
+                <div class="field"><label>Stopping <span class="defval">· default: take the best prize found</span></label>
+                  <div class="seg" id="p-costs-stopRule"><button data-v="best_found">Takes the best prize already found</button><button data-v="nominate">Nominates the selected position</button></div>
+                  <div class="hint"><b>Takes the best prize already found</b> — stopping ends the search and pays the
+                  best true prize the participant holds (open at the start, or revealed), minus what they spent. It never
+                  opens a new position, so the &ldquo;net value if you stop right now&rdquo; tile IS the score.<br>
+                  <b>Nominates the selected position</b> is the brief&rsquo;s original rule: the true prize wherever they
+                  stop, revealed or not. Only that rule lets a participant take a position on the AI&rsquo;s word without
+                  verifying it &mdash; which is what <code>nomination_type</code>, and the sparse/dense verification
+                  threshold, were designed to measure. Sessions created before this control existed run the original rule.</div>
+                </div>
                 <div class="field"><label>Score floor <span class="defval">· default off</span></label>
                   <div class="seg" id="p-costs-scoreFloor"><button data-v="false">Off &mdash; a round may end negative</button><button data-v="true">Floor at zero</button></div>
                   <div class="hint">Off is the recommended value: the brief requires a negative round to be possible, and logged.</div>

@@ -399,6 +399,9 @@
           n_verifications: verified,
           nominated_position: nomPos, nominated_true_value: nomVal,
           nomination_type: nomType,
+          // Which settlement rule the session ran under, so two sessions with
+          // different rules can never be pooled by accident (config.costs.stopRule).
+          stop_rule: end.stop_rule || (art && art.params && art.params.costs && art.params.costs.stopRule) || 'nominate',
           nomination_ai_error: nomAiErr,
           wasted_verifications: wasted,
           redundant_queries: Math.max(0, (num(end.n_queries) || 0) - 2 * spec.ai_k),

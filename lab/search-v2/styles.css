@@ -67,6 +67,7 @@ p{margin:.6em 0;}
 .quiz-opt input{transform:scale(1.15); margin-top:3px; flex:0 0 auto;}
 .feedback{border-radius:10px; padding:11px 13px; font-size:14px; margin-top:14px;}
 .feedback.bad{background:#fdeeee; border:1px solid #f3c9c9; color:#a12a2a;}
+.feedback.good{background:#eef8e9; border:1px solid #cfe8c2; color:#2c5d1f;}
 .q-fb{margin-top:8px;}
 
 .survey-part{margin:26px 0 2px; padding-top:16px; border-top:1px solid var(--line);}
@@ -118,12 +119,22 @@ p{margin:.6em 0;}
    and "Stop and nominate" sits apart below a divider, never in the swap. */
 .act-row{margin-top:8px; border:1px solid var(--line); border-radius:10px;
   padding:12px 14px; background:var(--panel);}
-.act-pair{display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start;}
+/* Two paid buttons: an equal-width pair, centred as a block. ONE paid button
+   (an AI-off round, where "Ask the AI" is not in the DOM at all): a single
+   centred pill of the same width one of the pair would have — a lone button
+   stretched across the whole row read as a banner rather than an action, and
+   made the AI-off screen look like a different study. */
+.act-pair{display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start;
+  max-width:560px; margin-left:auto; margin-right:auto;}
+.act-pair.solo{grid-template-columns:minmax(0,271px); justify-content:center;}
 @media (max-width:620px){ .act-pair{grid-template-columns:1fr;} }
-.act-cell{display:flex; flex-direction:column;}
+.act-cell{display:flex; flex-direction:column; text-align:center;}
 .act-row .btn{width:100%;}
 .act-sep{height:1px; background:var(--line); margin:14px 0 12px;}
-.act-stop{max-width:520px;}
+/* "Stop and nominate" is centred under the two paid buttons, not aligned to
+   the left one: it belongs to neither of them, and an off-centre position
+   under a symmetric pair reads as belonging to whichever it sits below. */
+.act-stop{max-width:560px; margin-left:auto; margin-right:auto; text-align:center;}
 /* One class for both paid buttons: every property below is shared, so a change
    can only ever be made to BOTH. The two hues differ in hue alone — the same
    saturation and lightness, and therefore the same contrast against white
@@ -277,7 +288,7 @@ p{margin:.6em 0;}
 
 /* ---- the rules that matter while playing, on top of the plot ---- */
 .round-reminder{background:#f6f8fa; border:1px solid var(--line); border-radius:10px;
-  padding:9px 13px; margin:0 0 10px; font-size:13px; line-height:1.65; color:var(--ink);}
+  padding:9px 13px; margin:0 0 12px; font-size:13px; line-height:1.65; color:var(--ink);}
 .round-reminder b{font-weight:700;}
 .round-reminder .rr-lead{text-transform:uppercase; letter-spacing:.06em; font-size:11.5px;
   color:var(--muted); margin-right:6px;}
@@ -333,7 +344,17 @@ p{margin:.6em 0;}
   display:flex; flex-direction:column; gap:2px; min-width:0;}
 .score-band .sb-l{font-size:12.5px; color:var(--muted); line-height:1.35;}
 .score-band .sb-v{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.2;}
-.score-band .sb-v.cost{color:var(--red);}
+/* Each running cost is shown in the hue of the action that produced it — the
+   AI's in the purple of "Ask the AI", revealing's in the blue of "Reveal" —
+   so a number and its button are read as the same thing (owner 2026-08).
+   Both, deliberately, and not just the AI's: leaving one cost in alarm-red
+   while the other carried the AI's own brand colour would make one of the two
+   PAID actions look more expensive than the other, and which of them a
+   participant presses is the primary outcome this study measures. Red stays on
+   the cost tag INSIDE each button, where it means "this is what it costs". */
+.score-band .sb-v.cost{color:var(--blue-d);}
+.score-band .sb.ai .sb-v.cost{color:var(--est-d);}
+.score-band .sb.ai .sb-v .sub{color:var(--est);}
 /* The qualifier under a headline number — "at position 45", the arithmetic
    behind the net value, the count behind a cost. It is a BLOCK: in a 200px
    column an inline qualifier wraps under the numeral anyway, and ragged. */

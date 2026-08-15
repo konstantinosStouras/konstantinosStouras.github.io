@@ -22,6 +22,7 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { join, extname, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs';
 const { chromium } = await import(PW);
@@ -55,6 +56,14 @@ const srv = createServer(async (req, res) => {
 });
 await new Promise(r => srv.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${srv.address().port}/lab/search-v2/`;
+
+const QUIZ_PROBE = (() => {
+  const C = createRequire(import.meta.url)('../content.js');
+  // A distinctive slice of a real prompt — long enough to be unique, short
+  // enough to survive a small rewording of the sentence around it.
+  const p = C.QUIZ_BASE[0].prompt;
+  return p.slice(0, 48);
+})();
 
 let fails = 0, checks = 0;
 const ok = (c, m, extra) => {
@@ -541,7 +550,9 @@ const findable = async (q) => {
   await pg.waitForTimeout(150);
   return (await pg.locator('#wording-body').innerText()).toLowerCase().includes(q.toLowerCase());
 };
-ok(await findable('HIGHEST the prize at position 41'), 'a quick-check question is on the screen');
+// Derived from content.js, never written down: the questions are rewritten from
+// time to time, and what this pins is that they are FINDABLE here at all.
+ok(await findable(QUIZ_PROBE), 'a quick-check question is on the screen', QUIZ_PROBE);
 ok(await findable('how did you decide when to stop'), 'a survey question is on the screen');
 ok(await findable('Out of every 10 questions'), 'a slider item is on the screen');
 ok(await findable('how many times would it come up even'), 'a numeracy item is on the screen');

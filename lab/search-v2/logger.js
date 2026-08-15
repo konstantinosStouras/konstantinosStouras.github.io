@@ -55,7 +55,7 @@ window.Logger = (function () {
     // row of every real session (the bot path in export.js sets it directly,
     // which is why the offline tests never noticed). Anything app.js logs must
     // appear here or it does not exist.
-    'raw_score', 'nomination_type',
+    'raw_score', 'nomination_type', 'stop_rule',
     'stopped_immediately', 'nominated_position', 'nominated_true_value',
     // comprehension / registration / survey
     'question_id', 'attempts', 'ms_to_first_answer', 'first_answer_correct',
