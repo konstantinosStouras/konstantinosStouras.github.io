@@ -308,7 +308,11 @@ exports.act = onCall(async (req) => {
   const entry = await requireOwner(uid, runId, code);
   const art = await artifacts(runId);
   const P = art.params;
-  if (!isFinite(position) || position < 1 || position > P.env.positions) {
+  // Under the 'best_found' rule the client names no position at all — the
+  // server settles from what the participant has actually found — so a missing
+  // or nonsense position is only an error under the legacy 'nominate' rule.
+  const legacyRule = (P.costs.stopRule === 'nominate');
+  if (legacyRule && (!isFinite(position) || position < 1 || position > P.env.positions)) {
     throw new HttpsError('invalid-argument', 'Bad position.');
   }
   const plan = await planFor(art, code, entry.sequence);
@@ -443,20 +447,22 @@ exports.nominate = onCall(async (req) => {
       throw new HttpsError('failed-precondition', 'That round is already finished.');
     }
     const queries = st.queries || [], reveals = st.reveals || [];
-    const trueValue = map[position - 1];
-    const totalCost = queries.length * P.costs.queryCost + reveals.length * P.costs.revealCost;
-    const raw = trueValue - totalCost;
-    const score = P.costs.scoreFloor ? Math.max(0, raw) : raw;
-    const nomType = (reveals.some(function (x) { return x.pos === position; }) || spec.pre_opened.indexOf(position) >= 0)
-      ? 'verified'
-      : (queries.some(function (q) { return q.pos === position; }) ? 'queried_only' : 'untouched');
+    // ONE settlement, shared with the client build through the vendored engine
+    // (tools/sync-engine.mjs keeps the copy honest). Under 'best_found' the
+    // position the client sent is IGNORED: the server takes the best prize the
+    // participant actually holds, which is the whole point of the rule.
+    const settled = Specs.settle(P, {
+      map: map, preOpened: spec.pre_opened, reveals: reveals, queries: queries, position: position
+    });
     const res = {
-      trueValue: trueValue, score: score, raw_score: raw, totalCost: totalCost,
-      nQueries: queries.length, nReveals: reveals.length, nominationType: nomType
+      trueValue: settled.trueValue, score: settled.score, raw_score: settled.raw_score,
+      totalCost: settled.totalCost, nQueries: queries.length, nReveals: reveals.length,
+      nominationType: settled.nominationType, nominatedPosition: settled.position,
+      stopRule: settled.rule
     };
     tx.set(ref, {
       done: true, nominationId: actionId, endedAt: Date.now(),
-      nominatedPosition: position, result: res
+      nominatedPosition: settled.position, result: res
     }, { merge: true });
     return Object.assign({}, res, { replay: false, queries: queries, reveals: reveals, st: st });
   });
@@ -482,7 +488,8 @@ exports.nominate = onCall(async (req) => {
       round_index: roundIndex, spec_id: spec.spec_id, seed_shape: spec.seed_shape,
       ai_density: spec.ai_density, mapping_index: spec.mapping_index,
       n_queries: out.nQueries, n_reveals: out.nReveals, total_cost: out.totalCost,
-      nominated_position: position, nominated_true_value: out.trueValue,
+      nominated_position: (out.nominatedPosition != null ? out.nominatedPosition : position),
+      nominated_true_value: out.trueValue, stop_rule: out.stopRule,
       nomination_type: out.nominationType, final_score: out.score, raw_score: out.raw_score,
       stopped_immediately: (out.nQueries + out.nReveals) === 0,
       cap_hit: capHit, interrupted: !!(out.st && out.st.interrupted),

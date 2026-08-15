@@ -376,6 +376,31 @@ head('11 · the content: instructions, gates and the survey');
   ok(all.every(q => q.answer >= 0 && q.answer < q.options.length), 'every quiz answer indexes a real option');
   ok(new Set(all.map(q => q.id)).size === all.length, 'quiz ids are unique');
 
+  // Every item must carry a `why`: a correct answer is shown its explanation in
+  // green and the screen HOLDS on it (app.js renderQuiz's review stage), so an
+  // item without one would tick and teach nothing — the whole reason the gate
+  // exists rather than a score.
+  ok(all.every(q => q.why && String(q.why).trim().length > 20),
+    'every question explains its answer, which is what the participant is held on',
+    all.filter(q => !q.why || String(q.why).trim().length <= 20).map(q => q.id).join(', '));
+
+  // The gate asks participants to USE the rules, not to read a number back off
+  // the reminder above them (which, since the round screen gained its own strip,
+  // states both costs outright). A prompt whose answer is a bare cost is a
+  // recall item, so no option may be nothing but a cost token.
+  const bareCost = all.filter(q => /^\{(revealCost|queryCost)\}( points)?$/.test(String(q.options[q.answer]).trim()));
+  ok(bareCost.length === 0,
+    'no item is answered by copying a cost off the reminder', bareCost.map(q => q.id).join(', '));
+
+  // The three arithmetic items state their numbers outright — 50 and one step,
+  // 95 and two steps against the ceiling, 80 forty positions away — so they
+  // assume the study's own step bound and prize range. If a future edit moves
+  // either default, those answer keys are silently WRONG for every participant;
+  // fail here instead, where it is cheap.
+  ok(CFG.DEFAULTS.env.stepBound === 10 && CFG.DEFAULTS.env.prizeMax === 100 && CFG.DEFAULTS.env.prizeMin === 0,
+    'the arithmetic gate items still match the step bound and prize range they were written for',
+    `stepBound ${CFG.DEFAULTS.env.stepBound}, range ${CFG.DEFAULTS.env.prizeMin}–${CFG.DEFAULTS.env.prizeMax}`);
+
   ok(Content.SURVEY.length === 20, 'the survey holds the twenty numbered items — background moved to registration');
   ok(new Set(Content.SURVEY.map(q => q.id)).size === Content.SURVEY.length, 'survey ids are unique');
   ['A', 'B', 'C', 'D', 'E'].forEach(part => {
@@ -859,7 +884,11 @@ head('16 · per-session wording overrides change words and nothing else');
 
   // ---- the defaults are never mutated ------------------------------------
   ok(Content.CONSENT !== 'Short consent.', 'resolving does not touch the default consent');
-  ok(qcBase.options[2] === '{revealCost} points', 'resolving does not touch the default options');
+  // Pinned against the DEFAULT's own text rather than a literal: the questions
+  // are rewritten from time to time, and this check is about resolve() leaving
+  // the defaults alone, not about what any one option says.
+  ok(qcBase.options[2] !== 'FIVE points' && qcBase.options[2] === Content.QUIZ_BASE.find(q => q.id === 'q_cost').options[2],
+    'resolving does not touch the default options');
   ok(Content.SURVEY.find(q => q.id === 's17').items[0].prompt.indexOf('Reworded') < 0,
     'resolving does not touch the default survey');
 

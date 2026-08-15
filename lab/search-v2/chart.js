@@ -66,7 +66,12 @@ window.SVChart = (function () {
       for (var gp = 1; gp <= N; gp += (gp === 1 ? N / 5 - 1 : N / 5)) {
         var xx = xOf(Math.round(gp));
         parts.push('<line class="grid" x1="' + xx + '" y1="' + PAD_T + '" x2="' + xx + '" y2="' + (PAD_T + PH) + '"/>');
-        parts.push('<text class="axt" x="' + xx + '" y="' + (VH - PAD_B + 17) + '" text-anchor="middle">' + Math.round(gp) + '</text>');
+        // The selected position is printed in this same row (see below), so a
+        // tick that would sit under it is dropped rather than overprinted.
+        var nearSel = (st.selected != null && Math.abs(Math.round(gp) - st.selected) < N / 20);
+        if (!nearSel) {
+          parts.push('<text class="axt" x="' + xx + '" y="' + (VH - PAD_B + 17) + '" text-anchor="middle">' + Math.round(gp) + '</text>');
+        }
       }
       parts.push('<text class="axtitle" x="' + (PAD_L + PW / 2) + '" y="' + (VH - 3) + '" text-anchor="middle">position</text>');
       parts.push('<text class="axtitle" transform="translate(12 ' + (PAD_T + PH / 2) + ') rotate(-90)" text-anchor="middle">points</text>');
@@ -95,7 +100,13 @@ window.SVChart = (function () {
       if (st.selected != null) {
         var sxp = xOf(st.selected);
         parts.push('<line class="sel-line" x1="' + sxp.toFixed(1) + '" y1="' + PAD_T + '" x2="' + sxp.toFixed(1) + '" y2="' + (PAD_T + PH) + '"/>');
+        // The selected position is labelled at BOTH ends of its line (owner
+        // 2026-08). The plot is 400px tall: with the number only at the top, a
+        // participant reading the x-axis at the bottom had to track a dashed
+        // line the height of the chart to find out which position they were on.
         parts.push('<text class="sel-txt" x="' + sxp.toFixed(1) + '" y="' + (PAD_T - 5) + '" text-anchor="middle">' + st.selected + '</text>');
+        parts.push('<text class="sel-txt" x="' + sxp.toFixed(1) + '" y="' + (VH - PAD_B + 17) +
+          '" text-anchor="middle">' + st.selected + '</text>');
       }
 
       // ---- asked: open diamonds at the AI's STATED value --------------------

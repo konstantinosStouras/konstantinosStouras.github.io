@@ -43,7 +43,56 @@
        randomised action order, so a session that predates it keeps the fixed
        order it actually ran with; new sessions get the default. */
     if (!params.ui) { out.ui.buttonOrder = 'fixed'; out.ui.encouragement = false; }
+    /* The same rule for a PARAMETER added to an existing group. `costs.stopRule`
+       arrived in 2026-08 and changes how a round is SETTLED, so a session stored
+       without it must keep the rule its participants actually played under —
+       otherwise one dataset would hold two different payoff rules, and nothing
+       in the rows would say which. */
+    if (params.costs && params.costs.stopRule == null) out.costs.stopRule = 'nominate';
     return out;
+  }
+
+  // ---- how a round is settled (§7, and config.costs.stopRule) --------------
+  // ONE implementation, used by the local backend AND vendored into the Cloud
+  // Function: the score is the one thing a client must never be able to differ
+  // with the server about.
+  //
+  //   best_found — the best TRUE prize the participant holds: the positions
+  //                open at the start plus the ones they revealed. Nothing new
+  //                is revealed by stopping, and a participant who holds nothing
+  //                takes 0 (they still pay what they spent).
+  //   nominate   — the legacy rule: the true prize at the position they named.
+  function settle(params, opts) {
+    var map = opts.map, pre = opts.preOpened || [], reveals = opts.reveals || [];
+    var rule = (params.costs.stopRule === 'nominate') ? 'nominate' : 'best_found';
+    var takenPos = null, takenVal = 0, type;
+    if (rule === 'nominate') {
+      takenPos = opts.position;
+      takenVal = map[takenPos - 1];
+      type = (indexOfPos(reveals, takenPos) >= 0 || pre.indexOf(takenPos) >= 0) ? 'verified'
+           : (indexOfPos(opts.queries || [], takenPos) >= 0 ? 'queried_only' : 'untouched');
+    } else {
+      var known = [], i;
+      for (i = 0; i < pre.length; i++) known.push({ pos: pre[i], val: map[pre[i] - 1], pre: true });
+      for (i = 0; i < reveals.length; i++) known.push({ pos: reveals[i].pos, val: map[reveals[i].pos - 1], pre: false });
+      var best = null;
+      for (i = 0; i < known.length; i++) if (!best || known[i].val > best.val) best = known[i];
+      if (best) { takenPos = best.pos; takenVal = best.val; type = best.pre ? 'best_pre_opened' : 'best_revealed'; }
+      else { type = 'nothing_found'; }
+    }
+    var totalCost = (opts.queries || []).length * params.costs.queryCost +
+                    reveals.length * params.costs.revealCost;
+    var raw = takenVal - totalCost;
+    return {
+      rule: rule,
+      trueValue: takenVal, position: takenPos, nominationType: type,
+      totalCost: totalCost, raw_score: raw,
+      score: params.costs.scoreFloor ? Math.max(0, raw) : raw
+    };
+  }
+  function indexOfPos(list, pos) {
+    for (var i = 0; i < list.length; i++) if (list[i].pos === pos) return i;
+    return -1;
   }
 
   // ---- seed placement (§10) -----------------------------------------------
@@ -418,6 +467,7 @@
 
   return {
     withDefaults: withDefaults,
+    settle: settle,
     buttonOrder: buttonOrder,
     assignmentCells: assignmentCells,
     nextCell: nextCell,

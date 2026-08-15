@@ -71,7 +71,37 @@
       queryCost: 2,            // c_AI
       queryCap: 40,            // per round
       revealCap: 20,           // per round
-      scoreFloor: false        // off: a round may end negative, and that is logged
+      scoreFloor: false,       // off: a round may end negative, and that is logged
+
+      // How a round is settled when the participant stops (owner 2026-08).
+      //
+      //   'best_found'  Stopping takes the BEST PRIZE THEY HAVE ALREADY FOUND —
+      //                 the best true prize among the positions open at the
+      //                 start and the ones they revealed — minus everything
+      //                 spent. Stopping never reveals a new prize, so it is not
+      //                 an action with an outcome: it is the end of searching,
+      //                 and the "net value if you stop right now" tile is
+      //                 literally the score. A participant who has found
+      //                 nothing scores 0 minus what they spent.
+      //
+      //   'nominate'    The ORIGINAL rule of the brief (§7): stopping nominates
+      //                 the SELECTED position and pays the true prize there,
+      //                 revealed or not. That made nominating on the AI's word
+      //                 without verifying possible, which is what the
+      //                 verification threshold s* = c_R·sqrt(2π) and the
+      //                 sparse/dense contrast were designed to measure.
+      //
+      // CONSEQUENCE, stated plainly because it is not recoverable from the
+      // data afterwards: under 'best_found' an unverified position can never be
+      // taken, so `nomination_type` is no longer a behavioural outcome and the
+      // trust-without-verification measure does not exist. The AI's value
+      // becomes purely navigational — where to spend a reveal — and
+      // tools/simulate.mjs (which motivated revealCost 4 / sparseK 3) models
+      // the 'nominate' rule, so its numbers do not carry over.
+      //
+      // Sessions stored before this parameter existed keep 'nominate', the rule
+      // they actually ran under (specs.js withDefaults).
+      stopRule: 'best_found'   // 'best_found' | 'nominate'
     },
 
     // ---- AI (§3, §12) ------------------------------------------------------
