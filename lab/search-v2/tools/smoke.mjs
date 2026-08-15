@@ -594,13 +594,14 @@ async function runOne(name) {
   await mp.goto(BASE + '?preview=1&debug=1&key=stouras&code=SMOKE');
   await mp.waitForSelector('#s-round.active', { timeout: 15000 });
 
-  // The instructions summary, reopenable at any time (§14).
-  await mp.locator('#btn-instr-open').click();
-  await mp.waitForSelector('#ov-summary.show');
-  const sum = await mp.locator('#summary-body').innerText();
-  ok(/at most/.test(sum) && /costs/.test(sum), 'the instructions summary reopens over the round and restates the rules');
-  await mp.keyboard.press('Escape');
-  ok(!(await mp.locator('#ov-summary.show').count()), 'Escape closes the summary');
+  // No Instructions button in a round (owner 2026-08): the rules that matter
+  // while playing are on the reminder strip, in every round, so the round screen
+  // states them without anything to open. What replaced it is checked here.
+  ok((await mp.locator('#btn-instr-open').count()) === 0,
+    'a round carries no Instructions button — the reminder above the plot is the reminder');
+  const strip = await mp.locator('#round-reminder').innerText();
+  ok(/at most/.test(strip) && /costs/.test(strip),
+    'and that strip states the step bound and what an action costs, in every round', strip.slice(0, 120));
 
   // The confirmation. Under 'best_found' stopping can never land on an unknown
   // prize, so the only case worth a question is stopping with NOTHING found —

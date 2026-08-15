@@ -1374,7 +1374,9 @@
     if ($('btn-ask')) $('btn-ask').onclick = doAsk;
     $('btn-reveal').onclick = doReveal;
     $('btn-nominate').onclick = openNominate;
-    $('btn-instr-open').onclick = openSummary;
+    // Absent by design — see index.html. Null-guarded rather than deleted, so
+    // putting the button back needs no change here.
+    if ($('btn-instr-open')) $('btn-instr-open').onclick = openSummary;
 
     // The testing overlays need the truth, so they exist only in LOCAL mode —
     // which is what the admin sandbox always runs in.

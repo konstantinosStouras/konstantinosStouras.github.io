@@ -2502,9 +2502,13 @@ and `tools/layout-guard.mjs` pins the side-by-side row at five widths.
 **Where the round screen puts things** (owner 2026-08, from screenshots).
 HEADER = the title **"Practice round (not scored) · Part 1 (out of 2)"** — the
 qualifier sits with the thing it qualifies and the part says how many there are
-(the count comes from the plan, never written down) — with the Instructions
-button and, beneath it, the whole-study counter **"Round n / 28 · N rounds to
-go"**. The progress BAR and its per-half line under the title are gone: the
+(the count comes from the plan, never written down) — with the whole-study counter **"Round n / 28 · N rounds to go"**. **There is
+no Instructions button** (owner 2026-08): the rules that matter while playing
+are on the reminder strip in every round, so a reopenable summary had nothing
+to add. `#ov-summary` and its builder are kept intact and unreachable, so
+restoring the button is one line, and `instruction_reopens` stays in the schema
+— constant at 0 for any session run without it, which its dictionary entry
+says. The progress BAR and its per-half line under the title are gone: the
 title already names the part and the counter says how much is left, and the two
 together said it three times. LEFT COLUMN = **the round in four numbers and
 nothing else**: net value if you stop right now (green, the one that matters),

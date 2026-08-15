@@ -106,7 +106,7 @@
     started_at: ['timestamp', 'When the round opened.'],
     ended_at: ['timestamp', 'When it was nominated.'],
     duration_ms: ['ms', 'Wall-clock length of the round.'],
-    instruction_reopens: ['integer', 'How many times they reopened the reminder during the round.'],
+    instruction_reopens: ['integer', 'How many times they reopened the instructions summary during the round. The button that opened it was removed in 2026-08, so this is 0 for every session run since \u2014 the rules that matter while playing are on the reminder above the plot instead.'],
     blur_events: ['integer', 'How many times the window lost focus.'],
     blur_total_ms: ['ms', 'Total time the window was not in focus.'],
     interrupted: ['boolean', 'TRUE if the round was resumed after a reload. A COLUMN, not a filter — decide in analysis.'],
