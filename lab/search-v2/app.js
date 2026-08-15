@@ -1203,25 +1203,7 @@
   // participant always knows how much is in front of them — which is what
   // makes the last third of a 40-minute task survivable — without anything
   // about their score feeding back into how they play.
-  function renderProgress(r) {
-    var box = $('prog'), fill = $('prog-fill'), txt = $('prog-txt');
-    if (!box || !fill || !txt) return;
-    var E = CT.ENCOURAGE;
-    if (!r.scored) {
-      box.className = 'prog warm';
-      fill.style.width = '0%';
-      txt.textContent = E.progressWarmup;
-      return;
-    }
-    var total = P.rounds.scoredPerBlock, n = 0;
-    for (var i = 0; i <= S.roundPtr && i < PLAN.rounds.length; i++) {
-      if (PLAN.rounds[i].scored && PLAN.rounds[i].block === r.block) n++;
-    }
-    box.className = 'prog';
-    fill.style.width = Math.round(100 * (n - 1) / Math.max(1, total)) + '%';
-    txt.textContent = E.progress.replace('{n}', n).replace('{total}', total).replace('{left}', total - n);
-  }
-
+ 
   // Where they are in the WHOLE study, in the left column. Deliberately a
   // different count from the header's "Round n of 12 · Part 1", which counts
   // scored rounds inside the current half: this one counts every round of the
@@ -1324,8 +1306,17 @@
     var r = currentRound();
     var aiOn = (r.condition === 'AI_ON');
 
-    $('round-label').textContent = (r.scored ? 'Round ' + scoredOrdinal(r) : 'Practice round') +
-      ' · Part ' + r.block + (r.scored ? '' : ' (not scored)');
+    // "Practice round (not scored) · Part 1 (out of 2)" — the qualifier sits with
+    // the thing it qualifies, and the part says how many there are, so a
+    // participant can place themselves from the title alone. The number of
+    // parts is counted from the plan, never written down.
+    var nParts = 0;
+    for (var bi = 0; bi < PLAN.rounds.length; bi++) {
+      if (PLAN.rounds[bi].block > nParts) nParts = PLAN.rounds[bi].block;
+    }
+    $('round-label').textContent =
+      (r.scored ? 'Round ' + scoredOrdinal(r) : 'Practice round (not scored)') +
+      ' · Part ' + r.block + ' (out of ' + nParts + ')';
     $('round-sub').textContent = aiOn
       // NEVER currentK() here: how many positions the AI knows IS the study's
       // manipulation (sparse vs dense), and a participant told the number can
@@ -1336,7 +1327,6 @@
         'values of any new prizes you find, and it will answer about any position you ask.'
       : 'No AI in this part.';
     $('round-sub').className = 'round-sub' + (aiOn ? ' ai' : '');
-    renderProgress(r);
     renderRoundCounter();
     renderReminder(aiOn);
 

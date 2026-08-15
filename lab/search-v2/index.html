@@ -175,21 +175,21 @@
         <div>
           <div class="round-label" id="round-label"></div>
           <div class="round-sub" id="round-sub"></div>
-          <!-- How far through this half they are. Progress, never performance:
-               the bar counts rounds played, and says nothing about scores. -->
-          <div class="prog" id="prog">
-            <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
-            <span class="prog-txt" id="prog-txt"></span>
+        </div>
+        <!-- How far through the WHOLE study they are, beside the Instructions
+             button rather than in the KPI column: that column is the round in
+             four numbers, and where the session has got to is not one of them.
+             Progress, never performance — it counts rounds played and says
+             nothing about scores. The bar and the per-half line that used to
+             sit under the title are gone: the title already names the part,
+             and this says how much is left. -->
+        <div class="round-head-right">
+          <button class="btn btn-ghost btn-sm" id="btn-instr-open" title="Reopen the instructions summary">&#9432; Instructions</button>
+          <div class="side-round" title="Rounds in the whole study, practice rounds included.">
+            <span class="side-round-n" id="side-round-n">Round 1 / 28</span>
+            <span class="side-round-left" id="side-round-left"></span>
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" id="btn-instr-open" title="Reopen the instructions summary">&#9432; Instructions</button>
-      </div>
-
-      <!-- A friendly, dismissible nudge. Never blocks anything, and every
-           appearance is logged as telemetry so the analysis can control for it. -->
-      <div class="tip" id="tip" role="status" aria-live="polite">
-        <span id="tip-text"></span>
-        <button type="button" class="tip-x" id="tip-close" aria-label="Dismiss">&times;</button>
       </div>
 
       <!-- The rules that matter WHILE PLAYING, across the full width above the
@@ -217,14 +217,6 @@
              what the plot, the number box, the nominate button and the
              progress bar each already say. -->
         <aside class="side-col">
-          <!-- How far through the WHOLE study they are. The header's "Round n
-               of 12 · Part 1" counts scored rounds inside the current half;
-               this counts every round of the session, practice included, which
-               is the number that answers "how much is left". -->
-          <div class="side-round" title="Rounds in the whole study, practice rounds included.">
-            <span class="side-round-n" id="side-round-n">Round 1 / 28</span>
-            <span class="side-round-left" id="side-round-left"></span>
-          </div>
           <div class="score-band" id="score-band">
             <div class="sb net"><span class="sb-l">Net value if you stop right now</span><span class="sb-v" id="sb-net">&mdash;</span></div>
             <div class="sb"><span class="sb-l">Best prize found</span><span class="sb-v" id="sb-best">&mdash;</span></div>
@@ -255,6 +247,16 @@
           </div>
           <div class="note warn" id="cap-note" style="display:none;"></div>
           <div class="answer-flash" id="answer-flash"></div>
+
+          <!-- A friendly, dismissible nudge, immediately above the buttons it
+               is about — at the top of the screen it spoke to a participant
+               whose eyes were on the plot and the actions. Never blocks
+               anything, and every appearance is logged as telemetry so the
+               analysis can control for it. -->
+          <div class="tip" id="tip" role="status" aria-live="polite">
+            <span id="tip-text"></span>
+            <button type="button" class="tip-x" id="tip-close" aria-label="Dismiss">&times;</button>
+          </div>
 
           <!-- THE ACTIONS, in the same column as the plot and directly under
                the picker that aims them: look at the line, choose a position,
