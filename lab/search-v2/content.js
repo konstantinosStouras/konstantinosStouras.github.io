@@ -43,7 +43,7 @@
       title: 'Neighbouring positions are similar',
       body:
         "The prizes are not scattered at random. **Two neighbouring positions differ by at most {L} points.**\n\n" +
-        "So if position 40 hides 50 points, position 41 hides somewhere between 40 and 60, position 42 between 30 and 70, and so on — {L} more points of possible difference for each further step.\n\n" +
+        "So if position 40 hides 50 points, position 41 hides somewhere between 40 and 60 points, position 42 between 30 and 70 points, and so on — {L} more points of possible difference for each further step.\n\n" +
         "This is the only thing you know about the line before you look at it."
     },
     {
@@ -57,11 +57,14 @@
     {
       id: 'i4',
       title: 'Stopping, and how you score',
+      // {scoreRule} and {scoreRuleNote} are substituted with the sentences for
+      // THIS session's settlement rule (costs.stopRule) — see app.js tokens().
+      // One field, so rewording it in the Wording tab reaches either rule.
       body:
-        "When you are ready, you **stop and nominate** one position. The round then ends.\n\n" +
-        "**Your score for the round is the true prize at the position you nominate, minus everything you spent that round.**\n\n" +
-        "You may nominate any position — one you revealed, or one you never touched. The true prize there is what counts, whatever you believed about it.\n\n" +
-        "A round can end below zero if you spend more than the prize you land on. That is allowed, and it is recorded."
+        "When you are ready, you **{stopVerb}**. The round then ends.\n\n" +
+        "**{scoreRule}**\n\n" +
+        "{scoreRuleNote}\n\n" +
+        "A round can end below zero if you spend more than the prize you take. That is allowed, and it is recorded."
     },
     {
       id: 'i5',
@@ -98,7 +101,7 @@
       body:
         "Every position **you** reveal is added to what the AI knows, together with every position that started open.\n\n" +
         "So the AI's answers can change after you reveal something, and asking about the same position again — at full cost — can give a different answer.\n\n" +
-        "**The AI's number is never your prize.** If you stop on a position the AI said was 70, you score the true prize there, whatever it turns out to be."
+        "**The AI's number is never a prize.** It is an estimate: it tells you where a reveal might be worth spending, and nothing more. {scoreRuleNote}"
     }
   ];
 
@@ -130,7 +133,7 @@
         'It is about 80 points, give or take a little'
       ],
       answer: 0,
-      why: 'The bound binds one STEP at a time. Over 40 positions it allows a change of 40 \u00d7 {stepBound}, ' +
+      why: 'The bound binds one STEP at a time. Over 40 positions it allows a change of 40 \u00d7 {stepBound} points, ' +
            'which is more than the whole range \u2014 so a far-away position is barely constrained at all. ' +
            'What you reveal tells you most about what is NEAR it.'
     },
@@ -139,33 +142,33 @@
       prompt: 'Position 15 was revealed and holds 50 points. What is the HIGHEST the prize at position 14 \u2014 one position to its LEFT \u2014 could be?',
       options: ['50 points', '55 points', '60 points', 'It could be anything from 0 to 100'],
       answer: 2,
-      why: 'The bound works in both directions: from 50, one step to the LEFT can reach 50 + {stepBound}, ' +
-           'exactly as one step to the right can. There is nothing special about the direction you look in.'
+      why: 'The bound works in both directions: from 50 points, one step to the LEFT can reach 50 + {stepBound} ' +
+           'points, exactly as one step to the right can. There is nothing special about the direction you look in.'
     },
     {
       id: 'q_adj_lo1',
       prompt: 'Position 80 was revealed and holds 95 points. What is the HIGHEST the prize at position 82 could be?',
       options: ['100 points', '105 points', '115 points', '95 points'],
       answer: 0,
-      why: 'Two steps allow 2 \u00d7 {stepBound}, which would be 115 \u2014 but no prize on the line is above ' +
-           '{prizeMax}, so 100 is the most it can be. Near the top of the range the ceiling binds before the step bound does.'
+      why: 'Two steps allow 2 \u00d7 {stepBound} points, which would be 115 points \u2014 but no prize on the line ' +
+           'is above {prizeMax} points, so 100 points is the most it can be. Near the top of the range the ceiling binds before the step bound does.'
     },
     {
       id: 'q_cost',
-      prompt: 'In one round you reveal three positions and stop on the best of them, which holds 60 points. What is your score for that round?',
+      prompt: 'In one round you reveal three positions and then stop. The best of the three holds 60 points. What is your score for that round?',
       options: [
-        'The prize where I stopped, minus 3 \u00d7 {revealCost}',
+        'The prize where I stopped, minus the 3 \u00d7 {revealCost} points I spent',
         'The prize where I stopped, with nothing deducted',
-        'The best prize I revealed, minus {revealCost}',
-        'The three prizes added together, minus 3 \u00d7 {revealCost}'
+        'The best prize I revealed, minus {revealCost} points',
+        'The three prizes added together, minus the 3 \u00d7 {revealCost} points I spent'
       ],
       answer: 0,
-      why: 'Each reveal costs {revealCost} whatever it turns out to show, and every one of them comes off the ' +
-           'prize where you stop. Only ONE prize is ever paid \u2014 the one where you stopped.'
+      why: 'Each reveal costs {revealCost} points whatever it turns out to show, and every one of them comes off ' +
+           'the prize you take. Only ONE prize is ever paid.'
     },
     {
       id: 'q_score',
-      prompt: 'You reveal six positions, the best of them holds 20 points, and you stop there. What is your score for that round?',
+      prompt: 'You reveal six positions and then stop. The best of them holds 20 points. What is your score for that round?',
       options: [
         'Below zero \u2014 the prize minus everything I spent, which can be negative',
         'Zero \u2014 a round can never score below zero',
@@ -173,7 +176,7 @@
         'The round does not count, and it is replayed'
       ],
       answer: 0,
-      why: 'Six reveals cost 6 \u00d7 {revealCost}, which is more than the 20 you stop on, so the round ends ' +
+      why: 'Six reveals cost 6 \u00d7 {revealCost} points, which is more than the 20 points you stop on, so the round ends ' +
            'below zero. That is allowed \u2014 which is why searching on and on is a real risk, not a free one.'
     },
     {
@@ -205,23 +208,23 @@
         'They cost the same, so it makes no difference which I use'
       ],
       answer: 0,
-      why: 'Asking costs {queryCost} and revealing costs {revealCost}. Asking is cheaper precisely BECAUSE it ' +
+      why: 'Asking costs {queryCost} points and revealing costs {revealCost} points. Asking is cheaper precisely BECAUSE it ' +
            'does not tell you the prize \u2014 it returns an estimate, which can be wrong.'
     },
     {
       id: 'qai_score',
       strict: true,
-      prompt: 'Earlier this round the AI said 55 about a position you then revealed, and it was exactly 55. Now it says 70 about position 40. You stop on position 40 without revealing it. What are you paid?',
+      prompt: 'Earlier this round the AI said 55 points about a position you then revealed, and it was exactly 55 points. Now it says 70 points about position 40, which you have NOT revealed. What is that 70 points worth to you?',
       options: [
-        'The true prize at position 40, whatever it turns out to be \u2014 the AI being right before says nothing about now',
+        'Nothing on its own \u2014 it is an estimate, not a prize I have found',
         '70 points, because the AI has been accurate this round',
         '55 points, the last number it got right',
-        'The average of 70 and the true prize'
+        'The average of 70 points and the true prize'
       ],
       answer: 0,
       why: 'The AI is exactly right at the positions it knows and guesses everywhere else, and nothing in an ' +
-           'answer tells you which of the two you have just been given. You are always paid the TRUE prize ' +
-           'where you stop.'
+           'answer tells you which of the two you have just been given. Only a prize you have actually ' +
+           'revealed counts \u2014 being right once says nothing about the next answer.'
     },
     {
       id: 'qai_right',
@@ -238,11 +241,11 @@
     },
     {
       id: 'qai_tell',
-      prompt: 'The AI answers 62 about a position \u2014 quickly, and to the nearest point, as always. What does that tell you about whether it knew that position or guessed it?',
+      prompt: 'The AI answers 62 points about a position \u2014 quickly, and to the nearest point, as always. What does that tell you about whether it knew that position or guessed it?',
       options: [
         'Nothing \u2014 every answer is rounded the same way and arrives after the same delay',
         'It knew it, because the answer came back quickly',
-        'It guessed, because 62 is not a round number',
+        'It guessed, because 62 points is not a round number',
         'It knew it, because it gave a single number rather than a range'
       ],
       answer: 0,
@@ -251,10 +254,10 @@
     },
     {
       id: 'qai_outside',
-      prompt: 'The AI says 45 at position 92, 45 at position 97 and 45 at position 100. What is the most likely explanation?',
+      prompt: 'The AI says 45 points at position 92, 45 points at position 97 and 45 points at position 100. What is the most likely explanation?',
       options: [
         'The outermost position it knows is at or before 92, and beyond that it just repeats that value',
-        'The prizes really are 45 all the way to the end of the line',
+        'The prizes really are 45 points all the way to the end of the line',
         'The AI has stopped working',
         'Out there it answers with the average of the whole line'
       ],
@@ -264,11 +267,11 @@
     },
     {
       id: 'qai_update',
-      prompt: 'The AI said 30 at position 60. You then reveal position 58, which holds 90. You ask about position 60 again, at full cost. What should you expect?',
+      prompt: 'The AI said 30 points at position 60. You then reveal position 58, which holds 90 points. You ask about position 60 again, at full cost. What should you expect?',
       options: [
         'A different answer is quite possible \u2014 what I revealed is now part of what it knows',
-        'Exactly 30 again \u2014 its answers never change',
-        'Exactly 90, the value I have just revealed',
+        'Exactly 30 points again \u2014 its answers never change',
+        'Exactly 90 points, the value I have just revealed',
         'It will refuse, because I have already asked about position 60'
       ],
       answer: 0,

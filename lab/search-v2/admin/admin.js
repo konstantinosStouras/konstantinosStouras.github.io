@@ -657,7 +657,10 @@
       'Neighbours differ by at most <b>' + p.env.stepBound + '</b>',
       'Reveal <b>' + p.costs.revealCost + '</b> (cap ' + p.costs.revealCap + ') · ask <b>' +
         p.costs.queryCost + '</b> (cap ' + p.costs.queryCap + ')',
-      'Score floor: ' + (p.costs.scoreFloor ? 'yes' : '<b>none</b> — a round may end negative')
+      'Score floor: ' + (p.costs.scoreFloor ? 'yes' : '<b>none</b> — a round may end negative'),
+      'Stopping: ' + (p.costs.stopRule === 'nominate'
+        ? '<b>nominates the selected position</b> — an unverified position can be taken, so trust is measurable'
+        : '<b>takes the best prize already found</b> — nothing new is revealed by stopping')
     ]]);
     box.push(['The AI', [
       'Sparse <b>K=' + p.ai.sparseK + '</b> · dense <b>K=' + p.ai.denseK + '</b>, ' + esc(p.ai.placement),
@@ -936,7 +939,7 @@
     ['env', 'seedLowMin', 'num'], ['env', 'seedLowMax', 'num'], ['env', 'seedHighProb', 'num'],
     ['env', 'seedHighMin', 'num'], ['env', 'seedHighMax', 'num'], ['env', 'poolSize', 'num'], ['env', 'generatorSeed', 'num'],
     ['costs', 'revealCost', 'num'], ['costs', 'queryCost', 'num'], ['costs', 'queryCap', 'num'], ['costs', 'revealCap', 'num'],
-    ['costs', 'scoreFloor', 'seg'],
+    ['costs', 'scoreFloor', 'seg'], ['costs', 'stopRule', 'seg'],
     ['ui', 'buttonOrder', 'seg'], ['ui', 'costColorReveal', 'txt'], ['ui', 'costColorQuery', 'txt'],
     ['ui', 'encouragement', 'seg'], ['ui', 'rushMinActions', 'num'],
     ['ai', 'sparseK', 'num'], ['ai', 'denseK', 'num'], ['ai', 'placement', 'seg'], ['ai', 'answerRounding', 'seg'],
@@ -1843,6 +1846,19 @@
     var p = currentParams || Specs.withDefaults(null);
     var K = (p.ai.sparseK === p.ai.denseK) ? p.ai.sparseK : (p.ai.sparseK + ' or ' + p.ai.denseK);
     return String(text == null ? '' : text)
+      // The settlement-rule sentences, previewed exactly as this session will
+      // show them (app.js tokens() is the other half of this pair — keep in sync).
+      .replace(/\{scoreRule\}/g, p.costs.stopRule === 'nominate'
+        ? 'Your score for the round is the true prize at the position you nominate, minus everything you spent that round.'
+        : 'Your score for the round is the best prize you have found, minus everything you spent that round.')
+      .replace(/\{scoreRuleNote\}/g, p.costs.stopRule === 'nominate'
+        ? 'You may nominate any position \u2014 one you revealed, or one you never touched. The true prize there is ' +
+          'what counts, whatever you believed about it.'
+        : 'Only prizes you have actually seen count \u2014 the ones open at the start and the ones you revealed. ' +
+          'Stopping never opens anything new, so a position you never revealed cannot be taken, however promising it looks.')
+      .replace(/\{stopVerb\}/g, p.costs.stopRule === 'nominate' ? 'stop and nominate one position' : 'stop')
+      .replace(/\{prizeMin\}/g, p.env.prizeMin)
+      .replace(/\{prizeMax\}/g, p.env.prizeMax)
       .replace(/\{J\}/g, p.env.positions)
       .replace(/\{L\}/g, p.env.stepBound)
       .replace(/\{stepBound\}/g, p.env.stepBound)

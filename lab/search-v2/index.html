@@ -192,6 +192,17 @@
         <button type="button" class="tip-x" id="tip-close" aria-label="Dismiss">&times;</button>
       </div>
 
+      <!-- The rules that matter WHILE PLAYING, across the full width above the
+           round: every number in it is read from the RUN's own parameters and
+           rebuilt each round — never written into the markup — so a session
+           that moves a cost, the step bound or the prize range can never leave
+           a stale figure on screen, and an AI-off round never mentions the AI
+           at all. Same convention as the reminder above each quick check: copy
+           derived from the numbers is built in app.js and is therefore not an
+           editable Wording field, which is what keeps it from contradicting
+           them. -->
+      <div class="round-reminder" id="round-reminder"></div>
+
       <div class="round-grid">
         <!-- LEFT: THE ROUND IN FOUR NUMBERS — the KPIs, and nothing else.
              They stand beside the line they describe, always on screen and
@@ -225,21 +236,11 @@
         <!-- CENTRE: the line, and directly under it everything used to act on
              it — picker, then the buttons. -->
         <div class="chart-col">
-          <!-- The rules that matter WHILE PLAYING, on top of the plot, so a
-               participant never has to reopen the instructions to remember
-               what the line can do or what an action costs. Every number in it
-               is read from the RUN's own parameters and rebuilt each round —
-               never written into the markup — so a session that moves a cost,
-               the step bound or the prize range can never leave a stale figure
-               on screen, and an AI-off round never mentions the AI at all.
-               Same convention as the price note under the KPIs and the
-               reminder above each quick check: copy derived from the numbers
-               is built in app.js and is therefore not an editable Wording
-               field, which is what keeps it from ever contradicting them. -->
-          <div class="round-reminder" id="round-reminder"></div>
-
-          <div class="plot-wrap"><div id="plot"></div></div>
+          <!-- The key sits ABOVE the plot: a participant meets the marks by
+               reading down into the chart, not by finding out afterwards what
+               they were looking at. -->
           <div class="legend" id="legend"></div>
+          <div class="plot-wrap"><div id="plot"></div></div>
 
           <!-- The position picker sits directly under the plot it points at:
                read what the round is worth, look at the line, choose where you
@@ -282,7 +283,10 @@
             <div class="act-sep"></div>
             <div class="act-stop">
               <button class="btn btn-amber" id="btn-nominate">Stop and nominate</button>
-              <p class="act-note">Ends the round on the selected position. Your score is the true prize there, minus what you spent.</p>
+              <!-- Written by app.js from the session's stop rule: the two rules
+                   end a round in different ways, and a static sentence here
+                   would describe the wrong one half the time. -->
+              <p class="act-note" id="stop-note"></p>
             </div>
           </div>
 

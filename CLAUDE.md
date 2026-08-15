@@ -2529,10 +2529,67 @@ from experience. It was leaking in three places at once (the round subtitle,
 the summary the Instructions button reopens, and the AI instruction screen's
 "{K} of the {J}"); all three now say what the AI DOES — it interpolates from
 the prizes it knows, and every position you reveal is added to them — never how
-much it holds. `layout-guard.mjs` pins all of it: the KPIs beside the plot, the
+much it holds. **The boxes line up** (owner 2026-08, from a hand-drawn layout): the reminder
+strip spans the WHOLE round, flush with the two columns beneath it; the key
+(legend) sits directly above the plot it explains rather than under it; the
+action block is flush with the chart column and centred, with the stop button
+sharing the paid pair's exact left and right edges; and in an AI-off round the
+lone Reveal button is a centred pill of the same width one of the pair would
+have (`.act-pair.solo`, a class app.js sets — `:has()` is newer than anything
+else in this build), because a single button stretched across the row read as a
+banner. The selected position is labelled at BOTH ends of its line on every
+plot, and the x-axis tick it would overprint is dropped rather than doubled.
+`layout-guard.mjs` pins all of it: the KPIs beside the plot, the
 strip on top of it and short enough not to push it down, the buttons within
-220px of the plot's bottom in the same column, and no "knows N" anywhere on the
-round screen or in its reopened summary.
+220px of the plot's bottom in the same column, every alignment above measured
+edge-to-edge, and no "knows N" anywhere on the round screen or in its reopened
+summary.
+
+**STOPPING TAKES THE BEST PRIZE ALREADY FOUND** (owner 2026-08, a deliberate
+change to the brief's §7, made with its consequence stated and accepted).
+Stopping is the END OF SEARCHING, not an action with an outcome: it never opens
+a new position. The score is the best TRUE prize the participant holds — the
+positions open at the start plus the ones they revealed — minus everything
+spent, so the green "Net value if you stop right now" tile IS literally the
+score. A participant who has found nothing takes 0 (and still pays what they
+spent); that is the one case the stop button confirms, since it is almost
+always a mis-click. **The consequence, which is not recoverable afterwards:**
+an unverified position can no longer be taken, so `nomination_type` stops being
+a behavioural outcome and the trust-without-verification measure does not
+exist. The AI becomes purely navigational — where to spend a reveal — and
+`tools/simulate.mjs`, whose 1000-participant runs motivated `revealCost` 4 and
+`sparseK` 3 (SIMULATION-FINDINGS.md), models the OLD rule, so its numbers do
+not carry over to a `best_found` session. The verification threshold
+s* = c_R·√(2π) still describes when checking beats trusting a reading, and the
+admin's Consequences panel still reports it, but nothing in the task now
+rewards acting on an unchecked estimate.
+**It is a LOCKED RUN PARAMETER, `costs.stopRule`** (`'best_found'` — the
+default for every new session — or `'nominate'`, the brief's original rule),
+chosen in the admin's Costs group and frozen at first participant like every
+other task parameter. `specs.js withDefaults` gives a session stored BEFORE the
+parameter existed `'nominate'`, the rule its participants actually played
+under: one dataset must never hold two payoff rules with nothing in the rows to
+say which — which is also why every round row now carries **`stop_rule`**
+(dictionary entry included, and `logger.js`'s field whitelist extended, the
+same trap that once silently dropped `raw_score`). `nomination_type` gains
+`best_revealed` / `best_pre_opened` / `nothing_found` beside the legacy
+`verified` / `queried_only` / `untouched`. **One settlement function,
+`Specs.settle`**, is used by the local backend AND vendored into the Cloud
+Function (`tools/sync-engine.mjs --check` keeps the copy honest) — the score is
+the one thing a client must never be able to differ with the server about, and
+under `best_found` the server IGNORES the position the client sends. Every
+piece of participant-facing copy that describes scoring asks the rule rather
+than assuming it: the stop button (which names the prize it takes, not the
+slider's position), its note, the strip on top of the plot, the reopenable
+summary, the gate's reminder, the between-rounds line, and — through the
+`{scoreRule}` / `{scoreRuleNote}` / `{stopVerb}` tokens, so the text stays ONE
+editable Wording field — instruction screen i4 and the AI screen. The admin's
+Wording tab substitutes the same three tokens, so its preview shows what that
+session's participants will actually read. The strict gate (`qai_score`) was
+rewritten to a form that is true under BOTH rules: an AI estimate is not a
+prize you have found. `smoke.mjs` and `data-audit.mjs` read `costs.stopRule`
+and assert against whichever rule is in force — the audit deriving the expected
+settlement from the frozen specs and its own reveals, never from the app.
 
 **The comprehension gates ask participants to USE the rules, and hold them on
 the explanation** (owner 2026-08). Two changes that go together. (1) **The gate

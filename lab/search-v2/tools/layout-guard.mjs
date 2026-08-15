@@ -173,6 +173,36 @@ for (const size of SIZES) {
   ok(geo && geo.gap <= 220 && geo.inColumn,
     `the paid buttons sit directly under the plot, in the same column (${geo && geo.gap}px below it)`);
 
+  // ALIGNMENT (owner 2026-08, from a hand-drawn layout). The boxes are meant to
+  // line up, so the edges are measured rather than eyeballed: the reminder spans
+  // the whole round, the key sits above the plot, and the action block is
+  // centred with the stop button sharing the paid pair's exact edges.
+  const align = await pg.evaluate(() => {
+    const r = s => { const e = document.querySelector(s); if (!e) return null;
+      const b = e.getBoundingClientRect();
+      return { l: Math.round(b.left), r: Math.round(b.right), t: Math.round(b.top), b: Math.round(b.bottom) }; };
+    return { strip: r('#round-reminder'), grid: r('.round-grid'), side: r('.side-col'),
+             col: r('.chart-col'), legend: r('.legend'), plot: r('.plot-wrap'),
+             act: r('.act-row'), pair: r('.act-pair'), stop: r('#btn-nominate') };
+  });
+  ok(align.strip && Math.abs(align.strip.l - align.grid.l) <= 1 && Math.abs(align.strip.r - align.grid.r) <= 1,
+    'the reminder spans the whole round, flush with the columns beneath it',
+    align.strip && `strip ${align.strip.l}–${align.strip.r} vs grid ${align.grid.l}–${align.grid.r}`);
+  ok(Math.abs(align.side.t - align.col.t) <= 1,
+    'the KPI column and the chart column start on the same line');
+  ok(align.legend.b <= align.plot.t + 1 && Math.abs(align.legend.l - align.plot.l) <= 1,
+    'the key sits directly above the plot it explains, flush with it',
+    `legend ${align.legend.t}–${align.legend.b} vs plot top ${align.plot.t}`);
+  ok(Math.abs(align.act.l - align.col.l) <= 1 && Math.abs(align.act.r - align.col.r) <= 1,
+    'the action block is flush with the chart column');
+  ok(Math.abs(align.pair.l - align.stop.l) <= 1 && Math.abs(align.pair.r - align.stop.r) <= 1,
+    'the stop button shares the paid buttons\' exact left and right edges',
+    `pair ${align.pair.l}–${align.pair.r} vs stop ${align.stop.l}–${align.stop.r}`);
+  {
+    const centred = Math.abs(((align.pair.l + align.pair.r) / 2) - ((align.act.l + align.act.r) / 2));
+    ok(centred <= 2, `and the block is centred in its row (off by ${Math.round(centred)}px)`);
+  }
+
   // The plot keeps its aspect and fills the middle column.
   const plot = await pg.evaluate(() => {
     const svg = document.querySelector('#plot svg');

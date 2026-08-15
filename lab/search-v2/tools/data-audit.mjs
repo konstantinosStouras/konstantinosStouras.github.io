@@ -121,6 +121,8 @@ await quiz('base');
 await submitQuiz(pg, '#btn-quiz', 's-quiz');
 await pg.waitForSelector('#s-blockintro.active, #s-round.active');
 
+const STOP_RULE = await pg.evaluate(() => window.CONFIG.DEFAULTS.costs.stopRule || 'nominate');
+console.log('  (settlement rule under audit: ' + STOP_RULE + ')');
 const plan = await pg.evaluate(() => window.SVApp.plan());
 const sequence = (await pg.evaluate(() => window.SVApp.state())).sequence;
 
@@ -232,7 +234,12 @@ for (let i = 0; i < plan.length; i++) {
     trace.ledger = led.replace(/\s+/g, ' ').trim();
   }
   const body = await pg.locator('#inter-body').innerText();
-  t.nominated = nomPos;
+  // Under 'best_found' stopping takes the best prize the participant HOLDS, not
+  // the position the slider was parked on — so the audit derives the expected
+  // position itself, from the round's pre-opened set and its own reveals, and
+  // compares that with what the app did. Under 'nominate' it is the selection.
+  t.selected = nomPos;
+  t.nominated = nomPos;   // filled in properly below, once the specs are rebuilt
   t.shown = (body.match(/position\s+\d+[^0-9-]*?(-?\d+)/) || [])[1];
   t.shown = t.shown == null ? null : +t.shown;
   const sm = body.match(/Round score[^0-9-]*(-?\d+)/i);
@@ -353,11 +360,25 @@ ok(vBad.length === 0, 'every revealed value is the true prize of that round’s 
 ok(aBad.length === 0, 'every AI answer is what §12’s rule gives for the anchor set at that moment',
   aBad.slice(0, 5).join(' | '));
 
+// What the rule says should have been taken, computed from the FROZEN specs and
+// the audit's own record of what it revealed — never from the app.
+trace.forEach(t => {
+  const r = sess.rounds[t.round - 1];
+  const map = pool[r.spec.mapping_index];
+  if (STOP_RULE === 'nominate') { t.expected = t.selected; return; }
+  const held = r.spec.pre_opened.concat(t.acts.filter(a => a.action === 'reveal').map(a => a.pos));
+  let best = null;
+  held.forEach(p => { if (best == null || map[p - 1] > map[best - 1]) best = p; });
+  t.expected = best;            // null when nothing was found
+  t.nominated = best;
+});
+
 const nomBad = trace.filter(t => {
   const map = pool[sess.rounds[t.round - 1].spec.mapping_index];
-  return t.shown != null && t.shown !== map[t.nominated - 1];
+  if (t.expected == null) return false;                 // nothing found: no prize to show
+  return t.shown != null && t.shown !== map[t.expected - 1];
 });
-ok(nomBad.length === 0, 'the prize revealed at the nominated position is the mapping’s own value',
+ok(nomBad.length === 0, 'the prize the round settled on is the mapping’s own value',
   nomBad.slice(0, 4).map(t => `round ${t.round}: shown ${t.shown}, mapping ${pool[sess.rounds[t.round - 1].spec.mapping_index][t.nominated - 1]}`).join(' | '));
 
 // ── 4 · the score the participant was told is the score in the data ───────
@@ -372,20 +393,31 @@ trace.forEach((t, i) => {
   const nr = t.acts.filter(a => a.action === 'reveal').length;
   const cost = nq * P.costs.queryCost + nr * P.costs.revealCost;
   const map = pool[sess.rounds[t.round - 1].spec.mapping_index];
-  const want = map[t.nominated - 1] - cost;
+  const takenVal = t.expected == null ? 0 : map[t.expected - 1];
+  const want = takenVal - cost;
   if (t.score != null && t.score !== want) sBad.push(`round ${t.round}: shown ${t.score}, arithmetic gives ${want}`);
   if (e.final_score !== want) sBad.push(`round ${t.round}: export ${e.final_score}, arithmetic gives ${want}`);
   if (e.total_cost !== cost) cBad.push(`round ${t.round}: export cost ${e.total_cost}, actually ${cost}`);
   if (e.n_queries !== nq || e.n_reveals !== nr)
     cBad.push(`round ${t.round}: export ${e.n_queries}q/${e.n_reveals}r, actually ${nq}q/${nr}r`);
-  if (e.nominated_position !== t.nominated) nBad.push(`round ${t.round}: export nominated ${e.nominated_position}, actually ${t.nominated}`);
-  if (e.nominated_true_value !== map[t.nominated - 1])
-    nBad.push(`round ${t.round}: export value ${e.nominated_true_value}, mapping ${map[t.nominated - 1]}`);
+  if (t.expected != null && e.nominated_position !== t.expected) {
+    nBad.push(`round ${t.round}: export settled on ${e.nominated_position}, the rule gives ${t.expected}`);
+  }
+  if (e.nominated_true_value !== takenVal) {
+    nBad.push(`round ${t.round}: export value ${e.nominated_true_value}, mapping gives ${takenVal}`);
+  }
 });
-ok(sBad.length === 0, 'score = true prize at the nominated position − everything spent, in the UI and in the export',
+ok(sBad.length === 0, STOP_RULE === 'nominate'
+  ? 'score = true prize at the nominated position − everything spent, in the UI and in the export'
+  : 'score = the best prize actually found − everything spent, in the UI and in the export',
   sBad.slice(0, 5).join(' | '));
 ok(cBad.length === 0, 'the action counts and the total cost carry through', cBad.slice(0, 5).join(' | '));
-ok(nBad.length === 0, 'the nominated position and its true value carry through', nBad.slice(0, 5).join(' | '));
+ok(nBad.length === 0, 'the position it settled on and its true value carry through', nBad.slice(0, 5).join(' | '));
+// The rule itself must be IN the data: two sessions run under different rules
+// are not poolable, and nothing else in a row would say which was in force.
+ok(exp.every(e => e.stop_rule === STOP_RULE),
+  'every round row records the settlement rule it was played under',
+  [...new Set(exp.map(e => e.stop_rule))].join(', '));
 const floorBad = exp.filter(e => e.final_score !== e.raw_score);
 ok(floorBad.length === 0, 'no floor is applied — the raw score IS the score, so a negative round survives',
   floorBad.slice(0, 4).map(e => `round ${e.round_index}: final ${e.final_score} vs raw ${e.raw_score}`).join(' | '));

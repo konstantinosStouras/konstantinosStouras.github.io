@@ -92,10 +92,33 @@
       .replace(/\{queryCap\}/g, P.costs.queryCap)
       .replace(/\{scored\}/g, P.rounds.scoredPerBlock)
       .replace(/\{warmup\}/g, P.rounds.warmupPerBlock)
+      .replace(/\{scoreRule\}/g, bestFoundRule()
+        ? 'Your score for the round is the best prize you have found, minus everything you spent that round.'
+        : 'Your score for the round is the true prize at the position you nominate, minus everything you spent that round.')
+      .replace(/\{scoreRuleNote\}/g, bestFoundRule()
+        ? 'Only prizes you have actually seen count \u2014 the ones open at the start and the ones you revealed. ' +
+          'Stopping never opens anything new, so a position you never revealed cannot be taken, however promising it looks.'
+        : 'You may nominate any position \u2014 one you revealed, or one you never touched. The true prize there is ' +
+          'what counts, whatever you believed about it.')
+      .replace(/\{stopVerb\}/g, bestFoundRule() ? 'stop' : 'stop and nominate one position')
       .replace(/\{prizeMin\}/g, P.env.prizeMin)
       .replace(/\{prizeMax\}/g, P.env.prizeMax)
       .replace(/\{K\}/g, currentK());
   }
+  // The settlement rule this SESSION runs under (costs.stopRule, locked at
+  // launch). 'best_found' — stopping takes the best prize already found and
+  // never reveals a new one; 'nominate' — the legacy rule, stopping names a
+  // position and pays the true prize there. Every piece of copy that describes
+  // scoring, and the stop button itself, asks this rather than assuming.
+  function bestFoundRule() { return !(P && P.costs && P.costs.stopRule === 'nominate'); }
+  // The best TRUE prize the participant holds right now: pre-opened positions
+  // and the ones they revealed. An AI answer is never in here.
+  function bestKnown() {
+    var known = preOpenedPairs().concat(revealedPairs()), best = null;
+    known.forEach(function (x) { if (best == null || x.val > best.val) best = x; });
+    return best;
+  }
+
   function currentK() {
     var r = currentRound();
     return (r && r.ai_k) ? r.ai_k : P.ai.sparseK;
@@ -869,16 +892,19 @@
   function quizReminder(withAi) {
     var li = [];
     li.push('Neighbouring positions differ by at most <b>' + P.env.stepBound + '</b> points.');
-    li.push('<b>Revealing</b> a position costs <b>' + P.costs.revealCost + '</b> and shows its true prize.');
+    li.push('<b>Revealing</b> a position costs <b>' + P.costs.revealCost + ' points</b> and shows its true prize.');
     if (withAi) {
-      li.push('<b>Asking the AI</b> about a position costs <b>' + P.costs.queryCost + '</b> and returns its estimate. ' +
+      li.push('<b>Asking the AI</b> about a position costs <b>' + P.costs.queryCost + ' points</b> and returns its estimate. ' +
         'That number is <b>not a prize</b> — it can be wrong.');
       li.push('The AI knows a few positions <b>exactly</b> and interpolates between them. Beyond the outermost ' +
         'position it knows, it repeats that value. You are never told which positions it knows.');
       li.push('Every answer looks and arrives the same way, whether it was known or guessed.');
     }
-    li.push('<b>Stopping</b> is free. Your score is the <b>true prize where you stop, minus everything you spent</b> ' +
-      'that round — which can be negative.');
+    li.push(bestFoundRule()
+      ? '<b>Stopping</b> is free and opens nothing new. Your score is the <b>best prize you have found, minus ' +
+        'everything you spent</b> that round — which can be negative.'
+      : '<b>Stopping</b> is free. Your score is the <b>true prize where you stop, minus everything you spent</b> ' +
+        'that round — which can be negative.');
     li.push('Prizes are drawn <b>afresh every round</b>.');
     return '<h4>What you need to answer these</h4><ul><li>' + li.join('</li><li>') + '</li></ul>';
   }
@@ -1230,15 +1256,17 @@
     if (!el) return;
     var bits = [
       'prizes run from <b>' + P.env.prizeMin + '</b> to <b>' + P.env.prizeMax +
-        '</b>, and neighbours differ by at most <b>&plusmn;' + P.env.stepBound + '</b>',
-      '<b>revealing</b> costs <b>' + P.costs.revealCost + '</b> and shows the true prize'
+        ' points</b>, and neighbours differ by at most <b>&plusmn;' + P.env.stepBound + ' points</b>',
+      '<b>revealing</b> costs <b>' + P.costs.revealCost + ' points</b> and shows the true prize'
     ];
     if (aiOn) {
       bits.push('<b>asking the AI</b> costs <b>' + P.costs.queryCost +
-        '</b> and returns an estimate &mdash; <b>not a prize</b>, and it can be wrong');
+        ' points</b> and returns an estimate &mdash; <b>not a prize</b>, and it can be wrong');
       bits.push('it interpolates from the prizes it knows, and every one you reveal is added to them');
     }
-    bits.push('<b>stopping</b> is free: you score the <b>true prize where you stop</b>, minus what you spent');
+    bits.push(bestFoundRule()
+      ? '<b>stopping</b> is free: you score the <b>best prize you have found</b>, minus what you spent'
+      : '<b>stopping</b> is free: you score the <b>true prize where you stop</b>, minus what you spent');
     el.innerHTML = '<span class="rr-lead">Remember</span>' +
       bits.join('<span class="rr-sep">·</span>');
   }
@@ -1267,6 +1295,9 @@
     var r = currentRound();
     var aiOn = !!(r && r.condition === 'AI_ON');
     if (ask) askPanel = ask;
+    // One paid button or two — the CSS cannot ask, because `:has()` is newer
+    // than anything else in this build, so the state is said out loud here.
+    pair.className = 'act-pair' + (aiOn ? '' : ' solo');
     if (!aiOn) {
       if (askPanel && askPanel.parentNode) askPanel.parentNode.removeChild(askPanel);
       return;
@@ -1450,7 +1481,28 @@
         || (S.round.queries.length >= P.costs.queryCap);
     }
     $('btn-nominate').disabled = busy;
-    $('btn-nominate').textContent = 'Stop and nominate position ' + sel;
+    if (bestFoundRule()) {
+      // The button names WHAT IT TAKES, not where the slider happens to be:
+      // stopping is the end of searching, and it can only ever hand over a
+      // prize already found. Saying so on the button is what stops a
+      // participant reading it as "stop HERE".
+      var bk = bestKnown();
+      $('btn-nominate').textContent = bk
+        ? 'Stop and take your best prize: ' + bk.val + ' points'
+        : 'Stop with no prize found';
+      $('btn-nominate').title = bk
+        ? 'Ends the round and takes ' + bk.val + ' points, found at position ' + bk.pos + '.'
+        : 'Ends the round. You have not found a prize yet, so there is nothing to take.';
+    } else {
+      $('btn-nominate').textContent = 'Stop and nominate position ' + sel;
+      $('btn-nominate').title = '';
+    }
+
+    if ($('stop-note')) {
+      $('stop-note').textContent = bestFoundRule()
+        ? 'Ends the round and takes the best prize you have found, minus what you spent. It never opens a new position.'
+        : 'Ends the round on the selected position. Your score is the true prize there, minus what you spent.';
+    }
 
     var capMsg = '';
     if (S.round.reveals.length >= P.costs.revealCap) capMsg = 'You have reached the limit of ' + P.costs.revealCap + ' reveals in a round.';
@@ -1554,8 +1606,10 @@
         done();
         renderRound();
         flashAnswer(action === 'query'
-          ? 'The AI says <b>' + value + '</b> at position ' + pos + '.'
-          : 'Position ' + pos + ' holds <b>' + value + '</b>.', action === 'query' ? 'ask' : 'reveal');
+          // Always with the unit: a bare number quoted beside a position number
+          // reads as another position (owner 2026-08).
+          ? 'The AI says <b>' + value + ' points</b> at position ' + pos + '.'
+          : 'Position ' + pos + ' holds <b>' + value + ' points</b>.', action === 'query' ? 'ask' : 'reveal');
         encourageAfterAction();
       }, function (err) { done(); serverProblem(err); });
     });
@@ -1604,8 +1658,29 @@
         R.stay, { text: R.go, onAlt: function () { openNominate(); } });
       return;
     }
-    // §14: confirm when the position has never been asked about or revealed —
-    // that is a pure gamble and more likely a misclick than an intention.
+    if (bestFoundRule()) {
+      // Nothing to guard against here: stopping cannot land on an unknown
+      // prize, because it never opens one. The single case worth a question is
+      // stopping with NOTHING found, which scores zero and is almost always a
+      // mis-click rather than a decision.
+      var bk = bestKnown();
+      if (!bk) {
+        $('nom-title').textContent = 'Stop with no prize found?';
+        $('nom-msg').innerHTML = 'You have not revealed any position yet, so there is no prize to take. ' +
+          'Stopping now scores <b>0</b>' +
+          (S.round.queries.length ? ', minus what you have spent asking the AI' : '') + '.';
+        $('btn-nom-ok').textContent = 'Yes, stop';
+        $('ov-nominate').classList.add('show');
+        $('btn-nom-cancel').onclick = function () { $('ov-nominate').classList.remove('show'); };
+        $('btn-nom-ok').onclick = function () { $('ov-nominate').classList.remove('show'); doNominate(null); };
+        return;
+      }
+      doNominate(bk.pos);
+      return;
+    }
+    // §14 (legacy 'nominate' rule): confirm when the position has never been
+    // asked about or revealed — that is a pure gamble and more likely a
+    // misclick than an intention.
     if (untouched) {
       $('nom-title').textContent = 'Stop on position ' + pos + '?';
       $('nom-msg').innerHTML = 'You have not asked about or revealed position <b>' + pos + '</b>. ' +
@@ -1621,6 +1696,9 @@
 
   function doNominate(pos) {
     var dc = decisionContext();
+    // Under 'best_found' there may be no position at all (nothing found). The
+    // server ignores it under that rule anyway; 0 keeps the wire shape stable.
+    if (pos == null) pos = 0;
     var capHit = (S.round.reveals.length >= P.costs.revealCap) ? 'reveal'
       : (S.round.queries.length >= P.costs.queryCap) ? 'query' : null;
     var actionId = uuid();
@@ -1638,14 +1716,19 @@
         action: 'stop', position: pos, value: null, cap_hit: capHit, event_id: actionId
       }));
 
+      // The backend decides BOTH what was taken and where it came from: under
+      // 'best_found' the position is the argmax of what was found, which the
+      // client must not second-guess.
+      var takenPos = (res.nominatedPosition != null) ? res.nominatedPosition : pos;
       var nomType = res.nominationType ||
         (isRevealed(pos) ? 'verified' : (wasQueried(pos) ? 'queried_only' : 'untouched'));
       var result = {
         round_index: r.round_index, spec_id: r.spec_id, block: r.block,
         condition: r.condition, scored: r.scored,
         n_queries: S.round.queries.length, n_reveals: S.round.reveals.length,
-        total_cost: cost, nominated_position: pos, nominated_true_value: trueVal,
-        nomination_type: nomType, final_score: score, raw_score: raw,
+        total_cost: cost, nominated_position: takenPos, nominated_true_value: trueVal,
+        nomination_type: nomType, stop_rule: (res.stopRule || (bestFoundRule() ? 'best_found' : 'nominate')),
+        final_score: score, raw_score: raw,
         duration_ms: Date.now() - S.round.startedAt,
         stopped_immediately: (S.round.decisionIdx === 0),
         cap_hit: capHit,
@@ -1700,7 +1783,18 @@
     });
     var host = $('inter-body');
     var lines = [];
-    lines.push('<div class="res-line">You stopped on position <b>' + result.nominated_position + '</b>.</div>');
+    // What the round ACTUALLY settled on. Under 'best_found' the participant
+    // did not choose a position, so telling them they "stopped on" one would
+    // misdescribe their own action: they stopped, and took the best prize they
+    // had found.
+    if (result.stop_rule === 'nominate' || (!result.stop_rule && !bestFoundRule())) {
+      lines.push('<div class="res-line">You stopped on position <b>' + result.nominated_position + '</b>.</div>');
+    } else if (result.nominated_position == null || result.nomination_type === 'nothing_found') {
+      lines.push('<div class="res-line">You stopped without finding a prize.</div>');
+    } else {
+      lines.push('<div class="res-line">You stopped and took the best prize you had found, at position <b>' +
+        result.nominated_position + '</b>.</div>');
+    }
     lines.push('<div class="res-big">' + result.nominated_true_value + ' points</div>');
     if (askedAt != null) {
       var errAbs = Math.abs(askedAt - result.nominated_true_value);
@@ -1712,7 +1806,8 @@
     // where their score went.
     var qC = result.n_queries * P.costs.queryCost, rC = result.n_reveals * P.costs.revealCost;
     var led = ['<div class="ledger">'];
-    led.push('<div class="lg plus"><span>Prize at position ' + result.nominated_position + '</span>' +
+    led.push('<div class="lg plus"><span>' + (result.nominated_position == null
+        ? 'No prize found' : 'Prize at position ' + result.nominated_position) + '</span>' +
       '<span class="lg-v">+' + result.nominated_true_value + '</span></div>');
     led.push('<div class="lg minus"><span>Cost of revealing &mdash; ' + result.n_reveals + ' \u00d7 ' +
       P.costs.revealCost + '</span><span class="lg-v">' + (rC ? '\u2212' + rC : '0') + '</span></div>');
@@ -1914,7 +2009,10 @@
       (aiOn ? '<li>Asking the AI costs <b>' + P.costs.queryCost + '</b> points. It knows the true prize ' +
         'at some positions and guesses everywhere else &mdash; you are not told which, or how many. ' +
         'Everything you reveal is added to what it knows.</li>' : '') +
-      '<li>Your score is the <b>true prize at the position you stop on</b>, minus everything you spent this round.</li>' +
+      (bestFoundRule()
+        ? '<li>Stopping ends the round and takes the <b>best prize you have found</b> \u2014 minus everything ' +
+          'you spent this round. It never opens a new position.</li>'
+        : '<li>Your score is the <b>true prize at the position you stop on</b>, minus everything you spent this round.</li>') +
       '<li>Prizes are drawn afresh every round.</li>' +
       '</ul>';
     $('summary-body').innerHTML = html;
