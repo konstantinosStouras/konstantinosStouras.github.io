@@ -16,7 +16,9 @@
    admin.js, so adding a simulation is: a `verify` block in catalog.js + one
    adapter here.
 
-   An adapter is  fn(ctx) -> Promise<{ records, doneById, identityDocs? }>  where
+   An adapter is
+     fn(ctx) -> Promise<{ records, doneById, doneByEmail?, identityDocs? }>
+   where
      ctx.D      the Firestore module (getDocs, collection, query, where, …)
      ctx.fs     Firestore instance for THAT simulation's project
      ctx.uid    uid of the admin account signed into that project
@@ -26,9 +28,22 @@
                 roster in that state, because "no records" is indistinguishable
                 from a wrong project / a permissions problem, and treating it
                 as "nobody completed anything" would revoke the whole class.
-     doneById   { <student ID, trimmed + lower-cased> : {ts, session} } for the
-                participants who COMPLETED it. ts = completion time in epoch
-                ms (0 when unknown), session = the session/wave code or null.
+     doneById   { <student ID, trimmed + lower-cased> : mark } for the
+                participants who COMPLETED it.
+     doneByEmail  { <e-mail, trimmed + lower-cased> : mark } — the SAME
+                completed participants keyed by whatever real e-mail address
+                their record carries (owner 2026-08-16: the roster join is
+                student ID AND/OR e-mail, so an ID typed differently in the
+                two forms no longer loses the student). Synthetic throwaway
+                addresses (@simplatform.stouras.com) are never reported —
+                they identify an account the app minted, not a student.
+     A mark is  { ts, session, id, email, dur }:
+                ts = completion time in epoch ms (0 when unknown), session =
+                the session/wave code or null, id/email = the identities the
+                record itself carries ('' when absent — SIMP_MATCH uses them
+                to cross-join and to spot duplicate registrations), dur = the
+                play duration in ms (0 = unknown; feeds the duplicates
+                pop-up's "super fast play" suggestion).
 
      identityDocs  OPTIONAL (Ideation Challenge): a read-only REPORT of the
                 participant records still carrying the throwaway login's
@@ -56,6 +71,42 @@ window.SIMP_VERIFY = (function () {
     return isNaN(n) ? 0 : n;
   }
   function pid(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+  /* The e-mail join key. '' for anything that is not a plausible address —
+     and for the synthetic throwaway logins the Ideation Challenge's
+     account-free flow mints (student-…@simplatform.stouras.com), which
+     identify an ACCOUNT, never a student. KEEP IN SYNC with
+     SIMP_MATCH.emailKey in admin/match.js (this file is also loaded
+     standalone by its own guard, so it carries its own copy); the
+     match-guard checks the two sources agree. */
+  function email(v) {
+    var s = String(v == null ? '' : v).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return '';
+    if (/@simplatform\.stouras\.com$/.test(s)) return '';
+    return s;
+  }
+  /* The e-mail-looking value in a map of form answers — registration forms
+     that collect an address do so under a session-defined field id, so the
+     VALUES are scanned rather than the ids (mirrors how the platform's
+     prefill answers such fields by label). TWO DIFFERENT addresses in one
+     form (an emergency contact beside the student's own, say) make the
+     identity ambiguous — refuse rather than adopt a third party's address
+     and stamp the wrong student. */
+  function emailInAnswers(m) {
+    var found = '', clash = false;
+    Object.keys(m || {}).forEach(function (k) {
+      var e = email(m[k]);
+      if (!e || e === found) return;
+      if (found) clash = true;
+      else found = e;
+    });
+    return clash ? '' : found;
+  }
+  /* Play duration in ms; 0 = unknown (either stamp missing, or the order
+     makes no sense). Feeds the duplicates pop-up's "super fast" judgement. */
+  function durMs(start, end) {
+    var a = tsMs(start), b = tsMs(end);
+    return (a > 0 && b > a) ? (b - a) : 0;
+  }
   /* A student may have several records (a retake, two devices) — keep the
      most recent completion, which is what the roster ✓ should date from. */
   function keep(map, id, mark) {
@@ -74,22 +125,30 @@ window.SIMP_VERIFY = (function () {
       ]).then(function (r) {
         var codeById = {};
         r[1].forEach(function (d) { codeById[d.id] = String(d.data().code || '').toUpperCase(); });
-        var done = {};
+        var done = {}, doneByEmail = {};
         r[0].forEach(function (d) {
           var x = d.data();
           var cs = x.completedSessions || {};
           var sids = Object.keys(cs);
           if (!sids.length && x.status !== 'done') return;      // not completed
           var id = pid(x.participantId);
-          if (!id) return;
+          /* The account e-mail is null for the anonymous intake flow, but an
+             admin-added e-mail question lands in the intake answers — stored
+             on the participant doc as `registration` (finishRegister in
+             arena-app.js). */
+          var em = email(x.email) || emailInAnswers(x.registration || x.answers);
+          if (!id && !em) return;                 // nothing identifying at all
           var best = { ts: Number(x.updatedAt) || 0, session: null };
           sids.forEach(function (sid) {
             var ts = Number(cs[sid]) || 0;
             if (ts >= best.ts) best = { ts: ts, session: sid === '_none' ? null : (codeById[sid] || null) };
           });
-          keep(done, id, best);
+          best.id = id; best.email = em;
+          best.dur = durMs(x.createdAt, best.ts || x.updatedAt);
+          if (id) keep(done, id, best);
+          if (em) keep(doneByEmail, em, best);
         });
-        return { records: r[0].size, doneById: done };
+        return { records: r[0].size, doneById: done, doneByEmail: doneByEmail };
       });
     },
 
@@ -135,6 +194,20 @@ window.SIMP_VERIFY = (function () {
         if (!ids.length) ids.push('ucdStudentId');
         return ids;
       }
+      /* Likewise for the e-mail: the DEFAULT form asks for none (the app's
+         identity is a throwaway login), so only a field the session's admin
+         LABELLED as an e-mail address can carry one — selected by label, not
+         by scanning every answer, so a third party's address typed into some
+         other field can never become the student's identity here. */
+      function emailFieldIds(regConfig) {
+        var ids = [];
+        var fields = (regConfig && Array.isArray(regConfig.fields)) ? regConfig.fields : [];
+        fields.forEach(function (f) {
+          if (!f || !f.id) return;
+          if (f.id === 'email' || /e-?mail/i.test(String(f.label || ''))) ids.push(f.id);
+        });
+        return ids;
+      }
       return c.D.getDocs(c.D.query(c.D.collection(c.fs, 'sessions'),
                                    c.D.where('instructorId', '==', c.uid)))
         .then(function (ss) {
@@ -145,7 +218,8 @@ window.SIMP_VERIFY = (function () {
               id: d.id,
               code: String(x.code || '').toUpperCase(),
               closed: x.status === 'done',
-              sidFields: studentIdFieldIds(x.registrationConfig)
+              sidFields: studentIdFieldIds(x.registrationConfig),
+              emFields: emailFieldIds(x.registrationConfig)
             });
           });
           if (!sessions.length) {
@@ -164,7 +238,7 @@ window.SIMP_VERIFY = (function () {
             ]).then(function (r) { return { s: s, ps: r[0], ideas: r[1] }; });
           }));
         }).then(function (rs) {
-          var done = {}, records = 0, identityDocs = {};
+          var done = {}, doneByEmail = {}, records = 0, identityDocs = {};
           rs.forEach(function (r) {
             var authored = {};
             if (r.ideas) r.ideas.forEach(function (d) {
@@ -208,7 +282,19 @@ window.SIMP_VERIFY = (function () {
                   id = pid(demo[r.s.sidFields[i]]);
                 }
               }
-              if (!id) return;                       // no student ID on record at all
+              /* The e-mail, for the ID-and/or-e-mail join: the handoff's real
+                 address first, then the participant doc's own (real once the
+                 identity backfill has healed it — email() drops the synthetic
+                 @simplatform throwaway), then an address typed into a
+                 registration field the session's admin LABELLED e-mail. */
+              var em = email(plat.email) || email(x.email);
+              if (!em) {
+                var dm = x.demographics || {};
+                for (var ei = 0; ei < r.s.emFields.length && !em; ei++) {
+                  em = email(dm[r.s.emFields[ei]]);
+                }
+              }
+              if (!id && !em) return;           // nothing identifying at all
               /* Report what this record is still missing, so admin.js can fill
                  it from the roster (owner 2026-08-16: a direct-link student's
                  real name/e-mail live on the PLATFORM's roster — they
@@ -220,7 +306,9 @@ window.SIMP_VERIFY = (function () {
               var needEmail = !x.email || /@simplatform\.stouras\.com$/i.test(String(x.email));
               var needPlatName = !String(plat.name || '').trim();
               var needPlatEmail = !String(plat.email || '').trim();
-              if (needName || needEmail || needPlatName || needPlatEmail) {
+              /* The backfill report stays keyed by student ID — admin.js
+                 writes it through the roster's ID join. */
+              if (id && (needName || needEmail || needPlatName || needPlatEmail)) {
                 (identityDocs[id] = identityDocs[id] || []).push({
                   sid: r.s.id, uid: d.id,
                   needName: needName, needEmail: needEmail,
@@ -229,13 +317,20 @@ window.SIMP_VERIFY = (function () {
                 });
               }
               if (!finished) return;
-              keep(done, id, {
+              var mark = {
                 ts: tsMs(x.surveyCompletedAt) || tsMs(x.votedAt) || tsMs(x.joinedAt) || 0,
-                session: r.s.code || null
-              });
+                session: r.s.code || null,
+                id: id, email: em,
+                /* joined → finished = the play duration (0 when either stamp
+                   is missing — e.g. the closed-session participation path). */
+                dur: durMs(x.joinedAt, x.surveyCompletedAt || x.votedAt)
+              };
+              if (id) keep(done, id, mark);
+              if (em) keep(doneByEmail, em, mark);
             });
           });
-          return { records: records, doneById: done, identityDocs: identityDocs };
+          return { records: records, doneById: done, doneByEmail: doneByEmail,
+                   identityDocs: identityDocs };
         });
     },
 
@@ -244,19 +339,28 @@ window.SIMP_VERIFY = (function () {
        survey is submitted. */
     portfoliofit: function (c) {
       return c.D.getDocs(c.D.collection(c.fs, 'participants')).then(function (ps) {
-        var done = {}, records = 0;
+        var done = {}, doneByEmail = {}, records = 0;
         ps.forEach(function (d) {
           records++;
           var x = d.data();
           if (x.status !== 'done') return;
           var id = pid(x.studentId || (x.registration && x.registration.studentId));
-          if (!id) return;
-          keep(done, id, {
+          /* Its default registration form has no e-mail question, but an
+             admin-added one lands in the registration answers. */
+          var em = email(x.email) || emailInAnswers(x.registration);
+          if (!id && !em) return;               // nothing identifying at all
+          var mark = {
             ts: tsMs(x.updatedAt) || tsMs(x.createdAt) || 0,
-            session: x.sessionId ? String(x.sessionId).toUpperCase() : null
-          });
+            session: x.sessionId ? String(x.sessionId).toUpperCase() : null,
+            id: id, email: em,
+            /* doc created at first sign-in, last written at the survey — the
+               span of the whole sitting. */
+            dur: durMs(x.createdAt, x.updatedAt)
+          };
+          if (id) keep(done, id, mark);
+          if (em) keep(doneByEmail, em, mark);
         });
-        return { records: records, doneById: done };
+        return { records: records, doneById: done, doneByEmail: doneByEmail };
       });
     },
 
@@ -278,10 +382,14 @@ window.SIMP_VERIFY = (function () {
           if (!id || id === 'anon') return;
           keep(done, id, {
             ts: tsMs(x.t),
-            session: x.sessionCode ? String(x.sessionCode).toUpperCase() : null
+            session: x.sessionCode ? String(x.sessionCode).toUpperCase() : null,
+            /* The study's log carries no e-mail at all (§11 — the student's
+               name and e-mail never reach it) and no per-participant start
+               stamp on this row, so the ID is the whole identity here. */
+            id: id, email: '', dur: 0
           });
         });
-        return { records: r[0].size || r[1].size, doneById: done };
+        return { records: r[0].size || r[1].size, doneById: done, doneByEmail: {} };
       });
     }
 

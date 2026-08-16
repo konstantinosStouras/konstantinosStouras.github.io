@@ -146,9 +146,17 @@
         click the <strong>Approved</strong> or a simulation column header to filter
         (all → only ✓ → only —).</p>
         <p class="hint">A <strong>⟲ Verify from …</strong> button appears for every <em>active</em> simulation
-        that keeps an identifiable participant record (one carrying the university student ID): it reads that
-        simulation's own backend — the ground truth — and fixes the column for students whose browser never
-        reported back. Simulations that collect no identifiable data (Problem Solving, Sustainable Supply
+        that keeps an identifiable participant record: it reads that simulation's own backend — the ground
+        truth — and matches every registered student on the <strong>university student ID and/or the
+        e-mail</strong> on record (so an ID typed differently in the two forms no longer loses the match),
+        fixing the column for students whose browser never reported back. <strong>This also runs by itself</strong>
+        once every time this panel opens (with the shared admin credentials from the locker above — save them
+        once to enable it): unique matches are stamped automatically, so the buttons are only needed for the
+        extreme cases — reviewing proposed ✓ <em>removals</em>, and <strong>possible duplicate
+        registrations</strong>, which are raised in a pop-up listing each entry with a suggestion on which to
+        remove (a profile that only registered while its duplicate carries the play data, or a super-fast play
+        made before re-registering to play properly) — nothing is ever deleted without your say-so.
+        Simulations that collect no identifiable data (Problem Solving, Sustainable Supply
         Chains, Newsvendor, Trust the AI?) have nothing to reconcile against, so they show no button.</p>
         <p class="hint"><strong>Approve all</strong> / <strong>Revoke all</strong> set the approval of every
         student shown in one click — with a column filter on they act only on the rows displayed (so you can,
@@ -191,6 +199,9 @@
 <script src="../completions.js"></script>
 <script src="../catalog.js"></script>
 <script src="../platform.js"></script>
+<!-- Roster ↔ simulation matching (student ID and/or e-mail) + duplicate
+     detection — pure logic, offline-tested by tools/match-guard.mjs. -->
+<script src="./match.js"></script>
 <!-- Per-simulation completion readers for the roster's Verify buttons. -->
 <script src="./verify.js"></script>
 <script src="./admin.js"></script>
