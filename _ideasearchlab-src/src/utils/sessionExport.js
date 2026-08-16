@@ -17,6 +17,7 @@
 import { getDocs, collection, query, orderBy } from 'firebase/firestore'
 import { db } from '../firebase'
 import { getRegistration, getSurveyQuestions } from '../data/formDefaults'
+import { displayName, displayEmail } from './participantIdentity'
 import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/aiPricing'
 import * as XLSX from 'xlsx-js-style'
 
@@ -135,6 +136,14 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
   const ideaById = Object.fromEntries(ideas.map(i => [i.id, i]))
   const ideaTitleById = Object.fromEntries(ideas.map(i => [i.id, i.title || i.text || i.id]))
 
+  // Every Name/Email column resolves the participant's REAL identity
+  // (participantIdentity.js): the doc's own fields mirror the throwaway login
+  // ("Student" + student-…@simplatform.stouras.com) for a student who joined
+  // from a direct link, while their real details sit in the platform block or
+  // their registration answers. The raw Platform columns stay raw.
+  const realName = p => displayName(p, session)
+  const realEmail = p => displayEmail(p, session)
+
   // Prepend the condition keys as the leftmost columns of every data sheet.
   const stamp = row => ({
     'Session Code': sessionCode,
@@ -233,8 +242,8 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     const ballotStatus = ballotStatusOf(p, required)
     const row = {
       'Participant ID': p.id,
-      'Name': p.name || '',
-      'Email': p.email || '',
+      'Name': realName(p) || '',
+      'Email': realEmail(p) || '',
       'Anonymous Label': p.anonymousLabel || '',
       'Group ID': groupOf(p),
       'Group UID': groupOf(p) ? `${sessionCode}:${groupOf(p)}` : '',
@@ -322,7 +331,7 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
       const gid = p.groupId || (idea && (idea.groupId || authorGroupId[idea.authorId])) || ''
       voteRows.push({
         'Voter ID': p.id,
-        'Voter Name': p.name || '',
+        'Voter Name': realName(p) || '',
         'Voter Label': p.anonymousLabel || '',
         'Group ID': gid,
         'Group UID': gid ? `${sessionCode}:${gid}` : '',
@@ -382,7 +391,7 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
       const a = p.surveyAnswers || {}
       const row = {
         'Participant ID': p.id,
-        'Name': p.name || '',
+        'Name': realName(p) || '',
         'Anonymous Label': p.anonymousLabel || '',
         'Completed At': p.surveyCompletedAt ? formatTimestamp(p.surveyCompletedAt) : '',
       }
@@ -411,7 +420,7 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
         const myReplies = aiMessages.filter(m => m.role === 'assistant' && m.scope === 'individual' && m.scopeId === p.id)
         return {
           'Participant ID': p.id,
-          'Name': p.name || '',
+          'Name': realName(p) || '',
           'Anonymous Label': p.anonymousLabel || '',
           'Group ID': p.groupId || '',
           'Group UID': p.groupId ? `${sessionCode}:${p.groupId}` : '',

@@ -9,7 +9,8 @@ import { individualTimers, groupTimers, formatDuration } from '../utils/phaseTim
 import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/aiPricing'
 import * as XLSX from 'xlsx-js-style'
 import { exportSessionWorkbook } from '../utils/sessionExport'
-import { participantIsDone, hasCompletedSurvey, healFinishedParticipants } from '../utils/participantStatus'
+import { participantIsDone, hasCompletedSurvey, healFinishedParticipants, healParticipantIdentities } from '../utils/participantStatus'
+import { displayName, displayEmail } from '../utils/participantIdentity'
 import styles from './AdminSession.module.css'
 
 export default function AdminSession() {
@@ -31,6 +32,8 @@ export default function AdminSession() {
   const [expandedGroups, setExpandedGroups] = useState(() => new Set()) // group buckets drilled open
   const [healed, setHealed] = useState(0)          // participants whose finished-status was repaired
   const healedRef = useRef(false)
+  const [identityHealed, setIdentityHealed] = useState(0) // docs given their real name/e-mail/student ID
+  const identityHealedRef = useRef(false)
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'sessions', sessionId), snap => {
@@ -59,6 +62,21 @@ export default function AdminSession() {
     )
     return unsub
   }, [sessionId])
+
+  // Write each participant's REAL identity onto their doc where the throwaway
+  // login left "Student" + a synthetic address but their registration answers
+  // know better (participantIdentity.js — a direct-link play records the real
+  // name/e-mail/student ID only under demographics). Once per visit; needs
+  // BOTH the session (its registrationConfig names the identity fields) and
+  // the participants, which arrive on independent snapshots — hence its own
+  // effect rather than a line in the participants handler above.
+  useEffect(() => {
+    if (!session || participants.length === 0 || identityHealedRef.current) return
+    identityHealedRef.current = true
+    healParticipantIdentities(sessionId, session, participants)
+      .then(n => { if (n) setIdentityHealed(n) })
+      .catch(() => { identityHealedRef.current = false })
+  }, [session, participants, sessionId])
 
   // Live ideas feed, used for the submitted-ideas confirmation summary below.
   useEffect(() => {
@@ -477,7 +495,7 @@ export default function AdminSession() {
                                 <span className={styles.pIdentity}>
                                   <span className={styles.pChevron}>{open ? '▾' : '▸'}</span>
                                   {p.anonymousLabel && <span className={styles.pGroupTag}>{p.anonymousLabel}</span>}
-                                  <span className={styles.pName}>{p.name || p.anonymousLabel || p.id.slice(0, 6)}</span>
+                                  <span className={styles.pName}>{displayName(p, session) || p.anonymousLabel || p.id.slice(0, 6)}</span>
                                 </span>
                                 <span className={styles.pRight}>
                                   {indivActive && (
@@ -503,7 +521,7 @@ export default function AdminSession() {
                               {open && (
                                 <div className={styles.pDetail}>
                                   <DetailRow label="Current stage" value={participantStageLabel(p)} />
-                                  <DetailRow label="Email" value={p.email || '—'} />
+                                  <DetailRow label="Email" value={displayEmail(p, session) || '—'} />
                                   <DetailRow label="Joined" value={formatTimestamp(p.joinedAt) || '—'} />
                                   {indivActive && <DetailRow label="Individual ideas" value={p.individualComplete ? 'Submitted ✓' : 'Not yet'} />}
                                   {indivActive && (
@@ -647,7 +665,7 @@ export default function AdminSession() {
                             <div className={styles.ideaUserHeader}>
                               <span className={styles.ideaUserIdentity}>
                                 {p.anonymousLabel && <span className={styles.pGroupTag}>{p.anonymousLabel}</span>}
-                                <span className={styles.ideaUserName}>{p.name || p.anonymousLabel || p.id.slice(0, 6)}</span>
+                                <span className={styles.ideaUserName}>{displayName(p, session) || p.anonymousLabel || p.id.slice(0, 6)}</span>
                                 <span className={styles.ideaSummaryCount}>
                                   {list.length} idea{list.length === 1 ? '' : 's'}
                                 </span>
@@ -786,6 +804,13 @@ export default function AdminSession() {
             <p className={styles.healNote}>
               Marked {healed} participant{healed === 1 ? '' : 's'} as finished — they had completed the
               survey but their status still said otherwise.
+            </p>
+          )}
+          {identityHealed > 0 && (
+            <p className={styles.healNote}>
+              Filled in the real name / e-mail / student ID of {identityHealed} participant
+              {identityHealed === 1 ? '' : 's'} from their registration answers — their login was a
+              throwaway account, so the records showed “Student” and a synthetic address.
             </p>
           )}
         </div>

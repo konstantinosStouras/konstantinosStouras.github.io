@@ -86,7 +86,15 @@ window.SIMP_VERIFY = (function () {
 
     /* Ideation Challenge — participants live UNDER their session
        (sessions/{id}/participants/{uid}); the identity is the platform block
-       the silent registration writes (platform.studentId).
+       the silent registration writes (platform.studentId) OR, for a student
+       who opened the app directly and registered on its own form (owner
+       2026-08: sessions SGP2/SGP3/ATHENS were played from a direct link, so
+       no handoff ever wrote a platform block), the student ID they typed
+       into that form — read from `demographics` via the session's own
+       registrationConfig: the default form's `ucdStudentId` field, or any
+       admin-added field whose label says Student/Participant ID (the same
+       label rule simplatform.js uses to FILL such a field on a platform
+       launch, so the two directions can't drift apart).
        TWO ways to finish, both landing the student on the same Done screen
        (which is what stamps their own ✓): they submit the survey — status
        'done' — or the INSTRUCTOR CLOSES the session while they are playing,
@@ -99,6 +107,22 @@ window.SIMP_VERIFY = (function () {
        participant reads to the session's instructor, so scanning other
        instructors' sessions would only collect permission errors. */
     ideasearchlab: function (c) {
+      /* The registration fields that carry the university student ID in a
+         given session: the default form's `ucdStudentId`, plus any field the
+         admin added whose label names a Student/Participant ID. Falls back to
+         the default id when a session has no custom registrationConfig (it
+         then RUNS the default form, so that is where the answer lives). */
+      function studentIdFieldIds(regConfig) {
+        var ids = [];
+        var fields = (regConfig && regConfig.fields) || [];
+        fields.forEach(function (f) {
+          if (!f || !f.id) return;
+          if (f.id === 'ucdStudentId' ||
+              /student\s*id|participant\s*id/i.test(String(f.label || ''))) ids.push(f.id);
+        });
+        if (!ids.length) ids.push('ucdStudentId');
+        return ids;
+      }
       return c.D.getDocs(c.D.query(c.D.collection(c.fs, 'sessions'),
                                    c.D.where('instructorId', '==', c.uid)))
         .then(function (ss) {
@@ -108,7 +132,8 @@ window.SIMP_VERIFY = (function () {
             sessions.push({
               id: d.id,
               code: String(x.code || '').toUpperCase(),
-              closed: x.status === 'done'
+              closed: x.status === 'done',
+              sidFields: studentIdFieldIds(x.registrationConfig)
             });
           });
           if (!sessions.length) {
@@ -161,8 +186,17 @@ window.SIMP_VERIFY = (function () {
                 finished = !!authored[d.id] || ((x.votedFor || []).length > 0);
               }
               if (!finished) return;
+              /* Platform launch first (the handoff's ID is the roster's own),
+                 then the ID the student typed into the session's registration
+                 form — a direct-link play records its identity only there. */
               var id = pid(x.platform && x.platform.studentId);
-              if (!id) return;                                    // joined outside the platform
+              if (!id) {
+                var demo = x.demographics || {};
+                for (var i = 0; i < r.s.sidFields.length && !id; i++) {
+                  id = pid(demo[r.s.sidFields[i]]);
+                }
+              }
+              if (!id) return;                       // no student ID on record at all
               keep(done, id, {
                 ts: tsMs(x.surveyCompletedAt) || tsMs(x.votedAt) || tsMs(x.joinedAt) || 0,
                 session: r.s.code || null
