@@ -123,6 +123,20 @@ export function displayEmail(participant, session) {
   return realIdentity(participant, session).email || String((participant && participant.email) || '').trim()
 }
 
+/**
+ * Best display label for a participant LIST: their real name, else their
+ * STUDENT ID (owner 2026-08-16: the default registration form has no name
+ * field at all — only "UCD Student ID" — so a direct-link session resolves no
+ * name for anyone and every row read "Student"; the ID is how the instructor
+ * actually knows their students), else whatever the doc holds. Deliberately
+ * NOT used for the export's Name columns — a student ID is not a name, and
+ * the workbook carries the ID in its own column.
+ */
+export function displayNameOrId(participant, session) {
+  const r = realIdentity(participant, session)
+  return r.name || r.studentId || String((participant && participant.name) || '').trim()
+}
+
 const EMAILISH = /\S+@\S+\.\S+/
 
 /**
