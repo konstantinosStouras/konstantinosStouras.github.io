@@ -47,6 +47,8 @@
                      adapter       key in window.SIMP_VERIFY (admin/verify.js)
                                    — the function that reads that project and
                                    returns who completed it, by student ID
+                                   and/or e-mail (the roster join tries both;
+                                   admin/match.js)
                      configGlobal  window global holding the app's PUBLIC
                                    Firebase web config, when the app publishes
                                    one as its own file (Answer Arena)
@@ -75,7 +77,7 @@ window.SIMP_CATALOG = [
         messagingSenderId: '368057681732',
         appId: '1:368057681732:web:35d8aba8d387abc364f911'
       },
-      idNote: 'the student ID carried over from the platform launch (participant.platform.studentId) or, for students who opened the app from a direct link, the Student ID they typed into the session’s own registration form (demographics — the default ucdStudentId field, or any field labelled Student ID), on participants who completed the study in the sessions this admin account created. The pass also FILLS the matched records’ real name and e-mail from this roster (fill-empty — a record already carrying real details is never touched)'
+      idNote: 'the student ID carried over from the platform launch (participant.platform.studentId) or, for students who opened the app from a direct link, the Student ID they typed into the session’s own registration form (demographics — the default ucdStudentId field, or any field labelled Student ID), on participants who completed the study in the sessions this admin account created; plus any real e-mail its records carry (the handoff’s platform.email, a healed participant e-mail, or an address typed into a registration field — the synthetic @simplatform throwaway logins never count). The pass also FILLS the matched records’ real name and e-mail from this roster (fill-empty — a record already carrying real details is never touched)'
     },
     adminUrl: '/lab/ideasearchlab/admin/', adminAuth: 'firebase',
     adminNote: 'Instructor account on the “ideasearchlab” Firebase project. Students get a silent throwaway login (no account screen); their join code arrives pre-filled and the registration auto-submits from the platform data, consent statements included (carried from the platform launch, stamped consentVia on the participant record).'
@@ -96,7 +98,7 @@ window.SIMP_CATALOG = [
         messagingSenderId: '346443957980',
         appId: '1:346443957980:web:d5987b2a470a401e7d5619'
       },
-      idNote: 'the University Student ID from its registration form (participants.studentId), on players whose record reached status “done” (survey submitted)'
+      idNote: 'the University Student ID from its registration form (participants.studentId), plus any e-mail typed into an admin-added registration question, on players whose record reached status “done” (survey submitted)'
     },
     adminUrl: '/lab/portfoliofit/?admin', adminAuth: 'firebase',
     adminNote: 'Opens with ?admin; email/password on the “stouras-portfoliofit” Firebase project. Its in-game registration form auto-fills from the platform registration (prefill drop-in wired).'
@@ -110,7 +112,7 @@ window.SIMP_CATALOG = [
       adapter: 'answerarena',
       /* the arena publishes its own config file, loaded by the admin page */
       configGlobal: 'ARENA_FIREBASE',
-      idNote: 'the University Student ID typed into its intake form (participants.participantId), on participants with a completed session'
+      idNote: 'the University Student ID typed into its intake form (participants.participantId), plus any e-mail on the record or typed into an intake question, on participants with a completed session'
     },
     adminUrl: '/lab/answerarena/?admin', adminAuth: 'firebase',
     adminNote: 'Opens with ?admin (same store pattern as Sustainable Supply Chains). Without a session code students play the default config. Its intake form auto-fills from the platform registration.'
@@ -164,7 +166,7 @@ window.SIMP_CATALOG = [
         messagingSenderId: '9761548035',
         appId: '1:9761548035:web:13d1cda30bbe35aeec2b36'
       },
-      idNote: 'the student ID the platform sends as PROLIFIC_PID — it becomes the study’s participant_code and is carried as events.pid on the “session_end” row'
+      idNote: 'the student ID the platform sends as PROLIFIC_PID — it becomes the study’s participant_code and is carried as events.pid on the “session_end” row (its log carries no e-mail by design, so the ID is the only join key here)'
     },
     adminUrl: '/lab/search-v2/admin/', adminAuth: 'firebase',
     adminNote: 'Email/password per ADMIN_EMAILS in lab/search-v2/firebase-config.js. The launch link mirrors its canonical Prolific link, with the student ID as PROLIFIC_PID.'

@@ -197,11 +197,50 @@ Then:
   hosted cross-origin in another project, and *Trust the AI?* stores nothing
   at all. Each button reads that simulation's OWN project with the shared
   admin credentials from the locker, matches its completed participants to
-  the roster by student ID, and stamps `completed.<simKey>` (with the session
-  code) onto every match — applied to the whole roster in one click, live
-  everywhere; its outcome (incl. IDs it could not match — usually a student
-  ID typed differently in the two forms) prints beside the buttons. Where
-  each simulation keeps that identity:
+  every registered student **by university student ID AND/OR e-mail**
+  (`admin/match.js` — owner 2026-08-16: the ID is typed into two different
+  forms, so ID-only lost the match for good on one typo while the
+  simulation's own admin showed the play; now the record's e-mail rescues
+  it, and each adapter reports a `doneByEmail` map beside `doneById` —
+  the Ideation Challenge's synthetic `@simplatform` throwaway logins are
+  never counted as an identity), and stamps `completed.<simKey>` (with the
+  session code) onto every match — applied to the whole roster in one
+  click, live everywhere; its outcome (incl. how many matched by e-mail
+  where the ID differed, and IDs it could not match by either key) prints
+  beside the buttons. **The same pass also runs UNATTENDED** once per admin
+  panel open (`maybeAutoVerify`, once the roster and activation config have
+  both arrived): the SAFE half only — stamping unique matches + the identity
+  fills — using the locker's saved credentials and never prompting (with
+  none saved it says how to enable itself and stands down); proposed ✓
+  REMOVALS are only counted in the note (press the button to review them —
+  the destructive half always stays behind a confirm), it never RE-STAMPS a
+  ✓ the instructor removed unless the play on record post-dates the removal
+  (a genuine retake; pressing the button IS the explicit instruction to
+  re-sync), and one verification runs at a time (`verifyBusy` — the buttons
+  render disabled while the chain runs), so the buttons remain for the
+  extreme cases. **Duplicate registrations are raised in a pop-up,
+  never removed automatically**: one person behind two roster rows (the
+  same e-mail under two student IDs — the roster only collapses same-ID
+  duplicates — or one simulation record whose ID matches one row and whose
+  e-mail matches another) is clustered by `SIMP_MATCH.findDuplicateClusters`
+  and listed with a per-entry removal SUGGESTION (pre-ticked, the admin can
+  untick): a profile that only registered while its duplicate carries the
+  play data, or a **super-fast play** (< 5 min, `FAST_PLAY_MS`) made before
+  the student re-registered with slightly different details to play properly
+  — when the record's own student ID pins the play to a profile that
+  fast-play profile is proposed for removal and the fresh registration kept;
+  matched by e-mail alone the play cannot be pinned to either profile (the
+  address is shared), so the newest registration — the one the student is
+  using — is kept instead. Several proper plays (or several fast ones with
+  nothing else) are genuinely ambiguous and get NO suggestion, and when two
+  clustered rows carry names with NOTHING in common (siblings on a family
+  mailbox) every pre-tick is dropped and a caution says to check the names —
+  a shared address is not proof of one person. A suggestion never
+  covers a whole cluster, the dialog refuses to delete every registration of
+  one student in one click, queues behind an already-open dialog instead of
+  replacing it, and deleting uses the same admin delete as the row button.
+  A ✓ sitting on a clustered row is also never proposed for REVOCATION (the
+  person may be listed under the duplicate) — the pop-up owns that decision. Where each simulation keeps the identity:
   Answer Arena `participants.participantId`; the Ideation Challenge
   `sessions/*/participants/*.platform.studentId` (the sessions this admin
   account created) **or, for a student who played it from a direct link
@@ -217,8 +256,10 @@ Then:
   **Adding a simulation to this is two edits:** a `verify` block in
   `catalog.js` (adapter name + the app's public Firebase web config + a note
   on what the join key is) and one reader in `admin/verify.js` returning who
-  completed it by student ID; the sign-in, roster join, safety guards,
-  stamping and revoking are all generic. **The Ideation Challenge pass also
+  completed it by student ID and/or e-mail (`doneById` + `doneByEmail`, each
+  mark carrying `id`/`email`/`dur` for the cross-join and the fast-play
+  judgement); the sign-in, roster join, duplicate detection, safety guards,
+  stamping, auto-verification and revoking are all generic. **The Ideation Challenge pass also
   fills the matched records' real name and e-mail FROM this roster** — a
   direct-link student registered here, but no launch handoff ever carried
   their identity into the app, so its records read "Student" + a synthetic
@@ -232,7 +273,12 @@ Then:
   pins its matching rules (platform ID wins over a typed one, the
   registration-form fallback incl. the no-registrationConfig default, the
   closed-session participation tests, ideas read only for closed sessions,
-  and the identity-backfill report — placeholders only, finished or not).
+  the e-mail identity map — synthetic addresses excluded, durations from
+  joined→survey — and the identity-backfill report — placeholders only,
+  finished or not); `node simulation/tools/match-guard.mjs` pins the
+  ID-and/or-e-mail join, the duplicate clustering, the removal-suggestion
+  rules, the e-mail-rule parity between match.js and verify.js, and the
+  wiring (auto-verification exists, never prompts, never revokes).
   **One student, several roster docs — read them MERGED (`completions.js`).**
   Every registration mints a fresh anonymous uid, so a log-out and re-register
   (or a second device) gives the same student another

@@ -3376,9 +3376,12 @@ opts in with a **`verify` block in `catalog.js`** (`adapter` name, its PUBLIC
 Firebase web config — inline, or `configGlobal` for Answer Arena which
 publishes `arena-config.js`, loaded on the admin page —, and an `idNote` for
 the button tooltip) plus **one reader in `simulation/admin/verify.js`**
-(`window.SIMP_VERIFY[adapter](ctx) → {records, doneById}`); everything else —
+(`window.SIMP_VERIFY[adapter](ctx) → {records, doneById, doneByEmail}` — each
+mark carries `{ts, session, id, email, dur}`, the record's own identities +
+play duration); everything else —
 the shared-locker sign-in into that project's own Firebase app
-(`simFirestore`, named app `verify-<key>`), the roster join, the guards, the
+(`simFirestore`, named app `verify-<key>`), the roster join, the duplicate
+detection, the guards, the
 stamping and revoking — is GENERIC, so a fifth simulation is those two edits
 and nothing more. Currently wired: **answerarena** (`participants.participantId`
 + sessions for id→code), **ideasearchlab** (`sessions/*/participants/*` of the
@@ -3433,9 +3436,50 @@ identity `pid` = the student ID the platform sends as `PROLIFIC_PID`, plus a
 reconcile against): **problem-solving** (Google Sheet, no identity), **ssc**
 (firm decisions, no student ID), **newsvendor** (cross-origin project),
 **jagged** (collects nothing). Each run reads a FRESH roster (never the
-snapshot cache), joins the simulation's student ID ↔ roster studentId, and
+snapshot cache) and joins the simulation's records to EVERY registered
+student **by university student ID AND/OR e-mail**
+(`SIMP_MATCH.joinRecords` in `simulation/admin/match.js` — owner 2026-08-16,
+the Qiu Taoyi case: the ID is typed into two different forms, so the ID-only
+join lost the match for good on one typo while the simulation's own admin
+showed the play; now the record's e-mail rescues it — the synthetic
+`@simplatform` throwaway addresses never count as an identity, in match.js
+AND verify.js's private copy of the rule, parity-pinned by the guard), and
 `stampCompleted`s
-(admin write) every match — and, TWO-WAY, **revokes** a ✓ whose student is
+(admin write) every match. **The same pass runs UNATTENDED once per admin
+panel open** (`maybeAutoVerify`, after the roster and activation config have
+both arrived, at idle, sims sequentially): the SAFE half only — stamps +
+identity fills — with the locker's saved credentials and NEVER a prompt
+(`sharedCreds(title, {auto:true})` declines instead; with no locker the note
+says how to enable it); proposed removals are only counted in the note, it
+never RE-STAMPS a ✓ the instructor removed unless the play on record
+post-dates the removal's `rts` (a genuine retake — pressing the button IS
+the explicit re-sync instruction), and one verification runs at a time
+(`verifyBusy`; the buttons render disabled while the chain runs), so the
+buttons remain for the extreme cases. **Duplicate registrations are
+raised in a pop-up (`showDuplicatesDialog`), never removed automatically**:
+one person behind two roster rows — the same e-mail under two student IDs
+(the roster only collapses same-ID duplicates) or one simulation record
+whose ID matches one row and whose e-mail another (`join.links`) — is
+clustered (`findDuplicateClusters`) and listed with a per-entry removal
+SUGGESTION (pre-ticked, admin can untick): a profile that only registered
+while its duplicate carries the play data, or a **super-fast play**
+(< `FAST_PLAY_MS` 5 min, from each adapter's `dur`) made before
+re-registering to play properly — when the record's own ID pins the play to
+a profile (`attributed`) that fast-play profile is proposed for removal and
+the fresh registration kept; matched by e-mail alone the play cannot be
+pinned to either profile, so the NEWEST registration (the one in use) is
+kept instead. Several proper plays are ambiguous
+and get NO suggestion; two clustered rows whose names share NO token
+(siblings on a family mailbox) drop every pre-tick and carry a caution
+(`nameTokens`); a suggestion never covers a whole cluster; the
+dialog refuses to delete every registration of one student in one click,
+QUEUES behind an open dialog (`dupeQueue`) instead of replacing it,
+and deletion is the row-Delete's own admin delete. A ✓ on a clustered row
+is also never proposed for revocation (`inDupCluster` — the person may be
+listed under the duplicate; the pop-up owns it), and a mass removal is
+refused when the read carries no student IDs at all (`idJoinDegraded`)
+beside the existing unmatched-IDs guard. TWO-WAY as before, it
+**revokes** a ✓ whose student is
 no longer a completed participant THERE (deleted so they may retake
 it; arena's `deleteParticipant` hard-deletes the doc + its subcollections,
 so they simply vanish — and the arena's participant list is GROUPED BY
@@ -3463,12 +3507,16 @@ can't hide the rest; an inactive simulation has no button at all (its column
 would be invisible) and `verifyFromSim` re-checks that anyway.
 The student page pushes local markers only AFTER its first roster snapshot
 (pushing at load raced a fresh revocation).
-Each run's outcome (stamped count + unmatched IDs, i.e. student-ID
-typos) prints in the shared `#verify-note` beside the buttons. Offline drift
+Each run's outcome (stamped count — incl. how many matched by e-mail where
+the ID differed — + IDs unmatched by either key) prints in the shared
+`#verify-note` beside the buttons. Offline drift
 guard: `node simulation/tools/verify-guard.mjs` (catalog ↔ adapter pairing
 both ways, a real web config per verifiable sim, the copied configs still
 matching the apps' own files, and the four no-identity sims still declaring
-no `verify` block). For those stragglers
+no `verify` block); `node simulation/tools/match-guard.mjs` pins the
+ID-and/or-e-mail join, the duplicate clustering + suggestion rules, the
+e-mail-rule parity between match.js and verify.js, and that auto-verify
+never prompts and never revokes. For those stragglers
 the roster's ✓/— cells are CLICKABLE (confirm-guarded manual override —
 stamp or `unstampCompleted` via deleteField; flows to the student live).
 The admin panel also AUTO-BACKFILLS the e-mail recovery docs once per
@@ -3602,7 +3650,9 @@ stay green: `node simulation/tools/smoke.mjs` (Playwright over a local static
 server, LOCAL mode forced — registration → admin activation → cards → launch
 handoff/seeds → prefill), `node simulation/tools/completion-guard.mjs`
 (the merged completion reading — the roster cell and the reconciliation must
-answer the same question) and `node simulation/tools/roster-width-guard.mjs`
+answer the same question), `node simulation/tools/match-guard.mjs`
+(the ID-and/or-e-mail join, duplicate clustering + removal suggestions, and
+the auto-verify wiring) and `node simulation/tools/roster-width-guard.mjs`
 (the Delete button unclipped at six window widths × simulation counts). That
 second guard measures containment inside `.roster-wrap` plus `elementFromPoint`,
 NOT viewport coordinates: a button clipped inside a scrolling ancestor still

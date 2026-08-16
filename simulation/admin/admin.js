@@ -689,6 +689,9 @@
               }).catch(function () { recoveryBackfilled = false; });
             });
           }
+          /* Unattended reconciliation with each simulation's own records —
+             the safe half only, once per panel open (see maybeAutoVerify). */
+          maybeAutoVerify();
         }
         else $('roster-count').textContent = 'Roster unavailable: permission denied' + RULES_HINT;
       });
@@ -716,10 +719,15 @@
      The client-side markers can miss a student (platform tab closed when they
      finished, a direct URL, another browser) — but each simulation's OWN
      backend is the ground truth wherever it keeps an IDENTIFIABLE participant
-     record, i.e. one carrying the university student ID, the join key to this
-     roster. One button per ACTIVE simulation that declares a `verify` block in
-     catalog.js (Answer Arena, the Ideation Challenge, PortfolioFit, Search);
-     the per-simulation reading lives in verify.js, everything below is generic.
+     record: one carrying the university student ID and/or an e-mail address,
+     the two join keys to this roster (owner 2026-08-16 — ID-only lost every
+     student whose ID was typed differently in the two forms; SIMP_MATCH in
+     admin/match.js owns the join). One button per ACTIVE simulation that
+     declares a `verify` block in catalog.js (Answer Arena, the Ideation
+     Challenge, PortfolioFit, Search) — and the same pass runs UNATTENDED once
+     per panel open (maybeAutoVerify below), so the buttons remain for the
+     extreme cases: reviewing removals and deciding on duplicates. The
+     per-simulation reading lives in verify.js, everything below is generic.
      Simulations that collect nothing identifiable (Problem Solving writes to a
      Google Sheet, Sustainable Supply Chains records firm decisions, Newsvendor
      is another project, Trust the AI? stores nothing) get no button — there is
@@ -732,6 +740,14 @@
       return s.verify && window.SIMP_VERIFY && window.SIMP_VERIFY[s.verify.adapter];
     });
   }
+  /* Duplicate clusters already raised this panel open (keyed by the sorted
+     row keys) — the unattended pass must not re-pop a cluster the admin just
+     chose to keep; pressing the button always shows what it finds. */
+  var dupesShown = {};
+  /* One verification at a time: the unattended chain and a button click must
+     never run concurrently against the same roster (their stamps and notes
+     would interleave). The buttons render disabled while it is set. */
+  var verifyBusy = false;
   /* An app either publishes its web config as its own file (Answer Arena's
      arena-config.js, loaded by this page) or keeps it inside its bundle, in
      which case the catalog carries a copy. */
@@ -741,14 +757,17 @@
     return (cfg && cfg.apiKey) ? cfg : null;
   }
   /* The simulations share one admin login by design (see the locker above), so
-     the credentials are asked for once and reused for every verification. */
-  function sharedCreds(simTitle) {
+     the credentials are asked for once and reused for every verification.
+     opts.auto = the unattended pass at panel open: it must NEVER pop a
+     prompt, so without locker credentials it just declines. */
+  function sharedCreds(simTitle, opts) {
     var creds = null;
     try {
       creds = JSON.parse(sessionStorage.getItem(P.KEYS.adminCreds) ||
                          localStorage.getItem(P.KEYS.adminCreds) || 'null');
     } catch (e) {}
     if (creds && creds.email && creds.pass) return creds;
+    if (opts && opts.auto) return null;
     /* No locker? Just ask — the admin e-mail is known (the shared login),
        only the password is needed; remembered for this tab so the next
        click doesn't re-ask. */
@@ -762,11 +781,11 @@
   }
   /* Sign in to ONE simulation's own Firebase project in a named secondary app,
      so the platform's own session is never disturbed. */
-  function simFirestore(s) {
+  function simFirestore(s, opts) {
     var cfg = verifyConfig(s);
     if (!cfg) return Promise.reject(new Error('no Firebase web config for ' + s.title +
       ' — add it to its verify block in catalog.js'));
-    var creds = sharedCreds(s.title);
+    var creds = sharedCreds(s.title, opts);
     if (!creds) return Promise.reject(new Error('cancelled — save the shared admin credentials in the locker above, or enter the password when prompted'));
     var U = 'https://www.gstatic.com/firebasejs/10.12.2/';
     var appName = 'verify-' + s.key;
@@ -789,12 +808,13 @@
       });
     });
   }
-  function verifyFromSim(s) {
+  function verifyFromSim(s, opts) {
+    opts = opts || {};
     if (!lastRows) return Promise.reject(new Error('the roster has not loaded yet'));
     if (!(CFG.sims[s.key] && CFG.sims[s.key].active)) {
       return Promise.reject(new Error('activate ' + s.title + ' first — while it is off the roster shows no column for it, so a change here would be invisible'));
     }
-    return simFirestore(s).then(function (ctx) {
+    return simFirestore(s, opts).then(function (ctx) {
       return Promise.all([
         window.SIMP_VERIFY[s.verify.adapter](ctx),
         /* Decide from a FRESH roster read, never from the live-snapshot
@@ -805,14 +825,15 @@
     }).then(function (rr) {
       var ctx = rr.ctx;
       var read = rr.read;
-      var doneById = read.doneById || {};       // normalized student ID -> {ts, session}
+      var doneById = read.doneById || {};       // normalized student ID -> mark
+      var doneByEmail = read.doneByEmail || {}; // normalized e-mail -> mark
       var rosterRows = rr.rosterRows || lastRows;
       /* SAFETY: a read that returned no participant records at all means
          something went wrong (wrong project, empty result, permissions) —
          never treat that as "nobody completed anything" and revoke the whole
          class. */
       if (!read.records) throw new Error(s.title + ' returned no participant records at all — nothing was changed. Check you signed in to the right project.');
-      if (!Object.keys(doneById).length) throw new Error(s.title + ' lists no COMPLETED participant with a student ID — nothing was changed (a sync from here would have removed every ✓).');
+      if (!Object.keys(doneById).length && !Object.keys(doneByEmail).length) throw new Error(s.title + ' lists no COMPLETED participant with a student ID or e-mail — nothing was changed (a sync from here would have removed every ✓).');
 
       /* Decide from the MERGED view of each student's roster docs — exactly
          what the ✓ / — cell shows (completions.js). Deciding per-doc made the
@@ -825,12 +846,45 @@
       Object.keys(groups).forEach(function (k) {
         if (groups[k].pid) byPid[groups[k].pid] = groups[k];
       });
-      var stamps = [], already = 0, unmatched = [];
-      Object.keys(doneById).forEach(function (pid) {
-        var g = byPid[pid];
-        if (!g) { unmatched.push(pid); return; }
-        if (C.isDone(g.completed[s.key])) { already++; return; }
-        stamps.push({ rows: g.refs, mark: doneById[pid] });
+      /* The JOIN is student ID AND/OR e-mail (owner 2026-08-16, the Qiu Taoyi
+         case: the ID is typed into two different forms, so one typo lost the
+         match for good even though the simulation's own admin showed the
+         play). SIMP_MATCH.joinRecords matches by ID first, then by the
+         record's e-mail; a record answering to TWO different roster rows is
+         duplicate-registration evidence (join.links, pop-up below). */
+      var M = window.SIMP_MATCH;
+      var join = M.joinRecords(groups, doneById, doneByEmail);
+      var stamps = [], already = 0, byEmailN = 0, heldStamps = 0;
+      Object.keys(join.matched).forEach(function (k) {
+        var g = groups[k];
+        var cur = g.completed[s.key];
+        if (C.isDone(cur)) { already++; return; }
+        /* A tombstone is an EXPLICIT removal the instructor made (the ✓ cell
+           click, or a confirmed revoke). The UNATTENDED pass never overrules
+           it: only a play finished AFTER the removal — a genuine retake —
+           re-earns the ✓ by itself. Re-stamping an older play stays behind
+           the button, where pressing Verify IS the explicit instruction to
+           re-sync with the simulation's records (to make a removal stick
+           against that too, delete the play in the simulation's own admin). */
+        if (opts.auto && cur && cur.revoked &&
+            !((Number(join.matched[k].ts) || 0) > (Number(cur.rts) || 0))) {
+          heldStamps++;
+          return;
+        }
+        if (join.via[k] === 'email') byEmailN++;
+        stamps.push({ rows: g.refs, mark: join.matched[k] });
+      });
+      var unmatched = join.unmatched;
+
+      /* Duplicate clusters are computed BEFORE the removals: a ✓ sitting on
+         a row that is possibly the SAME PERSON as a matched row must not be
+         proposed for removal ("no longer listed as completed" would be false
+         — the person is listed, under the duplicate) — the pop-up owns that
+         decision. */
+      var allClusters = M.findDuplicateClusters(groups, join, { isDone: C.isDone, simTitle: s.title });
+      var inDupCluster = {};
+      allClusters.forEach(function (c) {
+        c.entries.forEach(function (e) { inDupCluster[e.key] = 1; });
       });
 
       /* ── Identity backfill (Ideation Challenge) ────────────────────────────
@@ -888,13 +942,14 @@
          auto-revoked: one the instructor set BY HAND (that override exists
          precisely for students the automatic join cannot match), and one still
          matched in the simulation. */
-      var revokes = [], stampedTotal = 0;
+      var revokes = [], stampedTotal = 0, dupHeldRevokes = 0;
       Object.keys(groups).forEach(function (k) {
         var g = groups[k], c = g.completed[s.key], head = g.rows[0] || {};
         if (!C.isDone(c)) return;
         stampedTotal++;
         if (c.src === 'manual') return;
-        if (g.pid && doneById[g.pid]) return;          // still completed over there
+        if (join.matched[k]) return;    // still completed over there (matched by ID or e-mail)
+        if (inDupCluster[k]) { dupHeldRevokes++; return; }   // possibly the same person as a matched row — pop-up decides
         revokes.push({ rows: g.refs, who: head.name || head.studentId || head.uid });
       });
 
@@ -903,12 +958,25 @@
           unmatched.slice(0, 10).join(', ') + (unmatched.length > 10 ? '…' : '')
         : '');
 
-      /* The join is by student ID typed into two different forms, so it can
+      /* The UNATTENDED pass at panel open does only the safe, additive half:
+         stamps and identity fills. A removal is the destructive half and
+         stays behind the button's confirm — the "extreme case" the admin
+         decides — so auto mode just reports how many it left in place. */
+      var autoHeld = 0;
+      if (opts.auto && revokes.length) {
+        autoHeld = revokes.length;
+        revokes.length = 0;
+      }
+
+      /* The ID half of the join is typed into two different forms, so it can
          be lossy (a typo, a leading zero). Unmatched IDs are direct evidence
-         that it is lossy RIGHT NOW — so refuse a mass removal in that state
-         rather than unlocking students who really did finish. */
+         that it is lossy RIGHT NOW — as is a read whose records carry no
+         student IDs at all (e-mail-only matches while every ✓ was stamped by
+         ID) — so refuse a mass removal in either state rather than unlocking
+         students who really did finish. */
+      var idJoinDegraded = !Object.keys(doneById).length;
       var cancelled = 0, refused = 0;
-      if (revokes.length && unmatched.length && revokes.length > Math.max(3, stampedTotal * 0.25)) {
+      if (revokes.length && (unmatched.length || idJoinDegraded) && revokes.length > Math.max(3, stampedTotal * 0.25)) {
         /* Only the DESTRUCTIVE half is refused. Aborting the whole pass (which
            is what this used to do) also threw away the stamps — the additive,
            always-safe half, and the very reason the instructor pressed the
@@ -929,17 +997,61 @@
       }
 
       var refusedNote = (refused
-        ? ' · ⚠ ' + refused + ' ✓ mark(s) that ' + s.title + ' no longer lists were KEPT: ' + unmatched.length +
-          ' completed ID(s) do not match this roster, which means the student-ID join is failing, ' +
+        ? ' · ⚠ ' + refused + ' ✓ mark(s) that ' + s.title + ' no longer lists were KEPT: ' +
+          (unmatched.length
+            ? unmatched.length + ' completed ID(s) do not match this roster, which means the student-ID join is failing, '
+            : 'its records carry no student IDs at all right now, so the ID join cannot be trusted, ') +
           'not that those students were deleted (remove a ✓ by clicking the cell)'
         : '');
+      var heldNote = (autoHeld
+        ? ' · ' + autoHeld + ' ✓ mark(s) ' + s.title + ' no longer lists were left in place — press “⟲ Verify from ' +
+          s.title + '” to review the removals'
+        : '');
+      var heldStampNote = (heldStamps
+        ? ' · ' + heldStamps + ' ✓ you removed earlier were NOT re-added automatically (the ' + s.title +
+          ' play on record predates the removal) — press “⟲ Verify from ' + s.title + '” if you want them re-synced'
+        : '');
+      var dupRevokeNote = (dupHeldRevokes
+        ? ' · ' + dupHeldRevokes + ' ✓ on possible duplicate registration(s) left untouched — decide in the pop-up'
+        : '');
+
+      /* ── Duplicate registrations (owner 2026-08-16) ───────────────────────
+         One person behind two roster rows — the same e-mail under two student
+         IDs, or one simulation record answering to two rows. NEVER removed
+         automatically: a pop-up lists each cluster with a per-entry removal
+         suggestion (a profile that only registered while its duplicate played,
+         or a super-fast play before a re-registration) and the admin decides.
+         The unattended pass raises each cluster once per panel open; the
+         button raises whatever it finds every time it is pressed. */
+      var dupNote = '';
+      var clusters = allClusters.filter(function (c) {
+        var sig = c.entries.map(function (e) { return e.key; }).sort().join('|');
+        var seen = dupesShown[sig];
+        dupesShown[sig] = 1;
+        return !(opts.auto && seen);
+      });
+      if (clusters.length) {
+        var dupRows = clusters.reduce(function (n, c) { return n + c.entries.length; }, 0);
+        dupNote = ' · ⚠ ' + clusters.length + ' possible duplicate registration' +
+          (clusters.length === 1 ? '' : 's') + ' found (' + dupRows +
+          ' roster rows) — decide in the pop-up which to remove';
+        showDuplicatesDialog(s, clusters);
+      }
+
+      /* How many completed records were read across both identity maps (an
+         e-mail-only record adds one; a record present in both counts once). */
+      var checkedN = Object.keys(doneById).length;
+      Object.keys(doneByEmail).forEach(function (em) {
+        var m = doneByEmail[em] || {};
+        if (!(m.id && doneById[m.id])) checkedN++;
+      });
 
       if (!stamps.length && !revokes.length) {
         return doFills().then(function (fnote) {
           return (cancelled
             ? cancelled + ' proposed removal(s) were cancelled — the roster still differs from ' + s.title
-            : 'Checked ' + Object.keys(doneById).length + ' completed ' + s.title + ' participant(s) — the roster already matches')
-            + fnote + refusedNote + tail;
+            : 'Checked ' + checkedN + ' completed ' + s.title + ' participant(s) — the roster already matches')
+            + fnote + heldNote + heldStampNote + dupRevokeNote + refusedNote + dupNote + tail;
         });
       }
       return P.firebase().then(function (F) {
@@ -960,17 +1072,243 @@
         }, 0);
         return doFills().then(function (fnote) {
           var bits = [];
-          if (stamps.length) bits.push('stamped ✓ for ' + stamps.length + ' student(s)');
+          if (stamps.length) bits.push('stamped ✓ for ' + stamps.length + ' student(s)' +
+            (byEmailN ? ' (' + byEmailN + ' matched by e-mail where the student ID differed)' : ''));
           if (revokes.length) bits.push('removed the ✓ from ' + revokes.length + ' student(s) no longer in ' + s.title + ' (they can retake it)');
           return 'Synced with ' + s.title + '’s own records: ' + bits.join(' · ') +
             (already ? ' · ' + already + ' already matched' : '') +
             (cancelled ? ' · ' + cancelled + ' removal(s) cancelled' : '') +
-            (failed ? ' · ⚠ ' + failed + ' write(s) FAILED — click Verify again' : '') + fnote + refusedNote + tail +
+            (failed ? ' · ⚠ ' + failed + ' write(s) FAILED — click Verify again' : '') +
+            fnote + heldNote + heldStampNote + dupRevokeNote + refusedNote + dupNote + tail +
             ' — the roster and the students’ own pages update live.';
         });
       });
     });
   }
+  /* ── Duplicate-registrations pop-up (owner 2026-08-16) ────────────────────
+     One student behind several roster rows the ID collapse cannot fuse (they
+     differ in student ID): the same e-mail under two IDs, or one simulation
+     record whose ID matches one row and whose e-mail matches another. The
+     admin DECIDES which registrations to remove — nothing is deleted
+     automatically; the pre-ticked boxes are the suggestion computed by
+     SIMP_MATCH (a profile that only registered while its duplicate carries
+     the play data, or a super-fast play before a re-registration — that
+     fast-play profile is proposed for removal so the fresh registration can
+     play properly). Deleting uses the same admin delete as the row button
+     and repaints the roster locally, like Delete all. */
+  var dupeQueue = [];
+  function showDuplicatesDialog(s, clusters) {
+    /* The unattended pass runs the sims sequentially, so a second simulation
+       can find its own clusters while the first's dialog is still open —
+       QUEUE it rather than replacing the dialog under the admin's cursor. */
+    if (document.getElementById('dup-overlay')) {
+      dupeQueue.push({ s: s, clusters: clusters });
+      return;
+    }
+    renderDuplicatesDialog(s, clusters);
+  }
+  function dupeDialogClosed(ov) {
+    ov.remove();
+    var next = dupeQueue.shift();
+    if (next) renderDuplicatesDialog(next.s, next.clusters);
+  }
+  function renderDuplicatesDialog(s, clusters) {
+    var ov = document.createElement('div');
+    ov.id = 'dup-overlay';
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.55);' +
+      'z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:26px;overflow:auto';
+    var box = document.createElement('div');
+    box.className = 'card';
+    box.style.cssText = 'max-width:880px;width:100%;margin:0;max-height:88vh;overflow:auto;background:#fff';
+    ov.appendChild(box);
+
+    var h = document.createElement('h2');
+    h.textContent = '👥 Possible duplicate registrations';
+    box.appendChild(h);
+    var lede = document.createElement('p');
+    lede.className = 'hint';
+    lede.textContent = 'While verifying from ' + s.title + ', these registrations appear to belong to the ' +
+      'same student more than once — the same e-mail under two different student IDs, or one ' + s.title +
+      ' play record answering to two rows. Nothing is removed automatically: tick the entries to delete ' +
+      'and keep the rest. Pre-ticked entries are the suggestion — a profile that only registered while its ' +
+      'duplicate carries the play data, or a super-fast play made before the student re-registered to play ' +
+      'properly (the fast-play profile goes, the fresh one stays).';
+    box.appendChild(lede);
+
+    var picks = [];
+    clusters.forEach(function (c, i) {
+      var fs = document.createElement('fieldset');
+      fs.style.cssText = 'border:1px solid #d8dee9;border-radius:10px;padding:10px 14px;margin:12px 0';
+      var lg = document.createElement('legend');
+      lg.style.cssText = 'font-weight:600;padding:0 6px';
+      lg.textContent = 'Student ' + (i + 1) + ' — ' + c.entries.length + ' registrations';
+      fs.appendChild(lg);
+      /* A shared address can cluster two DIFFERENT people (siblings, a
+         family mailbox) — when the names have nothing in common, match.js
+         drops every pre-tick and this warning says why. */
+      if (c.caution) {
+        var cw = document.createElement('p');
+        cw.style.cssText = 'margin:2px 0 6px;color:#8a5a00;font-size:13px';
+        cw.textContent = '⚠ ' + c.caution;
+        fs.appendChild(cw);
+      }
+      c.entries.forEach(function (e) {
+        var head = (e.group.rows && e.group.rows[0]) || {};
+        var row = document.createElement('label');
+        row.style.cssText = 'display:flex;gap:10px;align-items:flex-start;padding:7px 2px;cursor:pointer';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!e.suggest;
+        cb.style.marginTop = '3px';
+        row.appendChild(cb);
+        var body = document.createElement('div');
+        var l1 = document.createElement('div');
+        l1.textContent = (head.name || '(no name)') + ' · ID ' + (head.studentId || '—') + ' · ' +
+          (head.email || 'no e-mail') + ' · registered ' + String(head.createdAt || '').slice(0, 10);
+        var l2 = document.createElement('div');
+        l2.className = 'hint';
+        l2.style.margin = '2px 0 0';
+        l2.textContent = e.evidence + (e.suggest ? ' — suggested to DELETE: ' + e.why : '');
+        if (e.suggest) l2.style.color = '#b23b2e';
+        body.appendChild(l1);
+        body.appendChild(l2);
+        row.appendChild(body);
+        fs.appendChild(row);
+        picks.push({ cb: cb, entry: e, cluster: c });
+      });
+      box.appendChild(fs);
+    });
+
+    var note = document.createElement('p');
+    note.className = 'hint';
+    note.textContent = 'Deleting removes ONLY the roster registration (exactly like the row Delete button) — ' +
+      'the simulation’s own play data is untouched. To let the kept profile replay a simulation, also delete ' +
+      'the play in that simulation’s own admin panel and verify again (the ✓ is then revoked so the card unlocks).';
+    box.appendChild(note);
+
+    var err = document.createElement('p');
+    err.className = 'err';
+    box.appendChild(err);
+
+    var acts = document.createElement('div');
+    acts.className = 'actions';
+    var del = document.createElement('button');
+    del.className = 'btn danger';
+    var keepBtn = document.createElement('button');
+    keepBtn.className = 'btn ghost';
+    keepBtn.textContent = 'Keep all (decide later)';
+    acts.appendChild(del);
+    acts.appendChild(keepBtn);
+    box.appendChild(acts);
+
+    function refreshDel() {
+      var n = picks.filter(function (p) { return p.cb.checked; }).length;
+      del.textContent = 'Delete ' + n + ' selected registration' + (n === 1 ? '' : 's');
+      del.disabled = !n;
+    }
+    picks.forEach(function (p) { p.cb.onchange = refreshDel; });
+    refreshDel();
+
+    keepBtn.onclick = function () { dupeDialogClosed(ov); };
+    del.onclick = function () {
+      err.textContent = '';
+      var chosen = picks.filter(function (p) { return p.cb.checked; });
+      if (!chosen.length) return;
+      /* One click must never erase EVERY registration of a student — that is
+         not de-duplication, it is unregistering them (the row Delete exists
+         for that, with its own double confirmation). */
+      var wiped = clusters.some(function (c) {
+        return c.entries.length && c.entries.every(function (e) {
+          return chosen.some(function (p) { return p.entry === e; });
+        });
+      });
+      if (wiped) {
+        err.textContent = 'Every registration of one student is ticked — untick the one to KEEP. ' +
+          'Deleting all of them would unregister the student completely (use the row Delete for that).';
+        return;
+      }
+      var who = chosen.map(function (p) {
+        var head = (p.entry.group.rows && p.entry.group.rows[0]) || {};
+        return (head.name || head.email || head.studentId || head.uid || '(unknown)');
+      });
+      if (!window.confirm('Delete ' + chosen.length + ' duplicate registration(s)?\n\n• ' + who.join('\n• ') +
+            '\n\nThis cannot be undone (same as the row Delete button); the kept profiles stay.')) return;
+      del.disabled = true;
+      del.textContent = 'Deleting…';
+      var uids = [], gone = {};
+      chosen.forEach(function (p) {
+        (p.entry.group.uids || []).forEach(function (u) { uids.push(u); gone[u] = 1; });
+      });
+      P.firebase().then(function (F) {
+        return F.deleteStudents(uids);
+      }).then(function () {
+        /* Drop them locally too — the live snapshot normally does it, but a
+           dead streaming channel would leave the deleted rows on screen. */
+        var left = (lastRows || []).filter(function (r) { return !gone[r.uid]; });
+        renderRoster(left);
+        $('verify-note').textContent = 'Removed ' + chosen.length + ' duplicate registration(s). ' +
+          ($('verify-note').textContent || '');
+        dupeDialogClosed(ov);
+      }, function (e) {
+        refreshDel();
+        err.textContent = 'Delete failed: ' +
+          ((e && e.code && String(e.code).indexOf('permission-denied') >= 0)
+            ? 'permission denied — sign in as the admin' + RULES_HINT
+            : ((e && e.message) || e));
+      });
+    };
+
+    ov.addEventListener('click', function (ev) { if (ev.target === ov) dupeDialogClosed(ov); });
+    document.body.appendChild(ov);
+  }
+
+  /* ── Unattended verification at panel open (owner 2026-08-16) ─────────────
+     "Automate the verification and platform database update … so I don't have
+     to hit Verify apart from extreme cases." Once per panel open, after the
+     roster AND the activation config have both arrived, every active
+     verifiable simulation is reconciled by itself — the SAFE half only:
+     stamping ✓ for the students its records identify (by ID and/or e-mail)
+     plus the identity fills. The extreme cases stay with the admin: removals
+     wait behind the button's confirm (auto mode only counts them), and
+     duplicate registrations go to the pop-up to decide. It reads each project
+     with the locker's shared credentials and never prompts — with none saved
+     it says how to enable itself and stands down. Sims run sequentially so
+     their sign-ins and notes don't trample each other. */
+  var autoVerified = false;
+  function maybeAutoVerify() {
+    if (autoVerified) return;
+    if (!P.configured || !lastRows || !lastRows.length) return;
+    var sims = verifiableSims();
+    if (!sims.length) return;   // config not in yet, or nothing active — retried on the next snapshot
+    autoVerified = true;
+    whenIdle(function () {
+      var creds = readCreds();
+      if (!creds || !creds.email || !creds.pass) {
+        $('verify-note').textContent = 'Auto-verification is off — save the shared admin credentials above ' +
+          'and completions are reconciled from each simulation automatically every time this panel opens.';
+        return;
+      }
+      var notes = [];
+      verifyBusy = true;
+      renderVerifyButtons();
+      $('verify-note').textContent = 'Auto-verifying completions from ' +
+        sims.map(function (x) { return x.title; }).join(', ') + '…';
+      (function run(i) {
+        if (i >= sims.length) {
+          verifyBusy = false;
+          renderVerifyButtons();
+          $('verify-note').textContent = 'Auto-verified. ' + notes.join(' — ');
+          return;
+        }
+        verifyFromSim(sims[i], { auto: true }).then(function (msg) {
+          notes.push(sims[i].title + ': ' + msg);
+        }, function (e) {
+          notes.push(sims[i].title + ': skipped (' + ((e && e.message) || e) + ')');
+        }).then(function () { run(i + 1); });
+      })(0);
+    });
+  }
+
   /* One button per ACTIVE verifiable simulation, rebuilt on every roster
      render — which is also what a config change triggers, so ticking a
      simulation Active (or off) adds/removes its button by itself. */
@@ -983,17 +1321,23 @@
       var b = document.createElement('button');
       b.className = 'btn ghost';
       b.textContent = '⟲ Verify from ' + s.title;
-      b.title = 'Reconcile the ' + s.title + ' column against that simulation’s own records — matched on ' +
+      b.title = 'Reconcile the ' + s.title + ' column against that simulation’s own records — every registered ' +
+        'student is matched on the university student ID AND/OR the e-mail on record, so an ID typed ' +
+        'differently in the two forms no longer loses the match. Join key there: ' +
         ((s.verify && s.verify.idNote) || 'the university student ID') +
-        '. Read-only there; only this roster is updated.';
+        '. Read-only there; only this roster is updated. Possible duplicate registrations are raised in a ' +
+        'pop-up for you to decide (never removed automatically).';
+      b.disabled = verifyBusy;
       b.onclick = function () {
+        if (verifyBusy) return;
+        verifyBusy = true;
         $('verify-note').textContent = 'Reading ' + s.title + '’s records…';
         b.disabled = true;
         verifyFromSim(s).then(function (msg) {
           $('verify-note').textContent = msg;
         }, function (e) {
           $('verify-note').textContent = 'Verify from ' + s.title + ' failed: ' + ((e && e.message) || e);
-        }).then(function () { b.disabled = false; });
+        }).then(function () { verifyBusy = false; b.disabled = false; renderVerifyButtons(); });
       };
       box.appendChild(b);
     });
@@ -1013,5 +1357,8 @@
        mirror the ACTIVE set — refresh them whenever the config changes. */
     if (lastRows) renderRoster(lastRows);
     if (!$('s-admin').hidden) buildConsoleOptions();
+    /* The roster snapshot can land before the activation config (auto-verify
+       needs both) — whichever arrives second starts the unattended pass. */
+    maybeAutoVerify();
   });
 })();
