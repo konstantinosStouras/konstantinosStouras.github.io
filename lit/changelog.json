@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "merge-any-two-accounts",
+      "date": "2026-08-16",
+      "title": "Signed up twice? Any two accounts can now be merged",
+      "summary": "The merge in Edit profile used to be offered only on an ORCID registration that duplicated an existing account. It is now offered on every account, because two accounts happen just as easily without ORCID — a second e-mail address, or a second Google account, and your library is on one of them while your alerts are on the other. Choose “Merge this account into another of mine…”, sign in to the one you want to keep, and everything moves across: saved papers, notes, tags, lists and e-mail alerts. Two fixes ride along: the account being merged away has its e-mail alerts removed rather than left behind sending you a second copy of everything for ever, and re-proving the sign-in before it is deleted now uses whichever method that account actually has, instead of always asking for ORCID.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "recent-by-day-and-wp-alerts",
       "date": "2026-08-10",
       "title": "Recently added, day by day — and working papers now reach your e-mail alerts",

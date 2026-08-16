@@ -4933,10 +4933,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         <span class="acct-link" onclick="acctLinkOrcidProvider()">Enable “Continue with ORCID” sign-in for this account</span>
         <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px">You'll sign in to this same account by authenticating at orcid.org — and the ORCID button on the sign-in screen can never create a duplicate account for you.</div>
       </div>
-      <!-- Duplicate-account repair: shown on ORCID-only registrations. -->
+      <!-- Duplicate-account repair. Offered on EVERY account, not only an
+           ORCID registration: two e-mail addresses (or two Google accounts)
+           are two Lit accounts just as surely, and the person who has them
+           wants the same thing. The copy is written by acctOpenProfile, which
+           knows which of the two situations this account is in. -->
       <div id="pfMergeRow" style="display:none;margin-top:6px">
-        <div style="font-size:13.5px;color:var(--text);line-height:1.55;margin-bottom:9px">Did you already have a Lit account (e-mail or Google) before registering with ORCID? Then this one is a <strong>duplicate</strong> — merge it and everything saved here moves into the account you keep.</div>
-        <button type="button" class="pf-merge-btn" onclick="acctStartMerge()">🔀 Merge this account into my main account…</button>
+        <div id="pfMergeLede" style="font-size:13.5px;color:var(--text);line-height:1.55;margin-bottom:9px"></div>
+        <button type="button" class="pf-merge-btn" onclick="acctStartMerge()">🔀 Merge this account into another of mine…</button>
       </div>
       <div class="acct-error" id="pfErr"></div>
       <button class="acct-primary" id="pfSaveBtn" onclick="acctSaveProfile()">Save profile</button>
@@ -6183,8 +6187,18 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }
     var provRow = document.getElementById('pfOrcidProviderRow');
     if (provRow) provRow.style.display = (linkedOrcid && p.orcidVerified && !acctHasProvider('oidc.orcid')) ? '' : 'none';
+    // The merge is offered on every account. An ORCID-only registration is
+    // named as the DUPLICATE it usually is; anything else is told plainly what
+    // the button does, because "I signed up twice with two e-mail addresses"
+    // is just as common and had no repair at all before.
     var mergeRow = document.getElementById('pfMergeRow');
-    if (mergeRow) mergeRow.style.display = acctIsOrcidOnlyAccount() ? '' : 'none';
+    var mergeLede = document.getElementById('pfMergeLede');
+    if (mergeRow) mergeRow.style.display = '';
+    if (mergeLede) {
+      mergeLede.innerHTML = acctIsOrcidOnlyAccount()
+        ? 'Did you already have a Lit account (e-mail or Google) before registering with ORCID? Then this one is a <strong>duplicate</strong> — merge it and everything saved here moves into the account you keep.'
+        : 'Signed up more than once — with ORCID as well as this, or with a second e-mail address? Each account keeps its own library, lists and alerts. Merging moves everything saved on <strong>this</strong> account into the one you keep, and removes this sign-in.';
+    }
     var st = document.getElementById('pfStatus'); if (st) st.textContent = '';
     var er = document.getElementById('pfErr'); if (er) er.textContent = '';
     document.getElementById('acctProfileOverlay').classList.add('open');
@@ -6434,26 +6448,93 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     return Promise.all(tasks).then(function () { return out; });
   }
 
+  // Re-prove the sign-in we are about to delete, with whichever method this
+  // account actually has. It used to assume ORCID, which was right while the
+  // merge was ORCID-only and is wrong now that any account can be merged away:
+  // a Google or password account would have been told to re-authenticate at
+  // orcid.org, which it cannot do.
+  function reauthCurrentAccount() {
+    var u = state.user, pd = (u && u.providerData) || [], ids = [];
+    for (var i = 0; i < pd.length; i++) if (pd[i]) ids.push(pd[i].providerId);
+    if (ids.indexOf('google.com') !== -1) {
+      return u.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider());
+    }
+    if (ids.indexOf('oidc.orcid') !== -1) {
+      return u.reauthenticateWithPopup(new firebase.auth.OAuthProvider('oidc.orcid'));
+    }
+    if (ids.indexOf('password') !== -1 && u.email) {
+      var pw = prompt('For safety, please re-enter the password of the account being merged away (' + u.email + '):');
+      if (!pw) return Promise.reject(new Error('re-authentication was cancelled'));
+      return u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email, pw));
+    }
+    return Promise.reject(new Error('this account has no sign-in method we can re-check'));
+  }
+
   function deleteCurrentAccount() {
     var u = state.user;
     return u.delete().catch(function (e) {
       if (e && e.code === 'auth/requires-recent-login') {
-        // Deleting an account needs a fresh sign-in — re-prove it at orcid.org.
-        return u.reauthenticateWithPopup(new firebase.auth.OAuthProvider('oidc.orcid'))
-          .then(function () { return u.delete(); });
+        // Deleting an account needs a fresh sign-in.
+        return reauthCurrentAccount().then(function () { return u.delete(); });
       }
       throw e;
     });
   }
 
+  // The duplicate's own alert subscriptions have to GO, not merely be copied.
+  // Deleting a Firebase sign-in does not delete its Firestore data, and
+  // alerts-mailer.mjs reads every alert in the database with
+  // collectionGroup('alerts') — so an alert left behind under a uid nobody can
+  // sign in to keeps e-mailing its subscriber for ever, and after the import
+  // they now have the same alert twice. Best effort, and deliberately AFTER
+  // the export: the stash is the only copy while this runs.
+  function deleteOwnAlerts() {
+    var ids = Object.keys(state.alerts || {});
+    if (!ids.length) return Promise.resolve();
+    return Promise.all(ids.map(function (id) {
+      return alertsCol().doc(id).delete().catch(function () {});
+    }));
+  }
+
+  // Put alerts back on THIS account. Used only on the failure path below: the
+  // subscriptions are deleted before the sign-in is removed (they cannot be
+  // touched afterwards), so an account deletion that then fails would leave a
+  // live account with no alerts. Restores from the stash, the copy we still
+  // hold, under the same ids.
+  function restoreOwnAlerts(alerts) {
+    return Promise.all(Object.keys(alerts || {}).map(function (id) {
+      var a = alerts[id];
+      return alertsCol().doc(id).set({
+        name: a.name, recipient: a.recipient, from: a.from, frequency: a.frequency,
+        enabled: a.enabled !== false, criteria: a.criteria || {},
+        createdAt: serverTime(), updatedAt: serverTime()
+      }).catch(function () {});
+    }));
+  }
+
   window.acctStartMerge = function (auto) {
-    if (!state.user || !acctIsOrcidOnlyAccount()) return;
+    if (!state.user) return;
     // auto === true: duplicate detection proved this ORCID-registered sign-in
-    // duplicates the user's main account — run without asking anything.
-    if (!auto && !confirm('Merge this ORCID sign-in into your main Lit account?\n\nThis will:\n  1. take everything saved on THIS account (library, notes, lists, alerts),\n  2. remove this duplicate sign-in,\n  3. ask you to sign in to the account you KEEP (e-mail or Google) — everything moves over there automatically.\n\nContinue?')) return;
+    // duplicates the user's main account — run without asking anything. Only
+    // that shape is ever merged automatically; every OTHER account reaches the
+    // merge from Edit profile, by choice.
+    if (auto && !acctIsOrcidOnlyAccount()) return;
+    // The export reads the live library, lists and alerts, so a merge started
+    // before their snapshots have landed would move an EMPTY account and then
+    // delete the sign-in that held the real one. The auto path already waits
+    // for all three (maybeClaimAccountKeys); the manual one must too.
+    if (!papersSnapshotSeen || !listsSnapshotSeen || !alertsSnapshotSeen) {
+      if (!auto) alert('Your saved papers, lists and alerts are still loading. Give it a moment and try again — merging now would move an empty account.');
+      return;
+    }
+    if (!auto && !confirm('Merge this Lit account into another one of yours?\n\nThis will:\n  1. take everything saved on THIS account (library, notes, lists, alerts),\n  2. remove this sign-in,\n  3. ask you to sign in to the account you KEEP — everything moves over there automatically.\n\nContinue?')) return;
     acctCloseProfile();
     exportAccountData().then(function (data) {
-      var stash = { fromUid: state.user.uid, orcid: (state.profile && state.profile.orcid) || '', data: data };
+      // authEmail, not just the profile's contact address: the e-mail identity
+      // key was claimed from the FIREBASE e-mail, and for a second Google
+      // account those are the two things most likely to differ.
+      var stash = { fromUid: state.user.uid, orcid: (state.profile && state.profile.orcid) || '',
+                    authEmail: (state.user.email || ''), data: data };
       try {
         localStorage.setItem(MERGE_STASH_KEY, JSON.stringify(stash));
         if (!localStorage.getItem(MERGE_STASH_KEY)) throw new Error('stash');
@@ -6468,8 +6549,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         if (!auto) alert('Could not prepare the merge (browser storage unavailable). Your account is unchanged and any shared-list links have been restored.');
         return;
       }
-      return deleteCurrentAccount().then(function () {
-        if (!auto) alert('This duplicate sign-in was removed.\n\nNow sign in to the account you want to KEEP — your saved papers, lists and alerts will move over automatically.');
+      // The alerts must go while we can still write as this user — see
+      // deleteOwnAlerts. That is why the failure branch below puts them back.
+      return deleteOwnAlerts().then(deleteCurrentAccount).then(function () {
+        if (!auto) alert('This sign-in was removed.\n\nNow sign in to the account you want to KEEP — your saved papers, lists and alerts will move over automatically.');
         acctOpenAuth();
         // In the modal, explain (non-blocking) why they're seeing sign-in.
         var er = document.getElementById('acctErr');
@@ -6478,12 +6561,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
           : 'Sign in to the account you keep — your saved data moves over automatically.'; }
       }).catch(function (e) {
         try { localStorage.removeItem(MERGE_STASH_KEY); } catch (e2) {}
-        // exportAccountData already unpublished this account's public lists
-        // (they must go while we can still write as this user). The account
-        // deletion failed, so the account lives on — restore its share links
-        // right away instead of leaving them dead until the next sign-in.
+        // exportAccountData already unpublished this account's public lists and
+        // deleteOwnAlerts has already removed its subscriptions — both have to
+        // happen while we can still write as this user. The account deletion
+        // failed, so the account lives on: put both back right away rather than
+        // leaving dead share links and a silently unsubscribed reader.
         lastSharedSig = {};
         try { syncPublicLists(); } catch (e3) {}
+        try { restoreOwnAlerts(data.alerts); } catch (e4) {}
         alert('Could not remove this account: ' + friendly(e) + '\nYour saved data was not moved.');
       });
     }).catch(function (e) { alert('Merge failed before any change was made: ' + friendly(e)); });
@@ -6565,7 +6650,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       // the ghost claims (the stale "another account uses this ORCID" nag).
       try {
         if (stash.orcid) db.collection('accountKeys').doc('orcid:' + stash.orcid).set({ uid: state.user.uid, t: serverTime() }).catch(function () {});
-        var mergedEmail = ((d.profile && d.profile.email) || '').trim().toLowerCase();
+        var mergedEmail = (stash.authEmail || (d.profile && d.profile.email) || '').trim().toLowerCase();
         if (mergedEmail && window.crypto && crypto.subtle && window.TextEncoder) {
           sha256Hex(mergedEmail).then(function (h) {
             db.collection('accountKeys').doc('email:' + h).set({ uid: state.user.uid, t: serverTime() }).catch(function () {});

@@ -1094,12 +1094,24 @@ catalog's own ORCID-resolved canonical spelling via `litCatalogCanonicalName`
 → given+family → sign-in claims; live-refreshes an open profile card). The
 analytics page's `resolveAuthor` matches name-parts too (unique hit only), so
 `analytics/?author=Konstantinos Stouras` finds the credited
-"Konstantinos I. Stouras". **Duplicate-account merge:** an ORCID-only
-registration by someone who already had an e-mail/Google account is repaired
-from the duplicate's Edit profile → "Merge this account into my main account"
-(`acctStartMerge` exports library/lists/alerts/profile, unpublishes its public
-lists, deletes the duplicate sign-in, then `maybeApplyMergeStash` imports into
-whichever account signs in next — papers union starred/tags/lists/notes,
+"Konstantinos I. Stouras". **Duplicate-account merge:** offered on **EVERY**
+account from Edit profile → "Merge this account into another of mine…", not
+only an ORCID-only registration (per the owner, 2026-08-16: two e-mail
+addresses, or two Google accounts, are two Lit accounts just as surely — and
+that case previously had no repair at all). The ORCID-only shape is still the
+one the AUTO path acts on, and it keeps its own wording
+(`pfMergeLede` in `acctOpenProfile`); `acctStartMerge(true)` still refuses
+anything else. `acctStartMerge` exports library/lists/alerts/profile,
+unpublishes its public lists, **deletes the duplicate's alert subscriptions**
+(deleting a Firebase sign-in does NOT delete its Firestore data, and
+`alerts-mailer.mjs` reads `collectionGroup('alerts')` — so an alert left behind
+under a uid nobody can sign in to keeps e-mailing for ever, and after the import
+the subscriber has it twice; `deleteOwnAlerts`, with `restoreOwnAlerts` on the
+failure branch beside the existing `syncPublicLists()` restore, since the alerts
+must go while we can still write as that user), deletes the duplicate sign-in
+(re-proving it via `reauthCurrentAccount`, which uses whichever provider the
+account HAS — it assumed ORCID, which a Google or password duplicate cannot do),
+then `maybeApplyMergeStash` imports into whichever account signs in next — papers union starred/tags/lists/notes,
 profile fill-empty, ORCID fields only on no-iD-or-same-iD); prevention is
 provider LINKING — a verified-ORCID account attaches `oidc.orcid` via
 `acctLinkOrcidProvider` (Edit profile) so "Continue with ORCID" reaches it
