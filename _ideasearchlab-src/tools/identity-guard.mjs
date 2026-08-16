@@ -80,6 +80,20 @@ console.log('identityFields — which registration fields carry identity')
   check('Nationality / Level of Study are not identity fields',
     !Object.values(f).flat().includes('nationality') && !Object.values(f).flat().includes('levelOfStudy'))
 }
+{
+  // A bare "Name" label is the student's name; a label merely STARTING with
+  // "Name" is an instructor question whose answer must never become — or be
+  // healed into — the student's identity ("Name of your company", the
+  // brick-uses prompt). Review finding 2026-08-16.
+  const f = identityFields({ registrationConfig: { fields: [
+    { id: 'f_a1', label: 'Name' },
+    { id: 'f_b2', label: 'Name of your company' },
+    { id: 'f_c3', label: 'Name three creative uses for a brick' },
+  ] } })
+  check('bare "Name" label is a name field', f.name.length === 1 && f.name[0] === 'f_a1')
+  check('"Name of your company"-style prompts are NOT identity fields',
+    !Object.values(f).flat().includes('f_b2') && !Object.values(f).flat().includes('f_c3'))
+}
 
 // ── Resolution ─────────────────────────────────────────────────────────────
 console.log('registrationIdentity / realIdentity — reading the answers back')

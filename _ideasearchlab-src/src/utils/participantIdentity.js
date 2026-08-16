@@ -48,7 +48,11 @@ const RE_STUDENT_ID = /student\s*id|participant\s*id/i
 const RE_EMAIL = /e-?mail/i
 const RE_FIRST_NAME = /first\s*name|given\s*name/i
 const RE_LAST_NAME = /last\s*name|family\s*name|surname/i
-const RE_NAME = /full\s*name|^your\s+name|^name\b/i
+// A bare "Name" label counts only when it IS the whole question — `^name\b`
+// would also swallow an instructor prompt like "Name of your company" or
+// "Name three creative uses…", and the heal would write that answer durably
+// as the student's identity.
+const RE_NAME = /full\s*name|^your\s+name|^name\s*$/i
 
 /**
  * The identity-bearing field ids of a session's registration form,

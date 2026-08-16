@@ -114,7 +114,10 @@ window.SIMP_VERIFY = (function () {
          then RUNS the default form, so that is where the answer lives). */
       function studentIdFieldIds(regConfig) {
         var ids = [];
-        var fields = (regConfig && regConfig.fields) || [];
+        /* Array.isArray, not truthiness — one session doc carrying a malformed
+           registrationConfig (fields as a map) must not throw and take the
+           whole verify pass down with it (getRegistration guards the same way). */
+        var fields = (regConfig && Array.isArray(regConfig.fields)) ? regConfig.fields : [];
         fields.forEach(function (f) {
           if (!f || !f.id) return;
           if (f.id === 'ucdStudentId' ||

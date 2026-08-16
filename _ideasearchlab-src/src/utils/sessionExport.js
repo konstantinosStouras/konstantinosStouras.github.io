@@ -133,6 +133,14 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
   groups.forEach(g => (g.finalIdeas || []).forEach((id, i) => { finalIdeaRank[id] = `${g.id} #${i + 1}` }))
   const authorGroupId = Object.fromEntries(participants.map(p => [p.id, p.groupId || '']))
   const authorLabel = Object.fromEntries(participants.map(p => [p.id, p.anonymousLabel || '']))
+  // Author-name columns resolve through the participant's REAL identity too:
+  // idea.authorName / msg.authorName were captured from the throwaway login at
+  // creation time, so a direct-link student's rows would read "Student" while
+  // the Participants sheet names them properly. Non-participant authors (the
+  // AI's own rows) fall through to the recorded name.
+  const authorRealName = Object.fromEntries(
+    participants.map(p => [p.id, displayName(p, session)])
+  )
   const ideaById = Object.fromEntries(ideas.map(i => [i.id, i]))
   const ideaTitleById = Object.fromEntries(ideas.map(i => [i.id, i.title || i.text || i.id]))
 
@@ -292,7 +300,7 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     'Group ID': idea.groupId || authorGroupId[idea.authorId] || '',
     'Group UID': (idea.groupId || authorGroupId[idea.authorId]) ? `${sessionCode}:${idea.groupId || authorGroupId[idea.authorId]}` : '',
     'Author ID': idea.authorId || '',
-    'Author Name': idea.authorName || '',
+    'Author Name': authorRealName[idea.authorId] || idea.authorName || '',
     'Author Label': authorLabel[idea.authorId] || idea.anonymousLabel || '',
     'Title': idea.title || '',
     'Description': idea.description || '',
@@ -481,7 +489,7 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
       'Scope': msg.scope || '',
       'Scope ID': msg.scopeId || '',
       'Author ID': msg.authorId || '',
-      'Author Name': msg.authorName || '',
+      'Author Name': authorRealName[msg.authorId] || msg.authorName || '',
       'Message': msg.text || '',
       'Model': msg.model || '',
       'Input Tokens': msg.inputTokens ?? '',
