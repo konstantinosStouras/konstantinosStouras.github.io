@@ -811,6 +811,42 @@ handoff) → welcome → tour → SILENT registration → lobby/phases.
   participation (an idea they authored, or a vote cast) — never on
   `votesSubmitted`/`individualComplete` alone, which the phase timers set with
   empty content.
+- **A direct-link student's REAL identity is resolved and healed
+  (`src/utils/participantIdentity.js`).** The throwaway login means a student
+  who opened the app from a direct URL (no platform handoff — owner 2026-08:
+  sessions SGP2/SGP3/ATHENS were played that way) lands on the participant doc
+  as displayName "Student" + `student-…@simplatform.stouras.com`, while the
+  name/e-mail/student ID they actually typed sit under `demographics`, keyed by
+  the session's own `registrationConfig` field ids. `participantIdentity.js`
+  (deliberately IMPORT-FREE so `tools/identity-guard.mjs` runs it under plain
+  Node) is the ONE resolver: `identityFields(session)` classifies the
+  registration fields (the default form's `ucdStudentId`, plus admin-added
+  fields by label — Student/Participant ID, Full/First/Last Name, E-mail — the
+  same label discipline as `simplatform.js`'s LABEL_MAP, and the same rules the
+  platform's `simulation/admin/verify.js` adapter applies on ITS side, so keep
+  the two in sync); `realIdentity`/`displayName`/`displayEmail` prefer the
+  platform block, then the registration answers, then a non-placeholder doc
+  value. **Displays**: AdminSession's participant rows/detail + Submitted-Ideas
+  bylines and Admin's Registered-Users panel (real e-mail + name shown first,
+  the throwaway shown small as "login: …"; search covers both) resolve through
+  it, and every `Name`/`Email` column of the Excel export (`sessionExport.js`)
+  does too — the raw `Platform *` columns stay raw. **Heal**:
+  `healParticipantIdentities` (in `participantStatus.js`, beside the
+  finished-status heal, run once per session per visit by Admin.jsx AND once
+  per control-room open by AdminSession.jsx, which reports "Filled in the real
+  name / e-mail / student ID of N participants") writes `identityRepairFor`'s
+  payload onto the doc: fill-empty ONLY — doc `name`/`email` only while they
+  still hold the placeholders, `platform.studentId`/`platform.name`/
+  `platform.email` via dotted paths only while empty (a handoff's record always
+  wins and its `source: 'simulation-platform'` is never relabelled; a filled
+  block is stamped `source: 'in-app-registration'`), junk e-mail answers never
+  written, idempotent (a healed doc computes null). Instructor-permitted by the
+  deployed rules (isSessionInstructor updates any participant of their
+  session) — no rules or functions change. Filling `platform.studentId` is
+  what makes the platform's "Verify from Ideation Challenge" and the export's
+  Platform columns agree; the verify adapter ALSO reads `demographics`
+  directly, so verification never waits on this heal. Offline test:
+  `node _ideasearchlab-src/tools/identity-guard.mjs`.
 - **"0 ideas" in the Submitted-Ideas panel says what the participant DID do.**
   That list is individual-phase only, so someone who wrote only group ideas,
   voted, or completed the survey read as a no-show ("No ideas submitted") —

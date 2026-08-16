@@ -349,6 +349,11 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .userFullName { font-size: 12px; color: var(--muted); }
+/* The throwaway login address, shown small under a student's REAL e-mail. */
+.userLoginEmail {
+  font-size: 11px; color: var(--muted); opacity: 0.75;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .userMetaRight { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .userSessionCount {
   font-size: 12px; font-weight: 600; color: var(--accent);

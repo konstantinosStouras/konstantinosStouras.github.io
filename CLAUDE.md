@@ -3382,7 +3382,23 @@ the shared-locker sign-in into that project's own Firebase app
 stamping and revoking — is GENERIC, so a fifth simulation is those two edits
 and nothing more. Currently wired: **answerarena** (`participants.participantId`
 + sessions for id→code), **ideasearchlab** (`sessions/*/participants/*` of the
-sessions this admin created — `platform.studentId`, done = `status:'done'` OR
+sessions this admin created — `platform.studentId` **or, for a student who
+played from a DIRECT link rather than a platform launch (no handoff ever wrote
+a platform block — sessions SGP2/SGP3/ATHENS, owner 2026-08), the student ID
+they typed into that session's own registration form**, read from
+`demographics` via the session's `registrationConfig` (the default form's
+`ucdStudentId` field, or any admin-added field whose label names a
+Student/Participant ID — the same label rule `simplatform.js` uses to FILL
+such a field on a launch, so the two directions can't drift; a session with no
+`registrationConfig` runs the default form, hence the `ucdStudentId`
+fallback; the platform ID always wins when both exist; behaviour pinned by
+`node simulation/tools/verify-adapter-guard.mjs`, a mocked-Firestore run of
+the adapter itself). The Ideation Challenge's own admin pages also HEAL such
+standalone participants' docs — `healParticipantIdentities` writes the real
+name/e-mail/`platform.studentId` from the registration answers, fill-empty
+only (see `_ideasearchlab-src/CLAUDE.md`) — but verification deliberately
+does NOT wait on that heal, reading `demographics` directly. done =
+`status:'done'` OR
 **a stored survey** (`surveyCompletedAt`/`surveyAnswers` — the survey is the
 last step, and `status` could be rewritten behind a finished participant; see
 the phase-guard note in `_ideasearchlab-src/CLAUDE.md`) OR,

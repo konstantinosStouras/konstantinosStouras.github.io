@@ -204,7 +204,14 @@ Then:
   each simulation keeps that identity:
   Answer Arena `participants.participantId`; the Ideation Challenge
   `sessions/*/participants/*.platform.studentId` (the sessions this admin
-  account created); PortfolioFit `participants.studentId`; Search for
+  account created) **or, for a student who played it from a direct link
+  rather than a platform launch (no handoff ever writes a platform block —
+  sessions SGP2/SGP3/ATHENS, owner 2026-08), the student ID they typed into
+  that session's own registration form** — read from `demographics` via the
+  session's `registrationConfig`: the default form's `ucdStudentId` field, or
+  any admin-added field whose label names a Student/Participant ID (the same
+  label rule the handoff uses to FILL such a field, so the two directions
+  can't drift); PortfolioFit `participants.studentId`; Search for
   Knowledge `events.pid` — the student ID the platform sends as
   `PROLIFIC_PID` — on its `session_end` events.
   **Adding a simulation to this is two edits:** a `verify` block in
@@ -213,7 +220,11 @@ Then:
   completed it by student ID; the sign-in, roster join, safety guards,
   stamping and revoking are all generic. `node simulation/tools/verify-guard.mjs`
   checks the two halves still fit (and that the copied web configs still
-  match the apps' own files).
+  match the apps' own files); `node simulation/tools/verify-adapter-guard.mjs`
+  runs the Ideation Challenge adapter itself against a mocked Firestore and
+  pins its matching rules (platform ID wins over a typed one, the
+  registration-form fallback incl. the no-registrationConfig default, the
+  closed-session participation tests, ideas read only for closed sessions).
   **One student, several roster docs — read them MERGED (`completions.js`).**
   Every registration mints a fresh anonymous uid, so a log-out and re-register
   (or a second device) gives the same student another

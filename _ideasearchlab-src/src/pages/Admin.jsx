@@ -15,7 +15,8 @@ import RichTextEditor from '../components/RichTextEditor'
 import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
 import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
 import { exportSessionWorkbook, conditionOf } from '../utils/sessionExport'
-import { participantIsDone, healFinishedParticipants } from '../utils/participantStatus'
+import { participantIsDone, healFinishedParticipants, healParticipantIdentities } from '../utils/participantStatus'
+import { displayName, displayEmail, isPlaceholderName, isSyntheticEmail } from '../utils/participantIdentity'
 import { joinLinkFor, normalizeJoinCode } from '../utils/joinLink'
 import { getPhaseSequence } from '../utils/phaseSequence'
 import {
@@ -209,6 +210,11 @@ export default function Admin() {
         if (healedSessionsRef.current.has(s.id)) return
         healedSessionsRef.current.add(s.id)
         healFinishedParticipants(s.id, rows).catch(() => healedSessionsRef.current.delete(s.id))
+        // Likewise fill in each participant's REAL name/e-mail/student ID from
+        // their registration answers where the throwaway login left "Student"
+        // + a synthetic address (participantIdentity.js) — `s` is the full
+        // session doc, whose registrationConfig names the identity fields.
+        healParticipantIdentities(s.id, s, rows).catch(() => {})
       })
     )
     return () => unsubs.forEach(u => u())
@@ -651,8 +657,10 @@ export default function Admin() {
           joinedAt: p.joinedAt,
           anonymousLabel: p.anonymousLabel,
           surveyCompletedAt: p.surveyCompletedAt,
-          email: p.email,
-          name: p.name,
+          // The doc's own name/email mirror the throwaway login — resolve the
+          // REAL identity (platform block or registration answers) instead.
+          email: displayEmail(p, sess),
+          name: displayName(p, sess),
         })
       })
     })
@@ -686,7 +694,15 @@ export default function Admin() {
       })
     }
     return Object.values(byUid)
-      .map(u => ({ ...u, sessions: participationByUid[u.uid] || [] }))
+      .map(u => {
+        const sessions = participationByUid[u.uid] || []
+        // The Auth account's displayName/e-mail are the throwaway login's
+        // ("Student" + student-…@simplatform.stouras.com). Their participant
+        // docs carry the identity the student actually supplied — surface it.
+        const realName = sessions.map(x => x.name).find(n => n && !isPlaceholderName(n)) || ''
+        const realEmail = sessions.map(x => x.email).find(e => e && !isSyntheticEmail(e)) || ''
+        return { ...u, sessions, realName, realEmail }
+      })
       .sort((a, b) =>
         (b.sessions.length - a.sessions.length) ||
         (a.email || '').localeCompare(b.email || '')
@@ -698,7 +714,9 @@ export default function Admin() {
     if (!q) return registeredUsers
     return registeredUsers.filter(u =>
       (u.email || '').toLowerCase().includes(q) ||
-      (u.name || '').toLowerCase().includes(q)
+      (u.name || '').toLowerCase().includes(q) ||
+      (u.realEmail || '').toLowerCase().includes(q) ||
+      (u.realName || '').toLowerCase().includes(q)
     )
   }, [registeredUsers, userSearch])
 
@@ -1369,8 +1387,15 @@ function UsersPanel({ users, totalCount, search, onSearch, loading, expandedUser
               <div key={u.uid} className={styles.userCard}>
                 <button type="button" className={styles.userHead} onClick={() => onToggle(u.uid)}>
                   <div className={styles.userIdentity}>
-                    <span className={styles.userEmail}>{u.email || '(no email)'}</span>
-                    {u.name && <span className={styles.userFullName}>{u.name}</span>}
+                    {/* Real identity first: the account's own e-mail/displayName
+                        are the throwaway login's for direct-link students. */}
+                    <span className={styles.userEmail}>{u.realEmail || u.email || '(no email)'}</span>
+                    {(u.realName || u.name) && (
+                      <span className={styles.userFullName}>{u.realName || u.name}</span>
+                    )}
+                    {u.realEmail && u.realEmail !== u.email && u.email && (
+                      <span className={styles.userLoginEmail}>login: {u.email}</span>
+                    )}
                   </div>
                   <div className={styles.userMetaRight}>
                     <span className={styles.userSessionCount}>
