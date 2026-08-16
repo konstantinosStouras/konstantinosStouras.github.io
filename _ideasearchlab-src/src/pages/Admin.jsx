@@ -16,7 +16,7 @@ import { RegistrationBuilder, SurveyBuilder } from '../components/FormBuilder'
 import { previewLaunchUrl, PREVIEW_CONFIG_KEY } from '../utils/preview'
 import { exportSessionWorkbook, conditionOf } from '../utils/sessionExport'
 import { participantIsDone, healFinishedParticipants, healParticipantIdentities } from '../utils/participantStatus'
-import { displayName, displayEmail, isPlaceholderName, isSyntheticEmail } from '../utils/participantIdentity'
+import { displayName, displayEmail, realIdentity, isPlaceholderName, isSyntheticEmail } from '../utils/participantIdentity'
 import { joinLinkFor, normalizeJoinCode } from '../utils/joinLink'
 import { getPhaseSequence } from '../utils/phaseSequence'
 import {
@@ -661,6 +661,7 @@ export default function Admin() {
           // REAL identity (platform block or registration answers) instead.
           email: displayEmail(p, sess),
           name: displayName(p, sess),
+          studentId: realIdentity(p, sess).studentId,
         })
       })
     })
@@ -701,7 +702,8 @@ export default function Admin() {
         // docs carry the identity the student actually supplied — surface it.
         const realName = sessions.map(x => x.name).find(n => n && !isPlaceholderName(n)) || ''
         const realEmail = sessions.map(x => x.email).find(e => e && !isSyntheticEmail(e)) || ''
-        return { ...u, sessions, realName, realEmail }
+        const realStudentId = sessions.map(x => x.studentId).find(Boolean) || ''
+        return { ...u, sessions, realName, realEmail, realStudentId }
       })
       .sort((a, b) =>
         (b.sessions.length - a.sessions.length) ||
@@ -716,7 +718,8 @@ export default function Admin() {
       (u.email || '').toLowerCase().includes(q) ||
       (u.name || '').toLowerCase().includes(q) ||
       (u.realEmail || '').toLowerCase().includes(q) ||
-      (u.realName || '').toLowerCase().includes(q)
+      (u.realName || '').toLowerCase().includes(q) ||
+      (u.realStudentId || '').toLowerCase().includes(q)
     )
   }, [registeredUsers, userSearch])
 
@@ -1388,10 +1391,17 @@ function UsersPanel({ users, totalCount, search, onSearch, loading, expandedUser
                 <button type="button" className={styles.userHead} onClick={() => onToggle(u.uid)}>
                   <div className={styles.userIdentity}>
                     {/* Real identity first: the account's own e-mail/displayName
-                        are the throwaway login's for direct-link students. */}
+                        are the throwaway login's for direct-link students. A
+                        session whose form asks no name (the default form asks
+                        only the student ID) knows them BY that ID. */}
                     <span className={styles.userEmail}>{u.realEmail || u.email || '(no email)'}</span>
-                    {(u.realName || u.name) && (
-                      <span className={styles.userFullName}>{u.realName || u.name}</span>
+                    {(u.realName || u.realStudentId || u.name) && (
+                      <span className={styles.userFullName}>
+                        {u.realName || (u.realStudentId ? `Student ID ${u.realStudentId}` : u.name)}
+                      </span>
+                    )}
+                    {u.realName && u.realStudentId && (
+                      <span className={styles.userLoginEmail}>Student ID {u.realStudentId}</span>
                     )}
                     {u.realEmail && u.realEmail !== u.email && u.email && (
                       <span className={styles.userLoginEmail}>login: {u.email}</span>

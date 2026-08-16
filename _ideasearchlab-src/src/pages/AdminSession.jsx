@@ -10,7 +10,7 @@ import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/ai
 import * as XLSX from 'xlsx-js-style'
 import { exportSessionWorkbook } from '../utils/sessionExport'
 import { participantIsDone, hasCompletedSurvey, healFinishedParticipants, healParticipantIdentities } from '../utils/participantStatus'
-import { displayName, displayEmail } from '../utils/participantIdentity'
+import { displayNameOrId, displayEmail, realIdentity } from '../utils/participantIdentity'
 import styles from './AdminSession.module.css'
 
 export default function AdminSession() {
@@ -495,7 +495,7 @@ export default function AdminSession() {
                                 <span className={styles.pIdentity}>
                                   <span className={styles.pChevron}>{open ? '▾' : '▸'}</span>
                                   {p.anonymousLabel && <span className={styles.pGroupTag}>{p.anonymousLabel}</span>}
-                                  <span className={styles.pName}>{displayName(p, session) || p.anonymousLabel || p.id.slice(0, 6)}</span>
+                                  <span className={styles.pName}>{displayNameOrId(p, session) || p.anonymousLabel || p.id.slice(0, 6)}</span>
                                 </span>
                                 <span className={styles.pRight}>
                                   {indivActive && (
@@ -521,6 +521,7 @@ export default function AdminSession() {
                               {open && (
                                 <div className={styles.pDetail}>
                                   <DetailRow label="Current stage" value={participantStageLabel(p)} />
+                                  <DetailRow label="Student ID" value={realIdentity(p, session).studentId || '—'} />
                                   <DetailRow label="Email" value={displayEmail(p, session) || '—'} />
                                   <DetailRow label="Joined" value={formatTimestamp(p.joinedAt) || '—'} />
                                   {indivActive && <DetailRow label="Individual ideas" value={p.individualComplete ? 'Submitted ✓' : 'Not yet'} />}
@@ -665,7 +666,7 @@ export default function AdminSession() {
                             <div className={styles.ideaUserHeader}>
                               <span className={styles.ideaUserIdentity}>
                                 {p.anonymousLabel && <span className={styles.pGroupTag}>{p.anonymousLabel}</span>}
-                                <span className={styles.ideaUserName}>{displayName(p, session) || p.anonymousLabel || p.id.slice(0, 6)}</span>
+                                <span className={styles.ideaUserName}>{displayNameOrId(p, session) || p.anonymousLabel || p.id.slice(0, 6)}</span>
                                 <span className={styles.ideaSummaryCount}>
                                   {list.length} idea{list.length === 1 ? '' : 's'}
                                 </span>

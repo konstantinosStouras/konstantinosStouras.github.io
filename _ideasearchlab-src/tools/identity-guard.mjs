@@ -20,7 +20,7 @@
 import {
   isSyntheticEmail, isPlaceholderName, identityFields,
   registrationIdentity, realIdentity, displayName, displayEmail,
-  identityRepairFor,
+  displayNameOrId, identityRepairFor,
 } from '../src/utils/participantIdentity.js'
 
 let failures = 0
@@ -139,6 +139,34 @@ const SESSION = { registrationConfig: { fields: [
   const p = { name: 'Student', email: 'student-b2@simplatform.stouras.com', demographics: {} }
   check('with nothing real anywhere, displayEmail falls back to the login address',
     displayEmail(p, SESSION) === 'student-b2@simplatform.stouras.com' && displayName(p, SESSION) === 'Student')
+}
+
+// ── The list label: name, else the STUDENT ID, never a bare "Student" while
+//    an ID is known (owner 2026-08-16: the default form asks NO name — only
+//    "UCD Student ID" — so a direct-link session resolves no name for anyone
+//    and every admin row read "Student"). ─────────────────────────────────────
+console.log('displayNameOrId — the admin lists fall back to the student ID')
+{
+  const p = {
+    name: 'Student', email: 'student-f6@simplatform.stouras.com',
+    demographics: { ucdStudentId: '25258366' },     // the default form's one identity answer
+  }
+  check('no name on record → the typed student ID is the label',
+    displayNameOrId(p, SESSION) === '25258366')
+}
+{
+  const p = { name: 'Student', demographics: { ucdStudentId: '25258366', f_nm: 'Qi YuHao' } }
+  check('a known name still wins over the ID', displayNameOrId(p, SESSION) === 'Qi YuHao')
+}
+{
+  const p = { name: 'Student', demographics: {} }
+  check('nothing known at all → the doc value remains the last resort',
+    displayNameOrId(p, SESSION) === 'Student')
+}
+{
+  const p = { name: 'Student', platform: { studentId: '25232453', source: 'simulation-platform' } }
+  check('a healed/platform studentId serves as the label too',
+    displayNameOrId(p, SESSION) === '25232453')
 }
 
 // ── The heal payload ───────────────────────────────────────────────────────

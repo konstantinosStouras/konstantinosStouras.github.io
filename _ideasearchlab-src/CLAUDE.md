@@ -845,7 +845,18 @@ handoff) → welcome → tour → SILENT registration → lobby/phases.
   session) — no rules or functions change. Filling `platform.studentId` is
   what makes the platform's "Verify from Ideation Challenge" and the export's
   Platform columns agree; the verify adapter ALSO reads `demographics`
-  directly, so verification never waits on this heal. Offline test:
+  directly, so verification never waits on this heal. **A participant with no
+  resolvable NAME is labelled by their STUDENT ID, never "Student"** (owner
+  2026-08-16: the DEFAULT registration form asks no name — its one identity
+  field is "UCD Student ID" — so a direct-link session resolves no name for
+  anyone and every admin row read "Student"): `displayNameOrId` (name → student
+  ID → doc value) is what the participant LISTS render — AdminSession's rows +
+  Submitted-Ideas bylines, and the Registered Users panel, which shows
+  "Student ID NNNNNNNN" in the name slot (and as a small line under a known
+  name; search matches the ID too), while the expanded participant detail
+  gained an explicit "Student ID" row. Deliberately NOT the export's Name
+  columns — a student ID is not a name, and the workbook carries the ID in its
+  own column. Offline test:
   `node _ideasearchlab-src/tools/identity-guard.mjs`.
 - **"0 ideas" in the Submitted-Ideas panel says what the participant DID do.**
   That list is individual-phase only, so someone who wrote only group ideas,
