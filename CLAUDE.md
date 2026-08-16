@@ -3393,7 +3393,20 @@ such a field on a launch, so the two directions can't drift; a session with no
 `registrationConfig` runs the default form, hence the `ucdStudentId`
 fallback; the platform ID always wins when both exist; behaviour pinned by
 `node simulation/tools/verify-adapter-guard.mjs`, a mocked-Firestore run of
-the adapter itself). The Ideation Challenge's own admin pages also HEAL such
+the adapter itself). **The same pass also writes the ROSTER's real name and
+e-mail back onto every matched Ideation Challenge record still carrying the
+throwaway login's placeholders** ("Student" + `student-…@simplatform…`) —
+owner 2026-08-16: a direct-link student registered on the platform, so their
+identity is on the roster, but no launch handoff ever carried it into the
+app. The adapter stays read-only and merely REPORTS the needy records
+(`identityDocs`, every matched student, finished or not — a name is a name);
+`verifyFromSim` in admin.js does the writing, fill-empty only (a real value
+is never overwritten; a filled platform block is stamped
+`source: 'simulation-platform-roster'`, a handoff's `simulation-platform`
+never relabelled), because that pass is the one place holding both handles —
+the roster and, via ctx, the app's own project signed in as its instructor.
+The outcome line reports "filled the real name/e-mail of N …". The Ideation
+Challenge's own admin pages also HEAL such
 standalone participants' docs — `healParticipantIdentities` writes the real
 name/e-mail/`platform.studentId` from the registration answers, fill-empty
 only (see `_ideasearchlab-src/CLAUDE.md`) — but verification deliberately

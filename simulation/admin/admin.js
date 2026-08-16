@@ -801,11 +801,12 @@
            cache (a dead streaming channel would make this destructive
            pass act on a stale view). */
         P.firebase().then(function (F) { return F.listStudents(); })
-      ]);
-    }).then(function (r) {
-      var read = r[0] || {};
+      ]).then(function (r) { return { ctx: ctx, read: r[0] || {}, rosterRows: r[1] }; });
+    }).then(function (rr) {
+      var ctx = rr.ctx;
+      var read = rr.read;
       var doneById = read.doneById || {};       // normalized student ID -> {ts, session}
-      var rosterRows = r[1] || lastRows;
+      var rosterRows = rr.rosterRows || lastRows;
       /* SAFETY: a read that returned no participant records at all means
          something went wrong (wrong project, empty result, permissions) —
          never treat that as "nobody completed anything" and revoke the whole
@@ -831,6 +832,55 @@
         if (C.isDone(g.completed[s.key])) { already++; return; }
         stamps.push({ rows: g.refs, mark: doneById[pid] });
       });
+
+      /* ── Identity backfill (Ideation Challenge) ────────────────────────────
+         A direct-link student registered on THIS roster — their real name and
+         e-mail are right here — but no launch handoff ever carried them into
+         the app, so its participant records show "Student" + a synthetic
+         address (owner 2026-08-16). The adapter reports which matched records
+         still carry those placeholders (read.identityDocs, a read-only
+         report); the WRITES happen here, because this pass is the one place
+         holding both handles — the roster and, via ctx, that simulation's own
+         project signed in as its instructor (whose deployed rules let the
+         instructor update any participant of their sessions). Fill-empty
+         only: a record that already carries a real name/e-mail is never
+         touched, so re-running is idempotent. */
+      var fills = [];
+      var identityDocs = read.identityDocs || {};
+      Object.keys(identityDocs).forEach(function (pid) {
+        var g = byPid[pid];
+        if (!g) return;                                  // not on this roster
+        var head = g.rows[0] || {};
+        var rName = String(head.name || '').trim();
+        var rEmail = String(head.email || '').trim();
+        if (!rName && !rEmail) return;
+        identityDocs[pid].forEach(function (t) {
+          var u = {};
+          if (rName && t.needName) u.name = rName;
+          if (rEmail && t.needEmail) u.email = rEmail;
+          if (rName && t.needPlatName) u['platform.name'] = rName;
+          if (rEmail && t.needPlatEmail) u['platform.email'] = rEmail;
+          if (!Object.keys(u).length) return;
+          /* Say where a filled platform block came from — never relabel one a
+             real handoff wrote. */
+          if ((u['platform.name'] || u['platform.email']) && t.needPlatSource) {
+            u['platform.source'] = 'simulation-platform-roster';
+          }
+          fills.push({ sid: t.sid, uid: t.uid, u: u });
+        });
+      });
+      function doFills() {
+        if (!fills.length) return Promise.resolve('');
+        return Promise.allSettled(fills.map(function (f) {
+          return ctx.D.updateDoc(ctx.D.doc(ctx.fs, 'sessions', f.sid, 'participants', f.uid), f.u);
+        })).then(function (rs) {
+          var okc = rs.filter(function (x) { return x.status === 'fulfilled'; }).length;
+          var bad = rs.length - okc;
+          return ' · filled the real name/e-mail of ' + okc + ' ' + s.title +
+            ' participant record(s) from this roster' +
+            (bad ? ' (⚠ ' + bad + ' write(s) refused)' : '');
+        });
+      }
 
       /* TWO-WAY: a roster ✓ whose student is no longer a completed participant
          over there (deleted so they may retake it) must be REVOKED — the
@@ -885,10 +935,12 @@
         : '');
 
       if (!stamps.length && !revokes.length) {
-        return (cancelled
-          ? cancelled + ' proposed removal(s) were cancelled — the roster still differs from ' + s.title
-          : 'Checked ' + Object.keys(doneById).length + ' completed ' + s.title + ' participant(s) — the roster already matches')
-          + refusedNote + tail;
+        return doFills().then(function (fnote) {
+          return (cancelled
+            ? cancelled + ' proposed removal(s) were cancelled — the roster still differs from ' + s.title
+            : 'Checked ' + Object.keys(doneById).length + ' completed ' + s.title + ' participant(s) — the roster already matches')
+            + fnote + refusedNote + tail;
+        });
       }
       return P.firebase().then(function (F) {
         /* allSettled: one failed row must not hide the rest of the run. */
@@ -906,14 +958,16 @@
           if (x.status === 'rejected') return n + 1;
           return n + ((x.value && x.value.failed) || 0);
         }, 0);
-        var bits = [];
-        if (stamps.length) bits.push('stamped ✓ for ' + stamps.length + ' student(s)');
-        if (revokes.length) bits.push('removed the ✓ from ' + revokes.length + ' student(s) no longer in ' + s.title + ' (they can retake it)');
-        return 'Synced with ' + s.title + '’s own records: ' + bits.join(' · ') +
-          (already ? ' · ' + already + ' already matched' : '') +
-          (cancelled ? ' · ' + cancelled + ' removal(s) cancelled' : '') +
-          (failed ? ' · ⚠ ' + failed + ' write(s) FAILED — click Verify again' : '') + refusedNote + tail +
-          ' — the roster and the students’ own pages update live.';
+        return doFills().then(function (fnote) {
+          var bits = [];
+          if (stamps.length) bits.push('stamped ✓ for ' + stamps.length + ' student(s)');
+          if (revokes.length) bits.push('removed the ✓ from ' + revokes.length + ' student(s) no longer in ' + s.title + ' (they can retake it)');
+          return 'Synced with ' + s.title + '’s own records: ' + bits.join(' · ') +
+            (already ? ' · ' + already + ' already matched' : '') +
+            (cancelled ? ' · ' + cancelled + ' removal(s) cancelled' : '') +
+            (failed ? ' · ⚠ ' + failed + ' write(s) FAILED — click Verify again' : '') + fnote + refusedNote + tail +
+            ' — the roster and the students’ own pages update live.';
+        });
       });
     });
   }

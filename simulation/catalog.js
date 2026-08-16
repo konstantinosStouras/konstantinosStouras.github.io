@@ -75,7 +75,7 @@ window.SIMP_CATALOG = [
         messagingSenderId: '368057681732',
         appId: '1:368057681732:web:35d8aba8d387abc364f911'
       },
-      idNote: 'the student ID carried over from the platform launch (participant.platform.studentId) or, for students who opened the app from a direct link, the Student ID they typed into the session’s own registration form (demographics — the default ucdStudentId field, or any field labelled Student ID), on participants who completed the study in the sessions this admin account created'
+      idNote: 'the student ID carried over from the platform launch (participant.platform.studentId) or, for students who opened the app from a direct link, the Student ID they typed into the session’s own registration form (demographics — the default ucdStudentId field, or any field labelled Student ID), on participants who completed the study in the sessions this admin account created. The pass also FILLS the matched records’ real name and e-mail from this roster (fill-empty — a record already carrying real details is never touched)'
     },
     adminUrl: '/lab/ideasearchlab/admin/', adminAuth: 'firebase',
     adminNote: 'Instructor account on the “ideasearchlab” Firebase project. Students get a silent throwaway login (no account screen); their join code arrives pre-filled and the registration auto-submits from the platform data, consent statements included (carried from the platform launch, stamped consentVia on the participant record).'

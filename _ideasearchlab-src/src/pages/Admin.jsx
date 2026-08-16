@@ -136,6 +136,7 @@ export default function Admin() {
   const [authUsers, setAuthUsers] = useState([])
   const [usersLoading, setUsersLoading] = useState(true)
   const [usersError, setUsersError] = useState(null)
+  const [usersHealed, setUsersHealed] = useState(0)   // Auth displayNames the callable repaired
   const [userSearch, setUserSearch] = useState('')
   const [expandedUser, setExpandedUser] = useState(null)
   const [removeUserConfirm, setRemoveUserConfirm] = useState(null) // user pending account removal
@@ -231,6 +232,9 @@ export default function Admin() {
     try {
       const res = await httpsCallable(functions, 'listRegisteredUsers')()
       setAuthUsers(res.data?.users || [])
+      // The deployed function also repairs placeholder Auth displayNames from
+      // the registration records as it lists — surface how many it fixed.
+      setUsersHealed(res.data?.healedNames || 0)
     } catch (err) {
       console.warn('listRegisteredUsers failed:', err.message)
       setUsersError(err.message || 'Could not load registered users.')
@@ -681,6 +685,10 @@ export default function Admin() {
       byUid[u.uid] = {
         uid: u.uid, email: u.email, name: u.displayName,
         createdAt: u.createdAt, lastSignInAt: u.lastSignInAt, fromAuth: true,
+        // Server-side identity join (Admin SDK — sees even participant docs
+        // orphaned by a deleted session, where the client join below is
+        // blind). Absent until the updated function is deployed.
+        identity: u.identity || null,
       }
     })
     if (usersError) {
@@ -700,9 +708,12 @@ export default function Admin() {
         // The Auth account's displayName/e-mail are the throwaway login's
         // ("Student" + student-…@simplatform.stouras.com). Their participant
         // docs carry the identity the student actually supplied — surface it.
-        const realName = sessions.map(x => x.name).find(n => n && !isPlaceholderName(n)) || ''
-        const realEmail = sessions.map(x => x.email).find(e => e && !isSyntheticEmail(e)) || ''
-        const realStudentId = sessions.map(x => x.studentId).find(Boolean) || ''
+        const realName = (u.identity && u.identity.name) ||
+          sessions.map(x => x.name).find(n => n && !isPlaceholderName(n)) || ''
+        const realEmail = (u.identity && u.identity.email) ||
+          sessions.map(x => x.email).find(e => e && !isSyntheticEmail(e)) || ''
+        const realStudentId = (u.identity && u.identity.studentId) ||
+          sessions.map(x => x.studentId).find(Boolean) || ''
         return { ...u, sessions, realName, realEmail, realStudentId }
       })
       .sort((a, b) =>
@@ -1101,6 +1112,7 @@ export default function Admin() {
                 onOpenSession={sid => navigate(`/admin/session/${sid}`)}
                 onRemoveUser={u => setRemoveUserConfirm(u)}
                 removingUserUid={removingUserUid}
+                healedNames={usersHealed}
               />
             </div>
           </div>
@@ -1356,13 +1368,13 @@ const USER_STATUS_CLASS = {
   group: 'group', voting: 'voting', survey: 'survey', done: 'done',
 }
 
-function UsersPanel({ users, totalCount, search, onSearch, loading, expandedUser, onToggle, onRefresh, onOpenSession, onRemoveUser, removingUserUid }) {
+function UsersPanel({ users, totalCount, search, onSearch, loading, expandedUser, onToggle, onRefresh, onOpenSession, onRemoveUser, removingUserUid, healedNames }) {
   return (
     <div className={styles.usersWrap}>
       <div className={styles.usersToolbar}>
         <input
           className={`input-field ${styles.userSearch}`}
-          placeholder="Search by email or name…"
+          placeholder="Search by email, name or student ID…"
           value={search}
           onChange={e => onSearch(e.target.value)}
         />
@@ -1370,6 +1382,12 @@ function UsersPanel({ users, totalCount, search, onSearch, loading, expandedUser
           Refresh
         </button>
       </div>
+      {healedNames > 0 && (
+        <p className={styles.usersHealNote}>
+          Filled the real names of {healedNames} account{healedNames === 1 ? '' : 's'} from their
+          registration records — their login was a throwaway, so the accounts read “Student”.
+        </p>
+      )}
 
       {loading ? (
         <div className={styles.empty}>Loading users…</div>
@@ -1395,9 +1413,16 @@ function UsersPanel({ users, totalCount, search, onSearch, loading, expandedUser
                         session whose form asks no name (the default form asks
                         only the student ID) knows them BY that ID. */}
                     <span className={styles.userEmail}>{u.realEmail || u.email || '(no email)'}</span>
-                    {(u.realName || u.realStudentId || u.name) && (
+                    {(u.realName || u.realStudentId || u.name || u.sessions.length === 0) && (
                       <span className={styles.userFullName}>
-                        {u.realName || (u.realStudentId ? `Student ID ${u.realStudentId}` : u.name)}
+                        {u.realName
+                          || (u.realStudentId ? `Student ID ${u.realStudentId}` : '')
+                          /* An account with no identity anywhere and no session
+                             is a login minted at /join that never joined — say
+                             so instead of a bare "Student". */
+                          || (u.sessions.length === 0
+                            ? 'no registration on record — this login never joined a session'
+                            : u.name)}
                       </span>
                     )}
                     {u.realName && u.realStudentId && (

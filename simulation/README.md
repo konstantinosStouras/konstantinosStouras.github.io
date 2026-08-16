@@ -218,13 +218,21 @@ Then:
   `catalog.js` (adapter name + the app's public Firebase web config + a note
   on what the join key is) and one reader in `admin/verify.js` returning who
   completed it by student ID; the sign-in, roster join, safety guards,
-  stamping and revoking are all generic. `node simulation/tools/verify-guard.mjs`
+  stamping and revoking are all generic. **The Ideation Challenge pass also
+  fills the matched records' real name and e-mail FROM this roster** — a
+  direct-link student registered here, but no launch handoff ever carried
+  their identity into the app, so its records read "Student" + a synthetic
+  address; the adapter stays read-only and reports the needy records
+  (`identityDocs`), `verifyFromSim` writes them fill-empty (never over a real
+  value), and the outcome line reports "filled the real name/e-mail of N …".
+  `node simulation/tools/verify-guard.mjs`
   checks the two halves still fit (and that the copied web configs still
   match the apps' own files); `node simulation/tools/verify-adapter-guard.mjs`
   runs the Ideation Challenge adapter itself against a mocked Firestore and
   pins its matching rules (platform ID wins over a typed one, the
   registration-form fallback incl. the no-registrationConfig default, the
-  closed-session participation tests, ideas read only for closed sessions).
+  closed-session participation tests, ideas read only for closed sessions,
+  and the identity-backfill report — placeholders only, finished or not).
   **One student, several roster docs — read them MERGED (`completions.js`).**
   Every registration mints a fresh anonymous uid, so a log-out and re-register
   (or a second device) gives the same student another

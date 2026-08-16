@@ -228,6 +228,45 @@ console.log('identityRepairFor — fill-empty, never overwrite, idempotent')
   check('nothing to add → null (no pointless write)', identityRepairFor(p, SESSION) === null)
 }
 
+// ── Parity: the Cloud Functions port answers exactly like the browser module ─
+// functions/identity.js is a CJS copy used by listRegisteredUsers (the Admin
+// SDK join that also sees participant docs orphaned by a deleted session).
+// The two are edited by hand, so this pins them together on shared fixtures.
+console.log('functions/identity.js parity — the CJS port never drifts')
+{
+  const { createRequire } = await import('node:module')
+  const serverIdentity = createRequire(import.meta.url)('../functions/identity.js')
+  const FIXTURE_SESSIONS = [
+    null,                                                        // deleted / default form
+    SESSION,
+    { registrationConfig: { fields: [
+      { id: 'f_a1', label: 'Name' },
+      { id: 'f_b2', label: 'Name of your company' },
+      { id: 'ucdStudentId', label: 'UCD Student ID' },
+    ] } },
+  ]
+  const FIXTURE_PARTICIPANTS = [
+    { name: 'Student', email: 'student-x9@simplatform.stouras.com',
+      demographics: { ucdStudentId: '25258366', f_nm: 'Qi YuHao', f_em: 'qi@ucdconnect.ie' } },
+    { name: 'Zhou Yan', email: 'student-a1@simplatform.stouras.com',
+      platform: { name: 'Zhou Yan', email: 'zhou@ucd.ie', studentId: '25232453', source: 'simulation-platform' } },
+    { demographics: { f_fn: 'Pua', f_ln: 'Suan Ting' } },
+    { name: 'Student', demographics: { f_a1: 'Ana Real', f_b2: 'Acme Ltd', ucdStudentId: '11112222' } },
+    { name: 'Jane Doe', email: 'jane@ucd.ie', demographics: {} },
+  ]
+  let same = true
+  for (const s of FIXTURE_SESSIONS) {
+    if (JSON.stringify(identityFields(s)) !== JSON.stringify(serverIdentity.identityFields(s))) same = false
+    for (const p of FIXTURE_PARTICIPANTS) {
+      if (JSON.stringify(realIdentity(p, s)) !== JSON.stringify(serverIdentity.realIdentity(p, s))) same = false
+    }
+  }
+  check('identityFields + realIdentity agree on every fixture × session', same)
+  check('placeholder rules agree too',
+    serverIdentity.isPlaceholderName('Student') === isPlaceholderName('Student') &&
+    serverIdentity.isSyntheticEmail('student-x@simplatform.stouras.com') === isSyntheticEmail('student-x@simplatform.stouras.com'))
+}
+
 console.log('')
 if (failures) { console.log(`GUARD FAILED — ${failures} check(s)`); process.exit(1) }
 console.log('GUARD OK — participantIdentity resolution and heal rules hold')
