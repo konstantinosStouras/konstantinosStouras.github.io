@@ -16,7 +16,7 @@
    admin.js, so adding a simulation is: a `verify` block in catalog.js + one
    adapter here.
 
-   An adapter is  fn(ctx) -> Promise<{ records, doneById }>  where
+   An adapter is  fn(ctx) -> Promise<{ records, doneById, identityDocs? }>  where
      ctx.D      the Firestore module (getDocs, collection, query, where, …)
      ctx.fs     Firestore instance for THAT simulation's project
      ctx.uid    uid of the admin account signed into that project
@@ -30,8 +30,17 @@
                 participants who COMPLETED it. ts = completion time in epoch
                 ms (0 when unknown), session = the session/wave code or null.
 
+     identityDocs  OPTIONAL (Ideation Challenge): a read-only REPORT of the
+                participant records still carrying the throwaway login's
+                placeholders — { <student ID> : [{ sid, uid, needName,
+                needEmail, needPlatName, needPlatEmail, needPlatSource }] } —
+                which admin.js uses to write the ROSTER's real name/e-mail
+                back onto those records (fill-empty only). Reported for EVERY
+                matched student, finished or not: a name is a name.
+
    Adapters must never write to the simulation's project — this is a read-only
-   reconciliation.
+   reconciliation. (The identity backfill is written by admin.js, the one
+   place holding both the roster and that project's instructor handle.)
    =========================================================================== */
 window.SIMP_VERIFY = (function () {
   'use strict';
@@ -155,7 +164,7 @@ window.SIMP_VERIFY = (function () {
             ]).then(function (r) { return { s: s, ps: r[0], ideas: r[1] }; });
           }));
         }).then(function (rs) {
-          var done = {}, records = 0;
+          var done = {}, records = 0, identityDocs = {};
           rs.forEach(function (r) {
             var authored = {};
             if (r.ideas) r.ideas.forEach(function (d) {
@@ -188,11 +197,11 @@ window.SIMP_VERIFY = (function () {
               if (!finished && r.s.closed) {
                 finished = !!authored[d.id] || ((x.votedFor || []).length > 0);
               }
-              if (!finished) return;
               /* Platform launch first (the handoff's ID is the roster's own),
                  then the ID the student typed into the session's registration
                  form — a direct-link play records its identity only there. */
-              var id = pid(x.platform && x.platform.studentId);
+              var plat = x.platform || {};
+              var id = pid(plat.studentId);
               if (!id) {
                 var demo = x.demographics || {};
                 for (var i = 0; i < r.s.sidFields.length && !id; i++) {
@@ -200,13 +209,33 @@ window.SIMP_VERIFY = (function () {
                 }
               }
               if (!id) return;                       // no student ID on record at all
+              /* Report what this record is still missing, so admin.js can fill
+                 it from the roster (owner 2026-08-16: a direct-link student's
+                 real name/e-mail live on the PLATFORM's roster — they
+                 registered there — but no handoff ever carried them into the
+                 app, so its records show "Student" + a synthetic address).
+                 Every matched student, finished or not. */
+              var needName = !String(x.name || '').trim() ||
+                             String(x.name).trim().toLowerCase() === 'student';
+              var needEmail = !x.email || /@simplatform\.stouras\.com$/i.test(String(x.email));
+              var needPlatName = !String(plat.name || '').trim();
+              var needPlatEmail = !String(plat.email || '').trim();
+              if (needName || needEmail || needPlatName || needPlatEmail) {
+                (identityDocs[id] = identityDocs[id] || []).push({
+                  sid: r.s.id, uid: d.id,
+                  needName: needName, needEmail: needEmail,
+                  needPlatName: needPlatName, needPlatEmail: needPlatEmail,
+                  needPlatSource: !plat.source
+                });
+              }
+              if (!finished) return;
               keep(done, id, {
                 ts: tsMs(x.surveyCompletedAt) || tsMs(x.votedAt) || tsMs(x.joinedAt) || 0,
                 session: r.s.code || null
               });
             });
           });
-          return { records: records, doneById: done };
+          return { records: records, doneById: done, identityDocs: identityDocs };
         });
     },
 

@@ -15,7 +15,11 @@
        CLOSED session only — demonstrable participation (an authored idea or
        a cast vote), never idle attendance;
      · the ideas collection is read ONLY for closed sessions;
-     · a participant with no student ID anywhere is skipped, not guessed.
+     · a participant with no student ID anywhere is skipped, not guessed;
+     · identityDocs REPORTS (read-only) every matched record still carrying
+       the throwaway login's placeholders — finished or NOT (a name is a
+       name) — so admin.js can fill the roster's real name/e-mail back onto
+       them; a record already carrying real details is not reported.
 
    Run: node simulation/tools/verify-adapter-guard.mjs
 */
@@ -58,8 +62,13 @@ const SESSIONS = [
 
 const PARTICIPANTS = {
   s1: [
-    // platform launch, finished
-    { id: 'pA', status: 'done', platform: { studentId: '11111111' } },
+    // platform launch, finished — carries its real identity in full, so the
+    // backfill report must NOT list it (only the doc e-mail stays synthetic
+    // by design of the throwaway login, and that IS reported)
+    { id: 'pA', status: 'done', name: 'Anna Platform',
+      email: 'student-aa11@simplatform.stouras.com',
+      platform: { studentId: '11111111', name: 'Anna Platform',
+                  email: 'anna@ucd.ie', source: 'simulation-platform' } },
     // direct link, finished (stored survey), ID typed into the form
     { id: 'pB', status: 'survey', surveyAnswers: { q: 1 },
       demographics: { ucdStudentId: '22222222', f_nm: 'Qi YuHao' } },
@@ -145,6 +154,21 @@ ok(ids.length === 6, 'exactly the six expected students match (got ' + ids.lengt
 
 ok(ideasReads.length === 1 && ideasReads[0] === 's2',
    'the ideas collection is read ONLY for the closed session');
+
+/* ── The identity-backfill report ─────────────────────────────────────────── */
+const idn = result.identityDocs || {};
+ok(Array.isArray(idn['22222222']) && idn['22222222'][0].needName === true &&
+   idn['22222222'][0].needEmail === true && idn['22222222'][0].sid === 's1' &&
+   idn['22222222'][0].uid === 'pB',
+   'a direct-link record with no name/e-mail is reported for the roster backfill (sid+uid carried)');
+ok(Array.isArray(idn['33333333']) && idn['33333333'][0].needName === true,
+   'an UNFINISHED matched student is reported too — a name is a name');
+ok(idn['11111111'] && idn['11111111'][0].needName === false &&
+   idn['11111111'][0].needPlatName === false && idn['11111111'][0].needPlatEmail === false &&
+   idn['11111111'][0].needEmail === true && idn['11111111'][0].needPlatSource === false,
+   'a platform-launched record is reported ONLY for its synthetic doc e-mail — real fields are never fill targets, and its handoff source is kept');
+ok(Object.keys(idn).every(k => (idn[k] || []).every(t => t.sid && t.uid)),
+   'every report entry names the exact doc to write (sid + uid)');
 
 console.log('\n' + (fails ? 'GUARD FAILED — ' + fails + ' of ' + checks + ' checks'
                           : 'GUARD OK — ' + checks + ' checks'));

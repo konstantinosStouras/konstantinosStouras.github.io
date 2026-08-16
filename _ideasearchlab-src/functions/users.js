@@ -3,6 +3,7 @@ const functions = functionsV1.region('europe-west1')
 const { HttpsError } = functionsV1.https
 const admin = require('firebase-admin')
 const { detachParticipant } = require('./session')
+const { realIdentity, isPlaceholderName } = require('./identity')
 
 const ADMIN_EMAIL = 'admin@admin.com'
 const db = admin.firestore()
@@ -19,6 +20,23 @@ const db = admin.firestore()
  * Which sessions each user has joined is cross-referenced on the client from
  * the participant documents the admin already reads (instructor-readable), so
  * no participation data is duplicated here.
+ *
+ * It ALSO joins each account to the student's REAL identity (owner
+ * 2026-08-16: the student flow mints a throwaway login — "Student" + a
+ * synthetic address — while the real name/e-mail/student ID live on the
+ * participant docs, in the platform block or the registration answers). The
+ * join runs HERE because the Admin SDK sees EVERY participant document,
+ * including those ORPHANED by a deleted session (deleting a session doc does
+ * not delete its subcollections, and the client rules can no longer authorise
+ * reading them once the session doc is gone) — exactly where the panel's
+ * client-side join is blind. The resolver is functions/identity.js, a CJS
+ * port of src/utils/participantIdentity.js (parity-checked by
+ * tools/identity-guard.mjs). While listing, it REPAIRS a placeholder Auth
+ * displayName ("Student"/empty) to the real name — or "Student ID NNNNNNNN"
+ * when the registration collected only the ID — fill-empty and idempotent,
+ * so the Firebase console and every future listing read properly too. Auth
+ * E-MAILS are deliberately never touched: they are the account's login key
+ * and must stay unique; the real e-mail travels in `identity` instead.
  */
 exports.listRegisteredUsers = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new HttpsError('unauthenticated', 'Must be logged in.')
@@ -42,7 +60,58 @@ exports.listRegisteredUsers = functions.https.onCall(async (data, context) => {
     pageToken = res.pageToken
   } while (pageToken)
 
-  return { users }
+  // uid -> { name, email, studentId }, merged across every participant doc the
+  // account ever wrote (a student may appear in several sessions): per field,
+  // a platform-handoff value always wins; otherwise first non-empty. Wholly
+  // best-effort — a failure here must never take the account list down.
+  const identityByUid = {}
+  try {
+    const [sessionsSnap, partsSnap] = await Promise.all([
+      db.collection('sessions').get(),
+      db.collectionGroup('participants').get(),
+    ])
+    const sessionById = {}
+    sessionsSnap.forEach(d => { sessionById[d.id] = d.data() })
+    partsSnap.forEach(d => {
+      const p = d.data() || {}
+      const uid = p.uid || d.id
+      const sessRef = d.ref.parent.parent
+      const session = (sessRef && sessionById[sessRef.id]) || null   // null = deleted → default form
+      const r = realIdentity(p, session)
+      if (!r.name && !r.email && !r.studentId) return
+      const plat = p.platform || {}
+      const cur = identityByUid[uid] ||
+        (identityByUid[uid] = { name: '', email: '', studentId: '', _pn: false, _pe: false, _ps: false })
+      const set = (field, value, fromPlatform, flag) => {
+        if (!value) return
+        if (fromPlatform && !cur[flag]) { cur[field] = value; cur[flag] = true }
+        else if (!cur[field]) cur[field] = value
+      }
+      set('name', r.name, !!String(plat.name || '').trim(), '_pn')
+      set('email', r.email, !!String(plat.email || '').trim(), '_pe')
+      set('studentId', r.studentId, !!String(plat.studentId || '').trim(), '_ps')
+    })
+  } catch (e) {
+    console.warn('identity join skipped:', e.message)
+  }
+
+  let healedNames = 0
+  for (const u of users) {
+    const idn = identityByUid[u.uid]
+    if (idn) u.identity = { name: idn.name, email: idn.email, studentId: idn.studentId }
+    if (!idn || u.email === ADMIN_EMAIL || !isPlaceholderName(u.displayName)) continue
+    const label = idn.name || (idn.studentId ? `Student ID ${idn.studentId}` : '')
+    if (!label) continue
+    try {
+      await admin.auth().updateUser(u.uid, { displayName: label })
+      u.displayName = label
+      healedNames++
+    } catch (e) {
+      // best-effort — the list itself is the deliverable
+    }
+  }
+
+  return { users, healedNames }
 })
 
 /**
