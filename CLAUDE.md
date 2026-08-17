@@ -2403,10 +2403,13 @@ runs fully offline with local logging. See `lab/search-v2/README.md` and
 **The task.** 100 positions hiding integer prizes 0–100, neighbours differing by
 at most 10. THREE actions (§7): **Ask the AI** (2 points, returns its estimate,
 does NOT reveal the truth — button ABSENT, not disabled, in AI-off rounds),
-**Reveal** (5 points, the true prize, joins the AI's anchors), and **Stop and
-nominate** (0, ends the round on the selected position; the button NAMES the
-position, and an untouched position asks for confirmation). **Score = the TRUE
-prize at the nominated position minus all query and reveal costs.** The AI's
+**Reveal** (5 points, the true prize, joins the AI's anchors), and **Stop**
+(0, ends the round; under the default `best_found` stop rule it NEVER opens a
+new position — the button names the best prize it takes, and stopping with
+nothing found asks for confirmation). **Score = the best TRUE prize the
+participant holds (pre-opened + own reveals) minus all query and reveal costs;
+under the legacy explicit-`nominate` rule only, the true prize at the selected
+position instead.** The AI's
 number is never a prize — that one rule is what makes trust fallible, and it is
 the strict comprehension gate. No score floor: a round may end negative and that
 is logged. Caps 40 queries / 20 reveals (§7/§17b/§20b say 20; the §20c table says
@@ -2608,12 +2611,26 @@ rewards acting on an unchecked estimate.
 **It is a LOCKED RUN PARAMETER, `costs.stopRule`** (`'best_found'` — the
 default for every new session — or `'nominate'`, the brief's original rule),
 chosen in the admin's Costs group and frozen at first participant like every
-other task parameter. `specs.js withDefaults` gives a session stored BEFORE the
-parameter existed `'nominate'`, the rule its participants actually played
-under: one dataset must never hold two payoff rules with nothing in the rows to
-say which — which is also why every round row now carries **`stop_rule`**
-(dictionary entry included, and `logger.js`'s field whitelist extended, the
-same trap that once silently dropped `raw_score`). `nomination_type` gains
+other task parameter. `specs.js withDefaults` resolves a session stored BEFORE
+the parameter existed to `'best_found'` like any other missing parameter
+(owner decision 2026-08-17 — the old `'nominate'` fallback is exactly the live
+bug: the tile promised the best-found net while Stop settled on the selected
+position, opening an unrevealed prize for free and re-pricing the round; only
+a session whose stored params EXPLICITLY say `'nominate'` runs the legacy
+rule). The dataset stays interpretable because every round row carries
+**`stop_rule`** (dictionary entry included, and `logger.js`'s field whitelist
+extended, the same trap that once silently dropped `raw_score`) AND because
+`admin/export.js` **re-settles at export** any round that settled under the
+old nominate fallback inside a best_found session — via the engine's own
+`Specs.settle` over the pre-opened positions plus the participant's own
+reveals, so a prize they never revealed can no longer touch the round's
+objective in either direction; such rows export `score_corrected: TRUE` with
+the as-played settlement preserved in `as_played_*` columns, and participants'
+`total_score` is re-summed (`rounds_score_corrected`,
+`total_score_as_played`). Re-downloading a past session's workbook from its
+card yields the corrected data; the tile is rule-aware too, so under an
+explicit nominate session it promises a number only when the selected
+position's truth is known. `nomination_type` gains
 `best_revealed` / `best_pre_opened` / `nothing_found` beside the legacy
 `verified` / `queried_only` / `untouched`. **One settlement function,
 `Specs.settle`**, is used by the local backend AND vendored into the Cloud
@@ -3129,7 +3146,7 @@ the debrief prose still saying the AI knows 4 positions, and `dictionary.js`'s
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (310) ·
+`node lab/search-v2/tools/selftest.js` (342) ·
 `tools/smoke.mjs` (217 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
 `tools/admin-smoke.mjs` (199) · `tools/platform-guard.mjs` (30) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its

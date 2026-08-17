@@ -297,6 +297,55 @@
         queries.forEach(function (q) { if (queriedPos[q.pos] == null) queriedPos[q.pos] = q.val; });
         var revealedPos = {}; reveals.forEach(function (r) { revealedPos[r.pos] = r.val; });
 
+        // ---- settlement-rule retro-correction (owner decision, 2026-08-17) --
+        // Sessions stored before `costs.stopRule` existed used to FALL BACK to
+        // the legacy 'nominate' rule: pressing Stop settled the round on the
+        // SELECTED position, so a prize the participant had never paid to
+        // reveal was opened by the settlement and priced into the score — while
+        // the round screen's green tile promised the best-found net value. The
+        // rule those sessions should run (and since the fix, do run) is
+        // 'best_found', so a round that settled under 'nominate' inside a
+        // best_found session is RE-SETTLED here by the engine's own
+        // Specs.settle, over the positions open at the start plus the
+        // participant's OWN reveals — a prize they never revealed can no longer
+        // touch the round's objective, in either direction. The as-played
+        // settlement is preserved beside it (as_played_* columns). The pass
+        // runs only when the logged reveal and query lists are complete enough
+        // to re-settle from (they match the round's own counts); anything else
+        // is left exactly as played, with score_corrected FALSE and its
+        // mismatched stop_rule visible.
+        var effRule = (params.costs.stopRule === 'nominate') ? 'nominate' : 'best_found';
+        var playedRule = end.stop_rule || 'nominate';   // rows from builds before stop_rule existed settled 'nominate'
+        // A row can also CLAIM best_found while its settlement provably is not:
+        // an interim server-mode round settled by a stale deployed engine whose
+        // response carried no rule, which the client then stamped from its own
+        // belief. A genuine best_found settlement only ever takes a position
+        // the participant HELD (or none at all), so a claimed-best_found row on
+        // an unheld position is nominate-settled in fact and corrected too.
+        var takenHeld = nomPos == null || nomPos === 0 ||
+          revealedPos[nomPos] != null || spec.pre_opened.indexOf(nomPos) >= 0;
+        var reSettled = null, asPlayed = null;
+        if (effRule === 'best_found' && (playedRule === 'nominate' || !takenHeld)
+            && num(end.n_reveals) != null && reveals.length === num(end.n_reveals)
+            && num(end.n_queries) != null && queries.length === num(end.n_queries)) {
+          reSettled = Specs.settle(params, {
+            map: mapping, preOpened: spec.pre_opened,
+            reveals: reveals.map(function (x) { return { pos: x.pos }; }),
+            queries: queries.map(function (x) { return { pos: x.pos }; }),
+            position: nomPos
+          });
+          asPlayed = {
+            position: nomPos, true_value: nomVal,
+            nomination_type: end.nomination_type ||
+              (revealedPos[nomPos] != null || spec.pre_opened.indexOf(nomPos) >= 0 ? 'verified'
+                : (queriedPos[nomPos] != null ? 'queried_only' : 'untouched')),
+            score: num(end.final_score), raw: num(end.raw_score)
+          };
+          nomPos = reSettled.position; nomVal = reSettled.trueValue;
+        }
+        var finalScore = reSettled ? reSettled.score : num(end.final_score);
+        var rawScore = reSettled ? reSettled.raw_score : num(end.raw_score);
+
         // Verification: reveals of positions that had been queried EARLIER in the
         // round, divided by the number of queries (§16.8).
         var verified = 0, wasted = 0;
@@ -334,15 +383,16 @@
         if (hi != null && hi < mapping.length) maxRight = Pool.maxOf(mapping.slice(hi));
 
         var nomAiErr = (nomPos != null && queriedPos[nomPos] != null) ? (queriedPos[nomPos] - nomVal) : null;
-        var nomType = end.nomination_type ||
-          (revealedPos[nomPos] != null || spec.pre_opened.indexOf(nomPos) >= 0 ? 'verified'
-            : (queriedPos[nomPos] != null ? 'queried_only' : 'untouched'));
+        var nomType = reSettled ? reSettled.nominationType
+          : (end.nomination_type ||
+            (revealedPos[nomPos] != null || spec.pre_opened.indexOf(nomPos) >= 0 ? 'verified'
+              : (queriedPos[nomPos] != null ? 'queried_only' : 'untouched')));
 
         var firstDec = decs.length ? decs[0] : null;
         var teleRound = P.telemetry.filter(function (r) { return r.round_index === num(ri); });
         var hb = teleRound.filter(function (r) { return r.kind === 'heartbeat'; }).length;
 
-        out.push({
+        var row = {
           run_id: runId, participant_code: code, pid: pid, sequence: seqLetter,
           block: end.block, condition: end.condition, scored: end.scored,
           spec_id: end.spec_id, seed_shape: end.seed_shape, ai_density: end.ai_density,
@@ -358,23 +408,25 @@
           interrupted: !!end.interrupted,
 
           n_queries: num(end.n_queries), n_reveals: num(end.n_reveals),
-          total_cost: num(end.total_cost), final_score: num(end.final_score),
-          raw_score: num(end.raw_score),
+          total_cost: num(end.total_cost), final_score: finalScore,
+          raw_score: rawScore,
           stopped_immediately: !!end.stopped_immediately,
           cap_hit: end.cap_hit || null,
 
           // The score is COPIED from the log (it is what the participant was
-          // actually told), so it is also recomputed here from the mapping and
-          // the counts, and any disagreement is flagged rather than hidden. That
-          // is the check that would have caught `raw_score` being silently
-          // dropped by the logger's field whitelist for every real session.
+          // actually told; a retro-corrected round exports its re-settled score
+          // instead — see score_corrected), so it is also recomputed here from
+          // the mapping and the counts, and any disagreement is flagged rather
+          // than hidden. That is the check that would have caught `raw_score`
+          // being silently dropped by the logger's field whitelist for every
+          // real session.
           final_score_check: (nomPos != null && nomVal != null)
             ? nomVal - (num(end.n_queries) || 0) * params.costs.queryCost
                      - (num(end.n_reveals) || 0) * params.costs.revealCost
             : null,
-          score_mismatch: (nomPos != null && nomVal != null && num(end.final_score) != null)
-            ? (num(end.final_score) !== nomVal - (num(end.n_queries) || 0) * params.costs.queryCost
-                                                - (num(end.n_reveals) || 0) * params.costs.revealCost)
+          score_mismatch: (nomPos != null && nomVal != null && finalScore != null)
+            ? (finalScore !== nomVal - (num(end.n_queries) || 0) * params.costs.queryCost
+                                     - (num(end.n_reveals) || 0) * params.costs.revealCost)
             : null,
           // pct_of_max_attainable measures what they DISCOVERED; this measures
           // what they WALKED AWAY WITH. The two differ whenever a participant
@@ -399,9 +451,22 @@
           n_verifications: verified,
           nominated_position: nomPos, nominated_true_value: nomVal,
           nomination_type: nomType,
-          // Which settlement rule the session ran under, so two sessions with
-          // different rules can never be pooled by accident (config.costs.stopRule).
-          stop_rule: end.stop_rule || (art && art.params && art.params.costs && art.params.costs.stopRule) || 'nominate',
+          // Which settlement rule the round's EXPORTED score follows, so two
+          // sessions with different rules can never be pooled by accident
+          // (config.costs.stopRule). A retro-corrected round reads 'best_found'
+          // — the rule its exported settlement now obeys — with the as-played
+          // 'nominate' preserved in as_played_stop_rule. An UNCORRECTED row
+          // keeps the rule it actually settled under (its own stamp, or
+          // 'nominate' for rows from before the stamp existed) — never the
+          // session's rule, which would dress a nominate-settled score up as
+          // best_found exactly where the correction could not verify it.
+          stop_rule: reSettled ? 'best_found' : playedRule,
+          // TRUE when this round's settlement was recomputed at export because
+          // it had settled under the legacy 'nominate' fallback inside a
+          // best_found session (the 2026-08-17 bug): the exported score,
+          // position and type follow best_found; the as-played values sit in
+          // the as_played_* columns.
+          score_corrected: !!reSettled,
           nomination_ai_error: nomAiErr,
           wasted_verifications: wasted,
           redundant_queries: Math.max(0, (num(end.n_queries) || 0) - 2 * spec.ai_k),
@@ -415,7 +480,20 @@
           max_in_left_tail: maxLeft, max_in_right_tail: maxRight,
           frontier_share: revealCount ? frontier / revealCount : null,
           slider_moves: num(info.slider_moves)
-        });
+        };
+        // The settlement the participant was actually shown, kept beside the
+        // corrected one — a correction that erased its own history would be a
+        // rewrite, not a repair. Only corrected rows carry these columns (the
+        // same only-when-held pattern as the retired reg_ questions).
+        if (reSettled) {
+          row.as_played_stop_rule = 'nominate';
+          row.as_played_position = asPlayed.position;
+          row.as_played_true_value = asPlayed.true_value;
+          row.as_played_nomination_type = asPlayed.nomination_type;
+          row.as_played_score = asPlayed.score;
+          row.as_played_raw_score = asPlayed.raw;
+        }
+        out.push(row);
       });
     });
 
@@ -478,6 +556,10 @@
       var scored = myRounds.filter(function (r) { return r.scored; });
       var aiRounds = scored.filter(function (r) { return r.condition === 'AI_ON'; });
       var offRounds = scored.filter(function (r) { return r.condition === 'AI_OFF'; });
+      // Rounds whose settlement was retro-corrected at export (the 2026-08-17
+      // stop-rule fix). When any exist, the sums below are taken from the
+      // corrected round rows, not from what the session once told the participant.
+      var correctedRounds = myRounds.filter(function (r) { return r.score_corrected; }).length;
 
       // Actual AI accuracy AS EXPERIENCED: only the answers this participant paid
       // for. The belief items are about those, not about the whole curve.
@@ -540,7 +622,14 @@
         completed: !!(rec.completed || sessionEnd),
         rounds_done: myRounds.length,
         scored_rounds_done: scored.length,
-        total_score: rec.total_score != null ? rec.total_score : scored.reduce(function (a, r) { return a + (r.final_score || 0); }, 0),
+        // The session record's total is what the participant was TOLD, so it is
+        // preferred — EXCEPT when any of their scored rounds was retro-corrected
+        // (the 2026-08-17 settlement-rule fix), where the corrected rounds are
+        // the authority and the as-told figure moves to total_score_as_played.
+        total_score: correctedRounds
+          ? scored.reduce(function (a, r) { return a + (r.final_score || 0); }, 0)
+          : (rec.total_score != null ? rec.total_score : scored.reduce(function (a, r) { return a + (r.final_score || 0); }, 0)),
+        rounds_score_corrected: correctedRounds,
         mean_score_ai_on: aiMean, mean_score_ai_off: offMean,
         mean_reveals_ai_on: aiRounds.length ? aiRounds.reduce(function (a, r) { return a + (r.n_reveals || 0); }, 0) / aiRounds.length : null,
         mean_reveals_ai_off: offRounds.length ? offRounds.reduce(function (a, r) { return a + (r.n_reveals || 0); }, 0) / offRounds.length : null,
@@ -561,6 +650,11 @@
         platform_sim: (rec.platform && rec.platform.sim) || null,
         platform_session: (rec.platform && rec.platform.session) || null
       };
+
+      // The total the session once REPORTED to a participant whose rounds were
+      // retro-corrected, kept beside the corrected total (only-when-held, like
+      // the as_played_* round columns).
+      if (correctedRounds && rec.total_score != null) row.total_score_as_played = rec.total_score;
 
       // Phase breakdown (§16.1), one column per phase.
       var ph = rec.phase_ms || {};
@@ -698,30 +792,45 @@
       });
 
       var knownFinal = Ai.knownSet(spec.pre_opened, revealed.map(function (x) { return x.pos; }), map);
-      // In an AI round the bot stops on the best thing it BELIEVES, verified or
-      // not, so the export's blind-nomination path (nomination_type
-      // 'queried_only', nomination_ai_error, misplaced_trust) is exercised.
-      var candidates = knownFinal.concat(r.condition === 'AI_ON' ? queried : []);
-      var nom = candidates.reduce(function (m, x) { return (!m || x.val > m.val) ? x : m; }, null)
-        || { pos: Math.ceil(J / 2), val: map[Math.ceil(J / 2) - 1] };
-      var nomVerified = knownFinal.some(function (x) { return x.pos === nom.pos; });
-      var cost = queried.length * params.costs.queryCost + revealed.length * params.costs.revealCost;
-      var score = map[nom.pos - 1] - cost;
-      if (r.scored) total += score;
+      // The bot's stop settles under the SESSION'S OWN stop rule, through the
+      // engine's settle() — a fixture that hand-rolled its own settlement could
+      // drift from the very arithmetic it exists to test. Under the legacy
+      // 'nominate' rule it stops on the best thing it BELIEVES, verified or
+      // not, so the blind-nomination path (nomination_type 'queried_only',
+      // nomination_ai_error, misplaced_trust) is exercised; under 'best_found'
+      // it stops and takes the best prize it holds, like the app.
+      var rule = (params.costs.stopRule === 'nominate') ? 'nominate' : 'best_found';
+      var stopPos;
+      if (rule === 'nominate') {
+        var candidates = knownFinal.concat(r.condition === 'AI_ON' ? queried : []);
+        var pick = candidates.reduce(function (m, x) { return (!m || x.val > m.val) ? x : m; }, null)
+          || { pos: Math.ceil(J / 2), val: map[Math.ceil(J / 2) - 1] };
+        stopPos = pick.pos;
+      } else {
+        var bestK = knownFinal.reduce(function (m, x) { return (!m || x.val > m.val) ? x : m; }, null);
+        stopPos = bestK ? bestK.pos : 0;
+      }
+      var st = Specs.settle(params, {
+        map: map, preOpened: spec.pre_opened,
+        reveals: revealed, queries: queried, position: stopPos
+      });
+      if (r.scored) total += st.score;
 
+      var bestTrue = knownFinal.reduce(function (m, x) { return (m == null || x.val > m) ? x.val : m; }, null);
       push('decision', Object.assign({}, ctx, {
         event_id: 'bot-stop-' + code + '-' + r.round_index, decision_index: di, action: 'stop',
-        position: nom.pos, queries_so_far: queried.length, reveals_so_far: revealed.length,
+        position: stopPos, queries_so_far: queried.length, reveals_so_far: revealed.length,
         n_reveals_before: revealed.length, ai_anchors_before: '',
         participant_known_before: pairs(knownFinal), participant_queried_before: pairs(queried),
-        best_true_known_before: nom.val, best_estimate_before: nom.val,
+        best_true_known_before: bestTrue, best_estimate_before: bestTrue,
         ms_since_round_start: 9000, ms_since_last_action: 1500,
         ms_since_last_slider_move: 700, slider_moves_since_last_action: 4, cap_hit: null
       }));
       push('round_end', Object.assign({}, ctx, {
-        n_queries: queried.length, n_reveals: revealed.length, total_cost: cost,
-        nominated_position: nom.pos, nominated_true_value: map[nom.pos - 1],
-        nomination_type: nomVerified ? 'verified' : 'queried_only', final_score: score, raw_score: score,
+        n_queries: queried.length, n_reveals: revealed.length, total_cost: st.totalCost,
+        nominated_position: st.position, nominated_true_value: st.trueValue,
+        nomination_type: st.nominationType, stop_rule: st.rule,
+        final_score: st.score, raw_score: st.raw_score,
         duration_ms: 12000, stopped_immediately: false, instruction_reopens: 0,
         blur_events: 0, blur_total_ms: 0, interrupted: false,
         info: JSON.stringify({ queries: pairs(queried), reveals: pairs(revealed), slider_moves: 24 })

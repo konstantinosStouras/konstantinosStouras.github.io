@@ -477,9 +477,37 @@ imply **different payoff functions**, so one dataset must never hold both with
 nothing in the rows to say which — hence `stop_rule` on every round row, a
 Dictionary entry for it, and `logger.js`'s field whitelist extended to carry it
 (the same trap that once silently dropped `raw_score` from every real session would
-have dropped this). A session stored **before the parameter existed** is given
-`'nominate'` by `withDefaults` — the rule its participants actually played under,
-not today's default.
+have dropped this). A session stored **before the parameter existed** used to be
+given `'nominate'` by `withDefaults`; that fallback is what the owner hit live on
+2026-08-17 — the round screen's green tile promised the best-found net value while
+pressing Stop settled on the *selected* position, opening a prize the participant
+had never paid to reveal and re-pricing the round (tile said 51, the settlement
+said 47). **Per the owner, stopping must never reveal a new prize or add a cost,
+in every session including the ones already running**, so `withDefaults` now
+resolves a missing `stopRule` to `'best_found'` like any other missing parameter;
+only a session whose stored params *explicitly* say `'nominate'` runs the legacy
+rule. The dataset stays interpretable because the correction is carried into the
+export: a round that settled under the old `nominate` fallback inside a
+`best_found` session is **re-settled at export** by the engine's own
+`Specs.settle`, over the positions open at the start plus the participant's own
+reveals — a prize they never revealed can no longer touch the round's objective,
+in either direction. Such rows read `stop_rule = best_found`,
+`score_corrected = TRUE`, and keep the as-played settlement beside them
+(`as_played_stop_rule/position/true_value/nomination_type/score/raw_score`);
+participants with corrected rounds export the corrected `total_score` with the
+as-told figure in `total_score_as_played` and the count in
+`rounds_score_corrected`. Re-downloading a past session's workbook from its card
+is all it takes to obtain the corrected data. The round screen's tile is also
+rule-aware now: under an explicit `'nominate'` session it promises a number only
+when the selected position's true prize is already known, so the interface can
+never again contradict the settlement. One deployment caveat: the DEPLOYED Cloud
+Functions settle with the engine they were deployed with, so a server-mode legacy
+session keeps settling `nominate` until `firebase deploy --only functions` ships
+the re-vendored engine — the client sends the best-found position, so the score
+is identical whenever a prize was found, the export's correction pass covers the
+interim rows (including a stale server's response carrying no rule, detected by
+the taken position not being one the participant held), and the one visible
+casualty before redeploy is a nothing-found stop, which the server refuses.
 
 > ### ⚠ The two simulation-derived defaults were measured under the OTHER rule
 >
@@ -1769,7 +1797,7 @@ other five.
 ## 18 · Tests, and what each one pins
 
 ```bash
-node lab/search-v2/tools/selftest.js          # 310 checks, no browser
+node lab/search-v2/tools/selftest.js          # 342 checks, no browser
 node lab/search-v2/tools/smoke.mjs            # 217, a whole 28-round session
 node lab/search-v2/tools/admin-smoke.mjs      # 178, the admin panel
 node lab/search-v2/tools/platform-guard.mjs   # 28, the platform contract, both ways
@@ -1866,7 +1894,7 @@ recorded because an appendix will need them.
 
 | Deviation | Why |
 |---|---|
-| **Stopping takes the best prize found** (`costs.stopRule: 'best_found'`), not the prize at a nominated position | The owner's decision, with its consequence stated and accepted: stopping is the end of searching, not an action with an outcome. It removes the trust-without-verification measure and makes the AI purely navigational (§1, §2). The brief's rule remains available as `'nominate'`, and a session predating the parameter is given it |
+| **Stopping takes the best prize found** (`costs.stopRule: 'best_found'`), not the prize at a nominated position | The owner's decision, with its consequence stated and accepted: stopping is the end of searching, not an action with an outcome. It removes the trust-without-verification measure and makes the AI purely navigational (§1, §2). The brief's rule remains available as `'nominate'` — but only when stored explicitly: a session predating the parameter settles `best_found` too (owner, 2026-08-17), with its fallback-settled rounds re-settled at export (`score_corrected`) |
 | Reveal cost **4**, not 5, and sparse **K = 3**, not 4 | Measured over 1,000 simulated participants: at the brief's values the AI-OFF arm is barely a search arm and the sparse/dense contrast is a gradient, not the sign change the design rests on. Moving both flips it; neither alone does (§7.2, §7.3) |
 | Mapping pool of **600**, not 200 | Measured: ~2% of pairings pass the §9 filter, so 200 cannot give 16 seeded specs a distinct curve each (§7.1) |
 | Reveal cap **20** | §7, §17b and §20b say 20; the §20c table says 30. The three-to-one reading wins, and the choice is inconsequential |

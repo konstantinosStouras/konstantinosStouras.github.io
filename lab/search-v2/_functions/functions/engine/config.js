@@ -99,8 +99,13 @@
       // tools/simulate.mjs (which motivated revealCost 4 / sparseK 3) models
       // the 'nominate' rule, so its numbers do not carry over.
       //
-      // Sessions stored before this parameter existed keep 'nominate', the rule
-      // they actually ran under (specs.js withDefaults).
+      // Sessions stored before this parameter existed resolve to 'best_found'
+      // like any other missing parameter (owner decision 2026-08-17: stopping
+      // must never reveal a new prize or add a cost, in EVERY session,
+      // including the ones already running). Their rounds that had settled
+      // under the old 'nominate' fallback are re-settled at export — see the
+      // score_corrected columns in admin/export.js. Only a session whose
+      // stored params EXPLICITLY say 'nominate' runs the legacy rule.
       stopRule: 'best_found'   // 'best_found' | 'nominate'
     },
 

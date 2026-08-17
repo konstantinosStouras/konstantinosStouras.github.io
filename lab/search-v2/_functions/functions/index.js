@@ -308,11 +308,12 @@ exports.act = onCall(async (req) => {
   const entry = await requireOwner(uid, runId, code);
   const art = await artifacts(runId);
   const P = art.params;
-  // Under the 'best_found' rule the client names no position at all — the
-  // server settles from what the participant has actually found — so a missing
-  // or nonsense position is only an error under the legacy 'nominate' rule.
-  const legacyRule = (P.costs.stopRule === 'nominate');
-  if (legacyRule && (!isFinite(position) || position < 1 || position > P.env.positions)) {
+  // A query or a reveal always acts on a concrete position, under EITHER stop
+  // rule — this guard was mistakenly gated on the legacy rule (it had swapped
+  // places with nominate's, whose contract the gate actually describes), which
+  // let a best_found session's client name an out-of-range position and read
+  // undefined off the mapping.
+  if (!isFinite(position) || position < 1 || position > P.env.positions) {
     throw new HttpsError('invalid-argument', 'Bad position.');
   }
   const plan = await planFor(art, code, entry.sequence);
@@ -428,7 +429,15 @@ exports.nominate = onCall(async (req) => {
   const entry = await requireOwner(uid, runId, code);
   const art = await artifacts(runId);
   const P = art.params;
-  if (!isFinite(position) || position < 1 || position > P.env.positions) {
+  // Under the 'best_found' rule the client names no position at all — it sends
+  // 0 on a nothing-found stop to keep the wire shape stable, and Specs.settle
+  // ignores the field — so a missing or nonsense position is only an error
+  // under the legacy 'nominate' rule, where the position IS the choice. This
+  // guard used to be unconditional (it had swapped places with act's), which
+  // dead-ended a best_found participant who stopped with nothing found:
+  // 'Bad position' → "we could not reach the study server", every retry alike.
+  const legacyRule = (P.costs.stopRule === 'nominate');
+  if (legacyRule && (!isFinite(position) || position < 1 || position > P.env.positions)) {
     throw new HttpsError('invalid-argument', 'Bad position.');
   }
   const plan = await planFor(art, code, entry.sequence);
