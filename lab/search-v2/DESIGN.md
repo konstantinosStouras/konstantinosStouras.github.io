@@ -477,9 +477,30 @@ imply **different payoff functions**, so one dataset must never hold both with
 nothing in the rows to say which — hence `stop_rule` on every round row, a
 Dictionary entry for it, and `logger.js`'s field whitelist extended to carry it
 (the same trap that once silently dropped `raw_score` from every real session would
-have dropped this). A session stored **before the parameter existed** is given
-`'nominate'` by `withDefaults` — the rule its participants actually played under,
-not today's default.
+have dropped this). A session stored **before the parameter existed** used to be
+given `'nominate'` by `withDefaults`; that fallback is what the owner hit live on
+2026-08-17 — the round screen's green tile promised the best-found net value while
+pressing Stop settled on the *selected* position, opening a prize the participant
+had never paid to reveal and re-pricing the round (tile said 51, the settlement
+said 47). **Per the owner, stopping must never reveal a new prize or add a cost,
+in every session including the ones already running**, so `withDefaults` now
+resolves a missing `stopRule` to `'best_found'` like any other missing parameter;
+only a session whose stored params *explicitly* say `'nominate'` runs the legacy
+rule. The dataset stays interpretable because the correction is carried into the
+export: a round that settled under the old `nominate` fallback inside a
+`best_found` session is **re-settled at export** by the engine's own
+`Specs.settle`, over the positions open at the start plus the participant's own
+reveals — a prize they never revealed can no longer touch the round's objective,
+in either direction. Such rows read `stop_rule = best_found`,
+`score_corrected = TRUE`, and keep the as-played settlement beside them
+(`as_played_stop_rule/position/true_value/nomination_type/score/raw_score`);
+participants with corrected rounds export the corrected `total_score` with the
+as-told figure in `total_score_as_played` and the count in
+`rounds_score_corrected`. Re-downloading a past session's workbook from its card
+is all it takes to obtain the corrected data. The round screen's tile is also
+rule-aware now: under an explicit `'nominate'` session it promises a number only
+when the selected position's true prize is already known, so the interface can
+never again contradict the settlement.
 
 > ### ⚠ The two simulation-derived defaults were measured under the OTHER rule
 >

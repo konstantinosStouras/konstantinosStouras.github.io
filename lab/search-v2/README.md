@@ -23,13 +23,19 @@ Three actions:
 |---|---|---|
 | **Ask the AI** | 2 points | Its estimate at that position is shown and recorded. It does **not** reveal the truth |
 | **Reveal** | 5 points | The true prize is shown. It joins the AI's anchor set |
-| **Stop and nominate** | 0 | Ends the round on the selected position |
+| **Stop** | 0 | Ends the round. It never opens a new position |
 
-**Score for the round = the true prize at the nominated position, minus all query
-and reveal costs.** The AI's number is never a prize. That single rule is what
-makes trust fallible and verification meaningful; without it, trusting a machine
-that says 95 when the truth is 60 would pay 95 and the study would measure the
-opposite of what it is for.
+**Score for the round = the best true prize the participant holds — the positions
+open at the start plus the ones they revealed — minus all query and reveal
+costs** (`costs.stopRule: 'best_found'`, the default; see DESIGN.md — the
+green "net value if you stop right now" tile IS the score, and stopping can
+never reveal a prize or change the cost). Under the legacy `'nominate'` rule —
+only when a session's stored params say so explicitly — stopping instead pays
+the true prize at the selected position, revealed or not. In both rules the
+AI's number is never a prize. That single rule is what makes trust fallible
+and verification meaningful; without it, trusting a machine that says 95 when
+the truth is 60 would pay 95 and the study would measure the opposite of what
+it is for.
 
 **The AI** holds **K private anchors** — positions whose true prize it knows
 exactly, 4 in *sparse* rounds and 10 in *dense* ones, placed one per equal

@@ -42,12 +42,20 @@
        randomised action order, so a session that predates it keeps the fixed
        order it actually ran with; new sessions get the default. */
     if (!params.ui) { out.ui.buttonOrder = 'fixed'; out.ui.encouragement = false; }
-    /* The same rule for a PARAMETER added to an existing group. `costs.stopRule`
-       arrived in 2026-08 and changes how a round is SETTLED, so a session stored
-       without it must keep the rule its participants actually played under —
-       otherwise one dataset would hold two different payoff rules, and nothing
-       in the rows would say which. */
-    if (params.costs && params.costs.stopRule == null) out.costs.stopRule = 'nominate';
+    /* `costs.stopRule` (added 2026-08) deliberately does NOT follow the
+       keep-the-old-behaviour rule above. A session stored before the parameter
+       existed used to be given 'nominate' here — and that is exactly the bug the
+       owner hit live (2026-08-17): the round screen's green tile promised the
+       best-found net value while pressing Stop settled on the SELECTED position,
+       "opening" a prize the participant never paid to reveal and re-pricing the
+       round. Per the owner, stopping must NEVER reveal a new prize or change the
+       cost, in EVERY session including the ones already running — so a stored
+       params object without the field resolves to the merged default,
+       'best_found', like any other parameter. The dataset stays interpretable
+       because every round row carries `stop_rule` (rows settled under the old
+       fallback say 'nominate' and are re-settled at export — see the
+       score_corrected columns in admin/export.js). A session whose stored params
+       EXPLICITLY say 'nominate' keeps that rule. */
     return out;
   }
 

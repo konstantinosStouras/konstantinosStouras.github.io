@@ -597,7 +597,11 @@ const run = {
   // The bot never hits a cap, so cap_hit is legitimately empty in its rows.
   ok(emptyD.filter(c => allowedD.indexOf(c) < 0).length === 0,
     'every decision column populates', 'empty: ' + emptyD.join(', '));
-  ok(emptyR.filter(c => ['cap_hit', 'max_in_left_tail', 'max_in_right_tail'].indexOf(c) < 0).length === 0,
+  // nomination_ai_error joins the allowance under the default best_found rule:
+  // the settlement can only take a position the bot HELD, and this bot never
+  // reveals a position it queried, so the error is legitimately blank here —
+  // it is exercised in the explicit-nominate build of section 12b.
+  ok(emptyR.filter(c => ['cap_hit', 'max_in_left_tail', 'max_in_right_tail', 'nomination_ai_error'].indexOf(c) < 0).length === 0,
     'every round column populates', 'empty: ' + emptyR.join(', '));
 
   const d0 = built.decisions[0];
@@ -704,10 +708,17 @@ const run = {
     'the score is the TRUE prize at the nominated position minus everything spent');
   ok(built.rounds.every(r => r.final_score === r.raw_score),
     'no floor is applied — the raw score IS the score, so a negative round survives to the data');
-  ok(built.rounds.some(r => r.nomination_type === 'queried_only'),
-    'the bot sometimes stops on a position it only asked about, so blind nomination is exercised');
-  ok(built.rounds.filter(r => r.nomination_type === 'queried_only').every(r => r.nomination_ai_error != null),
-    'a blind nomination records how far the AI was out');
+  // This build runs the DEFAULT rule, best_found: stopping settles on a prize
+  // the participant actually held, never on a merely-asked-about position (the
+  // blind-nomination paths are exercised in the explicit-nominate build, 12b).
+  ok(built.rounds.every(r => r.stop_rule === 'best_found'),
+    'every round settles under the session’s own rule, best_found');
+  ok(built.rounds.every(r => ['best_revealed', 'best_pre_opened', 'nothing_found'].indexOf(r.nomination_type) >= 0),
+    'so the round’s prize can only come from a position they held');
+  ok(built.rounds.every(r => r.final_score === (r.best_found || 0) - r.total_cost),
+    'and the score IS the best prize they held minus everything spent');
+  ok(built.rounds.every(r => r.score_corrected === false),
+    'a round settled under its session’s own rule is never retro-corrected');
   ok(built.rounds.filter(r => r.condition === 'AI_ON').every(r => r.n_queries >= 0), 'queries are counted per round');
   ok(built.rounds.filter(r => r.condition === 'AI_OFF').every(r => r.n_queries === 0), 'no queries are ever logged in an AI-off round');
   ok(built.rounds.every(r => r.redundant_queries === Math.max(0, r.n_queries - 2 * r.ai_k)), 'redundant_queries counts past 2K');
@@ -740,6 +751,92 @@ const run = {
   const bytes = Xlsx.build([X.toSheet('Decisions', built.decisions), X.toSheet('Rounds', built.rounds)]);
   ok(bytes && bytes.length > 2000, 'the workbook builds (' + (bytes ? bytes.length : 0) + ' bytes)');
   ok(bytes[0] === 0x50 && bytes[1] === 0x4B, 'the workbook is a zip (PK header)');
+}
+
+// ======================================================================
+head('12b · stop rules: an explicit nominate session, and the legacy-fallback correction');
+// ======================================================================
+{
+  // An EXPLICITLY-nominate session still runs the brief's original rule end to
+  // end — the parameter survives, only the silent fallback died.
+  const pNom = Specs.withDefaults(null);
+  pNom.costs.stopRule = 'nominate';
+  const runNom = { id: 'nom-run', code: 'NOM', name: 'nominate', params: pNom, specSeed: pNom.env.generatorSeed + 1 };
+  const artN = X.artifactsFor(runNom);
+  const rowsN = X.botSession(artN, 'BOT001', 'A', runNom);
+  const builtN = X.build(rowsN, runNom, { keepBots: true });
+  ok(builtN.rounds.length === 28, 'the nominate bot plays a full session');
+  ok(builtN.rounds.every(r => r.stop_rule === 'nominate'),
+    'an explicitly-nominate session settles nominate');
+  ok(builtN.rounds.every(r => r.score_corrected === false),
+    'and is NEVER retro-corrected — the rule was chosen, not fallen into');
+  ok(builtN.rounds.every(r => r.final_score === r.nominated_true_value - r.total_cost),
+    'its score is the true prize at the nominated position minus everything spent');
+  ok(builtN.rounds.some(r => r.nomination_type === 'queried_only'),
+    'the bot sometimes stops on a position it only asked about, so blind nomination is exercised');
+  ok(builtN.rounds.filter(r => r.nomination_type === 'queried_only').every(r => r.nomination_ai_error != null),
+    'a blind nomination records how far the AI was out');
+
+  // THE BUG (owner report 2026-08-17): a session stored BEFORE costs.stopRule
+  // existed fell back to 'nominate', so pressing Stop opened the SELECTED
+  // position at no cost and priced it into the round — while the green tile
+  // promised best-found − spent. Such a session must now (1) resolve
+  // best_found, and (2) have every round it already settled under the fallback
+  // RE-SETTLED at export from the pre-opened positions plus the participant's
+  // OWN reveals, so a prize they never revealed cannot touch the objective.
+  const legacyParams = JSON.parse(JSON.stringify(pNom));
+  delete legacyParams.costs.stopRule;              // stored before the parameter existed
+  ok(Specs.withDefaults(legacyParams).costs.stopRule === 'best_found',
+    'a session stored without a stop rule resolves best_found — stopping never opens a position');
+  ok(Specs.withDefaults({ costs: { stopRule: 'nominate' } }).costs.stopRule === 'nominate',
+    'while an explicitly stored nominate survives');
+
+  const runLegacy = { id: 'legacy-run', code: 'LEG', name: 'legacy', params: legacyParams, specSeed: legacyParams.env.generatorSeed + 1 };
+  // The rows its participants actually produced are the NOMINATE bot's rows;
+  // stripping stop_rule from half of them reproduces builds from before the
+  // field existed. Both shapes must be corrected.
+  const rowsLegacy = JSON.parse(JSON.stringify(rowsN));
+  rowsLegacy.forEach(e => { if (e.event === 'round_end' && e.round_index % 2 === 0) delete e.stop_rule; });
+  const builtL = X.build(rowsLegacy, runLegacy, { keepBots: true });
+  ok(builtL.rounds.length === 28, 'the legacy session exports every round');
+  ok(builtL.rounds.every(r => r.score_corrected === true),
+    'every nominate-settled round in a best_found session is retro-corrected — with or without a stop_rule stamp');
+  ok(builtL.rounds.every(r => r.stop_rule === 'best_found'),
+    'a corrected round reads the rule its exported score now follows');
+  ok(builtL.rounds.every(r => r.final_score === (r.best_found || 0) - r.total_cost),
+    'the corrected score is the best prize they actually held minus everything spent');
+  ok(builtL.rounds.every(r => ['best_revealed', 'best_pre_opened', 'nothing_found'].indexOf(r.nomination_type) >= 0),
+    'and its prize can only come from a position they held');
+  ok(builtL.rounds.every(r => r.score_mismatch === false),
+    'the corrected rows are self-consistent — the recomputation check agrees');
+  ok(builtL.rounds.every(r => r.as_played_stop_rule === 'nominate' && r.as_played_score != null
+      && r.as_played_position != null && r.as_played_nomination_type != null),
+    'the as-played settlement is preserved beside the correction, never erased');
+  const blind = builtL.rounds.filter(r => r.as_played_nomination_type === 'queried_only');
+  ok(blind.length > 0, 'the fixture really contains rounds settled on an unrevealed position');
+  ok(blind.every(r => r.nominated_position !== r.as_played_position || r.nominated_true_value === r.as_played_true_value),
+    'a corrected round never keeps an unrevealed position as its settlement');
+  ok(builtL.rounds.some(r => r.final_score !== r.as_played_score),
+    'the correction genuinely moves scores the fallback had mis-priced');
+  ok(builtL.rounds.every(r => r.total_cost === r.n_queries * pNom.costs.queryCost + r.n_reveals * pNom.costs.revealCost),
+    'while the round’s costs are untouched — stopping adds nothing, in either direction');
+
+  const pL = builtL.participants[0];
+  const sumL = builtL.rounds.filter(r => r.scored).reduce((a, r) => a + (r.final_score || 0), 0);
+  ok(pL.rounds_score_corrected === 28, 'the participant row counts its corrected rounds');
+  ok(pL.total_score === sumL, 'its total is re-summed from the corrected rounds, not from what the session once said');
+  ok(pL.total_score_as_played != null, 'with the as-told total preserved beside it');
+  const pN = builtN.participants[0];
+  ok(pN.rounds_score_corrected === 0 && pN.total_score_as_played === undefined,
+    'an uncorrected session carries no as-played columns');
+
+  // Every column the correction introduces is described in the Dictionary.
+  ok(Dict.undocumented('Rounds', X.columnsOf(builtL.rounds)).length === 0,
+    'every corrected-round column is described in admin/dictionary.js',
+    Dict.undocumented('Rounds', X.columnsOf(builtL.rounds)).join(', '));
+  ok(Dict.undocumented('Participants', X.columnsOf(builtL.participants)).length === 0,
+    'and every corrected-participant column too',
+    Dict.undocumented('Participants', X.columnsOf(builtL.participants)).join(', '));
 }
 
 // ======================================================================

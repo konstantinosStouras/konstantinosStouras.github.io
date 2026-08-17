@@ -2596,12 +2596,26 @@ rewards acting on an unchecked estimate.
 **It is a LOCKED RUN PARAMETER, `costs.stopRule`** (`'best_found'` — the
 default for every new session — or `'nominate'`, the brief's original rule),
 chosen in the admin's Costs group and frozen at first participant like every
-other task parameter. `specs.js withDefaults` gives a session stored BEFORE the
-parameter existed `'nominate'`, the rule its participants actually played
-under: one dataset must never hold two payoff rules with nothing in the rows to
-say which — which is also why every round row now carries **`stop_rule`**
-(dictionary entry included, and `logger.js`'s field whitelist extended, the
-same trap that once silently dropped `raw_score`). `nomination_type` gains
+other task parameter. `specs.js withDefaults` resolves a session stored BEFORE
+the parameter existed to `'best_found'` like any other missing parameter
+(owner decision 2026-08-17 — the old `'nominate'` fallback is exactly the live
+bug: the tile promised the best-found net while Stop settled on the selected
+position, opening an unrevealed prize for free and re-pricing the round; only
+a session whose stored params EXPLICITLY say `'nominate'` runs the legacy
+rule). The dataset stays interpretable because every round row carries
+**`stop_rule`** (dictionary entry included, and `logger.js`'s field whitelist
+extended, the same trap that once silently dropped `raw_score`) AND because
+`admin/export.js` **re-settles at export** any round that settled under the
+old nominate fallback inside a best_found session — via the engine's own
+`Specs.settle` over the pre-opened positions plus the participant's own
+reveals, so a prize they never revealed can no longer touch the round's
+objective in either direction; such rows export `score_corrected: TRUE` with
+the as-played settlement preserved in `as_played_*` columns, and participants'
+`total_score` is re-summed (`rounds_score_corrected`,
+`total_score_as_played`). Re-downloading a past session's workbook from its
+card yields the corrected data; the tile is rule-aware too, so under an
+explicit nominate session it promises a number only when the selected
+position's truth is known. `nomination_type` gains
 `best_revealed` / `best_pre_opened` / `nothing_found` beside the legacy
 `verified` / `queried_only` / `untouched`. **One settlement function,
 `Specs.settle`**, is used by the local backend AND vendored into the Cloud
@@ -3117,7 +3131,7 @@ the debrief prose still saying the AI knows 4 positions, and `dictionary.js`'s
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (310) ·
+`node lab/search-v2/tools/selftest.js` (337) ·
 `tools/smoke.mjs` (217 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
 `tools/admin-smoke.mjs` (199) · `tools/platform-guard.mjs` (30) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its

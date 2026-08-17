@@ -1484,13 +1484,34 @@
     $('sb-ai-n').textContent = plural(S.round.queries.length, 'question') + ' asked';
     $('sb-ai-wrap').style.display = aiOn ? '' : 'none';
     var sbNet = $('sb-net');
-    if (best) {
-      var netB = best.val - (qCost + rCost);
-      sbNet.innerHTML = netB + '<span class="sub">' + best.val + ' − ' + (qCost + rCost) + ' spent</span>';
-      sbNet.parentNode.classList.toggle('neg', netB < 0);
+    // The tile must promise the number the SETTLEMENT will pay, under this
+    // session's own stop rule. It used to compute best-found − spent
+    // unconditionally, which in a 'nominate' session contradicted the round's
+    // actual settlement (owner report 2026-08-17: tile said 51, stopping on an
+    // unrevealed position then settled 47) — the interface may never disagree
+    // with the score.
+    if (bestFoundRule()) {
+      if (best) {
+        var netB = best.val - (qCost + rCost);
+        sbNet.innerHTML = netB + '<span class="sub">' + best.val + ' − ' + (qCost + rCost) + ' spent</span>';
+        sbNet.parentNode.classList.toggle('neg', netB < 0);
+      } else {
+        sbNet.innerHTML = '—<span class="sub">reveal a position to start</span>';
+        sbNet.parentNode.classList.remove('neg');
+      }
     } else {
-      sbNet.innerHTML = '—<span class="sub">reveal a position to start</span>';
-      sbNet.parentNode.classList.remove('neg');
+      // Legacy 'nominate' rule: stopping settles at the SELECTED position, so a
+      // number may only be promised when the true prize there is already known.
+      var selVal = null;
+      knownPairs.forEach(function (x) { if (x.pos === sel) selVal = x.val; });
+      if (selVal != null) {
+        var netN = selVal - (qCost + rCost);
+        sbNet.innerHTML = netN + '<span class="sub">' + selVal + ' at position ' + sel + ' − ' + (qCost + rCost) + ' spent</span>';
+        sbNet.parentNode.classList.toggle('neg', netN < 0);
+      } else {
+        sbNet.innerHTML = '—<span class="sub">true prize at position ' + sel + ' unknown</span>';
+        sbNet.parentNode.classList.remove('neg');
+      }
     }
 
     var revealedHere = isRevealed(sel);
