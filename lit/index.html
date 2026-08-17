@@ -3681,6 +3681,15 @@ function toggleRecent() {
   recentMode = !recentMode;
   updateRecentButton();
   if (recentMode) {
+    // An UNTOUCHED site default (Management Science + area, auto-applied on
+    // landing) stands aside first: it is a browsing suggestion, and this view
+    // answers "what's new in the DATABASE" — kept in place, its journal chip
+    // silently scoped the feed to MS, hiding every other journal's additions
+    // AND the working-papers tally (user report 2026-08-17: an alerted
+    // Research Policy paper was invisible here and the counters read as if
+    // nothing was being added). A journal scope the user chose themselves
+    // (which retires the default at selection time) is still honoured below.
+    litRetireSiteDefault();
     // Standalone view scoped to the selected journal(s): keep the journal
     // chips (renderRecent filters by them; no selection = all journals) but
     // drop every other filter, and close summary panels.

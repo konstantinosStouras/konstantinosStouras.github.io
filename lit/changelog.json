@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "recent-view-whole-db-and-exact-alert-counts",
+      "date": "2026-08-17",
+      "title": "“Recently added” now always opens on the whole database — and alert e-mails count exactly",
+      "summary": "Two counting fixes. The “Recently added papers” view used to inherit the built-in landing filter (Management Science), so on a fresh visit it silently showed only Management Science's additions — a newly added paper from, say, Research Policy was invisible there, and the working-papers tally read as if nothing was arriving. That landing suggestion now steps aside when you open the view, which therefore always shows everything that entered the database in the last four weeks; a journal or type you picked yourself still scopes it exactly as before. And the digest e-mails now report exact counts: the recently-added list each dataset ships is capped, so on a busy day an “any new paper” alert claimed “1000 working papers” (precisely the cap) when ten times as many had really been added — the counts now come from the same uncapped daily tallies the page itself displays, with the newest papers still listed below.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "merge-any-two-accounts",
       "date": "2026-08-16",
       "title": "Signed up twice? Any two accounts can now be merged",
