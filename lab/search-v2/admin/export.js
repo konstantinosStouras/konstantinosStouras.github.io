@@ -316,10 +316,18 @@
         // mismatched stop_rule visible.
         var effRule = (params.costs.stopRule === 'nominate') ? 'nominate' : 'best_found';
         var playedRule = end.stop_rule || 'nominate';   // rows from builds before stop_rule existed settled 'nominate'
+        // A row can also CLAIM best_found while its settlement provably is not:
+        // an interim server-mode round settled by a stale deployed engine whose
+        // response carried no rule, which the client then stamped from its own
+        // belief. A genuine best_found settlement only ever takes a position
+        // the participant HELD (or none at all), so a claimed-best_found row on
+        // an unheld position is nominate-settled in fact and corrected too.
+        var takenHeld = nomPos == null || nomPos === 0 ||
+          revealedPos[nomPos] != null || spec.pre_opened.indexOf(nomPos) >= 0;
         var reSettled = null, asPlayed = null;
-        if (effRule === 'best_found' && playedRule === 'nominate'
-            && reveals.length === (num(end.n_reveals) || 0)
-            && queries.length === (num(end.n_queries) || 0)) {
+        if (effRule === 'best_found' && (playedRule === 'nominate' || !takenHeld)
+            && num(end.n_reveals) != null && reveals.length === num(end.n_reveals)
+            && num(end.n_queries) != null && queries.length === num(end.n_queries)) {
           reSettled = Specs.settle(params, {
             map: mapping, preOpened: spec.pre_opened,
             reveals: reveals.map(function (x) { return { pos: x.pos }; }),
@@ -447,9 +455,12 @@
           // sessions with different rules can never be pooled by accident
           // (config.costs.stopRule). A retro-corrected round reads 'best_found'
           // — the rule its exported settlement now obeys — with the as-played
-          // 'nominate' preserved in as_played_stop_rule.
-          stop_rule: reSettled ? 'best_found'
-            : (end.stop_rule || (art && art.params && art.params.costs && art.params.costs.stopRule) || 'nominate'),
+          // 'nominate' preserved in as_played_stop_rule. An UNCORRECTED row
+          // keeps the rule it actually settled under (its own stamp, or
+          // 'nominate' for rows from before the stamp existed) — never the
+          // session's rule, which would dress a nominate-settled score up as
+          // best_found exactly where the correction could not verify it.
+          stop_rule: reSettled ? 'best_found' : playedRule,
           // TRUE when this round's settlement was recomputed at export because
           // it had settled under the legacy 'nominate' fallback inside a
           // best_found session (the 2026-08-17 bug): the exported score,

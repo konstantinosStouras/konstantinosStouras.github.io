@@ -433,7 +433,10 @@
                   <b>Nominates the selected position</b> is the brief&rsquo;s original rule: the true prize wherever they
                   stop, revealed or not. Only that rule lets a participant take a position on the AI&rsquo;s word without
                   verifying it &mdash; which is what <code>nomination_type</code>, and the sparse/dense verification
-                  threshold, were designed to measure. Sessions created before this control existed run the original rule.</div>
+                  threshold, were designed to measure. A session created before this control existed settles as
+                  &ldquo;best prize found&rdquo; too (owner decision 2026-08-17 &mdash; stopping never opens a position),
+                  and its rounds that had settled under the old rule are re-settled in the export
+                  (<code>score_corrected</code>); only an explicitly saved &ldquo;Nominates&rdquo; runs the original rule.</div>
                 </div>
                 <div class="field"><label>Score floor <span class="defval">· default off</span></label>
                   <div class="seg" id="p-costs-scoreFloor"><button data-v="false">Off &mdash; a round may end negative</button><button data-v="true">Floor at zero</button></div>

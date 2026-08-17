@@ -181,7 +181,7 @@ bypasses the minimum-window check so a narrow test window still works.
 ### The tests
 
 ```bash
-node lab/search-v2/tools/selftest.js         # 310 checks, no browser
+node lab/search-v2/tools/selftest.js         # 342 checks, no browser
 node lab/search-v2/tools/smoke.mjs           # 217 checks, a whole session
 node lab/search-v2/tools/admin-smoke.mjs     # 199 checks, the admin panel
 node lab/search-v2/tools/wording-guard.mjs   #  17 checks, a session's own words

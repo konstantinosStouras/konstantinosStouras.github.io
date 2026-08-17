@@ -837,6 +837,40 @@ head('12b · stop rules: an explicit nominate session, and the legacy-fallback c
   ok(Dict.undocumented('Participants', X.columnsOf(builtL.participants)).length === 0,
     'and every corrected-participant column too',
     Dict.undocumented('Participants', X.columnsOf(builtL.participants)).join(', '));
+
+  // An UNCORRECTABLE row — its logged reveal list does not reconcile with its
+  // own count — is left exactly as played, and its stop_rule stays 'nominate':
+  // dressing an unverifiable nominate-settled score up as best_found is
+  // precisely what the export must never do.
+  const rowsBad = JSON.parse(JSON.stringify(rowsN));
+  rowsBad.forEach(e => {
+    if (e.event !== 'round_end') return;
+    const info = JSON.parse(e.info); info.reveals = ''; e.info = JSON.stringify(info);
+  });
+  const builtBad = X.build(rowsBad, runLegacy, { keepBots: true });
+  ok(builtBad.rounds.length === 28 && builtBad.rounds.every(r => r.n_reveals > 0),
+    'the unreconcilable fixture still exports its rounds, each with reveals on record');
+  ok(builtBad.rounds.every(r => r.score_corrected === false && r.stop_rule === 'nominate'
+      && r.as_played_score === undefined),
+    'a round the correction cannot verify is left as played, still visibly nominate');
+
+  // An interim server-mode round settled by a STALE deployed engine can reach
+  // the log claiming 'best_found' — the client stamped its own belief when the
+  // response carried no rule — while its settlement took an UNHELD position,
+  // which a genuine best_found settlement never does. The export detects the
+  // impossible shape and corrects it; a mis-stamped round whose nominate
+  // settlement already took the best held position is outcome-identical and
+  // legitimately passes through.
+  const unheldN = builtN.rounds.filter(r =>
+    ['queried_only', 'untouched'].indexOf(r.nomination_type) >= 0).length;
+  const rowsStale = JSON.parse(JSON.stringify(rowsN));
+  rowsStale.forEach(e => { if (e.event === 'round_end') e.stop_rule = 'best_found'; });
+  const builtStale = X.build(rowsStale, runLegacy, { keepBots: true });
+  ok(unheldN > 0, 'the fixture holds mis-stampable rounds (settled on an unheld position)');
+  ok(builtStale.rounds.filter(r => r.score_corrected).length === unheldN,
+    'every mis-stamped best_found claim on an unheld position is detected and corrected');
+  ok(builtStale.rounds.every(r => r.final_score === (r.best_found || 0) - r.total_cost),
+    'so every exported score in the stale-server fixture is the best prize held minus the spend');
 }
 
 // ======================================================================

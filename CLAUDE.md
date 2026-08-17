@@ -2391,10 +2391,13 @@ runs fully offline with local logging. See `lab/search-v2/README.md` and
 **The task.** 100 positions hiding integer prizes 0–100, neighbours differing by
 at most 10. THREE actions (§7): **Ask the AI** (2 points, returns its estimate,
 does NOT reveal the truth — button ABSENT, not disabled, in AI-off rounds),
-**Reveal** (5 points, the true prize, joins the AI's anchors), and **Stop and
-nominate** (0, ends the round on the selected position; the button NAMES the
-position, and an untouched position asks for confirmation). **Score = the TRUE
-prize at the nominated position minus all query and reveal costs.** The AI's
+**Reveal** (5 points, the true prize, joins the AI's anchors), and **Stop**
+(0, ends the round; under the default `best_found` stop rule it NEVER opens a
+new position — the button names the best prize it takes, and stopping with
+nothing found asks for confirmation). **Score = the best TRUE prize the
+participant holds (pre-opened + own reveals) minus all query and reveal costs;
+under the legacy explicit-`nominate` rule only, the true prize at the selected
+position instead.** The AI's
 number is never a prize — that one rule is what makes trust fallible, and it is
 the strict comprehension gate. No score floor: a round may end negative and that
 is logged. Caps 40 queries / 20 reveals (§7/§17b/§20b say 20; the §20c table says
@@ -3131,7 +3134,7 @@ the debrief prose still saying the AI knows 4 positions, and `dictionary.js`'s
 **Tests that must stay green** (browser ones need Playwright; only Chromium is
 installed in the container, so Firefox/WebKit report as skipped rather than
 pretending):
-`node lab/search-v2/tools/selftest.js` (337) ·
+`node lab/search-v2/tools/selftest.js` (342) ·
 `tools/smoke.mjs` (217 — a whole 28-round session, plus the resume path: breaks between sittings and which copy of a participant's progress is continued from) ·
 `tools/admin-smoke.mjs` (199) · `tools/platform-guard.mjs` (30) ·
 **`tools/wording-guard.mjs` (17 — a session's overrides actually REACH its

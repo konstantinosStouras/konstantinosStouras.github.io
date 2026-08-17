@@ -1762,8 +1762,10 @@
 
       // The backend decides BOTH what was taken and where it came from: under
       // 'best_found' the position is the argmax of what was found, which the
-      // client must not second-guess.
-      var takenPos = (res.nominatedPosition != null) ? res.nominatedPosition : pos;
+      // client must not second-guess. The 0 sent on a nothing-found stop is a
+      // wire placeholder, never a position — recorded as null, so the debrief
+      // ledger reads "No prize found" rather than "Prize at position 0".
+      var takenPos = (res.nominatedPosition != null) ? res.nominatedPosition : (pos || null);
       var nomType = res.nominationType ||
         (isRevealed(pos) ? 'verified' : (wasQueried(pos) ? 'queried_only' : 'untouched'));
       var result = {
