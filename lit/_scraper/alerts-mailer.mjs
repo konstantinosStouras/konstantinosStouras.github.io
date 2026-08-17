@@ -77,6 +77,11 @@ const WP_DIR    = path.join(__dirname, '..', 'data-workingpapers');
 // stouras.com/lit/changelog.json, and read here from the checkout. Adding an
 // entry dated ~today makes the next daily run e-mail it to feature subscribers.
 const CHANGELOG_FILE = path.join(__dirname, '..', 'changelog.json');
+// Each dataset's UNCAPPED per-journal × per-day "recently added" tally, written
+// beside its capped recent.json by every pipeline — the count the page's
+// recently-added view prints, and (since 2026-08) the count these e-mails
+// report too (see exactAlertCounts).
+const RECENT_COUNTS_FILE = 'recent-counts.json';
 const SITE_URL  = 'https://www.stouras.com/lit/';
 // The ABS satellite shards live in sibling repos, each served from its own Pages
 // site at stouras.com/<repo>/data/. They are fetched over HTTP at run time (they
@@ -331,11 +336,18 @@ function loadRecentPapers(extraRows) {
   const rows = [];
   // The same recent files the page's "Recently added" view merges: native +
   // FT50 + the Working Papers archive (whose absence pre-2026-08 was why an
-  // "any new paper" subscriber never heard about a new working paper).
-  for (const f of [path.join(DATA_DIR, 'recent.json'), path.join(FT50_DIR, 'recent.json'), path.join(WP_DIR, 'recent.json')]) {
+  // "any new paper" subscriber never heard about a new working paper). Each row
+  // is stamped with its dataset (`_ds`) so the exact-count pass can reconcile
+  // it against that dataset's own uncapped tally (see exactAlertCounts).
+  const files = [
+    [path.join(DATA_DIR, 'recent.json'), 'native'],
+    [path.join(FT50_DIR, 'recent.json'), 'ft50'],
+    [path.join(WP_DIR, 'recent.json'), 'wp'],
+  ];
+  for (const [f, ds] of files) {
     try {
       const arr = JSON.parse(fs.readFileSync(f, 'utf8'));
-      if (Array.isArray(arr)) for (const p of arr) { p._added = parseAdded(p['Date Added']); if (p._added) rows.push(p); }
+      if (Array.isArray(arr)) for (const p of arr) { p._added = parseAdded(p['Date Added']); p._ds = ds; if (p._added) rows.push(p); }
     } catch { /* missing file → skip */ }
   }
   if (Array.isArray(extraRows)) for (const p of extraRows) if (p && p._added) rows.push(p);
@@ -346,6 +358,128 @@ function loadRecentPapers(extraRows) {
     if (seen.has(k)) continue; seen.add(k); out.push(p);
   }
   out.sort((a, b) => b._added - a._added);
+  return out;
+}
+
+// ── Exact "recently added" tallies (recent-counts.json) ──────────────────────
+// Every recent.json is CAPPED (RECENT_CAP, 1000–1500 rows of a 90-day window),
+// so counting matched rows silently under-reports whenever more than the cap
+// lands inside an alert's window — the working-papers backfill stamps
+// ~10–12k/day, so an "any new paper" daily digest read "1000 working papers"
+// (exactly the cap) for ever (user report 2026-08-17). The page's recently-
+// added view already prints the number from each dataset's UNCAPPED
+// recent-counts.json tally ({days: {"<jkey|…>": {"YYYY-MM-DD": n}}}); this is
+// the mailer-side mirror of that fix, same discipline: the tally supplies the
+// COUNT line only (the listed rows stay the capped newest slice), per dataset,
+// and only when it is ≥ what the rows show — a missing or stale tally can
+// never make the number smaller than the papers actually listed.
+function loadRecentTallies(shardTallies) {
+  const tallies = [];
+  const local = [
+    [path.join(DATA_DIR, RECENT_COUNTS_FILE), 'native'],
+    [path.join(FT50_DIR, RECENT_COUNTS_FILE), 'ft50'],
+    [path.join(WP_DIR, RECENT_COUNTS_FILE), 'wp'],
+  ];
+  for (const [f, ds] of local) {
+    try {
+      const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+      if (j && j.days && typeof j.days === 'object') tallies.push({ ds, days: j.days });
+    } catch { /* dataset hasn't shipped a tally yet → its rows are counted as before */ }
+  }
+  if (Array.isArray(shardTallies)) for (const t of shardTallies) if (t && t.days) tallies.push(t);
+  return tallies;
+}
+
+// The native journal keys (incl. PNAS section keys), for the dataset-precedence
+// drop below — mirrors the page's isNativeJournalKey.
+function loadNativeKeys() {
+  const set = new Set();
+  try {
+    const man = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'sources.json'), 'utf8'));
+    for (const s of (Array.isArray(man) ? man : [])) {
+      if (s && s.key) set.add(s.key);
+      (s.sections || []).forEach(sec => { if (sec && sec.key) set.add(sec.key); });
+    }
+  } catch { /* no manifest → no drop (only possible on a broken checkout — the
+               matching path reads the same manifests and is degraded anyway) */ }
+  return set;
+}
+
+// Can this alert's criteria be answered by the per-journal × per-day tallies?
+// Only a pure journal scope can (allPapers, or journal/jtype chips alone) —
+// text/author/year/editor/pre-print filters need the rows themselves, so those
+// alerts keep the row count exactly as before.
+const NON_TALLY_CRIT_KEYS = ['author', 'title', 'abstract', 'affiliation', 'year', 'editor', 'area', 'se', 'ae'];
+function tallyAnswerable(c) {
+  if (!c) return false;
+  if (c.preprintOnly) return false;
+  if (NON_TALLY_CRIT_KEYS.some(k => ((c[k] || []).length))) return false;
+  return !!(c.allPapers || (c.journal || []).length || (c.jtype || []).length);
+}
+
+// The exact number of papers added inside the alert's window, split published /
+// working paper — or null when the criteria can't be tally-answered (caller
+// then keeps the row counts). Mirrors the page's recentExactCount +
+// recentCountsKeyVisible: a tally key is the row's whole '|'-joined scope-key
+// set (journal key first, then PNAS section keys); native journals count only
+// from the native tally (the FT50/shard catalogs' copies must not double-count);
+// per dataset the tally wins only when ≥ the rows we actually matched there.
+function exactAlertCounts(criteria, matches, windowStart, now, ctx, tallies, nativeKeys) {
+  if (!tallyAnswerable(criteria || {})) return null;
+  const c = criteria || {};
+  const scope = c.allPapers ? null : ctx.scopeFor(c);
+  const nat = nativeKeys || new Set();
+  const isWpKey = (k) => (ctx.wpKeys && ctx.wpKeys.has(k)) || String(k).startsWith('wp-');
+  // Rows we matched, grouped by dataset (the per-dataset floor for the guard).
+  const rowCounts = {};
+  for (const p of (matches || [])) {
+    const ds = p._ds || 'unknown';
+    const r = rowCounts[ds] || (rowCounts[ds] = { papers: 0, wp: 0 });
+    if (isWorkingPaper(p, ctx)) r.wp++; else r.papers++;
+  }
+  const talliedDs = new Set();
+  const countedPrimary = new Set();   // a journal counts from ONE dataset only (first wins: native → ft50 → wp → shards)
+  const out = { papers: 0, wp: 0 };
+  for (const t of (tallies || [])) {
+    const exact = { papers: 0, wp: 0 };
+    const ownPrimary = new Set();
+    for (const key of Object.keys(t.days || {})) {
+      const parts = String(key).split('|');
+      const primary = parts[0];
+      // Dataset precedence, as on the page: a native journal counts only from
+      // the native tally (the FT50 catalog shares the INFORMS journals with the
+      // native data, so its tally must not re-count them), and any journal an
+      // earlier dataset already tallied never counts again from a later one.
+      if (t.ds === 'native' ? !nat.has(primary) : nat.has(primary)) continue;
+      if (countedPrimary.has(primary)) continue;
+      if (scope && !parts.some(k => scope.has(k))) continue;
+      const perDay = t.days[key] || {};
+      let n = 0;
+      for (const d of Object.keys(perDay)) {
+        const day = parseAdded(d);
+        if (day && day > windowStart && day <= now) n += perDay[d] || 0;
+      }
+      ownPrimary.add(primary);
+      if (!n) continue;
+      if (isWpKey(primary)) exact.wp += n; else exact.papers += n;
+    }
+    for (const k of ownPrimary) countedPrimary.add(k);
+    talliedDs.add(t.ds);
+    const seen = rowCounts[t.ds] || { papers: 0, wp: 0 };
+    // The uncapped tally wins when it is available AND at least as large as the
+    // rows on hand — it can only be smaller when stale or ignorant of a key we
+    // matched, and then the rows stay the better answer (page parity).
+    if ((exact.papers + exact.wp) >= (seen.papers + seen.wp)) {
+      out.papers += exact.papers; out.wp += exact.wp;
+    } else {
+      out.papers += seen.papers; out.wp += seen.wp;
+    }
+  }
+  // Datasets with matched rows but no tally at all keep their row counts.
+  for (const ds of Object.keys(rowCounts)) {
+    if (talliedDs.has(ds)) continue;
+    out.papers += rowCounts[ds].papers; out.wp += rowCounts[ds].wp;
+  }
   return out;
 }
 
@@ -390,8 +524,9 @@ async function fetchJson(url) {
   return res.json();
 }
 async function loadShards(ctx) {
-  const rows = [];
+  const rows = [], tallies = [];
   for (const repo of SHARD_REPOS) {
+    const ds = 'shard:' + repo;
     try {
       const man = await fetchJson(SHARD_BASE + repo + '/data/sources.json');
       for (const s of (Array.isArray(man) ? man : [])) {
@@ -403,10 +538,14 @@ async function loadShards(ctx) {
     } catch { /* no shard manifest → its jtype grades just won't extend */ }
     try {
       const arr = await fetchJson(SHARD_BASE + repo + '/data/recent.json');
-      if (Array.isArray(arr)) for (const p of arr) { p._added = parseAdded(p['Date Added']); if (p._added) rows.push(p); }
+      if (Array.isArray(arr)) for (const p of arr) { p._added = parseAdded(p['Date Added']); p._ds = ds; if (p._added) rows.push(p); }
     } catch { /* no shard recent.json → skip this shard */ }
+    try {
+      const j = await fetchJson(SHARD_BASE + repo + '/data/' + RECENT_COUNTS_FILE);
+      if (j && j.days && typeof j.days === 'object') tallies.push({ ds, days: j.days });
+    } catch { /* no shard tally yet → its rows are counted as before */ }
   }
-  return rows;
+  return { rows, tallies };
 }
 
 // ── E-mail rendering ──────────────────────────────────────────────────────────
@@ -467,13 +606,25 @@ function renderEmail(alert, papers, opts) {
   const isWp = (p) => String((p && p.JKey) || '').startsWith('wp-') || (p && p.Status === 'Working paper');
   papers = papers.slice().sort((a, b) => (isWp(a) - isWp(b)) || ((b._added || 0) - (a._added || 0)));
   const n = papers.length;
-  const nWp = papers.filter(isWp).length, nPub = n - nWp;
+  let nWp = papers.filter(isWp).length, nPub = n - nWp;
+  // The listed rows come from the CAPPED recent.json files, so on a burst day
+  // (the working-papers backfill stamps ~10–12k/day against a 1,000-row cap)
+  // counting them under-reports what was really added — the digest read
+  // "1000 working papers" for ever. When the run computed the exact windowed
+  // totals from the uncapped recent-counts tallies (opts.exactCounts, see
+  // exactAlertCounts), the COUNT line reports those; the rows below stay the
+  // newest slice, and the "…and N more" line closes the gap. Guarded ≥ so a
+  // stale tally can never announce fewer papers than the e-mail itself lists.
+  const exact = opts.exactCounts;
+  if (exact && (exact.papers + exact.wp) >= n) { nPub = exact.papers; nWp = exact.wp; }
+  const total = nPub + nWp;
+  const fmt = (x) => x.toLocaleString('en-US');
   const countPhrase =
-    nPub && nWp ? `${nPub} new paper${nPub === 1 ? '' : 's'} and ${nWp} working paper${nWp === 1 ? '' : 's'}`
-    : nWp       ? `${nWp} new working paper${nWp === 1 ? '' : 's'}`
-    :             `${nPub} new paper${nPub === 1 ? '' : 's'}`;
+    nPub && nWp ? `${fmt(nPub)} new paper${nPub === 1 ? '' : 's'} and ${fmt(nWp)} working paper${nWp === 1 ? '' : 's'}`
+    : nWp       ? `${fmt(nWp)} new working paper${nWp === 1 ? '' : 's'}`
+    :             `${fmt(nPub)} new paper${nPub === 1 ? '' : 's'}`;
   const shown = papers.slice(0, MAX_LIST);
-  const more = n - shown.length;
+  const more = total - shown.length;
   const subject = `${opts.subjectPrefix || ''}The Lit: ${countPhrase} — ${name}`;
 
   const lineText = shown.map((p, i) => {
@@ -483,10 +634,10 @@ function renderEmail(alert, papers, opts) {
     return s;
   }).join('\n\n');
   const text =
-`${opts.noteText || ''}${countPhrase} matching your alert "${name}" ${n === 1 ? 'was' : 'were'} added to The Lit.
+`${opts.noteText || ''}${countPhrase} matching your alert "${name}" ${total === 1 ? 'was' : 'were'} added to The Lit.
 Criteria: ${describeCriteria(alert.criteria || {})}
 
-${lineText}${more > 0 ? `\n\n…and ${more} more. See them all on ${SITE_URL}` : ''}
+${lineText}${more > 0 ? `\n\n…and ${fmt(more)} more. See them all on ${SITE_URL}` : ''}
 
 ${footerText()}`;
 
@@ -502,10 +653,10 @@ ${footerText()}`;
   }).join('');
   const inner =
 `<p style="font-size:14px;margin:0 0 4px"><strong>${esc(countPhrase)}</strong> matching your alert
-      <strong>${esc(name)}</strong> ${n === 1 ? 'was' : 'were'} added to The Lit.</p>
+      <strong>${esc(name)}</strong> ${total === 1 ? 'was' : 'were'} added to The Lit.</p>
     <p style="color:#6a5a60;font-size:12.5px;margin:0 0 16px">Criteria: ${esc(describeCriteria(alert.criteria || {}))}</p>
     <ul style="list-style:none;padding:0;margin:0">${items}</ul>
-    ${more > 0 ? `<p style="font-size:13px;margin:14px 0 0">…and ${more} more. <a href="${esc(SITE_URL)}" style="color:#7d1d3f">See them all on The Lit</a>.</p>` : ''}`;
+    ${more > 0 ? `<p style="font-size:13px;margin:14px 0 0">…and ${fmt(more)} more. <a href="${esc(SITE_URL)}" style="color:#7d1d3f">See them all on The Lit</a>.</p>` : ''}`;
   return { subject, text, html: emailShell('new papers', inner, opts.bannerHtml) };
 }
 
@@ -707,11 +858,14 @@ async function run({ dryRun }) {
   }
 
   const ctx = makeCtx();
-  const shardRows = await loadShards(ctx);   // best-effort HTTP; also extends ctx ABS grades
+  const shards = await loadShards(ctx);      // best-effort HTTP; also extends ctx ABS grades
+  const shardRows = shards.rows;
   const papers = loadRecentPapers(shardRows);
+  const tallies = loadRecentTallies(shards.tallies);   // uncapped counts for the digest's number
+  const nativeKeys = loadNativeKeys();
   const changelog = loadChangelog();         // drives the "new features & updates" alerts
   const now = new Date();
-  console.log(`Loaded ${papers.length} recently-added papers${shardRows.length ? ` (incl. ${shardRows.length} from ABS shards)` : ''} and ${changelog.length} changelog entr${changelog.length === 1 ? 'y' : 'ies'}. now=${now.toISOString()} dryRun=${dryRun}`);
+  console.log(`Loaded ${papers.length} recently-added papers${shardRows.length ? ` (incl. ${shardRows.length} from ABS shards)` : ''}, ${tallies.length} recent-count tall${tallies.length === 1 ? 'y' : 'ies'} and ${changelog.length} changelog entr${changelog.length === 1 ? 'y' : 'ies'}. now=${now.toISOString()} dryRun=${dryRun}`);
 
   const { default: admin } = await import('firebase-admin');
   if (!admin.apps.length) {
@@ -773,9 +927,13 @@ async function run({ dryRun }) {
       let ok = true;
       if (papEval.matches.length) {
         matched += papEval.matches.length;
-        const em = renderEmail(alert, papEval.matches);
+        // The capped recent.json rows are the LIST; the count line comes from
+        // the uncapped tallies whenever the criteria allow it (exactAlertCounts
+        // → null keeps the row count, the pre-existing behaviour).
+        const exact = exactAlertCounts(criteria, papEval.matches, papEval.windowStart, now, ctx, tallies, nativeKeys);
+        const em = renderEmail(alert, papEval.matches, { exactCounts: exact });
         if (dryRun) {
-          console.log(`  [dry-run] would e-mail ${recipient}: "${em.subject}" (${papEval.matches.length} paper(s), window since ${papEval.windowStart.toISOString()})`);
+          console.log(`  [dry-run] would e-mail ${recipient}: "${em.subject}" (${papEval.matches.length} paper(s) listed${exact ? `, exact ${exact.papers}+${exact.wp}` : ''}, window since ${papEval.windowStart.toISOString()})`);
         } else {
           try {
             await transport.sendMail(mkMsg(em, 'Unsubscribe from The Lit alert: ' + (alert.name || '')));
@@ -1087,6 +1245,57 @@ function selftest() {
   // the archive's recent.json is loaded with the others (repo data on disk)
   ok('loadRecentPapers includes the working-papers archive', loadRecentPapers().some(p => String(p.JKey || '').startsWith('wp-')));
 
+  // ── Exact counts from the uncapped recent-counts tallies (user report
+  // 2026-08-17: an "any new paper" daily digest claimed "1000 working papers"
+  // — exactly the WP recent.json cap — while ~10k/day were really stamped).
+  const tW0 = new Date('2026-08-10T00:00:00Z');           // window: days AFTER 08-10
+  const tNow = new Date('2026-08-12T10:00:00Z');
+  const TALLIES = [
+    { ds: 'native', days: { 'ms': { '2026-08-10': 5, '2026-08-11': 7 },
+                            'pnas|pnas-econ|pnas-soc': { '2026-08-11': 2 },
+                            'respol': { '2026-08-11': 99 } } },     // non-native key in the native tally → dropped
+    { ds: 'ft50',   days: { 'respol': { '2026-08-11': 3 },
+                            'ms': { '2026-08-11': 50 } } },         // native key in the FT50 tally → dropped (no double count)
+    { ds: 'wp',     days: { 'wp-ssrn': { '2026-08-11': 9000 }, 'wp-arxiv': { '2026-08-12': 2500 } } },
+  ];
+  const NATK = new Set(['ms', 'opre', 'pnas', 'pnas-econ', 'pnas-soc']);
+  const wpRow = (d) => P({ JKey: 'wp-ssrn', Status: 'Working paper', _ds: 'wp', _added: new Date(d) });
+  const msRow = (d) => P({ JKey: 'ms', _ds: 'native', _added: new Date(d) });
+  const rpRow = (d) => P({ JKey: 'respol', Journal: 'Research Policy', _ds: 'ft50', _added: new Date(d) });
+  const MATCH = [msRow('2026-08-11T00:00:00Z'), rpRow('2026-08-11T00:00:00Z'), wpRow('2026-08-11T00:00:00Z')];
+  ok('text criteria are never tally-answered', exactAlertCounts({ author: ['x'] }, MATCH, tW0, tNow, ctx, TALLIES, NATK) === null);
+  ok('year criteria are never tally-answered', exactAlertCounts({ journal: ['ms'], year: ['2026'] }, MATCH, tW0, tNow, ctx, TALLIES, NATK) === null);
+  ok('pre-print criteria are never tally-answered', exactAlertCounts({ allPapers: true, preprintOnly: true }, MATCH, tW0, tNow, ctx, TALLIES, NATK) === null);
+  const exAll = exactAlertCounts({ allPapers: true }, MATCH, tW0, tNow, ctx, TALLIES, NATK);
+  ok('allPapers: uncapped WP tally beats the capped rows', exAll && exAll.wp === 11500);
+  ok('allPapers: published side sums native + FT50, window-exclusive of the boundary day',
+     exAll && exAll.papers === 7 + 2 + 3);                 // 08-10 excluded (> windowStart), ms 50 + respol 99 dropped
+  const exMs = exactAlertCounts({ journal: ['ms'] }, [msRow('2026-08-11T00:00:00Z')], tW0, tNow, ctx, TALLIES, NATK);
+  ok('journal scope counts only its keys', exMs && exMs.papers === 7 && exMs.wp === 0);
+  const exSec = exactAlertCounts({ journal: ['pnas-econ'] }, [], tW0, tNow, ctx, TALLIES, NATK);
+  ok('a PNAS section key matches its |-joined tally key', exSec && exSec.papers === 2);
+  const exWp = exactAlertCounts({ jtype: ['wp'] }, [wpRow('2026-08-11T00:00:00Z')], tW0, tNow, ctx, TALLIES, NATK);
+  ok('wp jtype scope reads the WP tally', exWp && exWp.wp === 11500 && exWp.papers === 0);
+  // per-dataset guard: a stale tally smaller than the rows on hand loses to them
+  const exStale = exactAlertCounts({ journal: ['ms'] },
+    [msRow('2026-08-11T00:00:00Z'), msRow('2026-08-11T01:00:00Z'), msRow('2026-08-11T02:00:00Z'),
+     msRow('2026-08-11T03:00:00Z'), msRow('2026-08-11T04:00:00Z'), msRow('2026-08-11T05:00:00Z'),
+     msRow('2026-08-11T06:00:00Z'), msRow('2026-08-11T07:00:00Z')],
+    tW0, tNow, ctx, [{ ds: 'native', days: { 'ms': { '2026-08-11': 2 } } }], NATK);
+  ok('a stale tally never under-counts the rows actually matched', exStale && exStale.papers === 8);
+  // a dataset with rows but no tally keeps its row count beside a tallied one
+  const exPart = exactAlertCounts({ allPapers: true }, MATCH, tW0, tNow, ctx,
+    [{ ds: 'wp', days: { 'wp-ssrn': { '2026-08-11': 9000 } } }], NATK);
+  ok('datasets without a tally fall back to their rows', exPart && exPart.wp === 9000 && exPart.papers === 2);
+  // the digest states the exact counts and closes the gap with "…and N more"
+  const emExact = renderEmail({ name: 'Everything', criteria: { allPapers: true } }, [WPP, P()],
+    { exactCounts: { papers: 2, wp: 11500 } });
+  ok('digest subject carries the exact tally counts', /2 new papers and 11,500 working papers — Everything/.test(emExact.subject));
+  ok('digest closes the gap with "…and N more"', emExact.text.includes('…and 11,500 more'));
+  const emStaleGuard = renderEmail({ name: 'Everything', criteria: { allPapers: true } }, [WPP, P()],
+    { exactCounts: { papers: 1, wp: 0 } });
+  ok('renderEmail ignores an exact count smaller than the rows it lists', /1 new paper and 1 working paper — Everything/.test(emStaleGuard.subject));
+
   // "any new paper" (allPapers) + features-only (no paper intent)
   ok('allPapers matches any paper', matchesCriteria(P({ Journal: 'Whatever', Year: '1990' }), { allPapers: true }, ctx));
   ok('allPapers describe', describeCriteria({ allPapers: true }) === 'any new paper');
@@ -1247,7 +1456,7 @@ async function runAnnounce(argv) {
   console.log(`Announce done: ${sent} ${dryRun ? 'would-send' : 'sent'}, ${skipped} skipped, ${errors} errors.`);
 }
 
-export { matchesCriteria, evaluateAlert, evaluateFeatures, renderEmail, renderAnnouncement, renderFeatureDigest, renderTestEmail, describeCriteria, hasPaperIntent, loadRecentPapers, loadChangelog, makeCtx };
+export { matchesCriteria, evaluateAlert, evaluateFeatures, renderEmail, renderAnnouncement, renderFeatureDigest, renderTestEmail, describeCriteria, hasPaperIntent, loadRecentPapers, loadRecentTallies, loadNativeKeys, exactAlertCounts, tallyAnswerable, loadChangelog, makeCtx };
 
 // ── Entry point (only when run directly, not when imported for tests) ─────────
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
