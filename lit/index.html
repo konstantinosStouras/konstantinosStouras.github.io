@@ -5101,6 +5101,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var open = document.querySelectorAll('.acct-overlay.open');
     for (var i = 0; i < open.length; i++) { if (open[i] !== el) open[i].classList.remove('open'); }
     el.classList.add('open');
+    // The alerts panel previews the "what's new" digest, so it needs to know
+    // which entries have actually been published (see litNewsEnsure).
+    if (id === 'litAlertsOverlay' && typeof window.litNewsEnsure === 'function') {
+      window.litNewsEnsure();
+    }
   }
   function closeOverlay(id) { var el = document.getElementById(id); if (el) el.classList.remove('open'); }
 
@@ -5132,15 +5137,54 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }).join('') + '</ul>';
   }
   window.renderAboutWhatsNew = renderAboutWhatsNew;
-  fetch('changelog.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-    var list = Array.isArray(j) ? j : (j && Array.isArray(j.updates) ? j.updates : []);
-    window.LIT_CHANGELOG = list
-      .filter(function (e) { return e && e.title && e.date; })
-      .sort(function (a, b) { return a.date < b.date ? 1 : (a.date > b.date ? -1 : 0); });
+
+  /* WHAT MAY BE SHOWN is not the whole file. An entry the maintainer has not
+     published yet, or has taken down, must not reach the alert preview — that
+     preview promises "this is the e-mail you will get", and the mailer applies
+     the same rule (lit-news.js, shared by both). Until the decisions are read
+     the date rule alone stands, which WITHHOLDS everything since the review
+     gate rather than guessing; `litNewsRaw` keeps the file as served so the
+     list can be widened once they land. */
+  window.litNewsRaw = [];
+  function publishChangelog(docs) {
+    window.LIT_CHANGELOG = window.LitNews
+      ? LitNews.publicUpdates(window.litNewsRaw, docs || {})
+      : [];
     renderAboutWhatsNew();
     // Refresh the alert preview if the alerts modal is already showing it.
     if (typeof window.litRefreshAlertPreview === 'function') window.litRefreshAlertPreview();
+  }
+  fetch('changelog.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    var list = Array.isArray(j) ? j : (j && Array.isArray(j.updates) ? j.updates : []);
+    window.litNewsRaw = list
+      .filter(function (e) { return e && e.title && e.date; })
+      .sort(function (a, b) { return a.date < b.date ? 1 : (a.date > b.date ? -1 : 0); });
+    publishChangelog();
+    // …and if the alerts panel was opened while this was still in flight, the
+    // decisions it wanted are fetched now rather than never.
+    if (window.litNewsWanted) window.litNewsEnsure();
   }).catch(function () { renderAboutWhatsNew(); });
+
+  /* The decisions cost a Firestore read, and the ONLY thing on this page that
+     reads the changelog is the alert preview inside the alerts panel — so they
+     are fetched when that panel opens and never on an ordinary visit.
+
+     IT ONLY LATCHES ONCE IT HAS SOMETHING TO GATE. Opening the panel before
+     changelog.json has landed would otherwise spend the one attempt on an
+     empty list and leave the decisions unread for the rest of the session —
+     the preview would then run on the date rule alone, showing an entry the
+     maintainer had removed and hiding one they had just published. The want is
+     remembered instead, and the fetch fires when the log arrives. */
+  window.litNewsEnsure = function () {
+    window.litNewsWanted = true;
+    if (!window.LitNews || window.litNewsAsked || !window.litNewsRaw.length) return;
+    window.litNewsAsked = true;
+    LitNews.gate(window.litNewsRaw, function (list) {
+      window.LIT_CHANGELOG = list;
+      renderAboutWhatsNew();
+      if (typeof window.litRefreshAlertPreview === 'function') window.litRefreshAlertPreview();
+    });
+  };
 
   // Fallback until the accounts script installs the real builder (i.e. when
   // Firebase is not configured). The accounts script overrides litAlertsOpen.
@@ -5159,6 +5203,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<!-- Which What's-new entries have actually been published. Shared with the
+     About page's list and with the alerts mailer, so the page, the preview and
+     the e-mail cannot disagree about what is public (see lit/lit-news.js). -->
+<script src="lit-news.js"></script>
 <script>
 /* ── Accounts: optional sign-in + private saved papers / notes / lists / tags ──
  *

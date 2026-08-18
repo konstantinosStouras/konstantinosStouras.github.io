@@ -50,6 +50,18 @@ jobs:
         with:
           node-version: '20'
 
+      # BEFORE anything can be sent. Both are offline (no network, no
+      # credentials, no npm dependency), and both guard what this job is about
+      # to put in somebody's inbox: the mailer's own matching and renderers,
+      # and the review gate — which entries may be announced at all, and that
+      # changelog.json is shaped so every entry can actually be reviewed. An
+      # entry with no id, or two sharing one, would otherwise hold every later
+      # announcement behind it with nothing on any screen to publish.
+      - name: Offline checks
+        run: |
+          node lit/_scraper/alerts-mailer.mjs --selftest
+          node lit/_scraper/news-selftest.mjs
+
       - name: Install mailer dependencies
         run: npm install --no-save --ignore-scripts firebase-admin@12.7.0 nodemailer@6.10.1
 

@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "whats-new-reviewed-and-tidy",
+      "date": "2026-08-18",
+      "title": "“What's new” is reviewed before it is published, and a removed update really goes",
+      "summary": "Two changes to the update list on the About page. An update I remove now leaves the list at once, instead of staying there struck through — so the list only ever shows what is current. (I can still put one back: the removed ones sit in a collapsed panel under the list that only I can see.) And a newly logged update is no longer public the moment it is written: it waits for me to publish it, and until I do, nobody sees it on the site and nobody is e-mailed about it. Your “new features & updates” digest only ever carries updates I have actually published, in the order they were written.",
+      "url": "https://www.stouras.com/lit/about/"
+    },
+    {
       "id": "share-cards",
       "date": "2026-08-18",
       "title": "Sharing a link to The Lit now shows a proper card",

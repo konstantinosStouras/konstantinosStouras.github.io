@@ -1853,15 +1853,81 @@ never fails pre-setup); `--selftest`/`--scan`/`--dry-run` modes and the full
 deploy steps are in `lit/_EMAIL-ALERTS-SETUP.md`. No Firestore rule change
 is needed. All of the alerts UI logic lives inside the accounts IIFE
 (`window.litAlerts*`); Feedback is top-level (`window.litFeedback*`). The
-**About page renders a data-driven "What's new" list** (`#litWhatsNew`, its own
-inline script in `lit/about/index.html`) from the same `changelog.json` (fetched
-as `../changelog.json`); the main page still loads `changelog.json` into
-`LIT_CHANGELOG` for the alert preview. So the changelog is the ONE place to log a
-feature — it feeds the About page's list, the alert preview and the automated
-e-mails at once. So: **when you ship a user-facing `/lit` feature, add a
-`changelog.json` entry (dated ~today) in the same change** — that is now part of
-the keep-in-sync discipline alongside updating the About page copy and the
-`fun/index.html` landing cards.
+**About page renders a data-driven "What's new" list** (`#litWhatsNew` in
+`lit/about/index.html`) from the same `changelog.json` (fetched as
+`../changelog.json`); the main page loads it into `LIT_CHANGELOG` for the alert
+preview. So the changelog is the ONE place to log a feature — it feeds the About
+page's list, the alert preview and the automated e-mails at once. So: **when you
+ship a user-facing `/lit` feature, add a `changelog.json` entry (dated ~today) in
+the same change** — that is now part of the keep-in-sync discipline alongside
+updating the About page copy and the `fun/index.html` landing cards.
+
+**Nothing on "What's new" publishes itself (owner, 2026-08-18).**
+`changelog.json` says WHAT was announced; Firestore `newsOverrides/{changelog
+id}` says what the maintainer has DONE about it, and **an entry with no document
+is withheld**:
+
+    status: 'approved'   published — every visitor sees it
+    status: 'pending'    not reviewed yet — only the maintainer sees it
+    status: 'removed'    taken down — it leaves the list entirely
+    title / summary      an optional rewording, applied wherever it is shown
+
+Three rules, and they only work together. (1) **A removed entry LEAVES the
+list**, for the maintainer too — the list is meant to get cleaner, not to fill
+up with struck-through entries. (2) **And removing is not a one-way door**:
+filtering it out for everybody would leave nothing on the page to press, so the
+removed ones sit in a **collapsed panel below the list** that only the
+maintainer sees, one click from Restore. (3) **A new entry waits for review** —
+`changelog.json` is committed by whoever ships a change, and the entry reached
+visitors AND the feature digests the moment it landed; it is now flagged for the
+maintainer with Publish (and **Publish all N**, since one change routinely ships
+two or three entries and a gate that clears one at a time does not get cleared).
+Every entry can also be edited in place — title and summary, in an inline form,
+because a browser `prompt()` shows a paragraph as one unscrollable line.
+
+**The gate arriving is not a reason to retract.** The 69 entries already on the
+site have no document and would all have gone pending on the first load, so an
+entry dated before `REVIEW_FROM` is approved by default — a DATE rather than a
+list of ids, so nothing has to be backfilled. Back-dating stays safe for the
+reason it already was: the mailer windows by date, so a back-dated entry
+precedes every subscriber's window.
+
+**One file, three consumers: `lit/lit-news.js`** — dual-mode (browser
+`window.LitNews`, Node `require`), so the About page's list, the main page's
+alert preview and `lit/_scraper/alerts-mailer.mjs` cannot disagree about what is
+public. This is the shape `assets/oa-news.js` uses on operationsacademia.org for
+the same problem; **keep the two in step in SHAPE, not in code** — different
+sites, different Firebase projects, different markup. The decisions cost one
+Firestore read, so the main page fetches them only when the **alerts panel
+opens** (`litNewsEnsure`), which is the only thing there that reads the log.
+
+**The mailer holds the STREAM at the oldest unreviewed entry**
+(`sendableChangelog`, pure + unit-tested in its `--selftest`): each alert's
+window advances on a high-water mark, so sending an entry dated after one still
+waiting would push the mark past it and the older entry, once published, would
+reach nobody. The digest stops before it — publish or remove it and everything
+behind it goes out on the next run, in the order it was written. Delayed, never
+lost — **and that last part needs BOTH halves**: the Lit's feature window is a
+TIMESTAMP (`lastFeatureCheckedAt`) advanced on every due run, empty send
+included, so holding the entry back was not enough on its own — the mark would
+have slid past its date while it waited and publishing it a day later would have
+reached nobody. `markCap` parks the mark just before the oldest held entry, and
+with nothing held it IS `now`, exactly as before. A decision read that FAILS is
+caught, not left to reject: it withholds everything since the gate (the safe
+direction) rather than killing the PAPER digests too. The `--test-emails` pass
+is held to the same rule — a test e-mail is a real e-mail.
+
+`DOC_KEYS` in `lit-news.js` and the `hasOnly()` list in `lit/_firestore.rules`
+are pinned against each other BOTH WAYS by
+**`node lit/_scraper/news-selftest.mjs`** (offline), which also pins the length
+caps, the maintainer address the module draws controls for against the one
+`isFeedbackAdmin()` authorises, and that every consumer really goes through the
+module. What each PERSON actually gets — a visitor's list, the maintainer's,
+that a removed entry is off the list and still in the panel — is measured in a
+real browser by **`node lit/_scraper/news-page-guard.mjs`** (Playwright, no
+network, Firebase deliberately unreachable so it also proves the page still
+renders its log before the rules are deployed). **Inert until the rules are redeployed**: `cd lit && firebase deploy
+--only firestore:rules --project lit-paper-browser`.
 
 ### Working Papers — the listed authors' UNPUBLISHED work
 A **"Working Papers" journal type** (last in `JOURNAL_TYPES` for badge

@@ -187,5 +187,50 @@ service cloud.firestore {
       allow update, delete: if isFeedbackAdmin();
     }
 
+    // ─── What's new: the maintainer's decision about each changelog entry ────
+    //
+    // lit/changelog.json stays the source of truth for WHAT was announced. One
+    // document here per changelog entry id says what has been DONE about it:
+    //
+    //   status: 'approved'   published — every visitor sees it
+    //   status: 'pending'    not reviewed yet — only the maintainer sees it
+    //   status: 'removed'    taken down — it leaves the list entirely
+    //   title / summary      an optional rewording, shown wherever it is shown
+    //
+    // The list is public, so reads are open — a decision has to reach every
+    // visitor, not only the maintainer. Only the maintainer writes one.
+    //
+    // NOTHING NEW PUBLISHES ITSELF (owner, 2026-08-18): an entry with NO
+    // document here is withheld unless it predates the review gate. That rule
+    // lives in lit/lit-news.js — the file the About page, the main page's alert
+    // preview and the mailer all read it through — because ABSENCE cannot be
+    // expressed in a rule at all. `hidden` is written in step with `status` so
+    // a page served from an older cache reads a removal the same way.
+    match /newsOverrides/{id} {
+      allow read: if true;
+      allow write: if isFeedbackAdmin()
+                   && request.resource.data.keys()
+                        .hasOnly(['status', 'hidden', 'title', 'summary', 't'])
+                   && (!('status' in request.resource.data)
+                       || request.resource.data.status in ['approved', 'pending', 'removed'])
+                   && (!('hidden' in request.resource.data)
+                       || request.resource.data.hidden is bool)
+                   && (!('title' in request.resource.data)
+                       || (request.resource.data.title is string
+                           && request.resource.data.title.size() <= 300))
+                   && (!('summary' in request.resource.data)
+                       || (request.resource.data.summary is string
+                           && request.resource.data.summary.size() <= 4000))
+                   && (!('t' in request.resource.data)
+                       || request.resource.data.t is number);
+      /* A DECISION MUST NOT BE A ONE-WAY DOOR. `allow write` cannot cover a
+         delete — `request.resource` is null on one, so
+         `request.resource.data.keys()` errors and the condition is false. The
+         normal way back from a removal is the "Removed updates" panel under
+         the list, which only the maintainer sees; this keeps a document
+         written wrongly from needing the Firestore console. */
+      allow delete: if isFeedbackAdmin();
+    }
+
   }
 }
