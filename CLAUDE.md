@@ -87,6 +87,141 @@ deployable section is left un-hooked (a guard on the rules alone still lets a
 Functions deploy land in the wrong project), when the guard hardcodes a project
 id instead of reading `.firebaserc`, or when two folders claim one project.
 
+## Link previews — the card people see before they click
+
+The owner pasted `/lit/` and `operationsacademia.org` into one WhatsApp
+conversation. The Lit drew a proper card; the other site drew its own hostname
+twice. Chasing that down found a defect class BOTH sites had, and this is the
+repository that had been getting away with it.
+
+**A served file that declares another page's `og:url` steals that page's
+preview.** Facebook's crawler family — which serves WhatsApp, Messenger,
+Facebook, LinkedIn and Viber — keys a preview on `og:url`, **not** on the
+address that was pasted. Twenty-five files were being PUBLISHED by GitHub Pages
+and between them claimed three live addresses, including the home page's:
+five under `backups/`, sixteen under `lab/problem-solving/back-ups/`, three
+under `fun/ms-old/back-ups/` and a stray `fun/ms-old/index - Copy.html`, which
+went into that folder with them. **Pages runs Jekyll, and Jekyll serves any directory whose name
+does not begin with an underscore** — which is why `_ideasearchlab-src/` is
+invisible and `backups/` was not. They are `_backups/site/` and `_back-ups/`
+now; the two `.bat` scripts that write into the first were repointed with it.
+That is the whole fix, and `tools/share-check.mjs` fails if it ever comes back.
+**Do not add a `.nojekyll` file to this repository.** It is the one change that
+would undo this silently: it turns Jekyll off, and with it the underscore rule
+that is the only thing keeping `_backups/`, `_ideasearchlab-src/`,
+`_lab-arena-firebase/` and every other `_`-prefixed folder off the web.
+
+**And the Lit's card was out of date, which no check could have caught because
+nobody looks at a picture twice.** It said "EIGHT SOURCES" over a catalogue
+that had long since passed eight, and gave the address as
+`stouras.com/fun/lit` — where The Lit has not lived since it was promoted to
+`/lit/`. Every share for months carried both. So the cards are now GENERATED,
+by `tools/make-share-images.mjs`, and nothing on one may be a COUNT: the
+journal LISTS it filters by (UTD24 · FT50 · ABS) do not move, and eight did.
+
+### The two pictures, and why there are two
+
+    <page>/og-image.jpg      1200x630 (2400x1260 for /lit) — the WIDE card
+    <page>/share-square.jpg  800x800                       — the SQUARE one
+
+Every wide-card platform renders `og:image` at about 1.91:1. The Chinese
+clients draw a small near-square tile and **centre-crop** whatever they are
+given: hand them the Lit card and the crop keeps the word "Research" and
+nothing else. The square is offered through `<link rel="image_src">` and
+`<meta itemprop="image">`, which those clients prefer and the wide-card
+platforms ignore, so each gets the one it can use. Run
+`node tools/make-share-images.mjs` to redraw the squares, `--wide` to redraw
+the cards as well, `--check` to see what would change — then **look at what
+came out** before committing it. Nothing here runs in CI.
+
+### The block, and why each tag is in it
+
+Written from the `MANAGED` table in `tools/share-check.mjs`, which is the one
+place the copy lives, and placed directly under the `<title>`: Slackbot reads
+the first 32 KB of a document and WhatsApp's parser gives up sooner, so a fat
+head above the tags is a documented way to lose a card. (That is also why the
+home page's `<meta charset>` was moved to the top of its `<head>` — it sat
+behind four `<script>` blocks, past the 1024-byte window a strict parser
+commits to an encoding in, and the description carries em-dashes.)
+
+* `og:*` is RDFa — **`property=`, never `name=`**; `twitter:*` is `name=`.
+  Backwards, each is invisible to the crawler that wanted it and nothing warns.
+* `twitter:card` has **no Open Graph equivalent**, so `og:*` alone can never
+  produce X's large card.
+* `og:image:width`/`height` must match the file's REAL pixels — Meta lays the
+  card out from the declared numbers before it has downloaded the image, which
+  decides whether the FIRST person to share a link gets the big card. The check
+  reads the JPEG's own SOFn header rather than trusting the tag.
+* **Exactly one `og:image`**: several are legal Open Graph and WhatsApp handles
+  them badly.
+* Under 300 KB, absolute `https`, no redirect — WhatsApp silently drops a
+  heavier thumbnail and the card degrades to plain text.
+* `<meta name="description">` as well as `og:description`, because WeChat and
+  Google read that one and not the Open Graph one.
+* `og:site_name` is **"The Lit"** across `/lit/`, not "stouras.com": LinkedIn
+  and Discord print it as a line above the title.
+* `og:locale` agrees with the language the PAGE declares: the home page says
+  `lang="en-us"` and carries `hreflang="en-us"` alternates, so it is `en_US`;
+  everything else says `lang="en"` and is written in British spelling, so it is
+  `en_GB`. Both are on Facebook's own published locale list. `en_IE`, the
+  obvious guess for an Irish site, is NOT — and an unsupported value is ignored
+  rather than rejected, so it fails silently, which is this whole section's
+  theme.
+
+`MANAGED` covers the pages people actually paste — `/`, `/lit/`, `/lit/about/`,
+`/lit/analytics/`, `/lit/feedback/`, `/fun/` and
+`/sustainable-supply-chains/` (which had no card at all and now has its own).
+**Every other served page that carries `og:*` is CHECKED but not rewritten** —
+the `/fun/` games and `/lab/` tools each have a card of their own — and the
+three that carry `og:*` with no picture are named in `NO_CARD_IMAGE` with a
+reason each, rather than tolerated silently. Redirect stubs carry no `og:*` at
+all, which is exactly why `/lit/`'s card never broke while the OA home page's
+did. The one allowed shared identity is in `SHARED_IDENTITY`: the root
+`404.html` and the Ideation Challenge's own two files, which deliberately carry
+the same card because Pages serves the root 404 for that app's deep links.
+
+**robots.txt names the preview crawlers explicitly.** They were already allowed
+by the wildcard, but `Crawl-delay: 7` applies to it and Slack honours crawl
+delay — seven seconds is long enough to lose an unfurl — and the Facebook
+Sharing Debugger has a recurring bug where it answers 403 blaming `robots.txt`
+on a site whose only rule is a permissive wildcard.
+
+`.github/workflows/site-checks.yml` runs it, with `tools/deploy-guard-selftest.mjs`,
+on every push that touches a page, a card or `tools/`. **It is the first
+workflow in this repository that reads the served HTML at all** — every other
+one writes data — and it is deliberately read-only, in its own concurrency
+group, so it can neither interfere with nor be delayed by the harvests.
+
+**The About page was deliberately NOT rewritten.** The keep-in-sync rule that
+covers `/lit/about/` is about what The Lit DOES — a new journal type, a new
+filter, a sign-in capability — and how a link previews is not one of those; the
+`changelog.json` entry is the right place, and the About page renders that list
+itself. Its `<meta name="description">` did change, because every managed page's
+did.
+
+### What the check cannot see
+
+That a crawler can REACH the page. A Pages edge answering `facebookexternalhit`
+with a 403, a Meta-side domain flag and a cached FAILED scrape all look exactly
+like bad tags. One paste into <https://developers.facebook.com/tools/debug/>
+settles all three — read **Response Code** and **Time Scraped**, then press
+*Scrape Again* two or three times. Do it before concluding a fix did not work:
+a handset that has already cached the old card will keep showing it for days.
+
+### WeChat, honestly
+
+Mobile WeChat **does not unfurl a pasted link at all**, whatever the `<head>`
+says — Tencent withdrew that in April 2017 for pages without a signed JS-SDK
+integration, which needs a verified Official Account and an ICP-filed domain,
+neither available to a GitHub Pages site. What DOES read these tags: the
+**desktop** WeChat client, **WeCom**, and "share to WeChat" from a mobile
+browser. Those are what the square thumbnail is for, and why every `<title>`
+has to stand on its own — WeChat's fallback leans on `<title>` and drops
+`og:description` even where it crawls. There is no WeChat debugger and no cache
+purge; the only reliable re-read is a changed URL (`?v=2`). Separately, for
+readers inside mainland China, GitHub Pages is unreliable and the Google Fonts
+every page here loads are blocked — a card is not the binding constraint there.
+
 ## Fun Projects landing page — keep it in sync
 
 `/fun/` (`fun/index.html`) is the landing page that lists every app under
