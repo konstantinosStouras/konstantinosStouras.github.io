@@ -1,12 +1,15 @@
 {
   "firestore": {
+    "predeploy": ["node check-project.mjs"],
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
   "functions": {
+    "predeploy": ["node check-project.mjs"],
     "source": "functions"
   },
   "hosting": {
+    "predeploy": ["node check-project.mjs"],
     "public": "dist",
     "ignore": [
       "firebase.json",
