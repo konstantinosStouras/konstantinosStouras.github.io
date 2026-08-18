@@ -10,6 +10,13 @@
       "url": "https://www.stouras.com/lit/about/"
     },
     {
+      "id": "share-cards",
+      "date": "2026-08-18",
+      "title": "Sharing a link to The Lit now shows a proper card",
+      "summary": "Every page of The Lit — the browser, About, Data Analytics and Feedback — now carries a picture, a title and a sentence when you paste its address into WhatsApp, Messenger, LinkedIn, Slack, Telegram or Signal, and a square thumbnail for the clients that crop to a square. The card itself was redrawn: it had been saying “eight sources” and giving the old /fun/lit address for months.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "recent-view-whole-db-and-exact-alert-counts",
       "date": "2026-08-17",
       "title": "“Recently added” now always opens on the whole database — and alert e-mails count exactly",

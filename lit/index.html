@@ -4,32 +4,48 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Lit · Research Paper Browser — Management Science, OR, Marketing Science, M&amp;SOM, POM, ISR, PNAS, ACM EC &amp; the FT50</title>
-
-<!-- SEO -->
-<meta name="description" content="Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, Strategy Science, INFORMS Transactions on Education, five PNAS sections, the ACM EC conference (1999–present), all 50 journals of the Financial Times FT50 rank, and topic-filtered slices of Nature and Science (GenAI, LLMs, innovation and the science of science). Filter by journal, journal type (UTD24, FT50, ABS 4/4*, ABS 3), year, author, or affiliation. Export BibTeX citations.">
-<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, Strategy Science, INFORMS Transactions on Education, PNAS, ACM EC, Economics and Computation, UTD24, UT Dallas journal list, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, European Journal of Operational Research, INFORMS Journal on Computing, academic papers, research browser, BibTeX, journal articles, INFORMS, Nature, Science, Nature Human Behaviour, Nature Communications, science of science, large language models, generative AI">
-<meta name="author" content="Konstantinos Stouras">
-
-<meta name="robots" content="index, follow">
+<meta name="description" content="Search and filter research papers across the UTD24, the FT50 and the ABS-ranked journals in operations, management, marketing and economics — by journal, journal type, year, author, editor, area or affiliation, with BibTeX export.">
 <link rel="canonical" href="https://www.stouras.com/lit/">
 
-<!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
+<!-- LINK PREVIEWS — what a card looks like when somebody shares this page.
+     og:* is read by Facebook, Messenger, WhatsApp, LinkedIn, Telegram,
+     Slack, Discord, Signal, Viber and iMessage; twitter:* by X, whose
+     twitter:card is the one preview tag with no Open Graph equivalent.
+     The image_src / itemprop trio offers the SQUARE thumbnail to the
+     clients that centre-crop a card to 1:1 and would otherwise keep only
+     the middle of the wide one. There is EXACTLY ONE og:image on purpose:
+     several are legal Open Graph and WhatsApp handles them badly.
+     Kept honest by tools/share-check.mjs; the pictures are drawn by
+     tools/make-share-images.mjs. Read both headers before editing. -->
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="The Lit">
+<meta property="og:locale" content="en_GB">
 <meta property="og:title" content="The Lit — Research Paper Browser">
-<meta property="og:description" content="Search papers across Management Science, OR, Marketing Science, M&SOM, POM, ISR, Strategy Science, INFORMS Transactions on Education, five PNAS sections, ACM EC, and all 50 FT50 journals — in one place.">
+<meta property="og:description" content="One search across the UTD24, the FT50 and the ABS journals — filter by journal, year, author, editor or affiliation, and export BibTeX.">
 <meta property="og:url" content="https://www.stouras.com/lit/">
 <meta property="og:image" content="https://www.stouras.com/lit/og-image.jpg">
 <meta property="og:image:secure_url" content="https://www.stouras.com/lit/og-image.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="2400">
 <meta property="og:image:height" content="1260">
-<meta property="og:site_name" content="stouras.com">
-
-<!-- Twitter Card -->
+<meta property="og:image:alt" content="The Lit — a research paper browser over the UTD24, FT50 and ABS journals">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="The Lit — Research Paper Browser">
-<meta name="twitter:description" content="Search papers across Management Science, OR, Marketing Science, M&SOM, POM, ISR, Strategy Science, INFORMS Transactions on Education, five PNAS sections, ACM EC, and all 50 FT50 journals — in one place.">
+<meta name="twitter:description" content="One search across the UTD24, the FT50 and the ABS journals — filter by journal, year, author, editor or affiliation, and export BibTeX.">
 <meta name="twitter:image" content="https://www.stouras.com/lit/og-image.jpg">
+<meta name="twitter:image:alt" content="The Lit — a research paper browser over the UTD24, FT50 and ABS journals">
+<link rel="image_src" href="https://www.stouras.com/lit/share-square.jpg">
+<meta itemprop="name" content="The Lit — Research Paper Browser">
+<meta itemprop="description" content="Search and filter research papers across the UTD24, the FT50 and the ABS-ranked journals in operations, management, marketing and economics — by journal, journal type, year, author, editor, area or affiliation, with BibTeX export.">
+<meta itemprop="image" content="https://www.stouras.com/lit/share-square.jpg">
+
+
+<meta name="keywords" content="Management Science, Operations Research, Marketing Science, MSOM, POM, Information Systems Research, Strategy Science, INFORMS Transactions on Education, PNAS, ACM EC, Economics and Computation, UTD24, UT Dallas journal list, FT50, Financial Times 50, ABS ranking, AJG, Academic Journal Guide, European Journal of Operational Research, INFORMS Journal on Computing, academic papers, research browser, BibTeX, journal articles, INFORMS, Nature, Science, Nature Human Behaviour, Nature Communications, science of science, large language models, generative AI">
+<meta name="author" content="Konstantinos Stouras">
+
+<meta name="robots" content="index, follow">
+
+
 
 <!-- Favicon: inline SVG "Lit" monogram (claret/gold literary style), no external file needed -->
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">

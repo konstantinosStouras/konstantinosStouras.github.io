@@ -3,7 +3,12 @@ setlocal EnableDelayedExpansion
 
 REM STEP 1: Define paths
 set SITE_DIR=%~dp0
-set BACKUP_DIR=%SITE_DIR%backups
+REM `_backups`, not `backups`: GitHub Pages runs Jekyll, Jekyll publishes
+REM any directory whose name does not start with an underscore, and five old
+REM copies of index.html were therefore being SERVED — each one still
+REM declaring og:url = the home page, which is how a link preview loses its
+REM card to a page nobody links to. The leading underscore un-serves them.
+set BACKUP_DIR=%SITE_DIR%_backups\site
 set LOG_FILE=%SITE_DIR%website-update-log.txt
 
 REM STEP 2: Generate timestamped folder name

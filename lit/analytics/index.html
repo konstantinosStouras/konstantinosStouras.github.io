@@ -4,13 +4,46 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Data Analytics · The Lit — Research Paper Browser</title>
+<meta name="description" content="Summary statistics over The Lit’s whole catalogue: publication and citation trends by journal, co-authorship, citation flows between journals, team size and disruption, with author and paper comparisons.">
+<link rel="canonical" href="https://www.stouras.com/lit/analytics/">
+
+<!-- LINK PREVIEWS — what a card looks like when somebody shares this page.
+     og:* is read by Facebook, Messenger, WhatsApp, LinkedIn, Telegram,
+     Slack, Discord, Signal, Viber and iMessage; twitter:* by X, whose
+     twitter:card is the one preview tag with no Open Graph equivalent.
+     The image_src / itemprop trio offers the SQUARE thumbnail to the
+     clients that centre-crop a card to 1:1 and would otherwise keep only
+     the middle of the wide one. There is EXACTLY ONE og:image on purpose:
+     several are legal Open Graph and WhatsApp handles them badly.
+     Kept honest by tools/share-check.mjs; the pictures are drawn by
+     tools/make-share-images.mjs. Read both headers before editing. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="The Lit">
+<meta property="og:locale" content="en_GB">
+<meta property="og:title" content="The Lit — Data Analytics">
+<meta property="og:description" content="Summary statistics over The Lit’s whole catalogue: publication and citation trends by journal, co-authorship, citation flows between journals, team size and disruption, with author and paper comparisons.">
+<meta property="og:url" content="https://www.stouras.com/lit/analytics/">
+<meta property="og:image" content="https://www.stouras.com/lit/og-image.jpg">
+<meta property="og:image:secure_url" content="https://www.stouras.com/lit/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="2400">
+<meta property="og:image:height" content="1260">
+<meta property="og:image:alt" content="The Lit — Data Analytics over the whole research catalogue">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Lit — Data Analytics">
+<meta name="twitter:description" content="Summary statistics over The Lit’s whole catalogue: publication and citation trends by journal, co-authorship, citation flows between journals, team size and disruption, with author and paper comparisons.">
+<meta name="twitter:image" content="https://www.stouras.com/lit/og-image.jpg">
+<meta name="twitter:image:alt" content="The Lit — Data Analytics over the whole research catalogue">
+<link rel="image_src" href="https://www.stouras.com/lit/share-square.jpg">
+<meta itemprop="name" content="The Lit — Data Analytics">
+<meta itemprop="description" content="Summary statistics over The Lit’s whole catalogue: publication and citation trends by journal, co-authorship, citation flows between journals, team size and disruption, with author and paper comparisons.">
+<meta itemprop="image" content="https://www.stouras.com/lit/share-square.jpg">
+
 
 <!-- Interactive summary statistics for The Lit database. Figures are pre-aggregated
      offline by lit/_scraper/build-analytics.mjs into ./data.json + ./authors.json
      (see .github/workflows/lit-analytics.yml); the page draws everything client-side. -->
-<meta name="description" content="Interactive summary statistics for The Lit research paper database — filter by journal, journal type, author and year to see publication trends, co-authorship, pre-print availability and the most-cited work.">
 <meta name="robots" content="noindex, follow">
-<link rel="canonical" href="https://www.stouras.com/lit/analytics/">
 <meta name="author" content="Konstantinos Stouras">
 <meta name="theme-color" content="#7d1d3f">
 
