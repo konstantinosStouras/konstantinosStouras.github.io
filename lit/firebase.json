@@ -1,8 +1,10 @@
 {
   "firestore": {
+    "predeploy": ["node check-project.mjs"],
     "rules": "_firestore.rules"
   },
   "functions": {
+    "predeploy": ["node check-project.mjs"],
     "source": "_functions/functions",
     "runtime": "nodejs20"
   }

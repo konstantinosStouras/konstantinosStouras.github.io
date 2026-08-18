@@ -42,6 +42,51 @@ this shape is **secret scanning + push protection** (free on public repos),
 guarding `FIREBASE_SERVICE_ACCOUNT`, `SMTP_*`, `S2_API_KEY`,
 `ELSEVIER_API_KEY` and `FEEDBACK_LOG_TOKEN`.
 
+## Deploying Firebase rules — ALWAYS name the project
+
+This repository holds **six** unrelated Firebase projects, and the sibling
+`OperationsAcademia.github.io` holds a seventh:
+
+| Folder | Project |
+|---|---|
+| `lit/` | `lit-paper-browser` |
+| `_lab-arena-firebase/` | `stouras-answerarena` |
+| `_ideasearchlab-src/` | `ideasearchlab` |
+| `_portfoliofit-firebase/` | `stouras-portfoliofit` |
+| `_portfoliofit-lab-firebase/` | `stouras-portfoliofit-86127` |
+| `lab/search-v2/` | `search-with-ai-456d7` |
+
+The Firebase CLI resolves the target from, in order: `--project`, the
+`FIREBASE_PROJECT` env var, **the "active project" it remembers PER DIRECTORY
+in its own global config**, and only then the default alias in `.firebaserc`.
+The remembered one wins over `.firebaserc`, is invisible in the repository, and
+survives between sessions — so `firebase deploy --only firestore:rules` run in
+one folder can publish that folder's rules into ANOTHER project's database and
+print "Deploy complete!".
+
+**It has happened twice, both times to Answer Arena** — once from
+`lab/search-v2`, once from `OperationsAcademia.github.io`, whose rules end in a
+deny-all catch-all and name none of Answer Arena's collections, so every read
+and write in that app was refused until its own rules were re-published.
+
+So **every folder carries `check-project.mjs`, wired as a `predeploy` hook on
+every deployable section of its `firebase.json`** (`firestore`, `functions`,
+`hosting` — `emulators` is local-only and needs none). The CLI exports
+`GCLOUD_PROJECT` to a predeploy hook, so the target is knowable before anything
+is uploaded; a mismatch exits non-zero, which aborts the deploy. Run it
+standalone to see where a folder would deploy: `node check-project.mjs`.
+
+**Still pass `--project` yourself.** The guard is the net, not the practice:
+
+    cd lit
+    firebase deploy --only firestore:rules --project lit-paper-browser
+
+**A new Firebase project means a new guard.** `node tools/deploy-guard-selftest.mjs`
+fails when a folder holding a `firebase.json` has no `check-project.mjs`, when a
+deployable section is left un-hooked (a guard on the rules alone still lets a
+Functions deploy land in the wrong project), when the guard hardcodes a project
+id instead of reading `.firebaserc`, or when two folders claim one project.
+
 ## Fun Projects landing page — keep it in sync
 
 `/fun/` (`fun/index.html`) is the landing page that lists every app under
