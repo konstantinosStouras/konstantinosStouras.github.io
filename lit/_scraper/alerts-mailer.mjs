@@ -887,12 +887,25 @@ function sendableChangelog(changelog, decisions) {
       ? e
       : { ...e, title: shown.title, summary: shown.summary });
   }
+  /* AND THE MARK MUST NOT MARCH PAST WHAT IS HELD. The feature side's
+     high-water mark is a TIMESTAMP of the last check, advanced on every due
+     run — including a run that sent nothing because everything was held. Left
+     alone it would slide past the unreviewed entry's own date, and publishing
+     that entry a day later would then reach nobody at all, silently and for
+     ever: the very loss the hold exists to prevent, arriving by the other
+     door. `markCap` is the last instant BEFORE the oldest held entry's day, so
+     a run under a hold parks the window there instead. */
+  const markCap = oldestPending
+    ? new Date(Date.parse(oldestPending + 'T00:00:00Z') - 1)
+    : null;
+
   return {
     list,
     pending: split.pending.length,
     removed: split.removed.length,
     held,
     oldestPending,
+    markCap: markCap && !isNaN(markCap) ? markCap : null,
   };
 }
 
@@ -944,6 +957,8 @@ async function run({ dryRun }) {
   }
   const news = sendableChangelog(changelog, newsDecisions);
   changelog = news.list;
+  // the instant the feature high-water mark may not pass while entries are held
+  const featureMark = news.markCap && news.markCap < now ? news.markCap : now;
   if (news.pending || news.removed || news.held) {
     console.log(`Changelog: ${changelog.length} sendable, ${news.pending} waiting for review, ${news.removed} removed` +
       (news.held ? `, ${news.held} held behind the unreviewed entry of ${news.oldestPending}` : ''));
@@ -1041,7 +1056,9 @@ async function run({ dryRun }) {
       } else {
         console.log(`  no new site features for "${alert.name || describeCriteria(criteria)}" (${alert.frequency || 'weekly'})`);
       }
-      if (ok) update.lastFeatureCheckedAt = Timestamp.fromDate(now);
+      /* Parked below anything still waiting for review — see `markCap` in
+         sendableChangelog. With nothing held this IS `now`, as it always was. */
+      if (ok) update.lastFeatureCheckedAt = Timestamp.fromDate(featureMark);
     }
 
     if (!dryRun && Object.keys(update).length) {
@@ -1465,6 +1482,25 @@ function selftest() {
        .list.some(e => e.id === 'live' && e.title === 'Reworded'));
   ok('and the mailer keeps its own entry shape (_added survives)',
      sendable.list.every(e => e._added instanceof Date));
+  /* AND THE MARK CANNOT MARCH PAST WHAT IS HELD. The feature window is a
+     TIMESTAMP advanced on every due run, empty send included — so without this
+     the held entry's own date falls behind the window while it waits, and
+     publishing it later would reach nobody. Reproduced as a timeline: B is
+     unreviewed on the 26th, the run sends nothing, and the mark must park
+     before the 26th rather than at "now" on the 30th. */
+  ok('the feature mark parks before the oldest entry still waiting',
+     sendable.markCap instanceof Date &&
+     sendable.markCap.toISOString() === '2026-08-25T23:59:59.999Z');
+  ok('and a window starting there still catches that entry once it is published',
+     new Date('2026-08-26T00:00:00Z') > sendable.markCap);
+  ok('with nothing waiting the mark is not capped at all — the behaviour it always had',
+     sendableChangelog(CLR, { live: { status: 'approved' }, draft: { status: 'approved' },
+       after: { status: 'approved' }, gone: { status: 'approved' } }).markCap === null);
+  /* …and an entry already sent is not re-sent by the parked mark: its own date
+     is strictly older than the cap, so the next window starts after it. */
+  ok('an entry already sent stays behind the parked mark',
+     new Date('2026-08-25T00:00:00Z') < sendable.markCap);
+
   ok('nothing waiting means nothing held back',
      sendableChangelog(CLR, { live: { status: 'approved' }, draft: { status: 'approved' },
        after: { status: 'approved' }, gone: { status: 'approved' } }).held === 0);

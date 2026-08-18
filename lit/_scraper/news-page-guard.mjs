@@ -123,6 +123,18 @@ try {
     JSON.stringify(['Publish/Edit/Remove', 'Edit/Remove', 'Edit/Remove']),
     'every entry can be edited and removed; only the new one published');
 
+  /* THE PANEL STAYS OPEN ACROSS A RE-RENDER. render() rebuilds the <details>,
+     so without remembering the state it snapped shut on every re-render — and
+     pressing Edit on a removed entry re-renders, which made that button read
+     as dead: the editor opened inside a panel that had just folded up. */
+  await page.click('.wn-bin summary');
+  ok(await page.$eval('.wn-bin', n => n.open), 'the removed panel opens when clicked');
+  await page.click('.wn-bin .wn-admin button:has-text("Edit")');
+  ok(await page.$eval('.wn-bin', n => n.open) &&
+     await page.isVisible('.wn-bin .wn-edit textarea'),
+    'and Edit inside it opens the form without folding the panel away');
+  await page.click('.wn-bin .wn-edit button:has-text("Cancel")');
+
   // ── an edit reads as the maintainer wrote it ──
   await page.evaluate(([l]) => window.LitNews.__setForTest(
     { settled: { status: 'approved', title: 'Reworded by hand' } }, false, l), [LOG]);
@@ -134,6 +146,13 @@ try {
   await page.click('#litWhatsNew .wn-item .wn-admin button:has-text("Edit")');
   ok(await page.isVisible('#litWhatsNew .wn-edit textarea'),
     'Edit opens a real form — a summary here is a paragraph, not a prompt line');
+  /* AND WHAT IS TYPED SURVIVES A RE-RENDER. The list re-renders on its own —
+     the decisions landing late, the session resolving — and on a FAILED save,
+     which is exactly when losing a paragraph just written would hurt most. */
+  await page.fill('#litWhatsNew .wn-edit textarea', 'A summary I am still writing');
+  await page.evaluate(([l]) => window.LitNews.__setForTest(null, true, l), [LOG]);
+  ok(await page.inputValue('#litWhatsNew .wn-edit textarea') === 'A summary I am still writing',
+    'a re-render mid-edit keeps what the maintainer has typed');
   await page.click('#litWhatsNew .wn-edit button:has-text("Cancel")');
   ok(!(await page.$('#litWhatsNew .wn-edit')), 'and Cancel closes it, changing nothing');
 } finally {

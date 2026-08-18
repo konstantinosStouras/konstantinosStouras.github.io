@@ -132,6 +132,36 @@ ok('and an over-long edit is cut before it is sent',
 ok('the module and the rules name the same maintainer',
   rules.includes(`request.auth.token.email == '${News.ADMIN_EMAIL}'`));
 
+/* ── the file itself ──────────────────────────────────────────────────────── */
+
+/* Nothing validated changelog.json before, and the gate gives that teeth: an
+   entry with no usable `id` cannot be reviewed at all (the decision document is
+   keyed on it, and the page skips such an entry while the mailer, which fills
+   the id in from the title, would count it as unreviewed and hold every later
+   announcement behind it — with nothing on any screen to publish). Two entries
+   sharing an id would be decided together: one Remove taking down a second
+   entry nobody touched. Both now fail here, where they are a one-line fix. */
+const shipped = JSON.parse(read('changelog.json'));
+const entries = shipped.updates || [];
+ok('changelog.json carries entries', entries.length > 0);
+const ids = new Set();
+for (const u of entries) {
+  ok(`every entry has an id — "${u.title || '(untitled)'}" does not`,
+    typeof u.id === 'string' && u.id.trim().length > 0);
+  ok(`and it is unique — "${u.id}" is used twice`, !ids.has(u.id));
+  ids.add(u.id);
+  ok(`every entry has a yyyy-mm-dd date — "${u.id}" has "${u.date}"`,
+    /^\d{4}-\d{2}-\d{2}$/.test(String(u.date || '')));
+  ok(`and a title — "${u.id}" has none`,
+    typeof u.title === 'string' && u.title.trim().length > 0);
+}
+/* AND THE GATE READS THE REAL FILE THE WAY THE PAGES DO — if publicUpdates
+   dropped an entry the About page renders, the mailer would announce a
+   different list from the one on the site. */
+eq('every pre-gate entry is public, and every entry since it is not',
+  News.publicUpdates(entries, {}).length,
+  entries.filter(u => String(u.date) < News.REVIEW_FROM).length);
+
 /* ── every consumer goes through it ───────────────────────────────────────── */
 
 const js = read('lit-news.js');

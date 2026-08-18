@@ -5144,13 +5144,24 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       .filter(function (e) { return e && e.title && e.date; })
       .sort(function (a, b) { return a.date < b.date ? 1 : (a.date > b.date ? -1 : 0); });
     publishChangelog();
+    // …and if the alerts panel was opened while this was still in flight, the
+    // decisions it wanted are fetched now rather than never.
+    if (window.litNewsWanted) window.litNewsEnsure();
   }).catch(function () { renderAboutWhatsNew(); });
 
   /* The decisions cost a Firestore read, and the ONLY thing on this page that
      reads the changelog is the alert preview inside the alerts panel — so they
-     are fetched when that panel opens and never on an ordinary visit. */
+     are fetched when that panel opens and never on an ordinary visit.
+
+     IT ONLY LATCHES ONCE IT HAS SOMETHING TO GATE. Opening the panel before
+     changelog.json has landed would otherwise spend the one attempt on an
+     empty list and leave the decisions unread for the rest of the session —
+     the preview would then run on the date rule alone, showing an entry the
+     maintainer had removed and hiding one they had just published. The want is
+     remembered instead, and the fetch fires when the log arrives. */
   window.litNewsEnsure = function () {
-    if (!window.LitNews || window.litNewsAsked) return;
+    window.litNewsWanted = true;
+    if (!window.LitNews || window.litNewsAsked || !window.litNewsRaw.length) return;
     window.litNewsAsked = true;
     LitNews.gate(window.litNewsRaw, function (list) {
       window.LIT_CHANGELOG = list;

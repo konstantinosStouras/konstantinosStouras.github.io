@@ -254,7 +254,10 @@
     var docsRead = false;
     var admin = false;
     var editing = null;
+    var draft = null;           // what has been typed into the open editor
     var flash = null;
+    var binOpen = false;        // is the "Removed updates" panel unfolded?
+    var written = {};           // ids this session decided — never overwritten by an older read
 
     function strings(n) { return n === 1 ? 'entry' : 'entries'; }
 
@@ -275,6 +278,7 @@
       if (!d) return;
       flash = null;
       d.collection(COLLECTION).doc(id).set(patch, { merge: true }).then(function () {
+        written[id] = true;
         docs[id] = docs[id] || {};
         for (var k in patch) {
           if (Object.prototype.hasOwnProperty.call(patch, k)) docs[id][k] = patch[k];
@@ -305,6 +309,7 @@
           return d.collection(COLLECTION).doc(r.id).set(patchFor(APPROVED), { merge: true })
             .then(function () {
               done++;
+              written[r.id] = true;
               docs[r.id] = docs[r.id] || {};
               docs[r.id].status = APPROVED;
               docs[r.id].hidden = false;
@@ -321,25 +326,37 @@
 
     /* An inline form, not two prompt() boxes: a summary here is a full
        paragraph, and a browser prompt shows one as a single unscrollable line,
-       which is how "editing" it turns into retyping it. */
+       which is how "editing" it turns into retyping it.
+
+       WHAT IS TYPED SURVIVES A RE-RENDER, and that is not a nicety: the list
+       re-renders on its own when the decisions arrive late or the session
+       resolves, and it re-renders on a FAILED save — which is exactly the
+       moment (the rules are not deployed yet) when losing a paragraph just
+       written would hurt most. */
     function editor(row, li) {
+      if (!draft) draft = { title: row.title, summary: row.summary };
       var form = el('div', 'wn-edit');
       var t = document.createElement('input');
       t.type = 'text';
-      t.value = row.title;
+      t.value = draft.title;
       t.maxLength = TITLE_MAX;
       t.setAttribute('aria-label', 'Title shown on the site');
+      t.addEventListener('input', function () { draft.title = t.value; });
       var s = document.createElement('textarea');
-      s.value = row.summary;
+      s.value = draft.summary;
       s.maxLength = SUMMARY_MAX;
       s.rows = 7;
       s.setAttribute('aria-label', 'Summary shown on the site');
+      s.addEventListener('input', function () { draft.summary = s.value; });
       var bar = el('div', 'wn-admin');
       bar.appendChild(button('Save', function () {
-        save(row.id, patchFor(row.status, { title: t.value.trim(), summary: s.value.trim() }),
-          function () { editing = null; });
+        save(row.id, patchFor(row.status, {
+          title: draft.title.trim(), summary: draft.summary.trim()
+        }), function () { editing = null; draft = null; });
       }));
-      bar.appendChild(button('Cancel', function () { editing = null; render(); }));
+      bar.appendChild(button('Cancel', function () {
+        editing = null; draft = null; render();
+      }));
       form.appendChild(t);
       form.appendChild(s);
       form.appendChild(bar);
@@ -377,7 +394,9 @@
       if (row.status === REMOVED) {
         bar.appendChild(button('↩ Restore', function () { decide(row.id, APPROVED); }));
       }
-      bar.appendChild(button('✎ Edit', function () { editing = row.id; render(); }));
+      bar.appendChild(button('✎ Edit', function () {
+        editing = row.id; draft = null; render();
+      }));
       if (row.status !== REMOVED) {
         bar.appendChild(button('✕ Remove', function () {
           if (!window.confirm('Remove “' + row.title + '” from What\'s new?\n\n' +
@@ -475,6 +494,12 @@
       if (split.removed.length) {
         var det = document.createElement('details');
         det.className = 'wn-bin';
+        /* IT STAYS OPEN ACROSS A RE-RENDER. render() rebuilds this element, so
+           without remembering the state every re-render snapped it shut — and
+           pressing Edit on a removed entry re-renders, so the editor opened
+           inside a panel that had just folded up and the button read as dead. */
+        det.open = binOpen;
+        det.addEventListener('toggle', function () { binOpen = det.open; });
         var sum = document.createElement('summary');
         sum.textContent = 'Removed updates (' + split.removed.length + ')';
         det.appendChild(sum);
@@ -492,9 +517,20 @@
 
        The changelog paints FIRST under the date rule alone, so the list is on
        screen without waiting for Firestore — and a database that cannot be
-       reached costs the newest entries rather than the whole section. It can
-       never leak: an unreviewed entry is dated on or after the gate, so the
-       date rule alone withholds it. */
+       reached costs the newest entries rather than the whole section.
+
+       WHAT THAT FIRST PAINT CAN AND CANNOT PROMISE, exactly:
+
+         • an UNREVIEWED entry can never appear in it — it is dated on or after
+           the gate, so the date rule withholds it with no document at all,
+           which is the half that must not leak;
+         • a REMOVED entry that predates the gate IS in it until the decisions
+           land a moment later. It was public until the maintainer took it
+           down, so this shows something that WAS on the site rather than
+           something that never was — and if the decisions never land it stays.
+           The alternative is holding the whole list behind a Firestore read on
+           every visit, which costs every visitor to spare that one; the
+           maintainer's own panel says when the read failed. */
     fetch(cfg.src || '../changelog.json', { cache: 'no-cache' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
@@ -504,7 +540,16 @@
       })['catch'](function () { /* no log — the section stays as it was */ });
 
     decisions().then(function (res) {
-      docs = res.docs;
+      /* A DECISION MADE WHILE THIS READ WAS IN FLIGHT WINS. The read starts at
+         mount and can land AFTER the maintainer has already pressed Publish or
+         Remove — the write went to Firestore, but the answer coming back is
+         older, and taking it wholesale would put the entry back on screen as
+         though the press had done nothing. */
+      for (var id in res.docs) {
+        if (Object.prototype.hasOwnProperty.call(res.docs, id) && !written[id]) {
+          docs[id] = res.docs[id];
+        }
+      }
       docsRead = res.ok;
       render();
     });
@@ -516,6 +561,7 @@
           if (is === admin) return;
           admin = is;
           editing = null;
+          draft = null;
           flash = null;
           render();
         });
@@ -523,12 +569,16 @@
     }
 
     var ctl = {
+      /* Deliberately JUST "new data, re-render" — it does not close an open
+         editor, because that is what a real re-render does (the decisions
+         landing, a snapshot arriving) and the guard uses it to prove a typed
+         draft survives one. The paths that really do reset the editor — a
+         successful save, an auth change — clear it themselves. */
       setForTest: function (nextDocs, isAdmin, nextUpdates) {
         if (nextDocs) docs = nextDocs;
         if (nextUpdates) updates = nextUpdates;
         if (typeof isAdmin === 'boolean') admin = isAdmin;
         docsRead = true;
-        editing = null;
         render();
       }
     };

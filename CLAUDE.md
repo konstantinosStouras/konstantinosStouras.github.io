@@ -1772,10 +1772,15 @@ window advances on a high-water mark, so sending an entry dated after one still
 waiting would push the mark past it and the older entry, once published, would
 reach nobody. The digest stops before it — publish or remove it and everything
 behind it goes out on the next run, in the order it was written. Delayed, never
-lost. A decision read that FAILS is caught, not left to reject: it withholds
-everything since the gate (the safe direction) rather than killing the PAPER
-digests too. The `--test-emails` pass is held to the same rule — a test e-mail
-is a real e-mail.
+lost — **and that last part needs BOTH halves**: the Lit's feature window is a
+TIMESTAMP (`lastFeatureCheckedAt`) advanced on every due run, empty send
+included, so holding the entry back was not enough on its own — the mark would
+have slid past its date while it waited and publishing it a day later would have
+reached nobody. `markCap` parks the mark just before the oldest held entry, and
+with nothing held it IS `now`, exactly as before. A decision read that FAILS is
+caught, not left to reject: it withholds everything since the gate (the safe
+direction) rather than killing the PAPER digests too. The `--test-emails` pass
+is held to the same rule — a test e-mail is a real e-mail.
 
 `DOC_KEYS` in `lit-news.js` and the `hasOnly()` list in `lit/_firestore.rules`
 are pinned against each other BOTH WAYS by
