@@ -865,9 +865,34 @@ function evaluateFeatures(alert, changelog, now) {
  *     everything behind it goes out on the next run, in the order it was
  *     written. Nothing is lost either way — only delayed.
  *
+ * A REMOVED entry deliberately does NOT hold the stream — removing one is a
+ * decision, not a pause, and it is one of the two ways to release the hold. The
+ * consequence, stated rather than hidden: an entry removed and later RESTORED
+ * is put back on the site but is not re-announced, because its date is by then
+ * behind the windows that have moved on. That is the right way round — many
+ * subscribers will already have been e-mailed it before it was taken down, and
+ * nothing here can tell which, so silence beats sending some of them a
+ * duplicate.
+ *
  * Pure, and returns the mailer's OWN entry objects (`_added`, the normalised
  * url) with any rewording laid over them, so nothing downstream changes shape.
  */
+/**
+ * The instant to store as this alert's feature high-water mark.
+ *
+ * `parked` is where the run wants it — below anything still waiting for review,
+ * so a held entry is not lost. `prev` is where this subscriber already is.
+ * The mark NEVER moves backwards: doing so would re-send every feature digest
+ * published in between, which the subscriber sees and the loss it would prevent
+ * is one the changelog's own contract already accepts (an entry back-dated
+ * behind the last run is not re-announced — "seeding historical entries never
+ * triggers a retroactive blast"). In the ordinary case, an entry dated today
+ * with a mark from yesterday's run, `parked` is the later of the two anyway.
+ */
+function featureMarkFor(parked, prev) {
+  return prev && prev > parked ? prev : parked;
+}
+
 function sendableChangelog(changelog, decisions) {
   const all = Array.isArray(changelog) ? changelog : [];
   const split = LitNews.partition(all, decisions || {});
@@ -959,6 +984,9 @@ async function run({ dryRun }) {
   changelog = news.list;
   // the instant the feature high-water mark may not pass while entries are held
   const featureMark = news.markCap && news.markCap < now ? news.markCap : now;
+  if (news.markCap) {
+    console.log(`  feature window parked at ${featureMark.toISOString()} while ${news.pending} entr${news.pending === 1 ? 'y is' : 'ies are'} unreviewed`);
+  }
   if (news.pending || news.removed || news.held) {
     console.log(`Changelog: ${changelog.length} sendable, ${news.pending} waiting for review, ${news.removed} removed` +
       (news.held ? `, ${news.held} held behind the unreviewed entry of ${news.oldestPending}` : ''));
@@ -1057,8 +1085,24 @@ async function run({ dryRun }) {
         console.log(`  no new site features for "${alert.name || describeCriteria(criteria)}" (${alert.frequency || 'weekly'})`);
       }
       /* Parked below anything still waiting for review — see `markCap` in
-         sendableChangelog. With nothing held this IS `now`, as it always was. */
-      if (ok) update.lastFeatureCheckedAt = Timestamp.fromDate(featureMark);
+         sendableChangelog — but NEVER MOVED BACKWARDS.
+
+         Those two pull against each other exactly once, and the tie-break is
+         the changelog's own contract. Parking below a held entry is what stops
+         it being lost; moving the mark back below where this subscriber has
+         already been checked would RE-SEND everything published in between,
+         which is worse and is visible to them. The only way markCap can land
+         before the stored mark is an entry BACK-DATED behind the last run —
+         and a back-dated entry reaching nobody is not a bug here, it is the
+         documented rule the whole file rests on ("entries dated in the past
+         are NOT re-sent, so seeding historical entries never triggers a
+         retroactive blast"). In the ordinary case — an entry dated today,
+         checked yesterday — markCap is LATER than the stored mark, so the
+         park applies and nothing is lost. */
+      if (ok) {
+        update.lastFeatureCheckedAt = Timestamp.fromDate(featureMarkFor(featureMark,
+          toDate(alert.lastFeatureCheckedAt) || toDate(alert.lastCheckedAt)));
+      }
     }
 
     if (!dryRun && Object.keys(update).length) {
@@ -1500,6 +1544,20 @@ function selftest() {
      is strictly older than the cap, so the next window starts after it. */
   ok('an entry already sent stays behind the parked mark',
      new Date('2026-08-25T00:00:00Z') < sendable.markCap);
+
+  /* AND THE MARK NEVER MOVES BACKWARDS. Parking it below a held entry is what
+     stops that entry being lost; moving it below where this subscriber has
+     already been checked would RE-SEND every digest published in between —
+     worse, and visible to them. The only way that can arise is an entry
+     back-dated behind the last run, which the changelog's own contract already
+     says is not re-announced. */
+  const parked = new Date('2026-08-25T23:59:59.999Z');
+  ok('the parked mark is used when the subscriber is behind it',
+     featureMarkFor(parked, new Date('2026-08-20T06:00:00Z')) === parked);
+  ok('and a subscriber already past it is left where they are — no re-send',
+     featureMarkFor(parked, new Date('2026-08-28T06:00:00Z')).toISOString() === '2026-08-28T06:00:00.000Z');
+  ok('a subscriber with no mark at all takes the parked one',
+     featureMarkFor(parked, null) === parked);
 
   ok('nothing waiting means nothing held back',
      sendableChangelog(CLR, { live: { status: 'approved' }, draft: { status: 'approved' },

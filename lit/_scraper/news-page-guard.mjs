@@ -155,6 +155,20 @@ try {
     'a re-render mid-edit keeps what the maintainer has typed');
   await page.click('#litWhatsNew .wn-edit button:has-text("Cancel")');
   ok(!(await page.$('#litWhatsNew .wn-edit')), 'and Cancel closes it, changing nothing');
+  /* A CHANGELOG THAT CANNOT BE FETCHED AT ALL still resolves the section. A
+     rejected fetch — offline, TLS, malformed JSON — used to leave the seeded
+     "Loading the latest updates…" placeholder under a visible heading for
+     ever; an empty log hides the section, and so must a failure. */
+  const dead = await browser.newPage();
+  await dead.route('**/changelog.json', r => r.abort());
+  await dead.goto(BASE + '/lit/about/', { waitUntil: 'domcontentloaded' });
+  await dead.waitForFunction(() => {
+    const box = document.querySelector('#litWhatsNew');
+    return box && box.style.display === 'none';
+  }, { timeout: 10000 }).then(
+    () => ok(true, 'a changelog that cannot be fetched hides the section rather than saying "Loading…" for ever'),
+    () => ok(false, 'a changelog that cannot be fetched hides the section rather than saying "Loading…" for ever'));
+  await dead.close();
 } finally {
   await browser.close();
   server.close();

@@ -537,7 +537,15 @@
         var list = Array.isArray(j) ? j : (j && Array.isArray(j.updates) ? j.updates : []);
         updates = list;
         render();
-      })['catch'](function () { /* no log — the section stays as it was */ });
+      })['catch'](function () {
+        /* A REJECTED fetch (offline, TLS, malformed JSON) must still resolve the
+           section, or the page keeps its seeded "Loading the latest updates…"
+           placeholder under a visible heading for ever — which is what the
+           renderer this replaced avoided by ending in hide(). An empty list
+           renders as the hidden state, the same as a log with nothing in it. */
+        updates = [];
+        render();
+      });
 
     decisions().then(function (res) {
       /* A DECISION MADE WHILE THIS READ WAS IN FLIGHT WINS. The read starts at
