@@ -2,4 +2,56 @@ User-agent: *
 Disallow: /stats/
 Crawl-delay: 7
 
+# The link-preview crawlers, named. They are covered by the wildcard above and
+# naming them anyway is not superstition:
+#
+#  * the Facebook Sharing Debugger has a long-standing bug — first reported in
+#    2014, back again in 2024 — where it answers 403 and blames robots.txt on a
+#    site whose only rule is a permissive wildcard. An explicit group removes
+#    that failure mode, and it costs nothing;
+#  * `Crawl-delay` above is meaningless to most of them and honoured by Slack,
+#    where seven seconds is long enough to lose an unfurl. A preview fetch is a
+#    person waiting for a card, not a crawl;
+#  * one WhatsApp share dispatches three separate Meta agents (WhatsApp,
+#    facebookexternalhit, Facebot), so allowing one of them is not enough.
+#
+# meta-externalagent is deliberately NOT listed: it is Meta's AI-training
+# crawler, a different thing from the preview fetchers, and it is left to the
+# wildcard rather than singled out for encouragement.
+
+# ONE THING TO REMEMBER ABOUT THE GROUPS BELOW: a named User-agent group
+# REPLACES the wildcard for that agent, it does not add to it. Any future rule
+# added to `User-agent: *` therefore has to be repeated here, or these ten
+# crawlers will silently not be subject to it.
+
+User-agent: facebookexternalhit
+Disallow: /stats/
+
+User-agent: Facebot
+Disallow: /stats/
+
+User-agent: WhatsApp
+Disallow: /stats/
+
+User-agent: Twitterbot
+Disallow: /stats/
+
+User-agent: LinkedInBot
+Disallow: /stats/
+
+User-agent: TelegramBot
+Disallow: /stats/
+
+User-agent: Slackbot-LinkExpanding
+Disallow: /stats/
+
+User-agent: Slack-ImgProxy
+Disallow: /stats/
+
+User-agent: Discordbot
+Disallow: /stats/
+
+User-agent: Applebot
+Disallow: /stats/
+
 Sitemap: https://www.stouras.com/sitemap.xml
