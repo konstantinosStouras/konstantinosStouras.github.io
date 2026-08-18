@@ -63,9 +63,14 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Who may see a What's-new entry — the SAME file lit/about/ and the main page's
+// alert preview read it through, so the site and the inbox cannot disagree
+// about what has actually been published. See lit/lit-news.js.
+const LitNews = createRequire(import.meta.url)(path.join(__dirname, '..', 'lit-news.js'));
 const DATA_DIR  = path.join(__dirname, '..', 'data');
 const FT50_DIR  = path.join(__dirname, '..', 'data-ft50');
 // The Working Papers archive (SSRN/NBER/arXiv/OSF pre-prints of the listed
@@ -844,6 +849,53 @@ function evaluateFeatures(alert, changelog, now) {
   return { active: true, due: true, features, windowStart };
 }
 
+/**
+ * WHICH CHANGELOG ENTRIES MAY BE E-MAILED, given the maintainer's decisions.
+ *
+ * Two rules, and the second is the one that is easy to miss:
+ *
+ *  1. Only PUBLISHED entries go out. An entry nobody has reviewed must not be
+ *     announced — an e-mail cannot be recalled, so a digest would defeat the
+ *     review gate outright — and one that has been taken down must not either.
+ *  2. AND THE ONES AFTER IT WAIT THEIR TURN. Each alert's window advances on a
+ *     high-water mark, so sending an entry dated AFTER one that is still
+ *     unreviewed pushes that mark past it, and publishing the older entry later
+ *     would then reach nobody at all, silently and for ever. So the send stops
+ *     before the oldest entry still waiting: publish it or remove it, and
+ *     everything behind it goes out on the next run, in the order it was
+ *     written. Nothing is lost either way — only delayed.
+ *
+ * Pure, and returns the mailer's OWN entry objects (`_added`, the normalised
+ * url) with any rewording laid over them, so nothing downstream changes shape.
+ */
+function sendableChangelog(changelog, decisions) {
+  const all = Array.isArray(changelog) ? changelog : [];
+  const split = LitNews.partition(all, decisions || {});
+  const published = new Map(split.approved.map(r => [r.id, r]));
+  const oldestPending = split.pending
+    .map(r => r.date)
+    .filter(Boolean)
+    .sort()[0] || '';
+
+  const list = [];
+  let held = 0;
+  for (const e of all) {
+    const shown = published.get(e.id);
+    if (!shown) continue;
+    if (oldestPending && String(e.date || '').slice(0, 10) >= oldestPending) { held++; continue; }
+    list.push(shown.title === e.title && shown.summary === e.summary
+      ? e
+      : { ...e, title: shown.title, summary: shown.summary });
+  }
+  return {
+    list,
+    pending: split.pending.length,
+    removed: split.removed.length,
+    held,
+    oldestPending,
+  };
+}
+
 // ── Real run ──────────────────────────────────────────────────────────────────
 async function run({ dryRun }) {
   // Until the secrets are configured, no-op cleanly so the scheduled workflow
@@ -863,7 +915,7 @@ async function run({ dryRun }) {
   const papers = loadRecentPapers(shardRows);
   const tallies = loadRecentTallies(shards.tallies);   // uncapped counts for the digest's number
   const nativeKeys = loadNativeKeys();
-  const changelog = loadChangelog();         // drives the "new features & updates" alerts
+  let changelog = loadChangelog();           // drives the "new features & updates" alerts
   const now = new Date();
   console.log(`Loaded ${papers.length} recently-added papers${shardRows.length ? ` (incl. ${shardRows.length} from ABS shards)` : ''}, ${tallies.length} recent-count tall${tallies.length === 1 ? 'y' : 'ies'} and ${changelog.length} changelog entr${changelog.length === 1 ? 'y' : 'ies'}. now=${now.toISOString()} dryRun=${dryRun}`);
 
@@ -875,6 +927,27 @@ async function run({ dryRun }) {
   }
   const db = admin.firestore();
   const Timestamp = admin.firestore.Timestamp;
+
+  /* A READ FAILURE IS NOT AN EMPTY SET OF DECISIONS: without them every entry
+     since the review gate reads as unreviewed, which is the SAFE direction
+     (nothing new goes out) rather than the wrong one, and older entries still
+     reach a subscriber whose window covers them. Caught rather than left to
+     reject — letting it kill the run would stop the PAPER digests too, and
+     those have nothing to do with the update log. */
+  let newsDecisions = {};
+  try {
+    const dsnap = await db.collection(LitNews.COLLECTION).get();
+    dsnap.forEach(d => { newsDecisions[d.id] = d.data(); });
+  } catch (err) {
+    newsDecisions = {};
+    console.log(`::warning::could not read the What's-new decisions (${err && err.code || err}) — only updates from before the review gate will be sent this run`);
+  }
+  const news = sendableChangelog(changelog, newsDecisions);
+  changelog = news.list;
+  if (news.pending || news.removed || news.held) {
+    console.log(`Changelog: ${changelog.length} sendable, ${news.pending} waiting for review, ${news.removed} removed` +
+      (news.held ? `, ${news.held} held behind the unreviewed entry of ${news.oldestPending}` : ''));
+  }
 
   let transport = null;
   if (!dryRun) {
@@ -998,7 +1071,7 @@ async function sendTestEmails({ dryRun }) {
 
   const ctx = makeCtx();
   const papers = loadRecentPapers();
-  const changelog = loadChangelog();
+  let changelog = loadChangelog();
 
   const { default: admin } = await import('firebase-admin');
   if (!admin.apps.length) {
@@ -1007,6 +1080,20 @@ async function sendTestEmails({ dryRun }) {
     else admin.initializeApp();
   }
   const db = admin.firestore();
+
+  /* A TEST E-MAIL IS A REAL E-MAIL, so it shows only what has really been
+     published — the whole point of the preview is that it is faithful, and an
+     unreviewed entry reaching an inbox is exactly what the gate exists to
+     prevent. Same fallback as the digest run: unreadable decisions withhold
+     everything since the gate rather than guessing. */
+  try {
+    const dsnap = await db.collection(LitNews.COLLECTION).get();
+    const docs = {};
+    dsnap.forEach(d => { docs[d.id] = d.data(); });
+    changelog = sendableChangelog(changelog, docs).list;
+  } catch {
+    changelog = sendableChangelog(changelog, {}).list;
+  }
 
   let transport = null;
   if (!dryRun) {
@@ -1350,6 +1437,38 @@ function selftest() {
   // loadChangelog reads the shipped file; every entry has a parseable date + title
   const cl = loadChangelog();
   ok('loadChangelog returns dated entries, newest first', Array.isArray(cl) && cl.length > 0 && cl.every(e => e._added instanceof Date && e.title) && (cl.length < 2 || cl[0]._added >= cl[1]._added));
+
+  // ── What may be announced at all: the review gate (lit-news.js) ────────────
+  // An e-mail cannot be recalled, so the gate has to hold HERE as well as on
+  // the page: an entry the maintainer has not published, or has taken down,
+  // must never reach an inbox. The decision rules themselves are pinned in
+  // lit/_scraper/news-selftest.mjs; these are the mailer's own use of them.
+  const CLR = [
+    { id: 'old',   title: 'Before the gate', summary: 'S', url: SITE_URL, date: '2026-08-01', _added: new Date('2026-08-01T00:00:00Z') },
+    { id: 'live',  title: 'Published',       summary: 'S', url: SITE_URL, date: '2026-08-25', _added: new Date('2026-08-25T00:00:00Z') },
+    { id: 'draft', title: 'Waiting',         summary: 'S', url: SITE_URL, date: '2026-08-26', _added: new Date('2026-08-26T00:00:00Z') },
+    { id: 'after', title: 'Published, newer', summary: 'S', url: SITE_URL, date: '2026-08-28', _added: new Date('2026-08-28T00:00:00Z') },
+    { id: 'gone',  title: 'Taken down',      summary: 'S', url: SITE_URL, date: '2026-08-29', _added: new Date('2026-08-29T00:00:00Z') },
+  ];
+  const DEC = { live: { status: 'approved' }, after: { status: 'approved' }, gone: { status: 'removed' } };
+  const sendable = sendableChangelog(CLR, DEC);
+  // (the list keeps the changelog's own order, which the fixture writes oldest
+  //  first; evaluateFeatures sorts by date itself, so only membership matters)
+  ok('only published entries are e-mailed', sendable.list.map(e => e.id).sort().join(',') === 'live,old');
+  ok('an unreviewed entry is counted, not sent', sendable.pending === 1 && sendable.removed === 1);
+  ok('a published entry DATED AFTER an unreviewed one waits for it',
+     sendable.held === 1 && !sendable.list.some(e => e.id === 'after'));
+  ok('with no decisions readable, nothing since the review gate goes out',
+     sendableChangelog(CLR, {}).list.map(e => e.id).sort().join(',') === 'old');
+  ok('a rewording is applied to what is sent',
+     sendableChangelog(CLR, { live: { status: 'approved', title: 'Reworded' } })
+       .list.some(e => e.id === 'live' && e.title === 'Reworded'));
+  ok('and the mailer keeps its own entry shape (_added survives)',
+     sendable.list.every(e => e._added instanceof Date));
+  ok('nothing waiting means nothing held back',
+     sendableChangelog(CLR, { live: { status: 'approved' }, draft: { status: 'approved' },
+       after: { status: 'approved' }, gone: { status: 'approved' } }).held === 0);
+
   // a features-only test e-mail samples the real changelog (faithful preview)
   const tf = renderTestEmail({ name: 'Site updates', criteria: { features: true } }, [], ctx, cl);
   ok('features-only test samples the real changelog', /^\[Test\] /.test(tf.subject) && /what.s new/.test(tf.html) && tf.html.includes(cl[0].title));

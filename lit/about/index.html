@@ -74,6 +74,46 @@
   .about-body .whats-new { margin: 6px 0 6px; }
   .about-body .whats-new ul li { padding-left: 12px; margin-bottom: 12px; }
   .about-body .whats-new ul li::before { content: none; }
+
+  /* ── What's new: one entry, and the maintainer's controls over it ─────────
+     Rendered by ../lit-news.js, which also decides who may see which entry.
+     changelog.json says what was announced; Firestore says what has been done
+     about it — published, reworded or taken down — and an entry nobody has
+     reviewed is shown to the maintainer alone. */
+  .wn-list { list-style: none; margin: 0; padding: 0; }
+  .about-body .wn-list .wn-item { padding-left: 12px; margin-bottom: 12px; border-left: 3px solid var(--accent); }
+  .wn-date { font-size: 11.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+  .wn-title { font-weight: 600; color: var(--text); font-size: 15px; }
+  .wn-title a { color: var(--navy); text-decoration: none; }
+  .wn-sum { color: var(--text); font-size: 13.5px; margin-top: 1px; line-height: 1.55; }
+
+  /* AN ENTRY WAITING FOR REVIEW — nobody but the maintainer can see it, so it
+     reads as a draft rather than as something that has been announced. */
+  .about-body .wn-list .wn-item.is-pending { border-left-color: #b6862a; background: var(--accent-light); border-radius: 0 6px 6px 0; padding: 6px 10px 8px 12px; }
+  .wn-flag { margin-left: 8px; color: #8a6318; font-weight: 700; }
+  /* AN ENTRY THAT WAS REMOVED. It is off the list entirely — that is what
+     Remove now means — so this is only ever seen inside "Removed updates". */
+  .about-body .wn-list .wn-item.is-removed { border-left-color: var(--border); opacity: .75; }
+  .wn-item.is-removed .wn-title { text-decoration: line-through; }
+
+  .wn-admin { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }
+  .wn-admin button { font: inherit; font-size: 12px; font-weight: 600; color: var(--navy); background: var(--white); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+  .wn-admin button:hover { border-color: var(--navy); }
+  .wn-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; padding: 11px 14px; font-size: 13.5px; color: var(--text); background: var(--accent-light); border: 1px solid #e2cf9e; border-radius: 8px; }
+  .wn-note button { font: inherit; font-size: 12px; font-weight: 600; color: var(--white); background: var(--navy); border: 1px solid var(--navy); border-radius: 999px; padding: 5px 13px; cursor: pointer; }
+  .wn-note button:hover { background: var(--navy-dark); border-color: var(--navy-dark); }
+  .wn-msg { margin: 0 0 12px; font-size: 13px; color: var(--text-muted); }
+  .wn-msg.is-err { color: #9b2c2c; }
+  /* The way back. A removed entry leaves the list, so the only thing that can
+     make Remove reversible is somewhere else to find it: collapsed, out of the
+     way, and drawn for the maintainer alone. */
+  .wn-bin { margin: 16px 0 0; border: 1px solid var(--border); border-radius: 8px; background: var(--white); padding: 4px 14px; }
+  .wn-bin summary { cursor: pointer; font-weight: 600; font-size: 13.5px; color: var(--navy); padding: 9px 0; }
+  .wn-bin .wn-list { margin-top: 8px; padding-bottom: 10px; }
+  .wn-panel:empty { display: none; }
+  .wn-edit { display: grid; gap: 7px; margin-top: 8px; }
+  .wn-edit input, .wn-edit textarea { font: inherit; font-size: 13.5px; color: var(--text); background: var(--white); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; width: 100%; resize: vertical; }
+  .wn-edit input:focus, .wn-edit textarea:focus { outline: none; border-color: var(--navy); }
   .about-note { font-size: 13px; color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 24px; padding-top: 16px; line-height: 1.6; text-align: justify; text-justify: inter-word; -webkit-hyphens: auto; hyphens: auto; }
   .about-note a { color: var(--navy); }
 
@@ -156,34 +196,15 @@
   </div>
 </main>
 
-<script>
-  // "What's new" list — read from the shared changelog (../changelog.json), the
-  // same single source the main page's alert preview and the mailer use.
-  (function () {
-    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-    var box = document.getElementById('litWhatsNew'), head = document.getElementById('litWhatsNewHead');
-    function fmt(d) { try { return new Date(d + 'T00:00:00Z').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return d; } }
-    function httpUrl(u) { return /^https?:\/\//i.test('' + (u || '')) ? ('' + u) : ''; }
-    function hide() { if (head) head.style.display = 'none'; if (box) box.style.display = 'none'; }
-    function render(cl) {
-      if (!box) return;
-      if (!cl.length) { hide(); return; }
-      box.innerHTML = '<ul style="list-style:none;padding:0;margin:0">' + cl.slice(0, 8).map(function (f) {
-        var url = httpUrl(f.url);
-        return '<li style="margin:0 0 12px;padding-left:12px;border-left:3px solid var(--accent)">' +
-          '<div style="font-size:11.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">' + esc(fmt(f.date)) + '</div>' +
-          '<div style="font-weight:600;color:var(--text);font-size:15px">' + (url ? '<a href="' + esc(url) + '" style="color:var(--navy);text-decoration:none">' + esc(f.title) + '</a>' : esc(f.title)) + '</div>' +
-          (f.summary ? '<div style="color:var(--text);font-size:13.5px;margin-top:1px;line-height:1.55">' + esc(f.summary) + '</div>' : '') +
-          '</li>';
-      }).join('') + '</ul>';
-    }
-    fetch('../changelog.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-      var list = Array.isArray(j) ? j : (j && Array.isArray(j.updates) ? j.updates : []);
-      list = list.filter(function (e) { return e && e.title && e.date; }).sort(function (a, b) { return a.date < b.date ? 1 : (a.date > b.date ? -1 : 0); });
-      render(list);
-    }).catch(hide);
-  })();
-</script>
+<!-- "What's new" — rendered by ../lit-news.js from the shared changelog
+     (../changelog.json), the same single source the main page's alert preview
+     and the mailer use, with the maintainer's decisions from Firestore laid
+     over it: an entry nobody has reviewed is shown to the maintainer alone,
+     one they have removed leaves the list, and signed in as the maintainer
+     each entry carries Publish / Edit / Remove. Loaded after the Firebase SDK
+     and lit-acct-nav.js below, which is what initialises the app it reads
+     through; without either it still renders the log, minus anything since the
+     review gate. -->
 
 <!-- Shared sign-in / account control in the header (mirrors the main browser).
      Needs the Firebase compat SDK (app + auth + firestore — the latter lets
@@ -194,5 +215,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="../lit-acct-nav.js"></script>
+<script src="../lit-news.js"></script>
+<script>LitNews.mount({ list: '#litWhatsNew', head: '#litWhatsNewHead', limit: 8 });</script>
 </body>
 </html>
