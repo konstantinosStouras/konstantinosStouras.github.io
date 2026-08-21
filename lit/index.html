@@ -6569,6 +6569,30 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     }));
   }
 
+  // The duplicate's PUBLIC registered-users marker has to go with it. It is one
+  // contentless doc per ACCOUNT and lit/analytics/ counts the collection, so a
+  // marker left behind under a uid nobody can sign in to counts one person
+  // twice for ever — exactly the double-count a merge exists to end. Deleted
+  // here, while we can still write as this user (nothing can touch it once the
+  // sign-in is gone), and put back by markRegistryEntry() on the failure path.
+  // Best effort: a merge must never fail because the tally could not be tidied.
+  function deleteOwnRegistryMark() {
+    if (!state.user) return Promise.resolve();
+    return db.collection('registeredUsers').doc(state.user.uid).delete()
+      .catch(function (err) { console.warn('registry unmark:', err && err.code); });
+  }
+
+  // Write (or re-write) this account's public marker. Called on sign-in and on
+  // the merge failure branch, where the account lives on and must go on being
+  // counted.
+  function markRegistryEntry(uid) {
+    if (!uid) return Promise.resolve();
+    lastMarkedUid = uid;
+    return db.collection('registeredUsers').doc(uid)
+      .set({ t: serverTime() }, { merge: true })
+      .catch(function (err) { console.warn('registry mark:', err && err.code); });
+  }
+
   // Put alerts back on THIS account. Used only on the failure path below: the
   // subscriptions are deleted before the sign-in is removed (they cannot be
   // touched afterwards), so an account deletion that then fails would leave a
@@ -6624,7 +6648,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       }
       // The alerts must go while we can still write as this user — see
       // deleteOwnAlerts. That is why the failure branch below puts them back.
-      return deleteOwnAlerts().then(deleteCurrentAccount).then(function () {
+      return deleteOwnAlerts().then(deleteOwnRegistryMark).then(deleteCurrentAccount).then(function () {
         if (!auto) alert('This sign-in was removed.\n\nNow sign in to the account you want to KEEP — your saved papers, lists and alerts will move over automatically.');
         acctOpenAuth();
         // In the modal, explain (non-blocking) why they're seeing sign-in.
@@ -6642,6 +6666,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         lastSharedSig = {};
         try { syncPublicLists(); } catch (e3) {}
         try { restoreOwnAlerts(data.alerts); } catch (e4) {}
+        // The account lives on, so it must go on being counted: put its public
+        // registered-users marker back (deleted just above, while we still
+        // could write as this user).
+        try { markRegistryEntry(state.user && state.user.uid); } catch (e5) {}
         alert('Could not remove this account: ' + friendly(e) + '\nYour saved data was not moved.');
       });
     }).catch(function (e) { alert('Merge failed before any change was made: ' + friendly(e)); });
@@ -8302,12 +8330,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       // signed-in uid: if the (updated) rules aren't deployed yet this just fails
       // silently and nothing else on the page is affected.
       if (lastMarkedUid !== user.uid) {
-        lastMarkedUid = user.uid;
-        try {
-          db.collection('registeredUsers').doc(user.uid)
-            .set({ t: serverTime() }, { merge: true })
-            .catch(function (err) { console.warn('registry mark:', err && err.code); });
-        } catch (e) {}
+        try { markRegistryEntry(user.uid); } catch (e) {}
       }
       unsubProfile = profileDoc().onSnapshot(function (d) {
         state.profile = d.exists ? (d.data() || {}) : {};

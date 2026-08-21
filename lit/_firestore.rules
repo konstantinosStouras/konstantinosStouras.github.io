@@ -34,12 +34,23 @@ service cloud.firestore {
     // without losing the count, replace these per-user public docs with a single
     // counter document incremented by a Cloud Function (Admin SDK) and drop
     // public read — a follow-up, not done here to avoid breaking the live tile.
+    //
+    // DELETE is allowed for the OWNER of the marker, and only for them. A
+    // sign-in that goes away must stop being counted: the duplicate-account
+    // merge deletes the account it merges AWAY (acctStartMerge), and deleting a
+    // Firebase sign-in does not touch its Firestore data — so with `delete: if
+    // false` the merged-away account's marker stayed here for ever and the
+    // "Registered users" tile went on counting one person as two. The merge
+    // retires its own marker just before it deletes the sign-in (the same
+    // "while we can still write as this user" reasoning as deleteOwnAlerts),
+    // and re-writes it if the deletion then fails. Nobody can delete anyone
+    // else's marker, so this cannot be used to deflate the tally.
     match /registeredUsers/{userId} {
       allow read: if true;
       allow create, update: if request.auth != null
                             && request.auth.uid == userId
                             && request.resource.data.keys().hasOnly(['t']);
-      allow delete: if false;
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // Duplicate-account detection (same person, two accounts). Each signed-in
