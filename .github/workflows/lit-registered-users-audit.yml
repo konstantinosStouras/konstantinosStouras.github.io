@@ -1,0 +1,60 @@
+name: lit — registered-users tally audit
+
+# Keeps the "Registered users" figure on stouras.com/lit/analytics/ a count of
+# PEOPLE rather than of leftover marker documents: it removes the public
+# `registeredUsers` markers whose Firebase Auth account no longer exists —
+# accounts merged away as duplicates (the merge deletes the sign-in, which does
+# not delete its Firestore data) and accounts deleted from the console.
+#
+# Only the Admin SDK can see whether a uid still exists, which is why this runs
+# here and not in the page. It is conservative by construction: a marker is
+# removed only on a definite "no such user", so a failed look-up leaves the
+# tally exactly as it was. See lit/_scraper/registered-users-audit.mjs.
+#
+# A clean no-op until the FIREBASE_SERVICE_ACCOUNT secret is set. It commits
+# nothing — the only thing it writes is Firestore.
+
+on:
+  schedule:
+    - cron: '10 7 * * *'      # daily 07:10 UTC, before the 08:10 analytics build
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — report the orphaned markers, delete nothing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lit-registered-users-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+
+      # Offline, no credentials, no dependencies — runs before anything can
+      # delete a marker document.
+      - name: Offline checks
+        run: node lit/_scraper/registered-users-audit.mjs --selftest
+
+      - name: Install dependencies
+        run: npm install --no-save --ignore-scripts firebase-admin@12.7.0
+
+      - name: Audit the registered-users tally
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node lit/_scraper/registered-users-audit.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}

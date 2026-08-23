@@ -1742,10 +1742,29 @@ count comes from a **public** `registeredUsers/{uid}` collection: one contentles
 per-account doc holding just a coarse `t` timestamp (no e-mail/name), written
 once per signed-in session by the main page's `auth.onAuthStateChanged` and read
 here via a `count()` aggregation (one billed read per visit). Its rule in
-`_firestore.rules` is public-read + owner-only, `t`-only writes, no delete; the
-tile hides itself if that rule isn't deployed. The count reflects accounts that
-have signed in since the tally launched (converges to the true total as users
-return; the exact all-time total is in Firebase console → Authentication).
+`_firestore.rules` is public-read + owner-only, `t`-only writes, OWNER-ONLY
+delete; the tile hides itself if that rule isn't deployed. **The count is of
+UNIQUE accounts, and two things keep it that way** (owner request 2026-08-21 —
+"if two registered user accounts have been merged, we should count them as
+one"): (1) the duplicate-account MERGE retires its own marker —
+`deleteOwnRegistryMark` in `acctStartMerge`, run while we can still write as
+the merged-away user (the same reasoning as `deleteOwnAlerts`) and re-written
+by `markRegistryEntry` on the failure branch, since deleting a Firebase
+sign-in does not delete its Firestore data and the orphaned marker would count
+one person as two for ever (this is why the rule allows owner delete — nobody
+can delete anyone ELSE's marker, so the tally can't be deflated); and (2) a
+daily **audit** removes the markers already orphaned by earlier merges or by
+console-deleted accounts — `lit/_scraper/registered-users-audit.mjs`
+(`.github/workflows/lit-registered-users-audit.yml`, 07:10 UTC, before the
+analytics build; Admin SDK, since only it can ask Auth whether a uid still
+exists), which deletes a marker ONLY on a definite `auth/user-not-found` — any
+other error leaves it in place, so a failed look-up can never shrink the
+tally. Modes `--dry-run`/`--scan`; offline test
+`node lit/_scraper/registered-users-audit.mjs --selftest`; a no-op until
+`FIREBASE_SERVICE_ACCOUNT` is set (the same secret the mailers use). The count
+otherwise reflects accounts that have signed in since the tally launched
+(converges to the true total as users return; the exact all-time total is in
+Firebase console → Authentication).
 Beside it sits a live **"Exploring now"** figure — the number of visitors
 currently browsing The Lit in real time — built on **Firebase Realtime Database
 presence** with **anonymous auth**, run in a **separate `'presence'` Firebase

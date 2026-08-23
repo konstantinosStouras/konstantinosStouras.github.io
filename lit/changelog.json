@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "registered-users-unique-count",
+      "date": "2026-08-21",
+      "title": "The “Registered users” figure counts people, not leftover accounts",
+      "summary": "The Data Analytics page's live “Registered users” tile counts one small public marker per account — and an account merged away as a duplicate, or deleted outright, used to leave its marker behind, so one person could be counted twice for ever. Merging two accounts now retires the merged-away account's marker in the same step, and a daily check removes any markers whose account no longer exists, so the figure is the number of unique registered accounts.",
+      "url": "https://www.stouras.com/lit/analytics/"
+    },
+    {
       "id": "whats-new-reviewed-and-tidy",
       "date": "2026-08-18",
       "title": "“What's new” is reviewed before it is published, and a removed update really goes",
