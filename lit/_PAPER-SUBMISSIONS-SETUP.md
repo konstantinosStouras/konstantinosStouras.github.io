@@ -68,6 +68,14 @@ suggestions to Firestore; they just sit `pending` until the ingest runs.
      `review` / `rejected` + reason) and, when SMTP is configured, e-mails the
      submitter their outcome and the maintainer a summary.
 
+   A `review` item is also announced INDIVIDUALLY, and reliably: the ingest's
+   summary is fire-and-forget (sent once, at processing time, only if SMTP was
+   up that minute), so the feedback mailer's review-queue pass
+   (`lit/_scraper/feedback-mailer.mjs`, every 10 minutes) e-mails the
+   maintainer one message per suggestion still waiting — stamping
+   `reviewMailedAt` after a successful send, so nothing is announced twice and
+   a failed send retries. See `lit/_FEEDBACK-SETUP.md` §5.
+
    It shares `lit/data-workingpapers/` (and the `lit-workingpapers-<ref>`
    concurrency group) with the crawler, so writes never race; both seed from the
    committed files and only add, so neither clobbers the other. `_authors.json`

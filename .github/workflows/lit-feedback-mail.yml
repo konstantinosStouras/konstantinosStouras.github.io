@@ -8,7 +8,12 @@ name: lit — feedback forwarder
 # lit/_feedback-resolutions/ (one file per resolved ticket): it closes the
 # feedback doc and e-mails the submitter "your feedback is resolved" with the
 # fix description + link — idempotent via a content hash, so files stay in
-# place as the public record. See lit/_scraper/feedback-mailer.mjs,
+# place as the public record. A third pass announces the OTHER queue on that
+# page: a suggested PUBLISHED paper the catalog lacks (paperSubmissions,
+# status 'review') is never added automatically, so each one is e-mailed to
+# the maintainer once — `reviewMailedAt` stamped after the send, a burst as
+# one list — instead of waiting silently in the 📄 Paper suggestions inbox.
+# See lit/_scraper/feedback-mailer.mjs,
 # lit/_feedback-resolutions/README.md and lit/_FEEDBACK-SETUP.md.
 #
 # It stays a clean no-op until the secrets below are configured, so it does not
