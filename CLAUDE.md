@@ -1464,7 +1464,17 @@ message back to them** as a confirmation (`renderSubmitterEmail`: receipt
 banner + ticket; marked `ackSent` so it's never doubled; best-effort — its
 failure never blocks or un-marks the maintainer copy). An **anonymous**
 submission by definition can't receive one, so only the maintainer's copy goes
-out. It stamps `forwarded:true` so nothing is sent twice.
+out. It stamps `forwarded:true` so nothing is sent twice. **The same run's
+third pass announces the page's OTHER queue** — a paper suggestion stamped
+`status:'review'` (a published paper only the maintainer's hands can add; see
+the paper-submissions section) is e-mailed to `FEEDBACK_TO` once, the resolved
+paper + the submitter's citation + the inbox to act in, `reviewMailedAt`
+stamped AFTER a successful send so nothing is announced twice and a failure
+retries; above `FEEDBACK_REVIEW_BURST` (10) a batch goes as one list. The
+ingest's own batch summary is unchanged — it reports what a RUN did, where
+this announces what is WAITING, however it got there (the summary was
+fire-and-forget with no mark on the document, so an SMTP hiccup left a
+suggestion sitting in the inbox with nothing anywhere saying so).
 Setup: `lit/_FEEDBACK-SETUP.md`. Delivery is
 instant when the optional **Firestore `onCreate` Cloud Function** is deployed
 (`lit/_functions/`, project `lit-paper-browser`; `forwardFeedbackOnCreate`
@@ -2113,7 +2123,10 @@ already listed (by DOI, or by the `matchPublished` probe that catches the same
 paper under another registration) → `duplicate`; genuinely missing →
 **`review`** — a published paper is NEVER auto-added (the daily harvests own
 the published catalog); the maintainer gets the resolved title/journal/year +
-the submitter's citation to add by hand. It **writes the dataset BEFORE
+the submitter's citation to add by hand, and the feedback mailer's
+review-queue pass e-mails them about each one still waiting (once per
+suggestion, `reviewMailedAt` as the high-water mark — see the feedback
+section). It **writes the dataset BEFORE
 stamping Firestore** (a crash just re-processes idempotently — the paper is
 then a `duplicate`, never lost), stamps each doc
 `added`/`duplicate`/`linked`/`review`/`rejected`+reason (+ `mode:'published'`,

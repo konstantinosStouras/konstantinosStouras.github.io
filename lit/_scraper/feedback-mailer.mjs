@@ -57,6 +57,25 @@
  *   node feedback-mailer.mjs --selftest  offline render + attachment self-tests
  *   node feedback-mailer.mjs --limit=N   cap how many are processed this run (default 50)
  *
+ * REVIEW-QUEUE PASS — a paper suggestion that needs the maintainer's hands is
+ * SAID OUT LOUD. The Feedback page's other queue is `paperSubmissions`: a
+ * suggested PUBLISHED paper the catalog genuinely lacks is stamped
+ * status:'review' by the ingest (lit/_scraper-workingpapers/
+ * ingest-submissions.mjs) and is never added automatically — the daily
+ * harvests own the published catalog, so it waits in the 📄 Paper suggestions
+ * inbox for the maintainer to add by hand. The ingest mentions it once, in a
+ * batch summary at processing time, and that was the whole announcement: sent
+ * fire-and-forget with no mark on the document, so an SMTP hiccup — or SMTP
+ * simply not being configured yet that day — left the suggestion sitting in
+ * the queue with nothing anywhere saying so. This pass e-mails the maintainer
+ * ONE message per waiting suggestion (the resolved paper, the submitter's
+ * citation, and the inbox to act in), stamping `reviewMailedAt` on the
+ * document AFTER a successful send — never twice, and a failed send retries
+ * next run. Above REVIEW_BURST at once (a backfill, or spam) they go as one
+ * list instead of a mail bomb. The ingest's batch summary is unchanged — it
+ * reports what a RUN did; this announces what is WAITING, however it got
+ * there. Same shape as the review-queue mailer on operationsacademia.org.
+ *
  * It is a clean no-op until FIREBASE_SERVICE_ACCOUNT + SMTP_* are configured, so
  * it never fails before the project is set up. See lit/_FEEDBACK-SETUP.md.
  */
@@ -345,6 +364,171 @@ async function applyResolutions(db, FieldValue, transport, fromAddr, fromName) {
   console.log(`Resolutions done. Closed ${closed}, e-mailed ${emailed}, already up to date ${upToDate}, failed ${failed}.`);
 }
 
+/* ─────────────── review queue — the suggestions waiting on YOU ───────────── */
+
+// More than this many un-announced at once is a batch (a backfill, or spam),
+// not readers trickling in, and goes as ONE list — the same mail-bomb
+// reasoning as the burst rule in operationsacademia.org's review mailer.
+const REVIEW_BURST = (function () {
+  const n = parseInt(process.env.FEEDBACK_REVIEW_BURST || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 10;
+})();
+
+const FEEDBACK_PAGE = 'https://www.stouras.com/lit/feedback/';
+
+// What one waiting suggestion is, for the subject line and the digest rows:
+// the RESOLVED paper first (the ingest already looked it up in Crossref/
+// OpenAlex — that is what the maintainer will actually add), the submitter's
+// typed title only as the fallback.
+function reviewLabel(doc) {
+  const title = String(doc.resolvedTitle || doc.title || '').trim() || '(title unresolved)';
+  const journal = String(doc.resolvedJournal || '').trim();
+  return journal ? `${title} — ${journal}` : title;
+}
+
+// One suggestion waiting for the maintainer's hands. Pure, so the selftest can
+// hold it still. The e-mail says the one thing that matters first: nothing
+// will add this paper on its own.
+export function renderReviewNudgeEmail(doc) {
+  const label = reviewLabel(doc);
+  const ticket = String(doc.ticket || '').trim();
+  const doi = String(doc.resolvedDoi || '').trim();
+  const subject = `[The Lit] paper suggestion to review — ${firstLine(label, 70)}`;
+
+  const metaLines = [
+    ['Resolved title', doc.resolvedTitle || '—'],
+    ['Journal', doc.resolvedJournal || '—'],
+    ['DOI', doi || '—'],
+    ['Submitted as', [doc.title, doc.url].filter(Boolean).join(' · ') || '—'],
+    ['Citation', firstLine(doc.citation, 300) || '—'],
+    ['Note', firstLine(doc.note, 300) || '—'],
+    ['Suggested by', [doc.name, doc.email].filter(Boolean).join(' ') || 'anonymous'],
+    ['Ticket', ticket || '—'],
+  ];
+
+  const bodyText =
+    'A reader suggested a published paper The Lit genuinely lacks. It was resolved and ' +
+    'checked against the catalog, and it is NOT added automatically — published papers are ' +
+    'the daily harvests’ to add, so this one waits in the Paper suggestions inbox until ' +
+    'you add it by hand (or delete the suggestion).\n\n' +
+    metaLines.map(([k, v]) => `${k}: ${v}`).join('\n') + '\n\n' +
+    (doi ? `Paper: https://doi.org/${doi}\n` : '') +
+    `Inbox: ${FEEDBACK_PAGE}\n\n` +
+    'This reminder is sent once per suggestion; the card stays in the inbox until you act on it.';
+
+  const html =
+    '<div style="font-family:Segoe UI,Arial,sans-serif;color:#241a1e;max-width:640px">' +
+    '<h2 style="color:#7d1d3f;font-size:18px;margin:0 0 10px">A paper suggestion is waiting for you</h2>' +
+    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px">A reader suggested a published paper ' +
+    'The Lit genuinely lacks. It is <b>not added automatically</b> — it waits in the ' +
+    '<a href="' + FEEDBACK_PAGE + '" style="color:#7d1d3f">📄 Paper suggestions inbox</a> ' +
+    'until you add it by hand.</p>' +
+    '<table style="font-size:12.5px;color:#6a5a60;border-collapse:collapse;margin:0 0 14px">' +
+    metaLines.map(([k, v]) => '<tr><td style="padding:2px 12px 2px 0;font-weight:600;vertical-align:top">' + htmlEscape(k) +
+      '</td><td style="padding:2px 0">' + htmlEscape(v) + '</td></tr>').join('') +
+    '</table>' +
+    (doi ? '<p style="font-size:14px;margin:0 0 8px"><a href="https://doi.org/' + htmlEscape(doi) +
+      '" style="color:#7d1d3f;font-weight:600">Open the paper →</a></p>' : '') +
+    '<p style="font-size:14px;margin:0 0 14px"><a href="' + FEEDBACK_PAGE +
+      '" style="color:#7d1d3f;font-weight:600">Open the suggestions inbox →</a></p>' +
+    '<p style="font-size:12.5px;color:#6a5a60;margin:0">This reminder is sent once per suggestion; ' +
+    'the card stays in the inbox until you act on it.</p>' +
+    '</div>';
+
+  return { subject, text: bodyText, html };
+}
+
+// A burst, as one list — what is waiting, never the per-item card repeated.
+export function renderReviewDigestEmail(items) {
+  const subject = `[The Lit] ${items.length} paper suggestions to review`;
+  const rows = items.map(({ doc }) => {
+    const bits = [reviewLabel(doc), doc.resolvedDoi ? 'doi:' + doc.resolvedDoi : '',
+      doc.ticket ? '#' + doc.ticket : ''].filter(Boolean);
+    return bits.join('  ·  ');
+  });
+  const text =
+    `${items.length} suggested published papers are waiting in the Paper suggestions inbox. ` +
+    'None is added automatically — each waits until you add it by hand.\n\n' +
+    rows.map(r => '• ' + r).join('\n') + '\n\n' +
+    `Inbox: ${FEEDBACK_PAGE}\n`;
+  const html =
+    '<div style="font-family:Segoe UI,Arial,sans-serif;color:#241a1e;max-width:640px">' +
+    '<h2 style="color:#7d1d3f;font-size:18px;margin:0 0 10px">' + items.length +
+    ' paper suggestions are waiting for you</h2>' +
+    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px">They arrived together, so they are ' +
+    'listed here rather than sent one by one. None is added automatically.</p>' +
+    '<ul style="font-size:13.5px;line-height:1.7;margin:0 0 14px;padding-left:20px">' +
+    rows.map(r => '<li>' + htmlEscape(r) + '</li>').join('') + '</ul>' +
+    '<p style="font-size:14px;margin:0"><a href="' + FEEDBACK_PAGE +
+      '" style="color:#7d1d3f;font-weight:600">Open the suggestions inbox →</a></p>' +
+    '</div>';
+  return { subject, text, html };
+}
+
+// The waiting-and-unannounced suggestions, oldest first — the same
+// single-equality query + in-memory sort discipline as the feedback read.
+async function pendingReviewSuggestions(db) {
+  const snap = await db.collection('paperSubmissions').where('status', '==', 'review').limit(LIMIT).get();
+  return snap.docs
+    .filter(d => !d.get('reviewMailedAt'))
+    .map(d => ({ id: d.id, ref: d.ref, doc: d.data() }))
+    .sort((a, b) => {
+      const t = (x) => {
+        const v = x.doc.processedAt || x.doc.createdAt;
+        return v && v.toMillis ? v.toMillis() : 0;
+      };
+      return t(a) - t(b);
+    });
+}
+
+// Third phase: say what is waiting. `reviewMailedAt` is stamped AFTER a
+// successful send — the failure that matters is a suggestion nobody hears
+// about; a duplicate after a crash between the two is a nuisance, and that is
+// the right way round (the same order the forwarding pass uses).
+async function announceReviewQueue(db, FieldValue, transport, fromAddr, fromName) {
+  let items;
+  try {
+    items = await pendingReviewSuggestions(db);
+  } catch (e) {
+    console.error('Review queue: could not read paperSubmissions:', e && e.message);
+    return;
+  }
+  if (!items.length) return;
+  console.log(`\nReview queue: ${items.length} paper suggestion(s) waiting and not yet announced.`);
+
+  const from = fromName ? `"${fromName}" <${fromAddr}>` : fromAddr;
+
+  if (items.length > REVIEW_BURST) {
+    const mail = renderReviewDigestEmail(items);
+    if (DRY_RUN) { console.log(`  [dry-run] would send ONE digest: ${mail.subject}`); return; }
+    try {
+      await transport.sendMail({ from, to: FEEDBACK_TO, subject: mail.subject, text: mail.text, html: mail.html });
+    } catch (e) { console.error('  ✗ review digest failed:', e && e.message); return; }
+    for (const it of items) {
+      try { await it.ref.update({ reviewMailedAt: FieldValue.serverTimestamp() }); }
+      catch (e) { console.error(`  ⚠ announced ${it.id} but could not stamp it (${e && e.message}) — it may be announced twice`); }
+    }
+    console.log(`  ✓ ${items.length} announced as one digest.`);
+    return;
+  }
+
+  for (const it of items) {
+    const mail = renderReviewNudgeEmail(it.doc);
+    if (DRY_RUN) { console.log(`  [dry-run] → ${FEEDBACK_TO}: ${mail.subject}`); continue; }
+    try {
+      await transport.sendMail({ from, to: FEEDBACK_TO, subject: mail.subject, text: mail.text, html: mail.html,
+        headers: { 'X-Lit-Submission': it.id } });
+    } catch (e) {
+      // left unstamped on purpose, so the next run tries again
+      console.error(`  ✗ ${it.id}: ${e && e.message}`);
+      continue;
+    }
+    try { await it.ref.update({ reviewMailedAt: FieldValue.serverTimestamp() }); }
+    catch (e) { console.error(`  ⚠ announced ${it.id} but could not stamp it (${e && e.message}) — it may be announced twice`); }
+    console.log(`  ✓ announced ${it.id}`);
+  }
+}
+
 /* ─────────────────────────── self-test (offline) ─────────────────────────── */
 function selftest() {
   let fail = 0;
@@ -425,6 +609,40 @@ function selftest() {
   const esc1 = renderResolutionEmail({ text: '<b>bold</b>', email: 'a@b.co', ticket: 'LIT-1' }, { body: 'Fixed <sup>tags</sup>.' });
   eq(esc1.html.includes('&lt;sup&gt;tags&lt;/sup&gt;') && esc1.html.includes('&lt;b&gt;bold&lt;/b&gt;'), 'html escapes user + resolution text');
 
+  // review-queue nudge — the suggestions only the maintainer's hands can add
+  const rvDoc = {
+    status: 'review', mode: 'published',
+    resolvedTitle: 'Strategic Queueing in Service Systems', resolvedJournal: 'Management Science',
+    resolvedDoi: '10.1287/mnsc.2020.1234',
+    title: 'strategic queueing (typed)', url: 'https://doi.org/10.1287/mnsc.2020.1234',
+    citation: 'Doe, J. (2020). Strategic Queueing in Service Systems. Management Science 66(4).',
+    note: 'Please add — heavily cited in our field.',
+    name: 'Jane Doe', email: 'jane@example.com', ticket: 'LIT-260901-QQ01',
+  };
+  const nudge = renderReviewNudgeEmail(rvDoc);
+  eq(nudge.subject.includes('paper suggestion to review'), 'nudge subject says what is waiting');
+  eq(nudge.subject.includes('Strategic Queueing'), 'and names the RESOLVED paper, not the typed title');
+  eq(nudge.text.includes('NOT added automatically') && /not added automatically/i.test(nudge.html),
+    'nudge says the one thing that matters: nothing will add it on its own');
+  eq(nudge.text.includes('https://www.stouras.com/lit/feedback/') &&
+     nudge.html.includes('https://www.stouras.com/lit/feedback/'),
+    'nudge links the suggestions inbox in both bodies');
+  eq(nudge.text.includes('https://doi.org/10.1287/mnsc.2020.1234'), 'nudge links the paper by DOI');
+  eq(nudge.text.includes(rvDoc.citation) && nudge.html.includes('LIT-260901-QQ01'),
+    'the submitter’s citation and the ticket travel with it');
+  eq(renderReviewNudgeEmail({ status: 'review' }).subject.includes('(title unresolved)'),
+    'a suggestion the ingest could not name still renders honestly');
+
+  const rvMany = Array.from({ length: 12 }, (_, i) => ({ id: 'd' + i,
+    doc: { ...rvDoc, resolvedTitle: 'Paper ' + i, ticket: 'LIT-260901-Q' + i } }));
+  const rvDigest = renderReviewDigestEmail(rvMany);
+  eq(rvDigest.subject.startsWith('12 ') || rvDigest.subject.includes(' 12 '),
+    'a burst is announced once, with the count in the subject');
+  eq(rvDigest.text.includes('Paper 0') && rvDigest.text.includes('Paper 11'),
+    'and lists every waiting suggestion');
+  eq(!/added automatically[\s\S]*added automatically[\s\S]*added automatically/.test(rvDigest.text),
+    'said once, not once per suggestion');
+
   if (fail) { console.error(`\nfeedback-mailer selftest: ${fail} failure(s)`); process.exit(1); }
   console.log('feedback-mailer selftest: OK');
 }
@@ -478,6 +696,14 @@ async function run() {
       const res = parseResolutionFile(fs.readFileSync(path.join(RES_DIR, f), 'utf8'));
       console.log(`  ${f}: ${res.error ? '⚠ ' + res.error : (res.ticket || res.doc) + ' — ' + firstLine(res.body, 70)}`);
     });
+    try {
+      const rq = await pendingReviewSuggestions(db);
+      console.log(`\n${rq.length} paper suggestion(s) waiting for review and not yet announced.`);
+      rq.forEach(it => console.log(`  ${it.id}: ${firstLine(reviewLabel(it.doc), 80)}` +
+        (it.doc.ticket ? `  #${it.doc.ticket}` : '')));
+    } catch (e) {
+      console.log('\n(review queue unreadable: ' + (e && e.message) + ')');
+    }
     return;
   }
 
@@ -552,6 +778,10 @@ async function run() {
   // Second phase: apply any repo-recorded resolutions (close + notify) — runs
   // every pass, independent of whether anything was pending above.
   await applyResolutions(db, FieldValue, transport, fromAddr, fromName);
+
+  // Third phase: say what is waiting in the OTHER queue on the feedback page —
+  // the suggested published papers only the maintainer's hands can add.
+  await announceReviewQueue(db, FieldValue, transport, fromAddr, fromName);
 }
 
 if (SELFTEST) {

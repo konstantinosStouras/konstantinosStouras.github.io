@@ -71,6 +71,18 @@ submissions are stored in the project's existing Firebase project
    and the resolution file in the same change, and the e-mail goes out
    automatically once merged.
 
+5. **The review queue is announced too** (same mailer run, third pass). The
+   Feedback page's other queue is `paperSubmissions`: a suggested PUBLISHED
+   paper the catalog genuinely lacks is stamped `status:'review'` by the
+   ingest and is **never added automatically** — it waits in the 📄 Paper
+   suggestions inbox for the maintainer to add by hand. The ingest used to
+   mention it once, in a fire-and-forget batch summary, and nothing ever
+   reminded anyone. Now each waiting suggestion is e-mailed to `FEEDBACK_TO`
+   once — the resolved paper, the submitter's citation, links to the paper and
+   the inbox — with `reviewMailedAt` stamped on the document **after** a
+   successful send, so nothing is announced twice and a failed send retries
+   next run. More than 10 at once (`FEEDBACK_REVIEW_BURST`) go as one list.
+
 ## Secrets (GitHub → repo Settings → Secrets and variables → Actions)
 
 Same secrets the e-mail-alerts mailer uses — if that already works, feedback
@@ -89,7 +101,7 @@ forwarding works with no extra setup beyond deploying the rule:
 
 ```
 node lit/_scraper/feedback-mailer.mjs --selftest   # offline: render + attachment tests
-node lit/_scraper/feedback-mailer.mjs --scan        # list pending submissions (needs creds)
+node lit/_scraper/feedback-mailer.mjs --scan        # list pending submissions + waiting paper suggestions (needs creds)
 node lit/_scraper/feedback-mailer.mjs --dry-run     # render + print, send nothing (needs creds)
 ```
 
