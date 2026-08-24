@@ -1171,6 +1171,11 @@
       urRender();
       urRenderCompose();
     }).catch(function (err) {
+      /* Drop the load latch: the FIRST run before the rules are deployed is a
+         permission-denied, and without this the panel could never retry
+         within the page's life — it would stay "could not load" until a
+         reload, even once the deploy had happened. */
+      urLoaded = false;
       $('urAdminSub').textContent = 'Could not load the roster (' +
         (err && err.code ? err.code : 'error') +
         ') — are the latest Firestore rules deployed?';
@@ -1275,15 +1280,21 @@
     var rows = urVisible();
     var picked = urPickedUids().length;
 
-    var head = '<tr><th class="ur-tick"><input type="checkbox" id="urAll" ' +
-      'aria-label="Select every account shown"></th>';
+    /* The select-all box must SHOW its own state, or it can be ticked and
+       never un-ticked: the table re-renders on every pick and would paint it
+       empty again. */
+    var allOn = rows.length > 0 && rows.every(function (r) { return !!urPicked[r.uid]; });
+    var head = '<tr><th class="ur-tick"><input type="checkbox" id="urAll"' +
+      (allOn ? ' checked' : '') + ' aria-label="Select every account shown"></th>';
     UR_COLS.forEach(function (c) {
       var on = urSortKey === c.key;
       head += '<th><button type="button" class="ur-sort' + (on ? ' is-on' : '') +
         '" data-sort="' + esc(c.key) + '">' + esc(c.label) +
         (on ? (urSortDir === 'asc' ? ' ▲' : ' ▼') : '') + '</button></th>';
     });
-    head += '</tr>';
+    // …and one more for the Open column each body row carries, or every
+    // heading sits above the wrong column.
+    head += '<th></th></tr>';
 
     var body = rows.map(function (r) {
       return '<tr><td class="ur-tick"><input type="checkbox" class="ur-pick" data-uid="' +
@@ -1302,7 +1313,9 @@
         'or delete it.</p><ul class="ur-ghosts">' + urGhosts.map(function (t) {
           return '<li><button type="button" class="fb-act ur-open" data-uid="' + esc(t.uid) +
             '">' + esc(t.uid) + '</button> <span class="fb-when">' + esc(urThreadLabel(t)) +
-            (t.lastAt ? ' · ' + esc(urDay(t.lastAt)) : '') + '</span></li>';
+            (t.lastAt ? ' · ' + esc(urDay(t.lastAt)) : '') + '</span> ' +
+            '<button type="button" class="fb-act delete ur-del" data-uid="' + esc(t.uid) +
+            '">Delete</button></li>';
         }).join('') + '</ul>';
     }
 
@@ -1324,9 +1337,12 @@
     var f = $('urFilter');
     if (f) f.addEventListener('input', function () {
       urFilter = f.value || '';
+      // keep the caret where it actually was — forcing it to the end makes
+      // editing a term mid-string impossible
+      var at = f.selectionStart;
       urRender();
       var again = $('urFilter');
-      if (again) { again.focus(); try { again.setSelectionRange(again.value.length, again.value.length); } catch (e) {} }
+      if (again) { again.focus(); try { again.setSelectionRange(at, at); } catch (e) {} }
     });
     Array.prototype.forEach.call(document.querySelectorAll('#urAdminList .ur-sort'), function (b) {
       b.addEventListener('click', function () {
@@ -1357,6 +1373,26 @@
     Array.prototype.forEach.call(document.querySelectorAll('#urAdminList .ur-open'), function (b) {
       b.addEventListener('click', function () { urOpenThread(b.getAttribute('data-uid')); });
     });
+    Array.prototype.forEach.call(document.querySelectorAll('#urAdminList .ur-del'), function (b) {
+      b.addEventListener('click', function () { urDeleteThread(b.getAttribute('data-uid')); });
+    });
+  }
+
+  /* Remove an orphaned conversation for good — offered only on a thread whose
+     roster row has gone. A live account's thread is a record of something and
+     stays. The items go first: deleting only the head would leave the messages
+     unreachable rather than gone. */
+  function urDeleteThread(uid) {
+    if (!window.confirm('Delete this conversation for good? This cannot be undone.')) return;
+    var head = db.collection('messages').doc(uid);
+    head.collection('items').get().then(function (snap) {
+      return Promise.all(snap.docs.map(function (d) { return d.ref.delete(); }));
+    }).then(function () { return head.delete(); })
+      .then(urLoad)
+      .catch(function (err) {
+        $('urAdminSub').textContent = 'Could not delete (' +
+          (err && err.code ? err.code : 'error') + ').';
+      });
   }
 
   /* A CSV cell a spreadsheet cannot be tricked into EXECUTING: Excel and
@@ -1388,6 +1424,10 @@
     var host = $('urAdminCompose');
     if (!host) return;
     var n = urPickedUids().length;
+    /* Ticking a recipient re-renders this block, and rebuilding the textarea
+       would throw away a message already written — which is the order people
+       work in: write, then choose who. Carry the draft across. */
+    var draft = ($('urBody') || {}).value || '';
     host.innerHTML =
       '<h3 class="fb-day">Send a message</h3>' +
       '<p class="fb-empty">It appears in the person’s account menu on The Lit under ' +
@@ -1398,6 +1438,8 @@
       '<p><button type="button" class="fb-act complete" id="urSend"' + (n ? '' : ' disabled') + '>' +
         (n ? 'Send to ' + n + (n === 1 ? ' person' : ' people') : 'Select who to message') +
         '</button> <span id="urOut" class="fb-when"></span></p>';
+    var ta = $('urBody');
+    if (ta && draft) ta.value = draft;
     var b = $('urSend');
     if (b) b.addEventListener('click', urSend);
   }
@@ -1421,25 +1463,41 @@
         var head = db.collection('messages').doc(uid);
         var row = urRows.filter(function (r) { return r.uid === uid; })[0];
         var prev = (row && row.thread) || null;
-        return head.collection('items').add({ from: 'admin', body: body, t: now })
-          .then(function () {
-            return head.set({
-              uid: uid, lastAt: now, lastFrom: 'admin', needsAdmin: false,
-              userUnread: (prev && typeof prev.userUnread === 'number' ? prev.userUnread : 0) + 1
-            }, { merge: true });
-          })
+        /* ONE atomic write for the message and its bookkeeping: two sequential
+           writes can half-fail, leaving the reader holding a message the
+           roster does not know about and this reporting it as undelivered
+           when it had in fact arrived. */
+        var batch = db.batch();
+        batch.set(head.collection('items').doc(), { from: 'admin', body: body, t: now });
+        batch.set(head, {
+          uid: uid, lastAt: now, lastFrom: 'admin',
+          /* NOT `false`. Clearing it would drop somebody who has replied out
+             of the "awaiting you" queue without their reply having been read
+             — and a broadcast is not an answer. Only opening the thread and
+             pressing "Mark answered" clears the flag. */
+          needsAdmin: !!(prev && prev.needsAdmin),
+          userUnread: (prev && typeof prev.userUnread === 'number' ? prev.userUnread : 0) + 1
+        }, { merge: true });
+        return batch.commit()
           .then(function () { sent++; })
           .catch(function () { failed++; });
       });
     }, Promise.resolve()).then(function () {
       if (ta) ta.value = '';
       urPicked = {};
-      if (out) {
-        out.textContent = failed
-          ? 'Sent to ' + sent + '; ' + failed + ' could not be delivered.'
-          : 'Sent to ' + sent + (sent === 1 ? ' person.' : ' people.');
-      }
-      return urLoad();
+      /* Reload FIRST — it repaints the compose block, which would otherwise
+         wipe the line below — then say what happened. */
+      return urLoad().then(function () {
+        var after = $('urOut');
+        if (after) {
+          after.textContent = failed
+            ? 'Sent to ' + sent + '; ' + failed + ' could not be delivered.'
+            : 'Sent to ' + sent + (sent === 1 ? ' person.' : ' people.');
+        }
+        // never leave Send stuck disabled — the reload may have replaced it
+        var live = $('urSend');
+        if (live) live.disabled = false;
+      });
     });
   }
 

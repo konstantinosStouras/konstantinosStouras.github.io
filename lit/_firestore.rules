@@ -92,6 +92,25 @@ service cloud.firestore {
     // The sibling operationsacademia.org carries the same two collections in
     // the same SHAPE (different site, different project, different markup).
     match /userDirectory/{userId} {
+      // Declared BEFORE the allow statements that call it, for the same reason
+      // isFeedbackAdmin() is hoisted to the top of this file.
+      function dirRowOk() {
+        return request.resource.data.keys().hasOnly(['name', 'email', 'first', 'seen'])
+          // THE ADDRESS CANNOT BE FORGED — but it may be ABSENT. An ORCID
+          // sign-in carries no e-mail claim at all, and demanding one would
+          // silently leave exactly those accounts off the roster. So: no
+          // address, or the caller's own. Never anyone else's.
+          && (!('email' in request.resource.data)
+              || (request.resource.data.email is string
+                  && request.resource.data.email.size() <= 200
+                  && request.resource.data.email == request.auth.token.email))
+          && (!('name' in request.resource.data)
+              || (request.resource.data.name is string
+                  && request.resource.data.name.size() <= 200))
+          && request.resource.data.first is number
+          && request.resource.data.seen is number;
+      }
+
       allow read: if isFeedbackAdmin()
                   || (request.auth != null && request.auth.uid == userId);
 
@@ -100,18 +119,6 @@ service cloud.firestore {
       allow update: if request.auth != null && request.auth.uid == userId
                     && dirRowOk()
                     && request.resource.data.first == resource.data.first;
-
-      function dirRowOk() {
-        return request.resource.data.keys().hasOnly(['name', 'email', 'first', 'seen'])
-          && request.resource.data.email is string
-          && request.resource.data.email.size() <= 200
-          && request.resource.data.email == request.auth.token.email
-          && (!('name' in request.resource.data)
-              || (request.resource.data.name is string
-                  && request.resource.data.name.size() <= 200))
-          && request.resource.data.first is number
-          && request.resource.data.seen is number;
-      }
 
       // The owner retires their own row, exactly as they retire their
       // registeredUsers marker — the merge does both while it can still write
@@ -188,8 +195,17 @@ service cloud.firestore {
                       && request.resource.data.t is number
                       && (
                         (isFeedbackAdmin() && request.resource.data.from == 'admin')
+                        // A REPLY NEEDS A THREAD TO REPLY TO. Without this an
+                        // owner could write unbounded documents under their own
+                        // uid that no thread head points at — invisible on the
+                        // Feedback page, which lists threads, and so an
+                        // unbounded write channel nobody would ever see. It
+                        // also states in the rules what the cards already
+                        // promise: only the maintainer opens a conversation.
+                        // One billed read per reply, and a reply is rare.
                         || (request.auth != null && request.auth.uid == userId
-                            && request.resource.data.from == 'user')
+                            && request.resource.data.from == 'user'
+                            && exists(/databases/$(database)/documents/messages/$(userId)))
                       );
         allow update, delete: if isFeedbackAdmin();
       }

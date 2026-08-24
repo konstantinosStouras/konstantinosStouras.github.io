@@ -124,6 +124,38 @@ ok(/hasOnly\(\['lastAt', 'lastFrom', 'needsAdmin'\]\)/.test(thr)
   'and may record a reply, which must say it came from them and must RAISE the ' +
   'maintainer’s flag — the queue cannot be emptied by the person waiting in it');
 
+ok(/exists\(\/databases\/\$\(database\)\/documents\/messages\/\$\(userId\)\)/.test(items),
+  'A REPLY NEEDS A THREAD TO REPLY TO — without it an owner could write ' +
+  'unbounded documents under their own uid that no thread head points at, ' +
+  'invisible on a page that lists threads. It is also what makes "only the ' +
+  'maintainer opens a conversation" true in the rules and not just in the copy');
+ok(/allow delete: if isFeedbackAdmin\(\);/.test(thr.slice(0, itemsAt))
+  && /ur-del/.test(fb) && /function urDeleteThread/.test(fb),
+  'the maintainer can remove an orphaned conversation, and the button the ghost ' +
+  'panel promises actually exists');
+ok(/\(!\('email' in request\.resource\.data\)/.test(dir),
+  'an ORCID sign-in, which carries no e-mail claim, still gets a roster row — ' +
+  'demanding one would silently omit exactly those accounts');
+ok(dir.indexOf('function dirRowOk()') < dir.indexOf('allow create'),
+  'dirRowOk() is declared before the allow statements that call it');
+ok(/needsAdmin: !!\(prev && prev\.needsAdmin\)/.test(fb),
+  'A BROADCAST IS NOT AN ANSWER: sending to somebody who has replied leaves them ' +
+  'in the queue — only reading the thread and marking it answered clears it');
+ok(/db\.batch\(\)/.test(fb),
+  'the message and its bookkeeping are ONE write — half of them landing would ' +
+  'leave a message the roster does not know about');
+ok(/var draft = \(\$\('urBody'\) \|\| \{\}\)\.value/.test(fb),
+  'and ticking a recipient does not throw away the message already typed');
+ok(/urLoaded = false;/.test(fb.slice(fb.indexOf('function urLoad'))),
+  'a refused first load drops its latch, so the panel can retry once the rules ' +
+  'are deployed instead of staying broken until a reload');
+ok(/Number\(p\.msgUnread\)/.test(nav),
+  'the sub-page badge COERCES the count it interpolates — the profile doc is ' +
+  'written by its own owner and the value reaches innerHTML');
+ok(/id="litMsgSend"/.test(main),
+  'the reader’s Send button is addressable, so it can be disabled while a reply ' +
+  'is in flight and a double-click cannot post it twice');
+
 ok(!/match \/users\/\{userId\}\/messages/.test(rules),
   'the threads are TOP-LEVEL: under users/{userId} the blanket owner-write could ' +
   'only ever be widened, and a reply-only constraint would be unenforceable');
@@ -171,6 +203,20 @@ ok(/replace\(\/"\/g, '""'\)/.test(cellSrc), '…and doubles an internal quote');
 ok(/esc\(String\(m\.body \|\| ''\)\)/.test(fb) && /esc\(String\(m\.body \|\| ''\)\)/.test(main),
   'a message body is escaped on BOTH sides — a reply box is a two-way injection ' +
   'surface, so the maintainer’s text is escaped too');
+
+/* ------------------------------------------------------------- disclosed */
+
+/* The roster is identity the maintainer can read. A site that collects it and
+   says so nowhere is wrong, whatever the rules allow — the sibling
+   operationsacademia.org discloses the same pair in its Privacy Policy, and
+   The Lit's equivalent is the About page's account section. */
+const about = read('about/index.html');
+ok(/e-mail address you sign in with, and when the account was first and last seen/.test(about),
+  'the About page discloses what the maintainer can see about an account — the ' +
+  'roster collects a name and an address, and saying so nowhere is not an option');
+ok(/readable by me alone/.test(about) && /library[\s\S]{0,120}private to you/.test(about),
+  '…and says who can read it, and that it is not the private library');
+ok(/Messages/.test(about), '…and that messages exist at all');
 
 if (fails.length) {
   console.log(`\n${fails.length} FAILED, ${pass} passed\n`);

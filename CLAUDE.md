@@ -2247,6 +2247,25 @@ rather than a fifth `onSnapshot`: a message arrives a few times a year, and a
 live listener on every page view is a standing cost for a card that is usually
 empty.
 
+**A reply needs a thread to reply to.** The items rule requires the parent
+thread to `exists()` before an owner may write into it — otherwise an owner
+could write unbounded documents under their own uid that no thread head points
+at, invisible on a page that LISTS threads. It also makes "only the maintainer
+opens a conversation" true in the rules rather than only in the copy.
+
+**A broadcast is not an answer**: sending to somebody who has replied leaves
+`needsAdmin` as it was; only "Mark answered" clears it. The message and its
+bookkeeping go as ONE batched write.
+
+**An ORCID sign-in still gets a roster row.** The address is pinned to the auth
+token but may be ABSENT — ORCID's carries no e-mail claim, and demanding one
+would silently leave exactly those accounts off the roster.
+
+**What the maintainer can see is disclosed** on the About page, beside the
+account features — the roster is identity, and a site that collects it and says
+so nowhere is wrong whatever its rules allow. (The sibling discloses the same
+pair in its Privacy Policy.)
+
 **Inert until the rules are redeployed** (nothing in CI does it):
 `cd lit && firebase deploy --only firestore:rules --project lit-paper-browser`.
 

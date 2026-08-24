@@ -6656,18 +6656,23 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   }
 
   function syncDirectoryRow(uid, name) {
-    if (!uid || !state.user || !state.user.email) return Promise.resolve();
-    var email = String(state.user.email);
+    if (!uid || !state.user) return Promise.resolve();
+    var email = String(state.user.email || '');
     var ref = directoryDoc(uid);
     return ref.get().then(function (snap) {
       var had = snap && snap.exists ? (snap.data() || {}) : null;
       var now = Date.now();
-      return ref.set({
+      var row = {
         name: String(name || '').slice(0, 200),
-        email: email.slice(0, 200),
         seen: now,
         first: had && typeof had.first === 'number' ? had.first : now
-      }, { merge: true });
+      };
+      /* Only when there IS one. An ORCID sign-in carries no e-mail claim, and
+         the rules refuse an address that is not the caller's own — so sending
+         an empty string would leave exactly those accounts off the roster
+         entirely. They get a row with a name and their dates. */
+      if (email) row.email = email.slice(0, 200);
+      return ref.set(row, { merge: true });
     }).catch(function (err) { console.warn('roster row:', err && err.code); });
   }
 
@@ -8025,7 +8030,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '<div class="msg-reply">' +
         '<label for="litMsgBody"><strong>Reply</strong></label>' +
         '<textarea id="litMsgBody" rows="4" maxlength="5000" placeholder="Write your reply…"></textarea>' +
-        '<p><button class="acct-btn primary" onclick="litMessagesReply()">Send reply</button> ' +
+        '<p><button class="acct-btn primary" id="litMsgSend" onclick="litMessagesReply()">Send reply</button> ' +
         '<span id="litMsgOut" class="acct-hint"></span></p>' +
       '</div>';
   }
@@ -8075,6 +8080,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!body) { if (out) out.textContent = 'Write something first.'; return; }
     if (body.length > 5000) { if (out) out.textContent = 'That is longer than 5000 characters.'; return; }
     if (out) out.textContent = 'Sending…';
+    // a double-click must not post the reply twice
+    var btn = document.getElementById('litMsgSend');
+    if (btn) btn.disabled = true;
     var uid = state.user.uid, now = Date.now();
     messageItemsCol(uid).add({ from: 'user', body: body, t: now })
       .then(function () {
@@ -8085,12 +8093,17 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       })
       .then(function () {
         if (ta) ta.value = '';
-        if (out) out.textContent = 'Sent.';
-        litMessagesOpen();
+        litMessagesOpen();      // repaints the card — say it AFTER
+        var after = document.getElementById('litMsgOut');
+        if (after) after.textContent = 'Sent.';
       })
       .catch(function (err) {
-        if (out) {
-          out.textContent = err && err.code === 'permission-denied'
+        var live = document.getElementById('litMsgSend');
+        if (live) live.disabled = false;
+        if (btn) btn.disabled = false;
+        var o = document.getElementById('litMsgOut') || out;
+        if (o) {
+          o.textContent = err && err.code === 'permission-denied'
             ? 'Messaging is not switched on yet — please try again later.'
             : 'Could not send (' + (err && err.code || 'error') + ').';
         }
