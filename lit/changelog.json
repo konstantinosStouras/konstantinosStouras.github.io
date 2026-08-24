@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "messages-from-the-maintainer",
+      "date": "2026-08-24",
+      "title": "Messages between you and The Lit’s maintainer",
+      "summary": "Your account menu has a new “Messages” card. If I need to reach you — about a paper you suggested, your account, or the site itself — the message appears there and you can reply to it in place, with the number beside “Messages” telling you how many you have not read. It is entirely on the site: nothing is e-mailed to you, nothing you write is published, and nobody but the two of us can read it. To raise something yourself, the Feedback page is still the way, and it still answers by e-mail with a ticket.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "registered-users-unique-count",
       "date": "2026-08-21",
       "title": "The “Registered users” figure counts people, not leftover accounts",

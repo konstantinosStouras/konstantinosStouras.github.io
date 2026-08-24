@@ -2185,6 +2185,78 @@ outcome are offline-tested in `ingest-selftest.mjs`. (The specific M&SOM example
 "…Opportunity Zone Program…" `10.1287/msom.2024.0746` was also fixed directly in
 `data/_preprints.json`+`papers-msom.json`.)
 
+### Who has registered, and messaging them
+
+The Lit could **count** registered accounts (the Data Analytics tile) and learn
+nothing else about them — three deliberate decisions meeting: `registeredUsers`
+is PUBLICLY readable and therefore contentless by contract (`hasOnly(['t'])`),
+`users/{uid}/**` is owner-only by the promise `_firestore.rules` opens with (a
+person's papers, notes, tags and lists are private), and **the e-mail address is
+not in Firestore at all** — it lives in the Firebase Auth record, which no
+browser can read for anyone but itself.
+
+    userDirectory/{uid}        the roster row — owner-written, maintainer-read
+    messages/{uid}             one thread per account, keyed on the uid
+    messages/{uid}/items/{id}  the messages themselves
+
+**The address cannot be forged**: `email` must equal `request.auth.token.email`,
+and `first` is **write-once** — which is why an account may read the one row
+about itself, since the browser has to send the stored value back.
+
+**Identity could never join `registeredUsers` HERE, and that is what settled the
+shape on both sites.** That collection is `allow read: if true` so the analytics
+tile can `count()` it; a name or an address in it would be world-readable. The
+sibling `operationsacademia.org` carries the same two collections in the same
+SHAPE for that reason — **keep them in step in shape, not in code** (different
+site, different Firebase project, different markup), exactly as `lit-news.js`
+and `assets/oa-news.js` are.
+
+**The threads are TOP-LEVEL, not `users/{uid}/messages`.** Firestore ORs every
+matching rule, so under that blanket owner-write a narrower rule could only ever
+GRANT more: the owner's write could not be taken away and a user could forge a
+message from the maintainer in their own inbox, or clear the flag saying they owe
+a reply. Every maintainer-facing queue in this file is top-level for the same
+family of reasons (`feedback`, `paperSubmissions`, `newsOverrides`). Keying the
+thread on the uid makes the doc id its owner's uid, so `request.auth.uid ==
+userId` on the items is an id-composition guard in its strongest form — a
+stranger cannot post into someone else's thread — and it lets a reader get their
+unread count with a single `get()`: no query, no composite index.
+
+**It is IN-APP, not e-mail** (owner, 2026-08-24). There is no mailer and nothing
+to stamp; a message is read in the account menu under **💬 Messages**. That is
+also why the merge does NOT delete a thread — nothing re-reads one server-side
+once a sign-in dies, unlike the alert subscriptions, which `alerts-mailer.mjs`
+would go on reading for ever (`deleteOwnAlerts`). It DOES delete the roster row
+(`deleteOwnDirectoryRow`, beside `deleteOwnRegistryMark` and restored on the same
+failure branch), or one person is listed twice for ever. A thread whose row has
+gone is listed on the Feedback page under "Threads with no account".
+
+**Only the maintainer starts a thread.** A reader who wants to raise something
+has the Feedback page, which is built for it (ticketed, screenshots, answered by
+e-mail) — so the card never offers a compose box on an empty thread, which the
+rules would refuse anyway.
+
+`isFeedbackAdmin()` was **hoisted to the top** of the documents match block: the
+roster and the threads sit above the feedback inbox it was first written for, and
+a rule calling a function declared after it is not something to leave to chance.
+
+**The unread badge is cached on the profile doc** (`msgUnread`), exactly as
+`myPubCount` is, so `lit-acct-nav.js` draws it on the sub-pages without a read of
+its own. The main page reads the thread once per session with a plain `get()`
+rather than a fifth `onSnapshot`: a message arrives a few times a year, and a
+live listener on every page view is a standing cost for a card that is usually
+empty.
+
+**Inert until the rules are redeployed** (nothing in CI does it):
+`cd lit && firebase deploy --only firestore:rules --project lit-paper-browser`.
+
+Tests: **`node lit/_scraper/users-selftest.mjs`** (offline; the rules against the
+three pages, the pinned address, the write-once `first`, the owner's two narrowed
+updates, CSV injection, and the wiring). It also closes a pinning gap it would
+otherwise have widened: `lit/lit-news.js`'s copy of the maintainer's address was
+pinned by `news-selftest.mjs`, but **`lit/feedback/index.html`'s copy was pinned
+by nothing** — and it now gates three admin sections rather than two.
+
 ### Citation graph — the references a paper cites that are IN the catalog
 For every listed paper, the pipeline extracts the references it **cites that
 also belong to the catalog** (the intra-catalog out-edges), surfaced on each

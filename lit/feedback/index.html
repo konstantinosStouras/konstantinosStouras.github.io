@@ -211,6 +211,44 @@
   .fb-act.delete:hover { background: var(--err); color: #fff; }
   .fb-act:disabled { opacity: 0.5; cursor: default; }
 
+  /* ── the registered-users roster and the message threads ────────────────
+     Kept in step in SHAPE (not in code) with the same pair on
+     operationsacademia.org, and with the reader's own card in lit/index.html. */
+  .fb-empty { font-size: 13.5px; color: var(--text-muted); margin: 8px 0; line-height: 1.55; }
+  .ur-bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 0 0 12px; }
+  .ur-find { display: flex; align-items: center; gap: 8px; }
+  .ur-find > span { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+  /* 16px, or iOS zooms the page when the field takes focus. */
+  .ur-find input { font-size: 16px; padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; }
+  .ur-count { font-size: 13px; color: var(--text-muted); margin-right: auto; }
+  /* An e-mail address has no spaces, so it sets a table's minimum width: the
+     table scrolls inside its OWN container rather than making the page scroll
+     sideways on a phone. */
+  .ur-wrap { overflow-x: auto; }
+  .ur-table { width: 100%; border-collapse: collapse; font-size: 14px; color: var(--text); }
+  .ur-table th, .ur-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+  .ur-table thead th { border-bottom: 2px solid var(--border); white-space: nowrap; }
+  .ur-table a { color: var(--navy); }
+  .ur-tick { width: 34px; }
+  .ur-tick input { width: 18px; height: 18px; }
+  .ur-sort { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--text); cursor: pointer; }
+  .ur-sort.is-on { color: var(--navy); }
+  .ur-ghosts { list-style: none; margin: 8px 0 0; padding: 0; }
+  .ur-ghosts li { padding: 4px 0; font-size: 14px; }
+  /* one conversation, drawn as it is drawn in the reader's own card */
+  .msg-thread { list-style: none; margin: 0 0 14px; padding: 0; }
+  .msg-item { padding: 10px 12px; margin: 0 0 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  .msg-item.is-me { border-left: 3px solid var(--navy); }
+  .msg-item.is-them { border-left: 3px solid var(--ok); }
+  .msg-who { font-weight: 700; font-size: 13px; }
+  .msg-when { float: right; font-size: 12px; color: var(--text-muted); }
+  .msg-item p { margin: 6px 0 0; font-size: 15px; line-height: 1.55; }
+  @media (max-width: 480px) {
+    .ur-count { margin-right: 0; width: 100%; }
+    .ur-table { font-size: 13px; }
+    .ur-table th, .ur-table td { padding: 7px 8px; }
+  }
+
   /* Screenshot lightbox */
   .fb-lightbox { position: fixed; inset: 0; background: rgba(20,10,14,0.86); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 32px; cursor: zoom-out; }
   .fb-lightbox.show { display: flex; }
@@ -297,6 +335,29 @@
       </div>
     </div>
     <div class="fb-admin-list" id="psAdminList"></div>
+  </section>
+
+  <!-- Registered users — rendered ONLY for the signed-in maintainer. The one
+       place The Lit says WHO has an account: `registeredUsers` is publicly
+       readable and therefore contentless by contract, and users/{uid}/** is
+       owner-only, so the roster reads a collection of its own that each
+       account writes about itself (userDirectory — see lit/_firestore.rules).
+       Tick people and write once to open a thread with each; they read and
+       answer it in their own account menu under "Messages". Nothing is
+       e-mailed. -->
+  <section class="fb-admin" id="urAdmin" hidden>
+    <div class="fb-admin-head">
+      <h2>👥 Registered users</h2>
+      <span class="fb-admin-sub" id="urAdminSub">Loading…</span>
+      <div class="fb-admin-tabs" id="urAdminTabs">
+        <button type="button" data-tab="all" class="is-active">All</button>
+        <button type="button" data-tab="waiting">Awaiting a reply</button>
+        <button type="button" data-tab="threads">With a thread</button>
+      </div>
+    </div>
+    <div class="fb-admin-list" id="urAdminList"></div>
+    <div id="urAdminThread" hidden></div>
+    <div id="urAdminCompose"></div>
   </section>
 
   <!-- Suggest a missing published Paper or a Working Paper — the FIRST section
@@ -519,6 +580,7 @@
         adminMaybeShow(u);
         psAuthChange(u);        // suggest-a-paper section: gate to signed-in users
         psAdminMaybeShow(u);    // suggest-a-paper inbox (maintainer only)
+        urMaybeShow(u);         // registered-users roster + messaging (maintainer only)
       });
     } catch (e) { CONFIGURED = false; }
   }
@@ -1047,6 +1109,395 @@
   var psAdminItems = [];
   var psAdminTab = 'pending';
   var psAdminLoaded = false;
+
+  /* ── Registered users, and messaging them — maintainer only ───────────────
+   *
+   * WHAT WAS MISSING. The Lit could COUNT registered accounts (the analytics
+   * tile) and learn nothing else about them: `registeredUsers` is publicly
+   * readable and therefore contentless by contract, `users/{uid}/**` is
+   * owner-only by the promise this site opens with, and the e-mail address is
+   * not in Firestore at all — it lives in the Firebase Auth record, which no
+   * browser can read for anyone but itself.
+   *
+   * So each account writes ONE row about itself into `userDirectory/{uid}`,
+   * with the rules pinning `email` to its own auth address (it cannot claim
+   * one it does not hold) and `first` write-once. This is the only place that
+   * row is read.
+   *
+   * MESSAGING IS IN-APP, NOT E-MAIL. There is no mailer: a message is a
+   * document the reader sees in their account menu under "Messages". The
+   * addresses carry mailto: links for when e-mail is actually wanted.
+   *
+   * As everywhere here, the isFeedbackAdmin() rule is the authorisation and
+   * this client check only decides whether to DRAW the section.
+   * Keep in step in SHAPE (not in code) with the same pair on
+   * operationsacademia.org — different site, different project, different
+   * markup. */
+  var urRows = [];          // [{ uid, name, email, first, seen, thread }]
+  var urGhosts = [];        // threads whose roster row has gone (a merged account)
+  var urTab = 'all';
+  var urLoaded = false;
+  var urPicked = {};
+  var urSortKey = 'seen';
+  var urSortDir = 'desc';
+  var urFilter = '';
+
+  function urMaybeShow(u) {
+    var sec = $('urAdmin');
+    if (!sec) return;
+    if (!isAdminUser(u)) { sec.hidden = true; return; }
+    sec.hidden = false;
+    if (!urLoaded) { urLoaded = true; urLoad(); }
+  }
+
+  function urLoad() {
+    $('urAdminSub').textContent = 'Loading…';
+    return Promise.all([
+      db.collection('userDirectory').get(),
+      db.collection('messages').get()
+    ]).then(function (both) {
+      var threads = {};
+      both[1].docs.forEach(function (d) {
+        var t = d.data() || {}; t.uid = t.uid || d.id; threads[d.id] = t;
+      });
+      urRows = both[0].docs.map(function (d) {
+        var r = d.data() || {};
+        r.uid = d.id;
+        r.thread = threads[d.id] || null;
+        delete threads[d.id];
+        return r;
+      });
+      urGhosts = Object.keys(threads).map(function (k) { return threads[k]; });
+      urRender();
+      urRenderCompose();
+    }).catch(function (err) {
+      $('urAdminSub').textContent = 'Could not load the roster (' +
+        (err && err.code ? err.code : 'error') +
+        ') — are the latest Firestore rules deployed?';
+    });
+  }
+
+  function urDay(ms) {
+    if (typeof ms !== 'number' || !isFinite(ms)) return '';
+    try { return new Date(ms).toISOString().slice(0, 10); } catch (e) { return ''; }
+  }
+
+  function urFold(s) {
+    var t = String(s || '');
+    if (t.normalize) t = t.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return t.toLowerCase().trim();
+  }
+
+  function urThreadLabel(t) {
+    if (!t) return 'No messages';
+    if (t.needsAdmin) return 'Replied — awaiting you';
+    if (t.userUnread > 0) return 'Sent — unread';
+    return 'Read';
+  }
+
+  /* ONE spec owns a column's heading, its cell AND its sort key, so a sorted
+     table can never order itself by something other than what it shows. */
+  var UR_COLS = [
+    { key: 'name', label: 'Name',
+      cell: function (r) { return esc(r.name || '—'); },
+      sort: function (r) { return urFold(r.name); } },
+    { key: 'email', label: 'E-mail',
+      cell: function (r) {
+        return r.email ? '<a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : '—';
+      },
+      sort: function (r) { return urFold(r.email); } },
+    { key: 'first', label: 'First seen',
+      cell: function (r) { return esc(urDay(r.first) || '—'); },
+      sort: function (r) { return typeof r.first === 'number' ? r.first : null; } },
+    { key: 'seen', label: 'Last seen',
+      cell: function (r) { return esc(urDay(r.seen) || '—'); },
+      sort: function (r) { return typeof r.seen === 'number' ? r.seen : null; } },
+    { key: 'thread', label: 'Messages',
+      cell: function (r) {
+        var t = r.thread;
+        return '<span class="fb-badge ' + (t && t.needsAdmin ? 'open' : 'closed') + '">' +
+          esc(urThreadLabel(t)) + '</span>';
+      },
+      sort: function (r) { return !r.thread ? 0 : (r.thread.needsAdmin ? 2 : 1); } }
+  ];
+
+  /* Unknown values sink to the BOTTOM in BOTH directions — an account with no
+     name has nothing to compare, which is not "sorts first" — and ties break
+     on load order so a second click is a clean reversal. */
+  function urSorted(rows, key, dir) {
+    var dec = rows.map(function (r, i) { return { r: r, i: i, v: key(r) }; });
+    var sign = dir === 'desc' ? -1 : 1;
+    dec.sort(function (a, b) {
+      var an = a.v === null || a.v === undefined || a.v === '';
+      var bn = b.v === null || b.v === undefined || b.v === '';
+      if (an && bn) return a.i - b.i;
+      if (an) return 1;
+      if (bn) return -1;
+      if (a.v < b.v) return -1 * sign;
+      if (a.v > b.v) return 1 * sign;
+      return a.i - b.i;
+    });
+    return dec.map(function (d) { return d.r; });
+  }
+
+  function urVisible() {
+    var rows = urRows.filter(function (r) {
+      if (urTab === 'waiting') return !!(r.thread && r.thread.needsAdmin);
+      if (urTab === 'threads') return !!r.thread;
+      return true;
+    });
+    var q = urFold(urFilter);
+    if (q) {
+      rows = rows.filter(function (r) {
+        return urFold(r.name).indexOf(q) >= 0 || urFold(r.email).indexOf(q) >= 0;
+      });
+    }
+    var col = UR_COLS.filter(function (c) { return c.key === urSortKey; })[0] || UR_COLS[3];
+    return urSorted(rows, col.sort, urSortDir);
+  }
+
+  function urPickedUids() {
+    return urRows.filter(function (r) { return urPicked[r.uid]; }).map(function (r) { return r.uid; });
+  }
+
+  function urRender() {
+    var host = $('urAdminList');
+    if (!host) return;
+    var waiting = urRows.filter(function (r) { return r.thread && r.thread.needsAdmin; }).length;
+    $('urAdminSub').textContent = urRows.length + ' registered' +
+      (waiting ? ' · ' + waiting + ' awaiting a reply' : '');
+
+    if (!urRows.length) {
+      host.innerHTML = '<p class="fb-empty">No accounts have signed in since the ' +
+        'roster shipped. A row is written the first time someone signs in.</p>';
+      return;
+    }
+    var rows = urVisible();
+    var picked = urPickedUids().length;
+
+    var head = '<tr><th class="ur-tick"><input type="checkbox" id="urAll" ' +
+      'aria-label="Select every account shown"></th>';
+    UR_COLS.forEach(function (c) {
+      var on = urSortKey === c.key;
+      head += '<th><button type="button" class="ur-sort' + (on ? ' is-on' : '') +
+        '" data-sort="' + esc(c.key) + '">' + esc(c.label) +
+        (on ? (urSortDir === 'asc' ? ' ▲' : ' ▼') : '') + '</button></th>';
+    });
+    head += '</tr>';
+
+    var body = rows.map(function (r) {
+      return '<tr><td class="ur-tick"><input type="checkbox" class="ur-pick" data-uid="' +
+        esc(r.uid) + '"' + (urPicked[r.uid] ? ' checked' : '') + ' aria-label="Select ' +
+        esc(r.name || r.email || r.uid) + '"></td>' +
+        UR_COLS.map(function (c) { return '<td>' + c.cell(r) + '</td>'; }).join('') +
+        '<td><button type="button" class="fb-act ur-open" data-uid="' + esc(r.uid) +
+        '">Open</button></td></tr>';
+    }).join('');
+
+    var ghosts = '';
+    if (urGhosts.length) {
+      ghosts = '<h3 class="fb-day">Threads with no account (' + urGhosts.length + ')</h3>' +
+        '<p class="fb-empty">These accounts are no longer registered — merged into ' +
+        'another account, or removed. Their conversations are kept; open one to read ' +
+        'or delete it.</p><ul class="ur-ghosts">' + urGhosts.map(function (t) {
+          return '<li><button type="button" class="fb-act ur-open" data-uid="' + esc(t.uid) +
+            '">' + esc(t.uid) + '</button> <span class="fb-when">' + esc(urThreadLabel(t)) +
+            (t.lastAt ? ' · ' + esc(urDay(t.lastAt)) : '') + '</span></li>';
+        }).join('') + '</ul>';
+    }
+
+    host.innerHTML =
+      '<div class="ur-bar">' +
+        '<label class="ur-find"><span>Find</span><input type="search" id="urFilter" ' +
+          'placeholder="name or e-mail" value="' + esc(urFilter) + '"></label>' +
+        '<span class="ur-count">' + rows.length + ' of ' + urRows.length + ' shown' +
+          (picked ? ' · ' + picked + ' selected' : '') + '</span>' +
+        '<button type="button" class="fb-act" id="urCsv">Download CSV</button>' +
+      '</div>' +
+      '<div class="ur-wrap"><table class="ur-table"><thead>' + head + '</thead><tbody>' +
+        body + '</tbody></table></div>' + ghosts;
+
+    urWire();
+  }
+
+  function urWire() {
+    var f = $('urFilter');
+    if (f) f.addEventListener('input', function () {
+      urFilter = f.value || '';
+      urRender();
+      var again = $('urFilter');
+      if (again) { again.focus(); try { again.setSelectionRange(again.value.length, again.value.length); } catch (e) {} }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#urAdminList .ur-sort'), function (b) {
+      b.addEventListener('click', function () {
+        var k = b.getAttribute('data-sort');
+        if (urSortKey === k) urSortDir = urSortDir === 'asc' ? 'desc' : 'asc';
+        else { urSortKey = k; urSortDir = (k === 'name' || k === 'email') ? 'asc' : 'desc'; }
+        urRender();
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#urAdminList .ur-pick'), function (c) {
+      c.addEventListener('change', function () {
+        var uid = c.getAttribute('data-uid');
+        if (c.checked) urPicked[uid] = true; else delete urPicked[uid];
+        urRender(); urRenderCompose();
+      });
+    });
+    var all = $('urAll');
+    if (all) all.addEventListener('change', function () {
+      // acts on the rows CURRENTLY SHOWN, so Find and the tabs double as the
+      // recipient picker
+      urVisible().forEach(function (r) {
+        if (all.checked) urPicked[r.uid] = true; else delete urPicked[r.uid];
+      });
+      urRender(); urRenderCompose();
+    });
+    var csv = $('urCsv');
+    if (csv) csv.addEventListener('click', urDownloadCsv);
+    Array.prototype.forEach.call(document.querySelectorAll('#urAdminList .ur-open'), function (b) {
+      b.addEventListener('click', function () { urOpenThread(b.getAttribute('data-uid')); });
+    });
+  }
+
+  /* A CSV cell a spreadsheet cannot be tricked into EXECUTING: Excel and
+     Sheets treat a leading =, +, - or @ as a formula, and these are names
+     people typed about themselves. */
+  function urCsvCell(v) {
+    var s = v === null || v === undefined ? '' : String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+
+  function urDownloadCsv() {
+    var head = ['Name', 'E-mail', 'First seen', 'Last seen', 'Messages', 'uid'];
+    var lines = [head.map(urCsvCell).join(',')];
+    urVisible().forEach(function (r) {
+      lines.push([r.name || '', r.email || '', urDay(r.first), urDay(r.seen),
+        urThreadLabel(r.thread), r.uid].map(urCsvCell).join(','));
+    });
+    var blob = new Blob([lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'lit-users-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
+  function urRenderCompose() {
+    var host = $('urAdminCompose');
+    if (!host) return;
+    var n = urPickedUids().length;
+    host.innerHTML =
+      '<h3 class="fb-day">Send a message</h3>' +
+      '<p class="fb-empty">It appears in the person’s account menu on The Lit under ' +
+        '“Messages”, where they can reply to you. <strong>No e-mail is sent</strong> — ' +
+        'use the address links above if e-mail is what you want.</p>' +
+      '<p><textarea id="urBody" rows="5" maxlength="5000" placeholder="Write your message…" ' +
+        'style="width:100%;font-size:16px"></textarea></p>' +
+      '<p><button type="button" class="fb-act complete" id="urSend"' + (n ? '' : ' disabled') + '>' +
+        (n ? 'Send to ' + n + (n === 1 ? ' person' : ' people') : 'Select who to message') +
+        '</button> <span id="urOut" class="fb-when"></span></p>';
+    var b = $('urSend');
+    if (b) b.addEventListener('click', urSend);
+  }
+
+  function urSend() {
+    var ta = $('urBody'), out = $('urOut');
+    var body = ta ? String(ta.value || '').trim() : '';
+    var uids = urPickedUids();
+    if (!body) { if (out) out.textContent = 'Write a message first.'; return; }
+    if (!uids.length) return;
+    if (!window.confirm('Send this message to ' +
+      (uids.length === 1 ? 'this person' : uids.length + ' people') + '?')) return;
+    var btn = $('urSend');
+    if (btn) btn.disabled = true;
+    if (out) out.textContent = 'Sending…';
+    var now = Date.now(), sent = 0, failed = 0;
+    /* One at a time, failures COUNTED rather than thrown: a half-finished
+       broadcast must report what it did, not vanish into a rejection. */
+    uids.reduce(function (chain, uid) {
+      return chain.then(function () {
+        var head = db.collection('messages').doc(uid);
+        var row = urRows.filter(function (r) { return r.uid === uid; })[0];
+        var prev = (row && row.thread) || null;
+        return head.collection('items').add({ from: 'admin', body: body, t: now })
+          .then(function () {
+            return head.set({
+              uid: uid, lastAt: now, lastFrom: 'admin', needsAdmin: false,
+              userUnread: (prev && typeof prev.userUnread === 'number' ? prev.userUnread : 0) + 1
+            }, { merge: true });
+          })
+          .then(function () { sent++; })
+          .catch(function () { failed++; });
+      });
+    }, Promise.resolve()).then(function () {
+      if (ta) ta.value = '';
+      urPicked = {};
+      if (out) {
+        out.textContent = failed
+          ? 'Sent to ' + sent + '; ' + failed + ' could not be delivered.'
+          : 'Sent to ' + sent + (sent === 1 ? ' person.' : ' people.');
+      }
+      return urLoad();
+    });
+  }
+
+  function urOpenThread(uid) {
+    var host = $('urAdminThread');
+    if (!host) return;
+    host.hidden = false;
+    host.innerHTML = '<p class="fb-empty">Loading…</p>';
+    db.collection('messages').doc(uid).collection('items').orderBy('t').get()
+      .then(function (snap) {
+        var row = urRows.filter(function (r) { return r.uid === uid; })[0];
+        var who = row ? (row.name || row.email || uid) : uid;
+        host.innerHTML = '<h3 class="fb-day">Conversation with ' + esc(who) + '</h3>' +
+          '<ul class="msg-thread">' + snap.docs.map(function (d) {
+            var m = d.data() || {};
+            var mine = m.from === 'admin';
+            return '<li class="msg-item ' + (mine ? 'is-me' : 'is-them') + '">' +
+              '<span class="msg-who">' + (mine ? 'You' : esc(who)) + '</span>' +
+              '<span class="msg-when">' + esc(urDay(m.t)) + '</span>' +
+              '<p>' + esc(String(m.body || '')).replace(/\n/g, '<br>') + '</p></li>';
+          }).join('') + '</ul>' +
+          '<p><button type="button" class="fb-act" id="urThreadClose">Close</button> ' +
+          '<button type="button" class="fb-act reopen" id="urThreadSeen">Mark answered</button> ' +
+          '<span id="urThreadOut" class="fb-when"></span></p>';
+        var c = $('urThreadClose');
+        if (c) c.addEventListener('click', function () { host.hidden = true; });
+        var sBtn = $('urThreadSeen');
+        if (sBtn) sBtn.addEventListener('click', function () {
+          db.collection('messages').doc(uid).set({ needsAdmin: false }, { merge: true })
+            .then(function () {
+              var o = $('urThreadOut'); if (o) o.textContent = 'Marked as answered.';
+              return urLoad();
+            })
+            .catch(function (err) {
+              var o = $('urThreadOut');
+              if (o) o.textContent = 'Could not update (' + (err && err.code ? err.code : 'error') + ').';
+            });
+        });
+      })
+      .catch(function (err) {
+        host.innerHTML = '<p class="fb-empty">Could not open the conversation (' +
+          esc(err && err.code ? err.code : 'error') + ').</p>';
+      });
+  }
+
+  (function urWireTabs() {
+    var tabs = $('urAdminTabs');
+    if (!tabs) return;
+    tabs.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button[data-tab]') : null;
+      if (!b) return;
+      urTab = b.getAttribute('data-tab');
+      Array.prototype.forEach.call(tabs.querySelectorAll('button'), function (x) {
+        x.classList.toggle('is-active', x === b);
+      });
+      urRender();
+    });
+  }());
 
   function psAdminMaybeShow(u) {
     var sec = $('psAdmin');
