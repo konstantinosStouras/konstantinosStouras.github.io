@@ -152,6 +152,16 @@ ok(/urLoaded = false;/.test(fb.slice(fb.indexOf('function urLoad'))),
 ok(/Number\(p\.msgUnread\)/.test(nav),
   'the sub-page badge COERCES the count it interpolates — the profile doc is ' +
   'written by its own owner and the value reaches innerHTML');
+ok(/function maybeCacheMsgUnread/.test(main)
+  && (main.match(/maybeCacheMsgUnread\(\)/g) || []).length >= 3,
+  'the profile cache the sub-pages read is written from MORE THAN the thread ' +
+  'read: that read fires one line before the profile listener is attached, with ' +
+  'state.profile just reset, so on nearly every sign-in it resolves with nothing ' +
+  'to write onto — onData() must call it again once the profile lands');
+ok(/if \(!state\.user \|\| state\.user\.uid !== uid\) return;/.test(main),
+  'a message read that lands after the account changed is dropped — the older ' +
+  'read would otherwise paint the previous person’s count on this account');
+
 ok(/id="litMsgSend"/.test(main),
   'the reader’s Send button is addressable, so it can be disabled while a reply ' +
   'is in flight and a double-click cannot post it twice');

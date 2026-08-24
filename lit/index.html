@@ -7986,19 +7986,36 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var msgUnread = null;      // null = not known yet; a number once read
   var msgItems = null;
 
+  /* Cache the count on the profile the sub-pages already fetch, exactly as
+     myPubCount is cached, so lit-acct-nav.js draws the badge without a read of
+     its own on every page.
+
+     CALLED FROM TWO PLACES, and it has to be. The thread read below is fired
+     one line BEFORE the profile listener is attached, with state.profile just
+     reset to null — so on nearly every sign-in it resolves first and there is
+     no profile to write onto yet. onData() calls it again once the profile has
+     landed, the same shape maybeCacheMyPubCount uses; without that second call
+     the sub-page badge would essentially never be written. */
+  function maybeCacheMsgUnread() {
+    if (!state.user || !state.profile) return;
+    if (typeof msgUnread !== 'number') return;          // unknown, never a 0
+    if (state.profile.msgUnread === msgUnread) return;
+    profileDoc().set({ msgUnread: msgUnread }, { merge: true })
+      .catch(function () { /* decoration — never break a sign-in over it */ });
+  }
+
   function litMessagesLoadUnread(uid) {
     if (!uid) return Promise.resolve();
     return messageThreadDoc(uid).get().then(function (d) {
+      /* The account can change while the read is in flight — sign out, then
+         sign in as someone else. Without this the older read wins and the
+         previous person's unread count is painted on this account's menu and
+         written into its profile. */
+      if (!state.user || state.user.uid !== uid) return;
       var n = d && d.exists ? (d.data() || {}).userUnread : 0;
       msgUnread = typeof n === 'number' ? n : 0;
       acctRenderControl();
-      /* Cache it on the profile the sub-pages already fetch, exactly as
-         myPubCount is cached, so lit-acct-nav.js draws the badge without a
-         read of its own on every page. */
-      if (state.profile && state.profile.msgUnread !== msgUnread) {
-        profileDoc().set({ msgUnread: msgUnread }, { merge: true })
-          .catch(function () { /* decoration — never break a sign-in over it */ });
-      }
+      maybeCacheMsgUnread();
     }).catch(function (err) {
       console.warn('messages:', err && err.code);   // rules not deployed → unknown, never 0
     });
@@ -8054,11 +8071,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       // badge as it was rather than lying about it.
       if (msgUnread) {
         messageThreadDoc(uid).set({ userUnread: 0 }, { merge: true }).then(function () {
+          if (!state.user || state.user.uid !== uid) return;   // switched mid-flight
           msgUnread = 0;
           acctRenderControl();
-          if (state.profile) {
-            profileDoc().set({ msgUnread: 0 }, { merge: true }).catch(function () {});
-          }
+          maybeCacheMsgUnread();
         }).catch(function () {});
       }
     }).catch(function (err) {
@@ -8495,6 +8511,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (state.profile && state.profile.orcid && state.profile.orcidLinked
         && state.profile.orcidNameAuto !== false) backfillOrcidAuthorName(state.profile.orcid, '');
     maybeCacheMyPubCount();  // keep the My-publications badge (profile myPubCount) current
+    maybeCacheMsgUnread();   // …and the Messages badge the sub-pages read from the profile
     maybeApplyMergeStash();  // finish a pending duplicate-account merge, if one is stashed
     maybeClaimAccountKeys(); // claim orcid/e-mail identity keys; offer the merge on a conflict
     maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID
