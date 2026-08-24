@@ -1,0 +1,29 @@
+# One-off crawl for the Enno Siemsen OM-list department links (this task
+# branch only — never scheduled, never on master). Commits results.json back
+# to the branch with [skip ci], and paths-ignore guards the loop twice over.
+name: siemsen-scrape
+on:
+  push:
+    branches: [claude/enno-siemsen-scrape-8ao8rr]
+    paths-ignore:
+      - '_siemsen-scrape/results.json'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: siemsen-scrape-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: node _siemsen-scrape/crawl.mjs
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _siemsen-scrape/results.json
+          git diff --cached --quiet || git commit -m "siemsen-scrape: crawl results [skip ci]"
+          git push origin HEAD:${{ github.ref_name }}
