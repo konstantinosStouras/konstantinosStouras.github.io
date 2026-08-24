@@ -77,8 +77,17 @@ const dirKeys = (dir.slice(dir.indexOf('hasOnly(['), dir.indexOf('])', dir.index
   .match(/'[^']+'/g) || []).map((q) => q.slice(1, -1));
 eq(dirKeys.slice().sort(), ['email', 'first', 'name', 'seen'],
   'the roster row is exactly those four fields');
+/* Against the WRITER's own source, not the whole 300 KB page. Searching the
+   file for "name:" proves nothing — it occurs 29 times in lit/index.html for
+   reasons that have nothing to do with the roster, and a check that cannot
+   fail is worse than no check: gutting syncDirectoryRow's row object left this
+   suite green. */
+const syncSrc = main.slice(main.indexOf('function syncDirectoryRow'),
+  main.indexOf('function deleteOwnDirectoryRow'));
+ok(syncSrc.length > 200, 'the roster writer is where this thinks it is');
 for (const k of dirKeys) {
-  ok(main.includes(k + ':'), `lit/index.html writes userDirectory."${k}"`);
+  ok(new RegExp('(^|[{;\\s])' + k + ':|row\\.' + k + '\\s*=').test(syncSrc),
+    `syncDirectoryRow writes userDirectory."${k}" — and the rules allow it`);
 }
 
 /* Identity may NEVER join registeredUsers — it is publicly readable here. */
