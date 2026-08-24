@@ -1,0 +1,2611 @@
+[
+ {
+  "slug": "arizona-state-university",
+  "uni": "Arizona State University",
+  "url": "https://omlist.edutool.org/schools/arizona-state-university.html",
+  "status": 403,
+  "departments": []
+ },
+ {
+  "slug": "auburn-university",
+  "uni": "Auburn University",
+  "url": "https://omlist.edutool.org/schools/auburn-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "https://harbertsearch.auburn.edu/s/search.html?f.Department%7CpeopleDepartment=Supply+Chain+Management&profile=directory&collection=harbert%7Esp-search"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "bilkent-university",
+  "uni": "Bilkent University",
+  "url": "https://omlist.edutool.org/schools/bilkent-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://fba.bilkent.edu.tr/operations-management/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "bocconi-university",
+  "uni": "Bocconi University",
+  "url": "https://omlist.edutool.org/schools/bocconi-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Supply Chain Management",
+    "links": [
+     "https://www.sdabocconi.it/en/faculty-research/faculty-knowledge/?research_domains=5678"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "boston-college",
+  "uni": "Boston College",
+  "url": "https://omlist.edutool.org/schools/boston-college.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Business Analytics",
+    "links": [
+     "https://www.bc.edu/content/bc-web/schools/carroll-school/faculty-research/faculty-expertise.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "boston-university",
+  "uni": "Boston University",
+  "url": "https://omlist.edutool.org/schools/boston-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Technology Management",
+    "links": [
+     "https://www.bu.edu/questrom/faculty/academic-departments/operations-technology-management/"
+    ]
+   },
+   {
+    "name": "Information Systems",
+    "links": [
+     "https://www.bu.edu/questrom/faculty/academic-departments/information-systems/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "brigham-young-university",
+  "uni": "Brigham Young University",
+  "url": "https://omlist.edutool.org/schools/brigham-young-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Marketing & Global Supply Chain",
+    "links": [
+     "https://marriott.byu.edu/directory/departmental/#dept-21"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "cardiff-university",
+  "uni": "Cardiff University",
+  "url": "https://omlist.edutool.org/schools/cardiff-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Logistics and Operations Management",
+    "links": [
+     "https://www.cardiff.ac.uk/business-school/people/academic-staff/logistics-and-operations-management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "carnegie-mellon-university",
+  "uni": "Carnegie Mellon University",
+  "url": "https://omlist.edutool.org/schools/carnegie-mellon-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.cmu.edu/tepper/faculty-and-research/academic-areas/operations-management"
+    ]
+   },
+   {
+    "name": "Heinz College",
+    "links": [
+     "https://www.heinz.cmu.edu/heinz-shared/_files/php/views/facultyresults-full.php?discipline%5B%5D=Operations+Research"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "case-western-reserve-university",
+  "uni": "Case Western Reserve University",
+  "url": "https://omlist.edutool.org/schools/case-western-reserve-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations",
+    "links": [
+     "https://case.edu/weatherhead/about/faculty-and-staff-directory"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "cat-lica-lisbon-school-of-business-and-economics",
+  "uni": "Católica Lisbon School of Business and Economics",
+  "url": "https://omlist.edutool.org/schools/cat-lica-lisbon-school-of-business-and-economics.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Data Science (Lisbon)",
+    "links": [
+     "https://clsbe.lisboa.ucp.pt/faculty-directory?f[]=field_areas_of_research:1579"
+    ]
+   },
+   {
+    "name": "Operations & Management Science (Porto)",
+    "links": [
+     "https://catolicabs.porto.ucp.pt/docentes-investigacao/faculty-members?f[0]=field_areas_of_research:406&items_per_page=10&views[views_dom_id:7a6d43618bc03e403230c7269b7b0111][view_name]=search_person&views[views_dom_id:7a6d43618bc03e403230c7269b7b0111][view_display_id]=panel_pane_1&views[views_dom_id:7a6d43618bc03e403230c7269b7b0111][view_args]=1&views[views_dom_id:7a6d43618bc03e403230c7269b7b0111][view_path]=node/41&views[views_dom_id:7a6d43618bc03e403230c7269b7b0111][view_base_path]=node/41&views[views_dom_id:7a6d43618bc03e403230c7269b7b0111][view_dom_id]=7a6d43618bc03e403230c7269b7b0111&views[views_dom_id:7a6d43618bc03e403230c7269b7b0111][pager_element]=0&index_id=default_multilingual_node_index&facet_field=field_areas_of_research"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "ceibs",
+  "uni": "CEIBS",
+  "url": "https://omlist.edutool.org/schools/ceibs.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.ceibs.edu/faculty-profiles/by-department"
+    ]
+   },
+   {
+    "name": "Decision Sciences and Management Information Systems",
+    "links": []
+   }
+  ]
+ },
+ {
+  "slug": "chinese-university-of-hong-kong",
+  "uni": "Chinese University of Hong Kong",
+  "url": "https://omlist.edutool.org/schools/chinese-university-of-hong-kong.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.bschool.cuhk.edu.hk/departments/decisions-operations-and-technology/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "city-st-george-s-university-of-london",
+  "uni": "City St George's, University of London",
+  "url": "https://omlist.edutool.org/schools/city-st-george-s-university-of-london.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Supply Chain Management",
+    "links": [
+     "https://www.bayes.citystgeorges.ac.uk/faculties-and-research/management/people#accordion-927190-header-2"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "city-university-of-hong-kong",
+  "uni": "City University of Hong Kong",
+  "url": "https://omlist.edutool.org/schools/city-university-of-hong-kong.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Research and Operations Management",
+    "links": [
+     "https://www.cb.cityu.edu.hk/people-and-research/people?dept_code=DAOS"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "city-university-of-new-york-baruch-college",
+  "uni": "City University of New York, Baruch College",
+  "url": "https://omlist.edutool.org/schools/city-university-of-new-york-baruch-college.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management",
+    "links": [
+     "https://zicklin.baruch.cuny.edu/faculty-research/academic-departments/management/faculty-management/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "clemson-university",
+  "uni": "Clemson University",
+  "url": "https://omlist.edutool.org/schools/clemson-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management",
+    "links": [
+     "https://www.clemson.edu/business/academics/management/faculty-staff.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "colorado-state-university",
+  "uni": "Colorado State University",
+  "url": "https://omlist.edutool.org/schools/colorado-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "http://www.csusupplychain.org/faculty.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "columbia-university",
+  "uni": "Columbia University",
+  "url": "https://omlist.edutool.org/schools/columbia-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Decision, Risk, and Operations",
+    "links": [
+     "https://business.columbia.edu/faculty/divisions/dro/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "copenhagen-business-school",
+  "uni": "Copenhagen Business School",
+  "url": "https://omlist.edutool.org/schools/copenhagen-business-school.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.cbs.dk/en/research/departments/department-operations-management#9903-employees?employee_type_value[staff]=staff&job_title_target_id[554]=554&job_title_target_id[546]=546&job_title_target_id[541]=541"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "cornell-university",
+  "uni": "Cornell University",
+  "url": "https://omlist.edutool.org/schools/cornell-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations, Technology and Information Management",
+    "links": [
+     "https://business.cornell.edu/faculty-research/areas/operations-technology-and-information-management/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "cranfield-university",
+  "uni": "Cranfield University",
+  "url": "https://omlist.edutool.org/schools/cranfield-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Logistics, Procurement and Supply Chain Management",
+    "links": [
+     "https://www.cranfield.ac.uk/som/faculty-profiles/school-of-management-faculty-groups"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "dartmouth-college",
+  "uni": "Dartmouth College",
+  "url": "https://omlist.edutool.org/schools/dartmouth-college.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Management Science",
+    "links": [
+     "https://faculty.tuck.dartmouth.edu/faculty-research/operations"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "depaul-university",
+  "uni": "DePaul University",
+  "url": "https://omlist.edutool.org/schools/depaul-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management & Entrepreneurship",
+    "links": [
+     "https://www.depaul.edu/faculty?college=Driehaus+College+of+Business&department=Management+%26+Entrepreneurship"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "drexel-university",
+  "uni": "Drexel University",
+  "url": "https://omlist.edutool.org/schools/drexel-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Decision Sciences and Management Information Systems",
+    "links": [
+     "https://www.lebow.drexel.edu/faculty-research/schools-academic-departments/decision-sciences-mis/decision-sciences-mis-faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "duke-university",
+  "uni": "Duke University",
+  "url": "https://omlist.edutool.org/schools/duke-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://areas.fuqua.duke.edu/operations-management/?_gl=1*egnn90*_gcl_au*MjEzNDIwMzQ0MC4xNzc1NDA0MTA0*_ga*MTg0NTA2MzgwMS4xNzc1NDA0MTA0*_ga_1QY6PJLGK7*czE3NzU0MDQxMDQkbzEkZzAkdDE3NzU0MDQxMDQkajYwJGwwJGgw*_ga_PB0LYZLB4K*czE3NzU0MDQxMDQkbzEkZzAkdDE3NzU0MDQxMDQkajYwJGwwJGgw*_ga_FRQ1WCSNLF*czE3NzU0MDQxMDQkbzEkZzAkdDE3NzU0MDQxMDQkajYwJGwwJGgw"
+    ]
+   },
+   {
+    "name": "Decision Sciences",
+    "links": [
+     "https://areas.fuqua.duke.edu/decision-sciences/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "emory-university",
+  "uni": "Emory University",
+  "url": "https://omlist.edutool.org/schools/emory-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://goizueta.emory.edu/faculty/isom"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "erasmus-university-rotterdam",
+  "uni": "Erasmus University Rotterdam",
+  "url": "https://omlist.edutool.org/schools/erasmus-university-rotterdam.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Technology and Operations Management",
+    "links": [
+     "https://www.rsm.nl/faculty-research/departments/technology-and-operations-management/faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "essec",
+  "uni": "ESSEC",
+  "url": "https://omlist.edutool.org/schools/essec.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems, Data Analytics and Operations",
+    "links": [
+     "https://faculty.essec.edu/en/?pagenum=1&s=&type=cv&filter%5Bdepartment-en%5D%5B%5D=Information%20Systems%2C%20Data%20Analytics%20and%20Operations"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "eth-zurich",
+  "uni": "ETH Zurich",
+  "url": "https://omlist.edutool.org/schools/eth-zurich.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management, Technology and Economics",
+    "links": [
+     "https://mtec.ethz.ch/people/scientists/professors.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "european-school-of-management-and-technology",
+  "uni": "European School of Management and Technology",
+  "url": "https://omlist.edutool.org/schools/european-school-of-management-and-technology.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science",
+    "links": [
+     "https://esmt.berlin/faculty-research/faculty-overview"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "frankfurt-school-of-finance-management",
+  "uni": "Frankfurt School of Finance & Management",
+  "url": "https://omlist.edutool.org/schools/frankfurt-school-of-finance-management.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management",
+    "links": [
+     "https://www.frankfurt-school.de/en/research-and-faculty/faculty/faculty-directory?sort=employeeLastName%7Casc"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "fudan-university",
+  "uni": "Fudan University",
+  "url": "https://omlist.edutool.org/schools/fudan-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science",
+    "links": [
+     "https://www.fdsm.fudan.edu.cn/en/fr_faculty/list.htm"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "george-mason-university",
+  "uni": "George Mason University",
+  "url": "https://omlist.edutool.org/schools/george-mason-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems and Operations Management",
+    "links": [
+     "https://business.gmu.edu/faculty-and-research/academic-areas/information-systems-and-operations-management-area?size=n_20_n&filters%5B0%5D%5Bfield%5D=domains&filters%5B0%5D%5Bvalues%5D%5B0%5D=https%3A%2F%2Fbusiness.gmu.edu&filters%5B0%5D%5Btype%5D=all"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "george-washington-university",
+  "uni": "George Washington University",
+  "url": "https://omlist.edutool.org/schools/george-washington-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Decision Sciences",
+    "links": [
+     "https://business.gwu.edu/about/departments/decision-sciences#faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "georgetown-university",
+  "uni": "Georgetown University",
+  "url": "https://omlist.edutool.org/schools/georgetown-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Analytics",
+    "links": [
+     "https://msb.georgetown.edu/faculty-research/operations-analytics/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "georgia-institute-of-technology",
+  "uni": "Georgia Institute of Technology",
+  "url": "https://omlist.edutool.org/schools/georgia-institute-of-technology.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.scheller.gatech.edu/academics-research/operations-management/index.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "georgia-state-university",
+  "uni": "Georgia State University",
+  "url": "https://omlist.edutool.org/schools/georgia-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Computer Information Systems",
+    "links": [
+     "https://robinson.gsu.edu/academic-departments/computer-information-systems/meet-our-faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "harvard-university",
+  "uni": "Harvard University",
+  "url": "https://omlist.edutool.org/schools/harvard-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Technology and Operations Management",
+    "links": [
+     "https://www.hbs.edu/faculty/units/tom/Pages/faculty.aspx"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "hec-montreal",
+  "uni": "HEC Montreal",
+  "url": "https://omlist.edutool.org/schools/hec-montreal.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Logistics and Operations Management",
+    "links": [
+     "https://www.hec.ca/en/gol/profs.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "hec-paris",
+  "uni": "HEC Paris",
+  "url": "https://omlist.edutool.org/schools/hec-paris.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems and Operations Management",
+    "links": [
+     "https://www.hec.edu/en/faculty-research/faculty-directory/faculty-member/all/all/information-systems-and-operations-management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "hong-kong-polytechnic-university",
+  "uni": "Hong Kong Polytechnic University",
+  "url": "https://omlist.edutool.org/schools/hong-kong-polytechnic-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Logistics and Maritime Studies",
+    "links": [
+     "https://www.polyu.edu.hk/lms/people/academic-staff/"
+    ]
+   },
+   {
+    "name": "Fashion and Textiles",
+    "links": []
+   }
+  ]
+ },
+ {
+  "slug": "hong-kong-university-of-science-and-technology",
+  "uni": "Hong Kong University of Science and Technology",
+  "url": "https://omlist.edutool.org/schools/hong-kong-university-of-science-and-technology.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems, Business Statistics and Operations Management",
+    "links": [
+     "https://bm.hkust.edu.hk/faculty-research/faculty-guide#department"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "ie-university",
+  "uni": "IE University",
+  "url": "https://omlist.edutool.org/schools/ie-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Business Analytics",
+    "links": [
+     "https://www.ie.edu/university/about/faculty/?page=1&ACADEMIC_AREA=29477"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "ieseg",
+  "uni": "IESEG",
+  "url": "https://omlist.edutool.org/schools/ieseg.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.ieseg.fr/en/faculty-and-research/departments/operations-management/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "imperial-college-london",
+  "uni": "Imperial College London",
+  "url": "https://omlist.edutool.org/schools/imperial-college-london.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Analytics & Operations",
+    "links": [
+     "https://www.imperial.ac.uk/business-school/faculty-research/academic-areas/analytics-operations/people/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "indian-school-of-business",
+  "uni": "Indian School of Business",
+  "url": "https://omlist.edutool.org/schools/indian-school-of-business.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.isb.edu/faculty-and-research/faculty-directory?area=operations-management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "indiana-university-bloomington",
+  "uni": "Indiana University Bloomington",
+  "url": "https://omlist.edutool.org/schools/indiana-university-bloomington.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain and Operations",
+    "links": [
+     "https://kelley.iu.edu/faculty-research/departments/operations-decision-technologies/faculty/supply-chain-and-operations/index.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "insead",
+  "uni": "INSEAD",
+  "url": "https://omlist.edutool.org/schools/insead.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Technology and Operations Management",
+    "links": [
+     "https://www.insead.edu/faculty-research/academic-areas/technology-operations-management#group-faculty"
+    ]
+   },
+   {
+    "name": "Decision Sciences",
+    "links": [
+     "https://www.insead.edu/faculty-research/academic-areas/decision-sciences#group-faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "iowa-state-university",
+  "uni": "Iowa State University",
+  "url": "https://omlist.edutool.org/schools/iowa-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "https://www.ivybusiness.iastate.edu/directory/?LName=&Department=SCM"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "johns-hopkins-university",
+  "uni": "Johns Hopkins University",
+  "url": "https://omlist.edutool.org/schools/johns-hopkins-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management and Business Analytics",
+    "links": [
+     "https://carey.jhu.edu/faculty/faculty-directory"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "kaist",
+  "uni": "KAIST",
+  "url": "https://omlist.edutool.org/schools/kaist.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Strategy & Management Science",
+    "links": [
+     "https://www.business.kaist.edu/_prog/prof/?site_dvs_cd=en&menu_dvs_cd=050106&div_cd=C02009"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "kedge-business-school",
+  "uni": "Kedge Business School",
+  "url": "https://omlist.edutool.org/schools/kedge-business-school.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management and Information Systems",
+    "links": [
+     "https://student.kedge.edu/faculty/departments/operations-management-and-information-systems-mosi"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "korea-university",
+  "uni": "Korea University",
+  "url": "https://omlist.edutool.org/schools/korea-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Logistics, Service and Operations Management",
+    "links": [
+     "https://biz.korea.ac.kr/professor/professor_list1.html?major=M06"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "ko-university",
+  "uni": "Koç University",
+  "url": "https://omlist.edutool.org/schools/ko-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management and Information Systems",
+    "links": [
+     "https://gsb.ku.edu.tr/about-gsb/full-time/?dp=16"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "k-hne-logistics-university",
+  "uni": "Kühne Logistics University",
+  "url": "https://omlist.edutool.org/schools/k-hne-logistics-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Department",
+    "links": [
+     "https://www.klu.org/faculty-research/faculty/resident-faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "lancaster-university",
+  "uni": "Lancaster University",
+  "url": "https://omlist.edutool.org/schools/lancaster-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science",
+    "links": [
+     "https://www.lancaster.ac.uk/lums/our-departments/management-science/people/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "maastricht-university",
+  "uni": "Maastricht University",
+  "url": "https://omlist.edutool.org/schools/maastricht-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Marketing and Supply Chain Management",
+    "links": [
+     "https://www.maastrichtuniversity.nl/research/mscm/faculty-and-staff"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "massachusetts-institute-of-technology",
+  "uni": "Massachusetts Institute of Technology",
+  "url": "https://omlist.edutool.org/schools/massachusetts-institute-of-technology.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://mitsloan.mit.edu/faculty/academic-groups/operations-management/faculty-research-centers"
+    ]
+   },
+   {
+    "name": "Operations Research and Statistics",
+    "links": [
+     "https://mitsloan.mit.edu/faculty/academic-groups/operations-research-statistics/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "mcgill-university",
+  "uni": "McGill University",
+  "url": "https://omlist.edutool.org/schools/mcgill-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.mcgill.ca/desautels/people/field_mprofile_areas/Operations%2520Management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "michigan-state-university",
+  "uni": "Michigan State University",
+  "url": "https://omlist.edutool.org/schools/michigan-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "https://broad.msu.edu/directory/?q=&expertise=0&program=0&department=26&employment%5B0%5D=1"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "monash-university",
+  "uni": "Monash University",
+  "url": "https://omlist.edutool.org/schools/monash-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management",
+    "links": [
+     "https://www.monash.edu/business/management/people/staff-directory"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "nanyang-technological-university",
+  "uni": "Nanyang Technological University",
+  "url": "https://omlist.edutool.org/schools/nanyang-technological-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Technology and Operations Management",
+    "links": [
+     "https://www.ntu.edu.sg/business/research/academic-divisions/itom/our-faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "national-university-of-singapore",
+  "uni": "National University of Singapore",
+  "url": "https://omlist.edutool.org/schools/national-university-of-singapore.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Analytics and Operations",
+    "links": [
+     "https://bschool.nus.edu.sg/analytics-operations/faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "new-york-university",
+  "uni": "New York University",
+  "url": "https://omlist.edutool.org/schools/new-york-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Technology, Operations and Statistics",
+    "links": [
+     "https://www.stern.nyu.edu/experience-stern/about/departments-centers-initiatives/academic-departments/tops/faculty-staff/full-time-faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "north-carolina-state-university",
+  "uni": "North Carolina State University",
+  "url": "https://omlist.edutool.org/schools/north-carolina-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Technology, Analytics and Operations",
+    "links": [
+     "https://poole.ncsu.edu/group/academic-departments/information-technology-analytics-and-operations/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "north-dakota-state-university",
+  "uni": "North Dakota State University",
+  "url": "https://omlist.edutool.org/schools/north-dakota-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Finance, Supply Chain and Transportation",
+    "links": [
+     "https://www.ndsu.edu/business/our-team/by-department#accordion__item-1092898"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "northeastern-university",
+  "uni": "Northeastern University",
+  "url": "https://omlist.edutool.org/schools/northeastern-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain & Information Management",
+    "links": [
+     "https://damore-mckim.northeastern.edu/group/supply-chain/members/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "northern-illinois-university",
+  "uni": "Northern Illinois University",
+  "url": "https://omlist.edutool.org/schools/northern-illinois-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management and Information Systems",
+    "links": [
+     "https://www.cob.niu.edu/about/directory/index.shtml#operations"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "northwestern-university",
+  "uni": "Northwestern University",
+  "url": "https://omlist.edutool.org/schools/northwestern-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations",
+    "links": [
+     "https://www.kellogg.northwestern.edu/academics-research/faculty-directory/?academicDepartments=Operations"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "nova-school-of-business-and-economics",
+  "uni": "NOVA School of Business and Economics",
+  "url": "https://omlist.edutool.org/schools/nova-school-of-business-and-economics.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations, Technology and Innovation Management",
+    "links": [
+     "https://www.novasbe.unl.pt/en/faculty-research/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "oregon-state-university",
+  "uni": "Oregon State University",
+  "url": "https://omlist.edutool.org/schools/oregon-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain and Logistics Management",
+    "links": [
+     "https://business.oregonstate.edu/faculty/supply-chain-and-logistics-management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "peking-university",
+  "uni": "Peking University",
+  "url": "https://omlist.edutool.org/schools/peking-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science and Information System",
+    "links": [
+     "https://en.gsm.pku.edu.cn/Faculty_Research/Faculty_Directory/Full_time_Professors.htm"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "pennsylvania-state-university",
+  "uni": "Pennsylvania State University",
+  "url": "https://omlist.edutool.org/schools/pennsylvania-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain and Information Systems",
+    "links": [
+     "https://www.smeal.psu.edu/scis/people/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "purdue-university",
+  "uni": "Purdue University",
+  "url": "https://omlist.edutool.org/schools/purdue-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain and Operations Management",
+    "links": [
+     "https://business.purdue.edu/directory/view.php?search=FacArea&FacAreaList=58"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "rice-university",
+  "uni": "Rice University",
+  "url": "https://omlist.edutool.org/schools/rice-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://business.rice.edu/faculty-research/research/operations-management#faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "rutgers-university-at-newark-and-new-brunswick",
+  "uni": "Rutgers University at Newark and New Brunswick",
+  "url": "https://omlist.edutool.org/schools/rutgers-university-at-newark-and-new-brunswick.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "https://www.business.rutgers.edu/faculty-research/faculty-profiles?aoe%5B71%5D=71"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "saarland-university",
+  "uni": "Saarland University",
+  "url": "https://omlist.edutool.org/schools/saarland-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Fachrichtung Wirtschaftswissenschaft",
+    "links": [
+     "https://www.uni-saarland.de/fachrichtung/wiwi/personen/professoren.html#c281360"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "santa-clara-university",
+  "uni": "Santa Clara University",
+  "url": "https://omlist.edutool.org/schools/santa-clara-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems and Analytics",
+    "links": [
+     "https://www.scu.edu/business/isa/faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "seoul-national-university",
+  "uni": "Seoul National University",
+  "url": "https://omlist.edutool.org/schools/seoul-national-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://cba.snu.ac.kr/en/research/faculty/professor?major=4"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "shanghai-jiao-tong-university",
+  "uni": "Shanghai Jiao Tong University",
+  "url": "https://omlist.edutool.org/schools/shanghai-jiao-tong-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science",
+    "links": [
+     "https://www.acem.sjtu.edu.cn/acem2021/en/faculty/team.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "simon-fraser-university",
+  "uni": "Simon Fraser University",
+  "url": "https://omlist.edutool.org/schools/simon-fraser-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Technology and Operations Management",
+    "links": [
+     "https://www.sfu.ca/beedie/faculty-and-research/faculty-staff-directory.html?area_pad_id=45&rank_name_faculty="
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "singapore-management-university",
+  "uni": "Singapore Management University",
+  "url": "https://omlist.edutool.org/schools/singapore-management-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://business.smu.edu.sg/disciplines/operations-management/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "southern-methodist-university",
+  "uni": "Southern Methodist University",
+  "url": "https://omlist.edutool.org/schools/southern-methodist-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Technology and Operations Management",
+    "links": [
+     "https://www.smu.edu/cox/academics/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "stanford-university",
+  "uni": "Stanford University",
+  "url": "https://omlist.edutool.org/schools/stanford-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations, Information and Technology",
+    "links": [
+     "https://www.gsb.stanford.edu/faculty-research/faculty/academic-areas/operations-information-technology"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "stony-brook-university",
+  "uni": "Stony Brook University",
+  "url": "https://omlist.edutool.org/schools/stony-brook-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Decision Analytics",
+    "links": [
+     "https://www.stonybrook.edu/commcms/business/faculty-research/research.php#view-operations"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "syracuse-university",
+  "uni": "Syracuse University",
+  "url": "https://omlist.edutool.org/schools/syracuse-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "https://whitman.syracuse.edu/academic-areas/supply-chain-management/supply-chain-faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "technical-university-of-munich",
+  "uni": "Technical University of Munich",
+  "url": "https://omlist.edutool.org/schools/technical-university-of-munich.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Technology",
+    "links": [
+     "https://www.mgt.tum.de/faculty-research/academic-departments/operations-technology"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "technion-israel-institute-of-technology",
+  "uni": "Technion – Israel Institute of Technology",
+  "url": "https://omlist.edutool.org/schools/technion-israel-institute-of-technology.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": []
+   }
+  ]
+ },
+ {
+  "slug": "tel-aviv-university",
+  "uni": "Tel Aviv University",
+  "url": "https://omlist.edutool.org/schools/tel-aviv-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operational Strategy",
+    "links": [
+     "https://en-coller.tau.ac.il/faculty-research/faculty/profiles/?id=187"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "temple-university",
+  "uni": "Temple University",
+  "url": "https://omlist.edutool.org/schools/temple-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Statistics, Operations, and Data Science",
+    "links": [
+     "https://www.fox.temple.edu/faculty-research/academic-areas/statistics-operations-and-data-science/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "texas-a-m-university",
+  "uni": "Texas A&M University",
+  "url": "https://omlist.edutool.org/schools/texas-a-m-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information and Operations Management",
+    "links": [
+     "https://mays.tamu.edu/directory/?department=2&office=0&center=0&type=&fullname="
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "texas-christian-university",
+  "uni": "Texas Christian University",
+  "url": "https://omlist.edutool.org/schools/texas-christian-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems and Supply Chain Management",
+    "links": [
+     "https://www.neeley.tcu.edu/Academic-Departments/Information-Systems-and-Supply-Chain-Management/Our-Team"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "texas-state-university",
+  "uni": "Texas State University",
+  "url": "https://omlist.edutool.org/schools/texas-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management",
+    "links": [
+     "https://mgt.mccoy.txst.edu/about/faculty.html"
+    ]
+   },
+   {
+    "name": "Information Systems and Analytics",
+    "links": [
+     "https://isa.mccoy.txst.edu/research.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "texas-tech-university",
+  "uni": "Texas Tech University",
+  "url": "https://omlist.edutool.org/schools/texas-tech-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Marketing",
+    "links": [
+     "https://www.depts.ttu.edu/rawlsbusiness/people/faculty/marketing/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "the-chinese-university-of-hong-kong-shenzhen",
+  "uni": "The Chinese University of Hong Kong, Shenzhen",
+  "url": "https://omlist.edutool.org/schools/the-chinese-university-of-hong-kong-shenzhen.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems & Operations Management",
+    "links": [
+     "https://sme.cuhk.edu.cn/en/teacher-search?academic%5B216%5D=216"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "the-hebrew-university-of-jerusalem",
+  "uni": "The Hebrew University of Jerusalem",
+  "url": "https://omlist.edutool.org/schools/the-hebrew-university-of-jerusalem.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Research",
+    "links": [
+     "https://bschool-en.huji.ac.il/faculty-members"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "the-ohio-state-university",
+  "uni": "The Ohio State University",
+  "url": "https://omlist.edutool.org/schools/the-ohio-state-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Business Analytics",
+    "links": [
+     "https://fisher.osu.edu/directory?department=224"
+    ]
+   },
+   {
+    "name": "Marketing & Logistics",
+    "links": [
+     "https://fisher.osu.edu/academic-departments/marketing-logistics/faculty-and-staff"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "the-university-of-melbourne",
+  "uni": "The University of Melbourne",
+  "url": "https://omlist.edutool.org/schools/the-university-of-melbourne.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations",
+    "links": [
+     "https://mbs.edu/faculty-and-research/faculty?facultyType=Operations"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "the-university-of-texas-at-austin",
+  "uni": "The University of Texas at Austin",
+  "url": "https://omlist.edutool.org/schools/the-university-of-texas-at-austin.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information, Risk and Operations Management",
+    "links": [
+     "https://www.mccombs.utexas.edu/faculty-and-research/faculty-directory/?filter=true&department_taxonomy=irom"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "the-university-of-texas-at-dallas",
+  "uni": "The University of Texas at Dallas",
+  "url": "https://omlist.edutool.org/schools/the-university-of-texas-at-dallas.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://jindal.utdallas.edu/osim/faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "the-university-of-texas-at-san-antonio",
+  "uni": "The University of Texas at San Antonio",
+  "url": "https://omlist.edutool.org/schools/the-university-of-texas-at-san-antonio.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Analytics",
+    "links": [
+     "https://business.utsa.edu/operations-analytics/faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "tilburg-university",
+  "uni": "Tilburg University",
+  "url": "https://omlist.edutool.org/schools/tilburg-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems and Operations Management",
+    "links": [
+     "https://www.tilburguniversity.edu/about/schools/economics-and-management/organization/departments/information-systems-and-operations-management/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "tsinghua-university",
+  "uni": "Tsinghua University",
+  "url": "https://omlist.edutool.org/schools/tsinghua-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science and Engineering)",
+    "links": [
+     "https://www.sem.tsinghua.edu.cn/en/Faculty/Faculty/Current_Faculty/DepartmentCampus/Management_Science_and_Engineering.htm"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "tulane-university",
+  "uni": "Tulane University",
+  "url": "https://omlist.edutool.org/schools/tulane-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science",
+    "links": [
+     "https://freeman.tulane.edu/faculty-research/management-science"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-at-buffalo-the-state-university-of-new-york",
+  "uni": "University at Buffalo, The State University of New York",
+  "url": "https://omlist.edutool.org/schools/university-at-buffalo-the-state-university-of-new-york.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://management.buffalo.edu/faculty/academic-departments/operations-management-strategy/faculty.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-college-dublin",
+  "uni": "University College Dublin",
+  "url": "https://omlist.edutool.org/schools/university-college-dublin.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management",
+    "links": [
+     "https://www.smurfitschool.ie/facultyresearch/subjectareas/management/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-college-london",
+  "uni": "University College London",
+  "url": "https://omlist.edutool.org/schools/university-college-london.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Technology",
+    "links": [
+     "https://www.mgmt.ucl.ac.uk/people#operations-technology"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-alberta",
+  "uni": "University of Alberta",
+  "url": "https://omlist.edutool.org/schools/university-of-alberta.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Accounting and Business Analytics",
+    "links": [
+     "https://www.ualberta.ca/en/accounting-business-analytics/people.html?discipline=OperationsManagement"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-amsterdam",
+  "uni": "University of Amsterdam",
+  "url": "https://omlist.edutool.org/schools/university-of-amsterdam.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Business Analytics",
+    "links": [
+     "https://abs.uva.nl/content/sections/business-analytics/staff/staff.html#Faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-arkansas-at-fayetteville",
+  "uni": "University of Arkansas at Fayetteville",
+  "url": "https://omlist.edutool.org/schools/university-of-arkansas-at-fayetteville.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "https://walton.uark.edu/departments/supplychain/directory.php"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-auckland",
+  "uni": "University of Auckland",
+  "url": "https://omlist.edutool.org/schools/university-of-auckland.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems and Operations Management",
+    "links": [
+     "https://www.auckland.ac.nz/en/study/study-options/find-a-study-option/operations-supply-chain-management/doctoral.html#Our-people"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-bath",
+  "uni": "University of Bath",
+  "url": "https://omlist.edutool.org/schools/university-of-bath.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information, Decisions and Operations",
+    "links": [
+     "https://researchportal.bath.ac.uk/en/organisations/information-decisions-operations/persons/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-british-columbia",
+  "uni": "University of British Columbia",
+  "url": "https://omlist.edutool.org/schools/university-of-british-columbia.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Logistics",
+    "links": [
+     "https://www.sauder.ubc.ca/thought-leadership/divisions/operations-and-logistics/people"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-calgary",
+  "uni": "University of Calgary",
+  "url": "https://omlist.edutool.org/schools/university-of-calgary.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Supply Chain Management",
+    "links": [
+     "https://haskayne.ucalgary.ca/research-and-faculty/academic-areas/operations-and-supply-chain-management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-california-san-diego",
+  "uni": "University of California San Diego",
+  "url": "https://omlist.edutool.org/schools/university-of-california-san-diego.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Innovation, Technology and Operations",
+    "links": [
+     "https://rady.ucsd.edu/faculty-research/faculty-directory/index.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-california-berkeley",
+  "uni": "University of California, Berkeley",
+  "url": "https://omlist.edutool.org/schools/university-of-california-berkeley.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Information Technology Management",
+    "links": [
+     "https://haas.berkeley.edu/oitm/faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-california-davis",
+  "uni": "University of California, Davis",
+  "url": "https://omlist.edutool.org/schools/university-of-california-davis.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://gsm.ucdavis.edu/faculty-and-research/faculty-directory?glossary_filter=All&search=&field_content_group_target_id=70"
+    ]
+   },
+   {
+    "name": "Business Analytics",
+    "links": [
+     "https://gsm.ucdavis.edu/faculty-and-research/faculty-directory?glossary_filter=All&search=&field_content_group_target_id=66"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-california-irvine",
+  "uni": "University of California, Irvine",
+  "url": "https://omlist.edutool.org/schools/university-of-california-irvine.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Decision Technologies",
+    "links": [
+     "https://merage.uci.edu/research-faculty/academic-areas/operations-decision-technologies.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-california-los-angeles",
+  "uni": "University of California, Los Angeles",
+  "url": "https://omlist.edutool.org/schools/university-of-california-los-angeles.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Decisions, Operations and Technology Management",
+    "links": [
+     "https://www.anderson.ucla.edu/faculty-and-research/decisions-operations-and-technology-management/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-california-riverside",
+  "uni": "University of California, Riverside",
+  "url": "https://omlist.edutool.org/schools/university-of-california-riverside.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Supply Chain Management",
+    "links": [
+     "https://business.ucr.edu/areas/oscm"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-cambridge",
+  "uni": "University of Cambridge",
+  "url": "https://omlist.edutool.org/schools/university-of-cambridge.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Technology Management",
+    "links": [
+     "https://www.jbs.cam.ac.uk/faculty-research/subject-groups/operations-technology-management/members/?area=3183&subject=Operations+%26+Technology+Management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-chicago",
+  "uni": "University of Chicago",
+  "url": "https://omlist.edutool.org/schools/university-of-chicago.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.chicagobooth.edu/faculty/academic-areas/operations-management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-cincinnati",
+  "uni": "University of Cincinnati",
+  "url": "https://omlist.edutool.org/schools/university-of-cincinnati.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations, Business Analytics, and Information Systems",
+    "links": [
+     "https://www.business.uc.edu/faculty-research/obais/faculty.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-cologne",
+  "uni": "University of Cologne",
+  "url": "https://omlist.edutool.org/schools/university-of-cologne.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://om.uni-koeln.de/de/team"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-colorado-boulder",
+  "uni": "University of Colorado Boulder",
+  "url": "https://omlist.edutool.org/schools/university-of-colorado-boulder.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.colorado.edu/business/faculty-research/directory/strategy-entrepreneurship-and-operations-faculty/operations-management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-connecticut",
+  "uni": "University of Connecticut",
+  "url": "https://omlist.edutool.org/schools/university-of-connecticut.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations & Information Management",
+    "links": [
+     "http://www.business.uconn.edu/contact/opim/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-dayton",
+  "uni": "University of Dayton",
+  "url": "https://omlist.edutool.org/schools/university-of-dayton.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Information Systems, Operations Supply Chain and Business Analytics",
+    "links": [
+     "https://udayton.edu/business/about/faculty-staff/mis-osc-analytics.php"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-florida",
+  "uni": "University of Florida",
+  "url": "https://omlist.edutool.org/schools/university-of-florida.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems & Operations Management",
+    "links": [
+     "https://warrington.ufl.edu/faculty-research/academic-groups/#h-information-systems-and-operations-management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-hong-kong",
+  "uni": "University of Hong Kong",
+  "url": "https://omlist.edutool.org/schools/university-of-hong-kong.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Innovation and Information Management",
+    "links": [
+     "https://www.hkubs.hku.hk/people/faculty?pg=1&staff_type=faculty&subject_area=innovation-and-information-management&track=professoriate&region=hku"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-houston",
+  "uni": "University of Houston",
+  "url": "https://omlist.edutool.org/schools/university-of-houston.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Decision & Information Sciences",
+    "links": [
+     "https://www.bauer.uh.edu/search/directory/index2.asp?dept=DISC"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-illinois-chicago",
+  "uni": "University of Illinois Chicago",
+  "url": "https://omlist.edutool.org/schools/university-of-illinois-chicago.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information and Decision Sciences",
+    "links": [
+     "https://business.uic.edu/academics-research/dept/department-of-information-and-decision-sciences/information-and-decision-sciences-faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-illinois-urbana-champaign",
+  "uni": "University of Illinois Urbana-Champaign",
+  "url": "https://omlist.edutool.org/schools/university-of-illinois-urbana-champaign.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems, Operations, Supply Chain and Analytics",
+    "links": [
+     "https://giesbusiness.illinois.edu/faculty-and-research/find-faculty?searchit=IOSA"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-iowa",
+  "uni": "University of Iowa",
+  "url": "https://omlist.edutool.org/schools/university-of-iowa.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Business Analytics",
+    "links": [
+     "https://tippie.uiowa.edu/people/?cohort=537896&amp%3Bcategory=FACULTY&amp%3Bpage=1&amp%3Bsize=10&category=FACULTY"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-kansas",
+  "uni": "University of Kansas",
+  "url": "https://omlist.edutool.org/schools/university-of-kansas.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Analytics, Information, Operations",
+    "links": [
+     "https://business.ku.edu/people/list/faculty-staff?lastname=&filter=414"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-liverpool",
+  "uni": "University of Liverpool",
+  "url": "https://omlist.edutool.org/schools/university-of-liverpool.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Supply Chain Management",
+    "links": [
+     "https://www.liverpool.ac.uk/management/about/people/operations-supply-chain/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-london",
+  "uni": "University of London",
+  "url": "https://omlist.edutool.org/schools/university-of-london.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science and Operations",
+    "links": [
+     "https://www.london.edu/faculty-and-research/management-science-and-operations/faculty-profiles#sortCriteria=%40profilesurname%20ascending"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-mannheim",
+  "uni": "University of Mannheim",
+  "url": "https://omlist.edutool.org/schools/university-of-mannheim.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.mannheim-business-school.com/en/the-mannheim-experience/faculty-research/faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-maryland-college-park",
+  "uni": "University of Maryland, College Park",
+  "url": "https://omlist.edutool.org/schools/university-of-maryland-college-park.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Decision, Operations and Information Technologies",
+    "links": [
+     "https://www.rhsmith.umd.edu/departments/decision-operations-information-technologies/faculty"
+    ]
+   },
+   {
+    "name": "Logistics, Business and Public Policy",
+    "links": [
+     "https://www.rhsmith.umd.edu/departments/logistics-business-public-policy/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-massachusetts-amherst",
+  "uni": "University of Massachusetts Amherst",
+  "url": "https://omlist.edutool.org/schools/university-of-massachusetts-amherst.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Information Management",
+    "links": [
+     "https://www.isenberg.umass.edu/programs/depts/oim/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-massachusetts-lowell",
+  "uni": "University of Massachusetts Lowell",
+  "url": "https://omlist.edutool.org/schools/university-of-massachusetts-lowell.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Information Systems",
+    "links": [
+     "https://www.uml.edu/msb/departments/operations-info-systems/faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-miami",
+  "uni": "University of Miami",
+  "url": "https://omlist.edutool.org/schools/university-of-miami.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science",
+    "links": [
+     "https://www.herbert.miami.edu/faculty-research/directory/index.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-michigan-at-ann-arbor",
+  "uni": "University of Michigan at Ann Arbor",
+  "url": "https://omlist.edutool.org/schools/university-of-michigan-at-ann-arbor.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Technology and Operations",
+    "links": [
+     "https://michiganross.umich.edu/faculty-research/directory?status=Active&department=39&name=&sort_by=sort_a"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-minnesota",
+  "uni": "University of Minnesota",
+  "url": "https://omlist.edutool.org/schools/university-of-minnesota.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain and Operations",
+    "links": [
+     "https://carlsonschool.umn.edu/departments/supply-chain-operations/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-missouri-st-louis",
+  "uni": "University of Missouri-St. Louis",
+  "url": "https://omlist.edutool.org/schools/university-of-missouri-st-louis.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain and Analytics",
+    "links": [
+     "https://www.umsl.edu/business/departments/supply-chain/faculty.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-navarra",
+  "uni": "University of Navarra",
+  "url": "https://omlist.edutool.org/schools/university-of-navarra.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations, Information and Technology",
+    "links": [
+     "https://www.iese.edu/faculty-research/academic-departments/operations-information-technology/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-nebraska-lincoln",
+  "uni": "University of Nebraska–Lincoln",
+  "url": "https://omlist.edutool.org/schools/university-of-nebraska-lincoln.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management & Analytics",
+    "links": [
+     "https://business.unl.edu/supply-chain-management-analytics/supply-chain-management-and-analytics-faculty-and-staff/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-nevada-reno",
+  "uni": "University of Nevada, Reno",
+  "url": "https://omlist.edutool.org/schools/university-of-nevada-reno.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Marketing",
+    "links": [
+     "https://www.unr.edu/business/departments-and-disciplines/marketing/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-new-south-wales",
+  "uni": "University of New South Wales",
+  "url": "https://omlist.edutool.org/schools/university-of-new-south-wales.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems and Technology Management",
+    "links": [
+     "https://www.unsw.edu.au/business/our-people#search=&filters=f.School%257CstaffSchool%3ASchool%2Bof%2BInformation%2BSystems%2Band%2BTechnology%2BManagement&sort=metastaffLastName&startRank=1&numRanks=12&componentId=be58b4d3-9485-4512-9a39-a6e366a1968f"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-north-carolina-at-chapel-hill",
+  "uni": "University of North Carolina at Chapel Hill",
+  "url": "https://omlist.edutool.org/schools/university-of-north-carolina-at-chapel-hill.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations",
+    "links": [
+     "https://www.kenan-flagler.unc.edu/faculty/?academic-areas=operations"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-north-texas",
+  "uni": "University of North Texas",
+  "url": "https://omlist.edutool.org/schools/university-of-north-texas.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "https://cob.unt.edu/people/?type=Faculty&department=Department+of+Supply+Chain+Management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-notre-dame",
+  "uni": "University of Notre Dame",
+  "url": "https://omlist.edutool.org/schools/university-of-notre-dame.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Technology, Analytics and Operations",
+    "links": [
+     "https://mendoza.nd.edu/mendoza-directory/?department=IT%2C+Analytics%2C+and+Operations&employeetype=Faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-oklahoma",
+  "uni": "University of Oklahoma",
+  "url": "https://omlist.edutool.org/schools/university-of-oklahoma.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Marketing and Supply Chain Management",
+    "links": [
+     "https://www.ou.edu/price/directory/areas#mscm"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-oregon",
+  "uni": "University of Oregon",
+  "url": "https://omlist.edutool.org/schools/university-of-oregon.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Business Analytics",
+    "links": [
+     "https://business.uoregon.edu/directory/operations-business-analytics"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-oxford",
+  "uni": "University of Oxford",
+  "url": "https://omlist.edutool.org/schools/university-of-oxford.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Technology and Operations Management",
+    "links": [
+     "https://www.sbs.ox.ac.uk/about-us/people?f%5B0%5D=research_areas_facet%3A676"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-pennsylvania",
+  "uni": "University of Pennsylvania",
+  "url": "https://omlist.edutool.org/schools/university-of-pennsylvania.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations, Information and Decisions",
+    "links": [
+     "https://oid.wharton.upenn.edu/faculty/faculty-list/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-pittsburgh",
+  "uni": "University of Pittsburgh",
+  "url": "https://omlist.edutool.org/schools/university-of-pittsburgh.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Business Analytics & Operations",
+    "links": [
+     "https://www.business.pitt.edu/connect/faculty/faculty-business-analytics-and-operations/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-rochester",
+  "uni": "University of Rochester",
+  "url": "https://omlist.edutool.org/schools/university-of-rochester.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://simon.rochester.edu/faculty-research/faculty-directory"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-science-and-technology-of-china",
+  "uni": "University of Science and Technology of China",
+  "url": "https://omlist.edutool.org/schools/university-of-science-and-technology-of-china.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science",
+    "links": [
+     "https://bs.ustc.edu.cn/english/teachers-2.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-south-carolina",
+  "uni": "University of South Carolina",
+  "url": "https://omlist.edutool.org/schools/university-of-south-carolina.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management Science",
+    "links": [
+     "https://sc.edu/study/colleges_schools/moore/study/management_science/our_people/index.php"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-southern-california",
+  "uni": "University of Southern California",
+  "url": "https://omlist.edutool.org/schools/university-of-southern-california.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Data Sciences and Operations (DSO)",
+    "links": [
+     "https://www.marshall.usc.edu/departments/data-sciences-and-operations/faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-tennessee-at-knoxville",
+  "uni": "University of Tennessee at Knoxville",
+  "url": "https://omlist.edutool.org/schools/university-of-tennessee-at-knoxville.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain",
+    "links": [
+     "https://haslam.utk.edu/supply-chain-management/people/"
+    ]
+   },
+   {
+    "name": "Business Analytics",
+    "links": [
+     "https://haslam.utk.edu/business-analytics-statistics/people/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-toronto",
+  "uni": "University of Toronto",
+  "url": "https://omlist.edutool.org/schools/university-of-toronto.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management and Statistics",
+    "links": [
+     "https://www.rotman.utoronto.ca/the-rotman-experience/our-community/faculty/?department=Operations%20Management%20and%20Statistics"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-utah",
+  "uni": "University of Utah",
+  "url": "https://omlist.edutool.org/schools/university-of-utah.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Department of Operations & Information Systems",
+    "links": [
+     "https://eccles.utah.edu/search/?_sft_departments=department-of-operations-and-is&amp;_sft_ecclesRoles=faculty"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-virginia",
+  "uni": "University of Virginia",
+  "url": "https://omlist.edutool.org/schools/university-of-virginia.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Technology and Operations Management",
+    "links": [
+     "https://www.darden.virginia.edu/faculty-research/academic-areas/technology-operations-management"
+    ]
+   },
+   {
+    "name": "Data Analytics and Decision Sciences",
+    "links": [
+     "https://www.darden.virginia.edu/faculty-research/academic-areas/data-analytics-decision-sciences"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-warwick",
+  "uni": "University of Warwick",
+  "url": "https://omlist.edutool.org/schools/university-of-warwick.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.wbs.ac.uk/research/academics-and-research-students/?subjectGroupNames=Operations+Management&facetFields=subjectGroupNames"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-washington",
+  "uni": "University of Washington",
+  "url": "https://omlist.edutool.org/schools/university-of-washington.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Information Systems and Operations Management",
+    "links": [
+     "https://foster.uw.edu/faculty-research/academic-departments/information-systems-and-operations-management/faculty/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-wisconsin-madison",
+  "uni": "University of Wisconsin–Madison",
+  "url": "https://omlist.edutool.org/schools/university-of-wisconsin-madison.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations and Information Management",
+    "links": [
+     "https://business.wisc.edu/directory/?_profile_type=faculty&_profile_department=operations-and-information-management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "university-of-zurich",
+  "uni": "University of Zurich",
+  "url": "https://omlist.edutool.org/schools/university-of-zurich.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Business Analytics & Operations",
+    "links": [
+     "https://www.business.uzh.ch/en/groups/operations"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "vanderbilt-university",
+  "uni": "Vanderbilt University",
+  "url": "https://omlist.edutool.org/schools/vanderbilt-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management & Quantitative Methods",
+    "links": [
+     "https://business.vanderbilt.edu/our-school/faculty/faculty-directory/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "villanova-university",
+  "uni": "Villanova University",
+  "url": "https://omlist.edutool.org/schools/villanova-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Management & Operations",
+    "links": [
+     "https://www.villanova.edu/university/business/faculty-and-research/faculty-by-department.html#4"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "vinuniversity",
+  "uni": "VinUniversity",
+  "url": "https://omlist.edutool.org/schools/vinuniversity.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain",
+    "links": []
+   }
+  ]
+ },
+ {
+  "slug": "virginia-commonwealth-university",
+  "uni": "Virginia Commonwealth University",
+  "url": "https://omlist.edutool.org/schools/virginia-commonwealth-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management and Analytics",
+    "links": [
+     "https://directory.business.vcu.edu/directory.php?area=Supply%20Chain%20Management%20and%20Analytics"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "virginia-tech",
+  "uni": "Virginia Tech",
+  "url": "https://omlist.edutool.org/schools/virginia-tech.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Business Information Technology",
+    "links": [
+     "https://bit.vt.edu/faculty/directory.html"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "wake-forest-university",
+  "uni": "Wake Forest University",
+  "url": "https://omlist.edutool.org/schools/wake-forest-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations",
+    "links": [
+     "https://business.wfu.edu/expert-faculty-research/faculty-and-academic-centers/"
+    ]
+   },
+   {
+    "name": "Analytics",
+    "links": [
+     "https://business.wfu.edu/expert-faculty-research/faculty-and-academic-centers/#Analytics"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "washington-university-in-st-louis",
+  "uni": "Washington University in St. Louis",
+  "url": "https://omlist.edutool.org/schools/washington-university-in-st-louis.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain, Operations and Technology",
+    "links": [
+     "https://olin.washu.edu/faculty-and-research/faculty-directory/index.php?search=&area=Supply%20Chain%20Operations%20%26%20Technology&type=&pageindex=0&pagesize=10"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "west-virginia-university",
+  "uni": "West Virginia University",
+  "url": "https://omlist.edutool.org/schools/west-virginia-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "https://business.wvu.edu/faculty-and-staff/directory?dname=Supply%20Chain%20Management"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "western-university-canada-university-of-western-at-london-ontario",
+  "uni": "Western University (Canada) /  University of Western at London, Ontario",
+  "url": "https://omlist.edutool.org/schools/western-university-canada-university-of-western-at-london-ontario.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management",
+    "links": [
+     "https://www.ivey.uwo.ca/faculty_research/faculty/area-groups/operations-management/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "whu-otto-beisheim-school-of-management",
+  "uni": "WHU – Otto Beisheim School of Management",
+  "url": "https://omlist.edutool.org/schools/whu-otto-beisheim-school-of-management.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Supply Chain Management",
+    "links": [
+     "https://www.whu.edu/en/faculty-research/supply-chain-management-group/"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "yale-university",
+  "uni": "Yale University",
+  "url": "https://omlist.edutool.org/schools/yale-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations",
+    "links": [
+     "https://som.yale.edu/faculty-research/faculty-directory?faculty_directory%5B0%5D=faculty_discipline%3AOperations"
+    ]
+   }
+  ]
+ },
+ {
+  "slug": "york-university",
+  "uni": "York University",
+  "url": "https://omlist.edutool.org/schools/york-university.html",
+  "status": 200,
+  "departments": [
+   {
+    "name": "Operations Management and Information Systems",
+    "links": [
+     "https://schulich.yorku.ca/faculty/"
+    ]
+   }
+  ]
+ }
+]
