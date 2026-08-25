@@ -387,5 +387,71 @@ console.log('one press fills the gap — the real engine, a fake model')
     `fillable=${end.fillable} unratable=${end.unratable} passes=${withBlanks.pass}`)
 }
 
+// ── The throw path: a pass that scored NOTHING ────────────────────────────
+// `scoreIdeas` throws when a run came back with nothing at all, which is the
+// exact case the recovery rule exists for — so it must not escape the fill loop.
+// The end-to-end block above drives `runScoring` directly and therefore could
+// not see this; these checks pin the page's own handling from its source.
+console.log('a pass that scored nothing is recovered, not thrown away')
+{
+  const { isFatalScoringError } = await import('../src/utils/scoreBatch.js')
+  const page = readFileSync(new URL('../src/pages/DataAnalytics.jsx', import.meta.url), 'utf8')
+
+  check('a missing API key is fatal — it fails the same way every time',
+    isFatalScoringError(Object.assign(new Error('No API key saved'), { fatal: true })) === true)
+  check('a rejected key (401) is fatal', isFatalScoringError({ status: 401 }) === true)
+  check('a refused request (400/403/404) is fatal',
+    isFatalScoringError({ status: 400 }) && isFatalScoringError({ status: 403 })
+    && isFatalScoringError({ status: 404 }))
+  check('a rate limit (429) is NOT fatal — that is the one worth another go',
+    isFatalScoringError({ status: 429 }) === false)
+  check('a 5xx and a bare network error are NOT fatal',
+    isFatalScoringError({ status: 503 }) === false && isFatalScoringError(new Error('fetch failed')) === false)
+  check('an undefined error does not crash the test', isFatalScoringError(undefined) === false)
+
+  check('the fill loop CATCHES around scoreIdeas rather than letting a pass throw out',
+    /scores = await scoreIdeas\([\s\S]{0,600}?\} catch \(err\) \{[\s\S]{0,600}?isFatalScoringError\(err\)/.test(page),
+    'scoreIdeas is not wrapped, so a scored-nothing pass aborts the whole run')
+  check('a fatal error still stops the run at once',
+    /if \(isFatalScoringError\(err\)\) throw err/.test(page))
+  check('a thrown pass counts as aborted whatever the report said',
+    /aborted = !!report\?\.aborted \|\| threw/.test(page),
+    'the report can reset `aborted` to false and skip the recovery pass')
+}
+
+// ── Two false-positive traps ───────────────────────────────────────────────
+console.log('a partial idea with no text is unratable, not fillable')
+{
+  // One score, no text: its other column can no more be filled than a blank
+  // idea's, so counting it as fillable puts a number on the panel that pressing
+  // the button can never bring down.
+  const r = { idea_id: 'x', text: '', idea_title: '', novelty: 4, usefulness: '' }
+  check('classified unratable', ideaScoreState(r) === 'unratable', ideaScoreState(r))
+  const g = scoreGaps([r])
+  check('it is NOT offered to the run', g.fillable === 0, `fillable=${g.fillable}`)
+  check('but its empty cell is still reported', g.missingUsefulness === 1 && g.gaps === 1)
+  check('a partial idea WITH text is still fillable',
+    scoreGaps([{ ...r, text: 'a real idea' }]).fillable === 1)
+}
+
+console.log('an auto-generated import id never joins two unrelated files')
+{
+  // `normalizeImportedRows` invents `import_<n>` for a file with no Idea ID
+  // column. Those are POSITIONS: joining on one writes the third row of one file
+  // onto the third row of another.
+  const rows = [{ rid: 'r1', idea_id: 'import_1', idea_title: 'Solar awning', text: 'Solar awning', novelty: '', usefulness: '' }]
+  const wrong = mergeAiScoresIntoRows(rows, [{ idea_id: 'import_1', idea_title: 'A completely different idea', novelty: 5, usefulness: 5 }])
+  check('a positional id does NOT match a different idea',
+    wrong.rows[0].novelty === '' && wrong.unmatched === 1,
+    `novelty=${wrong.rows[0].novelty} unmatched=${wrong.unmatched}`)
+  const right = mergeAiScoresIntoRows(rows, [{ idea_id: 'import_9', idea_title: 'Solar awning', novelty: 5, usefulness: 5 }])
+  check('the title still matches it, so a genuine top-up is not lost',
+    right.rows[0].novelty === 5 && right.matched === 1)
+  check('a REAL Idea ID still joins',
+    mergeAiScoresIntoRows(
+      [{ rid: 'r1', idea_id: 'abc123', idea_title: 'One', text: 'One', novelty: '', usefulness: '' }],
+      [{ idea_id: 'abc123', idea_title: 'Renamed', novelty: 2, usefulness: 2 }]).rows[0].novelty === 2)
+}
+
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed.')
 process.exit(failures ? 1 : 0)

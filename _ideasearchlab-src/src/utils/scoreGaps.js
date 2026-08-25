@@ -73,16 +73,24 @@ export const isFinalRow = r => Number(r?.final_pick) === 1
 /**
  * Where does one idea stand?
  *   'scored'    — both AI columns present
- *   'partial'   — exactly one present (still an empty cell on the page)
- *   'missing'   — neither present, but it has text, so a run can fill it
- *   'unratable' — neither present and no text to rate; no run will ever fill it
+ *   'partial'   — exactly one present (still an empty cell on the page), with
+ *                 text, so a run can fill the other one
+ *   'missing'   — neither present, but it has text, so a run can fill both
+ *   'unratable' — an empty cell and NO text to rate; no run will ever fill it
+ *
+ * The text test is applied to `partial` as well as to `missing` on purpose. An
+ * idea carrying one score and no text (an imported sheet of ratings with no
+ * titles) cannot have its other column filled either — counting it as fillable
+ * puts a number on the panel that pressing the button can never bring down, and
+ * makes the run report it as "the model's reply could not be read" when in truth
+ * nothing was ever sent.
  */
 export function ideaScoreState(r) {
   const nov = !isBlankScore(r?.novelty)
   const use = !isBlankScore(r?.usefulness)
   if (nov && use) return 'scored'
-  if (nov || use) return 'partial'
-  return hasIdeaText(r) ? 'missing' : 'unratable'
+  if (!hasIdeaText(r)) return 'unratable'
+  return (nov || use) ? 'partial' : 'missing'
 }
 
 /**
@@ -117,8 +125,7 @@ export function scoreGaps(rows, opts = {}) {
     if (isBlankScore(r.usefulness)) out.missingUsefulness++
     if (state === 'partial' || state === 'missing') out.ids.push(r.idea_id ?? r.rid)
   }
-  // `partial` ideas have text by definition (they were rated once), so every
-  // gap except an `unratable` one is worth a call.
+  // Every gap except an `unratable` one is worth a call.
   out.gaps = out.partial + out.missing + out.unratable
   out.fillable = out.partial + out.missing
   out.complete = out.gaps === 0
@@ -213,7 +220,7 @@ export function mergeAiScoresIntoRows(rows, incoming, fields = { novelty: 'novel
   const byId = new Map()
   const byTitle = new Map()
   ;(rows || []).forEach((r, i) => {
-    const id = String(r.idea_id ?? '').trim()
+    const id = joinableId(r.idea_id)
     if (id && !byId.has(id)) byId.set(id, i)
     const t = normTitle(rowTitle(r))
     if (t && !byTitle.has(t)) byTitle.set(t, i)
@@ -225,7 +232,7 @@ export function mergeAiScoresIntoRows(rows, incoming, fields = { novelty: 'novel
   let gainedNovelty = 0, gainedUsefulness = 0
 
   for (const e of incoming || []) {
-    const id = String(e?.idea_id ?? '').trim()
+    const id = joinableId(e?.idea_id)
     let idx = id ? byId.get(id) : undefined
     if (idx == null) idx = byTitle.get(normTitle(rowTitle(e || {})))
     // One file row per idea: a duplicate row in the file must not be counted as a
@@ -243,6 +250,18 @@ export function mergeAiScoresIntoRows(rows, incoming, fields = { novelty: 'novel
     else kept++
   }
   return { rows: next, matched, unmatched, filled, kept, gainedNovelty, gainedUsefulness }
+}
+
+/**
+ * An Idea ID only if it identifies the idea. `normalizeImportedRows` invents
+ * `import_<n>` for a file with no Idea ID column, and those are POSITIONS, not
+ * identities: two unrelated files both start at `import_1`, so joining on one
+ * would confidently write the third row of one file onto the third row of
+ * another. Such an id is dropped here and the title match decides instead.
+ */
+function joinableId(v) {
+  const id = String(v ?? '').trim()
+  return /^import_\d+$/i.test(id) ? '' : id
 }
 
 /** Coerce a file's rating to the 1–5 scale, or '' when it is not a usable number. */

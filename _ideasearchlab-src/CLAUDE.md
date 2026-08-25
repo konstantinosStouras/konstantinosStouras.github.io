@@ -497,7 +497,8 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      so re-downloading the aggregate after scoring carries the scores back in.
 3. **Score ideas (the Rankings rows), manage participants & download.** Works the **Rankings**
    rows of the consolidated Step-2 data. Every idea gets a per-KPI score:
-   the configured LLM rates each on novelty + usefulness (1–7), overall = their mean.
+   the configured LLM rates each on novelty + usefulness (**1–5**, the scale
+   `RATER_SYSTEM_PROMPT` states and `clamp1to5` enforces), overall = their mean.
    Scoring runs **client-side from the browser** via `src/utils/llmClient.js`, which reads
    the provider key straight from `settings/ai` (admin can read it per Firestore rules —
    no Cloud Function / redeploy needed) and calls Claude/OpenAI/Gemini directly (Claude
@@ -604,6 +605,33 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        row carries `idea_title`/`idea_description` — so a row with only a title would have
        been counted as fillable and sent as an EMPTY STRING, scored by nobody for ever
        while the panel went on offering to fill it. The guard caught it, and pins it.
+     - **A pass that scored NOTHING must not escape the loop.** `scoreIdeas` throws
+       when a run came back empty (`lastError && unscored === scores.length`) — which
+       is precisely the case the recovery rule exists for, so the throw would have
+       skipped it in the worst situation of all. The pass now catches around
+       `scoreIdeas` and treats a non-fatal throw as an aborted pass; a FATAL one
+       (`isFatalScoringError`) still stops the run at once, since retrying a rejected
+       key only makes the admin sit through the pauses before being told what is
+       wrong. `isFatalApiError`/`isFatalScoringError` moved from `llmClient.js` into
+       **`scoreBatch.js`** for that: it is the module that owns what is worth
+       retrying, and — unlike llmClient, which imports Firebase — a guard can load
+       it. A missing key is tagged `.fatal` at the throw site, since it carries no
+       HTTP status. `aborted` is `report?.aborted || threw`: scoreIdeas ALSO throws
+       when every batch was attempted and every one failed, which the circuit
+       breaker never sees, so the report alone would reset the flag to false and
+       skip the retry.
+     - **A partial idea with no text is `unratable`, not fillable.** One score and no
+       text (an imported ratings sheet with no titles) cannot have its other column
+       filled either — counting it as fillable puts a number on the panel that
+       pressing the button can never bring down, and makes the run report it as "the
+       model's reply could not be read" when nothing was ever sent. `ideaScoreState`
+       therefore tests the text BEFORE splitting missing from partial.
+     - **An auto-generated `import_<n>` id never joins two files.**
+       `normalizeImportedRows` invents one for a file with no Idea ID column, and
+       those are POSITIONS, not identities: two unrelated files both start at
+       `import_1`, so `mergeAiScoresIntoRows` joining on one would confidently write
+       the third row of one file onto the third row of another. `joinableId` drops
+       them and lets the title match decide.
      - Offline test: **`node _ideasearchlab-src/tools/score-gaps-guard.mjs`** (60+ checks, no
        network) — the coverage arithmetic, the scope toggle, the merge rules (id beats a
        changed title, a duplicate file row is not a second match, an empty cell never blanks

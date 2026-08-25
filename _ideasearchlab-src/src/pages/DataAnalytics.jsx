@@ -14,6 +14,9 @@ import {
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
+// From scoreBatch, not llmClient: that module owns what is worth retrying and
+// carries no Firebase import, so the offline guard can pin this rule.
+import { isFatalScoringError } from '../utils/scoreBatch'
 import {
   scoreGaps, gapSummary, shouldRunAnotherPass, mergeAiScoresIntoRows, ideaScoreState,
   scorableText,
@@ -737,16 +740,35 @@ export default function DataAnalytics() {
 
         setScoring({ done: 0, total: targets.length, pass })
         let report = null
-        const scores = await scoreIdeas(targets.map(t => t.text), {
-          brief: DESIGN_BRIEF,
-          settings,
-          provider: scoreProvider,
-          model: scoreModel,
-          onProgress: ({ done, total }) => setScoring({ done, total, pass }),
-          onReport: r => { report = r },
-        })
-        aborted = !!report?.aborted
-        lastError = report?.lastError || null
+        let scores = []
+        let threw = false
+        try {
+          scores = await scoreIdeas(targets.map(t => t.text), {
+            brief: DESIGN_BRIEF,
+            settings,
+            provider: scoreProvider,
+            model: scoreModel,
+            onProgress: ({ done, total }) => setScoring({ done, total, pass }),
+            onReport: r => { report = r },
+          })
+        } catch (err) {
+          // `scoreIdeas` THROWS when a pass scored nothing at all — which is the
+          // one case the recovery rule exists for, so it must not escape the
+          // loop. A FATAL error (no key, a rejected key) is a different thing
+          // and stops the run at once: retrying it only makes the admin wait
+          // through the pauses before being told what is actually wrong.
+          if (isFatalScoringError(err)) throw err
+          threw = true
+          lastError = err
+          scores = []
+        }
+        // A pass that THREW failed for transport reasons whatever the report
+        // says: `scoreIdeas` also throws when every batch was attempted and
+        // every one failed, which the circuit breaker never sees and so leaves
+        // `aborted` false. Either way the ideas got no real answer, and that is
+        // what the recovery rule is deciding about.
+        aborted = !!report?.aborted || threw
+        if (!threw) lastError = report?.lastError || null
 
         const byRid = new Map(targets.map((t, k) => [t.rid, scores[k]]))
         const before = working

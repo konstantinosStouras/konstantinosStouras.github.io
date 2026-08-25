@@ -14,7 +14,7 @@
  */
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
-import { runScoring, extractScoreObjects, clamp1to5 } from './scoreBatch'
+import { runScoring, extractScoreObjects, clamp1to5, isFatalApiError } from './scoreBatch'
 
 const PROVIDER_DEFAULTS = {
   claude: 'claude-sonnet-4-6',
@@ -78,98 +78,6 @@ export function extractJsonArray(text) {
   return objs.length ? objs : null
 }
 
-/** An error the run should give up on rather than retry: a rejected or missing
- *  API key, or a request the provider refuses outright, fails identically every
- *  time. Everything else (429 rate limits, 5xx, dropped connections) is worth
- *  another go — those are exactly what made a long 435-idea run lose batches. */
-function isFatalApiError(err) {
-  const s = err?.status
-  if (s === 401 || s === 403 || s === 404) return true
-  if (s === 400) return true
-  return false
-}
-
-/** Wrap a non-OK response in an Error that carries its HTTP status. */
-async function httpError(label, res) {
-  const err = new Error(`${label} API error (${res.status}): ${await res.text()}`)
-  err.status = res.status
-  return err
-}
-
-// ── Provider calls (browser) ──────────────────────────────────────────────────
-
-async function callClaude({ apiKey, model }, system, userText) {
-  // Opus 4.7+/Opus 5+/Fable/Mythos reject sampling params; older models accept them.
-  const supportsTemperature = !/^claude-(opus-(?:4-(?:[7-9]|\d{2})|[5-9])|fable|mythos)/.test(model || '')
-  // 4000, not 1500: a reply cut off by the token limit has no closing "]" and
-  // used to lose the WHOLE batch (see scoreBatch.js). The headroom is free —
-  // the rater's actual output is a few hundred tokens.
-  const body = { model, max_tokens: 4000, system, messages: [{ role: 'user', content: userText }] }
-  if (supportsTemperature) body.temperature = 0
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw await httpError('Claude', res)
-  const data = await res.json()
-  return data.content?.find(b => b.type === 'text')?.text || ''
-}
-
-async function callOpenAI({ apiKey, model }, system, userText) {
-  const isReasoning = /^(gpt-5|o\d)/.test(model || '')
-  const body = {
-    model,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: userText },
-    ],
-  }
-  // A reasoning model spends this budget on hidden reasoning FIRST, so a tight
-  // cap can return an empty message and silently lose the batch — hence the
-  // generous ceiling here and 4000 for the rest.
-  if (isReasoning) body.max_completion_tokens = 8000
-  else { body.max_tokens = 4000; body.temperature = 0 }
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw await httpError('OpenAI', res)
-  const data = await res.json()
-  return data.choices?.[0]?.message?.content || ''
-}
-
-async function callGemini({ apiKey, model }, system, userText) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: userText }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 8000, responseMimeType: 'application/json' },
-    }),
-  })
-  if (!res.ok) throw await httpError('Gemini', res)
-  const data = await res.json()
-  return data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || ''
-}
-
-function callProvider(resolved, system, userText) {
-  switch (resolved.provider) {
-    case 'openai': return callOpenAI(resolved, system, userText)
-    case 'gemini': return callGemini(resolved, system, userText)
-    case 'claude':
-    default: return callClaude(resolved, system, userText)
-  }
-}
-
 /**
  * Score a list of ideas with the configured LLM, in batches.
  *
@@ -200,9 +108,14 @@ export async function scoreIdeas(ideas, opts = {}) {
   const settings = opts.settings || (await fetchAISettings())
   const resolved = resolveProvider(settings, opts.provider, opts.model)
   if (!resolved.apiKey) {
-    throw new Error(
+    // Flagged fatal: a missing key fails the same way every time, so a caller
+    // that retries a failed run must not spend its attempts (and its pauses) on
+    // it before telling the admin what is actually wrong.
+    const err = new Error(
       `No API key saved for "${resolved.provider}". Add it under Admin → AI Settings first.`
     )
+    err.fatal = true
+    throw err
   }
   const { scores, unscored, blank, failedBatches, aborted, lastError } = await runScoring({
     texts: ideas,
