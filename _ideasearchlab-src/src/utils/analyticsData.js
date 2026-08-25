@@ -684,8 +684,11 @@ export function normTitle(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
 }
 
-/** A row's idea title — explicit `idea_title`, else the part of text before ": ". */
-function rowTitle(r) {
+/** A row's idea title — explicit `idea_title`, else the part of text before ": ".
+ *  Exported so `scoreGaps.js` matches an uploaded dataset onto the loaded rows by
+ *  exactly the title this file already uses — one definition, so a merge and a
+ *  score upload can never disagree about what an idea is called. */
+export function rowTitle(r) {
   if (r.idea_title) return r.idea_title
   const t = r.text || ''
   const i = t.indexOf(': ')

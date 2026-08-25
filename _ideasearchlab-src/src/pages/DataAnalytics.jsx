@@ -14,6 +14,13 @@ import {
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
+// From scoreBatch, not llmClient: that module owns what is worth retrying and
+// carries no Firebase import, so the offline guard can pin this rule.
+import { isFatalScoringError } from '../utils/scoreBatch'
+import {
+  scoreGaps, gapSummary, shouldRunAnotherPass, mergeAiScoresIntoRows, ideaScoreState,
+  scorableText,
+} from '../utils/scoreGaps'
 import { tfidfVectors } from '../utils/tfidf'
 import { computeDeterministicKpis, uniqueFraction, productivityCount, cosine, simMatrix } from '../utils/deterministicKpis'
 import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById } from '../data/aiModels'
@@ -31,6 +38,28 @@ import styles from './DataAnalytics.module.css'
 // The study task: rate ideas against THIS design brief (the smart-materials /
 // colour-changing-fabric task this version of the study actually ran).
 const DESIGN_BRIEF = 'Designing a completely new product using a fabric that changes colour when it reaches 37°C (body temperature), for the smart materials and wearable technology market.'
+// How many times one press of "Fill …" re-runs over whatever is still empty.
+// A pass only earns the next one by having filled something (`shouldRunAnotherPass`),
+// so this is a backstop against a pathological loop, not a retry budget.
+const MAX_FILL_PASSES = 4
+// How long to wait before re-trying a pass the provider aborted. A rate-limit
+// window is what this is for, so the pause grows with each attempt (10s, 20s)
+// rather than going straight back at a provider that has just refused us.
+const RECOVERY_WAIT_MS = 10000
+// Apply a pass's scores onto a row list: fill only the missing field(s), never
+// overwrite a value already there (hand-entered or previously scored), and
+// ignore a null the model omitted. Because it is fill-blank-only it is safe to
+// apply to the LIVE state as well as to the run's own working copy — a score the
+// admin typed into the table mid-run is not blank, so it survives.
+const applyPassScores = (list, byRid) => recomputeOverall(list.map(r => {
+  const sc = byRid.get(r.rid)
+  if (!sc) return r
+  return {
+    ...r,
+    novelty: r.novelty === '' && sc.novelty != null ? sc.novelty : r.novelty,
+    usefulness: r.usefulness === '' && sc.usefulness != null ? sc.usefulness : r.usefulness,
+  }
+}))
 const condClass = cond => styles[`cond${Math.max(0, CONDITIONS.indexOf(cond))}`]
 const userKey = (session, authorId) => `${session}|${authorId || ''}`
 
@@ -120,6 +149,7 @@ export default function DataAnalytics() {
   const aggFileRef = useRef(null)   // Step-2 import: parse AND load immediately
   const sec4FileRef = useRef(null)  // Step-4 import: parse AND load immediately
   const scoreFileRef = useRef(null)
+  const datasetFileRef = useRef(null)  // 3.2: re-upload the whole dataset to top its AI scores up
   const evalScoreFileRef = useRef(null)
   const kpiFileRef = useRef(null)
   const outRef = useRef('')
@@ -649,18 +679,29 @@ export default function DataAnalytics() {
     })
   }
 
-  // ── Score the unscored ideas with the configured LLM ──
+  // ── Fill every idea that has no AI score, with the configured LLM ──
+  // ONE press fills the whole gap (owner 2026-08-25: "I simply press the button
+  // to fill them up and update the entire dataset"). A single `runScoring` pass
+  // can still come back short three ways, and they need different answers:
+  //   • it filled some and left some — the model mishandled a few replies, and
+  //     a fresh pass over what is left usually gets them;
+  //   • it reached every idea and filled none — sending them again will not read
+  //     any better, so stop;
+  //   • it was ABORTED by `runScoring`'s circuit breaker — the ideas after that
+  //     point were never sent at all, which on a long run is the usual shape of
+  //     a rate limit, so this one gets a bounded number of recovery passes with
+  //     a growing pause.
+  // `shouldRunAnotherPass` holds that rule (and `MAX_FILL_PASSES` caps the lot),
+  // so a 429 storm is worked through while a dead provider costs a few attempts
+  // and is then reported as the outage it is. A fatal error — a rejected key —
+  // never reaches here at all: `isFatal` throws it straight out.
   async function scoreUnscored() {
     setScoreErr('')
-    // Score either every idea, or only the group-selected Final Ideas, per the toggle.
-    const pool = scoreOnlyFinal ? effectiveRows.filter(r => Number(r.final_pick) === 1) : effectiveRows
-    const targets = pool
-      .filter(r => r.novelty === '' || r.usefulness === '')
-      .map(r => ({ rid: r.rid, text: r.text || ideaText(r) }))
-    if (!targets.length) {
+    setScoreLoadMsg('')
+    if (scopeUnscored === 0) {
       setScoreErr(scoreOnlyFinal
         ? 'No unscored Final Ideas to score (none are marked Final Group Pick, or they are all scored). Untick the box to score all ideas.'
-        : 'All ideas already have novelty and usefulness scores.')
+        : 'Every idea already has an AI Novelty and an AI Usefulness score.')
       return
     }
     // Always use the API keys CURRENTLY saved in AI Settings (settings/ai), even if
@@ -668,52 +709,202 @@ export default function DataAnalytics() {
     // time and refresh the on-page "no key" hint. Falls back to the loaded copy.
     let settings = aiSettings
     try { settings = await fetchAISettings(); setAiSettings(settings) } catch (_) { /* keep the loaded copy */ }
-    setScoring({ done: 0, total: targets.length })
+
+    // Work off a local copy so each pass re-reads what the PREVIOUS pass filled;
+    // `setRows` is async, so re-deriving the targets from `rows` would ask the
+    // model to score the same ideas again.
+    let working = rows
+    let totalFilled = 0
+    let pass = 0
+    let recoveries = 0
+    let aborted = false
+    let lastError = null
+    let targets = []
+    const startedWith = scopeUnscored
+
     try {
-      const scores = await scoreIdeas(targets.map(t => t.text), {
-        brief: DESIGN_BRIEF,
-        settings,
-        provider: scoreProvider,
-        model: scoreModel,
-        onProgress: ({ done, total }) => setScoring({ done, total }),
-      })
-      const byRid = new Map(targets.map((t, k) => [t.rid, scores[k]]))
-      // Report what did NOT come back. Scoring hundreds of ideas is dozens of
-      // API calls and some can fail (rate limit, an unreadable reply); the run
-      // now keeps every score it got instead of discarding the lot, so the
-      // honest close is "X scored, Y still empty — press Score again", not a
-      // silent success with blank rows. `blank` are ideas with no text at all,
-      // which no amount of retrying can fix.
-      const blank = targets.filter(t => !String(t.text || '').trim()).length
-      const missed = targets.filter((t, k) => {
-        const s = scores[k]
-        return !(s && s.novelty != null && s.usefulness != null)
-      }).length - blank
-      if (missed > 0 || blank > 0) {
-        setScoreErr(
-          [
-            `Scored ${targets.length - missed - blank} of ${targets.length} ideas.`,
-            missed > 0 && `${missed} could not be scored this run (the model's reply for them could not be read, or the API kept failing) — press "Score …" again to retry just those.`,
-            blank > 0 && `${blank} ${blank === 1 ? 'idea has' : 'ideas have'} no text to rate.`,
-          ].filter(Boolean).join(' ')
-        )
-      }
-      setRows(prev => recomputeOverall(prev.map(r => {
-        const sc = byRid.get(r.rid)
-        if (!sc) return r
-        // Fill only the missing field(s); never overwrite a value already there
-        // (hand-entered or previously scored), and ignore a null the model omitted.
-        return {
-          ...r,
-          novelty: r.novelty === '' && sc.novelty != null ? sc.novelty : r.novelty,
-          usefulness: r.usefulness === '' && sc.usefulness != null ? sc.usefulness : r.usefulness,
+      do {
+        pass++
+        // Re-derive the still-empty ideas each pass, from the copy just updated.
+        // `isEligible` mirrors the on-page scope exactly: removed participants'
+        // ideas are excluded, and the Final-Ideas tick narrows it further.
+        const pool = working.filter(r =>
+          !excludedUsers.has(userKey(r.session, r.author_id)) && (!scoreOnlyFinal || isFinal(r)))
+        targets = pool
+          .filter(r => { const st = ideaScoreState(r); return st === 'missing' || st === 'partial' })
+          // `scorableText` is the SAME function `hasIdeaText` uses to decide an
+          // idea is ratable, so the panel can never offer to fill an idea the
+          // run then sends as an empty string.
+          .map(r => ({ rid: r.rid, text: scorableText(r) || ideaText(r) }))
+        if (!targets.length) break
+
+        setScoring({ done: 0, total: targets.length, pass })
+        let report = null
+        let scores = []
+        let threw = false
+        try {
+          scores = await scoreIdeas(targets.map(t => t.text), {
+            brief: DESIGN_BRIEF,
+            settings,
+            provider: scoreProvider,
+            model: scoreModel,
+            onProgress: ({ done, total }) => setScoring({ done, total, pass }),
+            onReport: r => { report = r },
+          })
+        } catch (err) {
+          // `scoreIdeas` THROWS when a pass scored nothing at all — which is the
+          // one case the recovery rule exists for, so it must not escape the
+          // loop. A FATAL error (no key, a rejected key) is a different thing
+          // and stops the run at once: retrying it only makes the admin wait
+          // through the pauses before being told what is actually wrong.
+          if (isFatalScoringError(err)) throw err
+          threw = true
+          lastError = err
+          scores = []
         }
-      })))
+        // A pass that THREW failed for transport reasons whatever the report
+        // says: `scoreIdeas` also throws when every batch was attempted and
+        // every one failed, which the circuit breaker never sees and so leaves
+        // `aborted` false. Either way the ideas got no real answer, and that is
+        // what the recovery rule is deciding about.
+        aborted = !!report?.aborted || threw
+        if (!threw) lastError = report?.lastError || null
+
+        const byRid = new Map(targets.map((t, k) => [t.rid, scores[k]]))
+        const before = working
+        working = applyPassScores(working, byRid)
+        let filledThisPass = 0
+        for (let i = 0; i < working.length; i++) {
+          if (working[i].novelty !== before[i].novelty || working[i].usefulness !== before[i].usefulness) filledThisPass++
+        }
+        totalFilled += filledThisPass
+        // Show each pass's progress as it lands, so a long run is not one silent
+        // block — and so a run the admin interrupts still leaves its work behind.
+        // Applied to `prev` rather than pushed as `working`: the table stays
+        // editable while a run is going, and replacing the state wholesale would
+        // discard a score the admin typed during it. `applyPassScores` fills
+        // blanks only, so `prev` keeps every edit and gains the same fills.
+        setRows(prev => applyPassScores(prev, byRid))
+
+        const after = scoreGaps(
+          working.filter(r => !excludedUsers.has(userKey(r.session, r.author_id))),
+          { onlyFinal: scoreOnlyFinal, isFinal })
+        if (!shouldRunAnotherPass({
+          pass, maxPasses: MAX_FILL_PASSES, filled: filledThisPass,
+          remaining: after.fillable, aborted, recoveries,
+        })) break
+        // A pass that filled nothing is only retried because the provider stopped
+        // answering (see `shouldRunAnotherPass`). Going straight back at a rate
+        // limit just earns another one, so wait — longer each time — and count
+        // the attempt, so a provider that is genuinely down is not hammered.
+        if (filledThisPass === 0) {
+          recoveries++
+          setScoring({ done: 0, total: targets.length, pass, waiting: true })
+          await new Promise(res => setTimeout(res, RECOVERY_WAIT_MS * recoveries))
+        }
+      } while (true)
+
+      // Say exactly what happened. `remaining` is what a further press would
+      // retry; `unratable` ideas are counted apart because nothing can ever fill
+      // them, and lumping them in would leave a panel that can never reach zero.
+      const finalGaps = scoreGaps(
+        working.filter(r => !excludedUsers.has(userKey(r.session, r.author_id))),
+        { onlyFinal: scoreOnlyFinal, isFinal })
+      // What WORKED is a neutral line; only a genuine shortfall is red. A run
+      // that filled every gap used to report through the same error slot, so a
+      // complete success was painted as a failure.
+      setScoreLoadMsg(
+        `Filled ${totalFilled.toLocaleString()} of ${startedWith.toLocaleString()} idea${startedWith === 1 ? '' : 's'} that had no AI score`
+        + (pass > 1 ? ` (${pass} passes)` : '')
+        + `. ${gapSummary(finalGaps, scoreOnlyFinal)}`)
+      const bits = []
+      if (aborted) {
+        bits.push(`The run stopped early — ${scoreProvider} kept failing${lastError ? ` (${lastError.message || lastError})` : ''}, so the remaining ideas were never sent. Check the API key and quota under AI Settings, then press the button again.`)
+      } else if (finalGaps.fillable > 0) {
+        bits.push(`${finalGaps.fillable.toLocaleString()} idea${finalGaps.fillable === 1 ? '' : 's'} still ${finalGaps.fillable === 1 ? 'has' : 'have'} an empty cell — the model's reply for ${finalGaps.fillable === 1 ? 'it' : 'them'} could not be read. Press the button again to retry just ${finalGaps.fillable === 1 ? 'it' : 'those'}.`)
+      }
+      if (finalGaps.unratable > 0) {
+        bits.push(`${finalGaps.unratable.toLocaleString()} ${finalGaps.unratable === 1 ? 'idea has' : 'ideas have'} no text to rate, so ${finalGaps.unratable === 1 ? 'it' : 'they'} can never be scored — they are counted apart above.`)
+      }
+      if (bits.length) setScoreErr(bits.join(' '))
     } catch (err) {
       setScoreErr(err.message || String(err))
     } finally {
       setScoring(null)
     }
+  }
+
+  // ── 3.2: top the loaded dataset up from a full-dataset file ──
+  // "Upload my entire data set … and fill them up" (owner 2026-08-25). The
+  // Step-1/2 importer APPENDS, so re-uploading your own dataset to fill its gaps
+  // used to give you every idea twice; this merges by **Idea ID** (then title)
+  // onto the ideas already loaded, fills only the AI cells that are still empty,
+  // and never appends an unmatched row — see `mergeAiScoresIntoRows` for why.
+  function onPickDatasetTopUp(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setScoreLoadMsg('')
+    const isCsv = /\.csv$/i.test(file.name)
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        let rawRows, bookSheets = []
+        if (isCsv) rawRows = csvToRows(ev.target.result)
+        else {
+          const wb = XLSX.read(ev.target.result, { type: 'array' })
+          // Same sheet preference as the Step-1 importer: the per-idea rows live
+          // on "Ideas"/"ideas", never on the leading "About" guide.
+          const name =
+            wb.SheetNames.find(n => n.toLowerCase() === 'ideas') ||
+            wb.SheetNames.find(n => /idea/i.test(n)) ||
+            wb.SheetNames[0]
+          rawRows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' })
+          // Keep every sheet, exactly as the Step-1 importer does, so a file that
+          // becomes the dataset here gives Step 2's aggregate the same material.
+          bookSheets = wb.SheetNames.map(sn => ({
+            name: sn, kind: 'json', rows: XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }),
+          }))
+        }
+        if (!looksLikeIdeaData(rawRows)) { alert(importFormatMsg(isCsv ? 'CSV' : 'Excel')); return }
+        const incoming = normalizeImportedRows(rawRows)
+        if (!incoming.length) { alert(importFormatMsg(isCsv ? 'CSV' : 'Excel')); return }
+
+        // Nothing loaded yet: the file IS the dataset. Load it through the same
+        // deferred-import bookkeeping Step 1 uses, so it shows as its own source
+        // row and can be removed again — rather than becoming untracked rows.
+        if (!rows.length) {
+          const bookId = `book_${bookSeq.current++}`
+          const bookRows = tagRows(incoming).map(r => ({ ...r, _book: bookId }))
+          setImportedBooks(prev => [...prev, {
+            id: bookId, label: file.name, kind: isCsv ? 'csv' : 'xlsx', sheets: bookSheets,
+            count: incoming.length, conditions: [...new Set(incoming.map(r => r.condition).filter(Boolean))],
+            rows: bookRows, selected: true,
+          }])
+          setRows(recomputeOverall(bookRows))
+          const g = scoreGaps(bookRows)
+          setScoreLoadMsg(`Loaded ${incoming.length} idea${incoming.length === 1 ? '' : 's'} from “${file.name}”. ${gapSummary(g)}`)
+          return
+        }
+
+        const res = mergeAiScoresIntoRows(rows, incoming)
+        setRows(recomputeOverall(res.rows))
+        const after = scoreGaps(
+          res.rows.filter(r => !excludedUsers.has(userKey(r.session, r.author_id))),
+          { onlyFinal: scoreOnlyFinal, isFinal })
+        setScoreLoadMsg(
+          `Merged “${file.name}” onto ${res.matched} of ${rows.length} loaded idea${rows.length === 1 ? '' : 's'} by Idea ID: `
+          + `filled ${res.filled} that had no AI score yet`
+          + (res.kept ? `, kept the existing scores of ${res.kept}` : '')
+          + (res.unmatched ? `. ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} matched no loaded idea and ${res.unmatched === 1 ? 'was' : 'were'} NOT added — clear Step 1 and import the file there to load it as the dataset` : '')
+          + `. ${gapSummary(after, scoreOnlyFinal)}`
+        )
+      } catch (err) {
+        setScoreLoadMsg('Could not read the file: ' + (err.message || err))
+      }
+    }
+    if (isCsv) reader.readAsText(file)
+    else reader.readAsArrayBuffer(file)
   }
 
   // Click a Step-3 table header to sort by that column: 1st click ascending,
@@ -791,14 +982,29 @@ export default function DataAnalytics() {
     const kpis = presentKpis(data)
     const stageLabel = ph => (ph === 'group' ? 'group' : ph === 'individual' ? 'individual (solo)' : (ph || ''))
     const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? '' : Number(v))
+    // The identity columns are here so this workbook can be RE-UPLOADED as the
+    // dataset (owner 2026-08-25: "upload my entire data set … and update the
+    // entire dataset"). Without Session Code and the author columns the round
+    // trip was lossy — every re-imported idea landed in a nameless "imported"
+    // session with no author, which empties the participant panel and the
+    // per-session summaries. Every one of these headers is a name
+    // `normalizeImportedRows` already reads, and all of them are skipped by the
+    // KPI-column sweep, so nothing else about the file changes.
     const ideaRows = data.map(r => {
       const row = {
         'Idea ID': r.idea_id,
+        'Session Code': r.session || '',
         'Condition': r.condition,
         'Stage': stageLabel(r.phase),
+        'Group UID': r.group_id || '',
+        'Author ID': r.author_id || '',
+        'Author Name': r.author_name || '',
+        'Author Email': r.author_email || '',
         'Final Group Pick': r.final_pick ? 'Yes' : 'No',
+        'Carried to group': r.carried ? 'Yes' : 'No',
         'Title': r.idea_title || '',
         'Description': r.idea_description || '',
+        'Full Text': r.text || '',
       }
       for (const k of kpis) row[k.label] = num(r[k.key])
       return row
@@ -1042,9 +1248,19 @@ export default function DataAnalytics() {
     return out
   }, [rows, loadedSessions, importedBooks, loadedBookIds])
   const participantTotal = participantsByCondition.reduce((s, c) => s + c.count, 0)
-  // Step-3 scoring scope (all ideas vs only Final Ideas) and its unscored count.
+  // Step-3 scoring scope (all ideas vs only Final Ideas) and its AI-score coverage.
+  // `gaps.fillable` — not "every empty cell" — is what the Fill button offers to do:
+  // an idea with no text at all can never be rated, so counting it as outstanding
+  // would leave a panel that never reaches zero however many times it is pressed.
   const scorePool = scoreOnlyFinal ? effectiveRows.filter(isFinal) : effectiveRows
-  const scopeUnscored = scorePool.filter(r => r.novelty === '' || r.usefulness === '').length
+  const gaps = useMemo(
+    () => scoreGaps(effectiveRows, { onlyFinal: scoreOnlyFinal, isFinal }),
+    [effectiveRows, scoreOnlyFinal])
+  // Coverage over the WHOLE dataset, regardless of the Final-Ideas tick — so the
+  // panel can say when the tick is what is hiding a gap ("0 final ideas to score"
+  // over a dataset that still has 24 unscored ideas is the reading that misled).
+  const allGaps = useMemo(() => scoreGaps(effectiveRows), [effectiveRows])
+  const scopeUnscored = gaps.fillable
   // Step-5 regression dataset: Final-Group-Pick ideas carrying at least one KPI
   // (from any source — AI / evaluator / objective).
   const finalScoredCount = effectiveRows.filter(r => isFinal(r) && hasAnyKpi(r)).length
@@ -1463,6 +1679,11 @@ export default function DataAnalytics() {
                 aggregate and the Step&nbsp;5 regressions. <strong>Both the AI run and an uploaded file only fill ideas
                 that have no score yet</strong> — ideas already scored (in an earlier sitting, by a past AI rater, or by
                 hand) keep their scores. To change one, edit it directly in the table below.
+                {' '}<strong>Coming back to a dataset with empty cells?</strong> Press <em>Upload full dataset</em>, pick the
+                workbook you downloaded, and its scores are merged onto the loaded ideas <strong>by Idea&nbsp;ID</strong> —
+                nothing is duplicated and nothing already scored is overwritten. The panel below then says exactly how many
+                ideas are still missing an AI&nbsp;Novelty or AI&nbsp;Usefulness, and one press of <em>Fill …</em> keeps
+                running over what is left until they are all filled.
               </div>
 
               <div className={styles.raterRow}>
@@ -1484,20 +1705,67 @@ export default function DataAnalytics() {
                 <span className={styles.kpiPill}>{finalCount} final</span>
               </label>
 
+              {/* AI-score coverage — the answer to "how many rows are still empty?".
+                  Always on screen while a dataset is loaded, because the only number
+                  here used to be the Score button's own scope count, and that follows
+                  the Final-Ideas tick: a dataset with 24 unscored ideas could read
+                  "Score 0 final ideas with AI" and look finished. */}
+              {effectiveRows.length > 0 && (
+                <div className={`${styles.coverage} ${gaps.complete ? styles.coverageDone : ''}`}>
+                  <div className={styles.coverageHead}>
+                    <strong>AI score coverage</strong>
+                    <span className={styles.kpiPill}>{gaps.scored.toLocaleString()} of {gaps.total.toLocaleString()} scored</span>
+                    {gaps.fillable > 0 && <span className={styles.unscored}>{gaps.fillable.toLocaleString()} still empty</span>}
+                    {gaps.unratable > 0 && <span className={styles.kpiPill}>{gaps.unratable.toLocaleString()} unratable</span>}
+                  </div>
+                  <p className={styles.coverageLine}>{gapSummary(gaps, scoreOnlyFinal)}</p>
+                  {/* A gap the tick is hiding: say so, rather than letting the scope
+                      count read as "there is nothing left to do". */}
+                  {scoreOnlyFinal && allGaps.fillable > gaps.fillable && (
+                    <p className={styles.coverageLine}>
+                      Across the <strong>whole</strong> dataset {allGaps.fillable.toLocaleString()} idea{allGaps.fillable === 1 ? '' : 's'} still
+                      need an AI score — untick <em>Only score the Final Ideas</em> above to fill those too.
+                    </p>
+                  )}
+                  {gaps.unratable > 0 && (
+                    <p className={styles.hint}>
+                      An “unratable” idea carries no text, so no rater — AI or human — can score it;
+                      it is counted apart so this panel can reach zero.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className={styles.row} style={{ marginBottom: 12 }}>
                 <button className="btn-primary" onClick={scoreUnscored} disabled={!!scoring || scopeUnscored === 0}>
                   {scoring
-                    ? `Scoring ${scoring.done}/${scoring.total}…`
-                    : `Score ${scopeUnscored} ${scoreOnlyFinal ? 'final ' : ''}idea${scopeUnscored === 1 ? '' : 's'} with AI`}
+                    ? scoring.waiting
+                      ? `Waiting for ${scoreProvider} to recover…`
+                      : `Scoring ${scoring.done}/${scoring.total}…${scoring.pass > 1 ? ` (pass ${scoring.pass})` : ''}`
+                    : scopeUnscored === 0
+                      ? `All ${scoreOnlyFinal ? 'final ' : ''}ideas have AI scores`
+                      : `Fill the ${scopeUnscored.toLocaleString()} missing AI score${scopeUnscored === 1 ? '' : 's'} with AI`}
                 </button>
+                <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => datasetFileRef.current?.click()} disabled={!!scoring}
+                  title="Upload your whole dataset (the ideas_with_kpis / analysis Excel or CSV you downloaded) → its AI scores are merged onto the loaded ideas by Idea ID, filling only the cells that are still empty. Nothing is duplicated and nothing already scored is overwritten.">
+                  Upload full dataset (top up AI scores)
+                </button>
+                <input ref={datasetFileRef} type="file" accept=".xlsx,.xls,.csv" className={styles.fileInput} onChange={onPickDatasetTopUp} />
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => scoreFileRef.current?.click()} disabled={!!scoring}
-                  title='Upload an offline AI-scoring file ("All Ideas Ranked" / Rankings sheet) → fills the AI KPI columns of ideas that have no score yet (already-scored ideas keep theirs)'>Load AI scores file</button>
+                  title='Upload an offline AI-scoring file ("All Ideas Ranked" / Rankings sheet, matched by idea title) → fills the AI KPI columns of ideas that have no score yet (already-scored ideas keep theirs)'>Load AI scores file</button>
                 <input ref={scoreFileRef} type="file" accept=".xlsx,.xls" className={styles.fileInput} onChange={onPickScores} />
-                {scoring && <span className={styles.statusLine}><span className={styles.spinner} /> contacting {scoreProvider}…</span>}
+                {scoring && (
+                  <span className={styles.statusLine}>
+                    <span className={styles.spinner} />
+                    {scoring.waiting
+                      ? ` ${scoreProvider} stopped answering — pausing before the next attempt…`
+                      : ` contacting ${scoreProvider}…`}
+                  </span>
+                )}
               </div>
               {scoring && (
                 <div className={styles.progressWrap}>
-                  <div className={styles.progressBar} style={{ width: `${Math.round((scoring.done / scoring.total) * 100)}%` }} />
+                  <div className={styles.progressBar} style={{ width: `${scoring.total ? Math.round((scoring.done / scoring.total) * 100) : 0}%` }} />
                 </div>
               )}
               {scoreErr && <p className="error-msg">{scoreErr}</p>}

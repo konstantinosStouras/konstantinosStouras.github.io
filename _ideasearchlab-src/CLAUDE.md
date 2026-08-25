@@ -497,7 +497,8 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      so re-downloading the aggregate after scoring carries the scores back in.
 3. **Score ideas (the Rankings rows), manage participants & download.** Works the **Rankings**
    rows of the consolidated Step-2 data. Every idea gets a per-KPI score:
-   the configured LLM rates each on novelty + usefulness (1–7), overall = their mean.
+   the configured LLM rates each on novelty + usefulness (**1–5**, the scale
+   `RATER_SYSTEM_PROMPT` states and `clamp1to5` enforces), overall = their mean.
    Scoring runs **client-side from the browser** via `src/utils/llmClient.js`, which reads
    the provider key straight from `settings/ai` (admin can read it per Firestore rules —
    no Cloud Function / redeploy needed) and calls Claude/OpenAI/Gemini directly (Claude
@@ -551,6 +552,93 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    *Removed participants* when any — plus a raw-dataset **CSV**. Both reflect the current
    post-removal `effectiveRows`.
    - **A long scoring run never silently leaves rows empty** (owner report 2026-08: "uploaded 435 ideas, asked for AI scores, some rows were empty"). 435 ideas is ~55 sequential API calls, and the old loop lost work four silent ways while the progress bar still read 435/435: **(1)** one failed call **re-threw**, so the caller's `setRows` never ran and every score already collected was discarded — 54 good batches lost to a 429 on the 55th; **(2)** a reply **truncated** by the token limit has no closing `]`, and the array-only parser returned null, losing all 8 ideas of that batch; **(3)** a **short reply** (6 entries for 8 ideas) left the other 2 empty for good; **(4)** a **duplicate `"i"`** overwrote one slot and left a sibling empty. The batching/parsing/retry logic now lives in **`src/utils/scoreBatch.js`** (no Firebase/`fetch` import, so it is testable offline): `extractScoreObjects` salvages the complete `{...}` objects out of an unterminated array, `assignScores` never lets a duplicate or out-of-range index clobber a filled slot, ideas still unscored after the batch call are retried **one at a time** (`singleTries`, because the usual failure is an unreadable REPLY, which the transport retry never sees), transient errors (429/5xx/network) get `withRetry` backoff while fatal ones (401/403/400 — a rejected key fails identically every time) abort at once, and **partial results are always returned**. A dead provider trips a **circuit breaker** (`maxConsecutiveFailures`, 3) instead of grinding all 55 batches through the backoff, and a thrown batch skips the per-idea round (the transport is down, not the ideas). Token ceilings were raised with it — Claude/OpenAI 1500 → 4000, reasoning models 2000 → 8000 (they spend the budget on hidden reasoning FIRST and can return an empty message), Gemini 2000 → 8000 — since truncation was cause (2). The page now **reports the shortfall** instead of showing blank rows: "Scored 431 of 435 ideas. 4 could not be scored this run … press Score again to retry just those", with ideas that have **no text** counted separately (nothing can rate them). Pressing Score again picks up exactly the still-empty ones, since the button's scope is "ideas with no score yet". Offline test: `node _ideasearchlab-src/tools/score-batch-guard.mjs` (33 checks against a fake model — truncated, short, duplicate-indexed, rate-limited and dead-provider replies).
+   - **Coming back to a dataset with empty AI cells — the whole loop in one step**
+     (owner report 2026-08-25: *"in the past I noticed that some rows had no scores for
+     those two columns … I would like to be able to upload my entire data set, and in
+     this step, we check how many ideas do not have AI novelty and AI usefulness, and I
+     simply press the button to fill them up and update the entire dataset"*).
+     `scoreBatch.js` had already stopped a long run LOSING work; three things were still
+     missing, and together they are that loop:
+     - **Nothing said how big the hole was.** The only number on screen was the Score
+       button's own scope count, which follows the Final-Ideas tick — so a dataset with
+       24 unscored ideas could read *"Score 0 final ideas with AI"* and look finished.
+       3.2 now opens with an always-on **AI score coverage** panel (`scoreGaps`/`gapSummary`
+       in **`src/utils/scoreGaps.js`**): *"24 of 741 ideas still need an AI score · 24
+       missing AI Novelty · 24 missing AI Usefulness"*, plus a second line when the tick
+       is what is hiding a gap ("across the **whole** dataset N still need one"). An idea
+       with **no text** is counted APART as `unratable`, never as outstanding — nothing can
+       ever rate it, and lumping it in leaves a panel that can never reach zero.
+     - **One press did one pass.** `scoreUnscored` now RE-DERIVES what is still empty and
+       runs again while each pass keeps filling something (`shouldRunAnotherPass`,
+       `MAX_FILL_PASSES` 4). The rule turns on three cases: a pass that filled some and
+       left some is working → go again; a pass that reached every idea and filled nothing
+       will not read better → stop; a pass `runScoring` **aborted** (its circuit breaker
+       trips after 3 consecutive failed batches) never SENT the rest, which on a 93-batch
+       run is the usual shape of a rate limit — so that one case gets `MAX_RECOVERY_PASSES`
+       (2) more goes with a growing pause (`RECOVERY_WAIT_MS`, 10s × the attempt), the
+       button saying *"Waiting for claude to recover…"*. A genuinely dead provider costs
+       those few attempts and is then reported as the outage it is.
+     - **`scoreIdeas` DISCARDED the abort flag**, so a run that gave up at batch 7 of 55
+       with 380 ideas never attempted reported exactly like one that mishandled four
+       replies. It now takes an `opts.onReport` carrying `{unscored, blank, failedBatches,
+       aborted, lastError}`, and the page says which happened. What WORKED is a neutral
+       line; only a real shortfall is red (a run that filled every gap used to be painted
+       as a failure through the same error slot).
+     - **Upload full dataset (top up AI scores)** — a second upload beside *Load AI scores
+       file*. The Step-1/2 importer APPENDS, so re-uploading your own dataset to fill its
+       gaps gave you every idea twice; this merges by **Idea ID** (normalised title only as
+       the fallback for a file with no id), fills blanks only, and **never appends** an
+       unmatched row — the admin's own `ideas_with_kpis` export carried no Session Code and
+       no author columns, so appending its rows would file real participants' ideas under a
+       nameless "imported" session. Unmatched rows are REPORTED with what to do instead.
+       With nothing loaded the file simply BECOMES the dataset, through the same
+       `importedBooks` bookkeeping Step 1 uses (its own removable source row, every sheet
+       kept for the Step-2 aggregate).
+     - **`downloadIdeasWithKpis` now carries the identity columns** — Session Code, Group
+       UID, Author ID/Name/Email, Carried to group, Full Text — so that round trip is
+       lossless. Every one is a header `normalizeImportedRows` already reads and the KPI
+       sweeps already skip, so nothing else about the workbook changes.
+     - **One definition of "has text".** `scorableText` in `scoreGaps.js` is used by BOTH
+       `hasIdeaText` (which decides an idea is unratable) and the page (which decides what
+       to send the rater). They must not drift: the page used to build the rater's text as
+       `r.text || ideaText(r)`, and `ideaText` reads `title`/`description` where a dataset
+       row carries `idea_title`/`idea_description` — so a row with only a title would have
+       been counted as fillable and sent as an EMPTY STRING, scored by nobody for ever
+       while the panel went on offering to fill it. The guard caught it, and pins it.
+     - **A pass that scored NOTHING must not escape the loop.** `scoreIdeas` throws
+       when a run came back empty (`lastError && unscored === scores.length`) — which
+       is precisely the case the recovery rule exists for, so the throw would have
+       skipped it in the worst situation of all. The pass now catches around
+       `scoreIdeas` and treats a non-fatal throw as an aborted pass; a FATAL one
+       (`isFatalScoringError`) still stops the run at once, since retrying a rejected
+       key only makes the admin sit through the pauses before being told what is
+       wrong. `isFatalApiError`/`isFatalScoringError` moved from `llmClient.js` into
+       **`scoreBatch.js`** for that: it is the module that owns what is worth
+       retrying, and — unlike llmClient, which imports Firebase — a guard can load
+       it. A missing key is tagged `.fatal` at the throw site, since it carries no
+       HTTP status. `aborted` is `report?.aborted || threw`: scoreIdeas ALSO throws
+       when every batch was attempted and every one failed, which the circuit
+       breaker never sees, so the report alone would reset the flag to false and
+       skip the retry.
+     - **A partial idea with no text is `unratable`, not fillable.** One score and no
+       text (an imported ratings sheet with no titles) cannot have its other column
+       filled either — counting it as fillable puts a number on the panel that
+       pressing the button can never bring down, and makes the run report it as "the
+       model's reply could not be read" when nothing was ever sent. `ideaScoreState`
+       therefore tests the text BEFORE splitting missing from partial.
+     - **An auto-generated `import_<n>` id never joins two files.**
+       `normalizeImportedRows` invents one for a file with no Idea ID column, and
+       those are POSITIONS, not identities: two unrelated files both start at
+       `import_1`, so `mergeAiScoresIntoRows` joining on one would confidently write
+       the third row of one file onto the third row of another. `joinableId` drops
+       them and lets the title match decide.
+     - Offline test: **`node _ideasearchlab-src/tools/score-gaps-guard.mjs`** (60+ checks, no
+       network) — the coverage arithmetic, the scope toggle, the merge rules (id beats a
+       changed title, a duplicate file row is not a second match, an empty cell never blanks
+       a stored score, nothing is appended), the pass rule, and an END-TO-END run of the
+       owner's own scenario through the REAL `runScoring`: 741 ideas with 24 empty, against
+       a healthy model, a transient outage that aborts the first pass, a dead provider, and
+       a model returning short batches.
    - **Score scope toggle (`scoreOnlyFinal`, default ON):** a checkbox **"Only score the Final
      Ideas"** scopes the AI scoring to the group-selected ideas (`final_pick == 1`) — the set
      Step 5 analyses — or, unticked, to every idea. The button label + count adapt

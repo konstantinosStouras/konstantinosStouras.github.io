@@ -2547,6 +2547,25 @@ plus a randomly pre-filled intake — implemented for its vanilla-JS store as
 offline test `node lab/answerarena/tools/preview-guard.mjs`); the two random
 fillers are deliberate twins — keep them in sync.
 
+**The Data Analytics page says how many ideas have NO AI score, and one press
+fills them.** Owner report 2026-08-25: *"some rows had no scores for those two
+columns … I would like to be able to upload my entire data set, and in this
+step, we check how many ideas do not have AI novelty and AI usefulness, and I
+simply press the button to fill them up."* Step 3.2 gained an always-on **AI
+score coverage** panel, a **Fill the N missing AI scores** button that keeps
+running over whatever is still empty until it is done, and an **Upload full
+dataset (top up AI scores)** button that merges a downloaded workbook onto the
+loaded ideas **by Idea ID** — never appending, never overwriting a score that is
+already there. The pure half is `_ideasearchlab-src/src/utils/scoreGaps.js`
+(`scoreGaps`/`gapSummary`/`shouldRunAnotherPass`/`mergeAiScoresIntoRows`/
+`scorableText`); an idea with no text is counted APART as *unratable*, since
+nothing can ever rate it and counting it as outstanding leaves a panel that
+never reaches zero. `downloadIdeasWithKpis` now also carries Session Code and
+the author columns, so that download → re-upload round trip is lossless. Full
+reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
+`node _ideasearchlab-src/tools/score-gaps-guard.mjs` (60+ checks, including the
+owner's own 741-idea scenario driven through the real scoring engine).
+
 **Excel export per session, from the session list.** Both admins let the
 instructor download ONE session's research workbook straight from its card —
 ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export data**

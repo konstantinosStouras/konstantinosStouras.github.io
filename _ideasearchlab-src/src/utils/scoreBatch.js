@@ -114,6 +114,38 @@ export function assignScores(parsed, count) {
 }
 
 /**
+ * An error the run should give up on rather than retry: a rejected or missing
+ * API key, or a request the provider refuses outright, fails identically every
+ * time. Everything else (429 rate limits, 5xx, dropped connections) is worth
+ * another go — those are exactly what made a long 435-idea run lose batches.
+ */
+export function isFatalApiError(err) {
+  const s = err?.status
+  if (s === 401 || s === 403 || s === 404) return true
+  if (s === 400) return true
+  return false
+}
+
+/**
+ * Is this error worth giving up the WHOLE run on, rather than trying again?
+ *
+ * The Data Analytics fill loop needs this because `scoreIdeas` THROWS when a
+ * pass scored nothing at all — and that is the same shape for two opposite
+ * situations: a rejected key (trying again is pointless and only makes the
+ * admin sit through the pauses before being told what is actually wrong) and a
+ * provider that refused every batch for a minute (trying again is the fix).
+ * Only the first is fatal: a `.fatal` flag the caller set deliberately, or a
+ * status that fails identically every time.
+ *
+ * It lives HERE rather than beside the fetch code so it can be tested offline —
+ * the same reason the batching and retry logic was split out of `llmClient.js`,
+ * which imports Firebase and cannot be loaded by a guard.
+ */
+export function isFatalScoringError(err) {
+  return err?.fatal === true || isFatalApiError(err)
+}
+
+/**
  * Call `fn`, retrying transient failures with exponential backoff. `isFatal`
  * decides what is NOT worth retrying (a rejected API key fails the same way
  * every time — retrying it just makes the user wait three times as long).
