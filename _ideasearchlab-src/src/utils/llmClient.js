@@ -182,8 +182,18 @@ function callProvider(resolved, system, userText) {
  * It throws only when the run cannot produce anything: no API key, a fatal
  * provider error (bad key / refused request), or every single batch failing.
  *
+ * `opts.onReport` receives what `runScoring` LEARNED about the run —
+ * `{ unscored, blank, failedBatches, aborted, lastError }`. That mattered
+ * enough to add (owner 2026-08-25): `runScoring` trips a circuit breaker after
+ * `maxConsecutiveFailures` failed batches and stops, which is the right call
+ * against a dead provider — but this function used to DISCARD the `aborted`
+ * flag, so a run that gave up at batch 7 of 55 with 380 ideas never attempted
+ * reported exactly like one that merely mishandled four replies. The caller
+ * needs the difference to say something true and to decide whether another
+ * pass is worth making.
+ *
  * @param ideas   array of idea text strings (caller maps rows → text first)
- * @param opts    { provider?, model?, brief?, batchSize?, onProgress?, settings? }
+ * @param opts    { provider?, model?, brief?, batchSize?, onProgress?, onReport?, settings? }
  * @returns array (same length/order as ideas) of { novelty, usefulness } | null
  */
 export async function scoreIdeas(ideas, opts = {}) {
@@ -194,13 +204,14 @@ export async function scoreIdeas(ideas, opts = {}) {
       `No API key saved for "${resolved.provider}". Add it under Admin → AI Settings first.`
     )
   }
-  const { scores, unscored, lastError } = await runScoring({
+  const { scores, unscored, blank, failedBatches, aborted, lastError } = await runScoring({
     texts: ideas,
     batchSize: opts.batchSize || 8,
     onProgress: opts.onProgress,
     isFatal: isFatalApiError,
     call: batch => callProvider(resolved, RATER_SYSTEM_PROMPT, buildBatchPrompt(batch, opts.brief)),
   })
+  if (opts.onReport) opts.onReport({ unscored, blank, failedBatches, aborted, lastError })
   // Nothing at all came back and we know why: surface it instead of returning a
   // silent array of nulls (the run looked like it "worked" and scored nothing).
   if (lastError && unscored === scores.length) throw lastError

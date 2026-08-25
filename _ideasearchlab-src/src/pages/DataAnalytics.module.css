@@ -493,6 +493,40 @@
 .userSub { display: block; font-size: 11.5px; color: var(--muted); }
 .removed { opacity: 0.55; }
 .removed .userName { text-decoration: line-through; }
+/* ── 3.2 AI-score coverage panel ──
+   How many ideas still have an empty AI Novelty / AI Usefulness cell. It is a
+   status readout, not a warning, so it borrows the banner's shape and only its
+   LEFT RULE carries the state: accent while there is a gap, green once there is
+   none. Every colour is a theme token, so it reads in light and dark alike. */
+.coverage {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--paper-dark);
+  border-radius: var(--radius);
+  padding: 11px 14px;
+  margin-bottom: 12px;
+}
+/* The page's own green (the same `.cond3` uses), not a token that does not exist. */
+.coverageDone { border-left-color: #2f9e54; }
+.coverageHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.coverageHead .kpiPill { margin-left: 0; }
+.coverageLine {
+  font-size: 13px;
+  color: var(--ink);
+  opacity: 0.9;
+  line-height: 1.6;
+  margin: 0 0 4px;
+}
+.coverage .hint { margin-bottom: 0; font-size: 12.5px; }
+
 .kpiPill {
   display: inline-block;
   font-size: 12.5px;
