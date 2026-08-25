@@ -19,7 +19,7 @@ import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
 import { isFatalScoringError } from '../utils/scoreBatch'
 import {
   scoreGaps, gapSummary, shouldRunAnotherPass, mergeAiScoresIntoRows, ideaScoreState,
-  scorableText,
+  scorableText, pickScoredSheet,
 } from '../utils/scoreGaps'
 import { tfidfVectors } from '../utils/tfidf'
 import { computeDeterministicKpis, uniqueFraction, productivityCount, cosine, simMatrix } from '../utils/deterministicKpis'
@@ -849,22 +849,22 @@ export default function DataAnalytics() {
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        let rawRows, bookSheets = []
+        let rawRows, bookSheets = [], sheetName = isCsv ? file.name : ''
         if (isCsv) rawRows = csvToRows(ev.target.result)
         else {
           const wb = XLSX.read(ev.target.result, { type: 'array' })
-          // Same sheet preference as the Step-1 importer: the per-idea rows live
-          // on "Ideas"/"ideas", never on the leading "About" guide.
-          const name =
-            wb.SheetNames.find(n => n.toLowerCase() === 'ideas') ||
-            wb.SheetNames.find(n => /idea/i.test(n)) ||
-            wb.SheetNames[0]
-          rawRows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' })
           // Keep every sheet, exactly as the Step-1 importer does, so a file that
           // becomes the dataset here gives Step 2's aggregate the same material.
           bookSheets = wb.SheetNames.map(sn => ({
             name: sn, kind: 'json', rows: XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }),
           }))
+          // The sheet is chosen by what it CONTAINS, not by being called "Ideas":
+          // in the admin's 13-tab aggregate export the Ideas tab holds the raw
+          // session rows with NO AI scores, and the scores live on Rankings. See
+          // `pickScoredSheet`.
+          const picked = pickScoredSheet(bookSheets)
+          sheetName = picked?.name || wb.SheetNames[0]
+          rawRows = picked?.rows || XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' })
         }
         if (!looksLikeIdeaData(rawRows)) { alert(importFormatMsg(isCsv ? 'CSV' : 'Excel')); return }
         const incoming = normalizeImportedRows(rawRows)
@@ -883,7 +883,7 @@ export default function DataAnalytics() {
           }])
           setRows(recomputeOverall(bookRows))
           const g = scoreGaps(bookRows)
-          setScoreLoadMsg(`Loaded ${incoming.length} idea${incoming.length === 1 ? '' : 's'} from “${file.name}”. ${gapSummary(g)}`)
+          setScoreLoadMsg(`Loaded ${incoming.length} idea${incoming.length === 1 ? '' : 's'} from “${file.name}”${isCsv ? '' : ` (sheet “${sheetName}”)`}. ${gapSummary(g)}`)
           return
         }
 
@@ -893,7 +893,7 @@ export default function DataAnalytics() {
           res.rows.filter(r => !excludedUsers.has(userKey(r.session, r.author_id))),
           { onlyFinal: scoreOnlyFinal, isFinal })
         setScoreLoadMsg(
-          `Merged “${file.name}” onto ${res.matched} of ${rows.length} loaded idea${rows.length === 1 ? '' : 's'} by Idea ID: `
+          `Merged “${file.name}”${isCsv ? '' : ` (sheet “${sheetName}”)`} onto ${res.matched} of ${rows.length} loaded idea${rows.length === 1 ? '' : 's'} by Idea ID: `
           + `filled ${res.filled} that had no AI score yet`
           + (res.kept ? `, kept the existing scores of ${res.kept}` : '')
           + (res.unmatched ? `. ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} matched no loaded idea and ${res.unmatched === 1 ? 'was' : 'were'} NOT added — clear Step 1 and import the file there to load it as the dataset` : '')
