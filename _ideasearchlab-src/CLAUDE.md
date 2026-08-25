@@ -632,6 +632,29 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        `import_1`, so `mergeAiScoresIntoRows` joining on one would confidently write
        the third row of one file onto the third row of another. `joinableId` drops
        them and lets the title match decide.
+     - **The scores are not always on the sheet called "Ideas"** (found in the owner's
+       own two exports, 2026-08-25). The admin's AGGREGATE workbook is 13 tabs and
+       keeps the halves apart: **Ideas** holds the raw session rows — session,
+       author, votes, and the blind-rater columns, which are EMPTY — while the AI
+       scores live on **Rankings**. Measured on the real 741-idea export: `Ideas`
+       carried 0 of 741 AI values, `Rankings` 741 of 741. So the top-up preferring
+       the sheet literally named "Ideas", the way the Step-1 importer does, read the
+       one sheet of that workbook with no scores on it and would have reported
+       "filled 0" and looked broken. `pickScoredSheet` chooses by CONTENT — the
+       sheet must identify its rows (an Idea ID or a Title) and wins on how many AI
+       values it actually carries; blind-rater columns and the 3.1 objective KPIs
+       are deliberately not counted, and with nothing scored anywhere the
+       identifiable "Ideas" sheet still wins (the plain `ideas_with_kpis` case, and
+       the Step-1 behaviour). The chosen sheet is NAMED in the message, so it is
+       always visible where the scores came from.
+     - **A round trip through the aggregate workbook does NOT carry the AI scores
+       back in**, and that is worth knowing rather than fixing blind: the Step-1/2
+       importer reads the Ideas tab, so re-importing an aggregate export brings the
+       ideas in UNSCORED and the next run re-scores them all. That is why the
+       owner's August file shows 174 of 435 July scores changed — a re-score by the
+       same rater (r = 0.85/0.88, means 2.83→2.86 and 3.03→3.04, 99% within one
+       point), not a mis-join: all 435 Idea IDs matched with identical titles. The
+       3.2 top-up is the path that carries them across.
      - Offline test: **`node _ideasearchlab-src/tools/score-gaps-guard.mjs`** (60+ checks, no
        network) — the coverage arithmetic, the scope toggle, the merge rules (id beats a
        changed title, a duplicate file row is not a second match, an empty cell never blanks

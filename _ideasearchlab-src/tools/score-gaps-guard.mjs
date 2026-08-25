@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs'
 import {
   scoreGaps, gapSummary, ideaScoreState, shouldRunAnotherPass,
   mergeAiScoresIntoRows, hasIdeaText, isBlankScore, scorableText, MAX_RECOVERY_PASSES,
+  pickScoredSheet,
 } from '../src/utils/scoreGaps.js'
 
 let failures = 0
@@ -451,6 +452,70 @@ console.log('an auto-generated import id never joins two unrelated files')
     mergeAiScoresIntoRows(
       [{ rid: 'r1', idea_id: 'abc123', idea_title: 'One', text: 'One', novelty: '', usefulness: '' }],
       [{ idea_id: 'abc123', idea_title: 'Renamed', novelty: 2, usefulness: 2 }]).rows[0].novelty === 2)
+}
+
+// ── Which sheet of an uploaded workbook carries the scores ────────────────
+// Shapes taken from the owner's own two exports (2026-08-25): a 13-tab aggregate
+// whose `Ideas` tab holds 0 of 741 AI values and whose `Rankings` tab holds
+// 741 of 741, and the plain two-tab `ideas_with_kpis`.
+console.log('pickScoredSheet — the scores are not always on the sheet called Ideas')
+{
+  const aggregate = [
+    { name: 'About', rows: [{ 'Ideation Challenge — aggregated research data export': 'x' }] },
+    { name: 'Participants', rows: [{ 'Author ID': 'a1', 'Author Name': 'A' }] },
+    // The real shape: identifiable rows, blind-rater columns, all empty.
+    { name: 'Ideas', rows: [
+      { 'Idea ID': 'i1', 'Session Code': 'SGP1', Title: 'One', 'Novelty (rater 1)': '', 'Usefulness (rater 1)': '' },
+      { 'Idea ID': 'i2', 'Session Code': 'SGP1', Title: 'Two', 'Novelty (rater 1)': '', 'Usefulness (rater 1)': '' },
+    ] },
+    { name: 'Rankings', rows: [
+      { 'Idea ID': 'i1', Condition: 'None', Title: 'One', Novelty: 3, Usefulness: 4, 'Novelty (objective)': '' },
+      { 'Idea ID': 'i2', Condition: 'Solo', Title: 'Two', Novelty: 2, Usefulness: 5, 'Novelty (objective)': '' },
+    ] },
+  ]
+  const got = pickScoredSheet(aggregate)
+  check('the 13-tab aggregate resolves to Rankings, NOT Ideas',
+    got && got.name === 'Rankings', got && got.name)
+  check('and it counted the AI values it found', got.scored === 4, `scored=${got && got.scored}`)
+
+  // The July export names them "AI Novelty" / "AI Usefulness".
+  const july = [
+    { name: 'Ideas', rows: [{ 'Idea ID': 'i1', Title: 'One', 'Novelty (rater 1)': '' }] },
+    { name: 'Rankings', rows: [{ 'Idea ID': 'i1', Title: 'One', 'AI Novelty': 4, 'AI Usefulness': 4 }] },
+  ]
+  check('the "AI Novelty" spelling is recognised too',
+    pickScoredSheet(july).name === 'Rankings', pickScoredSheet(july).name)
+
+  // The plain ideas_with_kpis download: one sheet, scores on it.
+  const simple = [{ name: 'ideas', rows: [
+    { 'Idea ID': 'i1', Title: 'One', 'AI Novelty': 3, 'AI Usefulness': 3 },
+  ] }]
+  check('the plain ideas_with_kpis workbook still resolves to its own sheet',
+    pickScoredSheet(simple).name === 'ideas')
+
+  // Nothing scored anywhere → the identifiable "Ideas" sheet still wins, which
+  // is the Step-1 behaviour and the right answer for a dataset with no scores.
+  const unscored = [
+    { name: 'Rankings', rows: [{ 'Idea ID': 'i1', Title: 'One', Novelty: '', Usefulness: '' }] },
+    { name: 'Ideas', rows: [{ 'Idea ID': 'i1', Title: 'One', 'Session Code': 'SGP1' }] },
+  ]
+  check('with no scores anywhere, the Ideas sheet wins', pickScoredSheet(unscored).name === 'Ideas')
+
+  // Guards against picking the wrong thing.
+  check('a sheet that cannot identify its rows is never chosen',
+    pickScoredSheet([{ name: 'AI Usage', rows: [{ Novelty: 5, Usefulness: 5 }] }]) === null)
+  check('a preamble sheet with no rows is skipped',
+    pickScoredSheet([{ name: 'About', rows: [] }, { name: 'ideas', rows: [{ 'Idea ID': 'i1' }] }]).name === 'ideas')
+  check('blind-rater columns do not make a sheet the scores sheet',
+    pickScoredSheet([
+      { name: 'Ideas', rows: [{ 'Idea ID': 'i1', 'Novelty (rater 1)': 4, 'Usefulness (rater 2)': 5 }] },
+    ]).scored === 0)
+  check('the objective KPIs do not either',
+    pickScoredSheet([
+      { name: 'Ideas', rows: [{ 'Idea ID': 'i1', 'Novelty (objective)': 0.9, 'Pool distinctiveness': 0.8 }] },
+    ]).scored === 0)
+  check('an empty workbook returns null, it does not throw',
+    pickScoredSheet([]) === null && pickScoredSheet(null) === null)
 }
 
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed.')

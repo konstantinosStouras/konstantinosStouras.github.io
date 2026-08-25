@@ -191,6 +191,64 @@ export function shouldRunAnotherPass({
 }
 
 /**
+ * Which sheet of an uploaded workbook actually carries the per-idea AI scores?
+ *
+ * WHY THIS IS NOT "the one called Ideas" (owner's own files, 2026-08-25). The
+ * admin's AGGREGATE export is a 13-tab workbook, and it keeps the two halves
+ * apart: the **Ideas** tab holds the raw session rows — session, author, title,
+ * votes, and the blind-rater columns, which are EMPTY — while the AI scores live
+ * on the **Rankings** tab. Preferring the sheet literally named "Ideas", the way
+ * the Step-1 importer does, therefore reads the one sheet of that workbook with
+ * no scores on it at all: measured on a real 741-idea export, `Ideas` had 0 of
+ * 741 AI values and `Rankings` had 741 of 741. A top-up would have reported
+ * "filled 0" and looked broken.
+ *
+ * So the sheet is chosen by what it CONTAINS: it must identify its rows (an Idea
+ * ID or a Title) and it wins on how many AI score values it actually carries.
+ * Blind-rater columns ("Novelty (rater 1)") and the objective KPIs ("Novelty
+ * (objective)", "Pool distinctiveness") are deliberately not counted — they are
+ * different measures, and a sheet carrying only those is not a scores sheet.
+ * With nothing scored anywhere the identifiable sheet named "Ideas" still wins,
+ * which is the plain `ideas_with_kpis` case and the Step-1 behaviour.
+ *
+ * @param sheets  [{ name, rows }] — every sheet of the workbook, already parsed
+ * @returns the chosen { name, rows, scored }, or null when none can be used
+ */
+export function pickScoredSheet(sheets) {
+  let best = null
+  for (const sh of sheets || []) {
+    const rows = sh?.rows
+    if (!Array.isArray(rows) || !rows.length) continue
+    const cols = Object.keys(rows[0] || {})
+    const lower = cols.map(c => String(c).toLowerCase().trim())
+    const identifies = lower.some(c => ID_COLUMNS.includes(c))
+    if (!identifies) continue
+    const scoreCols = cols.filter(c => isAiScoreColumn(c))
+    let scored = 0
+    for (const c of scoreCols) {
+      for (const r of rows) if (!isBlankScore(r[c])) scored++
+    }
+    const isIdeas = /^ideas?$/i.test(String(sh.name || ''))
+    const cand = { name: sh.name, rows, scored, isIdeas }
+    if (!best
+      || cand.scored > best.scored
+      || (cand.scored === best.scored && cand.isIdeas && !best.isIdeas)) best = cand
+  }
+  return best
+}
+
+const ID_COLUMNS = ['idea id', 'idea_id', 'id', 'ideaid', 'idea title', 'title']
+
+/** An AI Novelty / AI Usefulness column — not a blind rater's, not an objective KPI. */
+function isAiScoreColumn(col) {
+  const c = String(col).toLowerCase()
+  if (!/novelty|usefulness/.test(c)) return false
+  if (/rater|\(rater/.test(c)) return false            // human evaluators (3.3)
+  if (/objective|obj\.|distinctiveness/.test(c)) return false  // the 3.1 KPIs
+  return true
+}
+
+/**
  * Merge the AI scores of an uploaded FULL dataset onto the loaded rows, matched
  * by **Idea ID first, then normalised title** — the "upload my entire data set
  * and top it up" path.
