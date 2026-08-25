@@ -21,6 +21,12 @@ on:
     paths:
       - '**/*.html'
       - 'tools/**'
+      # the roster/messaging guard reads the rules and three pages against
+      # each other, so a rules edit alone must run the checks
+      - 'lit/_firestore.rules'
+      - 'lit/_scraper/users-selftest.mjs'
+      - 'lit/lit-news.js'
+      - 'lit/lit-acct-nav.js'
       # share-check.mjs measures the real pixels of every og:image against the
       # numbers the pages declare, so a card regenerated at a new size has to
       # run the checks even when no HTML moved.
@@ -37,6 +43,10 @@ on:
     paths:
       - '**/*.html'
       - 'tools/**'
+      - 'lit/_firestore.rules'
+      - 'lit/_scraper/users-selftest.mjs'
+      - 'lit/lit-news.js'
+      - 'lit/lit-acct-nav.js'
       - 'images/**'
       - 'robots.txt'
       - '.github/workflows/site-checks.yml'
@@ -74,3 +84,13 @@ jobs:
 
       - name: No folder deploys into another Firebase project
         run: node tools/deploy-guard-selftest.mjs
+
+      # The roster and the message threads: the rules, the main page, the
+      # Feedback page and the sub-page menu are four files that nothing else
+      # holds together, and one of them carries the maintainer's address.
+      - name: The users roster and the message rules agree with the pages
+        run: node lit/_scraper/users-selftest.mjs
+
+      # …and the What's-new gate, which pins the OTHER copy of that address.
+      - name: The What's-new review gate holds
+        run: node lit/_scraper/news-selftest.mjs

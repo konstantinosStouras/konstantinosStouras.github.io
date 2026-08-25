@@ -491,6 +491,18 @@
   .acct-menu-item:hover { background: var(--navy-light); }
   .acct-badge { font-size: 12px; color: var(--navy); background: var(--navy-light); border-radius: 100px; padding: 1px 9px; font-weight: 600; }
   .acct-menu-sep { height: 1px; background: var(--border); }
+
+  /* Messages: one conversation, drawn the same way on both sides of it (the
+     maintainer's copy lives on lit/feedback/ — keep the two in step in SHAPE,
+     as the sibling operationsacademia.org is kept in step with this). */
+  .msg-thread { list-style: none; margin: 0 0 14px; padding: 0; }
+  .msg-item { padding: 10px 12px; margin: 0 0 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  .msg-item.is-me { border-left: 3px solid var(--navy); }
+  .msg-item.is-them { border-left: 3px solid var(--green); }
+  .msg-who { font-weight: 700; font-size: 13px; }
+  .msg-when { float: right; font-size: 12px; color: var(--text-muted); }
+  .msg-item p { margin: 6px 0 0; font-size: 15px; line-height: 1.55; }
+  .msg-reply textarea { width: 100%; font-size: 16px; }
   .acct-menu-item.danger { color: var(--red); }
   .acct-menu-item.danger:hover { background: #fdeaea; }
 
@@ -5076,6 +5088,22 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
      rendered by JS (litAlertsRender) since it depends on sign-in state and the
      user's saved alerts. Delivery is handled by the alert mailer described in
      lit/_EMAIL-ALERTS-SETUP.md. -->
+<!-- Messages between the reader and the site's maintainer. The maintainer
+     opens a thread from the roster on the Feedback page; this is where it is
+     read and answered. Only the maintainer can START one — a reader who wants
+     to raise something has the Feedback page, which is built for it — so this
+     card never offers a compose box on an empty thread. -->
+<div id="litMessagesOverlay" class="acct-overlay" onclick="if(event.target===this)litMessagesClose()">
+  <div class="acct-modal wide">
+    <button class="acct-modal-x" onclick="litMessagesClose()" aria-label="Close">×</button>
+    <div class="acct-modal-head">
+      <h2>Messages</h2>
+      <p>Messages between you and The Lit&rsquo;s maintainer &mdash; about a paper you suggested, your account, or the site. They are private to the two of you, nothing here is published, and nothing is e-mailed to you. To raise something yourself, use <a href="feedback/">Feedback</a>.</p>
+    </div>
+    <div class="alerts-body" id="litMessagesBody"></div>
+  </div>
+</div>
+
 <div id="litAlertsOverlay" class="acct-overlay" onclick="if(event.target===this)litAlertsClose()">
   <div class="acct-modal wide">
     <button class="acct-modal-x" onclick="litAlertsClose()" aria-label="Close">×</button>
@@ -5310,6 +5338,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var pendingOrcid = null;      // an authenticated ORCID from a "Sign in with ORCID" redirect, awaiting save
   var doiIndex = null, doiIndexLen = -1;
   var lastMarkedUid = null;    // guards the once-per-session registered-users tally write
+  var lastRosterUid = null;    // …and the roster row beside it (written once the profile has landed)
 
   // ── helpers: per-paper keys / metadata ──────────────────────────────────
   function normDoi(d) { return String(d || '').trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').toLowerCase(); }
@@ -5339,6 +5368,17 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // real alerts) it queues here and the mailer's --test-emails pass delivers +
   // deletes them. Covered by the same users/{uid}/** security rule.
   function testEmailsCol() { return db.collection('users').doc(state.user.uid).collection('testEmails'); }
+  /* THE ROSTER ROW and THE MESSAGE THREAD are both TOP-LEVEL, keyed on the uid
+     — not under users/{uid}. The maintainer has to be able to read them, and
+     users/{uid}/** is owner-only by a promise this site opens with (a person's
+     papers, notes, tags and lists are private). For the thread there is a
+     second reason: Firestore ORs matching rules, so under that blanket
+     owner-write a narrower rule could only ever GRANT more, and a user could
+     forge a message from the maintainer in their own inbox. See
+     _firestore.rules. */
+  function directoryDoc(uid) { return db.collection('userDirectory').doc(uid || state.user.uid); }
+  function messageThreadDoc(uid) { return db.collection('messages').doc(uid || state.user.uid); }
+  function messageItemsCol(uid) { return messageThreadDoc(uid).collection('items'); }
   function isSaved(r) {
     return !!(r && (r.starred || (r.note && r.note.trim()) || (r.tags && r.tags.length) || (r.lists && r.lists.length)));
   }
@@ -5642,6 +5682,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
             : '') +
           '<div class="acct-menu-sep"></div>' +
           '<div class="acct-menu-item" title="Get an e-mail when new papers match your filters, or when the site gains a feature." onclick="acctOpenAlerts()">✉️ E-mail alerts' + (alertCount ? ' <span class="acct-badge">' + alertCount + '</span>' : '') + '</div>' +
+          '<div class="acct-menu-item" title="Messages between you and The Lit&#39;s maintainer." onclick="acctOpenMessages()">💬 Messages' + (msgUnread ? ' <span class="acct-badge">' + msgUnread + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" title="A set of journals or types applied automatically each time you sign in." onclick="acctOpenDefaults()">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" title="Edit your name, affiliation and account details." onclick="acctOpenProfile()">👤 Edit profile</div>' +
           '<div class="acct-menu-sep"></div>' +
@@ -6051,6 +6092,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (h === '#lit-signin') { if (!state.user) opener = window.acctOpenAuth; }
     else if (h === '#lit-library') opener = window.acctOpenLibrary;
     else if (h === '#lit-alerts') opener = window.acctOpenAlerts;
+    else if (h === '#lit-messages') opener = window.acctOpenMessages;
     else if (h === '#lit-defaults') opener = window.acctOpenDefaults;
     else if (h === '#lit-profile') opener = window.acctOpenProfile;
     if (typeof opener === 'function') { try { opener(); } catch (e) {} }
@@ -6593,6 +6635,63 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       .catch(function (err) { console.warn('registry mark:', err && err.code); });
   }
 
+  /* THE ROSTER ROW, written beside the marker above and retired with it.
+     `registeredUsers` is publicly readable, so it can never carry a name or an
+     address; this is the one place the maintainer learns who an account is.
+     The rules pin `email` to the caller's own auth address, so a row says what
+     the account really signs in as, and `first` is write-once — which is why
+     the browser reads the row back before writing it.
+
+     Best effort throughout, and once per uid, exactly like the marker: an
+     undeployed rule or an offline moment must never disturb a sign-in. */
+  /* The name the roster shows: what the account calls itself, resolved the way
+     the header chip resolves it, so the maintainer sees the same person the
+     site does. Never the e-mail — the rules carry that separately, pinned. */
+  function acctRosterName() {
+    var p = state.profile || {};
+    var full = [p.firstName, p.lastName].filter(Boolean).join(' ').trim();
+    if (full) return full;
+    var u = state.user || {};
+    return String(u.displayName || '').trim();
+  }
+
+  function syncDirectoryRow(uid, name) {
+    if (!uid || !state.user) return Promise.resolve();
+    var email = String(state.user.email || '');
+    var ref = directoryDoc(uid);
+    return ref.get().then(function (snap) {
+      var had = snap && snap.exists ? (snap.data() || {}) : null;
+      var now = Date.now();
+      var row = {
+        name: String(name || '').slice(0, 200),
+        seen: now,
+        first: had && typeof had.first === 'number' ? had.first : now
+      };
+      /* Only when there IS one. An ORCID sign-in carries no e-mail claim, and
+         the rules refuse an address that is not the caller's own — so sending
+         an empty string would leave exactly those accounts off the roster
+         entirely. They get a row with a name and their dates. */
+      if (email) row.email = email.slice(0, 200);
+      return ref.set(row, { merge: true });
+    }).catch(function (err) { console.warn('roster row:', err && err.code); });
+  }
+
+  /* …and retired by the merge, for the same reason the marker is: deleting a
+     sign-in does not delete its Firestore data, so a row left behind lists one
+     person twice for ever. Done while we can still write as this account.
+
+     The message THREAD is deliberately NOT deleted here. Only the maintainer
+     may delete one, nothing re-reads a thread server-side once the sign-in is
+     gone (there is no mailer — a message is read on the site), so an orphan
+     costs nobody anything; the Feedback page lists it as a thread whose
+     account has gone. That is the whole difference from deleteOwnAlerts,
+     which must run or the mailer keeps writing to a dead account for ever. */
+  function deleteOwnDirectoryRow() {
+    if (!state.user) return Promise.resolve();
+    return directoryDoc(state.user.uid).delete()
+      .catch(function (err) { console.warn('roster unrow:', err && err.code); });
+  }
+
   // Put alerts back on THIS account. Used only on the failure path below: the
   // subscriptions are deleted before the sign-in is removed (they cannot be
   // touched afterwards), so an account deletion that then fails would leave a
@@ -6648,7 +6747,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       }
       // The alerts must go while we can still write as this user — see
       // deleteOwnAlerts. That is why the failure branch below puts them back.
-      return deleteOwnAlerts().then(deleteOwnRegistryMark).then(deleteCurrentAccount).then(function () {
+      return deleteOwnAlerts().then(deleteOwnRegistryMark).then(deleteOwnDirectoryRow).then(deleteCurrentAccount).then(function () {
         if (!auto) alert('This sign-in was removed.\n\nNow sign in to the account you want to KEEP — your saved papers, lists and alerts will move over automatically.');
         acctOpenAuth();
         // In the modal, explain (non-blocking) why they're seeing sign-in.
@@ -6670,6 +6769,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         // registered-users marker back (deleted just above, while we still
         // could write as this user).
         try { markRegistryEntry(state.user && state.user.uid); } catch (e5) {}
+        // …and its roster row, deleted in the same breath and for the same
+        // reason. An account that lives on must go on being listed.
+        try { syncDirectoryRow(state.user && state.user.uid, acctRosterName()); } catch (e6) {}
         alert('Could not remove this account: ' + friendly(e) + '\nYour saved data was not moved.');
       });
     }).catch(function (e) { alert('Merge failed before any change was made: ' + friendly(e)); });
@@ -7873,6 +7975,163 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     litAlertsOpen();
   };
 
+  /* ------------------------------------------------------------- messages
+
+     The reader's side of a thread the maintainer opened. One doc plus its
+     items, both keyed on this account's own uid, so there is no query and no
+     index anywhere in here. Deliberately a plain get() rather than a fifth
+     onSnapshot listener: a message arrives at most a few times a year, and a
+     live listener on every page view is a standing cost for a card that is
+     usually empty. */
+  var msgUnread = null;      // null = not known yet; a number once read
+  var msgItems = null;
+
+  /* Cache the count on the profile the sub-pages already fetch, exactly as
+     myPubCount is cached, so lit-acct-nav.js draws the badge without a read of
+     its own on every page.
+
+     CALLED FROM TWO PLACES, and it has to be. The thread read below is fired
+     one line BEFORE the profile listener is attached, with state.profile just
+     reset to null — so on nearly every sign-in it resolves first and there is
+     no profile to write onto yet. onData() calls it again once the profile has
+     landed, the same shape maybeCacheMyPubCount uses; without that second call
+     the sub-page badge would essentially never be written. */
+  function maybeCacheMsgUnread() {
+    if (!state.user || !state.profile) return;
+    if (typeof msgUnread !== 'number') return;          // unknown, never a 0
+    if (state.profile.msgUnread === msgUnread) return;
+    profileDoc().set({ msgUnread: msgUnread }, { merge: true })
+      .catch(function () { /* decoration — never break a sign-in over it */ });
+  }
+
+  function litMessagesLoadUnread(uid) {
+    if (!uid) return Promise.resolve();
+    return messageThreadDoc(uid).get().then(function (d) {
+      /* The account can change while the read is in flight — sign out, then
+         sign in as someone else. Without this the older read wins and the
+         previous person's unread count is painted on this account's menu and
+         written into its profile. */
+      if (!state.user || state.user.uid !== uid) return;
+      var n = d && d.exists ? (d.data() || {}).userUnread : 0;
+      msgUnread = typeof n === 'number' ? n : 0;
+      acctRenderControl();
+      maybeCacheMsgUnread();
+    }).catch(function (err) {
+      console.warn('messages:', err && err.code);   // rules not deployed → unknown, never 0
+    });
+  }
+
+  window.litMessagesClose = function () {
+    var el = document.getElementById('litMessagesOverlay');
+    if (el) el.classList.remove('open');
+  };
+
+  function litMessagesRender() {
+    var body = document.getElementById('litMessagesBody');
+    if (!body) return;
+    if (msgItems === null) { body.innerHTML = '<p class="acct-hint">Loading…</p>'; return; }
+    if (!msgItems.length) {
+      body.innerHTML = '<p class="acct-hint">You have no messages. If The Lit&rsquo;s ' +
+        'maintainer writes to you, it will appear here &mdash; and the number beside ' +
+        '&ldquo;Messages&rdquo; in your account menu will say so.</p>';
+      return;
+    }
+    body.innerHTML =
+      '<ul class="msg-thread">' + msgItems.map(function (m) {
+        var mine = m.from === 'user';
+        return '<li class="msg-item ' + (mine ? 'is-me' : 'is-them') + '">' +
+          '<span class="msg-who">' + (mine ? 'You' : 'The Lit') + '</span>' +
+          '<span class="msg-when">' + esc(litMsgDay(m.t)) + '</span>' +
+          '<p>' + esc(String(m.body || '')).replace(/\n/g, '<br>') + '</p></li>';
+      }).join('') + '</ul>' +
+      '<div class="msg-reply">' +
+        '<label for="litMsgBody"><strong>Reply</strong></label>' +
+        '<textarea id="litMsgBody" rows="4" maxlength="5000" placeholder="Write your reply…"></textarea>' +
+        '<p><button class="acct-btn primary" id="litMsgSend" onclick="litMessagesReply()">Send reply</button> ' +
+        '<span id="litMsgOut" class="acct-hint"></span></p>' +
+      '</div>';
+  }
+
+  function litMsgDay(ms) {
+    if (typeof ms !== 'number' || !isFinite(ms)) return '';
+    try { return new Date(ms).toISOString().slice(0, 10); } catch (e) { return ''; }
+  }
+
+  function litMessagesOpen() {
+    if (window.litOpenOverlay) window.litOpenOverlay('litMessagesOverlay');
+    msgItems = null;
+    litMessagesRender();
+    var uid = state.user.uid;
+    messageItemsCol(uid).orderBy('t').get().then(function (snap) {
+      var out = [];
+      snap.forEach(function (d) { out.push(d.data() || {}); });
+      msgItems = out;
+      litMessagesRender();
+      // Reading them IS reading them. Best effort: a refused write leaves the
+      // badge as it was rather than lying about it.
+      if (msgUnread) {
+        messageThreadDoc(uid).set({ userUnread: 0 }, { merge: true }).then(function () {
+          if (!state.user || state.user.uid !== uid) return;   // switched mid-flight
+          msgUnread = 0;
+          acctRenderControl();
+          maybeCacheMsgUnread();
+        }).catch(function () {});
+      }
+    }).catch(function (err) {
+      msgItems = [];
+      var body = document.getElementById('litMessagesBody');
+      if (body) {
+        body.innerHTML = '<p class="acct-hint">' + (err && err.code === 'permission-denied'
+          ? 'Messaging is not switched on yet.'
+          : 'Could not load your messages (' + esc(String(err && err.code || 'error')) + ').') + '</p>';
+      }
+    });
+  }
+
+  window.litMessagesReply = function () {
+    if (!state.user) return;
+    var ta = document.getElementById('litMsgBody');
+    var out = document.getElementById('litMsgOut');
+    var body = ta ? String(ta.value || '').trim() : '';
+    if (!body) { if (out) out.textContent = 'Write something first.'; return; }
+    if (body.length > 5000) { if (out) out.textContent = 'That is longer than 5000 characters.'; return; }
+    if (out) out.textContent = 'Sending…';
+    // a double-click must not post the reply twice
+    var btn = document.getElementById('litMsgSend');
+    if (btn) btn.disabled = true;
+    var uid = state.user.uid, now = Date.now();
+    messageItemsCol(uid).add({ from: 'user', body: body, t: now })
+      .then(function () {
+        /* Only the three keys the rules let an owner touch when replying, and
+           needsAdmin only ever RAISED — the queue on the Feedback page cannot
+           be emptied by the person waiting in it. */
+        return messageThreadDoc(uid).update({ lastAt: now, lastFrom: 'user', needsAdmin: true });
+      })
+      .then(function () {
+        if (ta) ta.value = '';
+        litMessagesOpen();      // repaints the card — say it AFTER
+        var after = document.getElementById('litMsgOut');
+        if (after) after.textContent = 'Sent.';
+      })
+      .catch(function (err) {
+        var live = document.getElementById('litMsgSend');
+        if (live) live.disabled = false;
+        if (btn) btn.disabled = false;
+        var o = document.getElementById('litMsgOut') || out;
+        if (o) {
+          o.textContent = err && err.code === 'permission-denied'
+            ? 'Messaging is not switched on yet — please try again later.'
+            : 'Could not send (' + (err && err.code || 'error') + ').';
+        }
+      });
+  };
+
+  window.acctOpenMessages = function () {
+    if (!state.user) { acctOpenAuth(); return; }
+    acctCloseMenu();
+    litMessagesOpen();
+  };
+
   window.acctOpenDefaults = function () {
     if (!state.user) { acctOpenAuth(); return; }
     // Profile snapshot not in yet: the drafts would seed EMPTY and a Save
@@ -8252,6 +8511,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (state.profile && state.profile.orcid && state.profile.orcidLinked
         && state.profile.orcidNameAuto !== false) backfillOrcidAuthorName(state.profile.orcid, '');
     maybeCacheMyPubCount();  // keep the My-publications badge (profile myPubCount) current
+    maybeCacheMsgUnread();   // …and the Messages badge the sub-pages read from the profile
     maybeApplyMergeStash();  // finish a pending duplicate-account merge, if one is stashed
     maybeClaimAccountKeys(); // claim orcid/e-mail identity keys; offer the merge on a conflict
     maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID
@@ -8332,9 +8592,22 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       if (lastMarkedUid !== user.uid) {
         try { markRegistryEntry(user.uid); } catch (e) {}
       }
+      // How many messages are waiting. One get() of this account's own thread
+      // — no query, no index — and unknown (never 0) if the rules are not
+      // deployed, so the badge is honest either way.
+      msgUnread = null;
+      msgItems = null;
+      try { litMessagesLoadUnread(user.uid); } catch (e) {}
       unsubProfile = profileDoc().onSnapshot(function (d) {
         state.profile = d.exists ? (d.data() || {}) : {};
         litProfHintPut(state.profile);   // keep the card's fast-paint hint current
+        /* The roster row, from HERE rather than beside the tally above, so it
+           carries the name the site actually shows rather than whatever had
+           loaded when the session resolved. Once per uid, like the tally. */
+        if (lastRosterUid !== user.uid) {
+          lastRosterUid = user.uid;
+          try { syncDirectoryRow(user.uid, acctRosterName()); } catch (e) {}
+        }
         onData();
       }, function (err) { console.warn('profile listener:', err && err.code); });
       unsubPapers = papersCol().onSnapshot(function (snap) {
@@ -8355,11 +8628,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       }, function (err) { console.warn('alerts listener:', err && err.code); });
     } else {
       if (libraryMode) acctExitLibrary();
+      // …and the message count goes with the session: on a shared machine the
+      // next person must not be shown the last one's number.
+      msgUnread = null;
+      msgItems = null;
+      lastRosterUid = null;
       // A sign-out (e.g. from another tab, sharing this session) must also
       // dismiss any account modal still showing the signed-out user's data —
       // their Save handlers already refuse to write, but the stale card
       // lingering open reads as broken.
-      ['acctProfileOverlay', 'litOrcidOverlay', 'litAlertsOverlay', 'acctDefaultsOverlay', 'litShareOverlay'].forEach(function (id) {
+      ['acctProfileOverlay', 'litOrcidOverlay', 'litAlertsOverlay', 'litMessagesOverlay', 'acctDefaultsOverlay', 'litShareOverlay'].forEach(function (id) {
         var o = document.getElementById(id); if (o) o.classList.remove('open');
       });
       onData();

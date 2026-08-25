@@ -14,6 +14,20 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    /* THE MAINTAINER. Declared here, at the top of the block, so every match
+       below can call it: the roster and the message threads (added 2026-08-24)
+       sit above the feedback inbox this was first written for, and a rule that
+       calls a function declared after it is not something to leave to chance.
+       Keep in sync with ADMIN_EMAIL in lit/lit-news.js and in
+       lit/feedback/index.html — those decide only whether a control is DRAWN;
+       this is the actual authorisation, and lit/_scraper/news-selftest.mjs and
+       users-selftest.mjs pin all three against it. */
+    function isFeedbackAdmin() {
+      return request.auth != null
+             && request.auth.token.email == 'kstouras@gmail.com'
+             && request.auth.token.email_verified == true;
+    }
+
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
@@ -51,6 +65,150 @@ service cloud.firestore {
                             && request.auth.uid == userId
                             && request.resource.data.keys().hasOnly(['t']);
       allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ------------------------------------------------- the account roster
+    //
+    // What the maintainer may know about a registered account: a name, an
+    // address, and when it was first and last seen. It exists because
+    // `registeredUsers` above CANNOT carry any of that — it is publicly
+    // readable, so a name or an address there would be world-readable — and
+    // because `users/{userId}/**` is owner-only and holds the profile the
+    // maintainer must never be given (a person's saved papers, notes, tags and
+    // lists are private, which is the promise this file opens with). The
+    // address is not in Firestore at all: it lives in the Firebase Auth
+    // record, which no browser can read for anyone but itself.
+    //
+    // It exists for TWO readers, both the maintainer's: the Registered-users
+    // roster on the Feedback page, and the recipient picker that addresses a
+    // message. Nobody else can read it.
+    //
+    // THE ADDRESS CANNOT BE FORGED: `email` must equal the caller's own auth
+    // address, so a roster row says what the account really signs in as
+    // rather than whatever its owner typed. `first` is write-once, which is
+    // why an account may read the one row about itself — the browser has to
+    // send the stored value back.
+    //
+    // The sibling operationsacademia.org carries the same two collections in
+    // the same SHAPE (different site, different project, different markup).
+    match /userDirectory/{userId} {
+      // Declared BEFORE the allow statements that call it, for the same reason
+      // isFeedbackAdmin() is hoisted to the top of this file.
+      function dirRowOk() {
+        return request.resource.data.keys().hasOnly(['name', 'email', 'first', 'seen'])
+          // THE ADDRESS CANNOT BE FORGED — but it may be ABSENT. An ORCID
+          // sign-in carries no e-mail claim at all, and demanding one would
+          // silently leave exactly those accounts off the roster. So: no
+          // address, or the caller's own. Never anyone else's.
+          && (!('email' in request.resource.data)
+              || (request.resource.data.email is string
+                  && request.resource.data.email.size() <= 200
+                  && request.resource.data.email == request.auth.token.email))
+          && (!('name' in request.resource.data)
+              || (request.resource.data.name is string
+                  && request.resource.data.name.size() <= 200))
+          && request.resource.data.first is number
+          && request.resource.data.seen is number;
+      }
+
+      allow read: if isFeedbackAdmin()
+                  || (request.auth != null && request.auth.uid == userId);
+
+      allow create: if request.auth != null && request.auth.uid == userId
+                    && dirRowOk();
+      allow update: if request.auth != null && request.auth.uid == userId
+                    && dirRowOk()
+                    && request.resource.data.first == resource.data.first;
+
+      // The owner retires their own row, exactly as they retire their
+      // registeredUsers marker — the merge does both while it can still write
+      // as the account it is removing, or one person is listed twice for ever.
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ---------------------------------------------------------- messages
+    //
+    // Two-party threads between the maintainer and one account. ONE thread per
+    // account, keyed on the uid itself, which is what lets a person read their
+    // own unread count with a single get() — no query, no composite index —
+    // and lets the maintainer list the threads owing a reply with one equality
+    // filter.
+    //
+    // IT IS DELIBERATELY TOP-LEVEL, NOT users/{uid}/messages. Firestore ORs
+    // every matching rule, so under the blanket
+    //   match /users/{userId}/{document=**} { allow read, write: if …uid… }
+    // a narrower rule could only ever GRANT more: the owner's blanket write
+    // could not be taken away, and a user could forge a message from the
+    // maintainer in their own inbox or clear the flag saying they owe a reply.
+    // Every maintainer-facing queue in this file is a top-level collection for
+    // the same family of reasons (feedback, paperSubmissions, newsOverrides).
+    //
+    // Nothing here is ever e-mailed: a message is read on the site. There is
+    // no mailer, so nothing re-reads a thread server-side after a sign-in dies
+    // — which is why the merge does NOT delete one (unlike the alerts, which
+    // would keep e-mailing for ever). Only the maintainer may delete a thread.
+    match /messages/{userId} {
+      allow read: if isFeedbackAdmin()
+                  || (request.auth != null && request.auth.uid == userId);
+
+      allow create, update: if isFeedbackAdmin()
+                            && request.resource.data.keys().hasOnly(['uid', 'lastAt', 'lastFrom', 'needsAdmin', 'userUnread'])
+                            && request.resource.data.uid == userId
+                            && request.resource.data.lastAt is number
+                            && request.resource.data.lastFrom in ['admin', 'user']
+                            && request.resource.data.needsAdmin is bool
+                            && request.resource.data.userUnread is int
+                            && request.resource.data.userUnread >= 0;
+
+      // The owner may do exactly two things, and neither rewrites history:
+      //   1. mark the thread read — `userUnread` to zero and nothing else;
+      //   2. record that they have replied — which must say the reply came
+      //      FROM them and must RAISE the maintainer's flag, never lower it.
+      // So the queue on the Feedback page cannot be emptied by the person
+      // waiting in it.
+      allow update: if request.auth != null && request.auth.uid == userId
+                    && (
+                      (request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['userUnread'])
+                       && request.resource.data.userUnread == 0)
+                      ||
+                      (request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['lastAt', 'lastFrom', 'needsAdmin'])
+                       && request.resource.data.lastFrom == 'user'
+                       && request.resource.data.needsAdmin == true
+                       && request.resource.data.lastAt is number)
+                    );
+
+      allow delete: if isFeedbackAdmin();
+
+      // One message. `from` is pinned to whoever is actually writing, so
+      // neither side can put words in the other's mouth; the body is bounded;
+      // and only the maintainer may edit or retract one, because a thread
+      // whose history either party can rewrite is not a record of anything.
+      match /items/{itemId} {
+        allow read: if isFeedbackAdmin()
+                    || (request.auth != null && request.auth.uid == userId);
+        allow create: if request.resource.data.keys().hasOnly(['from', 'body', 't'])
+                      && request.resource.data.body is string
+                      && request.resource.data.body.size() > 0
+                      && request.resource.data.body.size() <= 5000
+                      && request.resource.data.t is number
+                      && (
+                        (isFeedbackAdmin() && request.resource.data.from == 'admin')
+                        // A REPLY NEEDS A THREAD TO REPLY TO. Without this an
+                        // owner could write unbounded documents under their own
+                        // uid that no thread head points at — invisible on the
+                        // Feedback page, which lists threads, and so an
+                        // unbounded write channel nobody would ever see. It
+                        // also states in the rules what the cards already
+                        // promise: only the maintainer opens a conversation.
+                        // One billed read per reply, and a reply is rare.
+                        || (request.auth != null && request.auth.uid == userId
+                            && request.resource.data.from == 'user'
+                            && exists(/databases/$(database)/documents/messages/$(userId)))
+                      );
+        allow update, delete: if isFeedbackAdmin();
+      }
     }
 
     // Duplicate-account detection (same person, two accounts). Each signed-in
@@ -120,11 +278,6 @@ service cloud.firestore {
     // page for that one account (kstouras@gmail.com). The server mailers and the
     // GitHub logger use the Admin SDK, which bypasses these rules. Bounds below
     // keep the collection from being abused as free public storage.
-    function isFeedbackAdmin() {
-      return request.auth != null
-             && request.auth.token.email == 'kstouras@gmail.com'
-             && request.auth.token.email_verified == true;
-    }
     // HARDENING FOLLOW-UP (console-side, not done in these rules because it would
     // break the deliberately no-sign-in feedback form until the page + project
     // are updated together): create is open to anyone, and Firestore rules can't

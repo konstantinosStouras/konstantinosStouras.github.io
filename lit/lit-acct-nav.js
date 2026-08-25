@@ -129,6 +129,10 @@
     var alertCount = (extras && extras.alerts != null) ? extras.alerts : 0;
     var defCount = ((p.defaultJournals || []).length) + ((p.defaultJTypes || []).length);
     var orcidLinked = !!(p.orcid && p.orcidLinked);
+    /* The profile doc is written by its own owner, so this number is COERCED
+       rather than interpolated: it reaches innerHTML, and a non-numeric value
+       stored there would otherwise be markup in that person's own menu. */
+    var msgUnread = Number(p.msgUnread) > 0 ? Math.floor(Number(p.msgUnread)) : 0;
     var matchName = (p.orcidAuthorName && p.orcidAuthorName.trim()) || fullName || user.displayName || '';
     var wasOpen = !!el.querySelector('[data-acct-menu].open');   // extras landing must not close an open menu
     el.innerHTML =
@@ -146,6 +150,10 @@
             : '') +
           '<div class="acct-menu-sep"></div>' +
           '<a class="acct-menu-item" title="Get an e-mail when new papers match your filters, or when the site gains a feature." href="' + MAIN + '#lit-alerts">✉️ E-mail alerts' + (alertCount ? ' <span class="acct-badge">' + alertCount + '</span>' : '') + '</a>' +
+          /* The unread count comes from the PROFILE doc this card already
+             fetches (lit/index.html caches it there as myPubCount is cached),
+             so a sub-page draws the badge without a read of its own. */
+          '<a class="acct-menu-item" title="Messages between you and The Lit&#39;s maintainer." href="' + MAIN + '#lit-messages">💬 Messages' + (msgUnread ? ' <span class="acct-badge">' + msgUnread + '</span>' : '') + '</a>' +
           '<a class="acct-menu-item" title="A set of journals or types applied automatically each time you sign in." href="' + MAIN + '#lit-defaults">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</a>' +
           '<a class="acct-menu-item" title="Edit your name, affiliation and account details." href="' + MAIN + '#lit-profile">👤 Edit profile</a>' +
           '<div class="acct-menu-sep"></div>' +
