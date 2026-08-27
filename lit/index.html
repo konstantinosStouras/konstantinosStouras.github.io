@@ -502,6 +502,30 @@
   .msg-who { font-weight: 700; font-size: 13px; }
   .msg-when { float: right; font-size: 12px; color: var(--text-muted); }
   .msg-item p { margin: 6px 0 0; font-size: 15px; line-height: 1.55; }
+  /* A message the reader has taken off their own list, on the Feedback page.
+     Faded, never hidden: the maintainer keeps the record. */
+  .msg-item.is-gone { opacity: 0.55; }
+  /* Remove / Restore. `clear` because .msg-when floats right and this is the
+     last line of the card — without it the button rides up beside the date on
+     a one-line message. */
+  .msg-act { clear: both; margin: 8px 0 0; }
+  .msg-hide { background: none; border: 0; padding: 0; font: inherit; font-size: 13px;
+    color: var(--text-muted); text-decoration: underline; cursor: pointer; }
+  .msg-hide:hover:not([disabled]) { color: var(--navy); }
+  .msg-hide[disabled] { opacity: 0.55; cursor: default; }
+  /* Where the removed ones wait: collapsed, below the list, drawn only when
+     there is something in it. It paints its own ground, so it names its own
+     ink. */
+  .msg-removed { margin: 14px 0; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--white); color: var(--text); }
+  .msg-removed > summary { cursor: pointer; font-weight: 700; font-size: 14px; color: var(--text); }
+  .msg-removed .acct-hint { margin: 8px 0; }
+  .msg-removed .msg-thread { margin-bottom: 0; }
+  @media (max-width: 480px) {
+    /* A text button on a phone is a tap target before it is a link. */
+    .msg-act { margin-top: 4px; }
+    .msg-hide { padding: 8px 0; display: inline-block; }
+  }
   .msg-reply textarea { width: 100%; font-size: 16px; }
   .acct-menu-item.danger { color: var(--red); }
   .acct-menu-item.danger:hover { background: #fdeaea; }
@@ -5098,7 +5122,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     <button class="acct-modal-x" onclick="litMessagesClose()" aria-label="Close">×</button>
     <div class="acct-modal-head">
       <h2>Messages</h2>
-      <p>Messages between you and The Lit&rsquo;s maintainer &mdash; about a paper you suggested, your account, or the site. They are private to the two of you, nothing here is published, and nothing is e-mailed to you. To raise something yourself, use <a href="feedback/">Feedback</a>.</p>
+      <p>Messages between you and The Lit&rsquo;s maintainer &mdash; about a paper you suggested, your account, or the site. They are private to the two of you, nothing here is published, and nothing is e-mailed to you. You can <strong>remove</strong> any message from this list and put it back afterwards &mdash; that only changes what YOU see here, and the message stays part of the conversation. To raise something yourself, use <a href="feedback/">Feedback</a>.</p>
     </div>
     <div class="alerts-body" id="litMessagesBody"></div>
   </div>
@@ -7982,7 +8006,31 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
      index anywhere in here. Deliberately a plain get() rather than a fifth
      onSnapshot listener: a message arrives at most a few times a year, and a
      live listener on every page view is a standing cost for a card that is
-     usually empty. */
+     usually empty.
+
+     REMOVING A MESSAGE IS A HIDE, AND HIDING IS NEVER A ONE-WAY DOOR (owner,
+     2026-08-27, after the same change on the sibling operationsacademia.org).
+     Two rules already written down here meet and settle the shape between
+     them:
+
+       · a thread whose history either party can rewrite is not a record of
+         anything — the sentence the items rule was built around. So this
+         cannot be a delete: the words stay where they were said and the
+         maintainer's copy is whole. What changes is ONE reader's own list,
+         which is theirs to tidy, and the Feedback page shows a removed
+         message faded and says so, because a maintainer quoting back
+         something the other person can no longer see is talking past them;
+       · filter it off the card entirely and there is nothing left to press to
+         bring it back — the trap newsOverrides records. So the removed ones
+         sit in a collapsed panel below the list, one click from Restore.
+
+     The reply box is drawn OUTSIDE the list for the same reason it is on the
+     sibling: a reader who removes every message still has a thread and must
+     still be able to answer in it. `hiddenForUser` is the one key the rules
+     let an owner touch on a message, always written as a boolean and never
+     deleted as a field — the rules test `is bool`, so a field deletion would
+     be refused and "you can always put it back" would be false exactly
+     once. */
   var msgUnread = null;      // null = not known yet; a number once read
   var msgItems = null;
 
@@ -8026,6 +8074,34 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (el) el.classList.remove('open');
   };
 
+  /* One message, drawn the same either side of the removed line. `id` is the
+     DOCUMENT id, read off the snapshot rather than taken from a position, so a
+     message arriving mid-read cannot point a button at its neighbour.
+
+     Deliberately NOT faded inside the removed panel: everything in there is
+     removed, so a fade would carry no signal and only cost legibility.
+     `.msg-item.is-gone` is for the Feedback page, where a removed message sits
+     among live ones and the fade is the whole point. */
+  function litMsgHTML(m, act) {
+    var mine = m.from === 'user';
+    return '<li class="msg-item ' + (mine ? 'is-me' : 'is-them') + '">' +
+      '<span class="msg-who">' + (mine ? 'You' : 'The Lit') + '</span>' +
+      '<span class="msg-when">' + esc(litMsgDay(m.t)) + '</span>' +
+      '<p>' + esc(String(m.body || '')).replace(/\n/g, '<br>') + '</p>' +
+      /* escAttr, NOT esc: this is a JS string inside a double-quoted HTML
+         attribute, and esc() leaves an apostrophe alone — the exact case the
+         comment above escAttr was written for. A Firestore auto-id cannot
+         carry one, but the id is data and the rule does not depend on that. */
+      '<p class="msg-act"><button type="button" class="msg-hide" ' +
+        'onclick="litMessagesSetHidden(this, \'' + escAttr(String(m.id || '')) + '\', ' +
+        (act === 'remove' ? 'true' : 'false') + ')" title="' +
+        (act === 'remove'
+          ? 'Remove this message from your list. It stays part of the conversation.'
+          : 'Put this message back on your list.') + '">' +
+        (act === 'remove' ? 'Remove' : 'Restore') + '</button></p>' +
+      '</li>';
+  }
+
   function litMessagesRender() {
     var body = document.getElementById('litMessagesBody');
     if (!body) return;
@@ -8036,14 +8112,39 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '&ldquo;Messages&rdquo; in your account menu will say so.</p>';
       return;
     }
+
+    /* Restoring one of several repaints the card, and a panel that snapped
+       shut each time would have to be re-opened for every message in it. Read
+       its state off the DOM before it is replaced. */
+    var openPanel = !!(body.querySelector('.msg-removed') || {}).open;
+
+    var kept = [], removed = [];
+    msgItems.forEach(function (m) {
+      (m.hiddenForUser === true ? removed : kept).push(m);
+    });
+
     body.innerHTML =
-      '<ul class="msg-thread">' + msgItems.map(function (m) {
-        var mine = m.from === 'user';
-        return '<li class="msg-item ' + (mine ? 'is-me' : 'is-them') + '">' +
-          '<span class="msg-who">' + (mine ? 'You' : 'The Lit') + '</span>' +
-          '<span class="msg-when">' + esc(litMsgDay(m.t)) + '</span>' +
-          '<p>' + esc(String(m.body || '')).replace(/\n/g, '<br>') + '</p></li>';
-      }).join('') + '</ul>' +
+      (kept.length
+        ? '<ul class="msg-thread">' +
+            kept.map(function (m) { return litMsgHTML(m, 'remove'); }).join('') + '</ul>'
+        : '<p class="acct-hint">You have removed every message from this list. They ' +
+          'are still in the conversation &mdash; open <strong>Removed messages</strong> ' +
+          'below to put any of them back.</p>') +
+      /* HIDING IS NEVER A ONE-WAY DOOR: filtered off the card entirely there
+         would be nothing left to press. */
+      (removed.length
+        ? '<details class="msg-removed"' + (openPanel ? ' open' : '') + '>' +
+            '<summary>Removed messages (' + removed.length + ')</summary>' +
+            '<p class="acct-hint">These are off your list. They are still part of the ' +
+              'conversation and The Lit&rsquo;s maintainer still has them; nobody else ' +
+              'can read them either way.</p>' +
+            '<ul class="msg-thread">' +
+              removed.map(function (m) { return litMsgHTML(m, 'restore'); }).join('') +
+            '</ul>' +
+          '</details>'
+        : '') +
+      /* OUTSIDE the list, deliberately: a reader who has removed every message
+         still has a thread and must still be able to answer in it. */
       '<div class="msg-reply">' +
         '<label for="litMsgBody"><strong>Reply</strong></label>' +
         '<textarea id="litMsgBody" rows="4" maxlength="5000" placeholder="Write your reply…"></textarea>' +
@@ -8051,6 +8152,30 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '<span id="litMsgOut" class="acct-hint"></span></p>' +
       '</div>';
   }
+
+  /** Take a message off this reader's list, or put it back. ONE key, always a
+      boolean and never a field deletion — the rules test `hiddenForUser is
+      bool`, so restoring by deleting the field would be refused. */
+  window.litMessagesSetHidden = function (btn, id, hide) {
+    if (!state.user || !id) return;
+    if (btn) btn.disabled = true;
+    var uid = state.user.uid;
+    messageItemsCol(uid).doc(id).update({ hiddenForUser: !!hide })
+      .then(function () {
+        if (!state.user || state.user.uid !== uid) return;   // switched mid-flight
+        litMessagesOpen();
+      })
+      .catch(function (err) {
+        if (btn) btn.disabled = false;
+        var o = document.getElementById('litMsgOut');
+        if (o) {
+          o.textContent = err && err.code === 'permission-denied'
+            ? 'That is not switched on yet — please try again later.'
+            : 'Could not ' + (hide ? 'remove' : 'restore') + ' that message (' +
+              (err && err.code || 'error') + ').';
+        }
+      });
+  };
 
   function litMsgDay(ms) {
     if (typeof ms !== 'number' || !isFinite(ms)) return '';
@@ -8064,7 +8189,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var uid = state.user.uid;
     messageItemsCol(uid).orderBy('t').get().then(function (snap) {
       var out = [];
-      snap.forEach(function (d) { out.push(d.data() || {}); });
+      /* Carry the DOCUMENT id beside the data: it is what Remove and Restore
+         write to, and reading it off the snapshot means a button can never
+         point at a neighbouring message. */
+      snap.forEach(function (d) {
+        var m = d.data() || {};
+        m.id = d.id;
+        out.push(m);
+      });
       msgItems = out;
       litMessagesRender();
       // Reading them IS reading them. Best effort: a refused write leaves the

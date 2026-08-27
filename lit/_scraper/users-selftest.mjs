@@ -118,9 +118,91 @@ ok(/isFeedbackAdmin\(\) && request\.resource\.data\.from == 'admin'/.test(items)
   && /request\.resource\.data\.from == 'user'/.test(items),
   '`from` is pinned to whoever is actually writing — neither side can put words ' +
   'in the other’s mouth');
-ok(/allow update, delete: if isFeedbackAdmin\(\);/.test(items),
-  'only the maintainer may retract a message: a thread whose history either party ' +
+ok(/allow delete: if isFeedbackAdmin\(\);/.test(items),
+  'only the maintainer may RETRACT a message: a thread whose history either party ' +
   'can rewrite is not a record of anything');
+
+/* ---------------- a reader may take a message off their OWN list ---------- */
+
+/* THE OWNER'S UPDATE IS ONE KEY WIDE. `hasOnly` on the diff is what keeps
+   "remove it from my list" from becoming "edit what you said to me": the body,
+   `from` and the timestamp are all outside it, so the maintainer's copy of the
+   conversation cannot be rewritten by the person reading it. */
+const ownerItem = items.slice(items.indexOf('allow update'));
+ok(/request\.auth\.uid == userId/.test(ownerItem)
+  && /affectedKeys\(\)\s*\n?\s*\.hasOnly\(\['hiddenForUser'\]\)/.test(ownerItem),
+  'a reader may take a message off their own list \u2014 and may touch NOTHING else ' +
+  'on it: not the body, not `from`, not the timestamp');
+ok(/request\.resource\.data\.hiddenForUser is bool/.test(ownerItem),
+  '\u2026and it is always a BOOLEAN, never a deleted field \u2014 restoring by deleting ' +
+  'the key would be refused, and "you can always put it back" would be false ' +
+  'exactly once');
+const ownerItemKeys = (ownerItem.slice(ownerItem.indexOf('hasOnly(['),
+  ownerItem.indexOf('])', ownerItem.indexOf('hasOnly([')))
+  .match(/'[^']+'/g) || []).map((q) => q.slice(1, -1));
+eq(ownerItemKeys, ['hiddenForUser'],
+  'the owner\u2019s branch allows exactly the one key the card writes there');
+
+/* REMOVING IS A HIDE, NOT A DELETE \u2014 the whole shape of the feature, and the
+   rules are where that is true rather than only in the copy. */
+ok(!/request\.auth\.uid == userId/.test(items.slice(items.indexOf('allow delete'))),
+  'a reader can never DELETE a message: removing is a hide, so the words stay ' +
+  'where they were said and the maintainer keeps the record');
+
+/* Scoped to the messages block, not the whole page: index.html is one very
+   large file and uses FieldValue elsewhere, so a page-wide search for it would
+   fail on code that has nothing to do with this card. Both end markers are
+   taken FORWARD from the render function — `window.acctOpenMessages` also
+   appears hundreds of KB earlier as the #lit-messages deep-link's opener, and
+   slicing on its first occurrence yields an EMPTY string that passes every
+   negative check by vacuity. Hence the length guard below. */
+const msgFrom = main.indexOf('function litMessagesRender');
+const msgSrc = main.slice(msgFrom, main.indexOf('window.acctOpenDefaults', msgFrom));
+ok(msgSrc.length > 500, 'the messages block is where this thinks it is');
+ok(/hiddenForUser: !!hide/.test(msgSrc) && !/FieldValue|deleteField/.test(msgSrc),
+  'the card writes the boolean the rules test for, and never a field deletion the ' +
+  'rules would refuse');
+ok(/hiddenForUser === true \? removed : kept/.test(main),
+  '\u2026and splits the thread into what is on the list and what has been taken off it');
+
+/* HIDING IS NEVER A ONE-WAY DOOR \u2014 the trap newsOverrides records. Filtered off
+   the card entirely there would be nothing left to press. */
+ok(/msg-removed/.test(main) && /Removed messages \(/.test(main) && /Restore/.test(main),
+  'HIDING IS NEVER A ONE-WAY DOOR: the removed messages sit in a collapsed panel ' +
+  'below the list, one click from Restore');
+ok(/\.msg-removed \{/.test(main),
+  '\u2026and that panel paints its own ground, so it names its own ink');
+
+/* A reader who removes everything still has a thread and must still be able to
+   answer in it \u2014 so the reply box is drawn OUTSIDE the list. */
+const cardSrc = main.slice(msgFrom,
+  main.indexOf('window.litMessagesSetHidden', msgFrom));
+ok(cardSrc.indexOf('msg-reply') > cardSrc.indexOf('msg-removed'),
+  'the reply box is drawn after the removed panel, outside the list: a reader who ' +
+  'has removed every message can still answer');
+ok(/id="litMsgBody"/.test(cardSrc.slice(cardSrc.indexOf('msg-reply'))),
+  '\u2026and it really is the reply box that sits there');
+
+/* Remove is keyed on the DOCUMENT id read off the snapshot, never on a position
+   in the list \u2014 a message arriving mid-read must not point a button at its
+   neighbour. And it goes through escAttr, NOT esc: it is a JS string inside a
+   double-quoted HTML attribute, which is the case escAttr's own comment in
+   index.html was written for, and esc() leaves an apostrophe alone. */
+ok(/m\.id = d\.id/.test(main),
+  'Remove is keyed on the message\u2019s own document id, taken from the snapshot ' +
+  'rather than from an index');
+ok(/escAttr\(String\(m\.id/.test(main) && !/onclick="litMessagesSetHidden\(this, \\'' \+ esc\(/.test(main),
+  '\u2026and that id is escAttr\u2019d into the onclick, never esc\u2019d \u2014 esc() does not ' +
+  'escape an apostrophe, which would break straight out of the JS string');
+
+/* The maintainer's copy is the RECORD, and their panel says what the other
+   person can still see. */
+ok(/m\.hiddenForUser === true/.test(fb) && /Removed from their list/.test(fb),
+  'the Feedback page still shows a removed message, faded and labelled as exactly ' +
+  'that: the maintainer can see what the other person no longer has');
+ok(/is-gone/.test(fb) && /\.msg-item\.is-gone/.test(fb) && /\.msg-item\.is-gone/.test(main),
+  '\u2026faded by a rule BOTH pages carry \u2014 they keep separate copies of this ' +
+  'stylesheet, so a fix to one alone is invisible on the other');
 ok(/request\.resource\.data\.body\.size\(\) <= 5000/.test(items)
   && /maxlength="5000"/.test(main) && /maxlength="5000"/.test(fb),
   'the body cap in the rules and the one both compose boxes enforce are the same number');
