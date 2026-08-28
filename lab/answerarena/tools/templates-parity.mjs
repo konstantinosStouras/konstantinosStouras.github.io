@@ -112,6 +112,8 @@ const FIXTURES = {
   // a winner tapped with the strength bar left where it started
   sliderAtZero: [...rep(15, (i) => ({ ...row('z' + i, 'T003', 0), chosen_model: 'frontier' })),
     ...rep(5, (i) => row('y' + i, 'T003', 2))],
+  // the same student answering one task twice (a session loaded twice)
+  duplicates: rep(10, (i) => row('u' + i, 'T001', 2)).flatMap((r) => [r, { ...r }]),
   // the wrong sheet, and nothing at all
   wrongSheet: rep(20, (i) => ({ ts: '2026-01-0' + (i % 9 + 1), event: 'open', who: 'a' + i })),
   empty: [],
