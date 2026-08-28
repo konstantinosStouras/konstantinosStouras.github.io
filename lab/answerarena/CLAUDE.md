@@ -604,152 +604,136 @@ Four sections:
    saved script from an older version can't shadow the current template (that was
    the "Python won't run" symptom — an old saved script erroring on new data).
 
-   The default templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) answer the study's
-   core question — *given a task (a user need) and two blind answers (Haiku 4.5 =
-   baseline, Opus 4.8 = frontier), do students **prefer a model or are they
-   indifferent**?* — and are **heavily commented line-by-line** so a non-coder can
-   read them. Both embed a `TASK_META` map (task_id → **complexity** Simple/Complex
-   + **domain**, the 30-task study list) and join it onto each row (a non-blank
-   exported `task_complexity`/`task_domain` overrides it). They then print, in
-   order: **(1) the 95%-confidence classification** (below); **(2) summary
-   statistics** per task, per domain and per task type
-   (mean/SD/n + Opus win-rate); **(3) the main hypothesis test** with Haiku as the
-   baseline (H0: mean graded preference = 0) two ways — task-level (each task = one
-   observation, so unequal response counts don't bias it) and response-level with
-   SEs **clustered on the student** — plus the decisive-choice binomial test;
-   **(4) a per-task recommendation** (one-sample t-test of each task → Opus / Haiku
-   / no clear preference, with p-values); **(5) by task type** and **(6) by domain**
-   using **task-level means so each task is weighted equally** (this is how the CIs
-   "account for unequal responses per task" — the random 15-of-30 subset per
-   student), each group tested vs baseline, a Welch Simple-vs-Complex test and a
-   one-way ANOVA across domains; **(7) regressions** of preference on complexity and
-   on domain (cluster-robust); **(8) the 95%-confident sets** (below).
+   The default templates (`DA_PY_TEMPLATE` / `DA_R_TEMPLATE`) answer **one
+   question and nothing else** (owner, 2026-08-28): *given the data collected,
+   for which specific task ids can we say with **95% confidence** that **Haiku**
+   is preferred, and for which **Opus**? Then the same at **99%**.* Four lists of
+   task ids, the numbers behind them, and one figure. Everything the previous
+   templates did beyond that — the `TASK_META` complexity/domain map, the
+   by-domain and by-task-type breakdowns, the cluster-robust regressions, the
+   TOST "indifferent" verdicts, the seven figures — was **deleted**, and the two
+   scripts are heavily commented line-by-line so a non-coder can read them.
 
-   **Section 1 — what we can say at 95% confidence** (the headline, printed first
-   because it is what the study is *for*). Every task, then every task type, then
-   every domain is placed in exactly one of four buckets, in the order
-   **1a Haiku preferred · 1b Opus preferred · 1c indifferent · 1d not decided yet**,
-   followed by **1e by task type** and **1f by domain**. The three claims are NOT
-   symmetric and each gets its own test (`decide`, shared by both languages, in
-   Python `st.t` / in R `qt`/`pt`, verified to agree to 3 dp on six synthetic
-   exports): a **direction** needs the two-sided t-test of the mean graded
-   preference vs 0 to clear `ALPHA` = 0.05 (equivalently, the 95% CI sits entirely
-   on one side of 0); **indifference is a positive claim** and needs an
-   **equivalence test** — TOST, two one-sided t-tests each at 5%, i.e. the 90% CI
-   inside `EQUIV_MARGIN` = ±0.5 scale points — because a merely non-significant
-   test is evidence of nothing; and what clears neither is **"not decided yet"**,
-   the *absence* of a finding rather than a finding of equality. A direction beats
-   equivalence when both fire, with the row flagged `small` / the group verdict
-   suffixed **"(small gap)"** — real but inside the indifference margin, i.e. not
-   worth paying for. The undecided table carries a `why` column (`n<2` vs "CI still
-   spans 0"), since those need different amounts of new data. **Group rows average
-   the TASK means** (equal task weights) and their SE pools only the *within*-task
-   sampling error — `Var = (1/k²)·Σ sd²/n`, Welch–Satterthwaite df (`group_estimate`)
-   — the same fixed-tasks reasoning as §2's delta-method CIs, which is why they are
-   informative where §§5–6's t-test *across* task means (also allowing task
-   sampling) is not; both are printed and the difference is stated. Constants
-   `CONF_LEVEL` / `ALPHA` / `EQUIV_MARGIN` sit at the top of each template and are
-   the one place to retune the confidence level or the margin — **keep the two
-   copies identical** (`templates-guard.mjs` checks it). **Every printed label is
-   built from `CONF_PCT`/`ALPHA_PCT`, derived from those numbers**, so the prose can
-   never claim a confidence the tests did not use; the guard also fails on a
-   hard-coded percentage in §1/§8. `CONF_LEVEL` governs **sections 1 and 8 only** —
-   sections 2–7 are the classical report and keep their own fixed 95% intervals and
-   p<0.05 thresholds, so at the default (0.95) the whole report agrees. Degenerate data follows the
-   existing conventions: all-ties → *indifferent* (proven, p_equiv = 0), a constant
-   non-zero task → decisive, n<2 → undecided; displayed intervals are clipped to the
-   bounded [−3, +3] scale (`clip3`, display only — verdicts come from p-values, so
-   clipping can never flip one).
+   **THE TEST IS THE EXACT SIGN TEST, AND WHICH TEST LEADS IS A FACT ABOUT THIS
+   APP, NOT A TASTE.** Per task, among the students who expressed a preference
+   (m of them, k for Opus), *p = the share of the 2^m possible splits at least
+   this lopsided*. A task is listed at confidence C when `p <= 1-C`, on the side
+   more students picked. Exact: no degrees of freedom, no normality, no CLT —
+   which matters at 10–30 answers on a bounded scale heaped with zeros.
 
-   **Section 8 — the confident sets** (printed last, per the owner). The bottom line
-   of §1 restated as three lists of task ids you can act on — **8a people prefer
-   Haiku · 8b people prefer Opus · 8c people are indifferent** — where "ground truth"
-   means the preference of the POPULATION the students are drawn from, which is what
-   a confidence interval is a claim about. It is a **recap at the same `CONF_LEVEL`,
-   not a second analysis** (it reuses §1's own `c99` table), so the two can never
-   disagree, and it prints ids rather than repeating §1a–c's tables. **The tasks that
-   reach no verdict are deliberately NOT listed** (only counted): no verdict is an
-   absence of evidence, not a third kind of answer, and printing them beside the
-   three sets invites reading them as a finding. Verified on every fixture that §8's
-   sets equal §1a/1b/1c's and are disjoint. There is no §8 figure: the picture of the
-   same classification is Figure 1.
+   It uses the DIRECTION and not the strength because **`pick(side)` in
+   `arena-app.js` seeds the 7-point bar at ±2 the moment a card is tapped**: a
+   student who taps and moves on exports a magnitude the *screen* chose, and the
+   export records exactly that as `preference_source = "card"` (vs `"bar"`). The
+   side chosen is always the student's own act, and one student's "3" is not
+   another's, so counting sides uses the part of each answer the student really
+   produced. That was the argument that overturned an earlier draft built on the
+   magnitude-weighted **sign-flip** test — keep it in mind before "improving" the
+   headline back to something that weighs magnitudes.
 
-   **Seven figures**, in this order (the harvest order the
-   Insights section relies on): **(1)** the verdict per task — bar = the task's
-   mean, whisker = its **`CONF_LEVEL` CI**, colour = the verdict (blue Haiku / orange Opus /
-   **green = proven indifferent** / pale grey = not decided), with the ±margin
-   indifference zone shaded (Python) or dotted (R); **(2)** responses-per-task
-   (sample balance);
-   **(3)** the preference distribution + outcome shares; **(4)** per-task means ±
-   95% CI (whiskers widen where fewer students responded); **(5)** *"what each
-   task's users prefer"* — a ranked bar chart (Haiku → indifferent → Opus) whose
-   **bar length is the task's mean preference** and whose **colour is the
-   statistical verdict** (blue Haiku / orange Opus when the per-task t-test is
-   significant, **grey = no clear preference**, i.e. its CI still includes 0 — so a
-   long grey bar means "leaned one way on average but not distinguishable from
-   indifference"); **(6)** the tasks classifiable **with 95% confidence** into
-   over- / indifferent / under-provisioning (an **exact binomial test** on the
-   top-two choice counts — under H0 the leading category and the runner-up are
-   equally likely — keeps only tasks where the leader significantly beats the
-   runner-up, hence the other two; exact, so small/lopsided tasks are not
-   over-called the way the earlier z-test was, e.g. 5-0-0 came out "certain";
-   empty → a "not enough data" note; note this is the **choice-count** view at
-   95%, while Figure 1 is the **graded-preference** view (mean + equivalence) — they answer
-   different questions and may disagree);
-   **(7)** by-domain / by-type means ± 95% CI. A plain-language **`INSIGHTS`** block
-   ends each script and now also contains a **`## Figure N — …` heading + guide for
-   every figure**, so each plot is explained in words next to it (§4).
+   The strength is **not** discarded: the SAME engine (`signflip_p`, one
+   convolution over the sign distribution) is run a second time weighted by the
+   magnitudes, printed for every task as **`p_str`**, and **every disagreement
+   between the two readings is named on screen** — both directions of it (a task
+   listed on the split whose strengths point the other way, and a task the
+   strengths would list that the split does not). A run where over half the
+   graded responses are `card`-sourced says so before the lists.
 
-   The Python version uses numpy / pandas / scipy; the R version computes the
-   **same numbers** with base R (`t.test`, `lm`, `anova`, `tapply`, `binom.test`);
-   they are verified to agree — the Section-1 verdicts, means, CIs and both
-   p-values were checked task-by-task and group-by-group across six synthetic
-   exports (full 60-task, built-in-30-task, all-ties, n=1-per-task, single-student
-   and narrow-spread), and `node lab/answerarena/tools/templates-guard.mjs` keeps the
-   two in step offline (section numbers 1..N in the same order in both, figure guides
-   contiguous 1..N with identical titles and no reference to a figure nobody draws,
-   identical `CONF_LEVEL`/`ALPHA`/`EQUIV_MARGIN`, §8's three buckets with no fourth,
-   and no hard-coded confidence percentage in §1/§8). Numerical
-   agreement itself needs Pyodide/CPython + WebR/Rscript, so it stays a manual
-   step. **Neither needs statsmodels** — the cluster-robust
-   vcov (CR1, else HC3) is done by hand (`ols_robust` in Python, the same algebra
-   in R), matching to 4 dp, with **G−1 degrees of freedom when clustered** (the
-   cluster-robust standard; n−k for HC3) and the response-level CI using the same
-   t critical value; statsmodels was dropped because it made Python fail to
-   start on some Pyodide builds, so the auto-loaded packages are now just
-   numpy/pandas/scipy/matplotlib and any missing one is non-fatal
-   (`daEnsurePyPackages`). Note: R rejects 3-digit hex colours (`#888`), so the
-   templates use 6-digit (`#888888`). Both are defensive about missing columns /
-   small n (verified by running both against the same synthetic exports): a
-   table without the preference/choice columns gets a clear "pick the Responses
-   table" message; an all-blank `task_complexity`/`task_domain` column, a
-   zero-variance task, and a no-graded-data load all degrade gracefully
-   instead of crashing; a domain with only 2 tasks has a very wide CI, clipped
-   to the bounded [-3, +3] preference scale for display. **Constant-data
-   convention (both languages, R's `t.test` errors on it):** every value equal
-   to the null (e.g. all ties) → t=0, **p=1** — reported as *no clear
-   preference*, NOT "too little data"; every value equal to some other constant
-   → t=±Inf, p=0 (scipy's own convention). The same rule covers a zero-SE
-   coefficient in `ols_robust` and a zero-SE estimate in `decide` (where it also
-   settles the equivalence leg: the mean is inside, or outside, the margin with
-   certainty — which is why an all-ties task is *proven indifferent* in Section 1
-   while Section 4 still calls it "no clear preference", the older and weaker
-   phrasing of the same fact). Other alignment rules shared by the charts and
-   both templates: a **blank/missing `submitted`** counts as submitted (only
-   real drafts are dropped), `task_id`/`chosen_model` are **trimmed and
-   NA-safe** (R maps NA keys and NA cluster ids to `""` the way pandas reads
-   those cells — otherwise `split()`/`as.factor()` silently drop the rows and
-   the clustered SEs go NA), rows with
-   an unrecognised `chosen_model` are excluded from the choice counts (and from
-   the provisioning charts entirely), and the tie share is reported over the
-   **classified** answers. The R tables store **unrounded** statistics and round
-   only when printing (2/3/4 dp like Python's display) — rounding p to 4 dp
-   before the p<0.05 filters could flip a borderline verdict vs Python. When the
-   graded rows hold a single student, the response-level test/regressions are
-   labelled **"(HC3 robust; no repeated students)"** instead of claiming
-   clustering. Section 1's Load warns when a ticked session also appears in an
-   imported workbook (rows would stack twice and every CI would silently
-   shrink — there is deliberately no dedup).
+   **Both verdicts read their DIRECTION from their own statistic** — the headline
+   from the vote margin, the strength reading from the score total. That is not
+   pedantry: with 17 mild `+1`s and 6 emphatic `-3`s the margin is +11 while the
+   total is −1, so a single shared direction would publish the wrong model. The
+   templates guard pins it in both languages.
+
+   **Degenerate cases need no conventions at all**, which is most of why this
+   test was chosen. Every response identical → `p = 2^(1-m)`, a real number, not
+   the old `0/0` patched to `p=0`; two responses that agree → `p = 0.5`, so no
+   `MIN_N` floor is needed; every response a tie → `p = 1`. The old
+   constant-data/zero-variance conventions are gone with the t-test that needed
+   them. What IS reported is **attainability**: since the smallest possible p is
+   `2^(1-m)`, a task needs **≥6** expressed preferences before *any* split could
+   reach 95% and **≥8** for 99%, and tasks below that are named as a sample-size
+   fact rather than a finding (`min_responses_for`).
+
+   **Multiplicity is a COLUMN, never a filter.** Each task carries a
+   Benjamini-Hochberg adjusted `q_bh` (FDR — the right currency for a list) and
+   the listed tasks that do not survive it are named, but the **headline lists
+   stay per task**, because that is the question the owner asked. There is
+   deliberately **no second set of lists**: one set, plus a column and a sentence.
+
+   **The 99% lists are subsets of the 95% lists** by construction (one p per
+   task, two thresholds), and the script *prints the check* rather than assuming
+   it, plus which tasks the stricter level costs.
+
+   **Data hygiene the scripts do themselves**, each of which was a real
+   Python-vs-R divergence before it was fixed: every column is read as **text**
+   and coerced by hand (`dtype=str` / `colClasses="character"`) — left alone,
+   pandas infers types and R does not, so `"0012"` and `"12"` merge into one
+   student in Python only, and a `TRUE`/`FALSE` submitted column becomes a
+   boolean whose text filter drops **every row** and reports it as "nothing
+   reached significance"; `submitted` accepts `yes`/blank/`true`/`t`/`y`/`1` and
+   the **count of excluded drafts is printed**; a score is used only when it is a
+   **whole number in −3..+3** (a re-scaled `1.5` would otherwise be silently
+   truncated by *both* languages) and rejects are counted; R sorts with
+   `method = "radix"` so its locale can never order task ids differently from
+   Python; both pin their table width so R does not wrap a wide table into a
+   headerless continuation block. Duplicate `(account_id, task_id)` rows and
+   responses that name a winner yet grade the two as equal are **warned about,
+   never silently repaired** — which of the two is right is not something the
+   script can know.
+
+   A row that recorded only a **choice** contributes its direction with a
+   magnitude of 1, so a table carrying one of the two columns but not the other
+   is still answerable; on the app's own Responses table every row is graded, so
+   this never fires.
+
+   **The figure** (exactly one, two panels): left, one bar per task = its mean
+   graded preference, coloured by the 95% verdict; right, the same tasks with
+   each task's exact `p` on a **log axis** against the 0.05 and 0.01 lines — *a
+   task is listed exactly when its dot sits left of the line* — with a hollow dot
+   for `p_str` beside it. A plain-language **`INSIGHTS`** block ends each script
+   and carries the `## Figure 1 - …` heading the Insights panel drops the image
+   under (§4).
+
+   The Python version uses numpy / pandas / matplotlib and **needs no statistics
+   library at all** (the exact test is a convolution written out by hand); scipy
+   stays in `DA_PY_PACKAGES` for scripts the user writes. The R version is base R
+   only. The two were verified to agree by **running both** (CPython + Rscript)
+   over **19 synthetic exports** — realistic, edge cases, drafts-only,
+   choice-only, graded-only, no-`submitted`, junk `chosen_model`, the wrong
+   sheet, one student, an empty table, leading-zero ids, a `TRUE`/`FALSE`
+   submitted column, out-of-range scores, a slider left at 0, and the
+   margin-vs-total crossing case — comparing the four task-id lists, every table
+   cell and every `INSIGHTS` bullet; and the engine itself was checked against
+   **brute-force enumeration of all 2^m sign patterns** (261 samples × both
+   weightings) and found **bitwise identical between the two languages** on 522
+   cases. **`node lab/answerarena/tools/templates-parity.mjs` re-runs all of
+   that** — it extracts both templates from `admin.js` exactly as the page hands
+   them to Pyodide/WebR, drives them over those fixtures, compares the lists,
+   every table cell and every `INSIGHTS` bullet, and brute-forces the engine;
+   it **skips itself** with a message when `python3` (numpy/pandas/matplotlib)
+   or `Rscript` is missing, which is the normal case in this repo's CI, exactly
+   as `page-test.mjs` does for Playwright. Note it writes the fixture to
+   `/tmp/data.csv`, because that is the absolute path WebR mounts the table at
+   and the R template reads. `node lab/answerarena/tools/templates-guard.mjs`
+   keeps them in step offline (the section titles and their order, figure guides contiguous 1..N
+   with identical titles, identical `LEVELS`, **no hard-coded confidence
+   percentage anywhere a label is printed**, one engine used twice, which test is
+   the headline, which statistic each verdict takes its direction from, that no
+   list is ever built from the adjusted column, and that both scripts still say
+   an unlisted task is not an equal task). That guard is **mutation-tested** —
+   five deliberate regressions were introduced and each was caught, and the
+   parity harness was mutation-tested the same way (a wrong convolution shift in
+   R and a strict-inequality tail in Python each raised 20+ failures).
+
+   **A task that is NOT listed is NOT a task where the models are equal**, and
+   both scripts say so in three places. Proving equivalence is a different claim
+   needing a different test (the deleted TOST); the scripts deliberately do not
+   make it.
+
+   Note: R rejects 3-digit hex colours (`#888`), so the templates use 6-digit
+   (`#888888`). `DA_TPL_VERSION` was bumped to `2026-08-28-tasklists`, which
+   drops any saved script from the previous templates.
 
 4. **Insights gained** (`buildDaSection4`). A readable write-up of the last run
    **and the home of every plot**: `daParseInsights()` extracts the script's
