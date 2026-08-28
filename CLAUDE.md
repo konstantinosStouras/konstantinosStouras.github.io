@@ -2266,15 +2266,76 @@ account features — the roster is identity, and a site that collects it and say
 so nowhere is wrong whatever its rules allow. (The sibling discloses the same
 pair in its Privacy Policy.)
 
+### A reader can take a message off their own list
+
+Owner, 2026-08-27, having asked for it on the sibling first: any past message
+may be removed from the reader's list. Two rules already written down here meet
+and settle the whole shape between them:
+
+* **a thread whose history either party can rewrite is not a record of
+  anything** — the sentence the items rule was built around. So this cannot be
+  a delete. The words stay where they were said, the maintainer's copy is
+  whole, and what changes is ONE reader's own list, which is theirs to tidy;
+* **hiding is never a one-way door** (`newsOverrides`, and `rowOverrides` on
+  the sibling). Filter the message off the card entirely and there is nothing
+  left to press to bring it back — so the removed ones sit in a **collapsed
+  panel below the list**, one click from Restore, and the list stays clean.
+
+**One boolean, `hiddenForUser`, and the owner may touch nothing else on a
+message.** `diff(resource.data).affectedKeys().hasOnly(['hiddenForUser'])` is
+what keeps "remove it from my list" from becoming "edit what you said to me":
+the body, `from` and the timestamp are all outside it, so a `set()` that
+dropped them fails the same test.
+
+**It is always written as a boolean and the field is never deleted.** The rule
+tests `hiddenForUser is bool`, so restoring with a field deletion would be
+refused — and "you can always put it back" would be false exactly once.
+
+**The document id goes through `escAttr`, never `esc`.** The Remove button is
+an inline `onclick`, so the id is a JS string inside a double-quoted HTML
+attribute — precisely the case `escAttr`'s own comment in `index.html` was
+written for. `esc()` does not escape an apostrophe and would break straight out
+of the string. A Firestore auto-id cannot carry one; the rule does not depend
+on that, and the selftest pins it.
+
+**The Feedback page still shows a removed message**, faded at 0.55 and labelled
+*Removed from their list*. Not a leak — the maintainer wrote or received it —
+but so that a maintainer quoting back a message the other person can no longer
+see is not talking past them. **That fade is a rule BOTH pages carry**:
+`index.html` and `feedback/index.html` keep separate copies of this stylesheet,
+so a fix to one alone is invisible on the other, and the selftest pins both.
+
+**The reply box is drawn OUTSIDE the list**, after the removed panel. A reader
+who removes every message still has a thread and must still be able to answer
+in it; the empty list then says where the messages went, which is a different
+state from the "you have no messages" one.
+
+**The badge does not move.** It counts what is UNREAD, not what the card lists,
+so removing a message is not a way to clear it.
+
+Disclosed on the About page beside the rest of the account features, and
+announced in `lit/changelog.json`.
+
 **Inert until the rules are redeployed** (nothing in CI does it):
 `cd lit && firebase deploy --only firestore:rules --project lit-paper-browser`.
 
 Tests: **`node lit/_scraper/users-selftest.mjs`** (offline; the rules against the
-three pages, the pinned address, the write-once `first`, the owner's two narrowed
-updates, CSV injection, and the wiring). It also closes a pinning gap it would
-otherwise have widened: `lit/lit-news.js`'s copy of the maintainer's address was
-pinned by `news-selftest.mjs`, but **`lit/feedback/index.html`'s copy was pinned
-by nothing** — and it now gates three admin sections rather than two.
+three pages, the pinned address, the write-once `first`, the owner's narrowed
+updates — including the one key its READER may change — that a reader can hide a
+message and never delete one, the `escAttr` rule above, CSV injection, and the
+wiring). It also closes a pinning gap it would otherwise have widened:
+`lit/lit-news.js`'s copy of the maintainer's address was pinned by
+`news-selftest.mjs`, but **`lit/feedback/index.html`'s copy was pinned by
+nothing** — and it now gates three admin sections rather than two.
+
+**A slice taken on the wrong marker passes every negative check by vacuity**,
+and this section nearly shipped one: the guard scoping "the card never writes a
+field deletion" to the messages block ended it at `window.acctOpenMessages`,
+which also appears hundreds of KB earlier as the `#lit-messages` deep-link's
+opener. The slice came back EMPTY and the check passed on nothing. Both markers
+are taken FORWARD from `function litMessagesRender` now, and a
+`msgSrc.length > 500` guard fails loudly if either moves. **Any new source-slice
+guard in this file needs that length assertion.**
 
 ### Citation graph — the references a paper cites that are IN the catalog
 For every listed paper, the pipeline extracts the references it **cites that

@@ -243,6 +243,9 @@
   .msg-who { font-weight: 700; font-size: 13px; }
   .msg-when { float: right; font-size: 12px; color: var(--text-muted); }
   .msg-item p { margin: 6px 0 0; font-size: 15px; line-height: 1.55; }
+  /* A message the reader has taken off their own list. Faded, never hidden:
+     this copy is the record, and removing is a hide rather than a delete. */
+  .msg-item.is-gone { opacity: 0.55; }
   @media (max-width: 480px) {
     .ur-count { margin-right: 0; width: 100%; }
     .ur-table { font-size: 13px; }
@@ -1514,10 +1517,19 @@
           '<ul class="msg-thread">' + snap.docs.map(function (d) {
             var m = d.data() || {};
             var mine = m.from === 'admin';
-            return '<li class="msg-item ' + (mine ? 'is-me' : 'is-them') + '">' +
+            /* A message the reader has taken off THEIR list is still here, and
+               is shown as exactly that. This copy is the record — that is the
+               whole reason removing is a hide — and a maintainer quoting back
+               a message the other person can no longer see is talking past
+               them. */
+            var gone = m.hiddenForUser === true;
+            return '<li class="msg-item ' + (mine ? 'is-me' : 'is-them') +
+              (gone ? ' is-gone' : '') + '">' +
               '<span class="msg-who">' + (mine ? 'You' : esc(who)) + '</span>' +
               '<span class="msg-when">' + esc(urDay(m.t)) + '</span>' +
-              '<p>' + esc(String(m.body || '')).replace(/\n/g, '<br>') + '</p></li>';
+              '<p>' + esc(String(m.body || '')).replace(/\n/g, '<br>') + '</p>' +
+              (gone ? '<p class="fb-when">Removed from their list &mdash; they can ' +
+                'restore it; you still have it.</p>' : '') + '</li>';
           }).join('') + '</ul>' +
           '<p><button type="button" class="fb-act" id="urThreadClose">Close</button> ' +
           '<button type="button" class="fb-act reopen" id="urThreadSeen">Mark answered</button> ' +
