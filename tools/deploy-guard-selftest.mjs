@@ -118,6 +118,34 @@ for (const unit of found) {
     ok(pre.some((c) => String(c).includes(hookRel)),
       `${rel}: its ${section} deploy runs the guard first`);
   }
+
+  /* THE RUNTIME THE DEPLOY WOULD ACTUALLY USE. The CLI resolves it as
+     `runtimeFromConfig || engines.node` (getRuntimeChoice in firebase-tools)
+     — a `runtime` field in firebase.json wins OUTRIGHT over the package's own
+     engines. That is how lit's config kept "nodejs20" straight through the
+     2026-08-30 engines 20 -> 22 upgrade: the next deploy would have printed
+     "Deploy complete!" and shipped Node 20 with engines reading 22, and only
+     `firebase functions:list` would ever have said so. Two files stating one
+     fact are pinned against each other here, both ways. */
+  if (cfg.functions && typeof cfg.functions === 'object') {
+    const srcDir = path.join(unit, cfg.functions.source || 'functions');
+    const pkgPath = path.join(srcDir, 'package.json');
+    ok(existsSync(pkgPath), `${rel}: its functions source carries a package.json`);
+    if (existsSync(pkgPath)) {
+      let engines = '';
+      try {
+        engines = (JSON.parse(readFileSync(pkgPath, 'utf8')).engines || {}).node || '';
+      } catch { /* reported below */ }
+      ok(!!engines, `${rel}: its functions package.json declares engines.node`);
+      const pinned = cfg.functions.runtime || '';
+      if (pinned && engines) {
+        ok(pinned === `nodejs${engines}`,
+          `${rel}: firebase.json pins runtime ${pinned} while its package.json` +
+          ` says engines.node ${engines} — the config field overrides engines` +
+          ` outright, so the deploy would ship ${pinned} whatever the package says`);
+      }
+    }
+  }
 }
 
 if (fails.length) {
