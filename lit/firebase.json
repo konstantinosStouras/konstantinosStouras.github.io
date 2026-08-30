@@ -6,6 +6,6 @@
   "functions": {
     "predeploy": ["node check-project.mjs"],
     "source": "_functions/functions",
-    "runtime": "nodejs20"
+    "runtime": "nodejs22"
   }
 }

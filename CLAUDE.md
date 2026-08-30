@@ -129,6 +129,18 @@ still naming it deploys at all — the deadline the sibling repo answered on
 see a runtime change, so a runtime-only move prints "Deploy complete!" over
 functions still on the old one.
 
+**A `runtime` field in a folder's `firebase.json` OVERRIDES `engines.node`
+OUTRIGHT** — the CLI's resolution is `runtimeFromConfig || engines`
+(`getRuntimeChoice` in firebase-tools), so where both are declared the config
+field decides alone and the engines move above ships nothing. That is not
+hypothetical either: `lit/firebase.json` carried `"runtime": "nodejs20"`
+through the engines upgrade, so lit's next deploy would have printed "Deploy
+complete!" and gone out on Node 20 with `engines` reading 22 — caught only
+because the rule above says to READ THE RUNTIME BACK. It is `nodejs22` now
+(2026-08-30), and `tools/deploy-guard-selftest.mjs` pins every declared
+`runtime` against its own package's `engines.node`, so the two files stating
+this one fact can never again disagree silently.
+
 If a deploy from some OTHER machine (no variable set) ever hits the loopback
 timeout, or an old checkout here needs deploying under an SDK below 6.4:
 `set FIREBASE_FUNCTIONS_DISCOVERY_OUTPUT_PATH=` clears the variable for that
