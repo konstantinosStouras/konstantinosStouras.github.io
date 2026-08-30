@@ -17,7 +17,15 @@
  * admin@admin.com account.
  */
 
-const functions = require('firebase-functions').region('europe-west1');
+/* firebase-functions 6 made the ROOT import the v2 API — `require('firebase-functions')`
+   no longer has .region(), so the old one-liner throws at load. The v1 API these two
+   callables are written against lives at 'firebase-functions/v1', and HttpsError moved
+   with it: the region() BUILDER no longer proxies it (builder.https has onCall/onRequest
+   only), so it is taken from the namespace — a swap that loads fine and then throws at
+   the first unauthenticated call is exactly the trap this comment is here to stop. */
+const fv1 = require('firebase-functions/v1');
+const functions = fv1.region('europe-west1');
+const { HttpsError } = fv1.https;
 const admin = require('firebase-admin');
 
 admin.initializeApp();
@@ -27,7 +35,7 @@ const FieldValue = admin.firestore.FieldValue;
 
 function requireAuth(context) {
   if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'You must be signed in.');
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
   return context.auth;
 }
@@ -44,7 +52,7 @@ exports.registerParticipant = functions.https.onCall(async (data, context) => {
   const participantId = (data && data.participantId ? String(data.participantId) : '').trim();
   const answers = (data && data.answers && typeof data.answers === 'object') ? data.answers : {};
   if (!participantId) {
-    throw new functions.https.HttpsError('invalid-argument', 'A Participant ID is required.');
+    throw new HttpsError('invalid-argument', 'A Participant ID is required.');
   }
 
   const pRef = db.collection('participants').doc(uid);
