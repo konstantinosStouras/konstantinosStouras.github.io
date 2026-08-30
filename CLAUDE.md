@@ -87,6 +87,54 @@ deployable section is left un-hooked (a guard on the rules alone still lets a
 Functions deploy land in the wrong project), when the guard hardcodes a project
 id instead of reading `.firebaserc`, or when two folders claim one project.
 
+### The deploy machine forces FILE-BASED discovery — `firebase-functions` >= 6.4
+
+The owner's Windows machine carries `FIREBASE_FUNCTIONS_DISCOVERY_OUTPUT_PATH=true`
+**machine-wide** (`setx`, 2026-08-30): its firewall refuses the CLI's loopback
+socket, so every functions deploy there died at "Loading and analyzing source
+code" with `Timeout after 10000.` — the sibling repo's setup page
+(`OperationsAcademia.github.io/_SETUP-INSTANT-PUBLISH.md`) holds the full
+diagnosis. The variable routes discovery through a manifest FILE instead of a
+port, and it reaches every Firebase project deployed from that machine — the
+six here included.
+
+**Only `firebase-functions` >= 6.4.0 honours it** (measured: 6.3.2 has no
+`FUNCTIONS_MANIFEST_OUTPUT_PATH` handling, 6.4.0 does). An older SDK ignores
+the variable, serves a port nothing will read, and the deploy dies with
+`Timeout after 10000ms` — reading exactly like slow user code when it is a
+VERSION. So every functions package in this repository now names **^6.6.0**:
+
+* `_portfoliofit-firebase/functions` and `_portfoliofit-lab-firebase/functions`
+  came up from ^4.5.0, which is a CODE change, not just a number —
+  firebase-functions 6 made the root import the v2 API, so
+  `require('firebase-functions').region(...)` throws at load; the v1 API these
+  two callables use lives at `firebase-functions/v1`, and `HttpsError` moved
+  with it (the region() builder no longer proxies it — a bare import swap
+  loads fine and then throws at the first unauthenticated call). Both were
+  validated by loading under Node 22 AND by running the file-route discovery
+  itself: both endpoints emit as `gcfv1, europe-west1`, the same platform and
+  region as deployed, so the next deploy updates in place.
+* `lit/_functions/functions` came up from ^6.1.0 — same major, no code change;
+  it has no lockfile, so the floor is what guarantees a fresh install lands
+  above 6.4. (search-v2 and ideasearchlab were already locked to 6.6.0.)
+
+The same three packages moved `engines.node` **20 -> 22** in the same change:
+Google decommissions the Node 20 runtime on **2026-10-30**, after which nothing
+still naming it deploys at all — the deadline the sibling repo answered on
+2026-08-30. Each takes effect at that project's next
+`firebase deploy --only functions --project <its project>`; run
+`npm install` in the functions folder first, and **verify the runtime with
+`firebase functions:list`** rather than reading the deploy log — the CLI's
+"Skipped (No changes detected)" hash covers source + env + secrets and CANNOT
+see a runtime change, so a runtime-only move prints "Deploy complete!" over
+functions still on the old one.
+
+If a deploy from some OTHER machine (no variable set) ever hits the loopback
+timeout, or an old checkout here needs deploying under an SDK below 6.4:
+`set FIREBASE_FUNCTIONS_DISCOVERY_OUTPUT_PATH=` clears the variable for that
+window only — an empty value is falsy, so that one deploy takes the port route
+while the machine-wide setting stays.
+
 ## Link previews — the card people see before they click
 
 The owner pasted `/lit/` and `operationsacademia.org` into one WhatsApp
