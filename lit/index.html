@@ -5107,7 +5107,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
 <!-- ── E-mail alerts modal ────────────────────────────────────────────────────
      Registered users can subscribe to an e-mail when new papers matching a set
      of filters (journal types, journals, authors, title/abstract/affiliation
-     terms, years, pre-prints) are added to the database. Criteria are pre-filled
+     terms, years, pre-prints, and — when MS/ISR/MkSc are among the journal
+     chips — accepting editors, areas and senior/associate editors, through the
+     same collapsed pickers as the Default-filters modal) are added to the
+     database. Criteria are pre-filled
      from the page's current search filters and are editable here. The body is
      rendered by JS (litAlertsRender) since it depends on sign-in state and the
      user's saved alerts. Delivery is handled by the alert mailer described in
@@ -5133,7 +5136,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     <button class="acct-modal-x" onclick="litAlertsClose()" aria-label="Close">×</button>
     <div class="acct-modal-head">
       <h2>E-mail alerts</h2>
-      <p>Get an e-mail when new papers matching your filters are added to The Lit — or about any new paper, or about new features and updates to the site. Alerts are private to your account; sent from and to your own e-mail (or any address you choose), at the frequency you choose.</p>
+      <p>Get an e-mail when new papers matching your filters are added to The Lit — or about any new paper, or about new features and updates to the site. Every search filter on the page is available here, including accepting editors and areas (Management Science) and senior/associate editors (ISR, Marketing Science) once their journal is among your journal chips. Alerts are private to your account; sent from and to your own e-mail (or any address you choose), at the frequency you choose.</p>
     </div>
     <div class="alerts-body" id="litAlertsBody"></div>
   </div>
@@ -7560,7 +7563,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.litAlertRemove = function (key, v) {
     if (!alertDraft) return;
     alertDraft[key] = (alertDraft[key] || []).filter(function (x) { return x !== v; });
-    renderAlertChips(key); renderAlertPreview();
+    renderAlertChips(key);
+    // A journal chip reveals/hides editorial pickers; a dimension chip changes
+    // its picker's ticks and "N chosen" count — re-render the section for both.
+    if (key === 'journal' || ED_DIM_KEYS.indexOf(key) >= 0) renderAlertEditorial();
+    renderAlertPreview();
   };
   window.litAlertToggleType = function (t) {
     var i = (alertDraft.jtype || []).indexOf(t);
@@ -7580,7 +7587,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var key = journalKeyByLabel(inp.value);
     if (!key) { inp.style.borderColor = 'var(--red)'; return; }
     inp.style.borderColor = '';
-    if (alertDraft.journal.indexOf(key) < 0) { alertDraft.journal.push(key); renderAlertChips('journal'); renderAlertPreview(); }
+    if (alertDraft.journal.indexOf(key) < 0) {
+      alertDraft.journal.push(key); renderAlertChips('journal');
+      renderAlertEditorial();   // adding MS/ISR/MkSc reveals its editorial pickers
+      renderAlertPreview();
+    }
     inp.value = ''; inp.focus();
   };
   window.litAlertSetPreprint = function (on) { if (alertDraft) alertDraft.preprintOnly = !!on; renderAlertPreview(); };
@@ -7589,16 +7600,17 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // "Any new paper": hides the paper-filter editor (criteria become moot), so
   // re-render the whole form; readAlertForm first so name/frequency/recipient survive.
   window.litAlertToggleAll = function (on) { if (!alertDraft) return; alertDraft.allPapers = !!on; readAlertForm(); litAlertsRenderForm(); };
-  window.litAlertReload = function () { readAlertForm(); alertDraft = captureCurrentFilters(); litAlertsRenderForm(); };
+  window.litAlertReload = function () { readAlertForm(); alertDraft = captureCurrentFilters(); alertEdOpen = {}; litAlertsRenderForm(); };
   window.litAlertCancelEdit = function () {
     alertEditId = null; alertForm = { name: '', recipient: (state.user && state.user.email) || '', freq: 'weekly' };
-    alertDraft = captureCurrentFilters(); litAlertsRenderForm();
+    alertDraft = captureCurrentFilters(); alertEdOpen = {}; litAlertsRenderForm();
   };
   window.litAlertEdit = function (id) {
     var a = state.alerts[id]; if (!a) return;
     alertEditId = id;
     alertForm = { name: a.name || '', recipient: a.recipient || (state.user && state.user.email) || '', freq: a.frequency || 'weekly' };
     alertDraft = fromCriteria(a.criteria);
+    alertEdOpen = {};   // fresh draft → dims with values re-expand in the render
     litAlertsRenderForm();
     var ov = document.getElementById('litAlertsOverlay'); if (ov) ov.scrollTop = 0;
   };
@@ -7633,7 +7645,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var p = editing ? alertsCol().doc(alertEditId).set(payload, { merge: true })
                     : alertsCol().add(Object.assign({ createdAt: serverTime() }, payload));
     p.then(function () {
-      alertEditId = null; alertDraft = emptyCriteria();
+      alertEditId = null; alertDraft = emptyCriteria(); alertEdOpen = {};
       alertForm = { name: '', recipient: recipient, freq: alertForm.freq || 'weekly' };
       litAlertsRenderForm();
       var s = document.getElementById('litAlertSaveStatus');
@@ -7677,6 +7689,117 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '<button type="button" class="alert-add-btn" onclick="litAlertAddText(\'' + key + '\',\'litAlertInput-' + key + '\')">Add</button></div>' +
       '<div class="alert-chips" id="litAlertChips-' + key + '"></div></div>';
   }
+
+  // ── Editorial criteria (Accepting Editor / Area / Senior & Associate Editor) ──
+  // The same collapsed, load-on-demand pickers as the Default-filters modal
+  // (renderPrefEditorial), driven by the alert draft's own journal chips:
+  // adding Management Science reveals Accepting Editor + Area, ISR reveals
+  // SE + AE, Marketing Science reveals SE — the main filter bar's msInScope
+  // gating, through the shared edDim* helpers. Values come from the loaded,
+  // normalized papers (edDimValues), so a saved criterion is exactly what the
+  // mailer's vendored normalizer computes from a fresh row (keep in sync).
+  var alertEdOpen = {};                                    // per-dim expanded state
+  function alertEdHas(k) { return !!(alertDraft && (alertDraft.journal || []).indexOf(k) >= 0); }
+  function alertEdDims() { return alertDraft ? edDimsFor(alertEdHas) : []; }
+  function alertEdSourceKeys(dim) { return edDimSourceKeys(dim, alertEdHas); }
+  var ALERT_ED_HINT = {
+    editor: 'Management Science', area: 'Management Science',
+    se: 'Information Systems Research or Marketing Science', ae: 'Information Systems Research'
+  };
+  window.litAlertEdOpen = function (dim) { alertEdOpen[dim] = true; renderAlertEditorial(); };
+  function alertEdSearchVal(dim) {
+    var i = document.getElementById('litAlertEdSearch-' + dim);
+    return i ? i.value : '';
+  }
+  window.litAlertEdSearch = function (dim, q) { renderAlertEdList(dim, q); };
+  window.litAlertEdToggle = function (dim, val) {
+    if (!alertDraft) return;
+    var list = alertDraft[dim] || (alertDraft[dim] = []);
+    var i = list.indexOf(val);
+    if (i >= 0) list.splice(i, 1); else list.push(val);
+    renderAlertEdList(dim, alertEdSearchVal(dim));
+    renderAlertChips(dim);
+    // Refresh the "N chosen" count on the dimension head without collapsing it.
+    var c = document.getElementById('litAlertEdCount-' + dim);
+    if (c) c.textContent = list.length ? '(' + list.length + ' chosen)' : '';
+    renderAlertPreview();
+  };
+  function renderAlertEdList(dim, query) {
+    var box = document.getElementById('litAlertEd-' + dim); if (!box) return;
+    var keys = alertEdSourceKeys(dim);
+    if (!edDimLoaded(keys)) { box.innerHTML = '<div class="pref-empty" style="padding:8px">Loading…</div>'; return; }
+    var counts = edDimValues(dim, keys);
+    var chosen = (alertDraft && alertDraft[dim]) || [];
+    var vals = Object.keys(counts).sort();
+    var q = (query || '').trim().toLowerCase();
+    if (q) vals = vals.filter(function (v) { return v.toLowerCase().indexOf(q) >= 0; });
+    if (!vals.length) { box.innerHTML = '<div class="pref-empty" style="padding:8px">' + (q ? 'No matches.' : 'None available.') + '</div>'; return; }
+    // Chosen pinned on top (same pattern as the Default-filters lists).
+    vals = vals.filter(function (v) { return chosen.indexOf(v) >= 0; })
+      .concat(vals.filter(function (v) { return chosen.indexOf(v) < 0; }));
+    box.innerHTML = vals.map(function (v) {
+      var on = chosen.indexOf(v) >= 0;
+      return '<label class="pref-jrow"><input type="checkbox"' + (on ? ' checked' : '') +
+        ' onchange="litAlertEdToggle(\'' + dim + '\',\'' + escAttr(v) + '\')"> ' + esc(v) +
+        ' <span style="opacity:.45">(' + counts[v] + ')</span></label>';
+    }).join('');
+  }
+  function renderAlertEditorial() {
+    var box = document.getElementById('litAlertEditorial'); if (!box || !alertDraft) return;
+    var dims = alertEdDims();
+    // A value kept on a dimension whose journal is no longer among the alert's
+    // journal chips (e.g. editing an older alert) stays VISIBLE and removable —
+    // never silently dropped: an editor criterion still matches correctly (only
+    // that journal's papers carry the field), so pruning it would rewrite a
+    // saved alert behind the user's back.
+    var kept = ED_DIM_KEYS.filter(function (d) {
+      return dims.indexOf(d) < 0 && ((alertDraft[d] || []).length > 0);
+    });
+    if (!dims.length && !kept.length) {
+      box.innerHTML = '<div class="alert-row" style="margin-bottom:0"><div class="pref-empty">' +
+        'Add <strong>Management Science</strong>, <strong>Information Systems Research</strong> or ' +
+        '<strong>Marketing Science</strong> under Journals to also filter by accepting editor, ' +
+        'area, or senior/associate editor.</div></div>';
+      return;
+    }
+    var html = dims.map(function (dim) {
+      var meta = PREF_ED_META[dim];
+      var n = (alertDraft[dim] || []).length;
+      var head = '<label>' + esc(meta.label) +
+        ' <span class="pref-ed-count" id="litAlertEdCount-' + dim + '">' + (n ? '(' + n + ' chosen)' : '') + '</span></label>';
+      var body = alertEdOpen[dim]
+        ? ('<input id="litAlertEdSearch-' + dim + '" class="pref-jsearch" placeholder="Search ' + escHtmlAttr(meta.noun) + '…" type="search" autocomplete="off" spellcheck="false" data-lpignore="true" oninput="litAlertEdSearch(\'' + dim + '\', this.value)">' +
+           '<div class="pref-jlist pref-ed-list" id="litAlertEd-' + dim + '"></div>')
+        : '<button type="button" class="acct-mini pref-ed-open" onclick="litAlertEdOpen(\'' + dim + '\')">Choose ' + esc(meta.noun) + '…</button>';
+      return '<div class="alert-row">' + head + body +
+        '<div class="alert-chips" id="litAlertChips-' + dim + '"></div></div>';
+    }).join('');
+    html += kept.map(function (dim) {
+      var meta = PREF_ED_META[dim];
+      return '<div class="alert-row"><label>' + esc(meta.label) + '</label>' +
+        '<div class="alert-chips" id="litAlertChips-' + dim + '"></div>' +
+        '<div class="pref-empty">Kept from this alert — add ' + esc(ALERT_ED_HINT[dim]) + ' under Journals to edit the list.</div></div>';
+    }).join('');
+    box.innerHTML = html;
+    ED_DIM_KEYS.forEach(renderAlertChips);
+    // Fill each open picker's list, loading its journal file(s) if needed —
+    // load-on-demand like prefEdEnsureData, so merely revealing the section
+    // never downloads a papers file; only an OPENED picker does.
+    dims.forEach(function (dim) {
+      if (!alertEdOpen[dim]) return;
+      var keys = alertEdSourceKeys(dim);
+      if (!edDimLoaded(keys) && typeof loadNativeSource === 'function') {
+        keys.forEach(function (k) {
+          if (typeof nativeState !== 'undefined' && nativeState[k] === 'done') return;
+          loadNativeSource(k).then(function () {
+            var ov = document.getElementById('litAlertsOverlay');
+            if (ov && ov.classList.contains('open')) renderAlertEditorial();
+          });
+        });
+      }
+      renderAlertEdList(dim, '');
+    });
+  }
   function litAlertsRenderForm() {
     var wrap = document.getElementById('litAlertsForm'); if (!wrap || !state.user) return;
     if (!alertDraft) alertDraft = captureCurrentFilters();
@@ -7685,7 +7808,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var typeChips = JTY.map(function (jt) {
       return '<span class="alert-typechip" id="litAlertType-' + jt.key + '" onclick="litAlertToggleType(\'' + jt.key + '\')" title="' + escAttr(jt.title || jt.label) + '">' + esc(jt.badge || jt.label) + '</span>';
     }).join('');
-    var advanced = ['editor', 'area', 'se', 'ae'].some(function (k) { return (d[k] || []).length; });
+    // A dimension that already carries values (captured from the page's
+    // filters, or from the alert being edited) opens expanded, so the
+    // criterion is immediately visible and editable — the Default-filters
+    // modal's auto-expand rule.
+    ED_DIM_KEYS.forEach(function (dim) { if ((d[dim] || []).length) alertEdOpen[dim] = true; });
     var freqOpt = function (v, label) { return '<option value="' + v + '"' + (alertForm.freq === v ? ' selected' : '') + '>' + esc(label) + '</option>'; };
     var critHtml =
       '<div class="alert-crit">' +
@@ -7701,9 +7828,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         alertTextRow('abstract', 'Abstract contains', 'Word or phrase in the abstract…') +
         alertTextRow('affiliation', 'Affiliation', 'Institution…') +
         alertTextRow('year', 'Year', 'e.g. 2026') +
-        (advanced ? ('<div class="alert-row"><label>Also carried over from your current filters</label>' +
-          '<div class="alert-chips" id="litAlertChips-editor"></div><div class="alert-chips" id="litAlertChips-area"></div>' +
-          '<div class="alert-chips" id="litAlertChips-se"></div><div class="alert-chips" id="litAlertChips-ae"></div></div>') : '') +
+        '<div id="litAlertEditorial"></div>' +
         '<div class="alert-row" style="margin-bottom:0"><label class="alert-toggle"><input type="checkbox" id="litAlertPreprint"' + (d.preprintOnly ? ' checked' : '') +
           ' onchange="litAlertSetPreprint(this.checked)"> Only papers with a free open-access pre-print</label></div>' +
       '</div>';
@@ -7732,6 +7857,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '<span class="alert-save-status" id="litAlertSaveStatus"></span></div>' +
       '<div class="info-note" style="margin-top:8px">Sent from your account e-mail (<strong>' + esc(state.user.email || '') + '</strong>) to the address above. New papers are matched when the database refreshes — delivery is handled by the alert mailer (see the setup notes). No e-mail is sent from your browser. Use <strong>Send me a test e-mail</strong> to receive a one-off sample of this alert (it usually arrives within a few minutes).</div>' +
       '<div class="alert-preview" id="litAlertPreview"></div>';
+    renderAlertEditorial();          // creates the litAlertChips-<dim> containers
     CRIT_KEYS.forEach(renderAlertChips);
     syncTypeChips();
     renderAlertPreview();
@@ -8355,49 +8481,42 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     renderPrefSelected();
   };
 
-  // ── Editorial defaults (Accepting Editor / Area / Senior & Associate Editor) ──
-  // The value lists come from the SAME loaded, normalized papers the main filter
-  // bar uses (p._editors/_area/_se/_ae after normalizeEditors + fuzzyMerge), so a
-  // saved value string always matches what sel.editor/area/se/ae filter on.
+  // ── Editorial dimensions — ONE definition shared by the Default-filters
+  // modal and the E-mail alerts modal, so the two can never disagree about
+  // which journal supplies which dimension (Management Science → accepting
+  // editor + area, ISR → SE + AE, Marketing Science → SE — the main filter
+  // bar's own gating). `has` is the caller's journal-scope predicate.
   var PREF_ED_META = {
     editor: { label: 'Accepting Editor (MS)', noun: 'editors' },
     area:   { label: 'Area (MS)',             noun: 'areas' },
     se:     { label: 'Senior Editor',         noun: 'senior editors' },
     ae:     { label: 'Associate Editor',      noun: 'associate editors' }
   };
-  function prefEdDraft(dim) {
-    return dim === 'editor' ? prefDraftEditor : dim === 'area' ? prefDraftArea
-      : dim === 'se' ? prefDraftSE : dim === 'ae' ? prefDraftAE : null;
-  }
-  // Which native journal file(s) supply a dimension's values, restricted to the
-  // journals the user has actually chosen (mirrors the main page's scope-gated
-  // editorial dropdowns).
-  function prefEdSourceKeys(dim) {
-    if (!prefDraftJ) return [];
-    if (dim === 'editor' || dim === 'area') return prefDraftJ.has('ms') ? ['ms'] : [];
-    if (dim === 'se') return ['isre', 'mksc'].filter(function (k) { return prefDraftJ.has(k); });
-    if (dim === 'ae') return prefDraftJ.has('isre') ? ['isre'] : [];
+  var ED_DIM_KEYS = ['editor', 'area', 'se', 'ae'];
+  function edDimSourceKeys(dim, has) {
+    if (dim === 'editor' || dim === 'area') return has('ms') ? ['ms'] : [];
+    if (dim === 'se') return ['isre', 'mksc'].filter(has);
+    if (dim === 'ae') return has('isre') ? ['isre'] : [];
     return [];
   }
-  // The dimensions to show, given the chosen journals (MS → editor+area,
-  // ISR → se+ae, Marketing Science → se only).
-  function prefEdDims() {
-    if (!prefDraftJ) return [];
+  function edDimsFor(has) {
     var dims = [];
-    if (prefDraftJ.has('ms')) { dims.push('editor'); dims.push('area'); }
-    if (prefDraftJ.has('isre') || prefDraftJ.has('mksc')) dims.push('se');
-    if (prefDraftJ.has('isre')) dims.push('ae');
+    if (has('ms')) { dims.push('editor'); dims.push('area'); }
+    if (has('isre') || has('mksc')) dims.push('se');
+    if (has('isre')) dims.push('ae');
     return dims;
   }
-  function prefEdLoaded(dim) {
-    var keys = prefEdSourceKeys(dim);
+  function edDimLoaded(keys) {
     return keys.length > 0 && keys.every(function (k) {
       return typeof nativeState !== 'undefined' && nativeState[k] === 'done';
     });
   }
-  // Distinct normalized values (+ paper counts) for a dimension, from loaded papers.
-  function prefEdValues(dim) {
-    var keys = prefEdSourceKeys(dim);
+  // Distinct normalized values (+ paper counts) for a dimension, from the SAME
+  // loaded, normalized papers the main filter bar uses (p._editors/_area/_se/
+  // _ae after normalizeEditors + fuzzyMerge), so a saved value string always
+  // matches what sel.editor/area/se/ae filter on — and what the alerts
+  // mailer's vendored normalizer computes from a fresh row.
+  function edDimValues(dim, keys) {
     var counts = {};
     if (typeof allPapers === 'undefined' || !keys.length) return counts;
     var want = {}; keys.forEach(function (k) { want[k] = 1; });
@@ -8410,6 +8529,22 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     });
     return counts;
   }
+
+  // ── Editorial defaults (Accepting Editor / Area / Senior & Associate Editor) ──
+  function prefEdDraft(dim) {
+    return dim === 'editor' ? prefDraftEditor : dim === 'area' ? prefDraftArea
+      : dim === 'se' ? prefDraftSE : dim === 'ae' ? prefDraftAE : null;
+  }
+  function prefEdHas(k) { return !!(prefDraftJ && prefDraftJ.has(k)); }
+  // Which native journal file(s) supply a dimension's values, restricted to the
+  // journals the user has actually chosen (mirrors the main page's scope-gated
+  // editorial dropdowns).
+  function prefEdSourceKeys(dim) { return edDimSourceKeys(dim, prefEdHas); }
+  // The dimensions to show, given the chosen journals (MS → editor+area,
+  // ISR → se+ae, Marketing Science → se only).
+  function prefEdDims() { return prefDraftJ ? edDimsFor(prefEdHas) : []; }
+  function prefEdLoaded(dim) { return edDimLoaded(prefEdSourceKeys(dim)); }
+  function prefEdValues(dim) { return edDimValues(dim, prefEdSourceKeys(dim)); }
   // Load-on-demand: fetch the journal file(s) an open picker needs, then re-render.
   function prefEdEnsureData(dim) {
     if (typeof loadNativeSource !== 'function') return;
