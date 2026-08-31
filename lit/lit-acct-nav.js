@@ -78,24 +78,44 @@
   // The account card must stay IDENTICAL wherever the user is on the site, so
   // fetch the little state the main page's menu shows that auth alone doesn't
   // carry: the profile doc (display name, ORCID link + match name, default-
-  // filter count) and two count() aggregates (saved papers, alerts). One doc
-  // read + two aggregate reads per page view; the menu paints instantly
-  // without them and upgrades in place when they land.
+  // filter count, and the badge counts the main page caches there). One doc
+  // read per page view; the menu paints instantly without it and upgrades in
+  // place when it lands.
+  //
+  // NO count() AGGREGATES HERE (owner report 2026-08-31: the About page's menu
+  // lost its badges and ORCID rows): the compat SDK these pages load
+  // (firebase-firestore-compat 10.12.5) has no Query.count(), so the previous
+  // version's `collection('papers').count()` THREW synchronously and took the
+  // profile read down with it — everything this card adds over bare auth
+  // silently vanished. The counts come from the PROFILE doc instead, where
+  // the main page caches them (savedCount / alertCount, beside the
+  // myPubCount / msgUnread it already cached — maybeCacheAcctCounts in
+  // lit/index.html); a profile from before that caching shipped falls back to
+  // reading the two collections and counting the docs — costlier, once, and
+  // self-healing on the user's next main-page visit.
   function loadExtras() {
     if (!user || !firebase.firestore) return;
     var uid = user.uid, db;
     try { db = firebase.firestore(); } catch (e) { return; }
     var base = db.collection('users').doc(uid);
     var out = { profile: {}, saved: null, alerts: null };
-    Promise.all([
-      base.collection('profile').doc('main').get().then(function (d) { out.profile = d.exists ? (d.data() || {}) : {}; }).catch(function () {}),
-      base.collection('papers').count().get().then(function (s) { out.saved = s.data().count; }).catch(function () {}),
-      base.collection('alerts').count().get().then(function (s) { out.alerts = s.data().count; }).catch(function () {})
-    ]).then(function () {
-      if (!user || user.uid !== uid) return;   // signed out / switched account meanwhile
-      extras = out;
-      render();
-    });
+    base.collection('profile').doc('main').get()
+      .then(function (d) {
+        out.profile = d.exists ? (d.data() || {}) : {};
+        var p = out.profile;
+        if (typeof p.savedCount === 'number') out.saved = p.savedCount;
+        if (typeof p.alertCount === 'number') out.alerts = p.alertCount;
+        var fallbacks = [];
+        if (out.saved == null) fallbacks.push(base.collection('papers').get().then(function (s) { out.saved = s.size; }).catch(function () {}));
+        if (out.alerts == null) fallbacks.push(base.collection('alerts').get().then(function (s) { out.alerts = s.size; }).catch(function () {}));
+        return Promise.all(fallbacks);
+      })
+      .catch(function () {})
+      .then(function () {
+        if (!user || user.uid !== uid) return;   // signed out / switched account meanwhile
+        extras = out;
+        render();
+      });
   }
 
   function render() {

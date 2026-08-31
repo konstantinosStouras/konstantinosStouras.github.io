@@ -775,6 +775,68 @@ function paperUrl(p) {
   if (doi) return 'https://doi.org/' + doi.replace(/^doi:/i, '');
   return SITE_URL;
 }
+// ── Paper meta chips — the site's own card colors (owner request 2026-08-31:
+// "include the journal name in a nice card with separate colour, as in the
+// website", plus the accepting editor and area). VENDORED from index.html's
+// .tag/.jk-* rules and extraColorCSS — keep in sync. Outlook's rendering
+// engine ignores hsl(), so an extra journal's hashed hue is emitted as hex.
+const JK_COLORS = {
+  ms:   ['#e8eef7', '#003087'], opre: ['#e6f0ec', '#1f5c40'],
+  mksc: ['#f7e8ee', '#8a2b52'], msom: ['#eeeaf7', '#4b3a8a'],
+  isre: ['#e6f2f5', '#1a5f70'], pom:  ['#f7f0e4', '#7a5b1d'],
+  pnas: ['#fdeee4', '#a34c17'], ec:   ['#eaf3e6', '#3d6b1f'],
+};
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const hex = (x) => Math.round(255 * x).toString(16).padStart(2, '0');
+  return '#' + hex(f(0)) + hex(f(8)) + hex(f(4));
+}
+// [background, text] for a journal key: the eight native pastels, else the
+// page's own hue hash (extraColorCSS in index.html — same formula, so a
+// journal's chip is the same color in the e-mail as on the site).
+function jkColors(jk) {
+  if (JK_COLORS[jk]) return JK_COLORS[jk];
+  let h = 0;
+  for (let i = 0; i < jk.length; i++) h = (h * 31 + jk.charCodeAt(i)) % 360;
+  return [hslToHex(h, 52, 92), hslToHex(h, 65, 28)];
+}
+function chipHTML(text, bg, fg, bold) {
+  return `<span style="display:inline-block;padding:3px 10px;border-radius:100px;font-size:11.5px;font-weight:${bold ? 600 : 500};margin:2px 6px 2px 0;background:${bg};color:${fg}">${esc(text)}</span>`;
+}
+// One chip row per listed paper — the same chips, in the same order and
+// colors, as the site's own paper card (journalTagsHTML + the .paper-meta row
+// in index.html): journal · year (vol/issue) · accepting editor(s) · area ·
+// SE/AE · status. Editor/area render the NORMALIZED values (the vendored
+// cleanEditorField/normalizeArea above), exactly as the page's cards do.
+function paperChipsHTML(p) {
+  const chips = [];
+  const jk = String(p.JKey || '');
+  const [jbg, jfg] = jkColors(jk);
+  if (jk === 'pnas' && Array.isArray(p.Sections) && p.Sections.length) {
+    for (const s of p.Sections) chips.push(chipHTML('PNAS · ' + s, jbg, jfg, true));
+  } else if (jk || p.Journal) {
+    const label = jk === 'ec' ? 'ACM EC' : (JOURNAL_NAMES[jk] || p.Journal || jk);
+    chips.push(chipHTML(label, jbg, jfg, true));
+  }
+  if (p.Year) {
+    const yr = (p.Volume && p.Issue)
+      ? `${p.Year} · Vol. ${p.Volume} No. ${p.Issue}${p.Page ? ', pp. ' + p.Page : ''}`
+      : String(p.Year);
+    chips.push(chipHTML(yr, '#f4e6ea', '#7d1d3f'));
+  }
+  for (const e of cleanEditorField(p['Accepting Editor'] || '')) chips.push(chipHTML('✎ ' + e, '#f6edda', '#6f5827'));
+  const area = normalizeArea(p['Area'] || '');
+  if (area) chips.push(chipHTML(area, '#e8f5ee', '#2a7d4f'));
+  for (const e of splitList(p['Senior Editor'])) chips.push(chipHTML('✎ SE: ' + e, '#f6edda', '#6f5827'));
+  for (const e of splitList(p['Associate Editor'])) chips.push(chipHTML('AE: ' + e, '#e6eef9', '#2d5f8a'));
+  if (p.Status === 'Other') chips.push(chipHTML('Other', '#fce8e8', '#b33a3a'));
+  else if (p.Status) chips.push(chipHTML(p.Status, '#fff3e0', '#b36b00'));
+  return chips.join('');
+}
+
 // Shared e-mail chrome (claret header + footnote), reused by paper alerts AND
 // feature announcements so the two never drift. The footnote always offers
 // editing preferences + unsubscribing from future e-mails, plus a feedback
@@ -843,9 +905,18 @@ function renderEmail(alert, papers, opts) {
   const subject = `${opts.subjectPrefix || ''}The Lit: ${countPhrase} — ${name}`;
 
   const lineText = shown.map((p, i) => {
-    const bits = [p.Journal, p.Year, p.Status].filter(Boolean).join(' · ');
+    // The same facts the HTML chips carry, as ' · '-separated text (editor and
+    // area normalized like the site's cards — see paperChipsHTML).
+    const bits = [
+      p.Journal, p.Year,
+      ...cleanEditorField(p['Accepting Editor'] || '').map(e => '✎ ' + e),
+      normalizeArea(p['Area'] || ''),
+      ...splitList(p['Senior Editor']).map(e => 'SE: ' + e),
+      ...splitList(p['Associate Editor']).map(e => 'AE: ' + e),
+      p.Status,
+    ].filter(Boolean).join(' · ');
     let s = `${i + 1}. ${p.Title || '(untitled)'}\n   ${p.Authors || ''}\n   ${bits}\n   ${paperUrl(p)}`;
-    const pre = safeUrl(p.Preprint); if (pre) s += `\n   Pre-print (open access): ${pre}`;
+    const pre = safeUrl(p.Preprint); if (pre) s += `\n   Pre-print (Open Access): ${pre}`;
     return s;
   }).join('\n\n');
   const text =
@@ -857,13 +928,12 @@ ${lineText}${more > 0 ? `\n\n…and ${fmt(more)} more. See them all on ${SITE_UR
 ${footerText()}`;
 
   const items = shown.map(p => {
-    const bits = [p.Journal, p.Year, p.Status].filter(Boolean).filter(x => x).map(esc).join(' · ');
     const pre = safeUrl(p.Preprint);
-    return `<li style="margin:0 0 16px">
+    return `<li style="margin:0 0 18px">
       <a href="${esc(paperUrl(p))}" style="color:#7d1d3f;font-weight:600;text-decoration:none;font-size:15px">${esc(p.Title || '(untitled)')}</a>
       <div style="color:#241a1e;font-size:13px;margin-top:2px">${esc(p.Authors || '')}</div>
-      <div style="color:#6a5a60;font-size:12px;margin-top:2px">${bits}</div>
-      ${pre ? `<div style="font-size:12px;margin-top:2px"><a href="${esc(pre)}" style="color:#c2410c">Pre-print (open access)</a></div>` : ''}
+      <div style="margin-top:5px;line-height:2">${paperChipsHTML(p)}</div>
+      ${pre ? `<div style="font-size:12px;margin-top:3px"><a href="${esc(pre)}" style="color:#c2410c;font-weight:600">Pre-print (Open Access) ↗</a></div>` : ''}
     </li>`;
   }).join('');
   const inner =
@@ -1614,6 +1684,33 @@ function selftest() {
   ok('text footer has edit-prefs/unsubscribe/feedback', /Edit your preferences/.test(em.text) && /Unsubscribe from future/.test(em.text) && em.text.includes(CONTACT_EMAIL));
   ok('html footer has edit-prefs/unsubscribe/feedback', /Edit your preferences/.test(em.html) && /Unsubscribe/.test(em.html) && em.html.includes('mailto:' + CONTACT_EMAIL));
   ok('html escapes', renderEmail({ name: 'x', criteria: {} }, [P({ Title: 'A <b> & "q"' })]).html.includes('A &lt;b&gt; &amp; &quot;q&quot;'));
+
+  // ── The paper chips (owner request 2026-08-31): each listed paper renders
+  // the site's own meta chips — the journal in its per-journal colors, year,
+  // NORMALIZED accepting editor + area, SE/AE, status — plus a pre-print link.
+  const emChips = renderEmail({ name: 'x', criteria: {} }, [P({
+    'Accepting Editor': 'This paper was accepted by Eric So, accounting.',
+    Area: 'Accounting', Preprint: 'https://arxiv.org/abs/2410.13767',
+  })]);
+  ok('journal chip carries the site\'s ms colors', emChips.html.includes('#003087') && emChips.html.includes('#e8eef7'));
+  ok('journal chip names the journal', />Management Science<\/span>/.test(emChips.html));
+  ok('editor chip shows the normalized name, never the sentence',
+     emChips.html.includes('✎ Eric So') && !emChips.html.includes('accepted by'));
+  ok('area chip shows the normalized area in the site\'s green', />accounting<\/span>/.test(emChips.html) && emChips.html.includes('#2a7d4f'));
+  ok('status chip present', />Articles in Advance<\/span>/.test(emChips.html));
+  ok('pre-print link is the site\'s own label', emChips.html.includes('Pre-print (Open Access) ↗'));
+  ok('text part carries editor + area too', emChips.text.includes('✎ Eric So') && emChips.text.includes('· accounting ·'));
+  const emSe = renderEmail({ name: 'x', criteria: {} }, [P({ JKey: 'isre', Journal: 'Information Systems Research',
+    'Senior Editor': 'Alok Gupta; Sabine Matook', 'Associate Editor': 'A. Reviewer' })]);
+  ok('SE/AE chips render per name', emSe.html.includes('✎ SE: Alok Gupta') && emSe.html.includes('✎ SE: Sabine Matook') && emSe.html.includes('AE: A. Reviewer'));
+  const pnasChips = renderEmail({ name: 'x', criteria: {} }, [P({ JKey: 'pnas', Journal: 'PNAS', Sections: ['Economic Sciences'] })]);
+  ok('PNAS renders one chip per section, in the pnas colors',
+     pnasChips.html.includes('PNAS · Economic Sciences') && pnasChips.html.includes('#a34c17'));
+  ok('an extra journal\'s chip color is the page\'s hue hash, as hex',
+     (() => { const [bg, fg] = jkColors('respol'); return /^#[0-9a-f]{6}$/.test(bg) && /^#[0-9a-f]{6}$/.test(fg)
+       && renderEmail({ name: 'x', criteria: {} }, [P({ JKey: 'respol', Journal: 'Research Policy' })]).html.includes(bg); })());
+  ok('a working paper\'s status chips as on the site',
+     />Working paper<\/span>/.test(renderEmail({ name: 'x', criteria: {} }, [P({ JKey: 'wp-ssrn', Status: 'Working paper' })]).html));
 
   // ── Working papers in alerts (user report 2026-08-10: an "any new paper"
   // subscriber had never received a single working paper — the archive's

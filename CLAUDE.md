@@ -1918,8 +1918,15 @@ on every one of its rows, so before the vendored normalizer an editor/area
 alert compared "Eric So" against "This paper was accepted by Eric So,
 accounting." and could never deliver; the raw field is kept as a comparison
 fallback, and the page's corpus-wide `fuzzyMerge*` passes are deliberately not
-reproduced — the alias tables carry the recurring variants), and e-mails due
-alerts over SMTP (`To` recipient, `Reply-To` the
+reproduced — the alias tables carry the recurring variants). **Each listed
+paper renders the site's own card chips** (owner request 2026-08-31 —
+`paperChipsHTML` in the mailer: the journal in its per-journal colors — the
+eight native `.jk-*` pastels vendored as `JK_COLORS`, extras through the SAME
+hue hash as index.html's `extraColorCSS`, emitted as hex because Outlook's
+engine ignores `hsl()` — then year (vol/issue), normalized accepting editor +
+area, SE/AE, status, and a "Pre-print (Open Access) ↗" link where one exists;
+mirrored by `renderAlertPreview`'s samples — keep the three color sets in
+sync), and e-mails due alerts over SMTP (`To` recipient, `Reply-To` the
 subscriber, `From` = `ALERTS_FROM`/`SMTP_USER`), stamping a per-alert
 `lastCheckedAt`/`lastSentAt` high-water mark so nothing is sent twice.
 **Working papers match with the page's own reachability rules** (`isWorkingPaper`
@@ -2013,6 +2020,16 @@ the same problem; **keep the two in step in SHAPE, not in code** — different
 sites, different Firebase projects, different markup. The decisions cost one
 Firestore read, so the main page fetches them only when the **alerts panel
 opens** (`litNewsEnsure`), which is the only thing there that reads the log.
+
+**The maintainer's Publish press is also reachable from CI**
+(`lit/_scraper/news-publish.mjs` + `.github/workflows/lit-news-publish.yml`,
+workflow_dispatch ONLY — no schedule, so nothing publishes itself): it writes
+the SAME `newsOverrides` decision document the site's Publish button writes,
+through `LitNews.patchFor` (news-selftest pins that it goes through the
+module and refuses an id `changelog.json` does not carry), then prints every
+entry's decision state — including which pending entry, if any, is HOLDING
+the digest stream (see below). Modes `--list`/`--dry-run`/`--selftest`; a
+no-op until `FIREBASE_SERVICE_ACCOUNT` is set.
 
 **The mailer holds the STREAM at the oldest unreviewed entry**
 (`sendableChangelog`, pure + unit-tested in its `--selftest`): each alert's
@@ -2326,7 +2343,19 @@ a rule calling a function declared after it is not something to leave to chance.
 
 **The unread badge is cached on the profile doc** (`msgUnread`), exactly as
 `myPubCount` is, so `lit-acct-nav.js` draws it on the sub-pages without a read of
-its own. The main page reads the thread once per session with a plain `get()`
+its own. **The My-library and E-mail-alerts counts are cached the same way**
+(`savedCount`/`alertCount`, `maybeCacheAcctCounts` in index.html, owner report
+2026-08-31): the compat SDK the sub-pages load (firebase-firestore-compat
+10.12.5) has NO `count()` aggregate — `lit-acct-nav.js` used to call one, the
+call THREW synchronously and took the profile read down with it, so the About
+page's menu silently lost its badges AND its ORCID rows ("My publications" /
+"My author analytics") while looking merely modest. The sub-page card now
+reads the ONE profile doc (falling back to reading the two collections and
+counting docs only for a profile from before the caching shipped — costlier,
+once, self-healing on the next main-page visit), and
+`lit/_scraper/alerts-ui-guard.mjs` drives the About-page menu against a stub
+that — like the real SDK — has no `count()`, and pins the full parity row set
++ badges + that `lit-acct-nav.js` never reaches for the missing API. The main page reads the thread once per session with a plain `get()`
 rather than a fifth `onSnapshot`: a message arrives a few times a year, and a
 live listener on every page view is a standing cost for a card that is usually
 empty.

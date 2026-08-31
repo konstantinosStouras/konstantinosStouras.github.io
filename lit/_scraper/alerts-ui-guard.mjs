@@ -67,28 +67,44 @@ let fails = 0;
 const ok = (cond, msg) => { if (cond) console.log('  ok —', msg); else { fails++; console.error('  FAIL —', msg); } };
 
 /* A minimal Firebase COMPAT stub: auth() resolves a fake signed-in user at
-   once; every Firestore chain absorbs its calls — onSnapshot never fires (an
-   empty account), reads resolve empty, writes resolve. Enough for the
+   once; every Firestore chain absorbs its calls — snapshots fire once, empty
+   (a brand-new account), reads resolve empty, writes resolve. Enough for the
    accounts script to reach state.user and render the alerts form, with no
-   network and no real project. */
-const FIREBASE_STUB = `
+   network and no real project.
+
+   `stubJs(profile)` bakes in an optional PROFILE served at users/x/profile/
+   main, so the sub-page menu (lit-acct-nav.js) can be driven with the state
+   the main page caches there. The stub deliberately has NO count() method —
+   the real compat SDK (10.12.5) has none either, so code reaching for it
+   fails here exactly as it fails in production (the regression the About-page
+   section below pins). */
+const stubJs = (profile) => `
 (function () {
+  var PROFILE = ${profile ? JSON.stringify(profile) : 'null'};
   var noop = function () {};
   var emptyDocSnap = { exists: false, id: 'stub', data: function () { return null; }, get: function () { return undefined; } };
   var emptyQuerySnap = { empty: true, size: 0, docs: [], forEach: noop };
-  function makeQ() {
+  function snapFor(path) {
+    if (PROFILE && /\\/profile\\/main$/.test(path)) {
+      return { exists: true, id: 'main', data: function () { return PROFILE; }, get: function (k) { return PROFILE[k]; },
+               empty: false, size: 1, docs: [], forEach: noop };
+    }
+    return Object.assign({}, emptyDocSnap, emptyQuerySnap);
+  }
+  function makeQ(path) {
     var q = {};
-    var self = function () { return q; };
-    ['doc', 'collection', 'where', 'orderBy', 'limit', 'limitToLast', 'startAfter', 'startAt', 'endAt', 'endBefore'].forEach(function (k) { q[k] = self; });
-    // Fire once with an EMPTY snapshot (a brand-new account): the profile
-    // listener needs a first snapshot before the Default-filters modal opens
-    // (acctOpenDefaults defers on !state.profile). No handler on the page
-    // reads docChanges()/metadata, so the merged doc/query shape suffices.
+    ['where', 'orderBy', 'limit', 'limitToLast', 'startAfter', 'startAt', 'endAt', 'endBefore'].forEach(function (k) { q[k] = function () { return q; }; });
+    q.collection = function (n) { return makeQ(path + '/' + n); };
+    q.doc = function (n) { return makeQ(path + '/' + (n || 'auto')); };
+    // Fires once: the profile listener needs a first snapshot before e.g. the
+    // Default-filters modal opens (acctOpenDefaults defers on !state.profile).
+    // No handler on the page reads docChanges()/metadata, so the merged
+    // doc/query shape suffices.
     q.onSnapshot = function (cb) {
-      setTimeout(function () { try { cb(Object.assign({}, emptyDocSnap, emptyQuerySnap)); } catch (e) {} }, 0);
+      setTimeout(function () { try { cb(snapFor(path)); } catch (e) {} }, 0);
       return noop;
     };
-    q.get = function () { return Promise.resolve(Object.assign({}, emptyDocSnap, emptyQuerySnap)); };
+    q.get = function () { return Promise.resolve(snapFor(path)); };
     q.set = q.update = q.delete = function () { return Promise.resolve(); };
     q.add = function () { return Promise.resolve({ id: 'stub' }); };
     q.id = 'stub';
@@ -111,9 +127,9 @@ const FIREBASE_STUB = `
   };
   var fsFn = function () {
     return {
-      collection: function () { return makeQ(); },
-      collectionGroup: function () { return makeQ(); },
-      doc: function () { return makeQ(); },
+      collection: function (n) { return makeQ('/' + n); },
+      collectionGroup: function (n) { return makeQ('/cg/' + n); },
+      doc: function (n) { return makeQ('/' + n); },
       batch: function () { var b = { set: noop, update: noop, delete: noop, commit: function () { return Promise.resolve(); } }; return b; },
       runTransaction: function (fn) { return Promise.resolve(); },
       enablePersistence: function () { return Promise.resolve(); },
@@ -148,13 +164,17 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM || undefined,
   args: ['--no-sandbox'],
 });
-const page = await browser.newPage({ viewport: { width: 1400, height: 1600 } });
-page.on('pageerror', e => { fails++; console.error('  FAIL — page error:', e.message); });
-// The four compat SDK scripts become the stub; everything else off-repo aborts.
-await page.route('**://www.gstatic.com/firebasejs/**', r =>
-  r.fulfill({ contentType: 'text/javascript', body: FIREBASE_STUB }));
-await page.route('**://*.googleapis.com/**', r => r.abort());
-await page.route('**://fonts.gstatic.com/**', r => r.abort());
+async function stubbedPage(profile) {
+  const p = await browser.newPage({ viewport: { width: 1400, height: 1600 } });
+  p.on('pageerror', e => { fails++; console.error('  FAIL — page error:', e.message); });
+  // The compat SDK scripts become the stub; everything else off-repo aborts.
+  await p.route('**://www.gstatic.com/firebasejs/**', r =>
+    r.fulfill({ contentType: 'text/javascript', body: stubJs(profile) }));
+  await p.route('**://*.googleapis.com/**', r => r.abort());
+  await p.route('**://fonts.gstatic.com/**', r => r.abort());
+  return p;
+}
+const page = await stubbedPage(null);
 
 try {
   await page.goto(BASE + '/lit/', { waitUntil: 'domcontentloaded' });
@@ -279,6 +299,68 @@ try {
   await page.waitForSelector('#prefEd-editor .pref-jrow', { timeout: 30000 });
   ok((await page.$$('#prefEd-editor .pref-jrow')).length > 0,
     'Default filters: the editor picker still lists values through the shared helpers');
+
+  // 9. The example e-mail previews the mailer's CHIP rendering — journal card
+  //    in its own color, editor + area chips, the pre-print link (owner
+  //    request 2026-08-31; keep in sync with paperChipsHTML in
+  //    alerts-mailer.mjs).
+  const prevHtml = await page.$eval('#litAlertPreview', el => el.innerHTML);
+  ok(prevHtml.includes('#003087') && /Management Science<\/span>/.test(prevHtml),
+    'the preview shows the journal as the site\'s own colored chip');
+  ok(prevHtml.includes('✎ Eric So') && /accounting<\/span>/.test(prevHtml),
+    'the preview\'s MS sample carries editor + area chips');
+  ok(prevHtml.includes('Pre-print (Open Access)'),
+    'the preview\'s pre-print link uses the site\'s own label');
+
+  // ── The sub-pages' account menu (owner report 2026-08-31: "I entered the
+  // About page and clicked my user profile, but I don't see my email alerts")
+  // — the menu must show the SAME card as the main page: badges + ORCID rows.
+  // The stub, like the REAL compat SDK 10.12.5, has no count() aggregate, so
+  // this section fails against the old loadExtras (whose count() call threw
+  // and silently took every badge and ORCID row with it).
+  const PROFILE = {
+    firstName: 'Guard', lastName: 'User',
+    orcid: '0000-0002-0000-0000', orcidLinked: true, orcidVerified: true,
+    orcidAuthorName: 'Guard I. User', orcidNameAuto: false,
+    myPubCount: 3, msgUnread: 0, savedCount: 36, alertCount: 2,
+    defaultJournals: [], defaultJTypes: [],
+  };
+  const about = await stubbedPage(PROFILE);
+  await about.goto(BASE + '/lit/about/', { waitUntil: 'domcontentloaded' });
+  await about.waitForSelector('#acctControl [data-acct-toggle]', { timeout: 30000 });
+  // The extras (profile read) land async — wait for the badge they carry.
+  await about.waitForFunction(() => /My publications/.test((document.getElementById('acctControl') || {}).innerHTML || ''), null, { timeout: 15000 });
+  await about.click('#acctControl [data-acct-toggle]');
+  await about.waitForSelector('#acctControl [data-acct-menu].open', { timeout: 5000 });
+  const menu = await about.$eval('#acctControl [data-acct-menu]', el => el.innerHTML);
+  ok(/My library[\s\S]{0,80}?>36</.test(menu), 'About: My library carries its count');
+  ok(/My publications[\s\S]{0,80}?>3</.test(menu), 'About: My publications row + count (linked ORCID)');
+  ok(menu.includes('My author analytics'), 'About: My author analytics row (linked ORCID)');
+  ok(/E-mail alerts[\s\S]{0,80}?>2</.test(menu), 'About: E-mail alerts carries its count');
+  for (const row of ['Messages', 'Default filters', 'Edit profile', 'Sign out']) {
+    ok(menu.includes(row), `About: ${row} row present`);
+  }
+  ok(/href="\/lit\/#lit-alerts"/.test(menu), 'About: E-mail alerts deep-links into the main page\'s modal');
+  await about.close();
+
+  // …and a LEGACY profile (cached counts not yet written by the main page)
+  // falls back to counting the collections — the menu still renders whole.
+  const LEGACY = Object.assign({}, PROFILE);
+  delete LEGACY.savedCount; delete LEGACY.alertCount;
+  const about2 = await stubbedPage(LEGACY);
+  await about2.goto(BASE + '/lit/about/', { waitUntil: 'domcontentloaded' });
+  await about2.waitForFunction(() => /My publications/.test((document.getElementById('acctControl') || {}).innerHTML || ''), null, { timeout: 15000 });
+  ok(true, 'About: a pre-caching profile still gets its full menu (fallback path)');
+  await about2.close();
+
+  // The API the compat SDK does not have must stay out of the sub-page script.
+  // Read with the comments stripped — the file EXPLAINS the count() call it no
+  // longer makes, and a guard that cannot tell the explanation from the
+  // command would have to be satisfied by deleting the explanation.
+  const navSrc = (await readFile(join(ROOT, 'lit', 'lit-acct-nav.js'), 'utf8'))
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/[^\n]*/g, '$1');
+  ok(!/\.count\(\)/.test(navSrc),
+    'lit-acct-nav.js never calls the count() aggregate the compat SDK lacks');
 } catch (e) {
   fails++;
   console.error('  FAIL —', e.message);

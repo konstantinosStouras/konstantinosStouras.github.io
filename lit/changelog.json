@@ -3,10 +3,17 @@
   "version": 1,
   "updates": [
     {
+      "id": "account-menu-everywhere",
+      "date": "2026-08-31",
+      "title": "Your account menu is the same on every page",
+      "summary": "Opening your account menu on the About, Data Analytics or Feedback page now shows exactly what the main page shows — My library and E-mail alerts with their counts, and, for accounts with a linked ORCID, My publications (with your paper count) and My author analytics. Those pages used to lose the counts and the ORCID entries, so the same click read differently depending on where you were.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "alerts-editorial-filters",
       "date": "2026-08-31",
       "title": "E-mail alerts can now target editors and areas",
-      "summary": "Every search filter on the page is now available when you compose an e-mail alert — including the editorial ones: once Management Science is among your alert’s journals you can pick its accepting editors and areas, and ISR or Marketing Science reveal their senior/associate editors, through the same searchable pickers the Default-filters card uses. So you can be e-mailed about, say, every new Management Science paper in entrepreneurship and innovation, or every paper a particular senior editor accepts. Alerts that already carried editor values from your page filters now deliver too — the mailer previously compared them against the journal’s raw acceptance sentence and could never match.",
+      "summary": "Every search filter on the page is now available when you compose an e-mail alert — including the editorial ones: once Management Science is among your alert’s journals you can pick its accepting editors and areas, and ISR or Marketing Science reveal their senior/associate editors, through the same searchable pickers the Default-filters card uses. So you can be e-mailed about, say, every new Management Science paper in entrepreneurship and innovation, or every paper a particular senior editor accepts. Alerts that already carried editor values from your page filters now deliver too — the mailer previously compared them against the journal’s raw acceptance sentence and could never match. And the e-mails themselves now show each paper the way the site does: the journal in its own coloured card, with year, accepting editor, area and senior/associate editor chips, and a direct link to the free pre-print where one exists.",
       "url": "https://www.stouras.com/lit/"
     },
     {

@@ -1,0 +1,73 @@
+name: lit — publish a What's-new entry
+
+# The maintainer's Publish button, reachable from CI: writes the SAME
+# newsOverrides decision document the button on the site writes (through
+# lit/lit-news.js — see lit/_scraper/news-publish.mjs), so a changelog entry
+# can be published (or taken down) with a workflow_dispatch instead of a
+# browser session. MANUAL ONLY — no schedule, no push trigger: "Nothing on
+# What's new publishes itself" stays true, this is just the same deliberate
+# press made from a different chair.
+#
+# A clean no-op until the FIREBASE_SERVICE_ACCOUNT secret is configured.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ids:
+        description: "Changelog entry id(s) to act on, space-separated (see lit/changelog.json). Ignored with list_only."
+        type: string
+        default: ''
+      status:
+        description: 'The decision to write'
+        type: choice
+        options: [approved, removed]
+        default: approved
+      dry_run:
+        description: 'Dry run — print what would be written, write nothing'
+        type: boolean
+        default: false
+      list_only:
+        description: "Just report every entry's decision state (no ids needed)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read              # reads the committed changelog; never commits
+
+concurrency:
+  group: lit-news-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+
+      # The review gate's own rules, before anything is decided through them —
+      # offline, no credentials. news-selftest pins the module ↔ rules key
+      # lists and that this CLI goes through the module; the CLI's selftest
+      # pins what it may write and the held-stream report.
+      - name: Offline checks
+        run: |
+          node lit/_scraper/news-selftest.mjs
+          node lit/_scraper/news-publish.mjs --selftest
+
+      - name: Install Admin SDK
+        run: npm install --no-save --ignore-scripts firebase-admin@12.7.0
+
+      - name: Publish
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: >
+          node lit/_scraper/news-publish.mjs
+          ${{ inputs.list_only && '--list' || format('--status {0} {1} {2}', inputs.status, (inputs.dry_run && '--dry-run' || ''), inputs.ids) }}
