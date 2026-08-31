@@ -6527,6 +6527,23 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // becomes available, so the badge appears without waiting for a snapshot.
   window.litAuthorsIndexReady = function () { maybeCacheMyPubCount(); acctRenderControl(); };
 
+  // The sub-pages' account menu (lit-acct-nav.js) must show the SAME card as
+  // this page — and the compat SDK those pages load has no count() aggregate
+  // (calling it THREW, which is how the About page's menu lost its badges and
+  // ORCID rows; owner report 2026-08-31) — so the two counts its badges need
+  // are cached on the profile doc, exactly as myPubCount and msgUnread are.
+  // Write-when-changed, so the profile snapshot's echo can never loop.
+  function maybeCacheAcctCounts() {
+    if (!state.user || !state.profile) return;
+    if (!papersSnapshotSeen || !alertsSnapshotSeen) return;
+    var saved = Object.keys(state.papers || {}).length;
+    var alerts = Object.keys(state.alerts || {}).length;
+    if (state.profile.savedCount === saved && state.profile.alertCount === alerts) return;
+    profileDoc().set({ savedCount: saved, alertCount: alerts, updatedAt: serverTime() }, { merge: true })
+      .then(function () { if (state.profile) { state.profile.savedCount = saved; state.profile.alertCount = alerts; } })
+      .catch(function () {});
+  }
+
   // ── Duplicate-account merge (same person, two accounts) ───────────────────
   // Registering with ORCID creates a SEPARATE Firebase account from an
   // existing e-mail/Google one (ORCID shares no e-mail to auto-match on), so
@@ -7897,16 +7914,26 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         '</div>' +
       '</div>';
     }
+    // Each sample renders the site's own meta chips — journal (per-journal
+    // colors), year, accepting editor + area, status — exactly as the mailer's
+    // paperChipsHTML draws them (keep the colors in sync with .tag/.jk-* above
+    // and with alerts-mailer.mjs). Sample 2 is a Management Science paper so
+    // the editor/area chips are visible in the preview.
     var samples = [
-      { t: 'Dispatching and Pricing in Two-Sided Spatial Queues', a: 'Ang Xu, Chiwei Yan', m: 'Operations Research · 2026 · Articles in Advance', pre: true },
-      { t: 'Learning and Information in Dynamic Marketplaces', a: 'A. Researcher, B. Coauthor', m: 'Management Science · 2026', pre: false }
+      { t: 'Dispatching and Pricing in Two-Sided Spatial Queues', a: 'Ang Xu, Chiwei Yan', pre: true,
+        chips: [['Operations Research', '#e6f0ec', '#1f5c40', 1], ['2026', '#f4e6ea', '#7d1d3f'], ['Articles in Advance', '#fff3e0', '#b36b00']] },
+      { t: 'Learning and Information in Dynamic Marketplaces', a: 'A. Researcher, B. Coauthor', pre: false,
+        chips: [['Management Science', '#e8eef7', '#003087', 1], ['2026', '#f4e6ea', '#7d1d3f'], ['✎ Eric So', '#f6edda', '#6f5827'], ['accounting', '#e8f5ee', '#2a7d4f'], ['Articles in Advance', '#fff3e0', '#b36b00']] }
     ];
     var items = samples.map(function (p) {
+      var chips = p.chips.map(function (c) {
+        return '<span style="display:inline-block;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:' + (c[3] ? 600 : 500) + ';margin:2px 6px 2px 0;background:' + c[1] + ';color:' + c[2] + '">' + esc(c[0]) + '</span>';
+      }).join('');
       return '<li style="margin:0 0 13px;list-style:none">' +
         '<span style="color:var(--navy);font-weight:600;font-size:14px">' + esc(p.t) + '</span>' +
         '<div style="color:var(--text);font-size:12.5px;margin-top:2px">' + esc(p.a) + '</div>' +
-        '<div style="color:var(--text-muted);font-size:11.5px;margin-top:2px">' + esc(p.m) + '</div>' +
-        (p.pre ? '<div style="font-size:11.5px;margin-top:2px"><span style="color:#c2410c">Pre-print (open access)</span></div>' : '') +
+        '<div style="margin-top:3px;line-height:2">' + chips + '</div>' +
+        (p.pre ? '<div style="font-size:11.5px;margin-top:2px"><span style="color:#c2410c;font-weight:600">Pre-print (Open Access) ↗</span></div>' : '') +
         '</li>';
     }).join('');
     var blocks = [];
@@ -8779,6 +8806,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         && state.profile.orcidNameAuto !== false) backfillOrcidAuthorName(state.profile.orcid, '');
     maybeCacheMyPubCount();  // keep the My-publications badge (profile myPubCount) current
     maybeCacheMsgUnread();   // …and the Messages badge the sub-pages read from the profile
+    maybeCacheAcctCounts();  // …and the My-library / E-mail-alerts counts they read the same way
     maybeApplyMergeStash();  // finish a pending duplicate-account merge, if one is stashed
     maybeClaimAccountKeys(); // claim orcid/e-mail identity keys; offer the merge on a conflict
     maybeOrcidPrompt();  // first-run: invite the user to connect their ORCID

@@ -181,6 +181,12 @@ ok("and its alert preview shows only what has been published",
 ok('the decisions are fetched only when the alerts panel opens — one read, not one per visit',
   main.includes('litNewsEnsure') && main.includes("id === 'litAlertsOverlay'"));
 
+const publisher = read('_scraper', 'news-publish.mjs');
+ok('the CI publisher goes through the module too', publisher.includes("'lit-news.js'"));
+ok('…and writes only the module\'s own patch — never a hand-built decision',
+  publisher.includes('LitNews.patchFor(') && !/status:\s*['"]approved['"]/.test(publisher));
+ok('…and refuses an id the changelog does not carry', publisher.includes('not in changelog.json'));
+
 const mailer = read('_scraper', 'alerts-mailer.mjs');
 ok('the mailer reads the same decisions', mailer.includes("'lit-news.js'"));
 ok('and sends only published entries — an e-mail cannot be recalled',
