@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "alerts-editorial-filters",
+      "date": "2026-08-31",
+      "title": "E-mail alerts can now target editors and areas",
+      "summary": "Every search filter on the page is now available when you compose an e-mail alert — including the editorial ones: once Management Science is among your alert’s journals you can pick its accepting editors and areas, and ISR or Marketing Science reveal their senior/associate editors, through the same searchable pickers the Default-filters card uses. So you can be e-mailed about, say, every new Management Science paper in entrepreneurship and innovation, or every paper a particular senior editor accepts. Alerts that already carried editor values from your page filters now deliver too — the mailer previously compared them against the journal’s raw acceptance sentence and could never match.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "messages-remove-from-your-list",
       "date": "2026-08-27",
       "title": "Remove any message from your list — and put it back",

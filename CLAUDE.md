@@ -1860,7 +1860,23 @@ paper-filter editor). Below those, unless "any new paper" is on, the modal
 **pre-fills the alert criteria from the page's current search filters** (journal
 types, journals, authors, title /
 abstract / affiliation terms, years, MS editors/areas, ISR/MkSc SE/AE, and the
-pre-print toggle — the same `sel` shape), editable in-modal, plus an alert name
+pre-print toggle — the same `sel` shape), editable in-modal — **the editorial
+dimensions included** (owner request 2026-08-31: "I want to be able to have all
+the current search filters available when I create email alerts"): once MS /
+ISR / MkSc is among the alert's journal chips, the modal reveals the same
+collapsed, load-on-demand editorial pickers as the Default-filters card
+(`renderAlertEditorial`/`renderAlertEdList` in the accounts IIFE, built on the
+SHARED `edDimSourceKeys`/`edDimsFor`/`edDimLoaded`/`edDimValues` helpers the
+pref pickers now delegate to, so the two modals cannot disagree; with no
+relevant journal chip the section says which journals to add; a value whose
+journal chip is later removed stays VISIBLE and removable in a "Kept from this
+alert" block — never silently pruned, since an editor criterion still matches
+correctly without the journal chip). Values come from the loaded, normalized
+papers (`p._editors`/`_area`/`_se`/`_ae`), which is what makes them match the
+mailer (below). Browser test:
+`node lit/_scraper/alerts-ui-guard.mjs` (Playwright over a stubbed compat
+Firebase SDK that signs a fake user straight in — the whole compose flow,
+both modals). Plus an alert name
 (**used as the e-mail subject line** — the field is labelled as such),
 recipient e-mail (default = account e-mail, sent *from* the user's own e-mail),
 and frequency (immediate / daily / weekly / monthly). The modal shows a **live
@@ -1894,8 +1910,16 @@ mailer** `lit/_scraper/alerts-mailer.mjs`, run daily by
 — the WP file was NOT read before 2026-08, which is why an "any new paper"
 subscriber never received a single working paper), reads all alerts via
 `collectionGroup('alerts')` with the Admin SDK, matches each with **vendored
-copies of the page's journal-list sets + `textMatch`/`authorMatch`** (keep in
-sync), and e-mails due alerts over SMTP (`To` recipient, `Reply-To` the
+copies of the page's journal-list sets + `textMatch`/`authorMatch` + the
+editorial normalizers `cleanEditorField`/`normalizeArea` and their alias
+tables** (keep in sync — the criteria hold the page's NORMALIZED editor/area
+values while MS deposits the WHOLE acceptance sentence as `Accepting Editor`
+on every one of its rows, so before the vendored normalizer an editor/area
+alert compared "Eric So" against "This paper was accepted by Eric So,
+accounting." and could never deliver; the raw field is kept as a comparison
+fallback, and the page's corpus-wide `fuzzyMerge*` passes are deliberately not
+reproduced — the alias tables carry the recurring variants), and e-mails due
+alerts over SMTP (`To` recipient, `Reply-To` the
 subscriber, `From` = `ALERTS_FROM`/`SMTP_USER`), stamping a per-alert
 `lastCheckedAt`/`lastSentAt` high-water mark so nothing is sent twice.
 **Working papers match with the page's own reachability rules** (`isWorkingPaper`

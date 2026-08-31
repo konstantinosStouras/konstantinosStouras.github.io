@@ -33,8 +33,11 @@
  * cron, "immediate" and "daily" behave the same; run the cron more often to
  * make "immediate" closer to real time.
  *
- * MATCHING FIDELITY: the journal-list sets and the textMatch/authorMatch
- * helpers below are vendored copies of the ones in lit/index.html — keep
+ * MATCHING FIDELITY: the journal-list sets, the textMatch/authorMatch helpers
+ * and the editorial-dimension normalizers (cleanEditorField/normalizeArea +
+ * their alias tables — editor/area criteria hold the page's NORMALIZED values,
+ * while MS's raw 'Accepting Editor' field is the whole acceptance sentence)
+ * below are vendored copies of the ones in lit/index.html — keep
  * them in sync if the page's filtering changes. Coverage is the ten native
  * sources + the FT50 catalog (the two recent.json files in this repo) PLUS the
  * ABS satellite shards, whose recent.json + manifests are fetched over HTTP at
@@ -209,6 +212,204 @@ function splitList(s) {
   return String(s || '').split(';').map(x => x.trim()).filter(Boolean);
 }
 
+// ── Editorial-dimension normalization (VENDORED from lit/index.html — keep in
+// sync, like textMatch/authorMatch above) ─────────────────────────────────────
+// The page's editor/area filter values — what captureCurrentFilters and the
+// alerts modal's editorial pickers save into an alert's criteria — are
+// NORMALIZED: sel.editor holds p._editors (cleanEditorField over the raw
+// field) and sel.area holds p._area (normalizeArea). Management Science
+// deposits the WHOLE acceptance sentence ("This paper was accepted by Eric So,
+// accounting.") as its 'Accepting Editor' field — measured 2026-08-31: every
+// one of the 4,894 served MS rows — so comparing a saved editor name against
+// the raw field could never match and an editor/area alert never delivered.
+// The page's corpus-wide fuzzyMergeEditors/fuzzyMergeAreas passes are
+// deliberately NOT reproduced (they need the whole loaded corpus and only
+// touch rare ≤3-paper variants); the alias tables below carry the recurring
+// spellings, so the two sides agree on every canonical value a picker offers.
+const EDITOR_ALIASES = {
+  // Accent variants
+  'renée adams': 'Renee Adams', 'renee adams': 'Renee Adams', 'adams': 'Renee Adams',
+  'gérard p. cachon': 'Gerard P. Cachon', 'gerard p. cachon': 'Gerard P. Cachon', 'gérard cachon': 'Gerard P. Cachon', 'gerard cachon': 'Gerard P. Cachon',
+  'jesper sørensen': 'Jesper Sorensen', 'jesper sorensen': 'Jesper Sorensen', 'jesper sørensen. organizations': 'Jesper Sorensen',
+  'jérôme detemple': 'Jerome Detemple', 'jerome b. detemple': 'Jerome Detemple', 'jerome detemple': 'Jerome Detemple',
+  'dorothea kübler': 'Dorothea Kubler', 'dorothea kubler': 'Dorothea Kubler',
+  'aurélien baillon': 'Aurelien Baillon',
+  'bariş ata': 'Baris Ata', 'baris ata': 'Baris Ata',
+  // Victor Martinez variants
+  'victor martínez-de-albéniz': 'Victor Martinez-de-Albeniz', 'victor martinez-de-albeniz': 'Victor Martinez-de-Albeniz',
+  'victor martínez de albéniz': 'Victor Martinez-de-Albeniz', 'victor martinez de albeniz': 'Victor Martinez-de-Albeniz',
+  'victor martinez de albéniz': 'Victor Martinez-de-Albeniz', 'víctor martínez-de-albéniz': 'Victor Martinez-de-Albeniz',
+  'martínez-de-albéniz victor': 'Victor Martinez-de-Albeniz',
+  'yuval victor martinez de albeniz': 'Victor Martinez-de-Albeniz',
+  // Typos
+  'brain bushee': 'Brian Bushee', 'duncan semester': 'Duncan Simester',
+  'karl deither': 'Karl Diether', 'manell baucells': 'Manel Baucells',
+  'suraj srinivassan': 'Suraj Srinivasan', 'toby suart': 'Toby Stuart',
+  'tylor shumway': 'Tyler Shumway', 'vishaul gaur': 'Vishal Gaur',
+  'yossiv aviv': 'Yossi Aviv', 'victoria ivanisha': 'Victoria Ivashina',
+  'mathew shum': 'Matthew Shum', 'lucas schmid': 'Lukas Schmid',
+  'loana popescu': 'Ioana Popescu', 'ioana popescu': 'Ioana Popescu',
+  'sameer srivastava': 'Sameer Srivastava',
+  // Middle names / initials → canonical
+  'brad m. barber': 'Brad Barber', 'barrie r. nault': 'Barrie Nault',
+  'carri w. chan': 'Carri Chan', 'charles j. corbett': 'Charles Corbett',
+  'lorin m. hitt': 'Lorin Hitt', 'mary e. barth': 'Mary Barth',
+  'pradeep k. chintagunta': 'Pradeep Chintagunta',
+  'jagmohan s. raju': 'Jagmohan Raju', 'paul h. zipkin': 'Paul Zipkin',
+  'candace a. yano': 'Candace Yano',
+  // Name consolidation
+  'david simchi-levi': 'David Simchi-Levi', 'david simchi levi': 'David Simchi-Levi', 'david simchi‐levi': 'David Simchi-Levi', 'david simchi‑levi': 'David Simchi-Levi', 'david simchi‒levi': 'David Simchi-Levi', 'david simchi–levi': 'David Simchi-Levi',
+  'chung piaw teo': 'Chung-Piaw Teo', 'chung-piaw teo': 'Chung-Piaw Teo',
+  'teck ho': 'Teck-Hua Ho', 'teck-hua ho': 'Teck-Hua Ho',
+  'yinyu-ye': 'Yinyu Ye', 'yinyu ye': 'Yinyu Ye',
+  'd. j. wu': 'D.J. Wu', 'd.j. wu': 'D.J. Wu', 'dj wu': 'D.J. Wu', 'dongjun wu': 'D.J. Wu',
+  'will cong': 'Will Cong', 'william cong': 'Will Cong', 'william lin cong': 'Will Cong', 'lin william cong': 'Will Cong',
+  'shivaram rajgopal': 'Shivaram Rajgopal', 'shiva rajgopal': 'Shivaram Rajgopal', 'rajgopal shiva': 'Shivaram Rajgopal',
+  'jay swaminathan': 'Jayashankar Swaminathan', 'jayashankar swaminathan': 'Jayashankar Swaminathan', 'swaminathan': 'Jayashankar Swaminathan',
+  'matt shum': 'Matthew Shum', 'matthew shum': 'Matthew Shum',
+  'george shanthikumar': 'J. George Shanthikumar', 'george j. shanthikumar': 'J. George Shanthikumar', 'j. george shanthikumar': 'J. George Shanthikumar',
+  'jean-pierre dube': 'Jean-Pierre Dube',
+  'sendil ethiraj': 'Sendil Ethiraj',
+  'sampath rajagopalan': 'Sampath Rajagopalan',
+  'maria claire villeval': 'Marie Claire Villeval', 'marie-claire villeval': 'Marie Claire Villeval', 'marie claire villeval': 'Marie Claire Villeval',
+  'chen yan': 'Yan Chen', 'prof. yan chen': 'Yan Chen', 'yan chen': 'Yan Chen',
+  'prof. ranjani krishnan': 'Ranjani Krishnan', 'ranjani krishnan': 'Ranjani Krishnan',
+  'professor bruno biais': 'Bruno Biais',
+  'erica plambeck': 'Erica Plambeck', 'caroline flammer': 'Caroline Flammer',
+  'giesecke kay': 'Kay Giesecke', 'kay giesecke': 'Kay Giesecke',
+  'yu (jeffrey) hu': 'Jeffrey Hu',
+  'dmitry kuksov': 'Dmitri Kuksov', 'dmitri kuksov': 'Dmitri Kuksov',
+  'shiva rajagopal': 'Shivaram Rajgopal',
+  'nicolas stier': 'Nicolas Stier-Moses', 'nicolas stier-moses': 'Nicolas Stier-Moses',
+  'manuel baucells': 'Manel Baucells',
+  'kay gieseke': 'Kay Giesecke',
+  'suraj srinivisan': 'Suraj Srinivasan',
+  'scholtes stefan': 'Stefan Scholtes', 'stefan sholtes': 'Stefan Scholtes',
+  'lukas schmidt': 'Lukas Schmid',
+  'alfonso gambardello': 'Alfonso Gambardella',
+  'carrie chan': 'Carri Chan',
+  'ranjani ananthakrishnan': 'Ranjani Krishnan',
+  'anita carson': 'Anita McGahan',
+  'raphael thomadsen': 'Raphael Thomadsen',
+  'ray reagans': 'Ray Reagans',
+  'uday rajan': 'Uday Rajan',
+  'melvyn sim': 'Melvyn Sim', 'michael fu': 'Michael Fu', 'peng sun': 'Peng Sun',
+  'glen dowell': 'Glen Dowell', 'greg shaffer': 'Greg Shaffer',
+  'jan bouwens': 'Jan Bouwens', 'haitao li': 'Haitao Li',
+  'eric bradlow': 'Eric Bradlow',
+  'anita mcgahan': 'Anita McGahan',
+};
+const EDITOR_JUNK = ['stakeholders. here', 'stakeholders'];
+const AREA_ALIASES = {
+  // Capitalization
+  'finance': 'finance', 'Finance': 'finance',
+  'Behavioral Economics and Decision Analysis': 'behavioral economics and decision analysis',
+  'Optimization <div data-widget-def': 'optimization', 'optimization': 'optimization',
+  // HTML junk
+  'accounting <div data-widget-def="ux': 'accounting',
+  'marketing <div data-widget-def="': 'marketing',
+  'healthcare management.conflict of interest statement: e': 'healthcare management',
+  // Typos
+  'behavioral economics and decisions analysis': 'behavioral economics and decision analysis',
+  'behavioral economics & decision analysis': 'behavioral economics and decision analysis',
+  'behavioral economics &amp; decision analysis': 'behavioral economics and decision analysis',
+  'behavioral economics and data analysis': 'behavioral economics and decision analysis',
+  'behavioral analysis': 'behavioral economics and decision analysis',
+  'behavioral economics and decision analysis–fast track': 'behavioral economics and decision analysis',
+  'entepreneurship and innovation': 'entrepreneurship and innovation',
+  'entrepreneurship': 'entrepreneurship and innovation',
+  // Consolidation
+  'information science': 'information systems', 'information system': 'information systems',
+  'information systems division': 'information systems',
+  'stochastic models': 'stochastic models and simulation',
+  'stochastic models & simulation': 'stochastic models and simulation',
+  'stochastic models &amp; simulation': 'stochastic models and simulation',
+  'stochastic models and systems': 'stochastic models and simulation',
+  'big data and analytics': 'big data analytics',
+  'operations and supply chain management': 'operations management',
+  'strategy': 'business strategy',
+  'revenue management and market analytics department': 'revenue management and market analytics',
+  'revenue management and analytics': 'revenue management and market analytics',
+  'r&amp;d and product development': 'R&D and product development',
+  'r&d and product development': 'R&D and product development',
+  'organizations and social networks': 'organizations',
+  'organization': 'organizations',
+  'optimization and decision analytics': 'optimization',
+  'finance department': 'finance',
+  'health': 'healthcare management',
+  'sustainability': 'business strategy',
+};
+const AREA_JUNK = [
+  'we report seven sets of studies',
+  'focused issue editor', 'guest department editor', 'guest editor',
+  'special issue editors',
+];
+function normalizeEditorName(name) {
+  var t = name.trim();
+  if (!t) return '';
+  // Strip "Prof." / "Professor" prefix
+  t = t.replace(/^(prof\.?|professor)\s+/i, '');
+  // Normalize Unicode hyphens to regular hyphen
+  t = t.replace(/[‐‑‒–—―﹘﹣－]/g, '-');
+  // Normalize accents for lookup
+  var key = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (EDITOR_ALIASES[key]) return EDITOR_ALIASES[key];
+  var keyLower = t.toLowerCase();
+  if (EDITOR_ALIASES[keyLower]) return EDITOR_ALIASES[keyLower];
+  // Check junk
+  for (var j = 0; j < EDITOR_JUNK.length; j++) { if (key.indexOf(EDITOR_JUNK[j]) !== -1) return ''; }
+  return t;
+}
+function cleanEditorField(raw) {
+  if (!raw) return [];
+  var s = raw;
+  // Fix junk containing "accepted by"
+  var ai = s.indexOf('This paper was accepted by');
+  if (ai === -1) ai = s.indexOf('accepted by');
+  if (ai !== -1) {
+    var after = s.substring(ai);
+    // Capture the full acceptance sentence (allowing multi-initial names like
+    // "D. J. Wu"), then keep the editor name part before the area comma.
+    var m = after.match(/accepted by\s+([^.]+(?:\.[^.]{0,5})*[^.]*)\./i);
+    var rest = m ? m[1] : after.replace(/^.*?accepted by\s+/i, '');
+    s = rest.split(',')[0].trim();
+  }
+  s = s.replace(/\.\s*$/, '').trim();
+  if (!s) return [];
+  // Split "Editor1 and Editor2"
+  return s.split(/\s+and\s+/i).map(e => normalizeEditorName(e.trim())).filter(Boolean);
+}
+function normalizeArea(raw) {
+  if (!raw) return '';
+  var s = raw.trim();
+  // Truncate at HTML tags
+  var htmlIdx = s.indexOf('<');
+  if (htmlIdx > 0) s = s.substring(0, htmlIdx).trim();
+  // Truncate at junk suffixes (case-insensitive)
+  s = s.replace(/\.?\s*funding:.*/i, '').trim();
+  s = s.replace(/\.?\s*supplemental material:.*/i, '').trim();
+  s = s.replace(/\.?\s*conflict.*/i, '').trim();
+  s = s.replace(/\.?\s*https?:\/\/.*/i, '').trim();
+  s = s.replace(/\.here.*/i, '').trim();
+  // Remove trailing period
+  s = s.replace(/\.\s*$/, '').trim();
+  // Fix spacing around colons: " :" → ":"
+  s = s.replace(/\s+:/g, ':');
+  var key = s.toLowerCase();
+  // Check aliases
+  if (AREA_ALIASES[key]) return AREA_ALIASES[key];
+  if (AREA_ALIASES[s]) return AREA_ALIASES[s];
+  // Check junk
+  for (var j = 0; j < AREA_JUNK.length; j++) { if (key.indexOf(AREA_JUNK[j]) !== -1) return ''; }
+  // Extract area from junk like "Renee, finance" or "Jayashankar, operations management"
+  var commaMatch = key.match(/^[a-z]+,\s*(.+)$/);
+  if (commaMatch) {
+    var extracted = commaMatch[1].trim();
+    return AREA_ALIASES[extracted] || extracted;
+  }
+  return s.toLowerCase();
+}
+
 // Journal keys a paper matches (its own key + PNAS section keys).
 function paperJKeys(p) {
   const keys = [p.JKey || ''];
@@ -295,8 +496,17 @@ function matchesCriteria(p, c, ctx) {
 
   const ciEq = (arr, val) => { const v = String(val || '').trim().toLowerCase(); return arr.some(x => String(x).trim().toLowerCase() === v); };
   const ciAny = (arr, list) => list.some(v => ciEq(arr, v));
-  if ((c.editor || []).length && !ciEq(c.editor, p['Accepting Editor'])) return false;
-  if ((c.area   || []).length && !ciEq(c.area,   p['Area'])) return false;
+  // Editor/area criteria hold NORMALIZED page values (sel.editor = p._editors,
+  // sel.area = p._area), while MS's raw 'Accepting Editor' field is the whole
+  // acceptance sentence — clean the row's fields with the vendored normalizers
+  // before comparing (the raw field is kept as a fallback so a dataset that
+  // deposits a clean name still matches). See the vendored block above.
+  if ((c.editor || []).length &&
+      !ciAny(c.editor, cleanEditorField(p['Accepting Editor'] || '')) &&
+      !ciEq(c.editor, p['Accepting Editor'])) return false;
+  if ((c.area   || []).length &&
+      !ciEq(c.area, normalizeArea(p['Area'] || '')) &&
+      !ciEq(c.area, p['Area'])) return false;
   if ((c.se     || []).length && !ciAny(c.se, splitList(p['Senior Editor']))) return false;
   if ((c.ae     || []).length && !ciAny(c.ae, splitList(p['Associate Editor']))) return false;
 
@@ -1316,6 +1526,42 @@ function selftest() {
   ok('affiliation dublin', matchesCriteria(P(), { affiliation: ['dublin'] }, ctx));
   ok('year exact 2026', matchesCriteria(P(), { year: ['2026'] }, ctx));
   ok('year 2025 fails', !matchesCriteria(P(), { year: ['2025'] }, ctx));
+
+  // ── Editorial dimensions (editor / area / SE / AE) ─────────────────────────
+  // The criteria hold NORMALIZED page values (sel.editor = p._editors), while
+  // MS deposits the WHOLE acceptance sentence as 'Accepting Editor' — the
+  // regression this block pins: before the vendored normalizer, an editor or
+  // area alert compared the saved name against the raw sentence and could
+  // never match a single real row.
+  const MSED = P({ 'Accepting Editor': 'This paper was accepted by Eric So, accounting.', Area: 'Accounting' });
+  ok('editor name matches the raw acceptance sentence', matchesCriteria(MSED, { editor: ['Eric So'] }, ctx));
+  ok('editor match is case-insensitive', matchesCriteria(MSED, { editor: ['eric so'] }, ctx));
+  ok('wrong editor fails', !matchesCriteria(MSED, { editor: ['Stefan Scholtes'] }, ctx));
+  ok('area normalizes to the page value (lowercase)', matchesCriteria(MSED, { area: ['accounting'] }, ctx));
+  ok('wrong area fails', !matchesCriteria(MSED, { area: ['finance'] }, ctx));
+  ok('editor alias variant resolves (D. J. Wu → D.J. Wu)',
+     matchesCriteria(P({ 'Accepting Editor': 'This paper was accepted by D. J. Wu, information systems.' }), { editor: ['D.J. Wu'] }, ctx));
+  ok('two editors split on "and" — either matches',
+     matchesCriteria(P({ 'Accepting Editor': 'This paper was accepted by Jane Roe and John Doe, operations.' }), { editor: ['john doe'] }, ctx));
+  ok('a clean editor-name field still matches (raw fallback)',
+     matchesCriteria(P({ 'Accepting Editor': 'Kay Giesecke' }), { editor: ['Kay Giesecke'] }, ctx));
+  ok('area alias consolidates (strategy → business strategy)',
+     matchesCriteria(P({ Area: 'Strategy' }), { area: ['business strategy'] }, ctx));
+  ok('SE ;-list matches any one of several',
+     matchesCriteria(P({ JKey: 'isre', 'Senior Editor': 'Alok Gupta; Sabine Matook' }), { se: ['sabine matook'] }, ctx));
+  ok('AE matches', matchesCriteria(P({ JKey: 'isre', 'Associate Editor': 'A. Reviewer' }), { ae: ['a. reviewer'] }, ctx));
+  ok('missing editor field fails an editor criterion', !matchesCriteria(P(), { editor: ['Eric So'] }, ctx));
+  // …and against the SERVED data: every MS row's raw field really is the
+  // sentence, and the normalizer really extracts a clean name from it.
+  (() => {
+    const served = loadRecentPapers().filter(p => p.JKey === 'ms' && p['Accepting Editor']);
+    if (!served.length) return;   // no MS rows in the current window → nothing to pin
+    const eds = cleanEditorField(served[0]['Accepting Editor']);
+    ok('served MS row: normalizer extracts a clean editor name',
+       eds.length > 0 && !/accepted by/i.test(eds[0]));
+    ok('served MS row: the extracted name matches as a criterion',
+       matchesCriteria(served[0], { editor: [eds[0]] }, ctx));
+  })();
 
   // pre-print flag
   ok('preprintOnly needs a pre-print', !matchesCriteria(P(), { preprintOnly: true }, ctx));
