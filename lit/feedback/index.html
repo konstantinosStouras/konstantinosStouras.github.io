@@ -246,10 +246,34 @@
   /* A message the reader has taken off their own list. Faded, never hidden:
      this copy is the record, and removing is a hide rather than a delete. */
   .msg-item.is-gone { opacity: 0.55; }
-  @media (max-width: 480px) {
-    .ur-count { margin-right: 0; width: 100%; }
-    .ur-table { font-size: 13px; }
-    .ur-table th, .ur-table td { padding: 7px 8px; }
+  /* the two figures the roster is reconciled against — the tile's and its own */
+  .ur-note { font-size: 13.5px; color: var(--text); background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; margin: 0 0 12px; line-height: 1.55; }
+  /* Phone-only sort chips: the column headings that carry the sort on a wide
+     screen are not drawn there (see the card layout below). Same .ur-sort
+     buttons, so urWire binds them with no code of their own. */
+  .ur-sortrow { display: none; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 13px; color: var(--text-muted); margin: 0 0 10px; }
+  .ur-sortrow .ur-sort { font-weight: 600; color: var(--text-muted); }
+  .ur-sortrow .ur-sort.is-on { color: var(--navy); font-weight: 700; }
+  .ur-act { text-align: right; white-space: nowrap; }
+  @media (max-width: 640px) {
+    .ur-find { flex: 1 1 100%; }
+    .ur-find input { flex: 1; min-width: 0; }
+    .ur-count { margin-right: 0; }
+    .ur-sortrow { display: flex; }
+    /* ONE CARD PER ACCOUNT rather than a seven-column table scrolled sideways
+       (a name, an address and two dates do not survive a 360px table). The
+       headings become a small label in front of each value, the name is the
+       card's title, the tick box sits top-right and Open spans the foot. */
+    .ur-wrap { overflow: visible; }
+    .ur-table, .ur-table tbody, .ur-table tr, .ur-table td { display: block; }
+    .ur-table thead { display: none; }
+    .ur-table tr { position: relative; background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; box-shadow: var(--shadow-sm); }
+    .ur-table td { border: 0; padding: 3px 0; display: flex; gap: 10px; align-items: baseline; }
+    .ur-table td[data-label]::before { content: attr(data-label); flex: none; width: 84px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted); }
+    .ur-table td.ur-tick { position: absolute; top: 10px; right: 10px; width: auto; padding: 0; }
+    .ur-table td.ur-name { padding-right: 34px; font-weight: 600; font-size: 15px; }
+    .ur-table td.ur-act { display: block; padding-top: 8px; text-align: left; }
+    .ur-table td.ur-act .fb-act { width: 100%; }
   }
 
   /* Screenshot lightbox */
@@ -1144,6 +1168,7 @@
   var urSortKey = 'seen';
   var urSortDir = 'desc';
   var urFilter = '';
+  var urPublicCount = null; // what the Data Analytics tile counts, or null if unread
 
   function urMaybeShow(u) {
     var sec = $('urAdmin');
@@ -1153,12 +1178,34 @@
     if (!urLoaded) { urLoaded = true; urLoad(); }
   }
 
+  /* The figure the Data Analytics tile shows — a count of the PUBLIC
+     registeredUsers markers — read here as well, so the two can stand side by
+     side and a gap between them is SAID rather than left for someone to notice
+     across two pages (owner, 2026-09-14: the tile read 4, this list 2).
+     Non-fatal: a failed count leaves the roster usable. The compat SDK this
+     page loads may carry no count() aggregate (lit-acct-nav.js learnt that
+     the hard way), so it is reached for only when present and the collection
+     is read outright otherwise; it is a handful of contentless documents. */
+  function urCountMarkers() {
+    var col = db.collection('registeredUsers');
+    var p;
+    try {
+      p = (typeof col.count === 'function')
+        ? col.count().get().then(function (agg) { return agg.data().count; })
+        : col.get().then(function (snap) { return snap.size; });
+    } catch (e) { p = col.get().then(function (snap) { return snap.size; }); }
+    return p.then(function (n) { return typeof n === 'number' ? n : null; })
+      .catch(function () { return null; });
+  }
+
   function urLoad() {
     $('urAdminSub').textContent = 'Loading…';
     return Promise.all([
       db.collection('userDirectory').get(),
-      db.collection('messages').get()
+      db.collection('messages').get(),
+      urCountMarkers()
     ]).then(function (both) {
+      urPublicCount = both[2];
       var threads = {};
       both[1].docs.forEach(function (d) {
         var t = d.data() || {}; t.uid = t.uid || d.id; threads[d.id] = t;
@@ -1272,12 +1319,19 @@
     var host = $('urAdminList');
     if (!host) return;
     var waiting = urRows.filter(function (r) { return r.thread && r.thread.needsAdmin; }).length;
-    $('urAdminSub').textContent = urRows.length + ' registered' +
+    /* The SAME number the Data Analytics tile shows, when it is known — and
+       when the two differ, both, so neither page contradicts the other. */
+    var pub = urPublicCount;
+    $('urAdminSub').textContent =
+      (pub === null || pub === urRows.length
+        ? urRows.length + ' registered'
+        : pub + ' registered · ' + urRows.length + ' listed here') +
       (waiting ? ' · ' + waiting + ' awaiting a reply' : '');
 
     if (!urRows.length) {
-      host.innerHTML = '<p class="fb-empty">No accounts have signed in since the ' +
-        'roster shipped. A row is written the first time someone signs in.</p>';
+      host.innerHTML = urGapNote() + '<p class="fb-empty">No account has a row here yet. ' +
+        'A row is written the moment someone signs in, and the nightly reconcile ' +
+        'writes one for every account already in the sign-in database.</p>';
       return;
     }
     var rows = urVisible();
@@ -1299,14 +1353,30 @@
     // heading sits above the wrong column.
     head += '<th></th></tr>';
 
+    /* Each cell carries its heading as data-label: on a phone the table is
+       drawn as one card per account and the heading is printed in front of the
+       value (the name is the card's title and needs none). */
     var body = rows.map(function (r) {
       return '<tr><td class="ur-tick"><input type="checkbox" class="ur-pick" data-uid="' +
         esc(r.uid) + '"' + (urPicked[r.uid] ? ' checked' : '') + ' aria-label="Select ' +
         esc(r.name || r.email || r.uid) + '"></td>' +
-        UR_COLS.map(function (c) { return '<td>' + c.cell(r) + '</td>'; }).join('') +
-        '<td><button type="button" class="fb-act ur-open" data-uid="' + esc(r.uid) +
+        UR_COLS.map(function (c) {
+          return c.key === 'name'
+            ? '<td class="ur-name">' + c.cell(r) + '</td>'
+            : '<td data-label="' + esc(c.label) + '">' + c.cell(r) + '</td>';
+        }).join('') +
+        '<td class="ur-act"><button type="button" class="fb-act ur-open" data-uid="' + esc(r.uid) +
         '">Open</button></td></tr>';
     }).join('');
+
+    /* The phone's sort control: the same buttons the column headings carry,
+       drawn as a row of chips above the cards where the headings are not shown. */
+    var sortRow = '<div class="ur-sortrow"><span>Sort by</span>' + UR_COLS.map(function (c) {
+      var on = urSortKey === c.key;
+      return '<button type="button" class="ur-sort' + (on ? ' is-on' : '') +
+        '" data-sort="' + esc(c.key) + '">' + esc(c.label) +
+        (on ? (urSortDir === 'asc' ? ' ▲' : ' ▼') : '') + '</button>';
+    }).join('') + '</div>';
 
     var ghosts = '';
     if (urGhosts.length) {
@@ -1322,18 +1392,39 @@
         }).join('') + '</ul>';
     }
 
-    host.innerHTML =
+    host.innerHTML = urGapNote() +
       '<div class="ur-bar">' +
         '<label class="ur-find"><span>Find</span><input type="search" id="urFilter" ' +
           'placeholder="name or e-mail" value="' + esc(urFilter) + '"></label>' +
         '<span class="ur-count">' + rows.length + ' of ' + urRows.length + ' shown' +
           (picked ? ' · ' + picked + ' selected' : '') + '</span>' +
         '<button type="button" class="fb-act" id="urCsv">Download CSV</button>' +
-      '</div>' +
+      '</div>' + sortRow +
       '<div class="ur-wrap"><table class="ur-table"><thead>' + head + '</thead><tbody>' +
         body + '</tbody></table></div>' + ghosts;
 
     urWire();
+  }
+
+  /* Said once, above the list, whenever the tile's figure and this list's
+     differ — with the reason and what closes it. Nothing when they agree or
+     the tile's figure could not be read. */
+  function urGapNote() {
+    var pub = urPublicCount;
+    if (pub === null || pub === urRows.length) return '';
+    var diff = pub - urRows.length;
+    var why = diff > 0
+      ? (diff === 1 ? 'One account has' : diff + ' accounts have') + ' signed in but ' +
+        (diff === 1 ? 'has' : 'have') + ' no row here yet: ' + (diff === 1 ? 'it' : 'they') +
+        ' last signed in before this roster existed, and a row is only written by its own account on a sign-in.'
+      : (-diff === 1 ? 'One row here has' : (-diff) + ' rows here have') +
+        ' no marker in the public tally the tile counts.';
+    return '<p class="ur-note"><strong>The Data Analytics tile counts ' + pub +
+      '; this list holds ' + urRows.length + '.</strong> ' + esc(why) +
+      ' Both are reconciled against the sign-in database every night (the ' +
+      'registered-users audit workflow), which fills a missing row from the account ' +
+      'record itself — name, address, first and last seen — so the two figures ' +
+      'agree again by the morning.</p>';
   }
 
   function urWire() {

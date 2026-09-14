@@ -96,6 +96,72 @@ ok(/allow read: if true;/.test(reg) && /hasOnly\(\['t'\]\)/.test(reg),
   'registeredUsers stays PUBLIC and contentless — which is exactly why the ' +
   'roster is a collection of its own rather than fields added to it');
 
+/* ------------------------------ the two figures agree (owner, 2026-09-14) */
+
+/* The tile read 4 and the roster listed 2: a marker is written on every
+   signed-in visit since the tally shipped, a row only on a visit since the
+   (later) roster shipped, and only the account itself can write its row. The
+   nightly Admin-SDK run is the one thing that can see Firebase Auth, so it
+   reconciles BOTH collections against it. */
+const audit = read('_scraper/registered-users-audit.mjs');
+ok(/collection\('registeredUsers'\)/.test(audit) && /collection\('userDirectory'\)/.test(audit),
+  'the nightly reconcile reads BOTH collections, not the tally alone');
+ok(/\.listUsers\(/.test(audit),
+  '…and lists every account in Firebase Auth — the one record of who exists');
+ok(/export function planReconcile/.test(audit) && /export function rowPatch/.test(audit)
+   && /export function accountOf/.test(audit),
+  'the additive half is pure and exported, so --selftest can drive it offline');
+ok(/isUserNotFound\(e\)\) verdicts\[uid\] = 'gone'/.test(audit),
+  'removal still needs a definite auth/user-not-found — for rows exactly as for markers');
+ok(/\.anonymous\) \{ plan\.anonymous\+\+; continue; \}/.test(audit),
+  'an anonymous account (presence) is never seeded as a registered user');
+/* A seeded row may carry ONLY the four fields the rules allow the owner —
+   sliced from rowPatch itself, with the length guard every source-slice check
+   in this file needs. */
+const patchSrc = audit.slice(audit.indexOf('export function rowPatch'), audit.indexOf('export function planReconcile'));
+ok(patchSrc.length > 500, 'rowPatch is where this thinks it is');
+const seeded = (patchSrc.match(/const r = \{([^}]*)\}/) || [])[1] || '';
+eq(seeded.split(',').map((s) => s.trim().split(':')[0].trim()).filter(Boolean).sort(),
+  ['first', 'name', 'seen'],
+  'a seeded row starts as name/first/seen…');
+ok(/if \(acct\.email\) r\.email = acct\.email;/.test(patchSrc),
+  '…gains email only when Auth has one (ORCID sign-ins carry none) — the rules’ four fields, never a fifth');
+ok(/if \(!row\.name && acct\.name\) p\.name = acct\.name;/.test(patchSrc),
+  'a name the account wrote about itself is never overwritten by Auth’s display name');
+ok(/acct\.created < row\.first\)\) p\.first = first;/.test(patchSrc) && /seen > row\.seen\) p\.seen = seen;/.test(patchSrc),
+  '`first` only ever moves EARLIER and `seen` only LATER');
+
+/* The Feedback page shows the tile’s figure beside its own and says so when
+   they differ, so the two pages cannot silently contradict each other. */
+ok(/function urCountMarkers/.test(fb) && /collection\('registeredUsers'\)/.test(fb),
+  'the Feedback roster reads the tile’s own figure');
+ok(/typeof col\.count === 'function'/.test(fb),
+  '…reaching for count() only when the SDK has it — the compat SDK may not (the lit-acct-nav.js lesson)');
+ok(/' registered · ' \+ urRows\.length \+ ' listed here'/.test(fb) && /function urGapNote/.test(fb),
+  '…and says BOTH figures, with a note naming the gap, when they differ');
+ok(/registered-users audit workflow/.test(fb),
+  'the note names what closes the gap');
+
+/* On a phone the roster is one card per account. */
+ok(/data-label="' \+ esc\(c\.label\) \+ '"/.test(fb),
+  'each roster cell carries its heading, for the phone layout to print');
+ok(/\.ur-table thead \{ display: none; \}/.test(fb) && /\.ur-sortrow \{ display: flex; \}/.test(fb),
+  'on a phone the heading row goes and the sort becomes a chip row');
+ok(/class="ur-sortrow"/.test(fb) && /class="ur-sort' \+ \(on \? ' is-on' : ''\)/.test(fb),
+  '…made of the SAME .ur-sort buttons, so urWire binds them with no code of its own');
+
+/* The workflow still runs the offline checks before it can touch a document. */
+const wf = readFileSync(path.join(LIT, '..', '.github', 'workflows', 'lit-registered-users-audit.yml'), 'utf8');
+ok(wf.indexOf('registered-users-audit.mjs --selftest') < wf.indexOf('registered-users-audit.mjs ${{'),
+  'the workflow’s offline selftest runs before the reconcile step');
+ok(/FIREBASE_SERVICE_ACCOUNT: \$\{\{ secrets\.FIREBASE_SERVICE_ACCOUNT \}\}/.test(wf),
+  'and the reconcile is the step that gets the credentials');
+
+/* The About page discloses that the entry may be filled from the account record. */
+const aboutPage = read('about/index.html');
+ok(/filled in from the account record itself/.test(aboutPage),
+  'the About page says the entry can be filled from the account record, not only on a sign-in');
+
 /* -------------------------------------------------------------- the threads */
 
 const thr = rules.slice(rules.indexOf('match /messages/{userId}'), rules.indexOf('match /accountKeys/'));

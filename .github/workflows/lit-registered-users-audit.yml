@@ -1,15 +1,26 @@
 name: lit — registered-users tally audit
 
-# Keeps the "Registered users" figure on stouras.com/lit/analytics/ a count of
-# PEOPLE rather than of leftover marker documents: it removes the public
-# `registeredUsers` markers whose Firebase Auth account no longer exists —
-# accounts merged away as duplicates (the merge deletes the sign-in, which does
-# not delete its Firestore data) and accounts deleted from the console.
+# Keeps the two places that say who has registered on The Lit in agreement with
+# Firebase Auth, the one record of the accounts that actually exist:
 #
-# Only the Admin SDK can see whether a uid still exists, which is why this runs
-# here and not in the page. It is conservative by construction: a marker is
-# removed only on a definite "no such user", so a failed look-up leaves the
-# tally exactly as it was. See lit/_scraper/registered-users-audit.mjs.
+#   • the PUBLIC `registeredUsers` markers the "Registered users" tile on
+#     stouras.com/lit/analytics/ counts, and
+#   • the maintainer-only `userDirectory` roster rows the Feedback page lists.
+#
+# Both are written by the browser on a sign-in, and the roster shipped later
+# than the tally — so an account that has not signed in since had a marker and
+# no row, and the tile read 4 while the roster listed 2 (owner, 2026-09-14).
+# This job REMOVES the markers and rows whose account no longer exists
+# (merged-away duplicates, console deletions — deleting a sign-in does not
+# delete its Firestore data) and SEEDS the ones an existing account lacks from
+# its Auth record (address, display name, creation and last sign-in time).
+#
+# Only the Admin SDK can list accounts or see whether a uid still exists, which
+# is why this runs here and not in the page. Removal is conservative by
+# construction: a document goes only on a definite "no such user", so a failed
+# look-up leaves the tally exactly as it was; seeding is additive, so a
+# half-failed listing can only seed less. See
+# lit/_scraper/registered-users-audit.mjs.
 #
 # A clean no-op until the FIREBASE_SERVICE_ACCOUNT secret is set. It commits
 # nothing — the only thing it writes is Firestore.
@@ -20,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run — report the orphaned markers, delete nothing'
+        description: 'Dry run — report what would be removed and seeded, write nothing'
         type: boolean
         default: false
 
@@ -47,14 +58,14 @@ jobs:
           node-version: '20'
 
       # Offline, no credentials, no dependencies — runs before anything can
-      # delete a marker document.
+      # touch a document.
       - name: Offline checks
         run: node lit/_scraper/registered-users-audit.mjs --selftest
 
       - name: Install dependencies
         run: npm install --no-save --ignore-scripts firebase-admin@12.7.0
 
-      - name: Audit the registered-users tally
+      - name: Reconcile the registered-users tally and roster with Firebase Auth
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node lit/_scraper/registered-users-audit.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
