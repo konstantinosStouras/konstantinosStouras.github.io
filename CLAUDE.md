@@ -405,7 +405,15 @@ or the citations job — overlapping fires queue and coalesce) is what makes a
 one); a rejected push re-runs the idempotent incremental pass against the fresh
 tip. Offline test: `node lit/_scraper/incremental-selftest.mjs` (mock, no network).
 NOTE: this build env's egress blocks Crossref (403), so the incremental pass only
-does real work on the GitHub Actions runners. **Duplicate registrations are
+does real work on the GitHub Actions runners. **Cadence caveat (measured
+2026-09-14):** GitHub's scheduler fires this repo's crons far below their
+nominal rate — `lit-check-new` (`*/15`, 96 fires/day nominal) has run 1,096
+times since it was created, about one run per 1.4 h on average and 2–7 h apart
+over the last day; `lit-paper-submissions` (`*/10`, off-boundary minutes)
+likewise, 2–6 h apart — the documented behaviour for a repo with ~700 scheduled
+runs/day, not a failure; a suggestion left `pending` for hours is waiting for
+the next fire, and `workflow_dispatch` (Actions → Run workflow) runs either
+job now. **Duplicate registrations are
 collapsed — no paper is ever listed twice:** Crossref keeps superseded
 registrations alive (INFORMS's zero-padded DOI switch `.612`→`.0612`, POM's
 Wiley→SAGE re-deposit, JSTOR `10.2307` legacy DOIs beside the publisher's own,
@@ -506,6 +514,58 @@ merge), the WP crawler AND `ingest-submissions.mjs`, and `dedupe-data.mjs`
 (which re-tallies from the SURVIVING rows, so a removal lowers it too). Tests:
 unit + integration checks in `incremental-selftest.mjs` (native + FT50), the WP
 `selftest.mjs` and `ingest-selftest.mjs`.
+**An un-dated paper is announced when it is published (`stampPublished`,
+2026-09-14).** The registry stamps a first-seen date ONCE, and the onboarding
+rule leaves the back-catalogue `''` on purpose — but a paper that was ALREADY an
+Article in Advance when the registry was created (8 Jul 2026) later moved into
+its issue with nothing more than a bibliographic refresh, so neither event ever
+reached "recently added" or an e-mail alert (both read `recent.json`). Found via
+the paper-suggestion queue: the September-2026 MS commentaries
+`10.1287/mnsc.2026.02441`/`.02442` (Crossref-registered by 7 Jul 2026 — the
+former is even a row of `mock/crossref-ms.json` — in the catalog since the very
+first build, published in 72(9)) were suggested as "missing" although they were
+listed all along; by the rule's own predicate 551 native Articles-in-Advance
+rows (278 of them MS: 98 ISR, 71 M&SOM, 70 POM, 33 OR, 1 MkSc) still carry `''`
+and would have transitioned the same way (measured 2026-09-14; EC's accepted
+papers never gain a volume/issue, so the rule never touches them). Now BOTH native passes and BOTH FT50
+passes stamp `PULL_DATE` onto a row whose registry entry is `''` the moment it
+gains its volume/issue: `isForthcomingRow` (no volume/issue AND a forthcoming
+`Status` — an old frozen no-volume record carries none and never counts) before,
+published after. The daily builds snapshot the committed forthcoming DOIs
+(`loadForthcomingDois`) BEFORE the harvest replaces them; the incrementals see
+the transition in the known-DOI refresh and stamp AFTER the DOI-adoption
+seeding, so an adopted key is judged on its inherited date. A row that already
+carries a date keeps it — a paper is announced once, as an advance article OR
+on publication, never twice — and an un-dated row already in its issue is
+back-catalogue and is never re-dated, so no build can mass-announce the
+onboarding rows. A transition that happened BEFORE this rule shipped cannot be
+re-observed, so `lit/_scraper/announce-papers.mjs --dir <dataset> [--date
+YYYY-MM-DD] [--dry-run] <doi>…` stamps a LISTED paper by hand and rewrites
+`recent.json` + `recent-counts.json` through the pipeline's own
+`buildRecent`/`buildRecentCounts` (exported for it, with `reInternalize`/
+`rehydrateRow` + `regKey`): a no-DOI `--dry-run` is a byte-for-byte consistency
+check of those two files (it passed on both datasets before the first use), and
+a DOI not in the catalog is refused — it announces, it never adds. The two
+commentaries were announced that way in native AND FT50 (the FT50 copies of the
+INFORMS six are dropped by the page's recent view, but the registries must
+agree). Tests: scenario 6 of `incremental-selftest.mjs` (native, on the
+published POM fixture row `10.1177/10591478261455555` added to
+`mock/crossref-pom.json` for it — every other fixture row of the eight polled
+journals is an advance article; the PNAS and rescue fixtures carry published
+rows but the incremental pass never reads them) and scenario 5 of the FT50 one (EJOR `10.1016/j.ejor.2026.05.012`):
+incremental + full build, announced-once, no re-dating (a refreshed
+already-published row included, so the `wasForthcoming` branch is really
+exercised, and the full build's `forthcomingBefore` guard — a mutation test
+dropping it fails the suite), the DOI-adoption path (an un-dated stub
+superseded by its published registration is announced, which pins the
+stamp-after-seeding order), quiet run still a no-op.
+**The five shard pipelines carry the same rule** (`isForthcomingRow`/
+`loadForthcomingDois`/`stampPublished` vendored from the FT50 module into each
+`_scraper/build-data.mjs` in the same change — daily builds only, since the
+shards have no incremental pass; the Nature/Science mock fixtures exercise the
+transition, the ABS shards' fixtures hold no published row, so there it is a
+syntax + mock-build smoke). Keep the three helpers in sync across all seven
+copies like the rest of the vendored machinery.
 **All four published counters are audited offline by
 `node lit/_scraper/counters-selftest.mjs`** — the header's "N papers from M
 authors", the recently-added tally, and the analytics scope line + tiles — each

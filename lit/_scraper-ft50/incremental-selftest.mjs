@@ -225,6 +225,84 @@ ok(/reference point/.test(ejorA2.find(p => p.DOI === upE.DOI).Abstract || ''),
 ok(ejorA2.find(p => p.DOI === keepE.DOI).Abstract === fullKeepE,
   'a fuller backfilled abstract is never regressed to the Crossref text');
 
+// 5) An un-dated paper is announced when it is published (stampPublished in
+// build-data.mjs; mirrors the native selftest's scenario 6). A row that was
+// already an Article in Press when the registry was created carries '' (the
+// onboarding rule), and its later move into an issue used to refresh
+// volume/issue silently — so it never reached "recently added". Rewrite the
+// committed copy of a PUBLISHED EJOR fixture row as an advance article with an
+// un-dated registry entry, then let (a) the incremental pass and (b) the full
+// build observe the transition.
+const PUB_DOI = '10.1016/j.ejor.2026.05.012';
+const ejorP = rd('papers-ejor.json');
+const pubRow = ejorP.find(p => p.DOI.toLowerCase().endsWith(PUB_DOI));
+ok(!!pubRow && pubRow.Volume === '335' && pubRow.Issue === '2' && !pubRow.Status,
+  'the published EJOR fixture row is built with its volume/issue');
+const asAdvance = (rows) => rows.map(p => p.DOI === pubRow.DOI
+  ? { ...p, Volume: '', Issue: '', Page: '', Status: 'Articles in Advance' } : p);
+const setReg = (v) => { const r = rd('_registry.json'); r[PUB_DOI] = v; writeFileSync(join(DATA, '_registry.json'), JSON.stringify(r)); };
+// (a) the incremental pass
+writeFileSync(join(DATA, 'papers-ejor.json'), JSON.stringify(asAdvance(ejorP)));
+setReg('');
+const out5 = run({ FT50_INCREMENTAL: '1' });
+ok(/registry: 1 un-dated paper\(s\) reached their issue — announced/.test(out5), 'the incremental pass reports the AIA→issue transition');
+const e5 = rd('papers-ejor.json').find(p => p.DOI === pubRow.DOI);
+ok(e5 && e5.Volume === '335' && e5.Issue === '2' && !e5.Status, 'the row regains its volume/issue (published again)');
+ok(rd('_registry.json')[PUB_DOI] === today, 'an un-dated row that reached its issue is stamped with today');
+ok(rd('recent.json').some(p => p.DOI === pubRow.DOI && p['Date Added'] === today), 'and it enters recent.json dated today');
+ok((rd('recent-counts.json').days.ejor || {})[today] >= 1, 'and the recently-added tally counts it under ejor');
+// Announced ONCE: a row that already carries a first-seen date keeps it.
+writeFileSync(join(DATA, 'papers-ejor.json'), JSON.stringify(asAdvance(rd('papers-ejor.json'))));
+setReg('2026-02-02');
+run({ FT50_INCREMENTAL: '1' });
+ok(rd('_registry.json')[PUB_DOI] === '2026-02-02', 'a row that already had a first-seen date keeps it on publication (announced once)');
+// An un-dated row that was ALREADY in its issue is back-catalogue: never re-dated.
+setReg('');
+const quiet5 = run({ FT50_INCREMENTAL: '1' });
+ok(rd('_registry.json')[PUB_DOI] === '' && /No new or changed papers/.test(quiet5),
+  'an un-dated row already in its issue is never re-dated, and that run is still a no-op');
+// (b) the full build sees the same transition through the committed files.
+writeFileSync(join(DATA, 'papers-ejor.json'), JSON.stringify(asAdvance(rd('papers-ejor.json'))));
+setReg('');
+const out5b = run({});
+ok(/registry: 1 un-dated paper\(s\) reached their issue — announced/.test(out5b), 'the full build reports the AIA→issue transition');
+ok(rd('_registry.json')[PUB_DOI] === today, 'the full build stamps the un-dated row that reached its issue');
+ok(rd('recent.json').some(p => p.DOI === pubRow.DOI && p['Date Added'] === today), 'and recent.json carries it dated today after the full build');
+ok(rd('papers-ejor.json').find(p => p.DOI === pubRow.DOI).Volume === '335', 'the full build serves the row published');
+// …and the full build, like the incremental pass, never re-dates an un-dated
+// row that is already in its issue (pins the daily build's
+// `forthcomingBefore.has(p._doi)` guard — without it the whole un-dated
+// back-catalogue would be stamped on the next full build).
+setReg('');
+const out5c = run({});
+ok(rd('_registry.json')[PUB_DOI] === '' && !/un-dated paper\(s\) reached their issue/.test(out5c),
+  'the full build leaves an un-dated row that was already in its issue un-dated');
+// …nor does a NON-publication change to such a row re-date it (the abstract is
+// emptied then restored from the fixture, so the wasForthcoming branch runs).
+{ const rows = rd('papers-ejor.json').map(p => p.DOI === pubRow.DOI ? { ...p, Abstract: '' } : p); writeFileSync(join(DATA, 'papers-ejor.json'), JSON.stringify(rows)); }
+setReg('');
+const out5e = run({ FT50_INCREMENTAL: '1' });
+ok(/ejor: \+0 new, 1 updated/.test(out5e), 'the already-published row was refreshed by the incremental pass');
+ok(rd('_registry.json')[PUB_DOI] === '' && !/un-dated paper\(s\) reached their issue/.test(out5e),
+  'a refreshed row that was already in its issue is not re-dated');
+// The DOI-adoption path: an un-dated advance STUB superseded by its published
+// registration is announced on adoption (pins stampPublished AFTER the
+// doiMigrations seeding — mirrors the native suite).
+const STUB_DOI = '10.1016/j.ejor.2026.05.999';
+{
+  const rows = rd('papers-ejor.json').map(p => p.DOI === pubRow.DOI
+    ? { ...p, DOI: 'https://doi.org/' + STUB_DOI, Volume: '', Issue: '', Page: '', Status: 'Articles in Advance' } : p);
+  writeFileSync(join(DATA, 'papers-ejor.json'), JSON.stringify(rows));
+  const r = rd('_registry.json'); delete r[PUB_DOI]; r[STUB_DOI] = ''; writeFileSync(join(DATA, '_registry.json'), JSON.stringify(r));
+}
+const out5f = run({ FT50_INCREMENTAL: '1' });
+const ejor5f = rd('papers-ejor.json');
+ok(ejor5f.filter(p => p.Title === pubRow.Title).length === 1 && ejor5f.some(p => p.DOI === pubRow.DOI),
+  'the published registration is adopted onto the un-dated stub (one row, the real DOI)');
+ok(rd('_registry.json')[PUB_DOI] === today && /registry: 1 un-dated paper\(s\) reached their issue — announced/.test(out5f),
+  'an un-dated stub superseded by its published registration is announced today (stamp after the DOI-adoption seeding)');
+ok(rd('recent.json').some(p => p.DOI === pubRow.DOI && p['Date Added'] === today), 'and the adopted paper enters recent.json dated today');
+
 rmSync(DATA, { recursive: true });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

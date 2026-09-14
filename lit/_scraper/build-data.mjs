@@ -543,6 +543,52 @@ function forthcomingStatus(volume, issue, year, pullDate) {
   return (y && y >= py - 3) ? 'Articles in Advance' : '';
 }
 
+// A row still waiting for its issue: no volume/issue AND a forthcoming Status
+// ('Articles in Advance'). An old no-volume record whose Crossref entry simply
+// froze at the advance stage carries no Status (forthcomingStatus above) and
+// is a published paper, not a forthcoming one — it never counts here.
+function isForthcomingRow(p) {
+  return !p.Volume && !p.Issue && !!p.Status;
+}
+
+// An un-dated paper is announced when it is published. The registry stamps a
+// paper's first-seen date once, and the onboarding rule (updateRegistry) leaves
+// a back-catalogue row un-dated ('') on purpose — but a paper that was ALREADY
+// an Article in Advance when it was onboarded later moved into its issue with
+// nothing more than a bibliographic refresh, so neither event ever reached
+// "recently added" (the September-2026 Management Science commentaries
+// 10.1287/mnsc.2026.02441 and .02442, in the catalog since its first build,
+// were exactly this). So a row that gains its volume/issue while its registry
+// entry is still '' is stamped with the pull date; a row that already carries
+// a date keeps it — a paper is announced once, as an advance article OR on
+// publication, never twice. `rows` are the rows that were forthcoming before
+// this run and are published now; the caller decides that, because the
+// incremental pass and the daily build see the transition differently.
+function stampPublished(rows, regMap) {
+  let n = 0;
+  for (const p of rows) {
+    const k = regKey(p);
+    if (regMap[k] === '') { regMap[k] = PULL_DATE; n++; }
+  }
+  if (n) console.log(`  registry: ${n} un-dated paper(s) reached their issue — announced under "recently added" as of ${PULL_DATE}`);
+  return n;
+}
+
+// The DOIs of the committed rows that are still forthcoming, read BEFORE a full
+// build replaces every journal from the fresh harvest (the incremental pass
+// keeps the committed rows in hand and needs no such snapshot).
+async function loadForthcomingDois(keys) {
+  const set = new Set();
+  for (const key of keys) {
+    const rows = await loadJsonIfExists(join(DATA_DIR, `papers-${key}.json`), []);
+    if (!Array.isArray(rows)) continue;
+    for (const p of rows) {
+      if (p && p.DOI && isForthcomingRow(p)) set.add(doiFromField(p.DOI));
+    }
+  }
+  return set;
+}
+
 function pubRank(item, volume, issue, status, year) {
   const aia = status ? 1 : 0; // any non-published status ranks above published
   const y = parseInt(year != null ? year : yearOf(item), 10) || 0;
@@ -553,7 +599,7 @@ function pubRank(item, volume, issue, status, year) {
 }
 
 // registry key: DOI when there is one, else a title|year key (EC forthcoming)
-function regKey(row) {
+export function regKey(row) {
   return row._doi || ('t:' + normTitle(row.Title) + '|' + row.Year);
 }
 
@@ -2556,7 +2602,7 @@ function buildAffiliations(papers) {
   return out.slice(0, TOP_AFFILIATIONS).map(({ key, ...rest }) => rest);
 }
 
-function buildRecent(papers, registry) {
+export function buildRecent(papers, registry) {
   const cutoff = new Date(PULL_DATE + 'T00:00:00');
   cutoff.setDate(cutoff.getDate() - RECENT_WINDOW_DAYS);
   const rows = [];
@@ -2758,6 +2804,11 @@ async function main() {
 
   const bySource = {}; // key -> rows (internal shape)
 
+  // The committed rows still waiting for their issue, read BEFORE the fresh
+  // harvest replaces them: a paper that gains its volume/issue in this build
+  // and never carried a first-seen date is announced today (stampPublished).
+  const forthcomingBefore = await loadForthcomingDois([...JOURNALS.map(s => s.key), PNAS.key, EC.key]);
+
   // 1. The eight journals. After each journal-route pull, top up any papers
   // the listing missed but Crossref still serves by DOI (rescueMissingWorks,
   // driven by data/_rescue-dois.json — e.g. Operations Research vol 67's
@@ -2856,6 +2907,7 @@ async function main() {
   applyCitations(allPapers, citationsCache);
 
   const registry = updateRegistry(allByRank, reg);
+  stampPublished(allPapers.filter(p => p._doi && forthcomingBefore.has(p._doi) && (p.Volume || p.Issue)), registry);
 
   const authors = buildAuthors(allPapers);
   const affiliations = buildAffiliations(allPapers);
@@ -2944,7 +2996,7 @@ function doiFromField(v) {
 // Restore the internal _doi/_rank fields the registry/recent/sort helpers need
 // on rows loaded back from a committed papers-<key>.json. Public fields are left
 // untouched, so publicRow() reproduces the original bytes for an unchanged row.
-function reInternalize(rows) {
+export function reInternalize(rows) {
   for (const p of rows) {
     if (p._doi === undefined) p._doi = doiFromField(p.DOI);
     if (p._rank === undefined) p._rank = pubRank({ page: p.Page }, p.Volume, p.Issue, p.Status, p.Year);
@@ -2973,6 +3025,7 @@ async function incrementalMain() {
   const changedSources = new Set();
   const freshRows = [];                    // genuinely-new papers, for enrichment
   const doiMigrations = [];                // [oldDoi, newDoi] when a paper's DOI is re-registered
+  const publishedNow = [];                 // known rows that gained their volume/issue this pass
 
   for (const src of JOURNALS) { // the eight Articles-in-Advance journals only
     const existing = reInternalize(await loadJsonIfExists(join(DATA_DIR, `papers-${src.key}.json`), []));
@@ -3024,6 +3077,7 @@ async function incrementalMain() {
       // Known DOI: refresh only core bibliographic fields (the AIA→issue
       // transition and metadata corrections); leave enrichment fields intact.
       let rowChanged = adopted;
+      const wasForthcoming = isForthcomingRow(cur);
       for (const f of INCR_CORE_FIELDS) {
         if (nr[f] === undefined) continue;
         if (String(nr[f] ?? '') !== String(cur[f] ?? '')) { cur[f] = nr[f]; rowChanged = true; }
@@ -3043,6 +3097,7 @@ async function incrementalMain() {
       if (rowChanged) {
         cur._rank = pubRank({ page: cur.Page }, cur.Volume, cur.Issue, cur.Status, cur.Year);
         updated++;
+        if (wasForthcoming && (cur.Volume || cur.Issue)) publishedNow.push(cur);
       }
     }
     if (added || updated) changedSources.add(src.key);
@@ -3073,6 +3128,12 @@ async function incrementalMain() {
       regState.map[newDoi] = regState.map[oldDoi];
     }
   }
+
+  // Announce the un-dated rows that reached their issue this pass (after the
+  // DOI-adoption seeding above, so an adopted key is judged on its inherited
+  // date). The transition always changed a core field, so the source is in
+  // changedSources and the derived files below are rewritten.
+  const surfaced = stampPublished(publishedNow, regState.map);
 
   const registryBefore = Object.keys(regState.map).length;
   const registry = updateRegistry(allByRank, regState);
@@ -3151,7 +3212,7 @@ async function incrementalMain() {
 
   const newlyRegistered = Object.keys(registry).length - registryBefore;
   console.log(`incremental update: {${[...changedSources].join(', ') || 'none'}} changed, ` +
-    `${newlyRegistered} newly-registered, ${recent.length} recent ` +
+    `${newlyRegistered} newly-registered, ${surfaced} announced on publication, ${recent.length} recent ` +
     `(${recentCounts.total} added in the last ${RECENT_WINDOW_DAYS} days), ${total} total papers.`);
 }
 

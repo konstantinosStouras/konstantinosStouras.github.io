@@ -299,6 +299,17 @@ Two committed files patch the gaps Crossref leaves:
   source; each shows up in the paper list *and* the "Recently added papers" view,
   and is silently superseded once Crossref catches up.
 
+**Announced once — on first sight or on publication.** `_registry.json` keeps
+the day each paper was first seen; the rows onboarded in the first build carry
+no date and never appear under "Recently added". Since 2026-09-14 an un-dated
+row that moves from Articles in Advance into its issue is stamped on that day
+(`stampPublished` in `build-data.mjs`, in the daily build AND the incremental
+pass), so a new issue's papers are announced even when they had been advance
+articles since before the registry existed; a row that already carries a date
+is never announced a second time. To announce a listed paper by hand (a
+transition that predates the rule): `node lit/_scraper/announce-papers.mjs
+--dir lit/data <doi>…` (`--dir lit/data-ft50` for the FT50 catalog).
+
 Both files are refreshed by running **on your own machine** (pubsonline blocks
 cloud IPs, like the editors index above):
 
