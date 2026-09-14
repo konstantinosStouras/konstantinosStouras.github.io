@@ -1823,18 +1823,19 @@ by `markRegistryEntry` on the failure branch, since deleting a Firebase
 sign-in does not delete its Firestore data and the orphaned marker would count
 one person as two for ever (this is why the rule allows owner delete — nobody
 can delete anyone ELSE's marker, so the tally can't be deflated); and (2) a
-daily **audit** removes the markers already orphaned by earlier merges or by
-console-deleted accounts — `lit/_scraper/registered-users-audit.mjs`
+daily **reconcile against Firebase Auth** — `lit/_scraper/registered-users-audit.mjs`
 (`.github/workflows/lit-registered-users-audit.yml`, 07:10 UTC, before the
-analytics build; Admin SDK, since only it can ask Auth whether a uid still
-exists), which deletes a marker ONLY on a definite `auth/user-not-found` — any
-other error leaves it in place, so a failed look-up can never shrink the
-tally. Modes `--dry-run`/`--scan`; offline test
+analytics build; Admin SDK, since only it can list the accounts or ask Auth
+whether a uid still exists). It removes the markers orphaned by earlier merges
+or console-deleted accounts ONLY on a definite `auth/user-not-found` — any
+other error leaves a marker in place, so a failed look-up can never shrink the
+tally — AND seeds a marker for every real (non-anonymous) account that lacks
+one, so the tile reads the number of accounts in Firebase Auth rather than the
+number that happened to sign in since the tally launched. The same run keeps
+the maintainer's `userDirectory` roster in step (see "Who has registered"
+below). Modes `--dry-run`/`--scan`; offline test
 `node lit/_scraper/registered-users-audit.mjs --selftest`; a no-op until
-`FIREBASE_SERVICE_ACCOUNT` is set (the same secret the mailers use). The count
-otherwise reflects accounts that have signed in since the tally launched
-(converges to the true total as users return; the exact all-time total is in
-Firebase console → Authentication).
+`FIREBASE_SERVICE_ACCOUNT` is set (the same secret the mailers use).
 Beside it sits a live **"Exploring now"** figure — the number of visitors
 currently browsing The Lit in real time — built on **Firebase Realtime Database
 presence** with **anonymous auth**, run in a **separate `'presence'` Firebase
@@ -2378,6 +2379,43 @@ would silently leave exactly those accounts off the roster.
 account features — the roster is identity, and a site that collects it and says
 so nowhere is wrong whatever its rules allow. (The sibling discloses the same
 pair in its Privacy Policy.)
+
+**The tile and the roster are reconciled against Firebase Auth every night, and
+the Feedback page says both figures when they differ** (owner, 2026-09-14: the
+Data Analytics tile read 4 registered users, the Feedback roster listed 2). The
+two are fed by two different browser writes — the public marker on every
+signed-in visit since the tally shipped, the roster row only on a visit since
+the roster shipped (2026-08-24, later) — so an account that had not signed in
+between the two launches had a marker and no row, and nothing in a browser
+could close that: a row is only ever written by its own account. The nightly
+`registered-users-audit.mjs` (Admin SDK) now `listUsers()` Firebase Auth and
+makes both collections agree with it: a missing marker is seeded; a missing
+roster row is CREATED from the Auth record (address, display name, `first` =
+the account's creation time, `seen` = its last sign-in or its marker's `t`,
+whichever is later — the marker moves on every visit, Auth's last sign-in only
+on a fresh authentication); an existing row is healed in the SAFE directions
+only — `first` only earlier, `seen` only later, `email`/`name` filled only when
+empty, a name the account wrote about itself never overwritten; anonymous
+accounts (presence) seed nothing; removal keeps its definite-`user-not-found`
+rule for rows as for markers, and seeding is additive so a half-failed
+listing can only seed less. `planReconcile`/`rowPatch`/`accountOf` are pure
+and unit-tested in its `--selftest`. The Feedback roster also reads the tile's
+own figure (`urCountMarkers` — a `count()` only when the compat SDK has one,
+else a plain read of the handful of contentless docs) and, when the two
+differ, its subtitle says "4 registered · 2 listed here" with a note above the
+list naming the reason and that the nightly run closes it; when they agree it
+says one number, as before. The About page's disclosure says the entry is also
+filled from the account record for accounts that pre-date it. **On a phone
+the roster is one card per account, not a seven-column table scrolled
+sideways** (≤640px: `thead` hidden, each `td` carries its heading as
+`data-label` and prints it in front of the value, the name is the card's
+title, the tick box top-right, Open across the foot, the sort moved to a row
+of the same `.ur-sort` chips so `urWire` binds them unchanged). Measured in a
+real browser by **`node lit/_scraper/users-page-guard.mjs`** (Playwright, no
+network, the compat SDK stubbed with four markers and two rows: the two-figure
+subtitle, the card layout and no sideways scroll at 390px, the chips sorting,
+and the analytics tile drawing the same 4 inside its card at phone width);
+the wiring is pinned by `users-selftest.mjs`.
 
 ### A reader can take a message off their own list
 
