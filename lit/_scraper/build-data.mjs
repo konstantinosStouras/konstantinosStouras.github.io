@@ -2907,7 +2907,7 @@ async function main() {
   applyCitations(allPapers, citationsCache);
 
   const registry = updateRegistry(allByRank, reg);
-  stampPublished(allPapers.filter(p => p._doi && (p.Volume || p.Issue)), registry);
+  stampPublished(allPapers.filter(p => p._doi && forthcomingBefore.has(p._doi) && (p.Volume || p.Issue)), registry);
 
   const authors = buildAuthors(allPapers);
   const affiliations = buildAffiliations(allPapers);
