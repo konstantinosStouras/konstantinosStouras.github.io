@@ -287,7 +287,7 @@ const setReg = (v) => { const r = rd('_registry.json'); r[PUB_DOI] = v; writeFil
 writeFileSync(join(DATA, 'papers-pom.json'), JSON.stringify(asAdvance(pom0)));
 setReg('');
 const out6 = run({ LIT_INCREMENTAL: '1' });
-ok(/1 un-dated paper\(s\) reached their issue/.test(out6), 'the incremental pass reports the AIA→issue transition');
+ok(/registry: 1 un-dated paper\(s\) reached their issue — announced/.test(out6), 'the incremental pass reports the AIA→issue transition');
 const pom6 = rd('papers-pom.json').find(p => p.DOI === pubRow.DOI);
 ok(pom6 && pom6.Volume === '35' && pom6.Issue === '8' && !pom6.Status, 'the row regains its volume/issue (published again)');
 ok(rd('_registry.json')[PUB_DOI] === today, 'an un-dated row that reached its issue is stamped with today');
@@ -309,7 +309,7 @@ ok(rd('_registry.json')[PUB_DOI] === '' && /No new or changed papers/.test(quiet
 writeFileSync(join(DATA, 'papers-pom.json'), JSON.stringify(asAdvance(rd('papers-pom.json'))));
 setReg('');
 const out6b = run({});
-ok(/1 un-dated paper\(s\) reached their issue/.test(out6b), 'the full build reports the AIA→issue transition');
+ok(/registry: 1 un-dated paper\(s\) reached their issue — announced/.test(out6b), 'the full build reports the AIA→issue transition');
 ok(rd('_registry.json')[PUB_DOI] === today, 'the full build stamps the un-dated row that reached its issue');
 ok(rd('recent.json').some(p => p.DOI === pubRow.DOI && p['Date Added'] === today), 'and recent.json carries it dated today after the full build');
 ok(rd('papers-pom.json').find(p => p.DOI === pubRow.DOI).Volume === '35', 'the full build serves the row published');
@@ -348,7 +348,7 @@ const out6f = run({ LIT_INCREMENTAL: '1' });
 const pom6f = rd('papers-pom.json');
 ok(pom6f.filter(p => p.Title === pubRow.Title).length === 1 && pom6f.some(p => p.DOI === pubRow.DOI),
   'the published registration is adopted onto the un-dated stub (one row, the real DOI)');
-ok(rd('_registry.json')[PUB_DOI] === today && /1 un-dated paper\(s\) reached their issue/.test(out6f),
+ok(rd('_registry.json')[PUB_DOI] === today && /registry: 1 un-dated paper\(s\) reached their issue — announced/.test(out6f),
   'an un-dated stub superseded by its published registration is announced today (stamp after the DOI-adoption seeding)');
 ok(rd('recent.json').some(p => p.DOI === pubRow.DOI && p['Date Added'] === today), 'and the adopted paper enters recent.json dated today');
 
