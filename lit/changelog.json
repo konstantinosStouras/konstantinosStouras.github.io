@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "recently-added-on-publication",
+      "date": "2026-09-14",
+      "title": "Papers that reach their issue now show under Recently added",
+      "summary": "A paper that was already in the database as an Article in Advance before arrivals were dated used to move into its journal issue silently, so it never appeared under Recently added and never reached an e-mail alert. It is now announced on the day it is published in an issue; a paper announced as an advance article is not announced a second time.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "account-menu-everywhere",
       "date": "2026-08-31",
       "title": "Your account menu is the same on every page",
