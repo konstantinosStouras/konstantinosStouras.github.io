@@ -20,8 +20,10 @@
  *   node lit/_scraper/announce-papers.mjs --dir lit/data [--date YYYY-MM-DD] [--dry-run] <doi> [<doi>…]
  *   node lit/_scraper/announce-papers.mjs --dir lit/data-ft50 …   (the FT50 catalog, via its own module)
  *
- * --date defaults to today (UTC). --dry-run reports what would change and
- * writes nothing; with no DOI at all it is a pure consistency check — the
+ * --date defaults to today (UTC) and is written onto the paper's registry entry
+ * only — the recent window itself stays cut at today, so a date older than the
+ * window announces nothing visible (the CLI says so). --dry-run reports what
+ * would change and writes nothing; with no DOI at all it is a pure consistency check — the
  * regenerated recent.json / recent-counts.json must equal the committed ones.
  * A DOI that is not in the catalog is refused: this announces a listed paper,
  * it never adds one. Offline, no network. Beside dedupe-data.mjs and
@@ -50,11 +52,13 @@ for (let i = 0; i < argv.length; i++) {
 }
 const normDoi = (v) => String(v || '').trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:/i, '').toLowerCase();
 
-// The FT50 catalog has its own module (near-verbatim, but its own PULL_DATE,
-// data dir and row hydration); the pull date — the day recent.json's window is
-// cut at — and the data dir are read from the environment at import time.
+// The FT50 catalog has its own module (near-verbatim, but its own data dir and
+// row hydration); the data dir is read from the environment at import time.
+// The module's PULL_DATE — the day recent.json's window is cut at and
+// recent-counts.json is stamped `generated` — is deliberately LEFT AT TODAY:
+// --date goes onto the paper's registry entry only, so a back-dated
+// announcement never slides the whole window into the past.
 const FT50 = basename(DIR) === 'data-ft50';
-process.env[FT50 ? 'FT50_PULL_DATE' : 'LIT_PULL_DATE'] = DATE;
 process.env[FT50 ? 'FT50_DATA_DIR' : 'LIT_DATA_DIR'] = DIR;
 const modPath = FT50 ? join(__dirname, '..', '_scraper-ft50', 'build-data.mjs') : join(__dirname, 'build-data.mjs');
 const mod = await import(pathToFileURL(modPath).href);
@@ -87,6 +91,10 @@ if (bad) process.exit(1);
 
 const recent = mod.buildRecent(allPapers, registry);
 const counts = mod.buildRecentCounts(allPapers, registry);
+if (stamped) {
+  const cutoff = new Date(); cutoff.setUTCDate(cutoff.getUTCDate() - (counts.windowDays || 0));
+  if (new Date(DATE + 'T00:00:00Z') < cutoff) console.warn(`  note: ${DATE} is older than the ${counts.windowDays}-day recent window — the registry is stamped, but nothing enters recent.json / the tally.`);
+}
 const out = { '_registry.json': JSON.stringify(registry), 'recent.json': JSON.stringify(recent), 'recent-counts.json': JSON.stringify(counts) };
 let changed = 0;
 for (const [f, bytes] of Object.entries(out)) {

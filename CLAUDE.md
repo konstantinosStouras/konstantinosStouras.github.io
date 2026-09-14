@@ -407,9 +407,10 @@ tip. Offline test: `node lit/_scraper/incremental-selftest.mjs` (mock, no networ
 NOTE: this build env's egress blocks Crossref (403), so the incremental pass only
 does real work on the GitHub Actions runners. **Cadence caveat (measured
 2026-09-14):** GitHub's scheduler fires this repo's crons far below their
-nominal rate — `lit-check-new` (`*/15`) ran 1,096 times in its first ~2
-months, i.e. every 2–7 h, and `lit-paper-submissions` (`*/10`, off-boundary
-minutes) every 2–6 h — the documented behaviour for a repo with ~700 scheduled
+nominal rate — `lit-check-new` (`*/15`, 96 fires/day nominal) has run 1,096
+times since it was created, about one run per 1.4 h on average and 2–7 h apart
+over the last day; `lit-paper-submissions` (`*/10`, off-boundary minutes)
+likewise, 2–6 h apart — the documented behaviour for a repo with ~700 scheduled
 runs/day, not a failure; a suggestion left `pending` for hours is waiting for
 the next fire, and `workflow_dispatch` (Actions → Run workflow) runs either
 job now. **Duplicate registrations are
@@ -523,8 +524,10 @@ the paper-suggestion queue: the September-2026 MS commentaries
 `10.1287/mnsc.2026.02441`/`.02442` (Crossref-registered by 7 Jul 2026 — the
 former is even a row of `mock/crossref-ms.json` — in the catalog since the very
 first build, published in 72(9)) were suggested as "missing" although they were
-listed all along; ~460 native AIA rows (215 of them MS) still carry `''` and
-would have transitioned the same way. Now BOTH native passes and BOTH FT50
+listed all along; by the rule's own predicate 551 native Articles-in-Advance
+rows (278 of them MS: 98 ISR, 71 M&SOM, 70 POM, 33 OR, 1 MkSc) still carry `''`
+and would have transitioned the same way (measured 2026-09-14; EC's accepted
+papers never gain a volume/issue, so the rule never touches them). Now BOTH native passes and BOTH FT50
 passes stamp `PULL_DATE` onto a row whose registry entry is `''` the moment it
 gains its volume/issue: `isForthcomingRow` (no volume/issue AND a forthcoming
 `Status` — an old frozen no-volume record carries none and never counts) before,
@@ -547,9 +550,15 @@ commentaries were announced that way in native AND FT50 (the FT50 copies of the
 INFORMS six are dropped by the page's recent view, but the registries must
 agree). Tests: scenario 6 of `incremental-selftest.mjs` (native, on the
 published POM fixture row `10.1177/10591478261455555` added to
-`mock/crossref-pom.json` for it — every other native fixture row is an advance
-article) and scenario 5 of the FT50 one (EJOR `10.1016/j.ejor.2026.05.012`):
-incremental + full build, announced-once, no re-dating, quiet run still a no-op.
+`mock/crossref-pom.json` for it — every other fixture row of the eight polled
+journals is an advance article; the PNAS and rescue fixtures carry published
+rows but the incremental pass never reads them) and scenario 5 of the FT50 one (EJOR `10.1016/j.ejor.2026.05.012`):
+incremental + full build, announced-once, no re-dating (a refreshed
+already-published row included, so the `wasForthcoming` branch is really
+exercised, and the full build's `forthcomingBefore` guard — a mutation test
+dropping it fails the suite), the DOI-adoption path (an un-dated stub
+superseded by its published registration is announced, which pins the
+stamp-after-seeding order), quiet run still a no-op.
 **The five shard pipelines carry the same rule** (`isForthcomingRow`/
 `loadForthcomingDois`/`stampPublished` vendored from the FT50 module into each
 `_scraper/build-data.mjs` in the same change — daily builds only, since the

@@ -313,6 +313,44 @@ ok(/1 un-dated paper\(s\) reached their issue/.test(out6b), 'the full build repo
 ok(rd('_registry.json')[PUB_DOI] === today, 'the full build stamps the un-dated row that reached its issue');
 ok(rd('recent.json').some(p => p.DOI === pubRow.DOI && p['Date Added'] === today), 'and recent.json carries it dated today after the full build');
 ok(rd('papers-pom.json').find(p => p.DOI === pubRow.DOI).Volume === '35', 'the full build serves the row published');
+// …and the full build, like the incremental pass, never re-dates an un-dated
+// row that is already in its issue. This pins the daily build's
+// `forthcomingBefore.has(p._doi)` guard: without it every '' row that carries
+// a volume/issue — the whole onboarding back-catalogue — would be stamped on
+// the next full build.
+setReg('');
+const out6c = run({});
+ok(rd('_registry.json')[PUB_DOI] === '' && !/un-dated paper\(s\) reached their issue/.test(out6c),
+  'the full build leaves an un-dated row that was already in its issue un-dated');
+// …nor does a NON-publication change to such a row re-date it. The incremental
+// pass refreshes the row here (its abstract, emptied then restored from the
+// fixture), so the wasForthcoming branch is actually exercised — and the row
+// is judged on what it WAS (already in its issue), not on the fact it changed.
+{ const rows = rd('papers-pom.json').map(p => p.DOI === pubRow.DOI ? { ...p, Abstract: '' } : p); writeFileSync(join(DATA, 'papers-pom.json'), JSON.stringify(rows)); }
+setReg('');
+const out6e = run({ LIT_INCREMENTAL: '1' });
+ok(/pom: \+0 new, 1 updated/.test(out6e), 'the already-published row was refreshed by the incremental pass');
+ok(rd('_registry.json')[PUB_DOI] === '' && !/un-dated paper\(s\) reached their issue/.test(out6e),
+  'a refreshed row that was already in its issue is not re-dated');
+// The DOI-adoption path: an un-dated advance STUB superseded by its published
+// registration is announced on adoption. This pins the ORDER in
+// incrementalMain — stampPublished runs AFTER the doiMigrations seeding, so the
+// adopted key is judged on the '' it inherits; moved above it, the key would be
+// unknown at stamp time and the paper would stay un-dated for ever.
+const STUB_DOI = '10.1177/10591478261455554';
+{
+  const rows = rd('papers-pom.json').map(p => p.DOI === pubRow.DOI
+    ? { ...p, DOI: 'https://doi.org/' + STUB_DOI, Volume: '', Issue: '', Page: '', Status: 'Articles in Advance' } : p);
+  writeFileSync(join(DATA, 'papers-pom.json'), JSON.stringify(rows));
+  const r = rd('_registry.json'); delete r[PUB_DOI]; r[STUB_DOI] = ''; writeFileSync(join(DATA, '_registry.json'), JSON.stringify(r));
+}
+const out6f = run({ LIT_INCREMENTAL: '1' });
+const pom6f = rd('papers-pom.json');
+ok(pom6f.filter(p => p.Title === pubRow.Title).length === 1 && pom6f.some(p => p.DOI === pubRow.DOI),
+  'the published registration is adopted onto the un-dated stub (one row, the real DOI)');
+ok(rd('_registry.json')[PUB_DOI] === today && /1 un-dated paper\(s\) reached their issue/.test(out6f),
+  'an un-dated stub superseded by its published registration is announced today (stamp after the DOI-adoption seeding)');
+ok(rd('recent.json').some(p => p.DOI === pubRow.DOI && p['Date Added'] === today), 'and the adopted paper enters recent.json dated today');
 
 rmSync(DATA, { recursive: true });
 console.log(`\n${pass} passed, ${fail} failed`);

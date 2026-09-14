@@ -269,6 +269,39 @@ ok(/1 un-dated paper\(s\) reached their issue/.test(out5b), 'the full build repo
 ok(rd('_registry.json')[PUB_DOI] === today, 'the full build stamps the un-dated row that reached its issue');
 ok(rd('recent.json').some(p => p.DOI === pubRow.DOI && p['Date Added'] === today), 'and recent.json carries it dated today after the full build');
 ok(rd('papers-ejor.json').find(p => p.DOI === pubRow.DOI).Volume === '335', 'the full build serves the row published');
+// …and the full build, like the incremental pass, never re-dates an un-dated
+// row that is already in its issue (pins the daily build's
+// `forthcomingBefore.has(p._doi)` guard — without it the whole un-dated
+// back-catalogue would be stamped on the next full build).
+setReg('');
+const out5c = run({});
+ok(rd('_registry.json')[PUB_DOI] === '' && !/un-dated paper\(s\) reached their issue/.test(out5c),
+  'the full build leaves an un-dated row that was already in its issue un-dated');
+// …nor does a NON-publication change to such a row re-date it (the abstract is
+// emptied then restored from the fixture, so the wasForthcoming branch runs).
+{ const rows = rd('papers-ejor.json').map(p => p.DOI === pubRow.DOI ? { ...p, Abstract: '' } : p); writeFileSync(join(DATA, 'papers-ejor.json'), JSON.stringify(rows)); }
+setReg('');
+const out5e = run({ FT50_INCREMENTAL: '1' });
+ok(/ejor: \+0 new, 1 updated/.test(out5e), 'the already-published row was refreshed by the incremental pass');
+ok(rd('_registry.json')[PUB_DOI] === '' && !/un-dated paper\(s\) reached their issue/.test(out5e),
+  'a refreshed row that was already in its issue is not re-dated');
+// The DOI-adoption path: an un-dated advance STUB superseded by its published
+// registration is announced on adoption (pins stampPublished AFTER the
+// doiMigrations seeding — mirrors the native suite).
+const STUB_DOI = '10.1016/j.ejor.2026.05.999';
+{
+  const rows = rd('papers-ejor.json').map(p => p.DOI === pubRow.DOI
+    ? { ...p, DOI: 'https://doi.org/' + STUB_DOI, Volume: '', Issue: '', Page: '', Status: 'Articles in Advance' } : p);
+  writeFileSync(join(DATA, 'papers-ejor.json'), JSON.stringify(rows));
+  const r = rd('_registry.json'); delete r[PUB_DOI]; r[STUB_DOI] = ''; writeFileSync(join(DATA, '_registry.json'), JSON.stringify(r));
+}
+const out5f = run({ FT50_INCREMENTAL: '1' });
+const ejor5f = rd('papers-ejor.json');
+ok(ejor5f.filter(p => p.Title === pubRow.Title).length === 1 && ejor5f.some(p => p.DOI === pubRow.DOI),
+  'the published registration is adopted onto the un-dated stub (one row, the real DOI)');
+ok(rd('_registry.json')[PUB_DOI] === today && /1 un-dated paper\(s\) reached their issue/.test(out5f),
+  'an un-dated stub superseded by its published registration is announced today (stamp after the DOI-adoption seeding)');
+ok(rd('recent.json').some(p => p.DOI === pubRow.DOI && p['Date Added'] === today), 'and the adopted paper enters recent.json dated today');
 
 rmSync(DATA, { recursive: true });
 console.log(`\n${pass} passed, ${fail} failed`);
