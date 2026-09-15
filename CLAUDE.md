@@ -1067,8 +1067,9 @@ former Editor John P Campbell", a 1983 JAP row) has no sentence end before the
 note, so cutting it takes the abstract's real last sentence too; a
 case-insensitive match would cut an arXiv abstract's mid-sentence "as this
 article has been accepted by the Frontiers of…"; and "This paper has been
-accepted for publication in the Journal of …" is a note two OSF working papers
-end with. The one INFORMS tail
+accepted for publication in the Journal of …" is a note an OSF working paper
+ends with (another ends "This article has been accepted for publication in
+…"). The one INFORMS tail
 WITHOUT "by" — M&SOM's "This paper has been accepted for the Manufacturing &
 Service Operations Management Special Issue on Value Chain Innovations in
 Developing Economies.", the LAST sentence of twenty M&SOM abstracts — has its
@@ -1081,10 +1082,11 @@ that only pointed at it — "The e-companion is available at https://doi.org/…
 …" used to dangle on the card as "…is available at" once the URL was stripped
 (417 rows measured 2026-09-15; a URL anywhere else, and a complete sentence
 before the URL, are untouched); the cut keeps the abstract's own last
-sentence whatever it ends in — the first commentary ends in a question, and
-the old `endsWith('.')` walked back to the previous period and dropped it with
-the tail — and an abstract that IS only the acceptance sentence ("This paper
-was accepted by Christoph Loch, commentary.", four MS rows) or only a trailer
+sentence whatever it ends in — the first commentary ends in a question, and a
+plain widening of the old `endsWith('.')` cut would have walked back to the
+previous period and dropped it with the tail — and an abstract that BEGINS with the acceptance sentence ("This paper
+was accepted by Christoph Loch, commentary.", four MS rows — two the sentence
+alone, two with a trailer after it) or only a trailer
 ("History: Accepted by Christoph Loch, commentary.", `10.1287/mnsc.2025.01934`
 — the trailer cut used to apply only PAST position 0) cleans to `''`, so the
 card shows no abstract rather than a description of itself. The data is

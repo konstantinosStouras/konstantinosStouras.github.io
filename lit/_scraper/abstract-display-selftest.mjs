@@ -49,6 +49,12 @@ const main = read('index.html');
 const from = main.indexOf('var ACCEPTED_BY_RE = ');
 const to = main.indexOf('\nlet searchTimer;', from);
 ok(from > 0 && to > from, 'cleanAbstract block located in index.html');
+if (!(from > 0 && to > from)) {
+  // Without this, a moved marker would hand new Function() the rest of the
+  // page and the run would die on a stack trace instead of the report.
+  console.error('abstract-display-selftest: cannot locate the cleanAbstract block in lit/index.html (did a marker move?)');
+  process.exit(1);
+}
 const src = main.slice(from, to);
 ok(src.length > 500 && src.length < 8000, `the slice is the block, not the page (${src.length} chars)`);
 ok(src.includes('function cleanAbstract('), 'the slice holds cleanAbstract');
@@ -122,10 +128,11 @@ for (const [what, input] of CASES) {
 const REPORT_RE = /\bThis (?:paper|work|commentary|discussion) (?:was|has been) accepted by\b|\bThis paper has been accepted for the [A-Z][^.]{0,60}Special (?:Issue|Section)\b|^History:|^Accepted by\b/;
 const OWNER_DOIS = ['10.1287/mnsc.2026.02441', '10.1287/mnsc.2026.02442', '10.1287/mnsc.2026.02443'];
 const bare = (d) => String(d || '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '').toLowerCase();
-// Every native INFORMS file, plus the FT50 catalog's copies of the six it
+// Every native INFORMS file, plus the FT50 catalog's copies of the five it
 // shares with the native data (the page drops those copies from the recent
-// view, but a type-chip search renders them). ACM EC and PNAS carry no
-// INFORMS tail; the ABS shards live in sibling repos this check cannot see.
+// view, but a type-chip search renders them) and IJOC, the INFORMS journal
+// only the FT50 catalog carries. ACM EC and PNAS carry no INFORMS tail; the
+// ABS shards live in sibling repos this check cannot see.
 const DATA_FILES = ['ms', 'msom', 'opre', 'mksc', 'isre', 'stsc', 'ited'].map((k) => `data/papers-${k}.json`)
   .concat(['ms', 'msom', 'opre', 'mksc', 'isre', 'ijoc'].map((k) => `data-ft50/papers-${k}.json`));
 for (const rel of DATA_FILES) {

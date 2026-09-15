@@ -4573,8 +4573,8 @@ var PREPRINT_HOST = { arxiv: 'arXiv', ssrn: 'SSRN', biorxiv: 'bioRxiv', medrxiv:
 // The match is case-sensitive, so an arXiv abstract's mid-sentence "as this
 // article has been accepted by the Frontiers of…" could never match either.
 // And "by" is REQUIRED: "This paper has been accepted for publication in the
-// Journal of…" is a note two OSF working papers end with, and it is theirs to
-// keep.
+// Journal of…" is a note an OSF working paper ends with (another ends "This
+// article has been accepted for publication in…"), and it is theirs to keep.
 // The INFORMS special-issue tail without "by" — "This paper has been
 // accepted for the Manufacturing & Service Operations Management Special
 // Issue on Value Chain Innovations in Developing Economies.", the LAST
@@ -4587,8 +4587,9 @@ var ACCEPTED_BY_RE = /\bThis (?:paper|work|commentary|discussion|comment|reply|n
 var ACCEPTED_FOR_RE = /\bThis paper (?:was|has been|is) accepted for the (?:Manufacturing & Service Operations Management|M&SOM|Management Science|Operations Research|Marketing Science|Information Systems Research|Strategy Science|Transportation Science|Organization Science|Mathematics of Operations Research|INFORMS Transactions on Education|INFORMS Journal on Computing|INFORMS) [Ss]pecial (?:[Ii]ssue|[Ss]ection)\b/;
 // The cut keeps the abstract's own last sentence whole — whatever it ends in.
 // The first of those commentaries ends "…does it ask more of human judgment,
-// or less?", and the old endsWith('.') test walked back to the previous
-// period and dropped that closing question together with the tail.
+// or less?", and a plain widening of the old endsWith('.') cut would have
+// walked back to the previous period and dropped that closing question
+// together with the tail.
 var SENTENCE_END_RE = /[.?!]["'”’)\]]*$/;
 function cutBeforeTail(s, idx) {
   var before = s.substring(0, idx).trimEnd();
@@ -4602,9 +4603,10 @@ function cutBeforeTail(s, idx) {
 function cleanAbstract(s) {
   if (!s) return '';
   // Remove everything from the acceptance sentence onwards. An abstract that
-  // IS only that sentence ("This paper was accepted by Christoph Loch,
-  // commentary." — four MS rows) cleans to '' and the card shows no abstract:
-  // a paper shows nothing rather than a description of itself.
+  // BEGINS with it ("This paper was accepted by Christoph Loch, commentary."
+  // — four MS rows: two are the sentence alone, two carry a supplement or
+  // conflict-of-interest trailer after it) cleans to '' and the card shows no
+  // abstract: a paper shows nothing rather than a description of itself.
   var am = ACCEPTED_BY_RE.exec(s);
   if (am) s = am.index > 0 ? cutBeforeTail(s, am.index) : '';
   var af = ACCEPTED_FOR_RE.exec(s);
