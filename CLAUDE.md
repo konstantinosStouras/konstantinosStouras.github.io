@@ -1050,32 +1050,65 @@ guard preventive). Covered by `entities-selftest.mjs`.
 takes** (owner, 2026-09-15). MS deposits "This paper was accepted by Eric So,
 accounting." at the end of ~4,900 abstracts and the data KEEPS it —
 `acceptance()` in `build-data.mjs` reads the editor and the area from it —
-while `cleanAbstract` in `index.html` cuts it (and the Funding /
-Supplemental-Material tail after it) at render time. It matched only
+while `cleanAbstract` cuts it (and the Funding / Supplemental-Material tail
+after it) for the reader. **That strip is ONE definition, `lit/lit-abstract.js`**
+(the `lit-news.js` shape: UMD, no dependencies), loaded by the page
+(`<script src="lit-abstract.js">` above the main script — the card renders it
+AND the Abstracts search matches it, through `absSearchText`, cached per row as
+`p._absq`), required by `alerts-mailer.mjs` for the "abstract contains"
+criterion, and by `emit-db.mjs` for the `?db=1` trigram index — because the
+search used to run over the RAW field, so "this commentary was" typed into the
+Abstracts search still returned the three papers whose cards no longer said it
+(owner, 2026-09-15); the page, the e-mails and the DB now cannot disagree about
+what an abstract says. It matched only
 `This paper was accepted` / `This work was accepted`, so the three
 September-2026 MS commentaries on "Fighting Fire with Fire"
 (`10.1287/mnsc.2026.02441`–`.02443`, "This commentary was accepted by
 Christoph Loch."), an MS discussion and the "has been accepted by" records
 showed the sentence on the card. `ACCEPTED_BY_RE` now matches a CLOSED list of
 INFORMS item types (paper, work, commentary, discussion, comment, reply, note,
-rejoinder, editorial, erratum) in the past tense and REQUIRES "by" — both
-measured, not guessed: a `\w+` noun would cut real prose ("This method is
-accepted by that group of accountants…", a TAR abstract in the FT50 catalog),
-and the ITED special-issue papers carry "This paper has been accepted for the
-… Special Issue on …" INSIDE the abstract as a note, never cut before and not
-now. Two more things changed with it: the cut keeps the abstract's own last
-sentence whatever it ends in — the first commentary ends in a question, and
-the old `endsWith('.')` walked back to the previous period and dropped it with
-the tail — and an abstract that IS only the acceptance sentence ("This paper
-was accepted by Christoph Loch, commentary.", four MS rows) or only a trailer
+rejoinder, editorial, erratum) in the past tense, case-sensitive, and REQUIRES
+"by" — all measured over every dataset, not guessed: a `\w+` noun would cut
+real prose ("This method is accepted by that group of accountants…", a TAR
+abstract in the FT50 catalog); "article" is left out because the one tail that
+uses it ("…according to Aristotle, when Note This article was accepted by
+former Editor John P Campbell", a 1983 JAP row) has no sentence end before the
+note, so cutting it takes the abstract's real last sentence too; a
+case-insensitive match would cut an arXiv abstract's mid-sentence "as this
+article has been accepted by the Frontiers of…"; and "This paper has been
+accepted for publication in the Journal of …" is a note an OSF working paper
+ends with (another ends "This article has been accepted for publication in
+…"). The one INFORMS tail
+WITHOUT "by" — M&SOM's "This paper has been accepted for the Manufacturing &
+Service Operations Management Special Issue on Value Chain Innovations in
+Developing Economies.", the LAST sentence of twenty M&SOM abstracts — has its
+own `ACCEPTED_FOR_RE`, anchored on the journal name so the OSF notes cannot
+match it; every other journal's copy of that special-issue sentence (TRSC,
+ORSC, STSC, ITED, IJOC, MOR, OR) sits INSIDE a `History:` block, which the
+trailer cut already removes. Three more things changed with it: a trailing DOI URL now takes the sentence
+that only pointed at it — "The e-companion is available at https://doi.org/…"
+(119 rows), "The online appendices are available at …", "Data are available at
+…" used to dangle on the card as "…is available at" once the URL was stripped
+(417 rows measured 2026-09-15; a URL anywhere else, and a complete sentence
+before the URL, are untouched); the cut keeps the abstract's own last
+sentence whatever it ends in — the first commentary ends in a question, and a
+plain widening of the old `endsWith('.')` cut would have walked back to the
+previous period and dropped it with the tail — and an abstract that BEGINS with the acceptance sentence ("This paper
+was accepted by Christoph Loch, commentary.", four MS rows — two the sentence
+alone, two with a trailer after it) or only a trailer
 ("History: Accepted by Christoph Loch, commentary.", `10.1287/mnsc.2025.01934`
 — the trailer cut used to apply only PAST position 0) cleans to `''`, so the
 card shows no abstract rather than a description of itself. The data is
 deliberately untouched: the daily build re-maps every MS abstract from
 Crossref, so a data-only edit would be back the next morning. Pinned by
-`node lit/_scraper/abstract-display-selftest.mjs` (offline; the block is
-SLICED out of `index.html`, length-asserted, and run over fixed cases AND the
-committed `papers-ms.json` in both catalogs), which `site-checks.yml` runs.
+`node lit/_scraper/abstract-display-selftest.mjs` (offline; requires the module
+exactly as the mailer and emit-db do, runs it over fixed cases AND the committed
+papers files of every native INFORMS journal plus the FT50 catalog's copies, and
+pins that the page, the mailer and emit-db each load THAT file and keep no copy
+of their own), which `site-checks.yml` runs; the mailer's `--selftest` pins the
+criterion side. The retired `fun/ms-old/` page keeps
+its own older copy of `cleanAbstract` over its Google-Sheet data and is
+deliberately outside this rule, like everything else about that page.
 **ScienceDirect "Highlights" bullets are never served as the abstract** (user
 report 2026-08, the EJOR case). Elsevier deposits many papers' author
 HIGHLIGHTS — the 3-5 short ScienceDirect bullet points — as (or fused onto)

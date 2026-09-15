@@ -25,9 +25,11 @@ on:
       # each other, so a rules edit alone must run the checks
       - 'lit/_firestore.rules'
       - 'lit/_scraper/users-selftest.mjs'
-      # the abstract strip is sliced out of lit/index.html (already listed
-      # under **/*.html) and checked against the committed papers-ms.json
+      # the abstract strip (lit-abstract.js, loaded by the page, the mailer and
+      # emit-db) is run over the committed INFORMS papers files, and the check
+      # pins that every consumer loads that one file
       - 'lit/_scraper/abstract-display-selftest.mjs'
+      - 'lit/lit-abstract.js'
       - 'lit/lit-news.js'
       - 'lit/lit-acct-nav.js'
       # share-check.mjs measures the real pixels of every og:image against the
@@ -49,6 +51,7 @@ on:
       - 'lit/_firestore.rules'
       - 'lit/_scraper/users-selftest.mjs'
       - 'lit/_scraper/abstract-display-selftest.mjs'
+      - 'lit/lit-abstract.js'
       - 'lit/lit-news.js'
       - 'lit/lit-acct-nav.js'
       - 'images/**'
