@@ -4566,11 +4566,25 @@ var PREPRINT_HOST = { arxiv: 'arXiv', ssrn: 'SSRN', biorxiv: 'bioRxiv', medrxiv:
 // rather than "was". Two things about the pattern are deliberate. The noun
 // list is CLOSED: a \w+ rule would cut real prose — a TAR abstract in the
 // FT50 catalog reads "This method is accepted by that group of accountants…"
-// mid-abstract. And "by" is REQUIRED: the ITED special-issue papers carry
-// "This paper has been accepted for the INFORMS Transactions on Education
-// Special Issue on…" inside the abstract — a note, not the tail — and were
-// never cut before. Pinned by lit/_scraper/abstract-display-selftest.mjs.
+// mid-abstract, and "article" is deliberately NOT in it: the one tail that
+// uses it ("…according to Aristotle, when Note This article was accepted by
+// former Editor John P Campbell", a 1983 JAP row) has no sentence end before
+// the note, so the cut would take the abstract's real last sentence with it.
+// The match is case-sensitive, so an arXiv abstract's mid-sentence "as this
+// article has been accepted by the Frontiers of…" could never match either.
+// And "by" is REQUIRED: "This paper has been accepted for publication in the
+// Journal of…" is a note two OSF working papers end with, and it is theirs to
+// keep.
+// The INFORMS special-issue tail without "by" — "This paper has been
+// accepted for the Manufacturing & Service Operations Management Special
+// Issue on Value Chain Innovations in Developing Economies.", the LAST
+// sentence of twenty M&SOM abstracts (measured 2026-09-15; every other
+// journal's copy of that sentence sits inside a History: block, which the
+// trailer cut below already removes) — gets its own pattern, anchored on the
+// journal name so the OSF notes cannot match it. Pinned by
+// lit/_scraper/abstract-display-selftest.mjs.
 var ACCEPTED_BY_RE = /\bThis (?:paper|work|commentary|discussion|comment|reply|note|rejoinder|editorial|erratum) (?:was|has been) accepted by\b/;
+var ACCEPTED_FOR_RE = /\bThis paper (?:was|has been|is) accepted for the (?:Manufacturing & Service Operations Management|M&SOM|Management Science|Operations Research|Marketing Science|Information Systems Research|Strategy Science|Transportation Science|Organization Science|Mathematics of Operations Research|INFORMS Transactions on Education|INFORMS Journal on Computing|INFORMS) [Ss]pecial (?:[Ii]ssue|[Ss]ection)\b/;
 // The cut keeps the abstract's own last sentence whole — whatever it ends in.
 // The first of those commentaries ends "…does it ask more of human judgment,
 // or less?", and the old endsWith('.') test walked back to the previous
@@ -4593,6 +4607,8 @@ function cleanAbstract(s) {
   // a paper shows nothing rather than a description of itself.
   var am = ACCEPTED_BY_RE.exec(s);
   if (am) s = am.index > 0 ? cutBeforeTail(s, am.index) : '';
+  var af = ACCEPTED_FOR_RE.exec(s);
+  if (af) s = af.index > 0 ? cutBeforeTail(s, af.index) : '';
   // Remove other trailing junk patterns. A marker at position 0 means the
   // whole "abstract" is trailer — "History: Accepted by Christoph Loch,
   // commentary." is one MS row's entire deposit — so that shows nothing too.
@@ -4602,8 +4618,22 @@ function cleanAbstract(s) {
     if (ji > 0) s = cutBeforeTail(s, ji);
     else if (ji === 0) s = '';
   }
-  // Remove trailing DOI URLs
-  s = s.replace(/\s*https?:\/\/doi\.org\/\S+\s*\.?\s*$/, '');
+  // Remove a trailing DOI URL — and the sentence that only pointed at it.
+  // "The e-companion is available at https://doi.org/… ." (119 rows), "The
+  // online appendices are available at …", "Data are available at …": with
+  // the URL gone that sentence has no terminator and used to dangle on the
+  // card as "…is available at" (417 rows measured 2026-09-15). A sentence
+  // that ends in a bare DOI is a pointer, not prose, so it goes with the URL;
+  // an abstract that was ONLY the pointer shows nothing. A URL anywhere else
+  // is untouched, and so is a complete sentence before the URL.
+  var noDoi = s.replace(/\s*https?:\/\/doi\.org\/\S+\s*\.?\s*$/, '');
+  if (noDoi !== s) {
+    s = noDoi.trimEnd();
+    if (s && !SENTENCE_END_RE.test(s)) {
+      var pm = s.match(/^[\s\S]*[.?!]["'”’)\]]*/);
+      s = pm ? pm[0] : '';
+    }
+  }
   return s.trim();
 }
 

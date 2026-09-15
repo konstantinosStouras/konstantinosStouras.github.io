@@ -1058,12 +1058,29 @@ September-2026 MS commentaries on "Fighting Fire with Fire"
 Christoph Loch."), an MS discussion and the "has been accepted by" records
 showed the sentence on the card. `ACCEPTED_BY_RE` now matches a CLOSED list of
 INFORMS item types (paper, work, commentary, discussion, comment, reply, note,
-rejoinder, editorial, erratum) in the past tense and REQUIRES "by" — both
-measured, not guessed: a `\w+` noun would cut real prose ("This method is
-accepted by that group of accountants…", a TAR abstract in the FT50 catalog),
-and the ITED special-issue papers carry "This paper has been accepted for the
-… Special Issue on …" INSIDE the abstract as a note, never cut before and not
-now. Two more things changed with it: the cut keeps the abstract's own last
+rejoinder, editorial, erratum) in the past tense, case-sensitive, and REQUIRES
+"by" — all measured over every dataset, not guessed: a `\w+` noun would cut
+real prose ("This method is accepted by that group of accountants…", a TAR
+abstract in the FT50 catalog); "article" is left out because the one tail that
+uses it ("…according to Aristotle, when Note This article was accepted by
+former Editor John P Campbell", a 1983 JAP row) has no sentence end before the
+note, so cutting it takes the abstract's real last sentence too; a
+case-insensitive match would cut an arXiv abstract's mid-sentence "as this
+article has been accepted by the Frontiers of…"; and "This paper has been
+accepted for publication in the Journal of …" is a note two OSF working papers
+end with. The one INFORMS tail
+WITHOUT "by" — M&SOM's "This paper has been accepted for the Manufacturing &
+Service Operations Management Special Issue on Value Chain Innovations in
+Developing Economies.", the LAST sentence of twenty M&SOM abstracts — has its
+own `ACCEPTED_FOR_RE`, anchored on the journal name so the OSF notes cannot
+match it; every other journal's copy of that special-issue sentence (TRSC,
+ORSC, STSC, ITED, IJOC, MOR, OR) sits INSIDE a `History:` block, which the
+trailer cut already removes. Three more things changed with it: a trailing DOI URL now takes the sentence
+that only pointed at it — "The e-companion is available at https://doi.org/…"
+(119 rows), "The online appendices are available at …", "Data are available at
+…" used to dangle on the card as "…is available at" once the URL was stripped
+(417 rows measured 2026-09-15; a URL anywhere else, and a complete sentence
+before the URL, are untouched); the cut keeps the abstract's own last
 sentence whatever it ends in — the first commentary ends in a question, and
 the old `endsWith('.')` walked back to the previous period and dropped it with
 the tail — and an abstract that IS only the acceptance sentence ("This paper
@@ -1075,7 +1092,10 @@ deliberately untouched: the daily build re-maps every MS abstract from
 Crossref, so a data-only edit would be back the next morning. Pinned by
 `node lit/_scraper/abstract-display-selftest.mjs` (offline; the block is
 SLICED out of `index.html`, length-asserted, and run over fixed cases AND the
-committed `papers-ms.json` in both catalogs), which `site-checks.yml` runs.
+committed papers files of every native INFORMS journal plus the FT50 catalog's
+copies), which `site-checks.yml` runs. The retired `fun/ms-old/` page keeps
+its own older copy of `cleanAbstract` over its Google-Sheet data and is
+deliberately outside this rule, like everything else about that page.
 **ScienceDirect "Highlights" bullets are never served as the abstract** (user
 report 2026-08, the EJOR case). Elsevier deposits many papers' author
 HIGHLIGHTS — the 3-5 short ScienceDirect bullet points — as (or fused onto)
