@@ -24,15 +24,19 @@
    abstracts — has its own journal-anchored pattern. Nothing but this file
    pins those lines.
 
-   The function is SLICED out of index.html and run — over fixed cases, and
-   over the committed papers-ms.json, so the three rows that prompted this
-   are checked as they really are. The slice is length-asserted: a guard
-   taken on the wrong marker passes every negative check by vacuity (see the
-   messages section of CLAUDE.md).
+   The function lives in lit/lit-abstract.js — ONE definition, loaded by the
+   page (the card AND the Abstracts search, which used to run over the raw
+   field and so still found "this commentary was" once the cards no longer
+   said it — owner, 2026-09-15), by the alerts mailer and by emit-db.mjs.
+   This file requires that module exactly as they do and runs it over fixed
+   cases and over the committed INFORMS papers files, so the rows that
+   prompted this are checked as they really are; and it pins that every
+   consumer really loads that file rather than a copy of its own.
    --------------------------------------------------------------------------- */
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LIT = path.join(HERE, '..');
@@ -45,29 +49,52 @@ const eq = (a, b, what) => ok(a === b,
   `${what}\n      expected ${JSON.stringify(b)}\n      got      ${JSON.stringify(a)}`);
 
 /* ------------------------------------------------- the function, as served */
-const main = read('index.html');
-const from = main.indexOf('var ACCEPTED_BY_RE = ');
-const to = main.indexOf('\nlet searchTimer;', from);
-ok(from > 0 && to > from, 'cleanAbstract block located in index.html');
-if (!(from > 0 && to > from)) {
-  // Without this, a moved marker would hand new Function() the rest of the
-  // page and the run would die on a stack trace instead of the report.
-  console.error('abstract-display-selftest: cannot locate the cleanAbstract block in lit/index.html (did a marker move?)');
-  process.exit(1);
-}
-const src = main.slice(from, to);
-ok(src.length > 500 && src.length < 8000, `the slice is the block, not the page (${src.length} chars)`);
-ok(src.includes('function cleanAbstract('), 'the slice holds cleanAbstract');
-ok(main.indexOf('function cleanAbstract(') > from && main.indexOf('function cleanAbstract(', to) === -1,
-  'cleanAbstract is defined once, inside the slice');
-// eslint-disable-next-line no-new-func
-const { cleanAbstract, ACCEPTED_BY_RE, ACCEPTED_FOR_RE } = new Function(src +
-  '\nreturn { cleanAbstract: cleanAbstract, ACCEPTED_BY_RE: ACCEPTED_BY_RE, ACCEPTED_FOR_RE: ACCEPTED_FOR_RE };')();
-ok(typeof cleanAbstract === 'function', 'cleanAbstract runs outside the page');
+// lit/lit-abstract.js is the ONE definition; it is required here exactly as
+// the mailer and emit-db.mjs require it, and the page loads the same file.
+const LitAbstract = createRequire(import.meta.url)(path.join(LIT, 'lit-abstract.js'));
+const { cleanAbstract, ACCEPTED_BY_RE, ACCEPTED_FOR_RE } = LitAbstract;
+ok(typeof cleanAbstract === 'function', 'lit-abstract.js exports cleanAbstract');
 for (const [name, re] of [['ACCEPTED_BY_RE', ACCEPTED_BY_RE], ['ACCEPTED_FOR_RE', ACCEPTED_FOR_RE]]) {
   ok(re instanceof RegExp && !re.global && !re.ignoreCase,
     `${name} is a plain case-sensitive non-global RegExp — exec() on a global one would carry lastIndex between calls, and a case-insensitive one would cut mid-sentence prose`);
 }
+const modSrc = read('lit-abstract.js');
+ok(!/=>|\bconst\b|\blet\b|`/.test(modSrc.slice(modSrc.indexOf("'use strict'"))),
+  'the module body is ES5 (var/function only), like the page code around its call sites');
+
+/* -------------------------------------- every consumer loads THAT file */
+// The page: the <script src> sits ABOVE the main script, the page keeps no
+// definition of its own (a second copy is how the two would drift), and the
+// Abstracts search reads the SHOWN text through absSearchText in BOTH filter
+// passes — never the raw field.
+const main = read('index.html');
+const tagAt = main.indexOf('<script src="lit-abstract.js"></script>');
+const mainScriptAt = main.indexOf('\n<script>\n', main.indexOf('<script type="application/ld+json">'));
+ok(tagAt > 0 && mainScriptAt > tagAt, 'index.html loads lit-abstract.js before its main script');
+ok(main.indexOf('var ACCEPTED_BY_RE') === -1 && !/function cleanAbstract\(s\) \{\n  if \(!s\) return ''/.test(main),
+  'index.html keeps no copy of the strip of its own');
+const wrapAt = main.indexOf('function cleanAbstract(');
+ok(wrapAt > 0 && main.indexOf('function cleanAbstract(', wrapAt + 1) === -1
+  && /window\.LitAbstract\.cleanAbstract\(s\)/.test(main.slice(wrapAt, wrapAt + 400)),
+  'the page\'s cleanAbstract is one wrapper over window.LitAbstract');
+ok((main.match(/absSearchText\(p\)/g) || []).length >= 2,
+  'both filter passes (applyFilters + crossFilter) search the shown abstract via absSearchText');
+ok(!/(?<!cleanAbstract)\(p\['Abstract'\]\s*\|\|\s*''\)\.toLowerCase\(\)/.test(main),
+  'no filter pass lower-cases the raw Abstract field for searching any more');
+ok(main.indexOf('function absSearchText(') > 0 && /_absq/.test(main.slice(main.indexOf('function absSearchText('), main.indexOf('function absSearchText(') + 300)),
+  'absSearchText caches the shown text per row');
+// The mailer: the abstract criterion goes through the same file.
+const mailer = read('_scraper/alerts-mailer.mjs');
+ok(/createRequire\(import\.meta\.url\)\(path\.join\(__dirname, '\.\.', 'lit-abstract\.js'\)\)/.test(mailer),
+  'alerts-mailer.mjs requires lit/lit-abstract.js');
+const mc = mailer.slice(mailer.indexOf('function matchesCriteria('), mailer.indexOf('function matchesCriteria(') + 3000);
+ok(mc.length > 500, 'matchesCriteria is where this thinks it is');
+ok(/LitAbstract\.cleanAbstract\(p\.Abstract/.test(mc) && !/(?<!cleanAbstract)\(p\.Abstract \|\| ''\)\.toLowerCase\(\)/.test(mc),
+  'the mailer\'s abstract criterion matches the shown abstract, not the raw field');
+// emit-db: the ?db=1 trigram index holds the shown text.
+const emit = read('_scraper/emit-db.mjs');
+ok(/createRequire\(import\.meta\.url\)\('\.\.\/lit-abstract\.js'\)/.test(emit) && /cleanAbstract\(p\.Abstract \|\| ''\)/.test(emit),
+  'emit-db.mjs indexes the shown abstract through lit-abstract.js');
 
 /* -------------------------------------------------------- fixed cases */
 const SAME = Symbol('unchanged');

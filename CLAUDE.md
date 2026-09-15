@@ -1050,8 +1050,17 @@ guard preventive). Covered by `entities-selftest.mjs`.
 takes** (owner, 2026-09-15). MS deposits "This paper was accepted by Eric So,
 accounting." at the end of ~4,900 abstracts and the data KEEPS it —
 `acceptance()` in `build-data.mjs` reads the editor and the area from it —
-while `cleanAbstract` in `index.html` cuts it (and the Funding /
-Supplemental-Material tail after it) at render time. It matched only
+while `cleanAbstract` cuts it (and the Funding / Supplemental-Material tail
+after it) for the reader. **That strip is ONE definition, `lit/lit-abstract.js`**
+(the `lit-news.js` shape: UMD, no dependencies), loaded by the page
+(`<script src="lit-abstract.js">` above the main script — the card renders it
+AND the Abstracts search matches it, through `absSearchText`, cached per row as
+`p._absq`), required by `alerts-mailer.mjs` for the "abstract contains"
+criterion, and by `emit-db.mjs` for the `?db=1` trigram index — because the
+search used to run over the RAW field, so "this commentary was" typed into the
+Abstracts search still returned the three papers whose cards no longer said it
+(owner, 2026-09-15); the page, the e-mails and the DB now cannot disagree about
+what an abstract says. It matched only
 `This paper was accepted` / `This work was accepted`, so the three
 September-2026 MS commentaries on "Fighting Fire with Fire"
 (`10.1287/mnsc.2026.02441`–`.02443`, "This commentary was accepted by
@@ -1092,10 +1101,12 @@ alone, two with a trailer after it) or only a trailer
 card shows no abstract rather than a description of itself. The data is
 deliberately untouched: the daily build re-maps every MS abstract from
 Crossref, so a data-only edit would be back the next morning. Pinned by
-`node lit/_scraper/abstract-display-selftest.mjs` (offline; the block is
-SLICED out of `index.html`, length-asserted, and run over fixed cases AND the
-committed papers files of every native INFORMS journal plus the FT50 catalog's
-copies), which `site-checks.yml` runs. The retired `fun/ms-old/` page keeps
+`node lit/_scraper/abstract-display-selftest.mjs` (offline; requires the module
+exactly as the mailer and emit-db do, runs it over fixed cases AND the committed
+papers files of every native INFORMS journal plus the FT50 catalog's copies, and
+pins that the page, the mailer and emit-db each load THAT file and keep no copy
+of their own), which `site-checks.yml` runs; the mailer's `--selftest` pins the
+criterion side. The retired `fun/ms-old/` page keeps
 its own older copy of `cleanAbstract` over its Google-Sheet data and is
 deliberately outside this rule, like everything else about that page.
 **ScienceDirect "Highlights" bullets are never served as the abstract** (user

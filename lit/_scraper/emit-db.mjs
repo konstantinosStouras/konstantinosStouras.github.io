@@ -21,6 +21,12 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
+
+// The trigram index holds the abstract the page SHOWS and SEARCHES —
+// lit/lit-abstract.js, the page's own definition — so a ?db=1 abstract search
+// agrees with the JSON path: neither finds INFORMS' acceptance sentence.
+const { cleanAbstract } = createRequire(import.meta.url)('../lit-abstract.js');
 
 // ── Membership sets, lifted verbatim from index.html ────────────────────────
 // We eval the exact `const ABS_RATING = {…}`, `const UTD24_KEYS = …`,
@@ -180,7 +186,7 @@ export function emitDb(dataDir, sources, outPath, membership) {
       isHttp(p.Preprint) ? 1 : 0, /Articles in Advance|Forthcoming/i.test(status) ? 1 : 0
     );
     insAbs.run(id, p.Abstract || '', p.Significance || '');
-    insTri.run(id, p.Title || '', p.Authors || '', p.Affiliations || '', p.Abstract || '');
+    insTri.run(id, p.Title || '', p.Authors || '', p.Affiliations || '', cleanAbstract(p.Abstract || ''));
     for (const k of jkeysOf(p, srcKey)) insJk.run(id, k);
   }
   db.exec('COMMIT');

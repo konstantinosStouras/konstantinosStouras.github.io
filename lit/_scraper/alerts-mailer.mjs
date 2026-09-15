@@ -74,6 +74,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // alert preview read it through, so the site and the inbox cannot disagree
 // about what has actually been published. See lit/lit-news.js.
 const LitNews = createRequire(import.meta.url)(path.join(__dirname, '..', 'lit-news.js'));
+// The abstract an alert's "abstract contains" criterion matches is the
+// abstract the CARD shows — lit/lit-abstract.js, the same file the page
+// renders and searches with — never the raw deposit with INFORMS' acceptance
+// sentence and trailers on it (owner, 2026-09-15: "this commentary was" must
+// not find papers whose cards no longer say it).
+const LitAbstract = createRequire(import.meta.url)(path.join(__dirname, '..', 'lit-abstract.js'));
 const DATA_DIR  = path.join(__dirname, '..', 'data');
 const FT50_DIR  = path.join(__dirname, '..', 'data-ft50');
 // The Working Papers archive (SSRN/NBER/arXiv/OSF pre-prints of the listed
@@ -516,7 +522,7 @@ function matchesCriteria(p, c, ctx) {
   for (const a of (c.author || [])) if (!authorMatch(auth, a)) return false;
   const aff = (p.Affiliations || '').toLowerCase();
   for (const af of (c.affiliation || [])) if (!textMatch(aff, af)) return false;
-  const abs = (p.Abstract || '').toLowerCase();
+  const abs = LitAbstract.cleanAbstract(p.Abstract || '').toLowerCase();
   for (const ab of (c.abstract || [])) if (!textMatch(abs, ab)) return false;
   return true;
 }
@@ -1591,6 +1597,14 @@ function selftest() {
   ok('abstract substring network', matchesCriteria(P(), { abstract: ['network'] }, ctx));
   ok('abstract missing term fails', !matchesCriteria(P(), { abstract: ['blockchain'] }, ctx));
   ok('paper with no abstract cannot match abstract query', !matchesCriteria(P({ Abstract: '' }), { abstract: ['platform'] }, ctx));
+  // The criterion matches the SHOWN abstract (lit-abstract.js), not the raw
+  // deposit: the INFORMS acceptance sentence and its editor are not terms.
+  const TAILED = P({ Abstract: 'We study platforms. This commentary was accepted by Christoph Loch.' });
+  ok('abstract criterion cannot match the acceptance sentence', !matchesCriteria(TAILED, { abstract: ['this commentary was'] }, ctx));
+  ok('abstract criterion cannot match the accepting editor', !matchesCriteria(TAILED, { abstract: ['loch'] }, ctx));
+  ok('abstract criterion still matches the abstract itself', matchesCriteria(TAILED, { abstract: ['platforms'] }, ctx));
+  ok('an area name in the tail is not an abstract term',
+    !matchesCriteria(P({ Abstract: 'We study platforms. This paper was accepted by Eric So, accounting.' }), { abstract: ['accounting'] }, ctx));
 
   // affiliation / year
   ok('affiliation dublin', matchesCriteria(P(), { affiliation: ['dublin'] }, ctx));

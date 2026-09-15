@@ -1031,6 +1031,9 @@
   </div>
 </footer>
 
+<!-- The abstract a card shows and the Abstracts search matches: ONE definition,
+     shared with the alerts mailer and emit-db.mjs (see lit/lit-abstract.js). -->
+<script src="lit-abstract.js"></script>
 <script>
 // ── Data source: static JSON, no Google Sheets ───────────────────────────────
 // These files are built from public APIs (Crossref + friends) by a scheduled
@@ -3296,7 +3299,7 @@ function updateDropdownOptions() {
       var affText = (p['Affiliations']||'').toLowerCase();
       if (searchAff && !textMatch(affText, searchAff)) return false;
       for (var af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
-      var absText = (p['Abstract']||'').toLowerCase();
+      var absText = absSearchText(p); // the SHOWN abstract, never the raw deposit
       if (searchAbs && !textMatch(absText, searchAbs)) return false;
       for (var ab of sel.abstract) { if (!textMatch(absText, ab)) return false; }
       return true;
@@ -3505,10 +3508,11 @@ function applyFilters() {
     if (searchAff && !textMatch(affText, searchAff)) return false;
     for (const af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
 
-    // Abstracts: full-text search over the paper abstract, same substring/
+    // Abstracts: full-text search over the abstract the card SHOWS (never the
+    // raw deposit with INFORMS' acceptance sentence on it), same substring/
     // quoted-word rules as the title search (a paper with no abstract on
     // record can never match, so an abstract query filters it out).
-    const absText = (p['Abstract']||'').toLowerCase();
+    const absText = absSearchText(p);
     if (searchAbs && !textMatch(absText, searchAbs)) return false;
     for (const ab of sel.abstract) { if (!textMatch(absText, ab)) return false; }
 
@@ -4553,90 +4557,22 @@ function preprintPdfUrl(u) {
 // say which of the two rxivs hosts it).
 var PREPRINT_HOST = { arxiv: 'arXiv', ssrn: 'SSRN', biorxiv: 'bioRxiv', medrxiv: 'medRxiv', cshl: 'bioRxiv/medRxiv', nber: 'NBER', osf: 'OSF' };
 
-// INFORMS closes every deposited abstract with an acceptance sentence naming
-// the editor — "This paper was accepted by Eric So, accounting." — and, after
-// it, the funding / supplemental-material tail. The data KEEPS that sentence
-// (acceptance() in build-data.mjs reads the editor and the area from it; the
-// editor chip on the card comes from there) and the card drops it here. The
-// item type varies with the item: a research paper says "paper", the
-// September-2026 MS commentaries on "Fighting Fire with Fire" end in "This
-// commentary was accepted by Christoph Loch." (owner, 2026-09-15 — the old
-// indexOf('This paper was accepted') let that sentence through onto the
-// card), an MS discussion says "discussion", and some records say "has been"
-// rather than "was". Two things about the pattern are deliberate. The noun
-// list is CLOSED: a \w+ rule would cut real prose — a TAR abstract in the
-// FT50 catalog reads "This method is accepted by that group of accountants…"
-// mid-abstract, and "article" is deliberately NOT in it: the one tail that
-// uses it ("…according to Aristotle, when Note This article was accepted by
-// former Editor John P Campbell", a 1983 JAP row) has no sentence end before
-// the note, so the cut would take the abstract's real last sentence with it.
-// The match is case-sensitive, so an arXiv abstract's mid-sentence "as this
-// article has been accepted by the Frontiers of…" could never match either.
-// And "by" is REQUIRED: "This paper has been accepted for publication in the
-// Journal of…" is a note an OSF working paper ends with (another ends "This
-// article has been accepted for publication in…"), and it is theirs to keep.
-// The INFORMS special-issue tail without "by" — "This paper has been
-// accepted for the Manufacturing & Service Operations Management Special
-// Issue on Value Chain Innovations in Developing Economies.", the LAST
-// sentence of twenty M&SOM abstracts (measured 2026-09-15; every other
-// journal's copy of that sentence sits inside a History: block, which the
-// trailer cut below already removes) — gets its own pattern, anchored on the
-// journal name so the OSF notes cannot match it. Pinned by
-// lit/_scraper/abstract-display-selftest.mjs.
-var ACCEPTED_BY_RE = /\bThis (?:paper|work|commentary|discussion|comment|reply|note|rejoinder|editorial|erratum) (?:was|has been) accepted by\b/;
-var ACCEPTED_FOR_RE = /\bThis paper (?:was|has been|is) accepted for the (?:Manufacturing & Service Operations Management|M&SOM|Management Science|Operations Research|Marketing Science|Information Systems Research|Strategy Science|Transportation Science|Organization Science|Mathematics of Operations Research|INFORMS Transactions on Education|INFORMS Journal on Computing|INFORMS) [Ss]pecial (?:[Ii]ssue|[Ss]ection)\b/;
-// The cut keeps the abstract's own last sentence whole — whatever it ends in.
-// The first of those commentaries ends "…does it ask more of human judgment,
-// or less?", and a plain widening of the old endsWith('.') cut would have
-// walked back to the previous period and dropped that closing question
-// together with the tail.
-var SENTENCE_END_RE = /[.?!]["'”’)\]]*$/;
-function cutBeforeTail(s, idx) {
-  var before = s.substring(0, idx).trimEnd();
-  if (!SENTENCE_END_RE.test(before)) {
-    var m = before.match(/^[\s\S]*[.?!]["'”’)\]]*/);
-    if (m && m[0].length > 0) before = m[0];
-  }
-  return before;
-}
-
+// The abstract a card shows — and the one the Abstracts search matches — is
+// ONE definition in lit/lit-abstract.js (loaded above the main script; the
+// alerts mailer and emit-db.mjs load the same file), so a search can never
+// find a sentence the card does not show: "this commentary was" used to
+// return the three MS commentaries whose cards no longer said it (owner,
+// 2026-09-15). The fallback keeps the page rendering (raw text) if the module
+// ever fails to load. Pinned by lit/_scraper/abstract-display-selftest.mjs.
 function cleanAbstract(s) {
-  if (!s) return '';
-  // Remove everything from the acceptance sentence onwards. An abstract that
-  // BEGINS with it ("This paper was accepted by Christoph Loch, commentary."
-  // — four MS rows: two are the sentence alone, two carry a supplement or
-  // conflict-of-interest trailer after it) cleans to '' and the card shows no
-  // abstract: a paper shows nothing rather than a description of itself.
-  var am = ACCEPTED_BY_RE.exec(s);
-  if (am) s = am.index > 0 ? cutBeforeTail(s, am.index) : '';
-  var af = ACCEPTED_FOR_RE.exec(s);
-  if (af) s = af.index > 0 ? cutBeforeTail(s, af.index) : '';
-  // Remove other trailing junk patterns. A marker at position 0 means the
-  // whole "abstract" is trailer — "History: Accepted by Christoph Loch,
-  // commentary." is one MS row's entire deposit — so that shows nothing too.
-  var junk = ['Funding:', 'Supplemental Material:', 'Conflict of Interest', 'The online appendix', 'Data and the online appendix', 'History:', 'Disclaimer/Publisher'];
-  for (var i = 0; i < junk.length; i++) {
-    var ji = s.indexOf(junk[i]);
-    if (ji > 0) s = cutBeforeTail(s, ji);
-    else if (ji === 0) s = '';
-  }
-  // Remove a trailing DOI URL — and the sentence that only pointed at it.
-  // "The e-companion is available at https://doi.org/… ." (119 rows), "The
-  // online appendices are available at …", "Data are available at …": with
-  // the URL gone that sentence has no terminator and used to dangle on the
-  // card as "…is available at" (417 rows measured 2026-09-15). A sentence
-  // that ends in a bare DOI is a pointer, not prose, so it goes with the URL;
-  // an abstract that was ONLY the pointer shows nothing. A URL anywhere else
-  // is untouched, and so is a complete sentence before the URL.
-  var noDoi = s.replace(/\s*https?:\/\/doi\.org\/\S+\s*\.?\s*$/, '');
-  if (noDoi !== s) {
-    s = noDoi.trimEnd();
-    if (s && !SENTENCE_END_RE.test(s)) {
-      var pm = s.match(/^[\s\S]*[.?!]["'”’)\]]*/);
-      s = pm ? pm[0] : '';
-    }
-  }
-  return s.trim();
+  return window.LitAbstract ? window.LitAbstract.cleanAbstract(s) : (s ? String(s) : '');
+}
+// The lower-cased SHOWN abstract, cached per row like p._bdoi: the filter
+// runs on every keystroke over up to ~600k rows, and a loaded row's Abstract
+// never changes on the page.
+function absSearchText(p) {
+  if (p._absq === undefined) p._absq = cleanAbstract(p['Abstract'] || '').toLowerCase();
+  return p._absq;
 }
 
 let searchTimer;
