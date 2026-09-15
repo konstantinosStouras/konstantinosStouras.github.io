@@ -4553,30 +4553,54 @@ function preprintPdfUrl(u) {
 // say which of the two rxivs hosts it).
 var PREPRINT_HOST = { arxiv: 'arXiv', ssrn: 'SSRN', biorxiv: 'bioRxiv', medrxiv: 'medRxiv', cshl: 'bioRxiv/medRxiv', nber: 'NBER', osf: 'OSF' };
 
+// INFORMS closes every deposited abstract with an acceptance sentence naming
+// the editor — "This paper was accepted by Eric So, accounting." — and, after
+// it, the funding / supplemental-material tail. The data KEEPS that sentence
+// (acceptance() in build-data.mjs reads the editor and the area from it; the
+// editor chip on the card comes from there) and the card drops it here. The
+// item type varies with the item: a research paper says "paper", the
+// September-2026 MS commentaries on "Fighting Fire with Fire" end in "This
+// commentary was accepted by Christoph Loch." (owner, 2026-09-15 — the old
+// indexOf('This paper was accepted') let that sentence through onto the
+// card), an MS discussion says "discussion", and some records say "has been"
+// rather than "was". Two things about the pattern are deliberate. The noun
+// list is CLOSED: a \w+ rule would cut real prose — a TAR abstract in the
+// FT50 catalog reads "This method is accepted by that group of accountants…"
+// mid-abstract. And "by" is REQUIRED: the ITED special-issue papers carry
+// "This paper has been accepted for the INFORMS Transactions on Education
+// Special Issue on…" inside the abstract — a note, not the tail — and were
+// never cut before. Pinned by lit/_scraper/abstract-display-selftest.mjs.
+var ACCEPTED_BY_RE = /\bThis (?:paper|work|commentary|discussion|comment|reply|note|rejoinder|editorial|erratum) (?:was|has been) accepted by\b/;
+// The cut keeps the abstract's own last sentence whole — whatever it ends in.
+// The first of those commentaries ends "…does it ask more of human judgment,
+// or less?", and the old endsWith('.') test walked back to the previous
+// period and dropped that closing question together with the tail.
+var SENTENCE_END_RE = /[.?!]["'”’)\]]*$/;
+function cutBeforeTail(s, idx) {
+  var before = s.substring(0, idx).trimEnd();
+  if (!SENTENCE_END_RE.test(before)) {
+    var m = before.match(/^[\s\S]*[.?!]["'”’)\]]*/);
+    if (m && m[0].length > 0) before = m[0];
+  }
+  return before;
+}
+
 function cleanAbstract(s) {
   if (!s) return '';
-  // Remove everything from "This paper was accepted by" onwards
-  var idx = s.indexOf('This paper was accepted');
-  if (idx === -1) idx = s.indexOf('This work was accepted');
-  if (idx > 0) {
-    // Go back to the last period before it
-    var before = s.substring(0, idx).trimEnd();
-    // If it ends with a period, keep it; otherwise find last period
-    if (!before.endsWith('.')) {
-      var lastDot = before.lastIndexOf('.');
-      if (lastDot > 0) before = before.substring(0, lastDot + 1);
-    }
-    s = before;
-  }
-  // Remove other trailing junk patterns
+  // Remove everything from the acceptance sentence onwards. An abstract that
+  // IS only that sentence ("This paper was accepted by Christoph Loch,
+  // commentary." — four MS rows) cleans to '' and the card shows no abstract:
+  // a paper shows nothing rather than a description of itself.
+  var am = ACCEPTED_BY_RE.exec(s);
+  if (am) s = am.index > 0 ? cutBeforeTail(s, am.index) : '';
+  // Remove other trailing junk patterns. A marker at position 0 means the
+  // whole "abstract" is trailer — "History: Accepted by Christoph Loch,
+  // commentary." is one MS row's entire deposit — so that shows nothing too.
   var junk = ['Funding:', 'Supplemental Material:', 'Conflict of Interest', 'The online appendix', 'Data and the online appendix', 'History:', 'Disclaimer/Publisher'];
   for (var i = 0; i < junk.length; i++) {
     var ji = s.indexOf(junk[i]);
-    if (ji > 0) {
-      var b = s.substring(0, ji).trimEnd();
-      if (!b.endsWith('.')) { var ld = b.lastIndexOf('.'); if (ld > 0) b = b.substring(0, ld + 1); }
-      s = b;
-    }
+    if (ji > 0) s = cutBeforeTail(s, ji);
+    else if (ji === 0) s = '';
   }
   // Remove trailing DOI URLs
   s = s.replace(/\s*https?:\/\/doi\.org\/\S+\s*\.?\s*$/, '');
