@@ -25,6 +25,9 @@ on:
       # each other, so a rules edit alone must run the checks
       - 'lit/_firestore.rules'
       - 'lit/_scraper/users-selftest.mjs'
+      # the abstract strip is sliced out of lit/index.html (already listed
+      # under **/*.html) and checked against the committed papers-ms.json
+      - 'lit/_scraper/abstract-display-selftest.mjs'
       - 'lit/lit-news.js'
       - 'lit/lit-acct-nav.js'
       # share-check.mjs measures the real pixels of every og:image against the
@@ -45,6 +48,7 @@ on:
       - 'tools/**'
       - 'lit/_firestore.rules'
       - 'lit/_scraper/users-selftest.mjs'
+      - 'lit/_scraper/abstract-display-selftest.mjs'
       - 'lit/lit-news.js'
       - 'lit/lit-acct-nav.js'
       - 'images/**'
@@ -94,3 +98,10 @@ jobs:
       # …and the What's-new gate, which pins the OTHER copy of that address.
       - name: The What's-new review gate holds
         run: node lit/_scraper/news-selftest.mjs
+
+      # The abstract a card shows: the INFORMS acceptance sentence is cut in
+      # every shape the catalog carries ("This commentary was accepted by …"
+      # included) and never a sentence of real prose — run over fixed cases
+      # and over the committed papers-ms.json.
+      - name: No card shows the INFORMS acceptance sentence as abstract
+        run: node lit/_scraper/abstract-display-selftest.mjs

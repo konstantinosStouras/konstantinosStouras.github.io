@@ -1046,6 +1046,36 @@ build-data/abstracts-ci, `clean-junk-abstracts.mjs` vendored + run: abs4
 1,366 rows blanked — mostly EJ/REStat/JHR/IER OUP citation lines — + 1,358
 cache entries healed; abs3-omecon 2, abs3-rest 12; nature/science clean,
 guard preventive). Covered by `entities-selftest.mjs`.
+**The INFORMS acceptance sentence is dropped on the card, in every shape it
+takes** (owner, 2026-09-15). MS deposits "This paper was accepted by Eric So,
+accounting." at the end of ~4,900 abstracts and the data KEEPS it —
+`acceptance()` in `build-data.mjs` reads the editor and the area from it —
+while `cleanAbstract` in `index.html` cuts it (and the Funding /
+Supplemental-Material tail after it) at render time. It matched only
+`This paper was accepted` / `This work was accepted`, so the three
+September-2026 MS commentaries on "Fighting Fire with Fire"
+(`10.1287/mnsc.2026.02441`–`.02443`, "This commentary was accepted by
+Christoph Loch."), an MS discussion and the "has been accepted by" records
+showed the sentence on the card. `ACCEPTED_BY_RE` now matches a CLOSED list of
+INFORMS item types (paper, work, commentary, discussion, comment, reply, note,
+rejoinder, editorial, erratum) in the past tense and REQUIRES "by" — both
+measured, not guessed: a `\w+` noun would cut real prose ("This method is
+accepted by that group of accountants…", a TAR abstract in the FT50 catalog),
+and the ITED special-issue papers carry "This paper has been accepted for the
+… Special Issue on …" INSIDE the abstract as a note, never cut before and not
+now. Two more things changed with it: the cut keeps the abstract's own last
+sentence whatever it ends in — the first commentary ends in a question, and
+the old `endsWith('.')` walked back to the previous period and dropped it with
+the tail — and an abstract that IS only the acceptance sentence ("This paper
+was accepted by Christoph Loch, commentary.", four MS rows) or only a trailer
+("History: Accepted by Christoph Loch, commentary.", `10.1287/mnsc.2025.01934`
+— the trailer cut used to apply only PAST position 0) cleans to `''`, so the
+card shows no abstract rather than a description of itself. The data is
+deliberately untouched: the daily build re-maps every MS abstract from
+Crossref, so a data-only edit would be back the next morning. Pinned by
+`node lit/_scraper/abstract-display-selftest.mjs` (offline; the block is
+SLICED out of `index.html`, length-asserted, and run over fixed cases AND the
+committed `papers-ms.json` in both catalogs), which `site-checks.yml` runs.
 **ScienceDirect "Highlights" bullets are never served as the abstract** (user
 report 2026-08, the EJOR case). Elsevier deposits many papers' author
 HIGHLIGHTS — the 3-5 short ScienceDirect bullet points — as (or fused onto)
