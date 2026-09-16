@@ -896,38 +896,66 @@ in a URL, a log line or browser code, and it may be revoked without notice (a
 (`view=COMPLETE`, subscriber-only — hence the token; 25 DOIs per GET as
 `DOI({…}) OR DOI({…})`, `scopusDoiQuery`/`scopusAbstracts`), is the bulk
 route — 20,000 requests/week per key, so the ~40k Elsevier DOIs the FT50
-catalog still lacks clear in a couple of runs instead of months; it only ever
-ADDS finds (a DOI it does not serve falls through), and drops out for the run
-on 401/403/429, on a query form Scopus rejects twice (the exact `DOI({…})`
-form is retried once as `DOI("…")`), after five straight answers matching
-none of the DOIs asked for, or when `X-RateLimit-Remaining` hits 0
-(`FT50_ABS_SCOPUS=0` disables it). Leg 3b, **Abstract Retrieval** (one GET
-per DOI, `view=META_ABS`, `elsevierAbstract` parses `dc:description`;
-10,000/week per key) takes whatever 3a did not serve and OWNS the verdict —
-and only a DEFINITIVE answer (200, or a 4xx other than 401/403/429) counts as
-checked; a 5xx leaves the DOI uncached (`elsAnswerIsDefinitive`). The run
+catalog still lacks clear in a couple of runs instead of months. A record it
+returns WITHOUT text is a VERDICT (Abstract Retrieval reads the same Scopus
+record, so asking again per DOI would only spend the smaller quota); a DOI it
+does not return falls through to 3b — or, when 3b is out for the run, is
+stamped a PROVISIONAL 7-day miss rather than re-sent to OpenAlex, S2 and
+Scopus on every run until the quota resets. It drops out for the run on
+401/403/429 (a 429 with quota left is the per-second throttle — waited out and
+retried once), on a query form Scopus rejects on BOTH spellings (the exact
+`DOI({…})` form is retried as `DOI("…")` after a 400 AND after five chunks of
+older papers matched nothing — chunks made only of papers from the last two
+years never count, they may simply not be indexed yet; `FT50_ABS_SCOPUS_FORM`
+pins one form), or when `X-RateLimit-Remaining` hits 0 (`FT50_ABS_SCOPUS=0`
+disables it). Leg 3b, **Abstract Retrieval** (one GET per DOI, the DOI's slash
+literal in the path, `view=META_ABS`, `elsevierAbstract` parses
+`dc:description`; 10,000/week per key) takes whatever 3a did not serve and
+OWNS the verdict — and only a DEFINITIVE answer counts as checked: 200 or 404
+(`elsAnswerIsDefinitive`); a 5xx, a 400 (INVALID_INPUT is about the request,
+not the paper) or an unreadable body leaves the DOI uncached. **A 200 without
+text is a tier-2 verdict only once the leg has retrieved ONE abstract in the
+run** — the no-text shape is exactly what a token that does not carry the
+entitlement produces, and a tier-2 stamp would be re-opened by nothing (the
+16,908-DOI write-off's failure class, at the strongest tier): until that proof
+they are stamped at tier 1, and 25 of them with no find raises a `::warning::`
+(`NOTEXT_ALARM`). A 404 on a paper from the last two years is a 7-day miss
+(`isRecentYear`; Scopus indexes an Elsevier article days to weeks after
+Crossref registration, and the queue is newest-first). A refusal names
+Elsevier's own error envelope (`elsErrorText`): a 401 is AUTHENTICATION_ERROR
+(bad/revoked key or token) OR AUTHORIZATION_ERROR (a valid pair without
+entitlement for the view — do not rotate the credentials), and the 9 req/s
+limit behind a throttle 429 is per KEY, shared by every repo using it. The run
 summary prints the `X-RateLimit` figures it saw per API — requests left this
 week and the reset time (`readRateLimit`) — so "is the quota the limit?" is
-answered from the Actions log. It caches into `data-ft50/_api-abstracts.json`
-(doi → `{a}` | `{none:1,t:day[,k:tier]}`) and applies UPGRADE-only via the
-same `betterAbstract`; `applyAbstractCaches` folds it into every FT50 daily
-build. **A miss carries the credential TIER it was checked under** (`k`:
-1 = key only, 2 = key + token; absent = the batched OpenAlex/S2 legs alone —
-`credentialTier`/`missStamp`), and `missIsFresh` treats a miss as binding
-only when it was stamped under a credential at least as strong as the one
-the run holds AND is younger than `FT50_ABS_MISS_TTL_DAYS` (45): the first
-token run re-checks every DOI written off under a refused or token-less key
-at once, while a DOI the token run confirmed abstract-less is not re-queried
-every six hours (the old rule retried EVERY Elsevier miss on every keyed
-run). `mergeAbsCache` (the push-retry replay) lets a stronger-tier miss
-replace a weaker one, never the reverse. Distinct OpenAlex identity
+answered from the Actions log, and a token set without a key is a `::warning::`
+rather than a silent unkeyed run. It caches into
+`data-ft50/_api-abstracts.json` (doi → `{a}` | `{none:1,t:day[,k:tier][,ttl:days]}`)
+and applies UPGRADE-only via the same `betterAbstract`; `applyAbstractCaches`
+folds it into every FT50 daily build. **A miss carries the credential TIER it
+was checked under** (`k`: 1 = key only, 2 = key + token; absent = the batched
+OpenAlex/S2 legs alone — `credentialTier`/`missStamp`), and `missIsFresh`
+treats a miss as binding only when it was stamped under a credential at least
+as strong as the one the run holds AND is younger than its TTL (its own `ttl`
+where stamped, else `FT50_ABS_MISS_TTL_DAYS` 45): the first token run
+re-checks every DOI written off under a refused or token-less key at once,
+while a DOI the token run confirmed abstract-less is not re-queried every six
+hours (the old rule retried EVERY Elsevier miss on every keyed run).
+`mergeAbsCache` (the push-retry replay) lets a stronger-tier miss replace a
+weaker one, never the reverse. Distinct OpenAlex identity
 `kstouras+litft50abs`. Offline test:
-`node lit/_scraper-ft50/abstracts-selftest.mjs` — unit checks plus five
+`node lit/_scraper-ft50/abstracts-selftest.mjs` — unit checks plus sixteen
 whole-run scenarios driven against a stubbed `fetch` in child processes (the
-token run, Scopus refused, key without token, the Scopus query-form fallback,
-a spent quota) and the source pin that the credentials only ever travel as
-headers. Operator guide — the two secrets, which repos, how to start it and
-how to read a run's log: `lit/_ELSEVIER-ABSTRACTS-SETUP.md`.
+token run, Scopus refused, key without token, no key at all, the Scopus 400
+form fallback, a spent quota, a token that unlocks no text, the Scopus
+empty-streak form fallback with provisional stamps, a 5xx chunk beside a
+quota-spending one, a throttle 429, a fetch that throws with the token in its
+message, the Springer leg, the `--apply-only --merge-cache` replay, a budget
+cut mid-batch, an OpenAlex 429, a chrome-only cache entry healed and
+re-queried) with the source pin that the credentials only ever travel as
+headers AND the runtime pin that no scenario's log ever carries one. Operator guide — the two secrets,
+which repos, how to start it and how to read a run's log:
+`lit/_ELSEVIER-ABSTRACTS-SETUP.md`.
 **A keyed leg that never ran must not write its DOIs off** (`shouldStampMiss`,
 pure + unit-tested). The per-DOI Elsevier/Springer legs drop for the WHOLE run
 on 401/403/429, and the time budget can cut one mid-batch — but the
@@ -938,9 +966,12 @@ written off as "no abstract" in a 9-minute run** that could not physically have
 queried them (one GET per DOI at `ELS_PACE_MS` 350 ms ≈ 98 min). So each batch
 now tracks which DOIs a keyed leg actually reached (`keyedTried`) and leaves
 the rest uncached for the next run. A configured-but-refused key also emits a
-`::warning::` naming the HTTP code and its meaning (401 bad/expired key, 403 no
-off-campus abstract entitlement → get an institutional token and set
-`ELSEVIER_INST_TOKEN`, 429 quota) — the run otherwise exits 0 and looks healthy
+`::warning::` naming the HTTP code and Elsevier's own error code (401/403:
+AUTHENTICATION_ERROR is a bad or revoked key/token, AUTHORIZATION_ERROR a valid
+pair without entitlement — a bare key off-campus needs the institutional token,
+`ELSEVIER_INST_TOKEN`), while a 429 or a spent `X-RateLimit-Remaining` is a
+`::notice::` (the leg resumes after the weekly reset; a throttle 429 is waited
+out and retried once first) — the run otherwise exits 0 and looks healthy
 while achieving nothing. **This is why EJOR abstract coverage sits at ~10%**:
 Elsevier DOIs resolve at 7.6% against 87.7% (OUP), 85.6% (AAA), 70.3% (AoM) —
 a credential problem, not a code or coverage one (measured 2026-09-16, the

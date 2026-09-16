@@ -11,8 +11,8 @@ needs, where to put them, how to start it and how to read its log.
 
 | Secret | What it is | Where it comes from |
 |---|---|---|
-| `ELSEVIER_API_KEY` | An Elsevier Developer Portal API key | Free, at <https://dev.elsevier.com> (any of the account's keys works) |
-| `ELSEVIER_INST_TOKEN` | The **institutional token** (`insttoken`) that pairs with the key | Issued by Elsevier support to the account holder, on request |
+| `ELSEVIER_API_KEY` | The Elsevier Developer Portal API key the token was issued against | Free, at <https://dev.elsevier.com> |
+| `ELSEVIER_INST_TOKEN` | The **institutional token** (`insttoken`) that pairs with that key | Issued by Elsevier support to the account holder, on request |
 
 A bare API key is entitled to abstract TEXT only from the institution's own IP
 range. A GitHub Actions runner is off-campus, so with the key alone Elsevier
@@ -34,8 +34,13 @@ How that is met here, and pinned by `node lit/_scraper-ft50/abstracts-selftest.m
 * the token lives ONLY in GitHub Actions repository secrets and reaches the
   script as an environment variable; GitHub masks secret values in run logs;
 * every Elsevier call is `https://api.elsevier.com/…` with the key and the
-  token as request headers — the selftest fails if either credential is ever
-  interpolated or concatenated into a URL, a string or a log line;
+  token as request headers — the selftest pins the source (no credential is
+  interpolated or concatenated into a URL or string, no log line names one,
+  no catch prints an error message verbatim) AND runs sixteen whole scenarios
+  with fake credentials, failing if the run's output ever carries them;
+* a secret pasted with an embedded line break or control character is refused
+  at startup by name only (`::error::…is not a valid header value`) and
+  ignored for the run, so it can never reach a request or an error message;
 * nothing browser-side ever sees it: the backfill is a Node script on a runner,
   and the site only serves the resulting `_api-abstracts.json` text;
 * a revoked token shows as HTTP 401 on a run that used to work, and the run
@@ -81,15 +86,28 @@ files; the daily builds re-apply the cache, so a rebuild never loses an abstract
    Elsevier answers without an abstract is cached as a miss for 45 days.
 
 Both drop out for the rest of a run on 401 / 403 / 429 or when the response
-headers say the week's quota is spent, and resume on the next run. A miss
-records the credential it was checked with (key only, or key + token), so the
-first run with the token re-checks every DOI written off under a weaker
-credential, and later runs do not re-query DOIs the token run has settled.
+headers say the week's quota is spent, and resume on the next run (a 429 that
+arrives with quota left is Elsevier's per-second throttle: the leg waits a
+moment and retries once). A miss records the credential it was checked with
+(key only, or key + token), so the first run with the token re-checks every
+DOI written off under a weaker credential, and later runs do not re-query DOIs
+the token run has settled. Three safety rules on top: a record Scopus returns
+without an abstract is settled without asking the per-DOI API again; a "not
+found" on a paper from the last two years is only a 7-day miss, since Scopus
+indexes new articles late; and the per-DOI leg's "no abstract" answers count
+as full verdicts only once it has retrieved at least one abstract in the run,
+because a token that does not carry the entitlement produces exactly the same
+answer shape (until then they are re-checked next run, and 25 of them with no
+find prints a `::warning::`).
 
-Quotas are per API key. If the same key is used in all four repositories, the
-four backfills share its weekly quota; a second key from the same Developer
-Portal account gives a second quota (the token pairs with any key of that
-account).
+Quotas and the 9-requests-a-second limit are per API key, across every
+repository using it. If the same key is used in all four repositories, the four
+backfills share its weekly quota and can throttle one another when two slices
+overlap; the leg copes (waits and retries, then stops for that run). If one
+key's quota turns out to be the limit, ask Elsevier support whether the token
+may be paired with a further key or a higher quota granted, rather than
+creating extra keys on your own: the terms of use forbid working around
+per-key quotas, and the token can be revoked without notice.
 
 ## Reading a run's log
 
@@ -106,9 +124,27 @@ Lines to look for in the "Backfill … abstracts" step:
   Elsevier support to confirm its entitlements.
 * `Elsevier quota — Scopus Search: … requests left this week, resets …;
   Abstract Retrieval: …` — the live quota, from Elsevier's own headers.
-* `::warning::` — the credentials were refused (401: bad key, or a revoked or
-  mismatched token; 403: no entitlement). `::notice::` — a spent quota, which
-  simply resumes after the reset.
+* `::warning::Scopus Search refused the COMPLETE view` — the batched leg is
+  off for good until Elsevier support sorts out the token's Scopus entitlement
+  (or the key/token pair); the per-DOI leg still runs, just slower.
+* `::warning::` — the credentials were refused. The line quotes Elsevier's own
+  error code: `AUTHENTICATION_ERROR` is a bad, expired or revoked key or token;
+  `AUTHORIZATION_ERROR` is a VALID pair that lacks entitlement for what was
+  asked (do not rotate the credentials, ask Elsevier support which
+  entitlements the token carries). Both can arrive as HTTP 401.
+* `::warning::The institutional token is not unlocking abstract text` — every
+  per-DOI answer came back without an abstract; nothing was written off (those
+  DOIs are re-checked next run), and Elsevier support should confirm the
+  token's entitlement for the Abstract Retrieval API.
+* `::warning::ELSEVIER_INST_TOKEN is set but ELSEVIER_API_KEY is not` — the
+  token does nothing without its key; add the key secret.
+* `::notice::` — a spent weekly quota (resumes after the reset) or a
+  per-second throttle that a retry did not clear (resumes next run).
+* `::notice::N Elsevier DOIs were left uncached this run` — no Elsevier leg
+  reached them, so nothing was written off and they come back next run. It is
+  the cost of a refused credential stated plainly: until the key or token
+  works, every run re-asks the free legs about the same DOIs and moves none of
+  them. A run with working credentials does not print this line.
 
 `node lit/_scraper-ft50/abstracts-ci.mjs --dry-run` (with the two variables
 set locally) prints the queue counts without fetching anything.
@@ -116,6 +152,9 @@ set locally) prints the queue counts without fetching anything.
 ## Knobs
 
 `FT50_ABS_SCOPUS=0` turns the Scopus leg off (per-DOI only);
-`FT50_ABS_SCOPUS_PACE_MS` / `FT50_ABS_ELS_PACE_MS` pace the two legs (floors
-250 ms; Elsevier allows 9 requests a second); `FT50_ABS_MISS_TTL_DAYS` is the
-miss retry window (45). The same names apply in the shard workflows.
+`FT50_ABS_SCOPUS_FORM=exact|loose` pins the Scopus DOI query form (by default
+the run starts on the exact `DOI({…})` form and falls back to the quoted one
+if Scopus rejects it or matches nothing with it); `FT50_ABS_SCOPUS_PACE_MS` /
+`FT50_ABS_ELS_PACE_MS` pace the two legs (floors 250 ms; Elsevier allows 9
+requests a second per key); `FT50_ABS_MISS_TTL_DAYS` is the miss retry window
+(45). The same names apply in the shard workflows.
