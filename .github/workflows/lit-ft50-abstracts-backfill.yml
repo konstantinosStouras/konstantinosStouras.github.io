@@ -1,9 +1,12 @@
 name: lit — backfill FT50 abstracts (OpenAlex/S2)
 
 # Fills missing/stub abstracts across the FT50 catalog (data-ft50/) from
-# OpenAlex (abstract_inverted_index, batched 50/call) with an optional
-# Semantic Scholar leg (500 DOIs/POST; drops out on throttle) — many FT50
-# journals (finance/econ especially) deposit no abstract to Crossref at all.
+# OpenAlex (abstract_inverted_index, batched 50/call), an optional Semantic
+# Scholar leg (500 DOIs/POST; drops out on throttle) and — with the
+# ELSEVIER_API_KEY + ELSEVIER_INST_TOKEN secrets — Elsevier's Scopus Search
+# (batched) and Abstract Retrieval (per DOI) APIs for 10.1016/… DOIs — many
+# FT50 journals (finance/econ especially) deposit no abstract to Crossref at
+# all, and the Elsevier ones are the bulk of what is still missing.
 # Runs bounded ~40-min slices four times a day, newest papers first, into
 # data-ft50/_api-abstracts.json, and applies UPGRADE-only (betterAbstract) to
 # the served papers files; the FT50 daily build re-applies the committed
@@ -42,14 +45,20 @@ jobs:
       - name: Backfill FT50 abstracts (bounded slice, newest first)
         env:
           FT50_ABS_BUDGET_MS: '2400000'
-          # Optional keys — both legs stay inert/anonymous until the secret is
-          # set on the repo. ELSEVIER_API_KEY (a free institutional key from
-          # dev.elsevier.com) unlocks the Abstract Retrieval leg for 10.1016/…
-          # DOIs — the bulk of the still-missing FT50 abstracts (EJOR, JFE,
-          # AOS, OBHDP, JAE, Research Policy…). S2_API_KEY moves the Semantic
-          # Scholar leg off the throttled anonymous pool.
+          # Optional keys — every keyed leg stays inert until its secret is set
+          # on the repo. ELSEVIER_API_KEY (a free key from dev.elsevier.com) +
+          # ELSEVIER_INST_TOKEN (the institutional token Elsevier support issues
+          # for server-side use) unlock the two Elsevier legs for 10.1016/… DOIs
+          # — the bulk of the still-missing FT50 abstracts (EJOR, JFE, AOS,
+          # OBHDP, JAE, Research Policy…): Scopus Search batched (25 DOIs/GET)
+          # and per-DOI Abstract Retrieval. The token is sent ONLY as the
+          # X-ELS-Insttoken header over https, never in a URL or a log line —
+          # its terms of use (lit/_ELSEVIER-ABSTRACTS-SETUP.md). Without it
+          # Elsevier answers with metadata and no abstract text off-campus.
+          # S2_API_KEY moves the Semantic Scholar leg off the throttled
+          # anonymous pool.
           ELSEVIER_API_KEY: ${{ secrets.ELSEVIER_API_KEY }}
-          ELSEVIER_INST_TOKEN: ${{ secrets.ELSEVIER_INST_TOKEN }}   # optional off-campus entitlement token
+          ELSEVIER_INST_TOKEN: ${{ secrets.ELSEVIER_INST_TOKEN }}
           SPRINGER_API_KEY: ${{ secrets.SPRINGER_API_KEY }}   # optional — the Meta API key (abstracts for Springer/Palgrave/Kluwer DOIs)
           S2_API_KEY: ${{ secrets.S2_API_KEY }}
         run: node lit/_scraper-ft50/abstracts-ci.mjs
