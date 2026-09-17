@@ -49,6 +49,39 @@ How that is met here, and pinned by `node lit/_scraper-ft50/abstracts-selftest.m
 **Never paste the token into a chat, a commit, an issue or a pull request.**
 It goes into the secrets page and nowhere else.
 
+## Which key does the token belong to?
+
+Elsevier issues an institutional token **against one specific API key**. Hold
+two keys and it is easy to lose track of which one you quoted to support, and
+the developer portal does not show the pairing — the token is issued by support
+and never listed there. Elsevier will tell you, though, in the text of a 401,
+and `lit/_scraper-ft50/elsevier-check.mjs` asks it for you:
+
+    ELSEVIER_API_KEY=<first key> \
+    ELSEVIER_API_KEY_2=<second key> \
+    ELSEVIER_INST_TOKEN=<the token> \
+      node lit/_scraper-ft50/elsevier-check.mjs
+
+Run it on a personal machine: this build sandbox cannot reach api.elsevier.com,
+and a proxy that answers in Elsevier's place is reported as proving nothing
+rather than as a working key. Either key may be omitted. Credentials are read
+from the environment only, never from the command line, and no value is ever
+printed — each key is identified by a short fingerprint you can match across
+runs. What it reports per key:
+
+| What Elsevier says | What it means |
+|---|---|
+| `Invalid API Key` | that key is not live: wrong, mistyped or revoked |
+| `Institution Token is not associated with API Key` | that key IS live, but the token belongs to the other one |
+| a 200 with abstract text | the matched pair, entitled. Use this one everywhere |
+| a 200 without abstract text | pair accepted, no off-campus abstract entitlement |
+| `AUTHORIZATION_ERROR` | valid pair, missing entitlement — ask support, do not rotate |
+
+If the token pairs with neither key, go back to Elsevier support with the live
+key (read its value off <https://dev.elsevier.com/apikey/manage>) and ask them
+to issue the token against that key, quoting the refusal text the script
+printed. Offline test: `node lit/_scraper-ft50/elsevier-check.mjs --selftest`.
+
 ## Where to set them
 
 GitHub → the repository → **Settings → Secrets and variables → Actions →

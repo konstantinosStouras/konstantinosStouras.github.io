@@ -956,6 +956,18 @@ re-queried) with the source pin that the credentials only ever travel as
 headers AND the runtime pin that no scenario's log ever carries one. Operator guide — the two secrets,
 which repos, how to start it and how to read a run's log:
 `lit/_ELSEVIER-ABSTRACTS-SETUP.md`.
+**Which key the token belongs to is a question Elsevier answers, not one to
+guess** (owner, 2026-09-17: two keys issued, the token requested against one
+of them, no record of which). Elsevier binds an insttoken to ONE API key and
+the portal never shows the pairing, but a 401 names it — `Invalid API Key` is
+a dead key, `Institution Token is not associated with API Key` is a LIVE key
+holding the wrong token. `lit/_scraper-ft50/elsevier-check.mjs` (local, env
+vars only, never argv; keys identified by a SHA-256 fingerprint so no value is
+printed) probes each key alone, then with the token, then Scopus, and
+translates the answers. A refusal carrying NO Elsevier error envelope is
+reported as proving nothing rather than as a live key — a proxy answering 403
+in Elsevier's place looks identical, which is exactly what this build sandbox
+does. Offline test: `--selftest` (30 checks).
 **A keyed leg that never ran must not write its DOIs off** (`shouldStampMiss`,
 pure + unit-tested). The per-DOI Elsevier/Springer legs drop for the WHOLE run
 on 401/403/429, and the time budget can cut one mid-batch — but the
