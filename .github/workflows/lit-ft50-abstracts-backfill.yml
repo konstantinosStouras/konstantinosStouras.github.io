@@ -75,7 +75,11 @@ jobs:
             echo "No data changes — nothing to commit."
             exit 0
           fi
-          cp lit/data-ft50/_api-abstracts.json /tmp/lit-ft50-abs-ours.json
+          # The cache is CHUNKED, so the replay copy must carry EVERY part:
+          # copying the first file alone would hand the replay a fraction of
+          # this run's finds and silently drop the rest.
+          rm -rf /tmp/lit-ft50-abs-ours && mkdir -p /tmp/lit-ft50-abs-ours
+          cp lit/data-ft50/_api-abstracts*.json /tmp/lit-ft50-abs-ours/
           git commit -m "lit: FT50 abstracts backfill (OpenAlex/S2)"
           for i in 1 2 3; do
             if git push origin "HEAD:$GITHUB_REF_NAME"; then
@@ -85,7 +89,7 @@ jobs:
             echo "Push rejected (concurrent commit?) — replaying our finds on the new tip…"
             git fetch origin "$GITHUB_REF_NAME"
             git reset --hard "origin/$GITHUB_REF_NAME"
-            node lit/_scraper-ft50/abstracts-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-abs-ours.json
+            node lit/_scraper-ft50/abstracts-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-abs-ours/_api-abstracts.json
             git add lit/data-ft50
             if git diff --cached --quiet; then
               echo "The concurrent commit already contains these abstracts — nothing left to push."

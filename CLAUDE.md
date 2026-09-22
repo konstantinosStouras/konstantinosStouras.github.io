@@ -932,7 +932,24 @@ answered from the Actions log, and a token set without a key is a `::warning::`
 rather than a silent unkeyed run. It caches into
 `data-ft50/_api-abstracts.json` (doi → `{a}` | `{none:1,t:day[,k:tier][,ttl:days]}`)
 and applies UPGRADE-only via the same `betterAbstract`; `applyAbstractCaches`
-folds it into every FT50 daily build. **A miss carries the credential TIER it
+folds it into every FT50 daily build. **That cache is CHUNKED** through
+`lit/_scraper/_chunked-json.mjs` (part 1 keeps the plain name, later parts
+insert `-N`, cap 48 MiB, `FT50_ABS_CHUNK_BYTES` overrides it for the test) —
+the working token made the backfill productive enough to walk the cache into
+GitHub's hard 100 MiB push limit, and **`lit-data-abs3-omecon` then failed
+three runs in a row** (2026-09-20/21: `File data/_api-abstracts.json is
+102.41 MB; this exceeds GitHub's file size limit of 100.00 MB`, the pre-receive
+hook declining every attempt while each run did its whole 40-minute slice and
+threw the result away — the working-papers and refs-cache outage of Aug 2026
+repeating in a third place). So **every reader reads through all the parts**:
+`abstracts-ci.mjs`, `applyAbstractCaches` in each `build-data.mjs`, and
+`clean-junk-abstracts.mjs` (which also rewrites them), pinned by source in the
+abstracts selftest because the daily build's read has no offline harness — and
+the six workflows' push-retry replay copies **every part** into its temp dir
+(`cp …/_api-abstracts*.json`), since copying the first file alone would hand
+the replay a fraction of the run's finds. Whole-run scenario `chunked` in
+`abstracts-selftest.mjs` forces a split under a 4 KiB cap and pins that a
+find in a later merge part still reaches its papers row. **A miss carries the credential TIER it
 was checked under** (`k`: 1 = key only, 2 = key + token; absent = the batched
 OpenAlex/S2 legs alone — `credentialTier`/`missStamp`), and `missIsFresh`
 treats a miss as binding only when it was stamped under a credential at least
