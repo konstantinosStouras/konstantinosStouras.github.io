@@ -72,6 +72,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseInformsEditors } from './informs-editors.mjs';
 import { betterAbstract } from '../_scraper/informs-abstracts.mjs';
+import { readChunkedJson } from '../_scraper/_chunked-json.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK = process.env.FT50_MOCK === '1';
@@ -1537,7 +1538,11 @@ async function applyAbstractCaches(allPapers) {
   ];
   let up = 0;
   for (const p of paths) {
-    const raw = await loadJsonIfExists(p, {});
+    // readChunkedJson, not loadJsonIfExists: _api-abstracts.json is written in
+    // PARTS once it outgrows the chunk cap (abstracts-ci.mjs), and reading only
+    // the first part would silently drop every abstract in the others. A
+    // single-file cache is just the one-part case.
+    const raw = await readChunkedJson(p, {});
     const map = raw.map || raw;
     for (const row of allPapers) {
       const rec = row._doi && map[row._doi];

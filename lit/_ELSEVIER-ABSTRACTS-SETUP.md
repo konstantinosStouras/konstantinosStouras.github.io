@@ -179,8 +179,38 @@ Lines to look for in the "Backfill … abstracts" step:
   works, every run re-asks the free legs about the same DOIs and moves none of
   them. A run with working credentials does not print this line.
 
+* `✓ Wrote …/_api-abstracts.json (+ 1 more part, through …-2.json)` — the
+  cache has outgrown one file and is written in parts. Nothing to do; it is how
+  the file stays under GitHub's push limit (below).
+
 `node lit/_scraper-ft50/abstracts-ci.mjs --dry-run` (with the two variables
 set locally) prints the queue counts without fetching anything.
+
+## The cache is written in parts, and why
+
+A working token makes the backfill fast enough to be its own problem. On
+2026-09-20 and 21 `lit-data-abs3-omecon` failed three runs in a row — not on
+Elsevier, on the push:
+
+    remote: error: File data/_api-abstracts.json is 102.41 MB; this exceeds
+    GitHub's file size limit of 100.00 MB
+    ! [remote rejected] HEAD -> main (pre-receive hook declined)
+
+Each of those runs spent its whole 40-minute slice, found its abstracts, and
+threw them away. So the cache is now written through
+`lit/_scraper/_chunked-json.mjs`: the first part keeps the plain name and later
+parts insert `-N` (`_api-abstracts.json`, `_api-abstracts-2.json`, …), each
+capped at 48 MiB, with stale parts deleted when a rewrite needs fewer. Nothing
+about the served data changes — the cache is never served.
+
+Two things follow, and both are already done in code: every reader reads
+through **all** the parts (the backfill, each daily build's
+`applyAbstractCaches`, `clean-junk-abstracts.mjs`), and each workflow's
+push-retry replay copies **every** part into its temp directory before the
+replay, since copying the first file alone would hand the replay only a
+fraction of that run's finds. If you add a new reader of this cache, use
+`readChunkedJson` — a plain `JSON.parse(readFileSync(...))` will look like it
+works and silently lose every abstract in the later parts.
 
 ## Knobs
 
@@ -190,4 +220,6 @@ the run starts on the exact `DOI({…})` form and falls back to the quoted one
 if Scopus rejects it or matches nothing with it); `FT50_ABS_SCOPUS_PACE_MS` /
 `FT50_ABS_ELS_PACE_MS` pace the two legs (floors 250 ms; Elsevier allows 9
 requests a second per key); `FT50_ABS_MISS_TTL_DAYS` is the miss retry window
-(45). The same names apply in the shard workflows.
+(45); `FT50_ABS_CHUNK_BYTES` overrides the cache's per-part byte cap (48 MiB —
+the selftest uses it to force a split without writing tens of megabytes).
+The same names apply in the shard workflows.
