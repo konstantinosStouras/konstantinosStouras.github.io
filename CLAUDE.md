@@ -3027,8 +3027,12 @@ each request — which is why both pages pair a provider (whose key) with a mode
 (which brain, at what price); both say so in their hint text. The assistant's
 own defaults in `functions/ai.js` are untouched (they deploy separately); its
 `MODEL_LABELS` and its no-`temperature` / reasoning-family rules were extended
-to the new ids for the next `firebase deploy --only functions`. Full detail in
-`_ideasearchlab-src/CLAUDE.md`.
+to the new ids, its `callClaude` gives the thinking-by-default models headroom
+above the reply ceiling plus low effort (a 1000-token turn could otherwise come
+back as thinking and no text), and its `callGemini` sends the key as the
+`x-goog-api-key` header instead of `?key=` (the "AQ." auth keys are refused in
+the URL) — all live at the next `firebase deploy --only functions`. Full detail
+in `_ideasearchlab-src/CLAUDE.md`.
 
 **Excel export per session, from the session list.** Both admins let the
 instructor download ONE session's research workbook straight from its card —

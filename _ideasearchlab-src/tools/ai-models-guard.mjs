@@ -37,6 +37,19 @@ import {
 } from '../src/utils/providerRequest.js'
 import { isFatalApiError } from '../src/utils/scoreBatch.js'
 
+// THE ONE PLACE the owner's requested line-up is written down (2026-09-23:
+// each provider's five newest, most capable first). When the list is next
+// refreshed, update this table with the catalogue — every other check below
+// derives from the catalogue and the price table themselves.
+const OWNER_LINEUP = {
+  claude: ['claude-fable-5-1', 'claude-fable-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5'],
+  openai: ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-6-sol', 'gpt-5.6-terra', 'gpt-6-luna'],
+  gemini: ['gemini-3.1-pro-preview', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'],
+}
+// Former scoring defaults (and the retired per-provider fallbacks) that must
+// never quietly become the scoring default again.
+const FORMER_SCORING_DEFAULTS = ['claude-haiku-4-5', 'claude-sonnet-4-6', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gemini-2.5-flash']
+
 const here = dirname(fileURLToPath(import.meta.url))
 const src = rel => readFileSync(join(here, '..', rel), 'utf8')
 
@@ -52,7 +65,7 @@ check(new Set(PROVIDERS.map(p => p.id)).size === 3, 'provider ids unique')
 const ids = allModelIds()
 check(new Set(ids).size === ids.length, 'model ids unique across providers')
 check(/^\d{4}-\d{2}-\d{2}$/.test(CATALOGUE_AS_OF), 'CATALOGUE_AS_OF is a date')
-check(CATALOGUE_AS_OF === PRICES_AS_OF, `catalogue (${CATALOGUE_AS_OF}) and prices (${PRICES_AS_OF}) snapshot on the same day`)
+check(/^\d{4}-\d{2}-\d{2}$/.test(PRICES_AS_OF) && PRICES_AS_OF >= CATALOGUE_AS_OF, `prices (${PRICES_AS_OF}) were snapshotted no earlier than the catalogue (${CATALOGUE_AS_OF}) — a price-only update may re-date aiPricing.js alone`)
 for (const p of PROVIDERS) {
   check(p.models.length === 5, `${p.id}: five models (has ${p.models.length})`)
   check(p.models.every(m => m.id && m.label), `${p.id}: every model has id + label`)
@@ -66,7 +79,7 @@ for (const p of PROVIDERS) {
   check(defPrice === Math.min(...outs), `${p.id}: scoring default ${def} is the cheapest of the five`)
   check(!!MODEL_PRICES[p.defaultModel], `${p.id}: assistant default ${p.defaultModel} is priced`)
   // The scoring default is a current-generation id, never a retired one.
-  check(!['claude-haiku-4-5', 'claude-sonnet-4-6', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gemini-3.5-flash', 'gemini-2.5-flash'].includes(def), `${p.id}: scoring default ${def} is current-generation, not the retired default`)
+  check(!FORMER_SCORING_DEFAULTS.includes(def), `${p.id}: scoring default ${def} is not a former scoring default`)
 }
 check(providerById('nope').id === PROVIDERS[0].id, 'providerById falls back to the first provider')
 check(providerById(DEFAULT_SCORING_PROVIDER).id === DEFAULT_SCORING_PROVIDER, 'default scoring provider exists')
@@ -77,37 +90,56 @@ const lab = modelOptionLabel(m0, MODEL_PRICES)
 check(lab.startsWith(m0.label) && /\$\d/.test(lab) && /per 1M tokens/.test(lab), `option label carries the price: "${lab}"`)
 check(modelOptionLabel({ id: 'nope', label: 'X' }, MODEL_PRICES) === 'X', 'unpriced model keeps its label')
 check(modelOptionLabel({ id: 'x', label: 'X' }, { x: { in: 0.1, out: 0.5 } }) === 'X · $0.1 in / $0.5 out per 1M tokens', 'fractional prices print as given')
-check(replyCostUSD('gpt-6-luna', 1_000_000, 1_000_000) === 0.6, 'replyCostUSD reads the new rows')
-
-// The line-up the owner asked for on 2026-09-23 — best/most expensive first.
-const want = {
-  claude: ['claude-fable-5-1', 'claude-fable-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5'],
-  openai: ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-6-sol', 'gpt-5.6-terra', 'gpt-6-luna'],
-  gemini: ['gemini-3.1-pro-preview', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'],
+{
+  const probe = PROVIDERS[1].models[4].id
+  const pp = MODEL_PRICES[probe]
+  check(pp && Math.abs(replyCostUSD(probe, 1_000_000, 1_000_000) - (pp.in + pp.out)) < 1e-9, `replyCostUSD reads the new rows (${probe})`)
 }
-for (const [pid, list] of Object.entries(want)) {
-  check(JSON.stringify(providerById(pid).models.map(m => m.id)) === JSON.stringify(list), `${pid}: the September-2026 line-up in order`)
+
+for (const [pid, list] of Object.entries(OWNER_LINEUP)) {
+  check(JSON.stringify(providerById(pid).models.map(m => m.id)) === JSON.stringify(list), `${pid}: the owner's line-up in order (update OWNER_LINEUP at the top of this file with the catalogue)`)
 }
 
 // ── 2. The three catalogues agree ───────────────────────────────────────────
 console.log('functions/ai.js mirror')
 const fn = src('functions/ai.js')
-const labelsBlock = fn.slice(fn.indexOf('const MODEL_LABELS = {'), fn.indexOf('}', fn.indexOf('const MODEL_LABELS = {')))
+const labelsStart = fn.indexOf('const MODEL_LABELS = {')
+const labelsBlock = labelsStart === -1 ? '' : fn.slice(labelsStart, fn.indexOf('\n}', labelsStart))
+check(labelsBlock.length > 0, 'found the MODEL_LABELS block in functions/ai.js')
 for (const id of ids) check(labelsBlock.includes(`'${id}'`), `MODEL_LABELS names ${id}`)
+// A regex literal scraped from the function's source; null when the line moved
+// or was reshaped — reported as a failed check, never a crash that hides the
+// hundred checks after it.
+function scrapedRegex(source, pattern, what) {
+  const m = source.match(pattern)
+  check(!!m, `found the ${what} regex in functions/ai.js`)
+  if (!m) return { test: () => false }
+  try { return new Function(`return ${m[1]}`)() } catch { check(false, `${what} regex parses`); return { test: () => false } }
+}
 for (const p of PROVIDERS) {
   const re = new RegExp(`${p.id}:\\s*\\{\\s*model:\\s*'([^']+)'`)
   const m = fn.match(re)
   check(m && m[1] === p.defaultModel, `functions PROVIDER_DEFAULTS.${p.id} (${m && m[1]}) == catalogue defaultModel (${p.defaultModel})`)
 }
 // The function's own Claude/OpenAI parameter rules cover the new ids.
-const tempRe = eval(fn.match(/supportsTemperature = !(\/[^\n]*\/)\.test/)[1])
+const tempRe = scrapedRegex(fn, /supportsTemperature = !(\/[^\n]*\/)\.test/, 'supportsTemperature')
 for (const id of ['claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-fable-5-1', 'claude-opus-4-8']) {
   check(tempRe.test(id), `functions callClaude sends no temperature to ${id}`)
 }
 for (const id of ['claude-sonnet-4-6', 'claude-haiku-4-5']) check(!tempRe.test(id), `functions callClaude still allows temperature on ${id}`)
-const reasonRe = eval(fn.match(/isReasoningFamily = (\/[^\n]*\/)\.test/)[1])
+const reasonRe = scrapedRegex(fn, /isReasoningFamily = (\/[^\n]*\/)\.test/, 'isReasoningFamily')
 for (const id of ['gpt-6-astra', 'gpt-6-luna', 'gpt-5.6-sol']) check(reasonRe.test(id), `functions callOpenAI treats ${id} as a reasoning model`)
 check(!reasonRe.test('gpt-4o'), 'functions callOpenAI keeps gpt-4o on the legacy params')
+// The deployed Gemini caller must carry the key as a header, like the browser
+// rater: `?key=` puts it in logs and is refused for the "AQ."-format keys.
+check(!/\?key=\$\{/.test(fn) && !/generateContent\?key/.test(fn), 'functions callGemini never puts the key in the URL')
+check(/'x-goog-api-key':\s*config\.apiKey/.test(fn), 'functions callGemini sends the key in x-goog-api-key')
+// Thinking-by-default Claude models get headroom above the reply ceiling and
+// a low effort, or a 1000-token chat reply can come back as thinking alone.
+const thinksRe = scrapedRegex(fn, /CLAUDE_THINKS_BY_DEFAULT = (\/[^\n]*\/)/, 'CLAUDE_THINKS_BY_DEFAULT')
+for (const id of ['claude-fable-5-1', 'claude-fable-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5']) check(thinksRe.test(id), `functions callClaude gives ${id} thinking headroom + low effort`)
+for (const id of ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5']) check(!thinksRe.test(id), `functions callClaude keeps the plain ceiling on ${id} (no thinking when omitted)`)
+check(/body\.max_tokens = config\.maxTokens \+ CLAUDE_THINKING_HEADROOM/.test(fn) && /body\.output_config = \{ effort: 'low' \}/.test(fn), 'functions callClaude adds the headroom and low effort inside that branch')
 
 // ── 3. The request shapes ───────────────────────────────────────────────────
 console.log('request shapes')
@@ -207,10 +239,15 @@ check(!/^(async )?function callProvider/m.test(llm), 'llmClient keeps no copy of
 check(!/import .*firebase/.test(src('src/utils/providerRequest.js')), 'providerRequest imports no Firebase (offline-testable)')
 const page = src('src/pages/DataAnalytics.jsx')
 check(/modelOptionLabel\(m, MODEL_PRICES\)/.test(page), 'Data Analytics dropdown prints the price per model')
-check(/five newest models, best and most expensive first/.test(page), 'Data Analytics explains the list order')
+check(/five newest models, most capable first/.test(page), 'Data Analytics explains the list order')
 check(/A key unlocks all of a provider's models|An API key belongs to your/.test(page), 'Data Analytics explains why a model is chosen beside the key')
 const settings = src('src/pages/AISettings.jsx')
 check(/modelOptionLabel\(m, MODEL_PRICES\)/.test(settings), 'AI Settings dropdown prints the price per model')
+// A saved id the pruned list no longer offers must render as ITSELF, not as
+// "Use default" (a controlled <select> with no matching option shows the first
+// row while Save re-persists the invisible id).
+check(/model && !activeProvider\?\.models\.some\(m => m\.id === model\) && \(/.test(settings) && /Saved: \$\{model\} \(no longer listed\)/.test(settings), 'AI Settings renders a saved-but-unlisted model as its own option')
+check(!/best and most expensive first/.test(settings) && !/best and most expensive first/.test(page), 'the hint text no longer claims a price ordering the printed prices contradict')
 
 // The shipped bundle: the chunk index.html loads must carry the provider calls
 // and must NOT reference callProvider as a bare global (the original bug).
@@ -224,7 +261,9 @@ if (existsSync(shippedIndex)) {
   check(chunk.includes('anthropic-dangerous-direct-browser-access'), 'shipped bundle carries the Claude browser call')
   check(chunk.includes('x-goog-api-key'), 'shipped bundle carries the Gemini header call')
   check(!/=>callProvider\(/.test(chunk) && !/[^.\w]callProvider\(/.test(chunk), 'shipped bundle has no bare callProvider global (the ReferenceError)')
-  check(chunk.includes('gpt-6-astra') && chunk.includes('gemini-3.8-flash') && chunk.includes('claude-opus-5-5'), 'shipped bundle carries the September-2026 catalogue')
+  const missingIds = ids.filter(id => !chunk.includes(id))
+  check(missingIds.length === 0, `shipped bundle carries every catalogue id (rebuild + copy dist/ into lab/ideasearchlab; missing: ${missingIds.join(', ') || 'none'})`)
+  check(chunk.includes('no longer listed'), 'shipped bundle carries the saved-but-unlisted model option')
 } else {
   console.log('  (no shipped bundle beside the source — bundle checks skipped)')
 }

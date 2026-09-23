@@ -139,6 +139,10 @@ function resolveAIConfig(sessionAIConfig, globalSettings, scope) {
 
 // ─── Provider API calls ───────────────────────────────────────────────────────
 
+// Models that think by default (thinking counts toward max_tokens) — see callClaude.
+const CLAUDE_THINKS_BY_DEFAULT = /^claude-(fable|mythos|opus-5|sonnet-5)/
+const CLAUDE_THINKING_HEADROOM = 4000
+
 async function callClaude(messages, config) {
   // Claude Opus 4.7+, Opus 5 / 5.5, Sonnet 5 and the Fable/Mythos family
   // removed sampling parameters — sending `temperature` to them returns a 400.
@@ -152,6 +156,18 @@ async function callClaude(messages, config) {
   }
   if (supportsTemperature && config.temperature != null) {
     body.temperature = config.temperature
+  }
+  // Opus 5 / 5.5, Sonnet 5 and Fable/Mythos THINK BY DEFAULT (always-on on
+  // Fable and Opus 5.5) and the thinking tokens count toward `max_tokens`,
+  // so the assistant's 1000-token reply ceiling could be spent on hidden
+  // thinking alone and come back as a thinking block with no text — a blank
+  // AI message and no error. Keep the thinking short (`effort: low` — the
+  // assistant is a chat, not a long task) and give it headroom ABOVE the
+  // admin's reply ceiling; the older models run without thinking when the
+  // parameter is omitted, so they keep the plain ceiling.
+  if (CLAUDE_THINKS_BY_DEFAULT.test(config.model || '')) {
+    body.max_tokens = config.maxTokens + CLAUDE_THINKING_HEADROOM
+    body.output_config = { effort: 'low' }
   }
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -212,10 +228,14 @@ async function callGemini(messages, config) {
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }))
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`
+  // The key travels in the `x-goog-api-key` HEADER, never as `?key=` in the
+  // URL: the URL form lands the key in logs and error text, and the "AQ."-format
+  // keys AI Studio issues since mid-2026 are refused (404) as a query parameter.
+  // Same shape as the browser rater (src/utils/providerRequest.js).
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent`
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: config.systemPrompt }] },
       contents,
@@ -376,7 +396,7 @@ exports.saveAISettings = functions.https.onCall(async (data, context) => {
   // it falls back to the built-in default in resolveAIConfig.
   const update = {}
   if (provider)                    update.provider      = provider
-  if (apiKeys)                     update.apiKeys       = apiKeys       // { claude: 'sk-ant-...', openai: 'sk-...', gemini: 'AIza...' }
+  if (apiKeys)                     update.apiKeys       = apiKeys       // { claude: 'sk-ant-...', openai: 'sk-...', gemini: 'AQ.… (older keys: AIza…)' }
   if (model !== undefined)         update.model         = model         // null = provider default
   if (temperature !== undefined)   update.temperature   = temperature
   if (maxTokens !== undefined)     update.maxTokens     = maxTokens

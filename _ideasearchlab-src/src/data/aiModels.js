@@ -8,12 +8,20 @@
  * `tools/ai-models-guard.mjs` fails when they drift.
  *
  * WHAT IS LISTED, AND IN WHAT ORDER (owner, 2026-09-23): each provider offers
- * its FIVE newest models, best and most expensive first. The list was rebuilt
+ * its FIVE newest models, most capable first (the first of each provider is
+ * also its most expensive; prices are printed beside every option). The list was rebuilt
  * from the providers' line-ups on that date (release dates in the comments),
  * so an older model that is still served — Claude Opus 4.8 / Haiku 4.5,
- * GPT-5.5 / GPT-5.4, Gemini 2.5 — no longer appears in the dropdowns; a
+ * GPT-5.5 / GPT-5.4, Gemini 2.5 — no longer appears in the dropdowns. A
  * model id already saved under AI Settings keeps working until its provider
- * retires it (the pages show it as "Use default (…)" / the saved id).
+ * retires it, and the AI Settings dropdown shows it as its own "Saved: …
+ * (no longer listed)" option — a controlled <select> whose value matches no
+ * option would otherwise silently display the first row, "Use default", while
+ * the assistant kept running on the saved id and Save re-persisted it.
+ * "Best first" is by CAPABILITY, with each model's price printed beside it —
+ * the two are not the same ordering (Opus 5.5 is cheaper than the Opus 5 it
+ * outperforms; GPT-6 Sol is cheaper than GPT-5.6 Terra), and the first entry
+ * of each provider is both its most capable and its most expensive.
  *
  * WHY A MODEL IS CHOSEN AT ALL (owner question, 2026-09-23: "isn't the API
  * attached to a specific model?"): no — an API key belongs to a provider
@@ -61,7 +69,7 @@ export const PROVIDERS = [
     id: 'gemini',
     name: 'Gemini (Google)',
     keyLabel: 'API Key',
-    keyPlaceholder: 'AIza...',
+    keyPlaceholder: 'AQ.… (older keys: AIza…)',
     keyLink: 'https://aistudio.google.com/app/apikey',
     defaultModel: 'gemini-3.5-flash',
     // Gemini 3.5 Pro was announced at I/O (May 2026) but has no API model id
@@ -97,7 +105,7 @@ export function allModelIds() {
 
 /**
  * Dropdown text for a model: its label plus the price per 1M tokens, so the
- * "best and most expensive first" ordering is visible rather than implied.
+ * "most capable first" ordering carries its cost rather than implying it.
  * `prices` is the MODEL_PRICES map from aiPricing.js (passed in, so this data
  * module stays import-free and the guard can test it with a fake table).
  */

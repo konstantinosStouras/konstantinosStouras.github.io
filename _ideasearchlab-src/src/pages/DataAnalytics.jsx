@@ -1693,8 +1693,8 @@ export default function DataAnalytics() {
                 <select className={styles.miniSelect} value={scoreProvider} onChange={e => onScoreProviderChange(e.target.value)} disabled={!!scoring} title="Which provider's API key to use">
                   {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                {/* Each provider's five newest models, best and most expensive first,
-                    with the price per 1M tokens (catalogue in src/data/aiModels.js). */}
+                {/* Each provider's five newest models, most capable first, with the
+                    price per 1M tokens (catalogue in src/data/aiModels.js). */}
                 <select className={styles.miniSelect} value={scoreModel} onChange={e => setScoreModel(e.target.value)} disabled={!!scoring} title="Which of that provider's models rates the ideas">
                   {activeProvider.models.map(m => <option key={m.id} value={m.id}>{modelOptionLabel(m, MODEL_PRICES)}</option>)}
                 </select>
@@ -1705,8 +1705,9 @@ export default function DataAnalytics() {
               <p className={styles.hint}>
                 Why pick a model as well as a provider? An API key belongs to your {activeProvider.name} account, not to
                 one model — it unlocks every model that provider serves, and each request names the model it runs on.
-                The list shows the provider's five newest models, best and most expensive first (as of {CATALOGUE_AS_OF});
-                the pre-selected one is the cheapest current model, which is enough for a 1–5 rating over hundreds of ideas.
+                The list shows the provider's five newest models, most capable first, with each model's price per
+                1M tokens beside it (as of {CATALOGUE_AS_OF}); the pre-selected one is the cheapest current model, which
+                is enough for a 1–5 rating over hundreds of ideas.
                 Every idea is scored by the model you pick here, so the AI&nbsp;Novelty and AI&nbsp;Usefulness columns
                 are that model's ratings.
               </p>
