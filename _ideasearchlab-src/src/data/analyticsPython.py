@@ -87,7 +87,7 @@ KPI_DEFS = [
     ("ext_quality", "Eval Quality", True),
     ("det_novelty", "Novelty (objective)", False),
     ("det_distinctiveness", "Pool distinctiveness", False),
-    ("det_score", "Combined score", False),
+    ("det_score", "NoveltyScore", False),
     ("det_need_fit", "Need fit (objective)", False),
     ("det_specificity", "Specificity (objective)", False),
     ("det_workability", "Workability (objective)", False),

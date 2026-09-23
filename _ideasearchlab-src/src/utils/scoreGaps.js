@@ -33,7 +33,7 @@
  * Everything here is pure — no React, no Firebase, no `fetch` — so
  * `tools/score-gaps-guard.mjs` reproduces each case offline.
  */
-import { normTitle, rowTitle } from './analyticsData.js'
+import { normTitle, rowTitle, isNoveltyScoreHeader } from './analyticsData.js'
 
 /** The two AI columns this step fills. Quality is derived from them, never filled. */
 export const AI_SCORE_FIELDS = ['novelty', 'usefulness']
@@ -245,6 +245,7 @@ function isAiScoreColumn(col) {
   if (!/novelty|usefulness/.test(c)) return false
   if (/rater|\(rater/.test(c)) return false            // human evaluators (3.3)
   if (/objective|obj\.|distinctiveness/.test(c)) return false  // the 3.1 KPIs
+  if (isNoveltyScoreHeader(c)) return false                    // 3.1 NoveltyScore
   return true
 }
 

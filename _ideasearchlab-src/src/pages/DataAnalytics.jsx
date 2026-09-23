@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
-  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis,
+  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition, scriptKpiKeys,
@@ -424,7 +424,8 @@ export default function DataAnalytics() {
         const header = aoa[h].map(c => String(c).toLowerCase().trim())
         const find = pred => header.findIndex(pred)
         const ciTitle = find(c => c.includes('idea title') || c === 'title')
-        const ciNov = find(c => c.includes('novelty'))
+        // Not the 3.1 NoveltyScore or objective Novelty column, whatever order they come in.
+        const ciNov = find(c => c.includes('novelty') && !isNoveltyScoreHeader(c) && !/objective|\bobj\b|obj\./.test(c))
         const ciUse = find(c => c.includes('usefulness') || c.includes('useful'))
         const entries = []
         for (let i = h + 1; i < aoa.length; i++) {
@@ -469,8 +470,8 @@ export default function DataAnalytics() {
   // Two sides, each with its OWN anchor so neither is a re-labelled copy of the other:
   //  • NOVELTY — vectorises every loaded idea + the reference set R with classical
   //    TF-IDF (in the browser, no API key, no model download), then per-idea Novelty
-  //    (1 − max sim to R), Distinctiveness (1 − mean sim to the pool) and the combined
-  //    Score, plus the pool-level Unique fraction and Productivity per condition.
+  //    (1 − max sim to R), Distinctiveness (1 − mean sim to the pool) and their mean,
+  //    NoveltyScore, plus the pool-level Unique fraction and Productivity per condition.
   //  • USEFULNESS (usefulnessKpis.js) — Need fit (max sim to the need set U, in a
   //    SEPARATE vectorisation of ideas + U, so the novelty numbers are exactly what
   //    they were before U existed and neither side depends on the other's anchor),
@@ -490,10 +491,10 @@ export default function DataAnalytics() {
     // Let the "computing…" state paint before the synchronous TF-IDF work.
     await new Promise(res => setTimeout(res, 0))
     try {
-      // Ideas + R are vectorised together (one vocabulary, one IDF). An idea with no
-      // word the tokeniser reads (blank, "?", one letter, Greek text) has nothing to
-      // compare: it is left blank and kept out of every pool and out of the TF-IDF
-      // corpus — it used to score a perfect 1 on every KPI. See objectiveKpis.js.
+      // Ideas + R are vectorised together (one vocabulary, one IDF). An idea with
+      // fewer than two meaningful words (blank, one word, only "the/and/it", Greek
+      // text) cannot be scored: it is left blank and kept out of every pool and out
+      // of the TF-IDF corpus — it used to score a perfect 1. See objectiveKpis.js.
       const ideaTexts = pool.map(r => r.text || ideaText(r))
       const res = objectiveKpisFromText(ideaTexts, refLines, { tau: 0.8 })
       if (res.error) { setDetErr(res.error); return }
@@ -568,7 +569,7 @@ export default function DataAnalytics() {
         ['ext_novelty', 'Eval. Novelty'], ['ext_usefulness', 'Eval. Usefulness'],
       ].filter(([k]) => pool.filter(r => num(r[k]) != null).length >= 3)
       const OBJ = [
-        ['Novelty (objective)', perIdea.map(d => d.novelty)], ['Combined score', novAll],
+        ['Novelty (objective)', perIdea.map(d => d.novelty)], ['NoveltyScore', novAll],
         ['Need fit (objective)', useIdea.map(d => d.needFit)], ['Specificity (objective)', useIdea.map(d => d.specificity)],
         ['Workability (objective)', useIdea.map(d => d.workability)], ['Usefulness score (objective)', useAll],
       ]
@@ -576,7 +577,7 @@ export default function DataAnalytics() {
         cols: RATINGS.map(([, label]) => label),
         rows: OBJ.map(([label, vals]) => ({
           label,
-          side: /Novelty|Combined/.test(label) ? 'novelty' : 'usefulness',
+          side: /Novelty/.test(label) ? 'novelty' : 'usefulness',
           cells: RATINGS.map(([k]) => {
             const ys = pool.map(r => num(r[k]))
             return { r: pearson(vals, ys), n: vals.filter((v, i) => v != null && ys[i] != null).length }
@@ -1603,7 +1604,7 @@ export default function DataAnalytics() {
             <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Condition, Stage,
             Final&nbsp;Group&nbsp;Pick, Title, Description</em>, the <em>Novelty / Usefulness / Quality</em>
             columns ready for blind expert rating, and the Section&nbsp;3.1 objective KPIs
-            (<em>Obj.&nbsp;Novelty / Obj.&nbsp;Distinctiveness / Obj.&nbsp;Score</em>) when computed.
+            (<em>Novelty&nbsp;(objective) / Pool&nbsp;distinctiveness / NoveltyScore</em>) when computed.
             You can also <strong>Import Excel / CSV</strong>
             here (same importer as Step&nbsp;1): the file is added to the source list above <strong>and
             loaded right away</strong>, so the aggregate, the stats below and Steps&nbsp;3–6 fill in
@@ -1693,7 +1694,7 @@ export default function DataAnalytics() {
                     <strong>Novelty side</strong> (Lee&nbsp;&amp;&nbsp;Chung 2024; Meincke et&nbsp;al. 2025; Bouschery et&nbsp;al. 2024):
                     {' '}<em>Novelty</em> (1&nbsp;−&nbsp;highest similarity to the reference set R of products that already
                     exist), <em>Pool distinctiveness</em> (1&nbsp;−&nbsp;average similarity to the other ideas) and their
-                    mean, the <em>Combined score</em>. Per condition: <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2).
+                    mean, the <em>NoveltyScore</em>. Per condition: <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2).
                   </li>
                   <li>
                     <strong>Usefulness side</strong> (Dean, Hender, Rodgers &amp; Santanen 2006; Rietzschel, Nijstad &amp;
@@ -1713,6 +1714,15 @@ export default function DataAnalytics() {
                 (matched to your ideas by Idea&nbsp;ID) becomes a KPI that flows into Section&nbsp;4, the Step-2 aggregate
                 {' '}<em>Rankings</em> tab and the Step-5 regressions. <em>Download ideas&nbsp;+&nbsp;KPIs</em> exports the ideas
                 with a column per KPI.
+                <br /><br />
+                <strong>Ideas that cannot be scored are left blank.</strong> An idea needs at least <strong>two meaningful
+                words</strong>: two different words that are not common English words such as <em>the</em>, <em>and</em> or
+                {' '}<em>it</em> (NLTK&apos;s English stop-word list). A blank idea, a single word (a made-up name like
+                {' '}<em>Zorblax</em>, or just <em>Thermochromic</em>), only common words, or text in a non-Latin script such as
+                Greek gets no KPI on either side, and is left out of the other ideas&apos; comparisons and of the Unique
+                fraction. This is the &ldquo;cannot be scored&rdquo; rule of Bouschery et&nbsp;al.&nbsp;(2024), who drop
+                single-word ideas; before it, such an idea shared no words with anything and scored a perfect 1 on the
+                novelty side, ranking first. Blank KPIs are dropped from the Step-5 regressions, not counted as 0.
               </div>
               <div className={styles.anchorGrid}>
                 <div>
@@ -2450,8 +2460,8 @@ function ObjectiveKpiResults({ res }) {
         Computed the novelty side for {res.ideas} idea{res.ideas === 1 ? '' : 's'} against {res.refCount} existing
         product{res.refCount === 1 ? '' : 's'} (R), and the usefulness side against {res.needCount} need{res.needCount === 1 ? '' : 's'} (U).
         {res.unmeasured > 0 && (
-          <>{' '}{res.unmeasured} idea{res.unmeasured === 1 ? ' has' : 's have'} no words to compare
-          {' '}(blank, a single letter, or text in a non-Latin script) and {res.unmeasured === 1 ? 'was' : 'were'} left
+          <>{' '}{res.unmeasured} idea{res.unmeasured === 1 ? ' has' : 's have'} fewer than two meaningful words
+          {' '}(blank, a single word, only common words, or text in a non-Latin script) and {res.unmeasured === 1 ? 'was' : 'were'} left
           {' '}blank on both sides and kept out of the pools.</>
         )}
       </p>
@@ -2484,7 +2494,7 @@ function ObjectiveKpiResults({ res }) {
       <div className={styles.regBlock}>
         <div className={styles.regCap}>
           <strong>Novelty × usefulness.</strong> How the two sides relate
-          <span className={styles.regSub}> Combined score (novelty side) against Usefulness score (usefulness side).</span>
+          <span className={styles.regSub}> NoveltyScore (novelty side) against Usefulness score (usefulness side).</span>
         </div>
         <div className={styles.tableWrap}>
           <table className={styles.regTable}>
@@ -2501,7 +2511,7 @@ function ObjectiveKpiResults({ res }) {
           r is the Pearson correlation between the two scores: below 0 means the more novel ideas tend to be the less
           useful-looking ones, above 0 that they go together. &quot;r, same length&quot; is the same correlation with the
           ideas&apos; length held fixed (log word count), since longer ideas score higher on most text measures. &quot;Novel&quot; and &quot;useful&quot; mean above the median of all
-          loaded ideas (Combined score {f2(res.novCut)}, Usefulness score {f2(res.useCut)}), so every condition is judged
+          loaded ideas (NoveltyScore {f2(res.novCut)}, Usefulness score {f2(res.useCut)}), so every condition is judged
           against the same line. &quot;Novel and useful&quot; is the standard definition of a creative idea (Runco &amp; Jaeger 2012).
         </p>
       </div>

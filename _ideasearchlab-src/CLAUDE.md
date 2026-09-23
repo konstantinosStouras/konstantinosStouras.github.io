@@ -570,10 +570,31 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      `_idea-kpi-script/idea_kpis.py` applies the same rule. Deliberately NOT changed: an
      idea that HAS words but shares none with R or with any other idea still scores 1 —
      that is the formula working (it is lexically unlike everything), not a missing
-     value. Offline test: **`node _ideasearchlab-src/tools/det-kpi-guard.mjs`** (36
+     value — BUT an idea must have **at least two meaningful words** to be scored at all
+     (owner, 2026-09-23, from the KPI audit): two different words that are not on
+     `COMMON_WORDS` (NLTK's English stop-word list, the 145 entries the tokeniser can
+     produce). A single word — "Zorblax", "Thermochromic" — is orthogonal to everything
+     unless another text shares it, so it scored 1 and ranked first just like a blank
+     idea; only-common-word text ("The: and it is") likewise. This is Bouschery et al.'s
+     "cannot be scored" rule (they drop single-word ideas; Productivity already did).
+     `isMeasurable`/`MIN_MEANINGFUL_WORDS` in objectiveKpis.js decide it, the list is used
+     ONLY for this gate (scored ideas' TF-IDF vectors are unchanged), and the rule is
+     stated in the 3.1 description above the Compute button, as the owner asked.
+     Offline test: **`node _ideasearchlab-src/tools/det-kpi-guard.mjs`** (58
      checks: the building blocks, the pipeline with blank/"?"/Greek/Chinese ideas mixed
      in, that real ideas' numbers are unchanged to 1e-12, that the page goes through the
-     pipeline, and number-for-number parity with the Python twin when numpy is present).
+     pipeline, the two-meaningful-words rule and its on-page description, the
+     NoveltyScore label below, and number-for-number parity with the Python twin —
+     identical common-word list included — when numpy is present).
+   - **3.1: the combined KPI is called NoveltyScore** (owner, 2026-09-23; it was
+     "Combined score" / "Obj. Score"). It is the mean of objective Novelty and
+     Distinctiveness. Only the LABEL moved: the data key is still `det_score`, and an
+     older file's "Combined score" / "Obj. Score" column still imports into it. The
+     trap: the new header contains the word "novelty", and three importers picked a
+     Novelty column by substring (`canonicalKpiField`, `isAiScoreColumn` in scoreGaps.js,
+     the 3.2 scores upload's `ciNov`), so a re-uploaded NoveltyScore column would have
+     been filed as the AI Novelty score. Each now asks **`isNoveltyScoreHeader`**
+     (analyticsData.js) first. The offline twin's per-idea CSV column is `novelty_score`.
    - **The rater could not call ANY provider until 2026-09-23 — `callProvider` was defined
      nowhere.** `llmClient.js` called it on every batch, no module defined or imported it, and the
      shipped bundle carried it as a bare global (`call:S=>callProvider(…)` in the minified chunk), so
@@ -798,10 +819,14 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        complicate matters. ignore it for now"). It was built (teammates, author excluded,
        who voted for the idea) and removed: the Final Ideas are picked by those votes,
        and its mean falls with ballot size. Rows carry no vote columns because of it.
-     - **An idea with no words is left blank on this side too**, the same rule
-       `objectiveKpis.js` applies to the novelty side (`isReadable`, imported, one
-       definition). `usefulnessKpisFromText` is the whole pipeline the page calls: only
-       readable ideas with a content word left after `contentText` enter the need-fit
+     - **An idea that cannot be scored is left blank on this side too**, the same rule
+       `objectiveKpis.js` applies to the novelty side (`isMeasurable`: at least two
+       meaningful words, imported, one definition), so an idea is blank on both sides or
+       on neither (merged 2026-09-23: #831 shipped with the older `isReadable`, one
+       readable word, and the two-word rule landed beside it — "It is what it is" and
+       "Zorblax" are now blank here as well, which usefulness-kpis-guard pins against the
+       novelty side's own count). `usefulnessKpisFromText` is the whole pipeline the page
+       calls: only measurable ideas with a content word left after `contentText` enter the need-fit
        TF-IDF corpus (an idea of filler words alone would be an EMPTY document that still
        shifts every IDF weight), so adding such ideas never moves the others' numbers.
      - **A saved Step-5 script goes stale**: one saved before a KPI existed ("Save" /
@@ -810,7 +835,7 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        run time). `staleKpis` warns under the Run button, naming each KPI the template
        analyses and the script lacks, and points to "Reset to template".
      The run also shows a **novelty × usefulness cross-check** per condition (Pearson r
-     between Combined score and Usefulness score; shares novel-and-useful / novel only /
+     between NoveltyScore and Usefulness score; shares novel-and-useful / novel only /
      useful only / neither at the whole pool's medians; also r with log word count held
      fixed, `partialPearson`), a **validation table** (each objective KPI's r with the AI
      and evaluator novelty/usefulness ratings, when loaded: convergent vs discriminant)

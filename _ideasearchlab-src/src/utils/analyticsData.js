@@ -95,12 +95,15 @@ export const KPI_DEFS = [
   { key: 'ext_usefulness', label: 'Eval. Usefulness', source: 'ext', scale5: true },
   { key: 'ext_quality', label: 'Eval. Quality', source: 'ext', scale5: true },
   // 3.1 Deterministic / objective KPIs (range 0–1; not a 1–5 scale, so no "top
-  // rating" Tables 5/6). Labels follow the idea-ranking spec (Novelty / Pool
-  // distinctiveness / Combined score); "Novelty (objective)" is qualified so it
-  // never clashes with the AI "Novelty" column. Computed in deterministicKpis.js.
+  // rating" Tables 5/6). "Novelty (objective)" is qualified so it never clashes
+  // with the AI "Novelty" column. The mean of the two is labelled NoveltyScore
+  // (owner, 2026-09-23; it was "Combined score"). Its header contains "novelty",
+  // so every importer asks isNoveltyScoreHeader BEFORE any "novelty" match — or
+  // a re-uploaded NoveltyScore column would land in AI Novelty. Computed in
+  // deterministicKpis.js.
   { key: 'det_novelty', label: 'Novelty (objective)', source: 'det', scale5: false },
   { key: 'det_distinctiveness', label: 'Pool distinctiveness', source: 'det', scale5: false },
-  { key: 'det_score', label: 'Combined score', source: 'det', scale5: false },
+  { key: 'det_score', label: 'NoveltyScore', source: 'det', scale5: false },
   // 3.1 objective USEFULNESS KPIs (usefulnessKpis.js), each anchored on something
   // the novelty KPIs never look at, so the two sides are not tied by construction.
   // Every label ends "(objective)" so canonicalKpiField routes a re-upload back here.
@@ -262,6 +265,16 @@ export function matchUploadedKpisIntoRows(rows, entries, keys) {
 }
 
 /**
+ * Is this column header the 3.1 NoveltyScore (the mean of objective Novelty and
+ * Distinctiveness, formerly "Combined score")? "NoveltyScore", "Novelty Score",
+ * "novelty_score", "Obj. NoveltyScore" all are. It contains the word "novelty",
+ * so any code that picks a Novelty column by substring must rule this out first.
+ */
+export function isNoveltyScoreHeader(header) {
+  return /novelty[\s_-]*score/.test(String(header || '').toLowerCase())
+}
+
+/**
  * Map an uploaded column header to a canonical row KPI field, so a re-uploaded
  * KPI/ideas file (e.g. the app's own "ideas_with_kpis") lands in the right columns
  * (Novelty / Usefulness / Quality / objective / evaluator) instead of as redundant
@@ -278,6 +291,8 @@ export function canonicalKpiField(header) {
   const exact = KPI_DEFS.find(d => d.key === h)
   if (exact) return exact.key
   const has = w => h.includes(w)
+  // First: the NoveltyScore header also contains "novelty".
+  if (isNoveltyScoreHeader(h)) return 'det_score'
   const isObj = /\bobj\b|\bobjective\b|\(objective\)/.test(h)
   const isEval = /\beval\b|\bevaluator\b|external/.test(h)
   if (isObj) {
@@ -670,7 +685,7 @@ export function normalizeImportedRows(rawRows) {
       ext_quality: numOrBlankOrNull(extOverall),
       det_novelty: numOrBlank(pick('det_novelty', 'novelty (objective)', 'objective novelty', 'obj. novelty', 'obj novelty')),
       det_distinctiveness: numOrBlank(pick('det_distinctiveness', 'pool distinctiveness', 'objective distinctiveness', 'obj. distinctiveness', 'obj distinctiveness')),
-      det_score: numOrBlank(pick('det_score', 'combined score', 'objective score', 'obj. score', 'obj score')),
+      det_score: numOrBlank(pick('det_score', 'noveltyscore', 'novelty score', 'novelty_score', 'combined score', 'objective score', 'obj. score', 'obj score')),
       det_need_fit: numOrBlank(pick('det_need_fit', 'need fit (objective)')),
       det_specificity: numOrBlank(pick('det_specificity', 'specificity (objective)')),
       det_workability: numOrBlank(pick('det_workability', 'workability (objective)')),

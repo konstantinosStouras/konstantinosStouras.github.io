@@ -26,6 +26,7 @@ import {
   pearson, partialPearson, median, quadrantCounts, contentText, foldPlural, STOP_WORDS,
 } from '../src/utils/usefulnessKpis.js'
 import { tfidfVectors } from '../src/utils/tfidf.js'
+import { objectiveKpisFromText } from '../src/utils/objectiveKpis.js'
 import { computeDeterministicKpis } from '../src/utils/deterministicKpis.js'
 import {
   KPI_DEFS, COLUMNS, canonicalKpiField, normalizeImportedRows, buildRowsForSession,
@@ -157,7 +158,8 @@ console.log('usefulnessKpisFromText — unreadable ideas are left blank, like th
     '',            // blank
     '?',           // nothing the tokeniser reads
     'Καλή ιδέα',   // a script the tokeniser does not read
-    'It is what it is',  // readable, but only filler words
+    'It is what it is',  // readable, but only common words: fewer than two meaningful words
+    'Zorblax',           // a single word
   ]
   const res = usefulnessKpisFromText(ideas, DEFAULT_NEED_SET, DEFAULT_TECH_SET)
   const p = res.perIdea
@@ -166,10 +168,15 @@ console.log('usefulnessKpisFromText — unreadable ideas are left blank, like th
   check('blank / "?" / Greek text: every usefulness KPI blank (null), never a top score',
     [2, 3, 4].every(i => p[i].needFit === null && p[i].specificity === null && p[i].workability === null && p[i].usefulness === null),
     JSON.stringify(p.slice(2, 5)))
-  check('counts measured / unmeasured the same way objectiveKpis does', res.measured === 3 && res.unmeasured === 3,
-    `${res.measured}/${res.unmeasured}`)
-  check('filler words only: no need fit (nothing to compare), but still read for the other parts',
-    p[5].needFit === null && p[5].specificity === 0 && p[5].workability === 1)
+  // Same rule as the novelty side (objectiveKpis.js isMeasurable: two meaningful
+  // words), so an idea is blank on both sides or on neither.
+  const nov = objectiveKpisFromText(ideas, DEFAULT_REFERENCE_SET)
+  check('counts measured / unmeasured exactly as objectiveKpis does (2 scored, 5 blank)',
+    res.measured === 2 && res.unmeasured === 5 && res.measured === nov.measured && res.unmeasured === nov.unmeasured,
+    `${res.measured}/${res.unmeasured} vs novelty side ${nov.measured}/${nov.unmeasured}`)
+  check('only common words, or a single word: blank on every usefulness KPI, as on the novelty side',
+    [5, 6].every(i => p[i].needFit === null && p[i].specificity === null && p[i].workability === null && p[i].usefulness === null
+      && nov.perIdea[i].score === null), JSON.stringify(p.slice(5)))
   // An unreadable idea must not shift the real ideas' numbers (it stays out of the corpus).
   const alone = usefulnessKpisFromText(ideas.slice(0, 2), DEFAULT_NEED_SET, DEFAULT_TECH_SET).perIdea
   check('adding unreadable ideas does not change the real ideas\' need fit',

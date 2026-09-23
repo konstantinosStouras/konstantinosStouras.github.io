@@ -39,13 +39,15 @@
  * (tools/usefulness-kpis-guard.mjs) and reproducible from the Step-2 data alone.
  * `usefulnessKpisFromText` is the whole pipeline the page runs. Ideas + U are
  * vectorised together (one vocabulary, one IDF) but SEPARATELY from ideas + R, so
- * editing U never moves a novelty number. An idea with no word the tokeniser reads
- * is left unscored on every usefulness KPI and kept out of the corpus: the same
- * rule objectiveKpis.js applies to the novelty side (isReadable).
+ * editing U never moves a novelty number. An idea that cannot be scored — fewer than
+ * two meaningful words: blank, a single word, only common words, a non-Latin script —
+ * is left unscored on every usefulness KPI and kept out of the corpus: the same rule
+ * objectiveKpis.js applies to the novelty side (isMeasurable), so an idea is blank on
+ * both sides or on neither.
  */
 import { cosine, hasTerms } from './deterministicKpis.js'
 import { tfidfVectors } from './tfidf.js'
-import { isReadable } from './objectiveKpis.js'
+import { isMeasurable } from './objectiveKpis.js'
 
 // ── Stop words (usefulness side only) ───────────────────────────────────────
 // Short ideas share function words with everything ("that", "when", "for"), and
@@ -342,11 +344,11 @@ export function usefulnessComposite(rankLists) {
  * @param texts      string[]   — the idea texts (for specificity and workability)
  * @param techTerms  the extra-technology list T (strings) for Workability
  * @returns { perIdea: [{ needFit, specificity, workability, usefulness, facets, tech }] }
- *   An unreadable idea (isReadable false) gets null on every KPI.
+ *   An idea that cannot be scored (isMeasurable false) gets null on every KPI.
  */
 export function computeUsefulnessKpis(ideaVecs, needVecs, texts, techTerms = []) {
   const compiled = compileTerms(techTerms)
-  const readable = texts.map(isReadable)
+  const readable = texts.map(isMeasurable)
   const nf = ideaVecs.map((v, i) => (readable[i] ? needFit(v, needVecs) : null))
   const sp = texts.map((t, i) => (readable[i] ? specificity(t) : null))
   const wk = texts.map((t, i) => (readable[i] ? workability(t, compiled) : null))
@@ -375,7 +377,7 @@ export function usefulnessKpisFromText(ideaTexts, needTexts, techTerms = []) {
   const needs = (needTexts || []).map(s => String(s ?? '').trim()).filter(t => contentText(t))
   if (!needs.length) return { error: 'The need set U is empty. Add the needs or problems people have (one per line).' }
   const texts = (ideaTexts || []).map(t => String(t ?? ''))
-  const readable = texts.map(isReadable)
+  const readable = texts.map(isMeasurable)
   // The corpus holds only ideas with a content word left after contentText: an idea
   // of filler words alone ("it is what it is") would enter as an EMPTY document and
   // still shift every IDF weight (N counts documents). It gets no need fit, but its

@@ -48,7 +48,7 @@ KPI_KEYS   <- c("novelty","usefulness","overall_quality",
                 "det_need_fit","det_specificity","det_workability","det_usefulness")
 KPI_LABELS <- c(novelty="AI Novelty", usefulness="AI Usefulness", overall_quality="AI Quality",
                 ext_novelty="Eval Novelty", ext_usefulness="Eval Usefulness", ext_quality="Eval Quality",
-                det_novelty="Novelty (objective)", det_distinctiveness="Pool distinctiveness", det_score="Combined score",
+                det_novelty="Novelty (objective)", det_distinctiveness="Pool distinctiveness", det_score="NoveltyScore",
                 det_need_fit="Need fit (objective)", det_specificity="Specificity (objective)",
                 det_workability="Workability (objective)",
                 det_usefulness="Usefulness score (objective)")
