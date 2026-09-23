@@ -3008,6 +3008,21 @@ reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
 `node _ideasearchlab-src/tools/score-gaps-guard.mjs` (60+ checks, including the
 owner's own 741-idea scenario driven through the real scoring engine).
 
+**Section 3.1 of the Data Analytics page measures USEFULNESS objectively, not
+only novelty** (owner 2026-09). Beside the TF-IDF novelty KPIs (Novelty vs the
+reference set R, Pool distinctiveness, Combined score) sit Need fit (closeness to an
+editable need set U of problems people have), Specificity (who / what / where-when /
+why / how the idea states), Workability (1 / (1 + extra technologies named from an
+editable list T, negations like "no electronics needed" ignored)) and their
+percentile composite Usefulness score. The rule: no usefulness KPI may reuse R or
+the idea-to-idea similarities, or it is just 1 - novelty. A peer-vote measure was
+left out on purpose (owner: it would complicate matters; the final picks are made
+by those votes). An idea with no words is left blank on this side too. A
+per-condition novelty × usefulness cross-check shows how the two relate. Pure module
+`_ideasearchlab-src/src/utils/usefulnessKpis.js` (`usefulnessKpisFromText`); full
+reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
+`node _ideasearchlab-src/tools/usefulness-kpis-guard.mjs`.
+
 **Section 3.1's objective KPIs leave an idea with no words blank.** An idea whose
 text has no word the TF-IDF tokeniser reads (blank, "?", one letter, Greek text)
 vectorises to all zeros, and cosine 0 with everything read as "as different as

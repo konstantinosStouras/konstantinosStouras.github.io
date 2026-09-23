@@ -12,6 +12,8 @@ WHAT THIS SCRIPT PRODUCES
     • AI-generated (3.2):        novelty / usefulness / overall_quality   (1–5)
     • External evaluators (3.3): ext_novelty / ext_usefulness / ext_quality (1–5)
     • Deterministic/objective (3.1): det_novelty / det_distinctiveness / det_score (0–1)
+      and the usefulness side det_need_fit / det_specificity / det_workability /
+      det_usefulness (0–1)
 
   For each KPI the tables report one column, so you can compare conditions on
   every available measure side by side:
@@ -86,6 +88,10 @@ KPI_DEFS = [
     ("det_novelty", "Novelty (objective)", False),
     ("det_distinctiveness", "Pool distinctiveness", False),
     ("det_score", "Combined score", False),
+    ("det_need_fit", "Need fit (objective)", False),
+    ("det_specificity", "Specificity (objective)", False),
+    ("det_workability", "Workability (objective)", False),
+    ("det_usefulness", "Usefulness score (objective)", False),
 ]
 
 TOP_RATING = 5.0           # a "top" idea earned the top of the 1–5 scale (Tables 5/6)

@@ -47,7 +47,9 @@ export function paperNameFor(encoding) {
 // kept in its own columns so they can be compared side by side (Section 3.1/3.2/3.3):
 //   • AI-generated (3.2):        novelty / usefulness / overall_quality
 //   • External evaluators (3.3): ext_novelty / ext_usefulness / ext_quality
-//   • Deterministic/objective (3.1): det_* — appended once those KPIs are defined.
+//   • Deterministic/objective (3.1): det_* — the novelty side (det_novelty /
+//     det_distinctiveness / det_score) and the usefulness side (det_need_fit /
+//     det_specificity / det_workability / det_usefulness, see usefulnessKpis.js).
 export const COLUMNS = [
   'idea_id',
   'session',
@@ -64,6 +66,10 @@ export const COLUMNS = [
   'det_novelty',
   'det_distinctiveness',
   'det_score',
+  'det_need_fit',
+  'det_specificity',
+  'det_workability',
+  'det_usefulness',
   'final_pick',
   'text',
 ]
@@ -95,6 +101,13 @@ export const KPI_DEFS = [
   { key: 'det_novelty', label: 'Novelty (objective)', source: 'det', scale5: false },
   { key: 'det_distinctiveness', label: 'Pool distinctiveness', source: 'det', scale5: false },
   { key: 'det_score', label: 'Combined score', source: 'det', scale5: false },
+  // 3.1 objective USEFULNESS KPIs (usefulnessKpis.js), each anchored on something
+  // the novelty KPIs never look at, so the two sides are not tied by construction.
+  // Every label ends "(objective)" so canonicalKpiField routes a re-upload back here.
+  { key: 'det_need_fit', label: 'Need fit (objective)', source: 'det', scale5: false },
+  { key: 'det_specificity', label: 'Specificity (objective)', source: 'det', scale5: false },
+  { key: 'det_workability', label: 'Workability (objective)', source: 'det', scale5: false },
+  { key: 'det_usefulness', label: 'Usefulness score (objective)', source: 'det', scale5: false },
 ]
 
 /**
@@ -142,6 +155,26 @@ export function uploadedKpiDefs(rows) {
 /** Every analysis column for the CSV/regressions: the fixed COLUMNS + uploaded KPIs. */
 export function analysisColumns(rows) {
   return [...COLUMNS, ...uploadedKpiKeys(rows)]
+}
+
+/**
+ * The KPI keys a Step-5 script actually analyses: the keys named in its registry,
+ * Python's `KPI_DEFS = [ … ]` or R's `KPI_KEYS <- c( … )`, ignoring comment lines.
+ * Used to warn when a SAVED script predates a KPI (it would skip it silently).
+ * Returns null when the registry cannot be found (a restructured script), so the
+ * caller warns about nothing rather than guessing.
+ */
+export function scriptKpiKeys(code, lang) {
+  const src = String(code || '')
+  const block = lang === 'r'
+    ? (src.match(/^KPI_KEYS\s*<-\s*c\(([\s\S]*?)\)/m) || [])[1]
+    : (src.match(/^KPI_DEFS\s*=\s*\[([\s\S]*?)^\]/m) || [])[1]
+  if (block == null) return null
+  const active = block.split('\n').map(l => l.replace(/#.*$/, '')).join('\n')
+  const keys = lang === 'r'
+    ? [...active.matchAll(/"([a-z0-9_]+)"/g)].map(m => m[1])
+    : [...active.matchAll(/\(\s*"([a-z0-9_]+)"/g)].map(m => m[1])
+  return new Set(keys)
 }
 
 /** Drop every uploaded extra-KPI column (x_*) from the rows (the "clear" action). */
@@ -239,10 +272,20 @@ export function matchUploadedKpisIntoRows(rows, entries, keys) {
  */
 export function canonicalKpiField(header) {
   const h = String(header || '').toLowerCase().trim()
+  // A column already named by its row key (the analysis CSV: det_score,
+  // det_need_fit, …) is that KPI. Without this, keys like det_distinctiveness
+  // matched nothing below and came back in as a duplicate x_det_… extra.
+  const exact = KPI_DEFS.find(d => d.key === h)
+  if (exact) return exact.key
   const has = w => h.includes(w)
   const isObj = /\bobj\b|\bobjective\b|\(objective\)/.test(h)
   const isEval = /\beval\b|\bevaluator\b|external/.test(h)
   if (isObj) {
+    // Usefulness side first: "Usefulness score (objective)" also contains "score".
+    if (has('need')) return 'det_need_fit'
+    if (has('specific')) return 'det_specificity'
+    if (has('workab')) return 'det_workability'
+    if (has('useful')) return 'det_usefulness'
     if (has('distinct')) return 'det_distinctiveness'
     if (has('score') || has('combined')) return 'det_score'
     if (has('novelty')) return 'det_novelty'
@@ -300,6 +343,66 @@ export const DEFAULT_REFERENCE_SET = [
   'thermochromic kettle band',
   'colour-change bath or floor mat',
   'thermochromic shower-head indicator',
+]
+
+/**
+ * Default need set U for the study's task: the problems and jobs people have that
+ * a fabric changing colour at 37°C could serve. It is the usefulness counterpart of
+ * the reference set R. R lists what ALREADY EXISTS (Novelty = far from R); U lists
+ * what people NEED (Need fit = close to U). The brief asks for both: "consider what
+ * users currently have and what unmet needs remain". Each line names the need and
+ * who has it in plain words (with common synonyms, since TF-IDF matches words, not
+ * meanings). It deliberately covers comfort, fun and self-expression as well as
+ * health and safety, so Need fit does not simply reward "medical" ideas. Lines are
+ * PROBLEMS, not products: they avoid R's product words (thermometer, sticker, bath,
+ * spoon, toy, mood ring…), or Need fit would partly copy "close to R" and pull
+ * against Novelty for the wrong reason. Only the core need words (fever, baby)
+ * are shared, because that need really is served by existing products. Write U
+ * before looking at the ideas (Griffin & Hauser 1993: 20-30 customer interviews
+ * surface about 90% of needs). Editable in Section 3.1, like R; a different theme
+ * needs its own list.
+ */
+export const DEFAULT_NEED_SET = [
+  'spot a fever early in a baby, infant, toddler or young child without waking or disturbing them',
+  'let parents and carers check a child\'s temperature quickly and easily at home or at night',
+  'keep an eye on a patient\'s body temperature in hospital, a care home or at home',
+  'warn an athlete, runner or player that their body is overheating during sport, training or exercise',
+  'warn outdoor workers, soldiers or firefighters of heat stress or heat stroke in hot weather',
+  'notice when elderly or vulnerable people are too cold or too hot (hypothermia, overheating)',
+  'detect infection or inflammation around a wound, injury, joint or surgical site',
+  'show poor circulation or cold spots in hands and feet, for example for diabetes or Raynaud\'s',
+  'track ovulation, the menstrual cycle, pregnancy or hormonal shifts in body temperature',
+  'make health checks fun and less scary for children',
+  'help people with dementia, autism or disabilities show that they feel unwell',
+  'check muscle warm-up, injury and recovery in sport and physiotherapy',
+  'spot fever or illness in pets, horses and farm animals',
+  'screen for fever in schools, workplaces, travel and crowded public places',
+  'help people sleep at a comfortable temperature and avoid night sweats',
+  'show whether clothing, a mask or a brace fits well and touches the body where it should',
+  'let people express how they feel and their personality through what they wear',
+  'make clothing and play more fun, surprising and interactive for children and adults',
+  'check health without batteries, electronics, apps or charging, at low cost',
+]
+
+/**
+ * Default extra-technology list T for the Workability KPI (usefulnessKpis.js): the
+ * technology a passive colour-changing fabric does NOT supply. An idea naming k of
+ * these gets workability 1 / (1 + k). Terms are matched as whole words (plurals
+ * too), so a line should be a word or a short phrase. Deliberately absent: words
+ * the fabric itself covers ("display", "shows", "smart", "heat") and ambiguous ones
+ * ("phone" — R has a phone case; "screen" — also "screen for fever"; "light",
+ * "sound"). Editable in Section 3.1; a theme where apps are part of the brief
+ * needs its own list.
+ */
+export const DEFAULT_TECH_SET = [
+  'app', 'bluetooth', 'wifi', 'wi-fi', 'wireless', 'internet',
+  'battery', 'rechargeable', 'charging', 'charger', 'power supply', 'solar panel',
+  'sensor', 'chip', 'microchip', 'microcontroller', 'circuit', 'electronic', 'electronics',
+  'led', 'lcd', 'oled', 'light up', 'lights up', 'camera', 'gps', 'ai', 'artificial intelligence',
+  'algorithm', 'machine learning', 'data', 'iot', 'nfc', 'rfid', 'qr code', 'motor',
+  'vibration', 'vibrates', 'vibrating', 'speaker', 'beep', 'buzzer', 'alarm sound',
+  'heating element', 'heater', 'cooling fan', 'implant', 'graphene', 'nanotechnology',
+  'notification', 'smartwatch', 'syncs', 'connected to',
 ]
 
 /** Map a session's AI configuration to its condition encoding (None/Solo/Group/Both). */
@@ -388,6 +491,10 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       det_novelty: '',
       det_distinctiveness: '',
       det_score: '',
+      det_need_fit: '',
+      det_specificity: '',
+      det_workability: '',
+      det_usefulness: '',
       final_pick: finalPickIds.has(idea.id) ? 1 : 0,
       // Carried to the group phase = the participant selected this individual idea
       // to carry forward (idea.selected). Group-stage ideas weren't "carried"; the
@@ -564,6 +671,10 @@ export function normalizeImportedRows(rawRows) {
       det_novelty: numOrBlank(pick('det_novelty', 'novelty (objective)', 'objective novelty', 'obj. novelty', 'obj novelty')),
       det_distinctiveness: numOrBlank(pick('det_distinctiveness', 'pool distinctiveness', 'objective distinctiveness', 'obj. distinctiveness', 'obj distinctiveness')),
       det_score: numOrBlank(pick('det_score', 'combined score', 'objective score', 'obj. score', 'obj score')),
+      det_need_fit: numOrBlank(pick('det_need_fit', 'need fit (objective)')),
+      det_specificity: numOrBlank(pick('det_specificity', 'specificity (objective)')),
+      det_workability: numOrBlank(pick('det_workability', 'workability (objective)')),
+      det_usefulness: numOrBlank(pick('det_usefulness', 'usefulness score (objective)')),
       final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
       carried: /^(1|yes|true)$/i.test(String(pick('carried to group', 'carried', 'carried_to_group')).trim()) ? 1 : 0,
       text,
