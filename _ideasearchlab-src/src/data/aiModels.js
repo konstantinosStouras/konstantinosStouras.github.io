@@ -110,13 +110,22 @@ export function allModelIds() {
  * Dropdown text for a model: its label plus the price per 1M tokens, so the
  * "most capable first" ordering carries its cost rather than implying it.
  * `prices` is the MODEL_PRICES map from aiPricing.js (passed in, so this data
- * module stays import-free and the guard can test it with a fake table).
+ * module stays import-free and the guard can test it with a fake table); a
+ * promotional row prints its expiry while it holds and its list price after
+ * (`at` = the day to price for, default today).
  */
-export function modelOptionLabel(model, prices) {
+export function modelOptionLabel(model, prices, at) {
   const p = prices?.[model.id]
   if (!p) return model.label
-  const promo = p.until ? ` (promotional price until ${p.until})` : ''
-  return `${model.label} · $${fmtPrice(p.in)} in / $${fmtPrice(p.out)} out per 1M tokens${promo}`
+  const today = dayString(at)
+  const live = p.until && today > p.until && p.list ? p.list : p
+  const promo = p.until && today <= p.until ? ` (promotional price until ${p.until})` : ''
+  return `${model.label} · $${fmtPrice(live.in)} in / $${fmtPrice(live.out)} out per 1M tokens${promo}`
+}
+
+function dayString(at) {
+  const d = at instanceof Date ? at : at ? new Date(at) : new Date()
+  return (Number.isNaN(d.getTime()) ? new Date() : d).toISOString().slice(0, 10)
 }
 
 function fmtPrice(n) {

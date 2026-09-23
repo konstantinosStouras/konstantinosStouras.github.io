@@ -29,7 +29,7 @@ import {
   PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById,
   allModelIds, modelOptionLabel, CATALOGUE_AS_OF,
 } from '../src/data/aiModels.js'
-import { MODEL_PRICES, PRICES_AS_OF, replyCostUSD } from '../src/data/aiPricing.js'
+import { MODEL_PRICES, PRICES_AS_OF, replyCostUSD, priceAt, dayOf } from '../src/data/aiPricing.js'
 import {
   buildRequest, parseReplyText, callProvider, scrubKey, replyProblem,
   claudeSupportsEffort, openaiIsReasoning, geminiTakesThinkingLevel,
@@ -89,13 +89,31 @@ const m0 = PROVIDERS[0].models[0]
 const lab = modelOptionLabel(m0, MODEL_PRICES)
 check(lab.startsWith(m0.label) && /\$\d/.test(lab) && /per 1M tokens/.test(lab), `option label carries the price: "${lab}"`)
 check(modelOptionLabel({ id: 'nope', label: 'X' }, MODEL_PRICES) === 'X', 'unpriced model keeps its label')
-check(modelOptionLabel({ id: 'x', label: 'X' }, { x: { in: 4, out: 20, until: '2026-11-21' } }).endsWith('(promotional price until 2026-11-21)'), 'a time-limited price prints its expiry')
-// A promotional price must never outlive its own expiry in the table: the
-// day PRICES_AS_OF passes a row's `until`, the row is stale and the guard says so.
+check(modelOptionLabel({ id: 'x', label: 'X' }, { x: { in: 4, out: 20, until: '2099-01-01' } }).endsWith('(promotional price until 2099-01-01)'), 'a time-limited price prints its expiry')
+// A promotional price must never outlive its own expiry in the table. The
+// runtime already falls back to the list price the day after `until`
+// (priceAt / modelOptionLabel), so nothing is mis-charged — but the row is
+// stale from that day, and this check (against TODAY's date, not the
+// hand-maintained PRICES_AS_OF) is what gets it re-snapshotted.
+const TODAY = dayOf()
 for (const [id, row] of Object.entries(MODEL_PRICES)) {
   if (!row?.until) continue
   check(/^\d{4}-\d{2}-\d{2}$/.test(row.until) && row.list && row.list.in > 0 && row.list.out > 0, `${id}: promotional row carries a dated \`until\` and a \`list\` price`)
-  check(PRICES_AS_OF <= row.until, `${id}: promotional price (until ${row.until}) has not lapsed as of PRICES_AS_OF ${PRICES_AS_OF} — re-snapshot the row`)
+  check(TODAY <= row.until, `${id}: promotional price lapsed on ${row.until} (today ${TODAY}) — the runtime is charging the list price; re-snapshot the row and PRICES_AS_OF`)
+}
+// The price of the day: promotional through `until`, list after it.
+{
+  const row = { in: 4, out: 20, until: '2026-11-21', list: { in: 5, out: 30 } }
+  check(priceAt(row, '2026-11-21').in === 4 && priceAt(row, '2026-11-21').promo === true, 'priceAt: the promotional price holds on its last day')
+  check(priceAt(row, '2026-11-22').in === 5 && priceAt(row, '2026-11-22').out === 30 && priceAt(row, '2026-11-22').promo === false, 'priceAt: the list price applies the day after')
+  check(priceAt({ in: 2, out: 10 }, '2030-01-01').in === 2, 'priceAt: a plain row never expires')
+  check(priceAt(null) === null, 'priceAt: no row → null')
+  check(dayOf({ seconds: 1764720000 }) === '2025-12-03' && dayOf('2026-11-22T10:00:00Z') === '2026-11-22' && /^\d{4}-\d{2}-\d{2}$/.test(dayOf(undefined)), 'dayOf reads Firestore-like, ISO and absent stamps')
+  check(Math.abs(replyCostUSD('gpt-5.6-sol', 1e6, 1e6, '2026-11-22') - 35) < 1e-9 && Math.abs(replyCostUSD('gpt-5.6-sol', 1e6, 1e6, '2026-11-01') - 24) < 1e-9, 'replyCostUSD costs a reply at the price of ITS day')
+  const m = { id: 'x', label: 'X' }
+  const tbl = { x: row }
+  check(modelOptionLabel(m, tbl, '2026-11-01').endsWith('(promotional price until 2026-11-21)') && /\$4 in \/ \$20 out/.test(modelOptionLabel(m, tbl, '2026-11-01')), 'label: promotional price + expiry while it holds')
+  check(!/promotional/.test(modelOptionLabel(m, tbl, '2026-11-22')) && /\$5 in \/ \$30 out/.test(modelOptionLabel(m, tbl, '2026-11-22')), 'label: the list price, no expiry note, once lapsed')
 }
 check(modelOptionLabel({ id: 'x', label: 'X' }, { x: { in: 0.1, out: 0.5 } }) === 'X · $0.1 in / $0.5 out per 1M tokens', 'fractional prices print as given')
 {
@@ -212,17 +230,20 @@ check(parseReplyText('gemini', { promptFeedback: { blockReason: 'SAFETY' } }) ==
 check(parseReplyText('other', {}) === '', 'unknown provider → empty')
 // A 2xx with no rating is reported as a cause, never returned as '' (which
 // scoreBatch would re-send per idea and end with nothing in lastError).
-check(/refusal: cyber/.test(replyProblem('claude', { stop_reason: 'refusal', stop_details: { category: 'cyber' }, content: [] }, '')), 'claude: refusal is a reply problem naming its category')
-check(/thinking and returned no text/.test(replyProblem('claude', { stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '…' }] }, '')), 'claude: ceiling spent on thinking with no text is a reply problem')
-check(replyProblem('claude', { stop_reason: 'max_tokens', content: [{ type: 'text', text: '[{"i":0,"novelty":3,"usefulness":4},{"i":1' }] }, '[{"i":0,"novelty":3,"usefulness":4},{"i":1') === '', 'claude: a truncated reply WITH text is handed back (the parser salvages it)')
-check(replyProblem('claude', { stop_reason: 'end_turn', content: [{ type: 'text', text: '[]' }] }, '[]') === '', 'claude: a normal reply is no problem')
-check(/refusal/.test(replyProblem('openai', { choices: [{ message: { refusal: 'no' }, finish_reason: 'stop' }] }, '')), 'openai: message.refusal is a reply problem')
-check(/reasoning and returned no text/.test(replyProblem('openai', { choices: [{ message: { content: '' }, finish_reason: 'length' }] }, '')), 'openai: length with no text is a reply problem')
-check(replyProblem('openai', { choices: [{ message: { content: '[]' }, finish_reason: 'length' }] }, '[]') === '', 'openai: length WITH text is handed back')
-check(/prompt blocked: SAFETY/.test(replyProblem('gemini', { promptFeedback: { blockReason: 'SAFETY' } }, '')), 'gemini: a blocked prompt is a reply problem')
-check(/thinking and returned no text/.test(replyProblem('gemini', { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }] }, '')), 'gemini: MAX_TOKENS with no text is a reply problem')
-check(replyProblem('gemini', { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '[]' }] } }] }, '[]') === '', 'gemini: a normal reply is no problem')
-check(replyProblem('other', {}, '') === '', 'unknown provider → no problem reported')
+const rp = (prov, data, text) => replyProblem(prov, data, text)
+check(rp('claude', { stop_reason: 'refusal', stop_details: { category: 'cyber' }, content: [] }, '')?.kind === 'refusal' && /refusal: cyber/.test(rp('claude', { stop_reason: 'refusal', stop_details: { category: 'cyber' }, content: [] }, '').why), 'claude: refusal is a reply problem of kind refusal naming its category')
+check(rp('claude', { stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '…' }] }, '')?.kind === 'exhausted', 'claude: ceiling spent on thinking with no text is an exhausted reply')
+check(rp('claude', { stop_reason: 'max_tokens', content: [{ type: 'text', text: '[{"i":0,"novelty":3,"usefulness":4},{"i":1' }] }, '[{"i":0,"novelty":3,"usefulness":4},{"i":1') === null, 'claude: a truncated reply WITH text is handed back (the parser salvages it)')
+check(rp('claude', { stop_reason: 'end_turn', content: [{ type: 'text', text: '[]' }] }, '[]') === null, 'claude: a normal reply is no problem')
+check(rp('openai', { choices: [{ message: { refusal: 'no' }, finish_reason: 'stop' }] }, '')?.kind === 'refusal', 'openai: message.refusal is a refusal')
+check(rp('openai', { choices: [{ message: { content: '' }, finish_reason: 'length' }] }, '')?.kind === 'exhausted', 'openai: length with no text is an exhausted reply')
+check(rp('openai', { choices: [{ message: { content: '[]' }, finish_reason: 'length' }] }, '[]') === null, 'openai: length WITH text is handed back')
+check(rp('openai', { choices: [{ message: { content: '' }, finish_reason: 'content_filter' }] }, '')?.kind === 'refusal', 'openai: content_filter is a refusal')
+check(rp('gemini', { promptFeedback: { blockReason: 'SAFETY' } }, '')?.kind === 'refusal', 'gemini: a blocked prompt is a refusal')
+check(rp('gemini', { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }] }, '')?.kind === 'exhausted', 'gemini: MAX_TOKENS with no text is an exhausted reply')
+check(rp('gemini', { candidates: [{ finishReason: 'SAFETY', content: { parts: [] } }] }, '')?.kind === 'refusal', 'gemini: a SAFETY finish with no text is a refusal')
+check(rp('gemini', { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '[]' }] } }] }, '[]') === null, 'gemini: a normal reply is no problem')
+check(rp('other', {}, '') === null, 'unknown provider → no problem reported')
 
 // ── 5. callProvider against a fake fetch ────────────────────────────────────
 console.log('callProvider')
@@ -247,9 +268,16 @@ check(e401 && isFatalApiError(e401), '401 is fatal for scoreBatch (no retries on
 check(e401 && !e401.message.includes(KEY) && e401.message.includes('[api key]'), 'the API key never appears in an error message')
 check(e401 && /Claude \(Anthropic\) API error 401/.test(e401.message) && e401.message.includes('claude-sonnet-5'), 'error names the provider, status and model')
 const eRef = await errorOf(fakeFetch(200, { stop_reason: 'refusal', stop_details: { category: 'cyber' }, content: [] }))
-check(eRef && eRef.replyProblem === true && eRef.status === undefined && !isFatalApiError(eRef) && /refusal: cyber/.test(eRef.message) && eRef.message.includes('claude-sonnet-5'), 'a refusal THROWS (no status: bounded retries, then counted with its cause), naming the model and category')
+check(eRef && eRef.replyProblem === 'refusal' && eRef.retryable === false && eRef.status === undefined && !isFatalApiError(eRef) && /refusal: cyber/.test(eRef.message) && eRef.message.includes('claude-sonnet-5'), 'a refusal THROWS as a non-retryable reply problem (no status, never fatal), naming the model and category')
 const eThink = await errorOf(fakeFetch(200, { stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '…' }] }))
-check(eThink && eThink.replyProblem === true && /thinking and returned no text/.test(eThink.message), 'a ceiling spent on thinking with no text THROWS with the cause')
+check(eThink && eThink.replyProblem === 'exhausted' && eThink.retryable === true && /thinking and returned no text/.test(eThink.message), 'a ceiling spent on thinking with no text THROWS as a retryable reply problem')
+// scoreBatch honours both: a refusal skips the transport retries and the
+// per-idea round still runs (tools/score-batch-guard.mjs drives the loop; here
+// only the contract the two modules share is pinned).
+{
+  const sb = src('src/utils/scoreBatch.js')
+  check(/err\?\.retryable === false/.test(sb) && /err\?\.replyProblem/.test(sb), 'scoreBatch reads retryable and replyProblem off the thrown error')
+}
 const okCut = await callProvider(resolved, 'SYS', 'USER', { fetch: fakeFetch(200, { stop_reason: 'max_tokens', content: [{ type: 'text', text: '[{"i":0,"novelty":3,"usefulness":4},{"i":1' }] }) })
 check(okCut.startsWith('[{"i":0'), 'a truncated reply WITH text is returned for the parser to salvage')
 const e429 = await errorOf(fakeFetch(429, 'rate limited'))
@@ -296,7 +324,18 @@ if (existsSync(shippedIndex)) {
   check(!/=>callProvider\(/.test(chunk) && !/[^.\w]callProvider\(/.test(chunk), 'shipped bundle has no bare callProvider global (the ReferenceError)')
   const missingIds = ids.filter(id => !chunk.includes(id))
   check(missingIds.length === 0, `shipped bundle carries every catalogue id (rebuild + copy dist/ into lab/ideasearchlab; missing: ${missingIds.join(', ') || 'none'})`)
-  check(chunk.includes('no longer listed'), 'shipped bundle carries the saved-but-unlisted model option')
+  // One marker per behaviour this guard exists for, so a bundle built before
+  // any of them fails here rather than passing on the older markers alone.
+  // ADD A MARKER WITH EVERY USER-VISIBLE STRING A LATER CHANGE INTRODUCES.
+  const BUNDLE_MARKERS = [
+    ['no longer listed', 'the saved-but-unlisted model option'],
+    ['declined to rate this batch', 'the refusal reply problem'],
+    ['token ceiling on', 'the thinking-exhausted reply problem'],
+    ['promotional price until', 'the promotional-price label'],
+    ['Last cause reported', 'the reported cause on the analytics page'],
+    ['in this section first, then fill', 'the fill-blank hint'],
+  ]
+  for (const [marker, what] of BUNDLE_MARKERS) check(chunk.includes(marker), `shipped bundle carries ${what} ("${marker}")`)
 } else {
   console.log('  (no shipped bundle beside the source — bundle checks skipped)')
 }

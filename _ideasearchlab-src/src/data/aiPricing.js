@@ -10,11 +10,11 @@
  * (`tools/ai-models-guard.mjs` checks).
  *
  * A time-limited price carries `until: 'YYYY-MM-DD'` (the last day it holds)
- * and `list: {in, out}` (the price after it). The dropdowns print the
- * expiry beside the price, and the guard FAILS once PRICES_AS_OF is later
- * than any row's `until` — so a lapsed promotion cannot keep understating the
- * Excel cost export or the dropdown silently; re-snapshot the row and bump
- * PRICES_AS_OF.
+ * and `list: {in, out}` (the price after it). `priceAt` resolves the price
+ * that applies on a given day — the promotional one through `until`, the list
+ * one after — so the dropdowns and the cost export never keep charging a
+ * lapsed promotion (a reply is costed at the price of ITS day); the guard also
+ * fails on the day a promotion lapses, so the row gets re-snapshotted.
  */
 
 export const PRICES_AS_OF = '2026-09-23'
@@ -72,9 +72,32 @@ export const MODEL_PRICES = {
   'gemini-2.5-flash-lite': { in: 0.1, out: 0.4 },
 }
 
-// Cost in USD for one AI reply; null when the model has no confirmed price.
-export function replyCostUSD(model, inputTokens, outputTokens) {
-  const p = MODEL_PRICES[model]
+/** 'YYYY-MM-DD' for a Date, epoch ms, ISO string or Firestore-like {seconds}; today when absent. */
+export function dayOf(at) {
+  let d = at
+  if (d && typeof d === 'object' && typeof d.toDate === 'function') d = d.toDate()
+  else if (d && typeof d === 'object' && typeof d.seconds === 'number') d = new Date(d.seconds * 1000)
+  else if (typeof d === 'number' || typeof d === 'string') d = new Date(d)
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) d = new Date()
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * The price row that applies on day `at` (default today): the promotional
+ * `{in, out}` through its `until`, the `list` price after it. Returns the row
+ * with `promo: true` while the promotion holds, so a label can say so.
+ */
+export function priceAt(p, at) {
+  if (!p) return null
+  if (!p.until) return { in: p.in, out: p.out, promo: false }
+  if (dayOf(at) <= p.until) return { in: p.in, out: p.out, promo: true, until: p.until }
+  return p.list ? { in: p.list.in, out: p.list.out, promo: false } : { in: p.in, out: p.out, promo: false }
+}
+
+// Cost in USD for one AI reply on day `at` (its timestamp; default today);
+// null when the model has no confirmed price.
+export function replyCostUSD(model, inputTokens, outputTokens, at) {
+  const p = priceAt(MODEL_PRICES[model], at)
   if (!p) return null
   return ((inputTokens || 0) * p.in + (outputTokens || 0) * p.out) / 1e6
 }

@@ -827,6 +827,12 @@ export default function DataAnalytics() {
       if (finalGaps.unratable > 0) {
         bits.push(`${finalGaps.unratable.toLocaleString()} ${finalGaps.unratable === 1 ? 'idea has' : 'ideas have'} no text to rate, so ${finalGaps.unratable === 1 ? 'it' : 'they'} can never be scored — they are counted apart above.`)
       }
+      // A cause the provider gave (a refusal, a ceiling spent on thinking, a
+      // 429 it kept answering) used to be dropped unless the run aborted; the
+      // still-empty ideas then read as "could not be read" with no reason.
+      if (lastError && !aborted && finalGaps.fillable > 0) {
+        bits.push(`Last cause reported: ${lastError.message || lastError}`)
+      }
       if (bits.length) setScoreErr(bits.join(' '))
     } catch (err) {
       setScoreErr(err.message || String(err))
@@ -1708,8 +1714,10 @@ export default function DataAnalytics() {
                 The list shows five models of the provider's newest generation, most capable first, with each model's
                 price per 1M tokens beside it (as of {CATALOGUE_AS_OF}); the pre-selected one is the cheapest current
                 model, which is enough for a 1–5 rating over hundreds of ideas.
-                Every idea is scored by the model you pick here, so the AI&nbsp;Novelty and AI&nbsp;Usefulness columns
-                are that model's ratings.
+                The run rates only ideas that have no AI score yet: on a fresh dataset the AI&nbsp;Novelty and
+                AI&nbsp;Usefulness columns are entirely the ratings of the model you pick here, while a dataset already
+                scored by another rater keeps those scores — to re-rate every idea with a different provider or model,
+                press <em>Clear</em> in this section first, then fill.
               </p>
 
               <label className={styles.checkRow}>

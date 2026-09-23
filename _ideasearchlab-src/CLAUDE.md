@@ -576,10 +576,22 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      `message.refusal`, a Gemini `blockReason` / non-STOP finish) or a ceiling spent entirely on
      hidden thinking (`max_tokens` / `length` / `MAX_TOKENS` with no text) used to look exactly like
      an unreadable reply, so scoreBatch re-sent every idea of the batch one by one (1 + 16 calls for
-     a deterministic refusal) and the run ended "N unscored" with nothing in `lastError`; thrown
-     without a status they are retried a bounded number of times, then counted with their cause on
-     screen. A cut-off reply that DID return text is handed back as is for `extractScoreObjects` to
-     salvage. `SCORING_EFFORT` is the one knob if deeper
+     a deterministic refusal) and the run ended "N unscored" with nothing in `lastError`. Thrown with
+     `replyProblem` set (`refusal` is `retryable: false`, `exhausted` is retried), scoreBatch
+     records the cause in `lastError`, does NOT count the batch toward the circuit breaker and still
+     runs the per-idea round — so one refused idea costs only itself its score, never its seven
+     batch-mates (the critic's catch on the first version, which treated the throw as a transport
+     failure: round 2 skipped, the same batch re-formed every pass, three refusals read as an
+     outage). The page prints "Last cause reported: …" beside any still-empty ideas. A cut-off
+     reply that DID return text is handed back as is for `extractScoreObjects` to salvage.
+     **A promotional price is priced by day:** `priceAt`/`replyCostUSD(model, in, out, at)` charge
+     the promotional price through its `until` and the `list` price after it (the session export
+     costs each reply at its own timestamp; the AI Pricing sheet shows `until` and the after-price),
+     the dropdown label switches on its own, and the guard fails from the lapse day (against
+     today's date, not `PRICES_AS_OF`) so the row gets re-snapshotted. **The hint states the
+     fill-blank rule:** a fresh dataset's AI columns are the chosen model's ratings; a dataset
+     already scored by another rater keeps those — press Clear in section 3 first to re-rate every
+     idea with a different provider. `SCORING_EFFORT` is the one knob if deeper
      deliberation per idea is wanted. Offline test: **`node _ideasearchlab-src/tools/ai-models-guard.mjs`**
      (catalogue shape and order, the three catalogues in sync, every request shape,
      every error path against a fake fetch, and — read from `lab/ideasearchlab/index.html`'s own main

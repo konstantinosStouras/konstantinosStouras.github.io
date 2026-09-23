@@ -54,10 +54,12 @@
  * no text). Returned as '' they were indistinguishable from an unreadable
  * reply — scoreBatch re-sent every idea of the batch one by one (1 + 16 calls
  * for a deterministic refusal) and the run ended "N unscored" with nothing in
- * `lastError`. Thrown (without a status, so they are retried a bounded number
- * of times and then counted), the cause reaches the report on screen. A
- * reply that was cut off but DID return text is handed back as is —
- * `extractScoreObjects` salvages the complete objects out of a truncated array.
+ * `lastError`. Thrown with `replyProblem` set (no HTTP status; a refusal is
+ * `retryable: false`), scoreBatch records the cause, does NOT count the batch
+ * as a transport failure, and still runs the per-idea round, so one refused
+ * idea costs only itself its score, not its seven batch-mates. A reply that
+ * was cut off but DID return text is handed back as is — `extractScoreObjects`
+ * salvages the complete objects out of a truncated array.
  */
 
 export const SCORING_MAX_TOKENS = 8000
@@ -227,48 +229,53 @@ export async function callProvider(resolved, system, user, opts = {}) {
 
   const data = await res.json()
   const text = parseReplyText(provider, data)
-  const why = replyProblem(provider, data, text)
-  if (why) {
-    const err = new Error(`${name} (${model}) ${scrubKey(why, apiKey)}`)
-    err.replyProblem = true
+  const problem = replyProblem(provider, data, text)
+  if (problem) {
+    const err = new Error(`${name} (${model}) ${scrubKey(problem.why, apiKey)}`)
+    err.replyProblem = problem.kind          // 'refusal' | 'exhausted'
+    err.retryable = problem.kind === 'exhausted'
     throw err
   }
   return text
 }
 
 /**
- * Why a 2xx reply still carries no usable rating — '' when it is fine. Pure,
- * so the guard can drive every shape: a refusal (never retryable in
- * substance, but bounded by scoreBatch's attempts) and a ceiling spent on
- * hidden thinking (worth another go — thinking length varies run to run).
+ * Why a 2xx reply still carries no usable rating — null when it is fine, else
+ * `{ kind, why }`: `refusal` (the provider declined this CONTENT — repeating
+ * the request repeats the answer, so `retryable` is false and scoreBatch goes
+ * straight to the per-idea round, where only the refused idea stays empty) or
+ * `exhausted` (the ceiling went on hidden thinking — worth another go, since
+ * thinking length varies run to run). Pure, so the guard drives every shape.
  */
 export function replyProblem(provider, data, text) {
   const empty = !String(text || '').trim()
+  const refusal = why => ({ kind: 'refusal', why })
+  const exhausted = what => ({ kind: 'exhausted', why: `spent its whole ${SCORING_MAX_TOKENS}-token ceiling on ${what} and returned no text` })
   switch (provider) {
     case 'claude': {
       if (data?.stop_reason === 'refusal') {
         const cat = data?.stop_details?.category
-        return `declined to rate this batch (refusal${cat ? `: ${cat}` : ''})`
+        return refusal(`declined to rate this batch (refusal${cat ? `: ${cat}` : ''})`)
       }
-      if (empty && data?.stop_reason === 'max_tokens') return `spent its whole ${SCORING_MAX_TOKENS}-token ceiling on thinking and returned no text`
-      return ''
+      if (empty && data?.stop_reason === 'max_tokens') return exhausted('thinking')
+      return null
     }
     case 'openai': {
       const choice = data?.choices?.[0]
-      if (choice?.message?.refusal) return `declined to rate this batch (refusal: ${String(choice.message.refusal).slice(0, 200)})`
-      if (empty && choice?.finish_reason === 'length') return `spent its whole ${SCORING_MAX_TOKENS}-token ceiling on reasoning and returned no text`
-      if (empty && choice?.finish_reason === 'content_filter') return 'declined to rate this batch (content filter)'
-      return ''
+      if (choice?.message?.refusal) return refusal(`declined to rate this batch (refusal: ${String(choice.message.refusal).slice(0, 200)})`)
+      if (empty && choice?.finish_reason === 'length') return exhausted('reasoning')
+      if (empty && choice?.finish_reason === 'content_filter') return refusal('declined to rate this batch (content filter)')
+      return null
     }
     case 'gemini': {
       const block = data?.promptFeedback?.blockReason
-      if (block) return `declined to rate this batch (prompt blocked: ${block})`
+      if (block) return refusal(`declined to rate this batch (prompt blocked: ${block})`)
       const fin = data?.candidates?.[0]?.finishReason
-      if (empty && fin === 'MAX_TOKENS') return `spent its whole ${SCORING_MAX_TOKENS}-token ceiling on thinking and returned no text`
-      if (empty && fin && fin !== 'STOP') return `declined to rate this batch (finish reason ${fin})`
-      return ''
+      if (empty && fin === 'MAX_TOKENS') return exhausted('thinking')
+      if (empty && fin && fin !== 'STOP') return refusal(`declined to rate this batch (finish reason ${fin})`)
+      return null
     }
     default:
-      return ''
+      return null
   }
 }

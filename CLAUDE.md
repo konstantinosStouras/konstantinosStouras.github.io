@@ -3038,7 +3038,9 @@ low thinking level), and its `callGemini` sends the key as the `x-goog-api-key`
 header instead of `?key=` (the "AQ." auth keys are refused in the URL) — all
 live at the next `firebase deploy --only functions`. The rater itself reports a
 refusal or a thinking-exhausted empty reply as a cause on screen instead of
-silently re-sending the batch idea by idea. Full detail
+silently re-sending the batch idea by idea, and one refused idea no longer costs
+its batch-mates their scores. Promotional prices resolve by day (`priceAt`), so
+neither the dropdown nor the cost export keeps charging a lapsed promotion. Full detail
 in `_ideasearchlab-src/CLAUDE.md`.
 
 **Excel export per session, from the session list.** Both admins let the
