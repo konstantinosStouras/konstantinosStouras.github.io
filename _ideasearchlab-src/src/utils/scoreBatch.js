@@ -160,7 +160,9 @@ export async function withRetry(fn, opts = {}) {
       return await fn()
     } catch (err) {
       last = err
-      if (isFatal(err) || i === attempts - 1) throw err
+      // `retryable === false` is an answer the provider GAVE (a refusal about
+      // this content) — repeating the request repeats the answer.
+      if (isFatal(err) || err?.retryable === false || i === attempts - 1) throw err
       if (opts.onRetry) opts.onRetry({ attempt: i + 1, error: err })
       await sleep(opts.backoffMs ? opts.backoffMs(i) : 700 * 2 ** i)
     }
@@ -179,7 +181,11 @@ export async function withRetry(fn, opts = {}) {
  * @returns { scores, unscored, blank, failedBatches, aborted, lastError } —
  *          `scores` is the same length/order as `texts`, holding
  *          {novelty,usefulness}|null. `aborted` is true when the run stopped
- *          early because the provider kept failing.
+ *          early because the provider kept failing. An error carrying
+ *          `replyProblem` (the provider answered but gave no rating — a
+ *          refusal, or a ceiling spent on thinking) is recorded in
+ *          `lastError` without counting as a failed batch; `retryable === false`
+ *          on any error skips the transport retries.
  */
 export async function runScoring({
   texts, call, batchSize = 8, onProgress, sleep, isFatal, retryAttempts = 3, singleTries = 2,
@@ -212,13 +218,25 @@ export async function runScoring({
       } catch (err) {
         if (isFatal && isFatal(err)) throw err
         lastError = err
-        failedBatches++
-        batchThrew = true
-        // The provider itself is failing (already retried with backoff), so
-        // stop rather than grinding through every remaining batch — and every
-        // idea inside them — against something that is plainly down. Whatever
-        // was scored before this point is still returned.
-        if (++consecutiveFailures >= maxConsecutiveFailures) break
+        if (err?.replyProblem) {
+          // The provider ANSWERED — it declined this batch's content, or spent
+          // its ceiling on hidden thinking and returned no text
+          // (`replyProblem` from providerRequest.js). That is not a transport
+          // failure: the breaker must not count it, and the batch-mates must
+          // still get their single calls below — under a thrown batch one
+          // refused idea used to cost its seven neighbours their scores on
+          // every pass, since the fill loop re-forms the same batch. The cause
+          // is kept in `lastError` so the page can say what happened.
+          consecutiveFailures = 0
+        } else {
+          failedBatches++
+          batchThrew = true
+          // The provider itself is failing (already retried with backoff), so
+          // stop rather than grinding through every remaining batch — and every
+          // idea inside them — against something that is plainly down. Whatever
+          // was scored before this point is still returned.
+          if (++consecutiveFailures >= maxConsecutiveFailures) break
+        }
       }
 
       // A thrown batch means the transport is unhealthy, not that the model

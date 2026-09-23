@@ -515,7 +515,7 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
       u.outputTokens += msg.outputTokens || 0
       u.genMs += msg.generationMs || 0
       if (msg.model) u.models.add(msg.model)
-      const cost = replyCostUSD(msg.model, msg.inputTokens, msg.outputTokens)
+      const cost = replyCostUSD(msg.model, msg.inputTokens, msg.outputTokens, msg.timestamp)
       if (msg.inputTokens == null && msg.outputTokens == null) u.unpriced += 1
       else if (cost == null) u.unpriced += 1
       else u.costUSD += cost
@@ -631,9 +631,12 @@ function aiPricingRows() {
     'USD per 1M output': p ? p.out : 'not confirmed',
     'EUR per 1M input': p ? Number((p.in * USD_TO_EUR).toFixed(3)) : '',
     'EUR per 1M output': p ? Number((p.out * USD_TO_EUR).toFixed(3)) : '',
+    'Promotional until': p?.until || '',
+    'USD per 1M input after': p?.list ? p.list.in : '',
+    'USD per 1M output after': p?.list ? p.list.out : '',
   }))
   rows.push({})
-  rows.push({ 'Model': `Prices as of ${PRICES_AS_OF}. USD>EUR rate ${USD_TO_EUR} (same date). Update src/data/aiPricing.js when providers change prices.` })
+  rows.push({ 'Model': `Prices as of ${PRICES_AS_OF}. USD>EUR rate ${USD_TO_EUR} (same date). A promotional price holds through its "until" day and the "after" price applies from the next day; each reply is costed at the price of its own day. Update src/data/aiPricing.js when providers change prices.` })
   return rows
 }
 

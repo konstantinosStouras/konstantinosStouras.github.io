@@ -212,6 +212,43 @@ console.log('runScoring — a long run keeps every score it can get')
   check('the shortfall is still reported honestly', r.unscored === 400, `unscored=${r.unscored}`)
 }
 
+// ── A reply problem (the provider answered, but gave no rating) ────────────
+{
+  // A refusal about ONE idea's content: the batch call throws a
+  // `replyProblem` error with `retryable: false` (providerRequest.js). The
+  // batch-mates must still be scored one by one — under the transport-failure
+  // path a thrown batch skipped round 2 and the same batch re-formed on every
+  // pass, so one refused idea cost its seven neighbours their scores for good.
+  const refusal = () => Object.assign(new Error('Claude (claude-sonnet-5) declined to rate this batch (refusal: cyber)'), { replyProblem: 'refusal', retryable: false })
+  let calls = 0
+  const refusing = async ts => {
+    calls++
+    if (ts.length > 1 || ts[0] === 'idea number 3') throw refusal()
+    return reply(1)
+  }
+  const r = await runScoring({ texts: texts(8), call: refusing, batchSize: 8, sleep: nosleep })
+  check('a refused batch still scores its batch-mates one by one', r.scores.filter(isScoredEntry).length === 7 && r.scores[3] === null)
+  check('the refused idea is counted, not the whole batch', r.unscored === 1 && r.failedBatches === 0 && r.aborted === false)
+  check('the cause reaches lastError', /refusal: cyber/.test(r.lastError?.message || ''))
+  check('a refusal is not transport-retried (1 batch call + 8 single calls)', calls === 9, `calls=${calls}`)
+}
+{
+  // The ceiling spent on hidden thinking (`retryable: true`) IS worth another
+  // go — thinking length varies — so the transport retry handles it.
+  const exhausted = () => Object.assign(new Error('spent its whole ceiling on thinking and returned no text'), { replyProblem: 'exhausted', retryable: true })
+  let n = 0
+  const flaky = async ts => { n++; if (n <= 2) throw exhausted(); return reply(ts.length) }
+  const r = await runScoring({ texts: texts(8), call: flaky, batchSize: 8, sleep: nosleep })
+  check('a thinking-exhausted reply is retried and the batch scores in full', r.scores.every(isScoredEntry) && n === 3 && r.failedBatches === 0)
+}
+{
+  // Three refusals in a row must NOT trip the circuit breaker — the provider
+  // is answering, it is the content it declines.
+  const refusal = () => Object.assign(new Error('declined'), { replyProblem: 'refusal', retryable: false })
+  const r = await runScoring({ texts: texts(32), call: async ts => { if (ts.length > 1) throw refusal(); return reply(1) }, batchSize: 8, sleep: nosleep })
+  check('refusals never trip the breaker; every idea is scored singly', r.aborted === false && r.scores.every(isScoredEntry))
+}
+
 console.log(failures
   ? `\n${failures} check(s) FAILED`
   : '\nSCORE-BATCH GUARD OK — truncated, short, duplicate-indexed and rate-limited replies all still score every idea.')

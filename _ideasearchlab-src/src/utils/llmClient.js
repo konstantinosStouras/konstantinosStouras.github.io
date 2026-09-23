@@ -11,16 +11,22 @@
  * Used to "extend the data" by giving every idea an expert-style rating on the
  * two base KPIs — novelty (1–5) and usefulness (1–5); overall quality is the
  * mean of the two and computed client-side.
+ *
+ * The provider request shapes live in `providerRequest.js` (`callProvider`),
+ * which holds no Firebase import so the offline guard can exercise them. That
+ * function was MISSING from this file until 2026-09-23 — it was referenced
+ * here and defined nowhere, so a scoring run with a valid key threw
+ * `ReferenceError: callProvider is not defined` on its first batch.
  */
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { runScoring, extractScoreObjects, clamp1to5, isFatalApiError } from './scoreBatch'
+import { callProvider } from './providerRequest'
+import { PROVIDERS } from '../data/aiModels'
 
-const PROVIDER_DEFAULTS = {
-  claude: 'claude-sonnet-4-6',
-  openai: 'gpt-5.5',
-  gemini: 'gemini-3.5-flash',
-}
+// One source for the per-provider fallback model: the catalogue's own
+// `defaultModel`, which mirrors the deployed functions/ai.js PROVIDER_DEFAULTS.
+const PROVIDER_DEFAULTS = Object.fromEntries(PROVIDERS.map(p => [p.id, p.defaultModel]))
 
 /** Read the admin AI settings (provider, keys, model). Admin-only by rules. */
 export async function fetchAISettings() {
