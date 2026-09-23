@@ -3008,16 +3008,19 @@ reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
 `node _ideasearchlab-src/tools/score-gaps-guard.mjs` (60+ checks, including the
 owner's own 741-idea scenario driven through the real scoring engine).
 
-**Section 3.1's objective KPIs leave an idea with no words blank.** An idea whose
-text has no word the TF-IDF tokeniser reads (blank, "?", one letter, Greek text)
-vectorises to all zeros, and cosine 0 with everything read as "as different as
-possible": it scored Novelty 1, Distinctiveness 1, Score 1 — the top of the
-ranking — and skewed every other idea's Distinctiveness and the Unique fraction.
+**Section 3.1's objective KPIs leave an idea that cannot be scored blank.** An
+idea needs at least two meaningful words (two different words not on NLTK's
+English stop-word list). A blank idea, one word ("Zorblax"), only common words,
+or Greek text shares no words with anything, and cosine 0 with everything read
+as "as different as possible": it scored Novelty 1, Distinctiveness 1, Score 1 —
+the top of the ranking — and skewed every other idea's Distinctiveness and the
+Unique fraction. It is Bouschery et al.'s "cannot be scored" rule, and the page
+states it in the 3.1 description above the Compute button.
 It is now left blank and kept out of every pool and out of the TF-IDF corpus, so
 real ideas get exactly the numbers they would get without it. One pure function,
 `objectiveKpisFromText` in `_ideasearchlab-src/src/utils/objectiveKpis.js`, is
 what the page calls; the offline twin `_idea-kpi-script/idea_kpis.py` applies the
-same rule. Offline test `node _ideasearchlab-src/tools/det-kpi-guard.mjs` (47
+same rule. Offline test `node _ideasearchlab-src/tools/det-kpi-guard.mjs` (58
 checks, incl. number-for-number parity with the Python twin). The combined KPI
 (mean of objective Novelty and Distinctiveness) is labelled **NoveltyScore**
 (owner, 2026-09-23; was "Combined score"); its data key stays `det_score`, and

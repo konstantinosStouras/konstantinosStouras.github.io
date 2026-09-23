@@ -570,11 +570,22 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      `_idea-kpi-script/idea_kpis.py` applies the same rule. Deliberately NOT changed: an
      idea that HAS words but shares none with R or with any other idea still scores 1 —
      that is the formula working (it is lexically unlike everything), not a missing
-     value. Offline test: **`node _ideasearchlab-src/tools/det-kpi-guard.mjs`** (47
+     value — BUT an idea must have **at least two meaningful words** to be scored at all
+     (owner, 2026-09-23, from the KPI audit): two different words that are not on
+     `COMMON_WORDS` (NLTK's English stop-word list, the 145 entries the tokeniser can
+     produce). A single word — "Zorblax", "Thermochromic" — is orthogonal to everything
+     unless another text shares it, so it scored 1 and ranked first just like a blank
+     idea; only-common-word text ("The: and it is") likewise. This is Bouschery et al.'s
+     "cannot be scored" rule (they drop single-word ideas; Productivity already did).
+     `isMeasurable`/`MIN_MEANINGFUL_WORDS` in objectiveKpis.js decide it, the list is used
+     ONLY for this gate (scored ideas' TF-IDF vectors are unchanged), and the rule is
+     stated in the 3.1 description above the Compute button, as the owner asked.
+     Offline test: **`node _ideasearchlab-src/tools/det-kpi-guard.mjs`** (58
      checks: the building blocks, the pipeline with blank/"?"/Greek/Chinese ideas mixed
      in, that real ideas' numbers are unchanged to 1e-12, that the page goes through the
-     pipeline, the NoveltyScore label below, and number-for-number parity with the Python
-     twin when numpy is present).
+     pipeline, the two-meaningful-words rule and its on-page description, the
+     NoveltyScore label below, and number-for-number parity with the Python twin —
+     identical common-word list included — when numpy is present).
    - **3.1: the combined KPI is called NoveltyScore** (owner, 2026-09-23; it was
      "Combined score" / "Obj. Score"). It is the mean of objective Novelty and
      Distinctiveness. Only the LABEL moved: the data key is still `det_score`, and an

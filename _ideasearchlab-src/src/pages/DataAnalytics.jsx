@@ -473,10 +473,10 @@ export default function DataAnalytics() {
     // Let the "computing…" state paint before the synchronous TF-IDF work.
     await new Promise(res => setTimeout(res, 0))
     try {
-      // Ideas + R are vectorised together (one vocabulary, one IDF). An idea with no
-      // word the tokeniser reads (blank, "?", one letter, Greek text) has nothing to
-      // compare: it is left blank and kept out of every pool and out of the TF-IDF
-      // corpus — it used to score a perfect 1 on every KPI. See objectiveKpis.js.
+      // Ideas + R are vectorised together (one vocabulary, one IDF). An idea with
+      // fewer than two meaningful words (blank, one word, only "the/and/it", Greek
+      // text) cannot be scored: it is left blank and kept out of every pool and out
+      // of the TF-IDF corpus — it used to score a perfect 1. See objectiveKpis.js.
       const ideaTexts = pool.map(r => r.text || ideaText(r))
       const res = objectiveKpisFromText(ideaTexts, refLines, { tau: 0.8 })
       if (res.error) { setDetErr(res.error); return }
@@ -1596,6 +1596,15 @@ export default function DataAnalytics() {
                 {' '}<strong>Upload additional KPIs</strong> below: every numeric column (matched to your ideas by Idea&nbsp;ID)
                 becomes a KPI that flows into Section&nbsp;4, the Step-2 aggregate <em>Rankings</em> tab and the Step-5
                 regressions. Once computed, <em>Download ideas&nbsp;+&nbsp;KPIs</em> exports the input file with a column added per idea for each KPI.
+                <br /><br />
+                <strong>Ideas that cannot be scored are left blank.</strong> An idea needs at least <strong>two meaningful
+                words</strong>: two different words that are not common English words such as <em>the</em>, <em>and</em> or
+                {' '}<em>it</em> (NLTK&apos;s English stop-word list). A blank idea, a single word (a made-up name like
+                {' '}<em>Zorblax</em>, or just <em>Thermochromic</em>), only common words, or text in a non-Latin script such as
+                Greek gets no Novelty, Distinctiveness or NoveltyScore, and is left out of the other ideas&apos; comparisons
+                and of the Unique fraction. This is the &ldquo;cannot be scored&rdquo; rule of Bouschery et&nbsp;al.&nbsp;(2024),
+                who drop single-word ideas; before it, such an idea shared no words with anything and scored a perfect 1,
+                ranking first. Blank KPIs are dropped from the Step-5 regressions, not counted as 0.
               </div>
               <div style={{ margin: '8px 0' }}>
                 <div className={styles.raterLabel} style={{ marginBottom: 4 }}>Reference set R — products that already exist (one per line)</div>
@@ -1637,8 +1646,8 @@ export default function DataAnalytics() {
                     Computed Novelty / Distinctiveness / NoveltyScore for {detResult.ideas} idea{detResult.ideas === 1 ? '' : 's'}
                     {' '}against {detResult.refCount} reference item{detResult.refCount === 1 ? '' : 's'}.
                     {detResult.unmeasured > 0 && (
-                      <>{' '}{detResult.unmeasured} idea{detResult.unmeasured === 1 ? ' has' : 's have'} no words to compare
-                      {' '}(blank, a single letter, or text in a non-Latin script) and {detResult.unmeasured === 1 ? 'was' : 'were'} left
+                      <>{' '}{detResult.unmeasured} idea{detResult.unmeasured === 1 ? ' has' : 's have'} fewer than two meaningful
+                      {' '}words (blank, a single word, only common words, or text in a non-Latin script) and {detResult.unmeasured === 1 ? 'was' : 'were'} left
                       {' '}blank and kept out of the pools.</>
                     )}
                     {' '}Pool-level KPIs per condition:

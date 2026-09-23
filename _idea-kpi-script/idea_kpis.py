@@ -95,6 +95,47 @@ def novelty_from_sims(sims_to_R):
     return 1.0 - max(sims_to_R)
 
 
+# An idea needs at least MIN_MEANINGFUL_WORDS different meaningful words to be
+# scored: words of two or more letters/digits (the TF-IDF tokeniser's rule) that
+# are not COMMON_WORDS. Bouschery et al. (2024) drop single-word ideas as ones that
+# "cannot be scored"; a blank idea, a lone word such as "Zorblax", or only common
+# words used to score a perfect 1 on every KPI. Mirrors objectiveKpis.js
+# (COMMON_WORDS / isMeasurable) — det-kpi-guard.mjs checks the two lists match.
+#
+# COMMON_WORDS = NLTK's English stop-word list (nltk_data corpora/stopwords,
+# "english"), keeping the entries the tokeniser can produce: 2+ letters, no
+# apostrophe. Used ONLY for this rule; the TF-IDF vectors are unchanged.
+COMMON_WORDS = frozenset({
+    "about", "above", "after", "again", "against", "ain", "all", "am", "an", "and",
+    "any", "are", "aren", "as", "at", "be", "because", "been", "before", "being",
+    "below", "between", "both", "but", "by", "can", "couldn", "did", "didn", "do",
+    "does", "doesn", "doing", "don", "down", "during", "each", "few", "for", "from",
+    "further", "had", "hadn", "has", "hasn", "have", "haven", "having", "he", "her",
+    "here", "hers", "herself", "him", "himself", "his", "how", "if", "in", "into",
+    "is", "isn", "it", "its", "itself", "just", "ll", "ma", "me", "mightn", "more",
+    "most", "mustn", "my", "myself", "needn", "no", "nor", "not", "now", "of", "off",
+    "on", "once", "only", "or", "other", "our", "ours", "ourselves", "out", "over",
+    "own", "re", "same", "shan", "she", "should", "shouldn", "so", "some", "such",
+    "than", "that", "the", "their", "theirs", "them", "themselves", "then", "there",
+    "these", "they", "this", "those", "through", "to", "too", "under", "until", "up",
+    "ve", "very", "was", "wasn", "we", "were", "weren", "what", "when", "where",
+    "which", "while", "who", "whom", "why", "will", "with", "won", "wouldn", "you",
+    "your", "yours", "yourself", "yourselves",
+})
+MIN_MEANINGFUL_WORDS = 2
+_WORD = re.compile(r"[a-z0-9]{2,}")
+
+
+def meaningful_words(text):
+    """The distinct words of a text that count as meaningful (not COMMON_WORDS)."""
+    return sorted({t for t in _WORD.findall(str(text or "").lower()) if t not in COMMON_WORDS})
+
+
+def is_measurable(text):
+    """True if the idea has enough meaningful words to be scored."""
+    return len(meaningful_words(text)) >= MIN_MEANINGFUL_WORDS
+
+
 def has_terms(vec):
     """True if the vector carries any term at all (mirrors deterministicKpis.hasTerms).
 
@@ -536,11 +577,11 @@ def compute_kpis(ideas, refs, backend, *, pool_by="", tau=0.8, w_nov=0.5, w_dist
     """
     texts = [it["text"] for it in ideas]
 
-    # An idea with no text, or (TF-IDF) no word of two or more letters/digits, has
-    # nothing to compare. It used to score a perfect 1 on everything (see
-    # has_terms); it now stays unscored, is kept out of every pool, and is left out
-    # of the corpus the backend is fitted on, so it cannot shift the other ideas'
-    # IDF either. Same rule for a reference line with nothing to read.
+    # An idea with fewer than two meaningful words (blank, one word, only common
+    # words, a non-Latin script) cannot be scored. It used to score a perfect 1 on
+    # everything (see is_measurable); it now stays unscored, is kept out of every
+    # pool, and is left out of the corpus the backend is fitted on, so it cannot
+    # shift the other ideas' IDF either. A reference line with no word is dropped.
     tok = getattr(backend, "_tokens", None)
 
     def readable(t):
@@ -548,7 +589,7 @@ def compute_kpis(ideas, refs, backend, *, pool_by="", tau=0.8, w_nov=0.5, w_dist
         return bool(t.strip()) and (bool(tok(t)) if tok else True)
 
     refs = [r for r in refs if readable(r)]
-    readable_idx = [i for i, t in enumerate(texts) if readable(t)]
+    readable_idx = [i for i, t in enumerate(texts) if is_measurable(t)]
 
     # Embed ideas + R in one shared vector space (so novelty similarities are valid).
     backend.fit([texts[i] for i in readable_idx] + refs)
@@ -872,7 +913,8 @@ def run_selftest():
     ]
     refs = ["thermochromic socks", "mood ring", "colour-change athletic top"]
     base = compute_kpis([dict(it) for it in bench], refs, TfidfBackend())
-    blanks = [{"text": t, "group_uid": "g2"} for t in ("", "   ", "?", "a", "Καλημέρα κόσμε")]
+    blanks = [{"text": t, "group_uid": "g2"} for t in (
+        "", "   ", "?", "a", "Καλημέρα κόσμε", "Zorblax", "Zorblax Zorblax", "The: and it is", "T-shirt")]
     got = compute_kpis([dict(it) for it in bench] + blanks, refs, TfidfBackend())
     for k, it in enumerate(got["ideas"][len(bench):]):
         ok = it["novelty"] is None and it["distinctiveness"] is None and it["score"] is None
@@ -887,7 +929,10 @@ def run_selftest():
             check(f"real idea {k + 1} {kpi} unchanged by wordless ideas", b[kpi], a[kpi], tol=1e-12)
     pool = got["pools"][0]
     check("unique fraction ignores wordless ideas", pool["unique_fraction"]["tau_0.8"], 1.0)
-    check("unmeasured ideas are reported", float(pool["n_unmeasured"]), 5.0)
+    check("unmeasured ideas are reported", float(pool["n_unmeasured"]), 9.0)
+    check("is_measurable: two meaningful words", float(is_measurable("Mood ring")), 1.0)
+    check("is_measurable: one word", float(is_measurable("Thermochromic")), 0.0)
+    check("is_measurable: only common words", float(is_measurable("The: and it is")), 0.0)
     best = max((it for it in got["ideas"] if it["score"] is not None), key=lambda it: it["score"])
     ok = best["text"] in {it["text"] for it in bench}
     print(f"  [{'PASS' if ok else 'FAIL'}] the top-ranked idea is a real idea: {best['text'][:40]!r}")
