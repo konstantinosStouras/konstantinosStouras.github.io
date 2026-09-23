@@ -3008,6 +3008,20 @@ reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
 `node _ideasearchlab-src/tools/score-gaps-guard.mjs` (60+ checks, including the
 owner's own 741-idea scenario driven through the real scoring engine).
 
+**Section 3.1 of the Data Analytics page measures USEFULNESS objectively, not
+only novelty** (owner 2026-09). Beside the TF-IDF novelty KPIs (Novelty vs the
+reference set R, Pool distinctiveness, Combined score) sit Need fit (closeness to an
+editable need set U of problems people have), Specificity (who / what / where-when /
+why / how the idea states), Workability (1 / (1 + extra technologies named from an
+editable list T, negations like "no electronics needed" ignored)), their percentile
+composite Usefulness score, and Peer vote share (teammates who backed the idea,
+author excluded; kept out of the composite because final picks are made by those
+votes). The rule: no usefulness KPI may reuse R or the idea-to-idea similarities, or
+it is just 1 - novelty. A per-condition novelty × usefulness cross-check shows how
+the two relate. Pure module `_ideasearchlab-src/src/utils/usefulnessKpis.js`; full
+reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
+`node _ideasearchlab-src/tools/usefulness-kpis-guard.mjs`.
+
 **Excel export per session, from the session list.** Both admins let the
 instructor download ONE session's research workbook straight from its card —
 ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export data**

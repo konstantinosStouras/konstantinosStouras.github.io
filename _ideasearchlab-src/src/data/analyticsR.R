@@ -9,6 +9,8 @@
 #     • AI-generated (3.2):        novelty / usefulness / overall_quality   (1–5)
 #     • External evaluators (3.3): ext_novelty / ext_usefulness / ext_quality (1–5)
 #     • Deterministic/objective (3.1): det_novelty / det_distinctiveness / det_score (0–1)
+#       and the usefulness side det_need_fit / det_specificity / det_workability /
+#       det_usefulness (0–1); det_vote_share is in the data but not analysed
 #   One table column per available KPI, so conditions can be compared on every
 #   measure side by side:
 #     T3 KPI level ~ Any AI;  T4 KPI level ~ Solo+Group+Both
@@ -42,13 +44,23 @@ COND_PAPER  <- c(None  = "Human-Only Hybrid (AI in neither stage)",
 # sense). Keep in sync with analyticsData.js / analyticsPython.py.
 KPI_KEYS   <- c("novelty","usefulness","overall_quality",
                 "ext_novelty","ext_usefulness","ext_quality",
-                "det_novelty","det_distinctiveness","det_score")
+                "det_novelty","det_distinctiveness","det_score",
+                "det_need_fit","det_specificity","det_workability","det_usefulness")
+# Peer vote share (det_vote_share) is in the data but deliberately NOT analysed: the
+# Final Ideas are chosen by those votes and its average falls with ballot size, so the
+# page uses it to validate the other KPIs instead. To analyse it anyway, add
+# "det_vote_share" to KPI_KEYS (its KPI_LABELS / KPI_SCALE5 entries are already below).
 KPI_LABELS <- c(novelty="AI Novelty", usefulness="AI Usefulness", overall_quality="AI Quality",
                 ext_novelty="Eval Novelty", ext_usefulness="Eval Usefulness", ext_quality="Eval Quality",
-                det_novelty="Novelty (objective)", det_distinctiveness="Pool distinctiveness", det_score="Combined score")
+                det_novelty="Novelty (objective)", det_distinctiveness="Pool distinctiveness", det_score="Combined score",
+                det_need_fit="Need fit (objective)", det_specificity="Specificity (objective)",
+                det_workability="Workability (objective)",
+                det_usefulness="Usefulness score (objective)", det_vote_share="Peer vote share (objective)")
 KPI_SCALE5 <- c(novelty=TRUE, usefulness=TRUE, overall_quality=TRUE,
                 ext_novelty=TRUE, ext_usefulness=TRUE, ext_quality=TRUE,
-                det_novelty=FALSE, det_distinctiveness=FALSE, det_score=FALSE)
+                det_novelty=FALSE, det_distinctiveness=FALSE, det_score=FALSE,
+                det_need_fit=FALSE, det_specificity=FALSE, det_workability=FALSE,
+                det_usefulness=FALSE, det_vote_share=FALSE)
 
 TOP_RATING   <- 5.0
 USE_CONTROLS <- FALSE

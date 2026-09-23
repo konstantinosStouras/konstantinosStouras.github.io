@@ -672,6 +672,72 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      cycles ascending → descending → original order; the active column shows ▲/▼.
    - **"Clear"** here is scoped to THIS step: it wipes the KPI scores + the regression run/insights
      (so Steps 5–6 empty) but leaves the loaded dataset and Sections 1–2 intact.
+   - **3.1 has a USEFULNESS side, not only a novelty side** (owner 2026-09: "All the
+     attached KPIs are … proxies of idea novelty. Can you suggest empirically-calculated
+     proxies of idea usefulness too? … these two notions mean different things").
+     The design rule, from the literature: creativity is novel AND useful (Runco & Jaeger
+     2012), and the two often pull apart (Runco & Charles 1993; Rietzschel, Nijstad &
+     Stroebe 2010; Beaty & Johnson 2021, reanalysing Heinen & Johnson 2018, found
+     text-distance novelty at r = -.75 with rated appropriateness, on single-word verb
+     generation). So **no usefulness KPI may be built from R or from the
+     idea-to-idea similarities**: "close to existing products" is just 1 - Novelty, and
+     "close to the brief" behaves the same way here because the brief's words run through
+     R (both were considered and rejected). Each KPI has its OWN anchor, all in
+     **`src/utils/usefulnessKpis.js`** (pure, no Firebase):
+     - `det_need_fit` **Need fit (objective)**: max TF-IDF cosine to the editable **need
+       set U** (`DEFAULT_NEED_SET`, problems people have). R is what already EXISTS, U what
+       people NEED; the brief asks for both ("what users currently have and what unmet
+       needs remain"). Dean, Hender, Rodgers & Santanen (2006) relevance. Vectorised
+       SEPARATELY from the novelty side (ideas + U, stop words dropped and plurals
+       folded via `contentText`/`foldPlural`, per Forthmann et al. 2019), so the novelty
+       numbers are unchanged by U. U lines are
+       problems, not products, and share no R product words except the core need words
+       (fever, baby): the guard pins that.
+     - `det_specificity` **Specificity (objective)**: share of five parts the idea states,
+       who / what / where-when / why / how (`FACETS`, small generic lexicons; Dean et al.
+       2006 completeness). Vague fillers ("people", "anyone") and the verb "wear" don't count.
+       HOW counts only detail BEYOND the brief and the worked example (the colour it turns,
+       a threshold other than 37°, placement, construction, reset): restating "changes
+       colour at body temperature" would otherwise fire for nearly every idea.
+     - `det_workability` **Workability (objective)**: 1 / (1 + k), k = distinct entries of
+       the editable **technology list T** (`DEFAULT_TECH_SET`: app, battery, sensor, AI …)
+       the idea names. Dean et al. workability; the brief's own "Feasibility" criterion.
+       NEGATED mentions do not count ("no electronics needed" is the worked example's
+       last line, "battery-free", "without an app"): `NEGATED_BEFORE`/`NEGATED_AFTER`.
+     - `det_usefulness` **Usefulness score (objective)**: mean of the three as mid-rank
+       percentiles in the pool (0 to 1), so no one scale dominates.
+     - `det_vote_share` **Peer vote share (objective)**: teammates (author excluded) who
+       voted for the idea / teammates who voted at all. Needs WHO voted: rows now carry
+       `votes` + `voted_by` (Firestore: the export's `countedFor` rule; import: "Vote
+       Count" + "Voted By (IDs)"); unknown voters → blank, never 0. Kept OUT of the
+       composite: the Final Ideas are chosen by these votes, so read it on "all ideas that
+       entered the group phase" (Rietzschel et al. 2010; Mueller et al. 2012: selectors
+       favour practical over original). Its mean also falls with ballot size (each voter
+       backs 3 ideas). So it is ALSO kept out of the Step-5 Python/R registries (a
+       commented line in each adds it back) and used as a VALIDATION signal instead: the
+       check table's "Teammates' votes (same group)" column is `withinGroupPearson`
+       (each variable centred on its group mean) between each text KPI and the share.
+     - **A saved Step-5 script goes stale**: one saved before a KPI existed ("Save" /
+       "Make this the default", `da:code:python`/`da:code:r`) keeps its old KPI list and
+       silently skips built-in keys it does not name (only `x_` columns are discovered at
+       run time). `staleKpis` warns under the Run button, naming each KPI the template
+       analyses and the script lacks, and points to "Reset to template".
+     The run also shows a **novelty × usefulness cross-check** per condition (Pearson r
+     between Combined score and Usefulness score; shares novel-and-useful / novel only /
+     useful only / neither at the whole pool's medians; also r with log word count held
+     fixed, `partialPearson`), a **validation table** (each objective KPI's r with the AI
+     and evaluator novelty/usefulness ratings, when loaded: convergent vs discriminant)
+     and a facet-coverage table; the first and last
+     go to the "Pool KPIs by condition" tab of the downloads with an "All ideas" row.
+     R, U and T are three side-by-side editors (saved to `da:refset`/`da:needset`/
+     `da:techset`). Registered everywhere a KPI must be (KPI_DEFS, COLUMNS, row builders,
+     importer, `canonicalKpiField` (usefulness checks run BEFORE "score", and a bare key
+     like `det_distinctiveness` now routes to itself instead of re-importing as an x_
+     duplicate), ALL_KPI_KEYS, the Rankings tab, the Python/R registries). Text measures
+     rise with length, so compare with word count (Section 4) or switch on USE_CONTROLS in
+     the Step-5 templates. Offline test: **`node _ideasearchlab-src/tools/usefulness-kpis-guard.mjs`**
+     (arithmetic, negation, the independence rule, the default lists, and every
+     registration point).
 4. **Summary Statistics.** Descriptive stats of the consolidated Step-3 data (`statRows`):
    stat boxes (ideas analysed, final ideas, sessions, conditions with data, mean quality), a
    per-condition table (n ideas / final / scored + each KPI's mean (SD) via `summarize()`), and

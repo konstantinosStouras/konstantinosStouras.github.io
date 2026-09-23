@@ -754,7 +754,7 @@ function buildAggregateAbout(entries) {
     ['Clustering unit (triad)', 'use Group UID (= "SessionCode:groupId"), NOT the bare Group ID — g0/g1… repeat across sessions.'],
     [],
     ['WHERE EACH MEASURE LIVES'],
-    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea: Novelty / Usefulness / Quality columns for blind expert rating, plus the objective KPIs — Obj. Novelty / Obj. Distinctiveness / Obj. Score — computed in Section 3.1).'],
+    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea: Novelty / Usefulness / Quality columns for blind expert rating, plus the objective KPIs computed in Section 3.1: on the novelty side Novelty (objective) / Pool distinctiveness / Combined score, on the usefulness side Need fit / Specificity / Workability / Usefulness score / Peer vote share (objective)). The "Pool KPIs by condition" sheet, when present, adds the novelty x usefulness cross-check per condition.'],
     ['Selected ideas (group level)', '"Ideas" sheet → Final Group Pick = Yes; "Groups" sheet lists them as titles.'],
     ['Vote completeness', '"Participants" sheet → Ballot Status + Votes Cast (a submitted ballot can hold zero votes).'],
     ['Who voted for which idea', '"Votes" sheet: one row per cast vote (voter x idea), stacked across every session.'],
@@ -791,6 +791,11 @@ export function rankingsSheetFromIdeas(ideaRows, scoreById, extraKpis = []) {
       'Novelty (objective)': sc ? blank(sc.detNovelty) : '',
       'Pool distinctiveness': sc ? blank(sc.detDistinctiveness) : '',
       'Combined score': sc ? blank(sc.detScore) : '',
+      'Need fit (objective)': sc ? blank(sc.detNeedFit) : '',
+      'Specificity (objective)': sc ? blank(sc.detSpecificity) : '',
+      'Workability (objective)': sc ? blank(sc.detWorkability) : '',
+      'Usefulness score (objective)': sc ? blank(sc.detUsefulness) : '',
+      'Peer vote share (objective)': sc ? blank(sc.detVoteShare) : '',
     }
     // Admin-uploaded extra KPIs (Section 3.1), each carried through sc.extra.
     for (const k of extraKpis) row[k.label] = sc ? blank(sc.extra?.[k.key]) : ''
