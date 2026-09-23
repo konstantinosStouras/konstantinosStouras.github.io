@@ -8,10 +8,10 @@ import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
-  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, presentKpis, isNoveltyScoreHeader,
+  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
-  enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition,
+  enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition, scriptKpiKeys,
 } from '../utils/analyticsData'
 import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
 // From scoreBatch, not llmClient: that module owns what is worth retrying and
@@ -23,6 +23,7 @@ import {
 } from '../utils/scoreGaps'
 import { objectiveKpisFromText } from '../utils/objectiveKpis'
 import { measuredUniqueFraction, productivityCount, cosine, hasTerms } from '../utils/deterministicKpis'
+import { usefulnessKpisFromText, pearson, partialPearson, median, quadrantCounts, FACETS } from '../utils/usefulnessKpis'
 import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById, modelOptionLabel, CATALOGUE_AS_OF } from '../data/aiModels'
 import { MODEL_PRICES } from '../data/aiPricing'
 import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
@@ -70,6 +71,7 @@ const ALL_KPI_KEYS = [
   'novelty', 'usefulness', 'overall_quality',
   'ext_novelty', 'ext_usefulness', 'ext_quality',
   'det_novelty', 'det_distinctiveness', 'det_score',
+  'det_need_fit', 'det_specificity', 'det_workability', 'det_usefulness',
 ]
 const hasAnyKpi = r =>
   ALL_KPI_KEYS.some(k => r[k] !== '' && r[k] != null) ||
@@ -78,7 +80,7 @@ const hasAnyKpi = r =>
 // localStorage keys for the per-section Save / Make-default persistence. Kept in
 // the browser (no Firestore-rules change needed); "Save" and "Make this the
 // default" both write the same key, which is loaded back on page open.
-const LS = { sessions: 'da:sessions', dataset: 'da:dataset', python: 'da:code:python', r: 'da:code:r', refset: 'da:refset' }
+const LS = { sessions: 'da:sessions', dataset: 'da:dataset', python: 'da:code:python', r: 'da:code:r', refset: 'da:refset', needset: 'da:needset', techset: 'da:techset' }
 
 export default function DataAnalytics() {
   const navigate = useNavigate()
@@ -118,6 +120,11 @@ export default function DataAnalytics() {
   // ── Section 3.1 — deterministic / objective KPIs (in-browser TF-IDF) ──
   // No API key / billing: similarity is computed locally from the idea text.
   const [referenceSet, setReferenceSet] = useState(() => DEFAULT_REFERENCE_SET.join('\n'))
+  // The need set U — the usefulness counterpart of R (what people NEED, where R is
+  // what already EXISTS). Anchors the "Need fit" KPI; editable, saved like R.
+  const [needSet, setNeedSet] = useState(() => DEFAULT_NEED_SET.join('\n'))
+  // The extra-technology list T behind the "Workability" KPI (one term per line).
+  const [techSet, setTechSet] = useState(() => DEFAULT_TECH_SET.join('\n'))
   const [detComputing, setDetComputing] = useState(null) // { phase, done, total } | null
   const [detErr, setDetErr] = useState('')
   const [detResult, setDetResult] = useState(null)       // per-condition pool KPIs
@@ -171,6 +178,8 @@ export default function DataAnalytics() {
       const py = localStorage.getItem(LS.python); if (py != null) setPyCode(py)
       const rc = localStorage.getItem(LS.r); if (rc != null) setRCode(rc)
       const rs = localStorage.getItem(LS.refset); if (rs != null) setReferenceSet(rs)
+      const ns = localStorage.getItem(LS.needset); if (ns != null) setNeedSet(ns)
+      const ts = localStorage.getItem(LS.techset); if (ts != null) setTechSet(ts)
       const sel = localStorage.getItem(LS.sessions)
       if (sel) { const a = JSON.parse(sel); if (Array.isArray(a)) setSelected(new Set(a)) }
       const ds = localStorage.getItem(LS.dataset)
@@ -458,18 +467,27 @@ export default function DataAnalytics() {
   }
 
   // ── Section 3.1: compute the deterministic / objective KPIs via TF-IDF ──────
-  // Vectorises every loaded idea + the reference set R with classical TF-IDF
-  // (in the browser, no API key, no model download), then computes per-idea
-  // Novelty (1 − max sim to R), Distinctiveness (1 − mean sim to the pool) and
-  // their mean, NoveltyScore, plus the pool-level Unique fraction and Productivity per
-  // condition. Cosine over TF-IDF vectors → fully reproducible from the data.
+  // Two sides, each with its OWN anchor so neither is a re-labelled copy of the other:
+  //  • NOVELTY — vectorises every loaded idea + the reference set R with classical
+  //    TF-IDF (in the browser, no API key, no model download), then per-idea Novelty
+  //    (1 − max sim to R), Distinctiveness (1 − mean sim to the pool) and their mean,
+  //    NoveltyScore, plus the pool-level Unique fraction and Productivity per condition.
+  //  • USEFULNESS (usefulnessKpis.js) — Need fit (max sim to the need set U, in a
+  //    SEPARATE vectorisation of ideas + U, so the novelty numbers are exactly what
+  //    they were before U existed and neither side depends on the other's anchor),
+  //    Specificity (who / what / where-when / why / how the idea states), their
+  //    Workability (extra technology named) and their composite Usefulness score.
+  // Then a pool-level cross-check: how the novelty and usefulness scores relate, and
+  // how many ideas are novel AND useful, per condition.
   async function computeDeterministic() {
     setDetErr(''); setDetResult(null)
     const pool = effectiveRows                         // distinctiveness pool = all loaded ideas
     if (pool.length < 2) { setDetErr('Load at least two ideas first.'); return }
     const refLines = referenceSet.split('\n').map(s => s.trim()).filter(Boolean)
     if (!refLines.length) { setDetErr('The reference set R is empty. Add the products that already exist (one per line).'); return }
-    setDetComputing({ phase: 'Vectorising ideas (TF-IDF)', done: 0, total: pool.length + refLines.length })
+    const needLines = needSet.split('\n').map(s => s.trim()).filter(Boolean)
+    if (!needLines.length) { setDetErr('The need set U is empty. Add the needs or problems people have (one per line).'); return }
+    setDetComputing({ phase: 'Vectorising ideas (TF-IDF)', done: 0, total: pool.length + refLines.length + needLines.length })
     // Let the "computing…" state paint before the synchronous TF-IDF work.
     await new Promise(res => setTimeout(res, 0))
     try {
@@ -481,13 +499,50 @@ export default function DataAnalytics() {
       const res = objectiveKpisFromText(ideaTexts, refLines, { tau: 0.8 })
       if (res.error) { setDetErr(res.error); return }
       const { perIdea, ideaVecs, refs, unmeasured } = res
+      // Usefulness side: ideas + U in their OWN vectorisation (usefulnessKpis.js), so
+      // editing U never moves a novelty number; unreadable ideas are left blank there too.
+      const techTerms = techSet.split('\n').map(s => s.trim()).filter(Boolean)
+      const use = usefulnessKpisFromText(ideaTexts, needLines, techTerms)
+      if (use.error) { setDetErr(use.error); return }
+      const { perIdea: useIdea, needs } = use
       const round4 = x => (x == null ? '' : Math.round(x * 1e4) / 1e4)
-      const byRid = new Map(pool.map((r, i) => [r.rid, perIdea[i]]))
+      const byRid = new Map(pool.map((r, i) => [r.rid, { ...perIdea[i], use: useIdea[i] }]))
       setRows(prev => recomputeOverall(prev.map(r => {
         const d = byRid.get(r.rid)
         if (!d) return r
-        return { ...r, det_novelty: round4(d.novelty), det_distinctiveness: round4(d.distinctiveness), det_score: round4(d.score) }
+        return {
+          ...r,
+          det_novelty: round4(d.novelty), det_distinctiveness: round4(d.distinctiveness), det_score: round4(d.score),
+          det_need_fit: round4(d.use.needFit), det_specificity: round4(d.use.specificity), det_workability: round4(d.use.workability),
+          det_usefulness: round4(d.use.usefulness),
+        }
       })))
+      // Novelty × usefulness cross-check. Both composites, split at the WHOLE pool's
+      // medians so every condition is judged against the same cut.
+      const novAll = perIdea.map(d => d.score)
+      const useAll = useIdea.map(d => d.usefulness)
+      const novCut = median(novAll), useCut = median(useAll)
+      // log(1 + word count): text measures rise with length, which can create or hide
+      // a novelty-usefulness correlation, so r is also reported with length held fixed.
+      const logLen = ideaTexts.map(t => Math.log1p(String(t || '').trim().split(/\s+/).filter(Boolean).length))
+      const cross = idxs => {
+        const nv = idxs.map(i => novAll[i]), us = idxs.map(i => useAll[i])
+        return {
+          r: pearson(nv, us), rLen: partialPearson(nv, us, idxs.map(i => logLen[i])),
+          q: quadrantCounts(nv, us, novCut, useCut),
+        }
+      }
+      // Facet coverage (share of ideas stating each of who/what/where-when/why/how),
+      // plus the share that needs no extra technology (Workability = 1). Taken over
+      // the MEASURED ideas only: an idea with no words has no facets to count.
+      const facetShare = idxs => {
+        const m = idxs.filter(i => useIdea[i].facets)
+        const share = pred => (m.length ? m.filter(pred).length / m.length : null)
+        return {
+          ...Object.fromEntries(FACETS.map(f => [f.key, share(i => useIdea[i].facets[f.key])])),
+          notech: share(i => useIdea[i].workability === 1),
+        }
+      }
       // Pool-level KPIs per condition (unique fraction at three thresholds + KPI 2 productivity).
       const perCond = []
       for (const cond of CONDITIONS) {
@@ -501,9 +556,39 @@ export default function DataAnalytics() {
           condition: cond, n: vecs.filter(hasTerms).length,
           uf80: measuredUniqueFraction(vecs, 0.8), uf75: measuredUniqueFraction(vecs, 0.75), uf85: measuredUniqueFraction(vecs, 0.85),
           productivity: prod.count,
+          ...cross(idxs), facets: facetShare(idxs),
         })
       }
-      setDetResult({ perCond, refCount: refs.length, ideas: pool.length - unmeasured, unmeasured })
+      const all = pool.map((_, i) => i)
+      // Validation against the ratings already on the page (AI rater 3.2, evaluators
+      // 3.3), where present: each objective KPI should correlate more with the
+      // matching rating (usefulness with usefulness) than with the other one.
+      const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
+      const RATINGS = [
+        ['novelty', 'AI Novelty'], ['usefulness', 'AI Usefulness'],
+        ['ext_novelty', 'Eval. Novelty'], ['ext_usefulness', 'Eval. Usefulness'],
+      ].filter(([k]) => pool.filter(r => num(r[k]) != null).length >= 3)
+      const OBJ = [
+        ['Novelty (objective)', perIdea.map(d => d.novelty)], ['NoveltyScore', novAll],
+        ['Need fit (objective)', useIdea.map(d => d.needFit)], ['Specificity (objective)', useIdea.map(d => d.specificity)],
+        ['Workability (objective)', useIdea.map(d => d.workability)], ['Usefulness score (objective)', useAll],
+      ]
+      const validation = RATINGS.length ? {
+        cols: RATINGS.map(([, label]) => label),
+        rows: OBJ.map(([label, vals]) => ({
+          label,
+          side: /Novelty/.test(label) ? 'novelty' : 'usefulness',
+          cells: RATINGS.map(([k]) => {
+            const ys = pool.map(r => num(r[k]))
+            return { r: pearson(vals, ys), n: vals.filter((v, i) => v != null && ys[i] != null).length }
+          }),
+        })),
+      } : null
+      setDetResult({
+        validation,
+        perCond, refCount: refs.length, needCount: needs.length, ideas: pool.length - unmeasured, unmeasured,
+        overall: { ...cross(all), facets: facetShare(all) }, novCut, useCut,
+      })
     } catch (err) {
       setDetErr(err.message || String(err))
     } finally {
@@ -1022,7 +1107,7 @@ export default function DataAnalytics() {
     // Pool-level KPIs (Unique fraction / Productivity) are per condition, not per
     // idea, so they live on their own tab when a compute run produced them.
     if (detResult?.perCond?.length) {
-      addSheet(wb, 'Pool KPIs by condition', poolKpiRows(detResult.perCond))
+      addSheet(wb, 'Pool KPIs by condition', poolKpiRows(withOverall(detResult)))
     }
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     saveBlob(out, 'ideas_with_kpis.xlsx', 'application/octet-stream')
@@ -1070,7 +1155,8 @@ export default function DataAnalytics() {
         const scoreById = new Map()
         for (const r of rows) {
           const hasAi = has(r.novelty) || has(r.usefulness)
-          const hasDet = has(r.det_novelty) || has(r.det_distinctiveness) || has(r.det_score)
+          const hasDet = has(r.det_novelty) || has(r.det_distinctiveness) || has(r.det_score) ||
+            has(r.det_need_fit) || has(r.det_specificity) || has(r.det_workability) || has(r.det_usefulness)
           const extra = {}
           let hasUp = false
           for (const d of upDefs) { extra[d.key] = r[d.key]; if (has(r[d.key])) hasUp = true }
@@ -1078,6 +1164,8 @@ export default function DataAnalytics() {
             scoreById.set(String(r.idea_id), {
               novelty: r.novelty, usefulness: r.usefulness, quality: r.overall_quality,
               detNovelty: r.det_novelty, detDistinctiveness: r.det_distinctiveness, detScore: r.det_score,
+              detNeedFit: r.det_need_fit, detSpecificity: r.det_specificity, detWorkability: r.det_workability,
+              detUsefulness: r.det_usefulness,
               extra,
             })
           }
@@ -1088,7 +1176,7 @@ export default function DataAnalytics() {
       // level, not per idea, so the consolidated aggregate carries them on their own
       // tab (the per-idea KPIs already sit as columns in Rankings).
       if (detResult?.perCond?.length) {
-        merged.push({ name: 'Pool KPIs by condition', kind: 'json', rows: poolKpiRows(detResult.perCond) })
+        merged.push({ name: 'Pool KPIs by condition', kind: 'json', rows: poolKpiRows(withOverall(detResult)) })
       }
       const wb = XLSX.utils.book_new()
       appendSheetsToWorkbook(wb, merged)
@@ -1314,6 +1402,18 @@ export default function DataAnalytics() {
   const code = tab === 'python' ? pyCode : rCode
   const setCode = tab === 'python' ? setPyCode : setRCode
   const resetCode = () => (tab === 'python' ? setPyCode(PYTHON_TEMPLATE) : setRCode(R_TEMPLATE))
+  // A script saved before a KPI existed (browser-local "Save" / "Make this the
+  // default") keeps its old KPI list and silently SKIPS that KPI: uploaded x_ columns
+  // are discovered at run time, but built-in keys (det_need_fit, …) are only analysed
+  // when the script names them. Flag every KPI in the data that the built-in template
+  // analyses and this script does not mention.
+  const staleKpis = useMemo(() => {
+    const lang = tab === 'python' ? 'python' : 'r'
+    const want = scriptKpiKeys(tab === 'python' ? PYTHON_TEMPLATE : R_TEMPLATE, lang)
+    const have = scriptKpiKeys(code, lang)
+    if (!want || !have) return []   // a restructured script: no registry to compare
+    return presentKpis(effectiveRows).filter(d => want.has(d.key) && !have.has(d.key))
+  }, [effectiveRows, code, tab])
 
   // ── Step 6: insights derived from the last run ──
   const report = useMemo(() => (lastRun ? parseRunOutput(lastRun.output) : null), [lastRun])
@@ -1586,43 +1686,102 @@ export default function DataAnalytics() {
               {/* ── Sub-step 3.1 — Deterministic & objective KPIs ───────────── */}
               <h3 className={styles.subTitle}><span className={styles.subBadge}>3.1</span>Deterministic and objective KPIs</h3>
               <div className={styles.banner}>
-                <strong>Objective, repeatable KPIs computed from the idea text</strong> (Lee&nbsp;&amp;&nbsp;Chung 2024;
-                Meincke et&nbsp;al. 2025; Bouschery et&nbsp;al. 2024). Using classical <strong>TF-IDF</strong> similarity computed
-                {' '}entirely in your browser (no&nbsp;API key, no&nbsp;model download), it computes, per idea,
-                {' '}<em>Novelty</em> (1&nbsp;−&nbsp;max similarity to the reference set R), <em>Distinctiveness</em>
-                {' '}(1&nbsp;−&nbsp;mean similarity to the other ideas) and their mean, <em>NoveltyScore</em>; and per condition the
-                pool-level <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2). <em>Prototypicality (KS)</em> and the
-                KS-based creativity count are not computed in the browser yet — compute them elsewhere and
-                {' '}<strong>Upload additional KPIs</strong> below: every numeric column (matched to your ideas by Idea&nbsp;ID)
-                becomes a KPI that flows into Section&nbsp;4, the Step-2 aggregate <em>Rankings</em> tab and the Step-5
-                regressions. Once computed, <em>Download ideas&nbsp;+&nbsp;KPIs</em> exports the input file with a column added per idea for each KPI.
+                <strong>Objective, repeatable KPIs computed from the idea text</strong>, in your browser with classical
+                {' '}<strong>TF-IDF</strong> similarity (no&nbsp;API key, no&nbsp;model download). They come in two sides, and each
+                side has its own anchor, so one is never just the other turned upside down.
+                <ul className={styles.bannerList}>
+                  <li>
+                    <strong>Novelty side</strong> (Lee&nbsp;&amp;&nbsp;Chung 2024; Meincke et&nbsp;al. 2025; Bouschery et&nbsp;al. 2024):
+                    {' '}<em>Novelty</em> (1&nbsp;−&nbsp;highest similarity to the reference set R of products that already
+                    exist), <em>Pool distinctiveness</em> (1&nbsp;−&nbsp;average similarity to the other ideas) and their
+                    mean, the <em>NoveltyScore</em>. Per condition: <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2).
+                  </li>
+                  <li>
+                    <strong>Usefulness side</strong> (Dean, Hender, Rodgers &amp; Santanen 2006; Rietzschel, Nijstad &amp;
+                    Stroebe 2010): <em>Need fit</em> (highest similarity to the need set U of problems people have: close
+                    to what people need, where Novelty is far from what already exists), <em>Specificity</em> (the share of
+                    five things the idea spells out: who it is for, what it is, where or when it is used, why it helps,
+                    how it works), <em>Workability</em> (can it be built with the fabric alone: 1 when it needs no extra
+                    technology from list T, ½ with one such as an app or a battery, ⅓ with two, and so on) and their
+                    {' '}<em>Usefulness score</em> (the mean of the three as percentile ranks, 0 to 1).
+                  </li>
+                </ul>
+                Novelty and usefulness are different things and research finds they often pull against each other
+                (Runco &amp; Charles 1993; Rietzschel et&nbsp;al. 2010), so the cross-check below shows how the two scores
+                relate and how many ideas are both novel and useful. Longer ideas tend to score higher on text measures,
+                so compare with the word count in Section&nbsp;4. <em>Prototypicality (KS)</em> is not computed in the
+                browser yet: compute it elsewhere and <strong>Upload additional KPIs</strong> below. Every numeric column
+                (matched to your ideas by Idea&nbsp;ID) becomes a KPI that flows into Section&nbsp;4, the Step-2 aggregate
+                {' '}<em>Rankings</em> tab and the Step-5 regressions. <em>Download ideas&nbsp;+&nbsp;KPIs</em> exports the ideas
+                with a column per KPI.
                 <br /><br />
                 <strong>Ideas that cannot be scored are left blank.</strong> An idea needs at least <strong>two meaningful
                 words</strong>: two different words that are not common English words such as <em>the</em>, <em>and</em> or
                 {' '}<em>it</em> (NLTK&apos;s English stop-word list). A blank idea, a single word (a made-up name like
                 {' '}<em>Zorblax</em>, or just <em>Thermochromic</em>), only common words, or text in a non-Latin script such as
-                Greek gets no Novelty, Distinctiveness or NoveltyScore, and is left out of the other ideas&apos; comparisons
-                and of the Unique fraction. This is the &ldquo;cannot be scored&rdquo; rule of Bouschery et&nbsp;al.&nbsp;(2024),
-                who drop single-word ideas; before it, such an idea shared no words with anything and scored a perfect 1,
-                ranking first. Blank KPIs are dropped from the Step-5 regressions, not counted as 0.
+                Greek gets no KPI on either side, and is left out of the other ideas&apos; comparisons and of the Unique
+                fraction. This is the &ldquo;cannot be scored&rdquo; rule of Bouschery et&nbsp;al.&nbsp;(2024), who drop
+                single-word ideas; before it, such an idea shared no words with anything and scored a perfect 1 on the
+                novelty side, ranking first. Blank KPIs are dropped from the Step-5 regressions, not counted as 0.
               </div>
-              <div style={{ margin: '8px 0' }}>
-                <div className={styles.raterLabel} style={{ marginBottom: 4 }}>Reference set R — products that already exist (one per line)</div>
-                <textarea
-                  className={styles.refsArea}
-                  value={referenceSet}
-                  spellCheck={false}
-                  disabled={!!detComputing}
-                  onChange={e => { setReferenceSet(e.target.value); try { localStorage.setItem(LS.refset, e.target.value) } catch (_) {} }}
-                />
-                <div className={styles.row} style={{ marginTop: 4 }}>
-                  <button className={`btn-ghost ${styles.miniBtn}`} disabled={!!detComputing}
-                    onClick={() => { setReferenceSet(DEFAULT_REFERENCE_SET.join('\n')); try { localStorage.removeItem(LS.refset) } catch (_) {} }}>
-                    Reset reference set
-                  </button>
-                  <span className={styles.kpiPill}>{referenceSet.split('\n').filter(s => s.trim()).length} items</span>
+              <div className={styles.anchorGrid}>
+                <div>
+                  <div className={styles.raterLabel} style={{ marginBottom: 4 }}>Reference set R: products that already exist (one per line) · novelty side</div>
+                  <textarea
+                    className={styles.refsArea}
+                    value={referenceSet}
+                    spellCheck={false}
+                    disabled={!!detComputing}
+                    onChange={e => { setReferenceSet(e.target.value); try { localStorage.setItem(LS.refset, e.target.value) } catch (_) {} }}
+                  />
+                  <div className={styles.row} style={{ marginTop: 4 }}>
+                    <button className={`btn-ghost ${styles.miniBtn}`} disabled={!!detComputing}
+                      onClick={() => { setReferenceSet(DEFAULT_REFERENCE_SET.join('\n')); try { localStorage.removeItem(LS.refset) } catch (_) {} }}>
+                      Reset reference set
+                    </button>
+                    <span className={styles.kpiPill}>{referenceSet.split('\n').filter(s => s.trim()).length} items</span>
+                  </div>
+                </div>
+                <div>
+                  <div className={styles.raterLabel} style={{ marginBottom: 4 }}>Need set U: problems people have (one per line) · usefulness side</div>
+                  <textarea
+                    className={styles.refsArea}
+                    value={needSet}
+                    spellCheck={false}
+                    disabled={!!detComputing}
+                    onChange={e => { setNeedSet(e.target.value); try { localStorage.setItem(LS.needset, e.target.value) } catch (_) {} }}
+                  />
+                  <div className={styles.row} style={{ marginTop: 4 }}>
+                    <button className={`btn-ghost ${styles.miniBtn}`} disabled={!!detComputing}
+                      onClick={() => { setNeedSet(DEFAULT_NEED_SET.join('\n')); try { localStorage.removeItem(LS.needset) } catch (_) {} }}>
+                      Reset need set
+                    </button>
+                    <span className={styles.kpiPill}>{needSet.split('\n').filter(s => s.trim()).length} needs</span>
+                  </div>
+                </div>
+                <div>
+                  <div className={styles.raterLabel} style={{ marginBottom: 4 }}>Extra technology T: what the fabric alone does not supply (one per line) · Workability</div>
+                  <textarea
+                    className={styles.refsArea}
+                    value={techSet}
+                    spellCheck={false}
+                    disabled={!!detComputing}
+                    onChange={e => { setTechSet(e.target.value); try { localStorage.setItem(LS.techset, e.target.value) } catch (_) {} }}
+                  />
+                  <div className={styles.row} style={{ marginTop: 4 }}>
+                    <button className={`btn-ghost ${styles.miniBtn}`} disabled={!!detComputing}
+                      onClick={() => { setTechSet(DEFAULT_TECH_SET.join('\n')); try { localStorage.removeItem(LS.techset) } catch (_) {} }}>
+                      Reset technology list
+                    </button>
+                    <span className={styles.kpiPill}>{techSet.split('\n').filter(s => s.trim()).length} terms</span>
+                  </div>
                 </div>
               </div>
+              <p className={styles.kpiMuted}>
+                Write R, U and T before you look at the ideas, and keep them fixed across conditions: they are the
+                researcher&apos;s only inputs, like the rubric a human rater would use. U lists problems, not products, and
+                should not reuse R&apos;s product words, or Need fit would partly copy &quot;close to R&quot;.
+              </p>
               <div className={styles.row} style={{ marginBottom: 8 }}>
                 <button className="btn-primary" onClick={computeDeterministic} disabled={!!detComputing || effectiveRows.length < 2}>
                   {detComputing ? `${detComputing.phase}… ${detComputing.done}/${detComputing.total}` : `Compute objective KPIs for ${effectiveRows.length} idea${effectiveRows.length === 1 ? '' : 's'}`}
@@ -1640,39 +1799,7 @@ export default function DataAnalytics() {
                 </div>
               )}
               {detErr && <p className="error-msg">{detErr}</p>}
-              {detResult && (
-                <div style={{ marginTop: 8 }}>
-                  <p className={styles.loadMsg}>
-                    Computed Novelty / Distinctiveness / NoveltyScore for {detResult.ideas} idea{detResult.ideas === 1 ? '' : 's'}
-                    {' '}against {detResult.refCount} reference item{detResult.refCount === 1 ? '' : 's'}.
-                    {detResult.unmeasured > 0 && (
-                      <>{' '}{detResult.unmeasured} idea{detResult.unmeasured === 1 ? ' has' : 's have'} fewer than two meaningful
-                      {' '}words (blank, a single word, only common words, or text in a non-Latin script) and {detResult.unmeasured === 1 ? 'was' : 'were'} left
-                      {' '}blank and kept out of the pools.</>
-                    )}
-                    {' '}Pool-level KPIs per condition:
-                  </p>
-                  <div className={styles.tableWrap} style={{ marginTop: 8 }}>
-                    <table className={styles.regTable}>
-                      <thead>
-                        <tr><th className={styles.regVar}>Condition</th><th>Ideas</th><th>Unique fraction (τ=.80)</th><th>τ=.75</th><th>τ=.85</th><th>Productivity (KPI 2)</th></tr>
-                      </thead>
-                      <tbody>
-                        {detResult.perCond.map(c => (
-                          <tr key={c.condition}>
-                            <td className={styles.regVar}><span className={`${styles.condTag} ${condClass(c.condition)}`}>{c.condition}</span></td>
-                            <td>{c.n}</td>
-                            <td>{c.uf80 == null ? '—' : c.uf80.toFixed(2)}</td>
-                            <td>{c.uf75 == null ? '—' : c.uf75.toFixed(2)}</td>
-                            <td>{c.uf85 == null ? '—' : c.uf85.toFixed(2)}</td>
-                            <td>{c.productivity}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+              {detResult && <ObjectiveKpiResults res={detResult} />}
 
               {/* Upload additional, externally-computed KPIs (matched by Idea ID). */}
               <div className={styles.row} style={{ marginTop: 12 }}>
@@ -2092,6 +2219,16 @@ export default function DataAnalytics() {
             <button className={`btn-ghost ${styles.miniBtn}`} onClick={resetCode} disabled={running}>Reset to template</button>
             {runStatus && <span className={styles.statusLine}><span className={styles.spinner} /> {runStatus}</span>}
           </div>
+          {staleKpis.length > 0 && (
+            <p className={styles.hint}>
+              <span className={styles.unscored}>
+                This {tab === 'python' ? 'Python' : 'R'} script is an older saved copy and will skip{' '}
+                {staleKpis.length === 1 ? 'a KPI' : `${staleKpis.length} KPIs`} your data has: {staleKpis.map(d => d.label).join(', ')}.
+                {' '}Press <em>Reset to template</em> to use the current script (it replaces your edited copy), or add
+                {' '}{staleKpis.length === 1 ? 'it' : 'them'} to the script&apos;s KPI list yourself.
+              </span>
+            </p>
+          )}
 
           <div className={styles.codeWrap}>
             <CopyButton text={code} />
@@ -2289,6 +2426,146 @@ function InsightsPanel({ report }) {
   )
 }
 
+// ── Section 3.1: results of a Compute run ─────────────────────────────────────
+// Three small tables: the novelty side's pool KPIs, the novelty × usefulness
+// cross-check, and which parts of an idea (who / what / where-when / why / how)
+// each condition's ideas spell out. Everything here is per condition, not per idea
+// (the per-idea KPIs are columns of the Step-3 table and the downloads).
+function ObjectiveKpiResults({ res }) {
+  const f2 = x => (x == null || !Number.isFinite(x) ? '—' : x.toFixed(2))
+  const pct = (k, n) => (n ? `${Math.round((k / n) * 100)}%` : '—')
+  const crossRow = (label, c, key) => (
+    <tr key={key}>
+      <td className={styles.regVar}>{label}</td>
+      <td>{c.q.n}</td>
+      <td>{f2(c.r)}</td>
+      <td>{f2(c.rLen)}</td>
+      <td>{pct(c.q.both, c.q.n)}</td>
+      <td>{pct(c.q.novelOnly, c.q.n)}</td>
+      <td>{pct(c.q.usefulOnly, c.q.n)}</td>
+      <td>{pct(c.q.neither, c.q.n)}</td>
+    </tr>
+  )
+  const facetRow = (label, fs, key) => (
+    <tr key={key}>
+      <td className={styles.regVar}>{label}</td>
+      {FACETS.map(f => <td key={f.key}>{fs[f.key] == null ? '—' : `${Math.round(fs[f.key] * 100)}%`}</td>)}
+      <td>{fs.notech == null ? '—' : `${Math.round(fs.notech * 100)}%`}</td>
+    </tr>
+  )
+  const tag = c => <span className={`${styles.condTag} ${condClass(c)}`}>{c}</span>
+  return (
+    <div style={{ marginTop: 8 }}>
+      <p className={styles.loadMsg}>
+        Computed the novelty side for {res.ideas} idea{res.ideas === 1 ? '' : 's'} against {res.refCount} existing
+        product{res.refCount === 1 ? '' : 's'} (R), and the usefulness side against {res.needCount} need{res.needCount === 1 ? '' : 's'} (U).
+        {res.unmeasured > 0 && (
+          <>{' '}{res.unmeasured} idea{res.unmeasured === 1 ? ' has' : 's have'} fewer than two meaningful words
+          {' '}(blank, a single word, only common words, or text in a non-Latin script) and {res.unmeasured === 1 ? 'was' : 'were'} left
+          {' '}blank on both sides and kept out of the pools.</>
+        )}
+      </p>
+
+      <div className={styles.regBlock}>
+        <div className={styles.regCap}>
+          <strong>Novelty side.</strong> Pool-level KPIs per condition
+        </div>
+        <div className={styles.tableWrap}>
+          <table className={styles.regTable}>
+            <thead>
+              <tr><th className={styles.regVar}>Condition</th><th>Ideas</th><th>Unique fraction (τ=.80)</th><th>τ=.75</th><th>τ=.85</th><th>Productivity (KPI 2)</th></tr>
+            </thead>
+            <tbody>
+              {res.perCond.map(c => (
+                <tr key={c.condition}>
+                  <td className={styles.regVar}>{tag(c.condition)}</td>
+                  <td>{c.n}</td>
+                  <td>{f2(c.uf80)}</td>
+                  <td>{f2(c.uf75)}</td>
+                  <td>{f2(c.uf85)}</td>
+                  <td>{c.productivity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className={styles.regBlock}>
+        <div className={styles.regCap}>
+          <strong>Novelty × usefulness.</strong> How the two sides relate
+          <span className={styles.regSub}> NoveltyScore (novelty side) against Usefulness score (usefulness side).</span>
+        </div>
+        <div className={styles.tableWrap}>
+          <table className={styles.regTable}>
+            <thead>
+              <tr><th className={styles.regVar}>Condition</th><th>Ideas</th><th>Correlation r</th><th>r, same length</th><th>Novel and useful</th><th>Novel only</th><th>Useful only</th><th>Neither</th></tr>
+            </thead>
+            <tbody>
+              {res.perCond.map(c => crossRow(tag(c.condition), c, c.condition))}
+              {crossRow(<strong>All ideas</strong>, res.overall, 'all')}
+            </tbody>
+          </table>
+        </div>
+        <p className={styles.regNote}>
+          r is the Pearson correlation between the two scores: below 0 means the more novel ideas tend to be the less
+          useful-looking ones, above 0 that they go together. &quot;r, same length&quot; is the same correlation with the
+          ideas&apos; length held fixed (log word count), since longer ideas score higher on most text measures. &quot;Novel&quot; and &quot;useful&quot; mean above the median of all
+          loaded ideas (NoveltyScore {f2(res.novCut)}, Usefulness score {f2(res.useCut)}), so every condition is judged
+          against the same line. &quot;Novel and useful&quot; is the standard definition of a creative idea (Runco &amp; Jaeger 2012).
+        </p>
+      </div>
+
+      {res.validation && (
+        <div className={styles.regBlock}>
+          <div className={styles.regCap}>
+            <strong>Check against the ratings.</strong> Correlation of each objective KPI with the scores already loaded
+            <span className={styles.regSub}> A usefulness KPI should go with the usefulness ratings more than with the novelty ones, and the reverse for a novelty KPI.</span>
+          </div>
+          <div className={styles.tableWrap}>
+            <table className={styles.regTable}>
+              <thead>
+                <tr><th className={styles.regVar}>Objective KPI</th>{res.validation.cols.map(c => <th key={c}>{c}</th>)}</tr>
+              </thead>
+              <tbody>
+                {res.validation.rows.map(row => (
+                  <tr key={row.label}>
+                    <td className={styles.regVar}>{row.label} <span className={styles.kpiMuted}>({row.side} side)</span></td>
+                    {row.cells.map((c, i) => <td key={i} title={`n = ${c.n}`}>{f2(c.r)}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className={styles.regNote}>
+            Pearson r over the ideas that have both values (hover a cell for n). Expect modest numbers: even GPT-4 agreed
+            with human &quot;value&quot; ratings at only about r = .33 (Kern &amp; Chao 2026), and human raters often let novelty
+            colour their usefulness scores, so the ratings may correlate with each other more than these KPIs do.
+          </p>
+        </div>
+      )}
+
+      <div className={styles.regBlock}>
+        <div className={styles.regCap}>
+          <strong>Specificity and workability.</strong> Share of ideas that spell out each part
+          <span className={styles.regSub}> The five parts behind the Specificity KPI (Dean et al. 2006), and the share of ideas that name no extra technology from list T (Workability = 1).</span>
+        </div>
+        <div className={styles.tableWrap}>
+          <table className={styles.regTable}>
+            <thead>
+              <tr><th className={styles.regVar}>Condition</th>{FACETS.map(f => <th key={f.key}>{f.label}</th>)}<th>Needs no extra technology</th></tr>
+            </thead>
+            <tbody>
+              {res.perCond.map(c => facetRow(tag(c.condition), c.facets, c.condition))}
+              {facetRow(<strong>All ideas</strong>, res.overall.facets, 'all')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Section 4: Table 1 — summary statistics + correlation matrix (paper style) ──
 // Renders the structure from buildSummaryTable(): five descriptive columns then a
 // lower-triangular Pearson correlation matrix, in the booktabs look of the paper.
@@ -2476,15 +2753,34 @@ const round3 = x => (x == null || !Number.isFinite(x)) ? '' : Number(x.toFixed(3
 
 // Rows for the "Pool KPIs by condition" tab — the per-pool deterministic KPIs
 // (Unique fraction at three thresholds + Productivity) the spec reports separately
-// from the per-idea columns. Shared by the standalone 3.1 download and the aggregate.
-const poolKpiRows = perCond => (perCond || []).map(c => ({
-  Condition: c.condition,
-  Ideas: c.n,
-  'Unique fraction (τ=.80)': round3(c.uf80),
-  'Unique fraction (τ=.75)': round3(c.uf75),
-  'Unique fraction (τ=.85)': round3(c.uf85),
-  'Productivity (KPI 2)': c.productivity,
-}))
+// from the per-idea columns, then the novelty × usefulness cross-check and the
+// specificity facet shares. Shared by the standalone 3.1 download and the aggregate.
+// The per-condition rows plus one "All ideas" row carrying the pooled cross-check.
+const withOverall = res => [
+  ...(res?.perCond || []),
+  ...(res?.overall ? [{ condition: 'All ideas', n: res.ideas, ...res.overall }] : []),
+]
+const poolKpiRows = perCond => (perCond || []).map(c => {
+  const q = c.q || { n: 0 }
+  const share = k => (q.n ? round3(k / q.n) : '')
+  const row = {
+    Condition: c.condition,
+    Ideas: c.n,
+    'Unique fraction (τ=.80)': round3(c.uf80),
+    'Unique fraction (τ=.75)': round3(c.uf75),
+    'Unique fraction (τ=.85)': round3(c.uf85),
+    'Productivity (KPI 2)': c.productivity,
+    'Novelty x usefulness r': round3(c.r),
+    'Novelty x usefulness r (same length)': round3(c.rLen),
+    'Share novel and useful': share(q.both),
+    'Share novel only': share(q.novelOnly),
+    'Share useful only': share(q.usefulOnly),
+    'Share neither': share(q.neither),
+  }
+  for (const f of FACETS) row[`States: ${f.label}`] = round3(c.facets?.[f.key])
+  row['Needs no extra technology'] = round3(c.facets?.notech)
+  return row
+})
 
 // Step-3 table columns: header label + how to read/sort each one. `condition`
 // sorts by the canonical None<Solo<Group<Both order, scores numerically (blanks

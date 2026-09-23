@@ -3008,11 +3008,26 @@ reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
 `node _ideasearchlab-src/tools/score-gaps-guard.mjs` (60+ checks, including the
 owner's own 741-idea scenario driven through the real scoring engine).
 
+**Section 3.1 of the Data Analytics page measures USEFULNESS objectively, not
+only novelty** (owner 2026-09). Beside the TF-IDF novelty KPIs (Novelty vs the
+reference set R, Pool distinctiveness, NoveltyScore) sit Need fit (closeness to an
+editable need set U of problems people have), Specificity (who / what / where-when /
+why / how the idea states), Workability (1 / (1 + extra technologies named from an
+editable list T, negations like "no electronics needed" ignored)) and their
+percentile composite Usefulness score. The rule: no usefulness KPI may reuse R or
+the idea-to-idea similarities, or it is just 1 - novelty. A peer-vote measure was
+left out on purpose (owner: it would complicate matters; the final picks are made
+by those votes). An idea that cannot be scored (fewer than two meaningful words) is left blank on this side too. A
+per-condition novelty × usefulness cross-check shows how the two relate. Pure module
+`_ideasearchlab-src/src/utils/usefulnessKpis.js` (`usefulnessKpisFromText`); full
+reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
+`node _ideasearchlab-src/tools/usefulness-kpis-guard.mjs`.
+
 **Section 3.1's objective KPIs leave an idea that cannot be scored blank.** An
 idea needs at least two meaningful words (two different words not on NLTK's
 English stop-word list). A blank idea, one word ("Zorblax"), only common words,
 or Greek text shares no words with anything, and cosine 0 with everything read
-as "as different as possible": it scored Novelty 1, Distinctiveness 1, Score 1 —
+as "as different as possible": it scored Novelty 1, Distinctiveness 1, NoveltyScore 1 —
 the top of the ranking — and skewed every other idea's Distinctiveness and the
 Unique fraction. It is Bouschery et al.'s "cannot be scored" rule, and the page
 states it in the 3.1 description above the Compute button.

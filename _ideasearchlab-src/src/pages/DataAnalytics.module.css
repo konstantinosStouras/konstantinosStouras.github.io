@@ -740,3 +740,16 @@
   line-height: 1.5;
 }
 .refsArea:focus { outline: none; border-color: var(--accent); }
+
+/* Section 3.1: the two sides of the objective KPIs, listed inside the banner. */
+.bannerList { margin: 6px 0 6px 18px; padding: 0; }
+.bannerList li { margin: 3px 0; }
+/* Section 3.1: R (novelty anchor) and U (usefulness anchor) side by side; one
+   column on a narrow window so neither editor is squeezed. */
+.anchorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 14px;
+  margin: 8px 0;
+}
+.anchorGrid > div { min-width: 0; }
