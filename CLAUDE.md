@@ -3020,6 +3020,41 @@ what the page calls; the offline twin `_idea-kpi-script/idea_kpis.py` applies th
 same rule. Offline test `node _ideasearchlab-src/tools/det-kpi-guard.mjs` (36
 checks, incl. number-for-number parity with the Python twin).
 
+**The AI rater's model list is five models of each provider's newest
+generation, most capable first, and the rater can now actually call them**
+(owner, 2026-09-23: "top 5 newest … starting with their best and most
+expensive" — the first of each list is both; below it the order is by
+capability, with every option printing its price, since Opus 5.5 is cheaper
+than the Opus 5 it outperforms and GPT-6 Sol cheaper than GPT-5.6 Terra). The Data Analytics 3.2 "Fill the N missing AI scores" button and
+the AI Settings page share one catalogue, `_ideasearchlab-src/src/data/aiModels.js`
+(Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Sonnet 5; GPT-6 Astra /
+GPT-5.6 Sol / GPT-6 Sol / GPT-5.6 Terra / GPT-6 Luna; Gemini 3.1 Pro preview /
+3.8 / 3.7 / 3.6 / 3.5 Flash), each option printing its price per 1M tokens from
+`aiPricing.js` (a promotional price carries `until` + `list`, is printed with
+its expiry, and fails the guard once lapsed). Rebuilding the list found that the rater's `callProvider` was
+defined NOWHERE — referenced in `llmClient.js`, absent from the source and a
+bare global in the shipped bundle — so with any key saved the button threw
+`ReferenceError` on its first batch; it is `src/utils/providerRequest.js` now
+(Firebase-free, fetch injected), and `tools/ai-models-guard.mjs` drives every
+provider's request shape and error path offline and reads the SHIPPED bundle
+so a stale rebuild fails the test. **A key is per provider account, not per
+model** — it unlocks every model the provider serves and the model is named on
+each request — which is why both pages pair a provider (whose key) with a model
+(which brain, at what price); both say so in their hint text. The assistant's
+own defaults in `functions/ai.js` are untouched (they deploy separately); its
+`MODEL_LABELS` and its no-`temperature` / reasoning-family rules were extended
+to the new ids, its `callClaude` gives the thinking-by-default models headroom
+above the reply ceiling plus low effort (a 1000-token turn could otherwise come
+back as thinking and no text; `callGemini` does the same for Gemini 3.x with a
+low thinking level), and its `callGemini` sends the key as the `x-goog-api-key`
+header instead of `?key=` (the "AQ." auth keys are refused in the URL) — all
+live at the next `firebase deploy --only functions`. The rater itself reports a
+refusal or a thinking-exhausted empty reply as a cause on screen instead of
+silently re-sending the batch idea by idea, and one refused idea no longer costs
+its batch-mates their scores. Promotional prices resolve by day (`priceAt`), so
+neither the dropdown nor the cost export keeps charging a lapsed promotion. Full detail
+in `_ideasearchlab-src/CLAUDE.md`.
+
 **Excel export per session, from the session list.** Both admins let the
 instructor download ONE session's research workbook straight from its card —
 ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export data**

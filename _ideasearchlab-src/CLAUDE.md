@@ -26,7 +26,7 @@ to give Claude full context about this project instantly.
 - saveAISettings: saves global AI provider settings
 - submitVote: legacy Cloud Function, still deployed but no longer called by the frontend. Voting now happens via direct Firestore writes from GroupPhase.jsx.
 - onParticipantUpdated: Firestore trigger with two jobs. (1) When a participant's `votesSubmitted` flips to true, `finishGroupVoting()` checks whether every member of that group has submitted; if so it tallies that group's votes (top 3 -> `finalIdeas`), marks the group 'done', moves the members to the next phase in the sequence (survey for individual_first, individual for group_first), and advances the session status once every participant has moved past the group phase. This is how groups reach the survey automatically -- "Force advance" remains the manual override. (2) On any participant phase change, `maybeAdvanceSession` re-syncs the session status — **capped at 'survey', never 'done'**: a session must never auto-close, because every CURRENT participant being finished does not mean the session is over (a groupSize-1 session is run as many independent solo plays, and a late joiner can arrive after the first cohort finished). `status: 'done'` — which closes the session (JoinSession filters done sessions out of code lookup; useSessionEnded ends every open page) — is set ONLY by the instructor: Close Session or Force advance.
-**AI providers supported:** Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google). Keys stored in Firestore settings/ai document, managed via /admin/ai-settings page. Saved keys reload into the page on every visit (password fields + "saved ✓" tags). `saveAISettings` is admin-only (admin@admin.com) and accepts partial updates — sending `null` clears a field back to its built-in default. Firestore rule: ALL `settings/*` reads are `isAdmin()` (participants must never read settings/ai — it holds the API keys; Cloud Functions use the Admin SDK and bypass rules). The AI Settings page's Model, Parameters and System Prompt sections each have the standard three default buttons (Make this the default / Reset this page to defaults / Restore built-in default) doing per-section partial saves. Model lists in AISettings.jsx updated June 2026 (Claude Opus 4.8/Fable 5/Sonnet 4.6/Haiku 4.5, GPT-5.5/5.4/5.2, Gemini 3.5/3.x/2.5); provider defaults in functions/ai.js: claude-sonnet-4-6, gpt-5.5, gemini-3.5-flash. callClaude omits `temperature` for Opus 4.7+/Fable/Mythos (they 400 on sampling params) and reads the first text block (thinking blocks may come first); callOpenAI uses `max_completion_tokens` and no temperature for gpt-5*/o* reasoning models. Session aiConfig.model defaults to null = defer to global AI Settings.
+**AI providers supported:** Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google). Keys stored in Firestore settings/ai document, managed via /admin/ai-settings page. Saved keys reload into the page on every visit (password fields + "saved ✓" tags). `saveAISettings` is admin-only (admin@admin.com) and accepts partial updates — sending `null` clears a field back to its built-in default. Firestore rule: ALL `settings/*` reads are `isAdmin()` (participants must never read settings/ai — it holds the API keys; Cloud Functions use the Admin SDK and bypass rules). The AI Settings page's Model, Parameters and System Prompt sections each have the standard three default buttons (Make this the default / Reset this page to defaults / Restore built-in default) doing per-section partial saves. **The model catalogue is `src/data/aiModels.js`** (shared by AI Settings and the Data Analytics rater; rebuilt 2026-09-23, per the owner's "top 5 newest, starting with their best and most expensive": FIVE models of each provider's newest generation, most capable first — the first of each list is also its most expensive, below it the order is by capability with every price printed (Opus 5.5 is cheaper than the Opus 5 it outperforms; GPT-6 Sol cheaper than GPT-5.6 Terra) — Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Sonnet 5; GPT-6 Astra / GPT-5.6 Sol / GPT-6 Sol / GPT-5.6 Terra / GPT-6 Luna; Gemini 3.1 Pro (preview, the only Pro the API serves — 3.5 Pro is announced with no model id) / 3.8 Flash / 3.7 Flash / 3.6 Flash / 3.5 Flash), every option label printing the price per 1M tokens from `src/data/aiPricing.js` (`modelOptionLabel`; a promotional row — GPT-5.6 Sol to 2026-11-21, Gemini 3.8/3.7/3.6 Flash to 2026-12-31 — carries `until` + `list`, prints its expiry, and fails the guard the day PRICES_AS_OF passes it, so a lapsed promotion cannot keep understating the AI Usage export), and `tools/ai-models-guard.mjs` pinning that every id is priced there AND labelled in functions/ai.js `MODEL_LABELS`. Provider defaults for the ASSISTANT in functions/ai.js stay claude-sonnet-4-6, gpt-5.5, gemini-3.5-flash (still served; the catalogue's `defaultModel` MIRRORS them because the function is deployed separately and the page must not claim a default the deployed function does not use — the guard pins the mirror). callClaude omits `temperature` for Opus 4.7+, Opus 5/5.5, Sonnet 5 and Fable/Mythos (they 400 on sampling params) and reads the first text block (thinking blocks may come first); callOpenAI uses `max_completion_tokens` and no temperature for gpt-5*/gpt-6*/o* reasoning models. **Why a model is chosen beside the key (owner question 2026-09-23):** a key belongs to the provider ACCOUNT and unlocks every model it serves; the model is named on every request, so the pages pair "which key" (provider) with "which model" — both pages say so in their hint text. Session aiConfig.model defaults to null = defer to global AI Settings.
 **Session flow:** waiting -> individual -> group -> survey -> done (order and active phases configurable per session). Note: 'voting' was removed from the backend phase sequence. Voting now happens client-side as a sub-phase within GroupPhase.
 
 ## Participant onboarding flow
@@ -504,9 +504,11 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    no Cloud Function / redeploy needed) and calls Claude/OpenAI/Gemini directly (Claude
    needs the `anthropic-dangerous-direct-browser-access` header). Ideas are batched (8/req),
    results map back by index. The **API provider + specific model** are chosen on-page via two
-   dropdowns (catalogue in `src/data/aiModels.js`, now shared with AI Settings); the default
-   rater is **Claude Haiku 4.5** (`SCORING_DEFAULT_MODEL` — fast/cheap for bulk scoring), and
-   the matching key is read from `settings/ai` (a "no key saved" hint shows if the selected
+   dropdowns (catalogue in `src/data/aiModels.js`, now shared with AI Settings — five models of each
+   provider's newest generation, most capable first, every option printing its price per 1M tokens); the
+   pre-selected rater is the cheapest current model of the chosen provider — **Claude Sonnet 5 /
+   GPT-6 Luna / Gemini 3.8 Flash** (`SCORING_DEFAULT_MODEL`; bulk scoring is hundreds of calls) —
+   and the matching key is read from `settings/ai` (a "no key saved" hint shows if the selected
    provider has none). Scores are also **hand-editable** in the data table; nothing is
    written back to Firestore (admin lacks idea-write permission, and keeping it in-memory
    avoids a rules change). **Manage participants:** a collapsible panel lists every
@@ -572,7 +574,72 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      checks: the building blocks, the pipeline with blank/"?"/Greek/Chinese ideas mixed
      in, that real ideas' numbers are unchanged to 1e-12, that the page goes through the
      pipeline, and number-for-number parity with the Python twin when numpy is present).
-   - **A long scoring run never silently leaves rows empty** (owner report 2026-08: "uploaded 435 ideas, asked for AI scores, some rows were empty"). 435 ideas is ~55 sequential API calls, and the old loop lost work four silent ways while the progress bar still read 435/435: **(1)** one failed call **re-threw**, so the caller's `setRows` never ran and every score already collected was discarded — 54 good batches lost to a 429 on the 55th; **(2)** a reply **truncated** by the token limit has no closing `]`, and the array-only parser returned null, losing all 8 ideas of that batch; **(3)** a **short reply** (6 entries for 8 ideas) left the other 2 empty for good; **(4)** a **duplicate `"i"`** overwrote one slot and left a sibling empty. The batching/parsing/retry logic now lives in **`src/utils/scoreBatch.js`** (no Firebase/`fetch` import, so it is testable offline): `extractScoreObjects` salvages the complete `{...}` objects out of an unterminated array, `assignScores` never lets a duplicate or out-of-range index clobber a filled slot, ideas still unscored after the batch call are retried **one at a time** (`singleTries`, because the usual failure is an unreadable REPLY, which the transport retry never sees), transient errors (429/5xx/network) get `withRetry` backoff while fatal ones (401/403/400 — a rejected key fails identically every time) abort at once, and **partial results are always returned**. A dead provider trips a **circuit breaker** (`maxConsecutiveFailures`, 3) instead of grinding all 55 batches through the backoff, and a thrown batch skips the per-idea round (the transport is down, not the ideas). Token ceilings were raised with it — Claude/OpenAI 1500 → 4000, reasoning models 2000 → 8000 (they spend the budget on hidden reasoning FIRST and can return an empty message), Gemini 2000 → 8000 — since truncation was cause (2). The page now **reports the shortfall** instead of showing blank rows: "Scored 431 of 435 ideas. 4 could not be scored this run … press Score again to retry just those", with ideas that have **no text** counted separately (nothing can rate them). Pressing Score again picks up exactly the still-empty ones, since the button's scope is "ideas with no score yet". Offline test: `node _ideasearchlab-src/tools/score-batch-guard.mjs` (33 checks against a fake model — truncated, short, duplicate-indexed, rate-limited and dead-provider replies).
+   - **The rater could not call ANY provider until 2026-09-23 — `callProvider` was defined
+     nowhere.** `llmClient.js` called it on every batch, no module defined or imported it, and the
+     shipped bundle carried it as a bare global (`call:S=>callProvider(…)` in the minified chunk), so
+     "Fill the N missing AI scores" threw `ReferenceError: callProvider is not defined` on the first
+     batch for every provider, with a valid key saved — the run never reached the network. Found
+     while answering the owner's "will an OpenAI/Gemini key give me their scores?" (the answer was
+     no, for Claude too). The function now lives in **`src/utils/providerRequest.js`** — split out
+     like `scoreBatch.js` (no Firebase import, `fetch` injected) so the guard can drive it offline:
+     the three request builders (Claude `/v1/messages` with the browser-access header and NO
+     sampling params — Opus 4.7+/5/5.5, Sonnet 5 and Fable 400 on them — `max_tokens` 8000 because
+     thinking counts toward it, `output_config.effort: low` where the model takes it; OpenAI
+     `chat/completions` with `max_completion_tokens` + `reasoning_effort: low` for gpt-5*/gpt-6*/o*
+     — GPT-6 Astra rejects `none`/`minimal` — and legacy `max_tokens` for gpt-4.1/4o; Gemini
+     `generateContent` with the key in the `x-goog-api-key` HEADER, never the URL, `thinkingLevel:
+     low` on 3.x only — 2.5 rejects the field — and `responseMimeType: application/json`), the
+     per-provider reply parsers (thinking block first / thought parts skipped), and `callProvider`,
+     whose errors carry the HTTP `status` scoreBatch's `isFatalApiError` reads (401/403/400/404
+     abort, 429/5xx retry, a network failure has none) and whose messages are scrubbed of the API
+     key. **A 2xx that carries no rating is thrown, not returned as ''** (`replyProblem`, review
+     finding): a safety refusal (Claude `stop_reason: refusal` + its category, an OpenAI
+     `message.refusal`, a Gemini `blockReason` / non-STOP finish) or a ceiling spent entirely on
+     hidden thinking (`max_tokens` / `length` / `MAX_TOKENS` with no text) used to look exactly like
+     an unreadable reply, so scoreBatch re-sent every idea of the batch one by one (1 + 16 calls for
+     a deterministic refusal) and the run ended "N unscored" with nothing in `lastError`. Thrown with
+     `replyProblem` set (`refusal` is `retryable: false`, `exhausted` is retried), scoreBatch
+     records the cause in `lastError`, does NOT count the batch toward the circuit breaker and still
+     runs the per-idea round — so one refused idea costs only itself its score, never its seven
+     batch-mates (the critic's catch on the first version, which treated the throw as a transport
+     failure: round 2 skipped, the same batch re-formed every pass, three refusals read as an
+     outage). The page prints "Last cause reported: …" beside any still-empty ideas. A cut-off
+     reply that DID return text is handed back as is for `extractScoreObjects` to salvage.
+     **A promotional price is priced by day:** `priceAt`/`replyCostUSD(model, in, out, at)` charge
+     the promotional price through its `until` and the `list` price after it (the session export
+     costs each reply at its own timestamp; the AI Pricing sheet shows `until` and the after-price),
+     the dropdown label switches on its own, and the guard fails from the lapse day (against
+     today's date, not `PRICES_AS_OF`) so the row gets re-snapshotted. **The hint states the
+     fill-blank rule:** a fresh dataset's AI columns are the chosen model's ratings; a dataset
+     already scored by another rater keeps those — press Clear in section 3 first to re-rate every
+     idea with a different provider. `SCORING_EFFORT` is the one knob if deeper
+     deliberation per idea is wanted. Offline test: **`node _ideasearchlab-src/tools/ai-models-guard.mjs`**
+     (catalogue shape and order, the three catalogues in sync, every request shape,
+     every error path against a fake fetch, and — read from `lab/ideasearchlab/index.html`'s own main
+     chunk — that the SHIPPED bundle carries the provider calls and no bare `callProvider`, so a
+     stale rebuild fails the guard rather than the classroom). **The scoring defaults moved with the
+     catalogue:** Claude Sonnet 5, GPT-6 Luna, Gemini 3.8 Flash — the cheapest current model of each
+     provider (`SCORING_DEFAULT_MODEL`; Haiku 4.5 and GPT-5.4 mini left the list, Gemini 3.5 Flash
+     stays listed but is no longer the scoring default). **Three things the adversarial review of
+     that change caught, all fixed in it:** (a) the assistant's own `callClaude` in functions/ai.js
+     would have sent the newly-listed thinking-by-default models (Opus 5/5.5, Sonnet 5, Fable) a
+     1000-token `max_tokens` with no effort control — thinking counts toward it, so a chat turn
+     could come back as a thinking block and NO text, a blank AI message with no error; it now
+     adds `CLAUDE_THINKING_HEADROOM` (4000) above the admin's reply ceiling and `effort: low` for
+     `CLAUDE_THINKS_BY_DEFAULT` models, while the older models (no thinking when the parameter is
+     omitted) keep the plain ceiling — and `callGemini` does the same for Gemini 3.x
+     (`GEMINI_THINKS_BY_DEFAULT`, thinks at MEDIUM by default with the thoughts counted against
+     `maxOutputTokens`: `thinkingLevel: low` + `GEMINI_THINKING_HEADROOM`; 2.5 rejects the field);
+     (b) the function's `callGemini` still put the key in the URL
+     as `?key=` — logs and error text, and the "AQ."-format auth keys AI Studio issues since
+     mid-2026 (standard keys are refused from September 2026) are rejected in that position — so
+     it sends `x-goog-api-key` like the browser rater (the key placeholder says `AQ.…`); and (c) a
+     model id saved under AI Settings that the pruned list no longer offers used to make the
+     controlled `<select>` display "Use default" while the assistant kept running on the saved id
+     and Save re-persisted it — it now renders as its own "Saved: … (no longer listed)" option.
+     The guard pins all three (the two regexes and the header are scraped from functions/ai.js
+     with a failed-check fallback, never a crash).
+   - **A long scoring run never silently leaves rows empty** (owner report 2026-08: "uploaded 435 ideas, asked for AI scores, some rows were empty"). 435 ideas is ~55 sequential API calls, and the old loop lost work four silent ways while the progress bar still read 435/435: **(1)** one failed call **re-threw**, so the caller's `setRows` never ran and every score already collected was discarded — 54 good batches lost to a 429 on the 55th; **(2)** a reply **truncated** by the token limit has no closing `]`, and the array-only parser returned null, losing all 8 ideas of that batch; **(3)** a **short reply** (6 entries for 8 ideas) left the other 2 empty for good; **(4)** a **duplicate `"i"`** overwrote one slot and left a sibling empty. The batching/parsing/retry logic now lives in **`src/utils/scoreBatch.js`** (no Firebase/`fetch` import, so it is testable offline): `extractScoreObjects` salvages the complete `{...}` objects out of an unterminated array, `assignScores` never lets a duplicate or out-of-range index clobber a filled slot, ideas still unscored after the batch call are retried **one at a time** (`singleTries`, because the usual failure is an unreadable REPLY, which the transport retry never sees), transient errors (429/5xx/network) get `withRetry` backoff while fatal ones (401/403/400 — a rejected key fails identically every time) abort at once, and **partial results are always returned**. A dead provider trips a **circuit breaker** (`maxConsecutiveFailures`, 3) instead of grinding all 55 batches through the backoff, and a thrown batch skips the per-idea round (the transport is down, not the ideas). Token ceilings were raised with it — Claude/OpenAI 1500 → 4000, reasoning models 2000 → 8000 (they spend the budget on hidden reasoning FIRST and can return an empty message), Gemini 2000 → 8000 — since truncation was cause (2); since 2026-09-23 they are `SCORING_MAX_TOKENS` 8000 for every Claude model (all five listed think by default) and the OpenAI reasoning line, `LEGACY_CHAT_MAX_TOKENS` 4000 for gpt-4.1/gpt-4o only, 8000 for Gemini — in `providerRequest.js`. The page now **reports the shortfall** instead of showing blank rows: "Scored 431 of 435 ideas. 4 could not be scored this run … press Score again to retry just those", with ideas that have **no text** counted separately (nothing can rate them). Pressing Score again picks up exactly the still-empty ones, since the button's scope is "ideas with no score yet". Offline test: `node _ideasearchlab-src/tools/score-batch-guard.mjs` (33 checks against a fake model — truncated, short, duplicate-indexed, rate-limited and dead-provider replies).
    - **Coming back to a dataset with empty AI cells — the whole loop in one step**
      (owner report 2026-08-25: *"in the past I noticed that some rows had no scores for
      those two columns … I would like to be able to upload my entire data set, and in
