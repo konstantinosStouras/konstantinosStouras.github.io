@@ -553,6 +553,27 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    per-idea dataset), *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and
    *Removed participants* when any — plus a raw-dataset **CSV**. Both reflect the current
    post-removal `effectiveRows`.
+   - **3.1: an idea with no words is not measured** (owner request 2026-09-23). The
+     objective KPIs are TF-IDF cosines, and an idea whose text has no word the tokeniser
+     reads (blank, "?", a one-letter answer, text in a non-Latin script such as Greek)
+     vectorises to ALL ZEROS; a zero vector has cosine 0 with everything, which every
+     formula reads as "as different as possible". Such an idea scored **Novelty 1,
+     Distinctiveness 1, Score 1 — the top of the ranking** — sat in every other idea's
+     Distinctiveness mean as a fake "completely different" neighbour, and counted as a
+     unique concept in the Unique fraction. It is now left **blank**, kept out of every
+     pool, and kept out of the TF-IDF corpus itself (it used to add to N in the IDF, which
+     nudged every real idea's numbers), so the real ideas get EXACTLY the numbers they
+     would get without it; a reference line with nothing to read is dropped the same way.
+     The page reports how many were left blank. The text → KPI path is one pure function,
+     **`objectiveKpisFromText`** in `src/utils/objectiveKpis.js`, which the page calls
+     (`hasTerms`/`measuredUniqueFraction` in `deterministicKpis.js`); the offline twin
+     `_idea-kpi-script/idea_kpis.py` applies the same rule. Deliberately NOT changed: an
+     idea that HAS words but shares none with R or with any other idea still scores 1 —
+     that is the formula working (it is lexically unlike everything), not a missing
+     value. Offline test: **`node _ideasearchlab-src/tools/det-kpi-guard.mjs`** (36
+     checks: the building blocks, the pipeline with blank/"?"/Greek/Chinese ideas mixed
+     in, that real ideas' numbers are unchanged to 1e-12, that the page goes through the
+     pipeline, and number-for-number parity with the Python twin when numpy is present).
    - **The rater could not call ANY provider until 2026-09-23 — `callProvider` was defined
      nowhere.** `llmClient.js` called it on every batch, no module defined or imported it, and the
      shipped bundle carried it as a bare global (`call:S=>callProvider(…)` in the minified chunk), so

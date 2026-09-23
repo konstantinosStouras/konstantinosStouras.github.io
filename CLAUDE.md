@@ -3008,6 +3008,18 @@ reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
 `node _ideasearchlab-src/tools/score-gaps-guard.mjs` (60+ checks, including the
 owner's own 741-idea scenario driven through the real scoring engine).
 
+**Section 3.1's objective KPIs leave an idea with no words blank.** An idea whose
+text has no word the TF-IDF tokeniser reads (blank, "?", one letter, Greek text)
+vectorises to all zeros, and cosine 0 with everything read as "as different as
+possible": it scored Novelty 1, Distinctiveness 1, Score 1 — the top of the
+ranking — and skewed every other idea's Distinctiveness and the Unique fraction.
+It is now left blank and kept out of every pool and out of the TF-IDF corpus, so
+real ideas get exactly the numbers they would get without it. One pure function,
+`objectiveKpisFromText` in `_ideasearchlab-src/src/utils/objectiveKpis.js`, is
+what the page calls; the offline twin `_idea-kpi-script/idea_kpis.py` applies the
+same rule. Offline test `node _ideasearchlab-src/tools/det-kpi-guard.mjs` (36
+checks, incl. number-for-number parity with the Python twin).
+
 **The AI rater's model list is five models of each provider's newest
 generation, most capable first, and the rater can now actually call them**
 (owner, 2026-09-23: "top 5 newest … starting with their best and most

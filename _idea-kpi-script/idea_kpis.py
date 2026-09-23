@@ -95,24 +95,47 @@ def novelty_from_sims(sims_to_R):
     return 1.0 - max(sims_to_R)
 
 
+def has_terms(vec):
+    """True if the vector carries any term at all (mirrors deterministicKpis.hasTerms).
+
+    A text with no word of two or more letters/digits vectorises (TF-IDF) to all
+    zeros, and a zero vector has cosine 0 with everything, which every KPI here
+    reads as "as different as possible": Novelty 1, Distinctiveness 1, Score 1 —
+    the top of the ranking for an idea with nothing to measure. Such an idea is
+    left unscored and kept out of every pool.
+    """
+    return vec is not None and bool(np.any(np.asarray(vec, dtype=float) != 0))
+
+
 def novelty(idea_vec, ref_vecs):
-    """Novelty of an idea = 1 − max cosine similarity to any item in R."""
-    if not ref_vecs:
+    """Novelty of an idea = 1 − max cosine similarity to any item in R.
+
+    None when R is empty or the idea has no terms; reference items with no terms
+    are ignored.
+    """
+    if not has_terms(idea_vec):
         return None
-    return novelty_from_sims([cosine(idea_vec, r) for r in ref_vecs])
+    refs = [r for r in (ref_vecs if ref_vecs is not None else []) if has_terms(r)]
+    if not refs:
+        return None
+    return novelty_from_sims([cosine(idea_vec, r) for r in refs])
 
 
-def distinctiveness_from_row(sim_row, i):
+def distinctiveness_from_row(sim_row, i, include=None):
     """Pool distinctiveness of idea ``i`` from its row of the similarity matrix.
 
-    = 1 − mean cosine similarity to the other N−1 ideas (the i-th, self, is skipped).
-    None for a pool of one (the mean is undefined).
+    = 1 − mean cosine similarity to the other ideas (the i-th, self, is skipped).
+    ``include`` (optional, one bool per pool member) restricts the pool: excluded
+    members are neither averaged over nor given a value. None when no other
+    member is left (the mean is undefined).
     """
     n = len(sim_row)
-    if n < 2:
+    if include is not None and not include[i]:
         return None
-    total = sum(sim_row[j] for j in range(n) if j != i)
-    return 1.0 - total / (n - 1)
+    others = [sim_row[j] for j in range(n) if j != i and (include is None or include[j])]
+    if not others:
+        return None
+    return 1.0 - sum(others) / len(others)
 
 
 def combined_score(nov, dist, w_nov=0.5, w_dist=0.5):
@@ -513,16 +536,35 @@ def compute_kpis(ideas, refs, backend, *, pool_by="", tau=0.8, w_nov=0.5, w_dist
     """
     texts = [it["text"] for it in ideas]
 
+    # An idea with no text, or (TF-IDF) no word of two or more letters/digits, has
+    # nothing to compare. It used to score a perfect 1 on everything (see
+    # has_terms); it now stays unscored, is kept out of every pool, and is left out
+    # of the corpus the backend is fitted on, so it cannot shift the other ideas'
+    # IDF either. Same rule for a reference line with nothing to read.
+    tok = getattr(backend, "_tokens", None)
+
+    def readable(t):
+        t = str(t or "")
+        return bool(t.strip()) and (bool(tok(t)) if tok else True)
+
+    refs = [r for r in refs if readable(r)]
+    readable_idx = [i for i, t in enumerate(texts) if readable(t)]
+
     # Embed ideas + R in one shared vector space (so novelty similarities are valid).
-    backend.fit(texts + refs)
+    backend.fit([texts[i] for i in readable_idx] + refs)
     idea_vecs = backend.transform(texts)
     ref_vecs = backend.transform(refs) if refs else np.zeros((0, idea_vecs.shape[1] if idea_vecs.size else 1))
 
+    readable_set = set(readable_idx)
+    measured = [i in readable_set and has_terms(idea_vecs[i]) for i in range(len(texts))]
+    ref_ok = [r for r in ref_vecs if has_terms(r)]
+
     # Novelty (vs R) is independent of the pool — vectorise it for all ideas at once.
-    if len(refs):
-        ideas_to_R = idea_vecs @ ref_vecs.T  # both already L2-normalised → cosine
+    if ref_ok:
+        R = np.asarray(ref_ok, dtype=float)
+        ideas_to_R = idea_vecs @ R.T  # both already L2-normalised → cosine
         max_sim_to_R = ideas_to_R.max(axis=1)
-        novelties = [1.0 - float(m) for m in max_sim_to_R]
+        novelties = [1.0 - float(m) if measured[i] else None for i, m in enumerate(max_sim_to_R)]
     else:
         novelties = [None] * len(ideas)
 
@@ -537,8 +579,11 @@ def compute_kpis(ideas, refs, backend, *, pool_by="", tau=0.8, w_nov=0.5, w_dist
     score = [None] * len(ideas)
     for idxs in pools.values():
         M = sim_matrix([idea_vecs[i] for i in idxs])
+        include = [measured[i] for i in idxs]
         for local_i, gi in enumerate(idxs):
-            d = distinctiveness_from_row(M[local_i], local_i)
+            if not measured[gi]:
+                continue  # nothing to measure: novelty, distinctiveness and score stay None
+            d = distinctiveness_from_row(M[local_i], local_i, include)
             dist[gi] = d
             score[gi] = combined_score(novelties[gi], d, w_nov, w_dist)
 
@@ -575,13 +620,17 @@ def compute_kpis(ideas, refs, backend, *, pool_by="", tau=0.8, w_nov=0.5, w_dist
             return _M[a][b]
 
         prod = productivity_count(items, get_sim, dedup_tau=dedup_tau, min_words=min_words)
+        # The unique fraction is taken over the ideas that have something to compare.
+        keep = [k for k, gi in enumerate(idxs) if measured[gi]]
+        M_measured = [[M[a][b] for b in keep] for a in keep]
         pool_results.append(
             {
                 "pool": pool_key,
                 "n_ideas": len(idxs),
+                "n_unmeasured": len(idxs) - len(keep),
                 "productivity_count": prod["count"],
                 "productivity_dropped_short": prod["dropped"],
-                "unique_fraction": {f"tau_{t}": unique_fraction(M, t) for t in taus},
+                "unique_fraction": {f"tau_{t}": unique_fraction(M_measured, t) for t in taus},
             }
         )
     pool_results.sort(key=lambda p: (-p["n_ideas"], p["pool"]))
@@ -804,6 +853,46 @@ def run_selftest():
     ]
     p3 = productivity_count(cross, lambda a, b: 0.99, dedup_tau=0.9)
     check("productivity cross-group not merged → 2", float(p3["count"]), 2.0)
+
+    # An idea with nothing to measure (blank, "?", one letter, a script the TF-IDF
+    # tokeniser does not read) used to score 1 on every KPI — the top of the
+    # ranking. It must stay unscored and out of every other idea's pool.
+    print("\n--- Ideas with no words to measure ---")
+    check("has_terms zero vector", float(has_terms([0.0, 0.0])), 0.0)
+    check("has_terms real vector", float(has_terms([0.0, 0.3])), 1.0)
+    check("novelty of a zero vector", novelty([0.0, 0.0], [[1.0, 0.0]]), None)
+    check("novelty ignores a wordless R item", novelty([1.0, 0.0], [[0.0, 0.0], [1.0, 0.0]]), 0.0)
+    row = [1.0, 0.6, 0.0]   # idea 0 vs [itself, a real idea, a wordless idea]
+    check("distinctiveness keeps the wordless idea out", distinctiveness_from_row(row, 0, [True, True, False]), 0.4)
+    check("distinctiveness of the wordless idea", distinctiveness_from_row(row, 2, [True, True, False]), None)
+    bench = [
+        {"text": "Thermochromic socks: socks that change colour at body temperature", "group_uid": "g1"},
+        {"text": "Fever pillowcase: a pillowcase that changes colour when a child has a fever", "group_uid": "g1"},
+        {"text": "Heat-map running sleeve: shows which muscles warm up during a run", "group_uid": "g2"},
+    ]
+    refs = ["thermochromic socks", "mood ring", "colour-change athletic top"]
+    base = compute_kpis([dict(it) for it in bench], refs, TfidfBackend())
+    blanks = [{"text": t, "group_uid": "g2"} for t in ("", "   ", "?", "a", "Καλημέρα κόσμε")]
+    got = compute_kpis([dict(it) for it in bench] + blanks, refs, TfidfBackend())
+    for k, it in enumerate(got["ideas"][len(bench):]):
+        ok = it["novelty"] is None and it["distinctiveness"] is None and it["score"] is None
+        print(f"  [{'PASS' if ok else 'FAIL'}] wordless idea {k + 1} ({it['text']!r}) left unscored")
+        if not ok:
+            failures.append(f"wordless idea {k + 1}")
+    # ...and the real ideas get EXACTLY the numbers they get without them: the
+    # wordless ideas are neither a neighbour nor a document in the IDF corpus.
+    for k in range(len(bench)):
+        a, b = base["ideas"][k], got["ideas"][k]
+        for kpi in ("novelty", "distinctiveness", "score"):
+            check(f"real idea {k + 1} {kpi} unchanged by wordless ideas", b[kpi], a[kpi], tol=1e-12)
+    pool = got["pools"][0]
+    check("unique fraction ignores wordless ideas", pool["unique_fraction"]["tau_0.8"], 1.0)
+    check("unmeasured ideas are reported", float(pool["n_unmeasured"]), 5.0)
+    best = max((it for it in got["ideas"] if it["score"] is not None), key=lambda it: it["score"])
+    ok = best["text"] in {it["text"] for it in bench}
+    print(f"  [{'PASS' if ok else 'FAIL'}] the top-ranked idea is a real idea: {best['text'][:40]!r}")
+    if not ok:
+        failures.append("top-ranked idea is a real idea")
 
     print("\n" + ("ALL SELF-TESTS PASSED ✓" if not failures else f"FAILURES: {failures}"))
     return 0 if not failures else 1

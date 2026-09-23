@@ -21,8 +21,8 @@ import {
   scoreGaps, gapSummary, shouldRunAnotherPass, mergeAiScoresIntoRows, ideaScoreState,
   scorableText, pickScoredSheet,
 } from '../utils/scoreGaps'
-import { tfidfVectors } from '../utils/tfidf'
-import { computeDeterministicKpis, uniqueFraction, productivityCount, cosine, simMatrix } from '../utils/deterministicKpis'
+import { objectiveKpisFromText } from '../utils/objectiveKpis'
+import { measuredUniqueFraction, productivityCount, cosine, hasTerms } from '../utils/deterministicKpis'
 import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById, modelOptionLabel, CATALOGUE_AS_OF } from '../data/aiModels'
 import { MODEL_PRICES } from '../data/aiPricing'
 import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
@@ -466,20 +466,20 @@ export default function DataAnalytics() {
     setDetErr(''); setDetResult(null)
     const pool = effectiveRows                         // distinctiveness pool = all loaded ideas
     if (pool.length < 2) { setDetErr('Load at least two ideas first.'); return }
-    const refs = referenceSet.split('\n').map(s => s.trim()).filter(Boolean)
-    if (!refs.length) { setDetErr('The reference set R is empty. Add the products that already exist (one per line).'); return }
-    setDetComputing({ phase: 'Vectorising ideas (TF-IDF)', done: 0, total: pool.length + refs.length })
+    const refLines = referenceSet.split('\n').map(s => s.trim()).filter(Boolean)
+    if (!refLines.length) { setDetErr('The reference set R is empty. Add the products that already exist (one per line).'); return }
+    setDetComputing({ phase: 'Vectorising ideas (TF-IDF)', done: 0, total: pool.length + refLines.length })
     // Let the "computing…" state paint before the synchronous TF-IDF work.
     await new Promise(res => setTimeout(res, 0))
     try {
-      // Vectorise ideas + reference set TOGETHER so they share one vocabulary and
-      // IDF space — required for the idea-vs-R cosine in Novelty to be meaningful.
+      // Ideas + R are vectorised together (one vocabulary, one IDF). An idea with no
+      // word the tokeniser reads (blank, "?", one letter, Greek text) has nothing to
+      // compare: it is left blank and kept out of every pool and out of the TF-IDF
+      // corpus — it used to score a perfect 1 on every KPI. See objectiveKpis.js.
       const ideaTexts = pool.map(r => r.text || ideaText(r))
-      const { vectors } = tfidfVectors([...ideaTexts, ...refs])
-      const ideaVecs = vectors.slice(0, pool.length)
-      const refVecs = vectors.slice(pool.length)
-      // Per-idea KPIs over the full pool.
-      const { perIdea } = computeDeterministicKpis(ideaVecs, refVecs, { tau: 0.8 })
+      const res = objectiveKpisFromText(ideaTexts, refLines, { tau: 0.8 })
+      if (res.error) { setDetErr(res.error); return }
+      const { perIdea, ideaVecs, refs, unmeasured } = res
       const round4 = x => (x == null ? '' : Math.round(x * 1e4) / 1e4)
       const byRid = new Map(pool.map((r, i) => [r.rid, perIdea[i]]))
       setRows(prev => recomputeOverall(prev.map(r => {
@@ -493,16 +493,16 @@ export default function DataAnalytics() {
         const idxs = pool.map((r, i) => (r.condition === cond ? i : -1)).filter(i => i >= 0)
         if (!idxs.length) continue
         const vecs = idxs.map(i => ideaVecs[i])
-        const M = simMatrix(vecs)
         const items = idxs.map(i => ({ text: pool[i].text || ideaText(pool[i]), group: pool[i].group_id }))
         const prod = productivityCount(items, (a, b) => cosine(vecs[a], vecs[b]), { dedupTau: 0.9, minWords: 2 })
         perCond.push({
-          condition: cond, n: idxs.length,
-          uf80: uniqueFraction(M, 0.8), uf75: uniqueFraction(M, 0.75), uf85: uniqueFraction(M, 0.85),
+          // n = the ideas the Unique fraction is taken over (those with words).
+          condition: cond, n: vecs.filter(hasTerms).length,
+          uf80: measuredUniqueFraction(vecs, 0.8), uf75: measuredUniqueFraction(vecs, 0.75), uf85: measuredUniqueFraction(vecs, 0.85),
           productivity: prod.count,
         })
       }
-      setDetResult({ perCond, refCount: refs.length, ideas: pool.length })
+      setDetResult({ perCond, refCount: refs.length, ideas: pool.length - unmeasured, unmeasured })
     } catch (err) {
       setDetErr(err.message || String(err))
     } finally {
@@ -1634,7 +1634,13 @@ export default function DataAnalytics() {
                 <div style={{ marginTop: 8 }}>
                   <p className={styles.loadMsg}>
                     Computed Novelty / Distinctiveness / Score for {detResult.ideas} idea{detResult.ideas === 1 ? '' : 's'}
-                    {' '}against {detResult.refCount} reference item{detResult.refCount === 1 ? '' : 's'}. Pool-level KPIs per condition:
+                    {' '}against {detResult.refCount} reference item{detResult.refCount === 1 ? '' : 's'}.
+                    {detResult.unmeasured > 0 && (
+                      <>{' '}{detResult.unmeasured} idea{detResult.unmeasured === 1 ? ' has' : 's have'} no words to compare
+                      {' '}(blank, a single letter, or text in a non-Latin script) and {detResult.unmeasured === 1 ? 'was' : 'were'} left
+                      {' '}blank and kept out of the pools.</>
+                    )}
+                    {' '}Pool-level KPIs per condition:
                   </p>
                   <div className={styles.tableWrap} style={{ marginTop: 8 }}>
                     <table className={styles.regTable}>

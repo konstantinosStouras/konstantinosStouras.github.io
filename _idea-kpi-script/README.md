@@ -20,6 +20,14 @@ For each idea (Title + Description):
 | **Unique fraction** | `connected groups / N`, an edge when similarity `> tau` (reported at tau = 0.75 / 0.80 / 0.85) | per pool |
 | **KPI 2 — Productivity** | count of non-redundant, multi-word ideas (near-duplicates within a group merge to one) | per pool |
 
+**Ideas with nothing to measure are left blank.** An idea with no text — or, on the
+TF-IDF backend, no word of two or more letters/digits (`?`, a single letter, Greek text) —
+gets no Novelty / Distinctiveness / Score, is kept out of every pool and out of the corpus
+the backend is fitted on. Its all-zero vector used to score a perfect 1 on every KPI and top
+the ranking. `n_unmeasured` in each pool's JSON says how many were skipped. Same rule as the
+web page (`objectiveKpis.js`); `node ../_ideasearchlab-src/tools/det-kpi-guard.mjs` checks the
+two give identical numbers.
+
 ### Excluded for now (by request)
 
 - **KPI 1 — Prototypicality (KS statistic).** Needs a topic-specific corpus, Porter stemming, a
