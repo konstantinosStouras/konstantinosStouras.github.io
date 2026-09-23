@@ -551,6 +551,27 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    per-idea dataset), *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and
    *Removed participants* when any — plus a raw-dataset **CSV**. Both reflect the current
    post-removal `effectiveRows`.
+   - **3.1: an idea with no words is not measured** (owner request 2026-09-23). The
+     objective KPIs are TF-IDF cosines, and an idea whose text has no word the tokeniser
+     reads (blank, "?", a one-letter answer, text in a non-Latin script such as Greek)
+     vectorises to ALL ZEROS; a zero vector has cosine 0 with everything, which every
+     formula reads as "as different as possible". Such an idea scored **Novelty 1,
+     Distinctiveness 1, Score 1 — the top of the ranking** — sat in every other idea's
+     Distinctiveness mean as a fake "completely different" neighbour, and counted as a
+     unique concept in the Unique fraction. It is now left **blank**, kept out of every
+     pool, and kept out of the TF-IDF corpus itself (it used to add to N in the IDF, which
+     nudged every real idea's numbers), so the real ideas get EXACTLY the numbers they
+     would get without it; a reference line with nothing to read is dropped the same way.
+     The page reports how many were left blank. The text → KPI path is one pure function,
+     **`objectiveKpisFromText`** in `src/utils/objectiveKpis.js`, which the page calls
+     (`hasTerms`/`measuredUniqueFraction` in `deterministicKpis.js`); the offline twin
+     `_idea-kpi-script/idea_kpis.py` applies the same rule. Deliberately NOT changed: an
+     idea that HAS words but shares none with R or with any other idea still scores 1 —
+     that is the formula working (it is lexically unlike everything), not a missing
+     value. Offline test: **`node _ideasearchlab-src/tools/det-kpi-guard.mjs`** (36
+     checks: the building blocks, the pipeline with blank/"?"/Greek/Chinese ideas mixed
+     in, that real ideas' numbers are unchanged to 1e-12, that the page goes through the
+     pipeline, and number-for-number parity with the Python twin when numpy is present).
    - **A long scoring run never silently leaves rows empty** (owner report 2026-08: "uploaded 435 ideas, asked for AI scores, some rows were empty"). 435 ideas is ~55 sequential API calls, and the old loop lost work four silent ways while the progress bar still read 435/435: **(1)** one failed call **re-threw**, so the caller's `setRows` never ran and every score already collected was discarded — 54 good batches lost to a 429 on the 55th; **(2)** a reply **truncated** by the token limit has no closing `]`, and the array-only parser returned null, losing all 8 ideas of that batch; **(3)** a **short reply** (6 entries for 8 ideas) left the other 2 empty for good; **(4)** a **duplicate `"i"`** overwrote one slot and left a sibling empty. The batching/parsing/retry logic now lives in **`src/utils/scoreBatch.js`** (no Firebase/`fetch` import, so it is testable offline): `extractScoreObjects` salvages the complete `{...}` objects out of an unterminated array, `assignScores` never lets a duplicate or out-of-range index clobber a filled slot, ideas still unscored after the batch call are retried **one at a time** (`singleTries`, because the usual failure is an unreadable REPLY, which the transport retry never sees), transient errors (429/5xx/network) get `withRetry` backoff while fatal ones (401/403/400 — a rejected key fails identically every time) abort at once, and **partial results are always returned**. A dead provider trips a **circuit breaker** (`maxConsecutiveFailures`, 3) instead of grinding all 55 batches through the backoff, and a thrown batch skips the per-idea round (the transport is down, not the ideas). Token ceilings were raised with it — Claude/OpenAI 1500 → 4000, reasoning models 2000 → 8000 (they spend the budget on hidden reasoning FIRST and can return an empty message), Gemini 2000 → 8000 — since truncation was cause (2). The page now **reports the shortfall** instead of showing blank rows: "Scored 431 of 435 ideas. 4 could not be scored this run … press Score again to retry just those", with ideas that have **no text** counted separately (nothing can rate them). Pressing Score again picks up exactly the still-empty ones, since the button's scope is "ideas with no score yet". Offline test: `node _ideasearchlab-src/tools/score-batch-guard.mjs` (33 checks against a fake model — truncated, short, duplicate-indexed, rate-limited and dead-provider replies).
    - **Coming back to a dataset with empty AI cells — the whole loop in one step**
      (owner report 2026-08-25: *"in the past I noticed that some rows had no scores for
