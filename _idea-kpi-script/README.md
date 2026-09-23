@@ -16,13 +16,13 @@ For each idea (Title + Description):
 |---|---|---|
 | **Novelty** | `1 − max cosine similarity to a reference set R` (distance from products that already exist) | per idea |
 | **Distinctiveness** | `1 − mean cosine similarity to the other ideas in the pool` | per idea |
-| **Combined score** | `0.5·Novelty + 0.5·Distinctiveness`, with a **rank** within each pool | per idea |
+| **NoveltyScore** (was *Combined score*) | `0.5·Novelty + 0.5·Distinctiveness`, with a **rank** within each pool | per idea |
 | **Unique fraction** | `connected groups / N`, an edge when similarity `> tau` (reported at tau = 0.75 / 0.80 / 0.85) | per pool |
 | **KPI 2 — Productivity** | count of non-redundant, multi-word ideas (near-duplicates within a group merge to one) | per pool |
 
 **Ideas with nothing to measure are left blank.** An idea with no text — or, on the
 TF-IDF backend, no word of two or more letters/digits (`?`, a single letter, Greek text) —
-gets no Novelty / Distinctiveness / Score, is kept out of every pool and out of the corpus
+gets no Novelty / Distinctiveness / NoveltyScore, is kept out of every pool and out of the corpus
 the backend is fitted on. Its all-zero vector used to score a perfect 1 on every KPI and top
 the ranking. `n_unmeasured` in each pool's JSON says how many were skipped. Same rule as the
 web page (`objectiveKpis.js`); `node ../_ideasearchlab-src/tools/det-kpi-guard.mjs` checks the
@@ -81,7 +81,7 @@ python idea_kpis.py --input idea_analytics_aggregate.xlsx
 
 That prints a summary, and writes three files into an `output\` folder:
 
-- `idea_kpis_per_idea.csv` — one row per idea: novelty, distinctiveness, score, rank
+- `idea_kpis_per_idea.csv` — one row per idea: novelty, distinctiveness, novelty_score (NoveltyScore), rank
 - `idea_kpis_pools.csv` — one row per pool: KPI 2 productivity + unique fraction
 - `idea_kpis.json` — the full structured results (settings + every idea + every pool)
 

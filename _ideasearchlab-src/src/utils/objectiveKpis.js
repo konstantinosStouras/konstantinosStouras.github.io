@@ -4,7 +4,7 @@
  * The Section 3.1 pipeline from TEXT to per-idea objective KPIs, as one pure
  * function so the page and the offline guard (tools/det-kpi-guard.mjs) run the
  * same code: which texts are measured, how ideas + R are vectorised, and the
- * per-idea Novelty / Distinctiveness / Score.
+ * per-idea Novelty / Distinctiveness / NoveltyScore (their mean).
  *
  * An idea with no word the tokeniser reads (blank, "?", a one-letter answer, or
  * text in a script it does not read, such as Greek) has nothing to compare. It

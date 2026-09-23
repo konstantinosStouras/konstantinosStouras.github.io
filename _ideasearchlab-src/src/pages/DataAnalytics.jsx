@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
-  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, presentKpis,
+  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, presentKpis, isNoveltyScoreHeader,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition,
@@ -415,7 +415,8 @@ export default function DataAnalytics() {
         const header = aoa[h].map(c => String(c).toLowerCase().trim())
         const find = pred => header.findIndex(pred)
         const ciTitle = find(c => c.includes('idea title') || c === 'title')
-        const ciNov = find(c => c.includes('novelty'))
+        // Not the 3.1 NoveltyScore or objective Novelty column, whatever order they come in.
+        const ciNov = find(c => c.includes('novelty') && !isNoveltyScoreHeader(c) && !/objective|\bobj\b|obj\./.test(c))
         const ciUse = find(c => c.includes('usefulness') || c.includes('useful'))
         const entries = []
         for (let i = h + 1; i < aoa.length; i++) {
@@ -460,7 +461,7 @@ export default function DataAnalytics() {
   // Vectorises every loaded idea + the reference set R with classical TF-IDF
   // (in the browser, no API key, no model download), then computes per-idea
   // Novelty (1 − max sim to R), Distinctiveness (1 − mean sim to the pool) and
-  // the combined Score, plus the pool-level Unique fraction and Productivity per
+  // their mean, NoveltyScore, plus the pool-level Unique fraction and Productivity per
   // condition. Cosine over TF-IDF vectors → fully reproducible from the data.
   async function computeDeterministic() {
     setDetErr(''); setDetResult(null)
@@ -1503,7 +1504,7 @@ export default function DataAnalytics() {
             <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Condition, Stage,
             Final&nbsp;Group&nbsp;Pick, Title, Description</em>, the <em>Novelty / Usefulness / Quality</em>
             columns ready for blind expert rating, and the Section&nbsp;3.1 objective KPIs
-            (<em>Obj.&nbsp;Novelty / Obj.&nbsp;Distinctiveness / Obj.&nbsp;Score</em>) when computed.
+            (<em>Novelty&nbsp;(objective) / Pool&nbsp;distinctiveness / NoveltyScore</em>) when computed.
             You can also <strong>Import Excel / CSV</strong>
             here (same importer as Step&nbsp;1): the file is added to the source list above <strong>and
             loaded right away</strong>, so the aggregate, the stats below and Steps&nbsp;3–6 fill in
@@ -1589,7 +1590,7 @@ export default function DataAnalytics() {
                 Meincke et&nbsp;al. 2025; Bouschery et&nbsp;al. 2024). Using classical <strong>TF-IDF</strong> similarity computed
                 {' '}entirely in your browser (no&nbsp;API key, no&nbsp;model download), it computes, per idea,
                 {' '}<em>Novelty</em> (1&nbsp;−&nbsp;max similarity to the reference set R), <em>Distinctiveness</em>
-                {' '}(1&nbsp;−&nbsp;mean similarity to the other ideas) and their mean <em>Score</em>; and per condition the
+                {' '}(1&nbsp;−&nbsp;mean similarity to the other ideas) and their mean, <em>NoveltyScore</em>; and per condition the
                 pool-level <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2). <em>Prototypicality (KS)</em> and the
                 KS-based creativity count are not computed in the browser yet — compute them elsewhere and
                 {' '}<strong>Upload additional KPIs</strong> below: every numeric column (matched to your ideas by Idea&nbsp;ID)
@@ -1633,7 +1634,7 @@ export default function DataAnalytics() {
               {detResult && (
                 <div style={{ marginTop: 8 }}>
                   <p className={styles.loadMsg}>
-                    Computed Novelty / Distinctiveness / Score for {detResult.ideas} idea{detResult.ideas === 1 ? '' : 's'}
+                    Computed Novelty / Distinctiveness / NoveltyScore for {detResult.ideas} idea{detResult.ideas === 1 ? '' : 's'}
                     {' '}against {detResult.refCount} reference item{detResult.refCount === 1 ? '' : 's'}.
                     {detResult.unmeasured > 0 && (
                       <>{' '}{detResult.unmeasured} idea{detResult.unmeasured === 1 ? ' has' : 's have'} no words to compare

@@ -6,7 +6,7 @@
  *   • idea_ranking_kpis_llm_guide.md (Lee & Chung 2024; Meincke et al. 2025):
  *       - Novelty            = 1 − max cosine similarity to a reference set R
  *       - Distinctiveness    = 1 − mean cosine similarity to the other pool ideas
- *       - Combined score     = w_novelty·novelty + w_distinct·distinctiveness
+ *       - NoveltyScore       = w_novelty·novelty + w_distinct·distinctiveness  (was "Combined score")
  *       - Unique fraction    = connected groups / N (edge iff sim > tau), pool-level
  *   • llm_kpi_calculation_spec.md (Bouschery et al. 2024):
  *       - KPI 2 Productivity = count of non-redundant, multi-word ideas

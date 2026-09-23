@@ -10,7 +10,7 @@ objective, repeatable KPIs from the two spec files shipped with this study:
   • idea_ranking_kpis_llm_guide.md  (Lee & Chung 2024; Meincke et al. 2025)
         Novelty          = 1 − max cosine similarity to a reference set R
         Distinctiveness  = 1 − mean cosine similarity to the other ideas in the pool
-        Combined score   = w_novelty·Novelty + w_distinct·Distinctiveness   (+ ranking)
+        NoveltyScore     = w_novelty·Novelty + w_distinct·Distinctiveness   (+ ranking; was "Combined score")
         Unique fraction  = connected groups / N  (edge iff sim > tau)        [per pool]
   • llm_kpi_calculation_spec.md      (Bouschery et al. 2024)
         KPI 2 Productivity = count of non-redundant, multi-word ideas         [per pool]
@@ -671,7 +671,7 @@ def write_outputs(result, outdir, basename="idea_kpis"):
     per_idea = os.path.join(outdir, f"{basename}_per_idea.csv")
     fields = [
         "rank_in_pool", "pool", "idea_id", "session", "condition", "stage", "group_uid",
-        "author_label", "title", "description", "novelty", "distinctiveness", "score",
+        "author_label", "title", "description", "novelty", "distinctiveness", "novelty_score",
     ]
     with open(per_idea, "w", newline="", encoding="utf-8-sig") as fh:
         w = csv.writer(fh)
@@ -735,8 +735,8 @@ def print_summary(result, top=15):
     # Headline ranking: best ideas across all pools by combined score.
     scored = [it for it in ideas if it["score"] is not None]
     scored.sort(key=lambda r: r["score"], reverse=True)
-    print(f"\n  TOP {min(top, len(scored))} IDEAS BY COMBINED SCORE (Novelty + Distinctiveness)")
-    print(f"  {'#':>3}  {'score':>6} {'novl':>6} {'dist':>6}  {'pool':<10} title")
+    print(f"\n  TOP {min(top, len(scored))} IDEAS BY NOVELTYSCORE (mean of Novelty and Distinctiveness)")
+    print(f"  {'#':>3}  {'nov.sc':>6} {'novl':>6} {'dist':>6}  {'pool':<10} title")
     print("  " + "-" * 74)
     for i, it in enumerate(scored[:top], start=1):
         print(
@@ -811,7 +811,7 @@ def run_selftest():
     check("UF {3 sprinklers}", unique_fraction(same3, 0.8), 1 / 3)
 
     # §11.6 / §7 — combined score and ranking.
-    print("\n--- Combined score + ranking (guide §11.6–§11.7) ---")
+    print("\n--- NoveltyScore (combined score) + ranking (guide §11.6–§11.7) ---")
     nov = [0.21, 0.38, 0.26, 0.42, 0.53]
     dst = [0.48, 0.47, 0.66, 0.52, 0.67]
     titles = ["Reveal Tee", "Sports Bra", "Baby Onesie", "Leggings", "Yoga Mat"]

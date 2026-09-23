@@ -27,7 +27,10 @@ import {
   hasTerms, novelty, distinctiveness, measuredUniqueFraction, computeDeterministicKpis,
 } from '../src/utils/deterministicKpis.js'
 import { objectiveKpisFromText, isReadable } from '../src/utils/objectiveKpis.js'
-import { DEFAULT_REFERENCE_SET } from '../src/utils/analyticsData.js'
+import {
+  DEFAULT_REFERENCE_SET, KPI_DEFS, canonicalKpiField, isNoveltyScoreHeader, normalizeImportedRows,
+} from '../src/utils/analyticsData.js'
+import { pickScoredSheet } from '../src/utils/scoreGaps.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 let pass = 0, fail = 0
@@ -142,6 +145,52 @@ console.log('\n--- the page goes through the pipeline ---')
     !/tfidfVectors\(|computeDeterministicKpis\(/.test(body))
   check('the per-condition Unique fraction skips wordless ideas (measuredUniqueFraction)',
     /measuredUniqueFraction\(/.test(body) && !/[^d]uniqueFraction\(/.test(body))
+}
+
+console.log('\n--- the combined KPI is labelled NoveltyScore (owner, 2026-09-23) ---')
+// Its header contains "novelty", so every importer must recognise it BEFORE any
+// "novelty" substring match — otherwise a re-uploaded NoveltyScore column would be
+// filed as the AI Novelty score.
+{
+  const det = KPI_DEFS.find(d => d.key === 'det_score')
+  check('KPI_DEFS labels det_score "NoveltyScore"', det && det.label === 'NoveltyScore')
+  const heads = { 'NoveltyScore': 'det_score', 'Novelty Score': 'det_score', 'novelty_score': 'det_score',
+    'Obj. NoveltyScore': 'det_score', 'Combined score': 'det_score', 'Obj. Score': 'det_score',
+    'Novelty': 'novelty', 'AI Novelty': 'novelty', 'Novelty (objective)': 'det_novelty',
+    'Obj. Novelty': 'det_novelty', 'Pool distinctiveness': 'det_distinctiveness', 'Eval. Novelty': 'ext_novelty' }
+  const wrong = Object.entries(heads).filter(([h, want]) => canonicalKpiField(h) !== want)
+  check('canonicalKpiField: NoveltyScore (new and old spellings) → det_score, Novelty headers unchanged',
+    wrong.length === 0, wrong.map(([h, w]) => `${h} → ${canonicalKpiField(h)} (want ${w})`).join('; '))
+  check('isNoveltyScoreHeader is true only for the NoveltyScore header',
+    isNoveltyScoreHeader('NoveltyScore') && !isNoveltyScoreHeader('Novelty') && !isNoveltyScoreHeader('AI Novelty')
+    && !isNoveltyScoreHeader('Novelty (objective)'))
+  // The page's own "Download ideas + KPIs" headers (KPI_DEFS labels), read back in.
+  const exported = [{ 'Idea ID': 'i1', 'Condition': 'None', 'Title': 'Fever pillowcase', 'Description': 'x',
+    'AI Novelty': 3, 'AI Usefulness': 4, 'AI Quality': 3.5,
+    'Novelty (objective)': 0.61, 'Pool distinctiveness': 0.93, 'NoveltyScore': 0.77 }]
+  const [row] = normalizeImportedRows(exported)
+  check('re-import: NoveltyScore → det_score, not AI Novelty',
+    row.det_score === 0.77 && row.novelty === 3 && row.det_novelty === 0.61 && row.det_distinctiveness === 0.93,
+    JSON.stringify({ novelty: row.novelty, det_score: row.det_score, det_novelty: row.det_novelty }))
+  check('re-import: NoveltyScore is not also carried as an uploaded extra (x_) column',
+    !Object.keys(row).some(k => /^x_.*novelty/.test(k)))
+  const [only] = normalizeImportedRows([{ 'Idea ID': 'i2', 'Title': 't', 'NoveltyScore': 0.5 }])
+  check('re-import: a file with ONLY NoveltyScore leaves AI Novelty empty', only.novelty === '' && only.det_score === 0.5)
+  const [legacy] = normalizeImportedRows([{ 'Idea ID': 'i3', 'Title': 't', 'Combined score': 0.4 }])
+  check('re-import: an older file\'s "Combined score" still lands in det_score', legacy.det_score === 0.4)
+  const picked = pickScoredSheet([
+    { name: 'Rankings', rows: [{ 'Idea ID': 'i1', 'Novelty': '', 'Usefulness': '', 'NoveltyScore': 0.5 }] },
+  ])
+  check('"Upload full dataset" does not count NoveltyScore values as AI scores', picked && picked.scored === 0,
+    JSON.stringify(picked && { scored: picked.scored }))
+  const exp = readFileSync(join(HERE, '../src/utils/sessionExport.js'), 'utf8')
+  check('the Rankings export column is "NoveltyScore" (and no "Combined score" column is left)',
+    /'NoveltyScore': sc \? blank\(sc\.detScore\)/.test(exp) && !/'Combined score':/.test(exp))
+  const page = readFileSync(join(HERE, '../src/pages/DataAnalytics.jsx'), 'utf8')
+  check('the 3.2 AI-scores upload skips the NoveltyScore column when it looks for "Novelty"',
+    /const ciNov = find\(c => c\.includes\('novelty'\) && !isNoveltyScoreHeader\(c\)/.test(page))
+  check('the page no longer shows the bare "Score" / "Combined score" label for this KPI',
+    !/their mean <em>Score<\/em>|Distinctiveness \/ Score for|Obj\.&nbsp;Score/.test(page))
 }
 
 console.log('\n--- parity with the offline Python twin (_idea-kpi-script/idea_kpis.py) ---')

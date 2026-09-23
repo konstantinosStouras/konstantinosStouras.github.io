@@ -85,7 +85,7 @@ KPI_DEFS = [
     ("ext_quality", "Eval Quality", True),
     ("det_novelty", "Novelty (objective)", False),
     ("det_distinctiveness", "Pool distinctiveness", False),
-    ("det_score", "Combined score", False),
+    ("det_score", "NoveltyScore", False),
 ]
 
 TOP_RATING = 5.0           # a "top" idea earned the top of the 1–5 scale (Tables 5/6)

@@ -570,10 +570,20 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      `_idea-kpi-script/idea_kpis.py` applies the same rule. Deliberately NOT changed: an
      idea that HAS words but shares none with R or with any other idea still scores 1 —
      that is the formula working (it is lexically unlike everything), not a missing
-     value. Offline test: **`node _ideasearchlab-src/tools/det-kpi-guard.mjs`** (36
+     value. Offline test: **`node _ideasearchlab-src/tools/det-kpi-guard.mjs`** (47
      checks: the building blocks, the pipeline with blank/"?"/Greek/Chinese ideas mixed
      in, that real ideas' numbers are unchanged to 1e-12, that the page goes through the
-     pipeline, and number-for-number parity with the Python twin when numpy is present).
+     pipeline, the NoveltyScore label below, and number-for-number parity with the Python
+     twin when numpy is present).
+   - **3.1: the combined KPI is called NoveltyScore** (owner, 2026-09-23; it was
+     "Combined score" / "Obj. Score"). It is the mean of objective Novelty and
+     Distinctiveness. Only the LABEL moved: the data key is still `det_score`, and an
+     older file's "Combined score" / "Obj. Score" column still imports into it. The
+     trap: the new header contains the word "novelty", and three importers picked a
+     Novelty column by substring (`canonicalKpiField`, `isAiScoreColumn` in scoreGaps.js,
+     the 3.2 scores upload's `ciNov`), so a re-uploaded NoveltyScore column would have
+     been filed as the AI Novelty score. Each now asks **`isNoveltyScoreHeader`**
+     (analyticsData.js) first. The offline twin's per-idea CSV column is `novelty_score`.
    - **The rater could not call ANY provider until 2026-09-23 — `callProvider` was defined
      nowhere.** `llmClient.js` called it on every batch, no module defined or imported it, and the
      shipped bundle carried it as a bare global (`call:S=>callProvider(…)` in the minified chunk), so
