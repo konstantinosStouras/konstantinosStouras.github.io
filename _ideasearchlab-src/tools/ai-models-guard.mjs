@@ -31,7 +31,7 @@ import {
 } from '../src/data/aiModels.js'
 import { MODEL_PRICES, PRICES_AS_OF, replyCostUSD } from '../src/data/aiPricing.js'
 import {
-  buildRequest, parseReplyText, callProvider, scrubKey,
+  buildRequest, parseReplyText, callProvider, scrubKey, replyProblem,
   claudeSupportsEffort, openaiIsReasoning, geminiTakesThinkingLevel,
   SCORING_MAX_TOKENS, LEGACY_CHAT_MAX_TOKENS, SCORING_EFFORT,
 } from '../src/utils/providerRequest.js'
@@ -89,6 +89,14 @@ const m0 = PROVIDERS[0].models[0]
 const lab = modelOptionLabel(m0, MODEL_PRICES)
 check(lab.startsWith(m0.label) && /\$\d/.test(lab) && /per 1M tokens/.test(lab), `option label carries the price: "${lab}"`)
 check(modelOptionLabel({ id: 'nope', label: 'X' }, MODEL_PRICES) === 'X', 'unpriced model keeps its label')
+check(modelOptionLabel({ id: 'x', label: 'X' }, { x: { in: 4, out: 20, until: '2026-11-21' } }).endsWith('(promotional price until 2026-11-21)'), 'a time-limited price prints its expiry')
+// A promotional price must never outlive its own expiry in the table: the
+// day PRICES_AS_OF passes a row's `until`, the row is stale and the guard says so.
+for (const [id, row] of Object.entries(MODEL_PRICES)) {
+  if (!row?.until) continue
+  check(/^\d{4}-\d{2}-\d{2}$/.test(row.until) && row.list && row.list.in > 0 && row.list.out > 0, `${id}: promotional row carries a dated \`until\` and a \`list\` price`)
+  check(PRICES_AS_OF <= row.until, `${id}: promotional price (until ${row.until}) has not lapsed as of PRICES_AS_OF ${PRICES_AS_OF} — re-snapshot the row`)
+}
 check(modelOptionLabel({ id: 'x', label: 'X' }, { x: { in: 0.1, out: 0.5 } }) === 'X · $0.1 in / $0.5 out per 1M tokens', 'fractional prices print as given')
 {
   const probe = PROVIDERS[1].models[4].id
@@ -140,6 +148,12 @@ const thinksRe = scrapedRegex(fn, /CLAUDE_THINKS_BY_DEFAULT = (\/[^\n]*\/)/, 'CL
 for (const id of ['claude-fable-5-1', 'claude-fable-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5']) check(thinksRe.test(id), `functions callClaude gives ${id} thinking headroom + low effort`)
 for (const id of ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5']) check(!thinksRe.test(id), `functions callClaude keeps the plain ceiling on ${id} (no thinking when omitted)`)
 check(/body\.max_tokens = config\.maxTokens \+ CLAUDE_THINKING_HEADROOM/.test(fn) && /body\.output_config = \{ effort: 'low' \}/.test(fn), 'functions callClaude adds the headroom and low effort inside that branch')
+// Same trap on Gemini 3.x (thinks at MEDIUM by default, thoughts count toward
+// maxOutputTokens): low thinking level + headroom; 2.5 rejects thinkingLevel.
+const gThinksRe = scrapedRegex(fn, /GEMINI_THINKS_BY_DEFAULT = (\/[^\n]*\/)/, 'GEMINI_THINKS_BY_DEFAULT')
+for (const id of ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']) check(gThinksRe.test(id), `functions callGemini gives ${id} thinking headroom + low thinking level`)
+check(!gThinksRe.test('gemini-2.5-flash'), 'functions callGemini keeps the plain ceiling on gemini-2.5-flash')
+check(/generationConfig\.maxOutputTokens = config\.maxTokens \+ GEMINI_THINKING_HEADROOM/.test(fn) && /generationConfig\.thinkingConfig = \{ thinkingLevel: 'low' \}/.test(fn), 'functions callGemini adds the headroom and low thinking level inside that branch')
 
 // ── 3. The request shapes ───────────────────────────────────────────────────
 console.log('request shapes')
@@ -190,12 +204,25 @@ check(threw, 'unknown provider throws')
 // ── 4. Reply parsing ────────────────────────────────────────────────────────
 console.log('reply parsing')
 check(parseReplyText('claude', { content: [{ type: 'thinking', thinking: '…' }, { type: 'text', text: '[{"i":0' }, { type: 'text', text: ',"novelty":3,"usefulness":4}]' }] }) === '[{"i":0,"novelty":3,"usefulness":4}]', 'claude: thinking block first, text blocks joined')
-check(parseReplyText('claude', { stop_reason: 'refusal', content: [] }) === '', 'claude: refusal → empty text (scoreBatch retries the idea)')
+check(parseReplyText('claude', { stop_reason: 'refusal', content: [] }) === '', 'claude: refusal parses to empty text (callProvider then reports it — below)')
 check(parseReplyText('openai', { choices: [{ message: { content: '[]' } }] }) === '[]', 'openai: message content')
 check(parseReplyText('openai', { choices: [] }) === '', 'openai: no choices → empty')
 check(parseReplyText('gemini', { candidates: [{ content: { parts: [{ text: 'thoughts', thought: true }, { text: '[{"i":0}]' }] } }] }) === '[{"i":0}]', 'gemini: thought parts skipped')
 check(parseReplyText('gemini', { promptFeedback: { blockReason: 'SAFETY' } }) === '', 'gemini: blocked prompt → empty')
 check(parseReplyText('other', {}) === '', 'unknown provider → empty')
+// A 2xx with no rating is reported as a cause, never returned as '' (which
+// scoreBatch would re-send per idea and end with nothing in lastError).
+check(/refusal: cyber/.test(replyProblem('claude', { stop_reason: 'refusal', stop_details: { category: 'cyber' }, content: [] }, '')), 'claude: refusal is a reply problem naming its category')
+check(/thinking and returned no text/.test(replyProblem('claude', { stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '…' }] }, '')), 'claude: ceiling spent on thinking with no text is a reply problem')
+check(replyProblem('claude', { stop_reason: 'max_tokens', content: [{ type: 'text', text: '[{"i":0,"novelty":3,"usefulness":4},{"i":1' }] }, '[{"i":0,"novelty":3,"usefulness":4},{"i":1') === '', 'claude: a truncated reply WITH text is handed back (the parser salvages it)')
+check(replyProblem('claude', { stop_reason: 'end_turn', content: [{ type: 'text', text: '[]' }] }, '[]') === '', 'claude: a normal reply is no problem')
+check(/refusal/.test(replyProblem('openai', { choices: [{ message: { refusal: 'no' }, finish_reason: 'stop' }] }, '')), 'openai: message.refusal is a reply problem')
+check(/reasoning and returned no text/.test(replyProblem('openai', { choices: [{ message: { content: '' }, finish_reason: 'length' }] }, '')), 'openai: length with no text is a reply problem')
+check(replyProblem('openai', { choices: [{ message: { content: '[]' }, finish_reason: 'length' }] }, '[]') === '', 'openai: length WITH text is handed back')
+check(/prompt blocked: SAFETY/.test(replyProblem('gemini', { promptFeedback: { blockReason: 'SAFETY' } }, '')), 'gemini: a blocked prompt is a reply problem')
+check(/thinking and returned no text/.test(replyProblem('gemini', { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }] }, '')), 'gemini: MAX_TOKENS with no text is a reply problem')
+check(replyProblem('gemini', { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '[]' }] } }] }, '[]') === '', 'gemini: a normal reply is no problem')
+check(replyProblem('other', {}, '') === '', 'unknown provider → no problem reported')
 
 // ── 5. callProvider against a fake fetch ────────────────────────────────────
 console.log('callProvider')
@@ -219,6 +246,12 @@ check(e401 && e401.status === 401, '401 carries status 401')
 check(e401 && isFatalApiError(e401), '401 is fatal for scoreBatch (no retries on a bad key)')
 check(e401 && !e401.message.includes(KEY) && e401.message.includes('[api key]'), 'the API key never appears in an error message')
 check(e401 && /Claude \(Anthropic\) API error 401/.test(e401.message) && e401.message.includes('claude-sonnet-5'), 'error names the provider, status and model')
+const eRef = await errorOf(fakeFetch(200, { stop_reason: 'refusal', stop_details: { category: 'cyber' }, content: [] }))
+check(eRef && eRef.replyProblem === true && eRef.status === undefined && !isFatalApiError(eRef) && /refusal: cyber/.test(eRef.message) && eRef.message.includes('claude-sonnet-5'), 'a refusal THROWS (no status: bounded retries, then counted with its cause), naming the model and category')
+const eThink = await errorOf(fakeFetch(200, { stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '…' }] }))
+check(eThink && eThink.replyProblem === true && /thinking and returned no text/.test(eThink.message), 'a ceiling spent on thinking with no text THROWS with the cause')
+const okCut = await callProvider(resolved, 'SYS', 'USER', { fetch: fakeFetch(200, { stop_reason: 'max_tokens', content: [{ type: 'text', text: '[{"i":0,"novelty":3,"usefulness":4},{"i":1' }] }) })
+check(okCut.startsWith('[{"i":0'), 'a truncated reply WITH text is returned for the parser to salvage')
 const e429 = await errorOf(fakeFetch(429, 'rate limited'))
 check(e429 && e429.status === 429 && !isFatalApiError(e429), '429 is not fatal (retried with backoff)')
 const e400 = await errorOf(fakeFetch(400, { error: 'unknown model' }), { provider: 'openai', apiKey: KEY, model: 'gpt-nope' })
@@ -239,7 +272,7 @@ check(!/^(async )?function callProvider/m.test(llm), 'llmClient keeps no copy of
 check(!/import .*firebase/.test(src('src/utils/providerRequest.js')), 'providerRequest imports no Firebase (offline-testable)')
 const page = src('src/pages/DataAnalytics.jsx')
 check(/modelOptionLabel\(m, MODEL_PRICES\)/.test(page), 'Data Analytics dropdown prints the price per model')
-check(/five newest models, most capable first/.test(page), 'Data Analytics explains the list order')
+check(/newest generation, most capable first/.test(page), 'Data Analytics explains the list order')
 check(/A key unlocks all of a provider's models|An API key belongs to your/.test(page), 'Data Analytics explains why a model is chosen beside the key')
 const settings = src('src/pages/AISettings.jsx')
 check(/modelOptionLabel\(m, MODEL_PRICES\)/.test(settings), 'AI Settings dropdown prints the price per model')

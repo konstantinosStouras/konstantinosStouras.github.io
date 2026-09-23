@@ -280,8 +280,8 @@ export default function AISettings() {
               ))}
             </select>
             <p className={styles.hint}>
-              Each provider lists its five newest models, most capable first, with each model's
-              price per 1M tokens beside it (list updated {CATALOGUE_AS_OF}). Your API key belongs
+              Each provider lists five models of its newest generation, most capable first, with
+              each model's price per 1M tokens beside it (list updated {CATALOGUE_AS_OF}). Your API key belongs
               to the provider account, not to one model — it unlocks every model that provider
               serves, and the model named here is the one each request runs on. A previously
               saved model keeps working until its provider retires it (it shows above as

@@ -8,8 +8,11 @@
  * `tools/ai-models-guard.mjs` fails when they drift.
  *
  * WHAT IS LISTED, AND IN WHAT ORDER (owner, 2026-09-23): each provider offers
- * its FIVE newest models, most capable first (the first of each provider is
- * also its most expensive; prices are printed beside every option). The list was rebuilt
+ * FIVE models of its newest generation, most capable first (the first of each
+ * provider is also its most expensive; prices are printed beside every
+ * option). "Newest" is by generation, not strictly by date: Gemini keeps its
+ * only Pro tier, 3.1 Pro (preview), over the later 3.5 Flash-Lite, and OpenAI
+ * keeps GPT-5.6 Sol and Terra over the same-day 5.6 Luna. The list was rebuilt
  * from the providers' line-ups on that date (release dates in the comments),
  * so an older model that is still served — Claude Opus 4.8 / Haiku 4.5,
  * GPT-5.5 / GPT-5.4, Gemini 2.5 — no longer appears in the dropdowns. A
@@ -112,7 +115,8 @@ export function allModelIds() {
 export function modelOptionLabel(model, prices) {
   const p = prices?.[model.id]
   if (!p) return model.label
-  return `${model.label} · $${fmtPrice(p.in)} in / $${fmtPrice(p.out)} out per 1M tokens`
+  const promo = p.until ? ` (promotional price until ${p.until})` : ''
+  return `${model.label} · $${fmtPrice(p.in)} in / $${fmtPrice(p.out)} out per 1M tokens${promo}`
 }
 
 function fmtPrice(n) {

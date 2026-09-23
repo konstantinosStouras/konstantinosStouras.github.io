@@ -8,6 +8,13 @@
  * prices change. `null` = price not yet confirmed; cost columns stay blank for
  * that model. Every id in src/data/aiModels.js must have a row here
  * (`tools/ai-models-guard.mjs` checks).
+ *
+ * A time-limited price carries `until: 'YYYY-MM-DD'` (the last day it holds)
+ * and `list: {in, out}` (the price after it). The dropdowns print the
+ * expiry beside the price, and the guard FAILS once PRICES_AS_OF is later
+ * than any row's `until` — so a lapsed promotion cannot keep understating the
+ * Excel cost export or the dropdown silently; re-snapshot the row and bump
+ * PRICES_AS_OF.
  */
 
 export const PRICES_AS_OF = '2026-09-23'
@@ -36,10 +43,10 @@ export const MODEL_PRICES = {
   'gpt-6-astra': { in: 10, out: 50 },
   'gpt-6-sol': { in: 2, out: 10 },
   'gpt-6-luna': { in: 0.1, out: 0.5 },
-  // GPT-5.6 Sol: list price $5/$30; promotional $4/$20 through at least
-  // 2026-11-21 (OpenAI, 2026-08-21). `gpt-5.6` is an alias of gpt-5.6-sol.
-  'gpt-5.6-sol': { in: 4, out: 20 },
-  'gpt-5.6': { in: 4, out: 20 },
+  // GPT-5.6 Sol: promotional $4/$20 through at least 2026-11-21 (OpenAI,
+  // 2026-08-21), list $5/$30. `gpt-5.6` is an alias of gpt-5.6-sol.
+  'gpt-5.6-sol': { in: 4, out: 20, until: '2026-11-21', list: { in: 5, out: 30 } },
+  'gpt-5.6': { in: 4, out: 20, until: '2026-11-21', list: { in: 5, out: 30 } },
   'gpt-5.6-terra': { in: 2, out: 12 },
   'gpt-5.6-luna': { in: 0.2, out: 1.2 },
   'gpt-5.5': { in: 5, out: 30 },
@@ -52,10 +59,10 @@ export const MODEL_PRICES = {
   'gpt-4o': { in: 2.5, out: 10 },
 
   // Google (Gemini). 3.8/3.7/3.6 Flash carry Google's introductory price
-  // ($0.75/$3.75) through 2026-12-31.
-  'gemini-3.8-flash': { in: 0.75, out: 3.75 },
-  'gemini-3.7-flash': { in: 0.75, out: 3.75 },
-  'gemini-3.6-flash': { in: 0.75, out: 3.75 },
+  // ($0.75/$3.75) through 2026-12-31; standard $1.50/$7.50 after it.
+  'gemini-3.8-flash': { in: 0.75, out: 3.75, until: '2026-12-31', list: { in: 1.5, out: 7.5 } },
+  'gemini-3.7-flash': { in: 0.75, out: 3.75, until: '2026-12-31', list: { in: 1.5, out: 7.5 } },
+  'gemini-3.6-flash': { in: 0.75, out: 3.75, until: '2026-12-31', list: { in: 1.5, out: 7.5 } },
   'gemini-3.5-flash': { in: 1.5, out: 9 },
   'gemini-3.5-flash-lite': { in: 0.3, out: 2.5 },
   'gemini-3.1-pro-preview': { in: 2, out: 12 },

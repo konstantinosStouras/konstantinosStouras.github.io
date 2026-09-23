@@ -222,6 +222,10 @@ async function callOpenAI(messages, config) {
   }
 }
 
+// Gemini 3.x thinks by default (thoughts count toward maxOutputTokens) — see callGemini.
+const GEMINI_THINKS_BY_DEFAULT = /^gemini-3/
+const GEMINI_THINKING_HEADROOM = 4000
+
 async function callGemini(messages, config) {
   // Convert to Gemini format
   const contents = messages.map(m => ({
@@ -233,16 +237,25 @@ async function callGemini(messages, config) {
   // keys AI Studio issues since mid-2026 are refused (404) as a query parameter.
   // Same shape as the browser rater (src/utils/providerRequest.js).
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent`
+  const generationConfig = {
+    temperature: config.temperature,
+    maxOutputTokens: config.maxTokens,
+  }
+  // Gemini 3.x thinks by default (at MEDIUM) and the thought tokens count
+  // against maxOutputTokens — the same blank-reply trap as callClaude's, so
+  // the same cure: a low thinking level and headroom above the reply ceiling.
+  // 2.5 models take the older `thinkingBudget` and reject `thinkingLevel`.
+  if (GEMINI_THINKS_BY_DEFAULT.test(config.model || '')) {
+    generationConfig.maxOutputTokens = config.maxTokens + GEMINI_THINKING_HEADROOM
+    generationConfig.thinkingConfig = { thinkingLevel: 'low' }
+  }
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: config.systemPrompt }] },
       contents,
-      generationConfig: {
-        temperature: config.temperature,
-        maxOutputTokens: config.maxTokens,
-      },
+      generationConfig,
     }),
   })
   if (!response.ok) throw new Error(`Gemini API error: ${await response.text()}`)

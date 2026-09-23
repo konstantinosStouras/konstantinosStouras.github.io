@@ -46,6 +46,18 @@
  * 401/403/400/404 aborts the run at once, a 429/5xx is retried), and the
  * message can never contain the API key — a provider that echoes the key in
  * its error body has it scrubbed before the message is built.
+ *
+ * A 200 that carries NO rating is an error too, not an empty string: a
+ * safety refusal (Claude `stop_reason: "refusal"`, an OpenAI `message.refusal`,
+ * a Gemini `blockReason` / SAFETY finish) or a reply whose whole token
+ * ceiling went on hidden thinking (`max_tokens` / `length` / `MAX_TOKENS` with
+ * no text). Returned as '' they were indistinguishable from an unreadable
+ * reply — scoreBatch re-sent every idea of the batch one by one (1 + 16 calls
+ * for a deterministic refusal) and the run ended "N unscored" with nothing in
+ * `lastError`. Thrown (without a status, so they are retried a bounded number
+ * of times and then counted), the cause reaches the report on screen. A
+ * reply that was cut off but DID return text is handed back as is —
+ * `extractScoreObjects` salvages the complete objects out of a truncated array.
  */
 
 export const SCORING_MAX_TOKENS = 8000
@@ -214,5 +226,49 @@ export async function callProvider(resolved, system, user, opts = {}) {
   }
 
   const data = await res.json()
-  return parseReplyText(provider, data)
+  const text = parseReplyText(provider, data)
+  const why = replyProblem(provider, data, text)
+  if (why) {
+    const err = new Error(`${name} (${model}) ${scrubKey(why, apiKey)}`)
+    err.replyProblem = true
+    throw err
+  }
+  return text
+}
+
+/**
+ * Why a 2xx reply still carries no usable rating — '' when it is fine. Pure,
+ * so the guard can drive every shape: a refusal (never retryable in
+ * substance, but bounded by scoreBatch's attempts) and a ceiling spent on
+ * hidden thinking (worth another go — thinking length varies run to run).
+ */
+export function replyProblem(provider, data, text) {
+  const empty = !String(text || '').trim()
+  switch (provider) {
+    case 'claude': {
+      if (data?.stop_reason === 'refusal') {
+        const cat = data?.stop_details?.category
+        return `declined to rate this batch (refusal${cat ? `: ${cat}` : ''})`
+      }
+      if (empty && data?.stop_reason === 'max_tokens') return `spent its whole ${SCORING_MAX_TOKENS}-token ceiling on thinking and returned no text`
+      return ''
+    }
+    case 'openai': {
+      const choice = data?.choices?.[0]
+      if (choice?.message?.refusal) return `declined to rate this batch (refusal: ${String(choice.message.refusal).slice(0, 200)})`
+      if (empty && choice?.finish_reason === 'length') return `spent its whole ${SCORING_MAX_TOKENS}-token ceiling on reasoning and returned no text`
+      if (empty && choice?.finish_reason === 'content_filter') return 'declined to rate this batch (content filter)'
+      return ''
+    }
+    case 'gemini': {
+      const block = data?.promptFeedback?.blockReason
+      if (block) return `declined to rate this batch (prompt blocked: ${block})`
+      const fin = data?.candidates?.[0]?.finishReason
+      if (empty && fin === 'MAX_TOKENS') return `spent its whole ${SCORING_MAX_TOKENS}-token ceiling on thinking and returned no text`
+      if (empty && fin && fin !== 'STOP') return `declined to rate this batch (finish reason ${fin})`
+      return ''
+    }
+    default:
+      return ''
+  }
 }
