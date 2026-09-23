@@ -49,8 +49,7 @@ export function paperNameFor(encoding) {
 //   • External evaluators (3.3): ext_novelty / ext_usefulness / ext_quality
 //   • Deterministic/objective (3.1): det_* — the novelty side (det_novelty /
 //     det_distinctiveness / det_score) and the usefulness side (det_need_fit /
-//     det_specificity / det_workability / det_usefulness / det_vote_share, see
-//     usefulnessKpis.js).
+//     det_specificity / det_workability / det_usefulness, see usefulnessKpis.js).
 export const COLUMNS = [
   'idea_id',
   'session',
@@ -71,8 +70,6 @@ export const COLUMNS = [
   'det_specificity',
   'det_workability',
   'det_usefulness',
-  'det_vote_share',
-  'votes',
   'final_pick',
   'text',
 ]
@@ -111,7 +108,6 @@ export const KPI_DEFS = [
   { key: 'det_specificity', label: 'Specificity (objective)', source: 'det', scale5: false },
   { key: 'det_workability', label: 'Workability (objective)', source: 'det', scale5: false },
   { key: 'det_usefulness', label: 'Usefulness score (objective)', source: 'det', scale5: false },
-  { key: 'det_vote_share', label: 'Peer vote share (objective)', source: 'det', scale5: false },
 ]
 
 /**
@@ -289,7 +285,6 @@ export function canonicalKpiField(header) {
     if (has('need')) return 'det_need_fit'
     if (has('specific')) return 'det_specificity'
     if (has('workab')) return 'det_workability'
-    if (has('vote')) return 'det_vote_share'
     if (has('useful')) return 'det_usefulness'
     if (has('distinct')) return 'det_distinctiveness'
     if (has('score') || has('combined')) return 'det_score'
@@ -465,20 +460,6 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
   )
   // ideaId -> 1 if it is one of its group's locked-in final picks.
   const finalPickIds = new Set((groups || []).flatMap(g => g.finalIdeas || []))
-  // ideaId -> votes received, counted over the ballots the server tally counts
-  // (not removed, still in a group) — the same rule as the export's "Vote Count"
-  // (sessionExport.countedFor), so the page and the workbook agree. Feeds the 3.1
-  // "Peer vote share" usefulness KPI.
-  const voteCount = new Map()
-  const votersOf = new Map()   // ideaId -> voter ids (the peer vote share leaves the author's own out)
-  for (const p of participants || []) {
-    if (p.removed || !p.groupId) continue
-    for (const id of p.votedFor || []) {
-      voteCount.set(id, (voteCount.get(id) || 0) + 1)
-      if (!votersOf.has(id)) votersOf.set(id, [])
-      votersOf.get(id).push(p.id)
-    }
-  }
 
   return (ideas || []).map(idea => {
     const groupId = idea.groupId || authorGroup[idea.authorId] || ''
@@ -514,10 +495,6 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       det_specificity: '',
       det_workability: '',
       det_usefulness: '',
-      det_vote_share: '',
-      votes: voteCount.get(idea.id) || 0,
-      // Display-only (off COLUMNS): who voted for it, as the export's "Voted By (IDs)".
-      voted_by: (votersOf.get(idea.id) || []).join(', '),
       final_pick: finalPickIds.has(idea.id) ? 1 : 0,
       // Carried to the group phase = the participant selected this individual idea
       // to carry forward (idea.selected). Group-stage ideas weren't "carried"; the
@@ -698,12 +675,6 @@ export function normalizeImportedRows(rawRows) {
       det_specificity: numOrBlank(pick('det_specificity', 'specificity (objective)')),
       det_workability: numOrBlank(pick('det_workability', 'workability (objective)')),
       det_usefulness: numOrBlank(pick('det_usefulness', 'usefulness score (objective)')),
-      det_vote_share: numOrBlank(pick('det_vote_share', 'peer vote share (objective)')),
-      // The admin export's "Vote Count" (Ideas sheet) — blank when the file has none.
-      votes: numOrBlank(pick('vote count', 'votes')),
-      // "Voted By (IDs)" — lets the peer vote share leave the author's own vote out.
-      // Absent in older exports, which then get no peer vote share (not a guess).
-      voted_by: String(pick('voted by (ids)', 'voted_by')),
       final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
       carried: /^(1|yes|true)$/i.test(String(pick('carried to group', 'carried', 'carried_to_group')).trim()) ? 1 : 0,
       text,
@@ -745,8 +716,7 @@ const STD_IMPORT_COLS = new Set([
   'final group pick', 'final_pick', 'final pick', 'final', 'selected',
   'carried to group', 'carried', 'carried_to_group', 'final pick rank',
   'exclude (yes/no)', 'exclude', 'excluded', 'exclusion reason',
-  'votes', 'vote count', 'votes cast', 'voted by (ids)', 'voted by (labels)', 'voted_by',
-  'created at', 'createdat',
+  'votes', 'vote count', 'votes cast', 'created at', 'createdat',
   'n edges', 'n_edges', 'n nodes', 'n_nodes', 'scorable', 'score_mode', 'score mode',
 ])
 

@@ -8,9 +8,10 @@
  * something different from novelty, so no usefulness KPI may be computed from the
  * novelty KPIs' anchor (the reference set R) or from their similarities. Checks:
  *   - each measure's arithmetic (Need fit, Specificity, Workability, the composite,
- *     Peer vote share, the novelty × usefulness cross-check helpers),
- *   - that the composite does not move when only novelty moves, and leaves the
- *     behavioural vote share out,
+ *     the novelty × usefulness cross-check helpers),
+ *   - that the composite does not move when only novelty moves,
+ *   - the "idea with no words" rule the novelty side follows (objectiveKpis.js):
+ *     such an idea is left blank on every usefulness KPI and kept out of the corpus,
  *   - that the default need set U does not reuse R's product words,
  *   - that every new KPI key is registered in every place a KPI must be for it to
  *     reach Section 4, the Rankings tab, the downloads, a re-import and the
@@ -21,8 +22,8 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
   needFit, specificity, specificityFacets, FACETS, percentileRanks, usefulnessComposite,
-  peerVoteShares, rowVoters, parseVoters, compileTerms, techTermsIn, workability,
-  computeUsefulnessKpis, pearson, partialPearson, withinGroupPearson, median, quadrantCounts, contentText, foldPlural, STOP_WORDS,
+  compileTerms, techTermsIn, workability, computeUsefulnessKpis, usefulnessKpisFromText,
+  pearson, partialPearson, median, quadrantCounts, contentText, foldPlural, STOP_WORDS,
 } from '../src/utils/usefulnessKpis.js'
 import { tfidfVectors } from '../src/utils/tfidf.js'
 import { computeDeterministicKpis } from '../src/utils/deterministicKpis.js'
@@ -114,32 +115,6 @@ console.log('Percentile ranks and the Usefulness score')
     comp[0] === 0.5 && comp[1] === 1 && comp[2] === null, JSON.stringify(comp))
 }
 
-// ── Peer vote share ─────────────────────────────────────────────────────────
-console.log('Peer vote share — teammates only, author excluded')
-{
-  const items = [
-    { group: 'g', author: 'a', voters: ['b', 'c'], eligible: true },   // 2 of b,c,d
-    { group: 'g', author: 'b', voters: ['a', 'b'], eligible: true },   // own vote dropped: 1 of a,c,d
-    { group: 'g', author: 'c', voters: [], eligible: true },           // on the ballot, nobody: 0
-    { group: 'g', author: 'd', voters: ['d'], eligible: true },        // only its author: 0
-    { group: 'g', author: 'a', voters: null, eligible: true },         // voters unknown: null
-    { group: 'g', author: 'a', voters: ['b'], eligible: false },       // not on a ballot: null
-    { group: '', author: 'a', voters: ['b'], eligible: true },         // no group: null
-  ]
-  const v = peerVoteShares(items)
-  check('share of the OTHER voters in the group who backed it', near(v[0], 2 / 3), String(v[0]))
-  check('the author\'s own vote is left out', near(v[1], 1 / 3), String(v[1]))
-  check('on the ballot with no votes → 0', v[2] === 0 && v[3] === 0, `${v[2]} ${v[3]}`)
-  check('unknown voters / not on a ballot / no group → null, never 0',
-    v[4] === null && v[5] === null && v[6] === null, `${v[4]} ${v[5]} ${v[6]}`)
-  check('rowVoters: ids → list; 0 votes and no ids → nobody; count > 0 but no ids → unknown',
-    JSON.stringify(rowVoters({ voted_by: 'a, b', votes: 2 })) === '["a","b"]' &&
-    JSON.stringify(rowVoters({ voted_by: '', votes: 0 })) === '[]' &&
-    rowVoters({ voted_by: '', votes: 3 }) === null && rowVoters({ voted_by: '', votes: '' }) === null &&
-    rowVoters({}) === null)
-  check('parseVoters splits on , ; |', JSON.stringify(parseVoters('a; b | c,d')) === '["a","b","c","d"]')
-}
-
 // ── Need fit + the independence rule ────────────────────────────────────────
 console.log('Need fit — anchored on U, never on R')
 {
@@ -161,23 +136,46 @@ console.log('Need fit — anchored on U, never on R')
   // Two ideas with IDENTICAL text-usefulness inputs but different novelty (one is
   // a word-for-word existing product, one is not) must get the SAME usefulness.
   const useVecs = [[1, 0], [1, 0]]
-  const out = computeUsefulnessKpis(useVecs, [[1, 0]], ['A baby vest for parents', 'A baby vest for parents'], null, [])
+  const out = computeUsefulnessKpis(useVecs, [[1, 0]], ['A baby vest for parents', 'A baby vest for parents'], [])
   check('same need fit + specificity + workability → same Usefulness score whatever the novelty',
     out.perIdea[0].usefulness === out.perIdea[1].usefulness, JSON.stringify(out.perIdea.map(p => p.usefulness)))
-  // The composite ignores the vote share entirely.
-  const a = computeUsefulnessKpis([[1, 0], [0, 1]], [[1, 0]], ['baby vest', 'dog collar'],
-    [{ group: 'g', author: 'x', voters: ['y'], eligible: true }, { group: 'g', author: 'y', voters: [], eligible: true }], [])
-  const b = computeUsefulnessKpis([[1, 0], [0, 1]], [[1, 0]], ['baby vest', 'dog collar'],
-    [{ group: 'g', author: 'x', voters: [], eligible: true }, { group: 'g', author: 'y', voters: ['x'], eligible: true }], [])
-  check('the Usefulness score does not move when only the votes move',
-    a.perIdea.map(p => p.usefulness).join() === b.perIdea.map(p => p.usefulness).join() &&
-    a.perIdea[0].voteShare !== b.perIdea[0].voteShare)
+  check('no vote-based KPI is produced (left out per the owner)', !('voteShare' in out.perIdea[0]))
 
   // The novelty side is computed from ideas + R alone: the same numbers whatever U is.
   const refs = DEFAULT_REFERENCE_SET
   const nv = tfidfVectors([...ideas, ...refs]).vectors
   const nov1 = computeDeterministicKpis(nv.slice(0, 2), nv.slice(2)).perIdea.map(d => d.novelty)
   check('the novelty KPIs never see U (vectorised from ideas + R only)', nov1.every(x => x != null && x > 0 && x <= 1), JSON.stringify(nov1))
+}
+
+// ── The pipeline from text, and the "idea with no words" rule ──────────────
+console.log('usefulnessKpisFromText — unreadable ideas are left blank, like the novelty side')
+{
+  const ideas = [
+    'Fever onesie: a baby onesie that turns red at night when the baby has a fever',
+    'Heat vest for outdoor workers that warns of heat stroke during summer shifts',
+    '',            // blank
+    '?',           // nothing the tokeniser reads
+    'Καλή ιδέα',   // a script the tokeniser does not read
+    'It is what it is',  // readable, but only filler words
+  ]
+  const res = usefulnessKpisFromText(ideas, DEFAULT_NEED_SET, DEFAULT_TECH_SET)
+  const p = res.perIdea
+  check('two real ideas get all three components and a score', [0, 1].every(i =>
+    p[i].needFit > 0 && p[i].specificity > 0 && p[i].workability === 1 && p[i].usefulness != null), JSON.stringify(p.slice(0, 2)))
+  check('blank / "?" / Greek text: every usefulness KPI blank (null), never a top score',
+    [2, 3, 4].every(i => p[i].needFit === null && p[i].specificity === null && p[i].workability === null && p[i].usefulness === null),
+    JSON.stringify(p.slice(2, 5)))
+  check('counts measured / unmeasured the same way objectiveKpis does', res.measured === 3 && res.unmeasured === 3,
+    `${res.measured}/${res.unmeasured}`)
+  check('filler words only: no need fit (nothing to compare), but still read for the other parts',
+    p[5].needFit === null && p[5].specificity === 0 && p[5].workability === 1)
+  // An unreadable idea must not shift the real ideas' numbers (it stays out of the corpus).
+  const alone = usefulnessKpisFromText(ideas.slice(0, 2), DEFAULT_NEED_SET, DEFAULT_TECH_SET).perIdea
+  check('adding unreadable ideas does not change the real ideas\' need fit',
+    near(alone[0].needFit, p[0].needFit) && near(alone[1].needFit, p[1].needFit))
+  check('an empty need set is an error, not a silent 0', !!usefulnessKpisFromText(ideas, ['', '  '], []).error)
+  check('need fit of a zero vector is null', needFit([0, 0], [[1, 0]]) === null)
 }
 
 // ── Cross-check helpers ─────────────────────────────────────────────────────
@@ -199,12 +197,6 @@ console.log('Novelty × usefulness cross-check')
   check('partialPearson equals the r of the residuals on z',
     near(partialPearson(px, py, pz), pearson(resid(px, pz), resid(py, pz)), 1e-9),
     `${partialPearson(px, py, pz)} vs ${pearson(resid(px, pz), resid(py, pz))}`)
-  // Within-group r: group B's level is shifted up, which a pooled r would mistake for a relation.
-  const wx = [1, 2, 3, 10, 11, 12], wy = [3, 2, 1, 13, 12, 11], wg = ['a', 'a', 'a', 'b', 'b', 'b']
-  check('withinGroupPearson removes group levels (pooled r > 0, within-group r = -1)',
-    pearson(wx, wy) > 0.9 && near(withinGroupPearson(wx, wy, wg), -1), `${pearson(wx, wy)} / ${withinGroupPearson(wx, wy, wg)}`)
-  check('withinGroupPearson skips single-idea groups and missing values',
-    near(withinGroupPearson([1, 2, 3, 9, null], [1, 2, 3, 0, 5], ['a', 'a', 'a', 'c', 'a']), 1))
   check('partialPearson: constant z → plain r', near(partialPearson([1, 2, 3], [2, 4, 6], [5, 5, 5]), 1))
   check('median of odd / even / with nulls', median([3, 1, 2]) === 2 && median([4, 1, 2, 3]) === 2.5 && median([null, 5]) === 5)
   const q = quadrantCounts([0.9, 0.9, 0.1, 0.1, null], [0.9, 0.1, 0.9, 0.1, 0.5], 0.5, 0.5)
@@ -229,7 +221,7 @@ console.log('Default lists')
 // ── Registry: every place a KPI must be registered ──────────────────────────
 console.log('Registry — every new KPI reaches every consumer')
 {
-  const NEW = ['det_need_fit', 'det_specificity', 'det_workability', 'det_usefulness', 'det_vote_share']
+  const NEW = ['det_need_fit', 'det_specificity', 'det_workability', 'det_usefulness']
   const defs = Object.fromEntries(KPI_DEFS.map(d => [d.key, d]))
   const py = src('src/data/analyticsPython.py')
   const R_ = src('src/data/analyticsR.R')
@@ -250,21 +242,12 @@ console.log('Registry — every new KPI reaches every consumer')
     check(`${k}: a Firestore-built row starts blank`, blankRow[k] === '')
     check(`${k}: stripAllKpis blanks it`, stripAllKpis([{ [k]: 0.5 }])[0][k] === '')
     check(`${k}: in ALL_KPI_KEYS (DataAnalytics.jsx)`, allKpiKeys.includes(`'${k}'`))
-    // Peer vote share is kept OUT of the Step-5 condition regressions (the Final
-    // Ideas are chosen by those votes, and its mean falls with ballot size); the
-    // page uses it to validate the other KPIs instead. Every other one is analysed.
     const pyKeys = (py.match(/^KPI_DEFS = \[([\s\S]*?)^\]/m) || [])[1] || ''
     const pyActive = pyKeys.split('\n').filter(l => !l.trim().startsWith('#')).join('\n')
     const rKeys = (R_.match(/KPI_KEYS\s*<-\s*c\(([\s\S]*?)\)/) || [])[1] || ''
-    if (k === 'det_vote_share') {
-      check(`${k}: NOT in the Python KPI_DEFS (regressions skip it on purpose)`, pyKeys.length > 100 && !pyActive.includes(`"${k}"`))
-      check(`${k}: NOT in the R KPI_KEYS (regressions skip it on purpose)`, rKeys.length > 50 && !rKeys.includes(`"${k}"`))
-      check(`${k}: both scripts say how to add it back`, py.includes(`add: ("${k}"`) && R_.includes(`"${k}" to KPI_KEYS`))
-    } else {
-      check(`${k}: in the Python KPI_DEFS with the same label`, pyActive.includes(`("${k}", "${d.label}", False)`))
-      check(`${k}: in the R KPI_KEYS / KPI_LABELS / KPI_SCALE5`,
-        rKeys.includes(`"${k}"`) && R_.includes(`${k}="${d.label}"`) && R_.includes(`${k}=FALSE`))
-    }
+    check(`${k}: in the Python KPI_DEFS with the same label`, pyActive.includes(`("${k}", "${d.label}", False)`))
+    check(`${k}: in the R KPI_KEYS / KPI_LABELS / KPI_SCALE5`,
+      rKeys.includes(`"${k}"`) && R_.includes(`${k}="${d.label}"`) && R_.includes(`${k}=FALSE`))
     check(`${k}: a column of the aggregate Rankings tab`, exp.includes(`'${d.label}':`))
   }
   check('the old novelty labels still route (no regression)',
@@ -273,9 +256,8 @@ console.log('Registry — every new KPI reaches every consumer')
     canonicalKpiField('Eval. Usefulness') === 'ext_usefulness')
   // Stale saved scripts: the page compares the template's registry with the script's.
   const pyNow = scriptKpiKeys(py, 'python'), rNow = scriptKpiKeys(R_, 'r')
-  check('scriptKpiKeys reads the Python and R registries (new keys in, the vote share out)',
-    pyNow && rNow && ['det_need_fit', 'det_workability', 'det_usefulness', 'novelty', 'det_score'].every(k => pyNow.has(k) && rNow.has(k)) &&
-    !pyNow.has('det_vote_share') && !rNow.has('det_vote_share'),
+  check('scriptKpiKeys reads the Python and R registries (the new keys are in)',
+    pyNow && rNow && ['det_need_fit', 'det_workability', 'det_usefulness', 'novelty', 'det_score'].every(k => pyNow.has(k) && rNow.has(k)),
     `${pyNow && [...pyNow].join(',')} | ${rNow && [...rNow].join(',')}`)
   const oldPy = py.replace(/^\s*\("det_(need_fit|specificity|workability|usefulness)".*\n/gm, '')
   check('an older script without the new keys is detected as missing them',
@@ -283,26 +265,13 @@ console.log('Registry — every new KPI reaches every consumer')
   check('a restructured script (no registry) gives null, so nothing is flagged', scriptKpiKeys('print(1)', 'python') === null)
   check('Step 5 wires the warning under Run',
     /const staleKpis = useMemo/.test(page) && page.includes('scriptKpiKeys(code, lang)') && page.includes('{staleKpis.length > 0 && ('))
+  // Found in the browser run: the facet table read .facets of an unmeasured idea (null).
+  check('the facet-coverage table counts only measured ideas (an unreadable one has no facets)',
+    page.includes('const m = idxs.filter(i => useIdea[i].facets)'))
+  check('the page runs the shared text pipelines, not its own vectorisation',
+    page.includes('usefulnessKpisFromText(ideaTexts, needLines, techTerms)') && page.includes('objectiveKpisFromText(ideaTexts, refLines'))
   check('a det_* key column is no longer re-imported as an x_ duplicate',
     !Object.keys(normalizeImportedRows([{ Condition: 'Solo', Title: 'x', det_distinctiveness: 0.37 }])[0]).some(k => k.startsWith('x_')))
-}
-
-// ── Votes on the rows ───────────────────────────────────────────────────────
-console.log('Vote counts on the analysis rows')
-{
-  const parts = [
-    { id: 'p1', groupId: 'g0', votedFor: ['i1', 'i2'] },
-    { id: 'p2', groupId: 'g0', votedFor: ['i1'] },
-    { id: 'p3', groupId: '', votedFor: ['i1'] },               // detached: not counted (the tally's rule)
-    { id: 'p4', groupId: 'g0', removed: true, votedFor: ['i2'] },
-  ]
-  const rows = buildRowsForSession({ code: 'S' }, [{ id: 'i1', authorId: 'p1' }, { id: 'i2', authorId: 'p2' }, { id: 'i3', authorId: 'p1' }], parts, [])
-  check('votes counted over the ballots the tally counts', rows[0].votes === 2 && rows[1].votes === 1 && rows[2].votes === 0,
-    rows.map(r => r.votes).join())
-  check('voted_by lists the counted voters', rows[0].voted_by === 'p1, p2' && rows[1].voted_by === 'p1' && rows[2].voted_by === '')
-  const imp = normalizeImportedRows([{ Condition: 'Solo', Title: 'x', 'Vote Count': 2, 'Voted By (IDs)': 'a, b' }])[0]
-  check('the importer reads Vote Count + Voted By (IDs)', imp.votes === 2 && imp.voted_by === 'a, b', `${imp.votes} ${imp.voted_by}`)
-  check('"Voted By (IDs)" is not swept in as an x_ KPI', !Object.keys(imp).some(k => k.startsWith('x_')))
 }
 
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll usefulness-KPI checks passed.')

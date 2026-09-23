@@ -3013,14 +3013,27 @@ only novelty** (owner 2026-09). Beside the TF-IDF novelty KPIs (Novelty vs the
 reference set R, Pool distinctiveness, Combined score) sit Need fit (closeness to an
 editable need set U of problems people have), Specificity (who / what / where-when /
 why / how the idea states), Workability (1 / (1 + extra technologies named from an
-editable list T, negations like "no electronics needed" ignored)), their percentile
-composite Usefulness score, and Peer vote share (teammates who backed the idea,
-author excluded; kept out of the composite because final picks are made by those
-votes). The rule: no usefulness KPI may reuse R or the idea-to-idea similarities, or
-it is just 1 - novelty. A per-condition novelty × usefulness cross-check shows how
-the two relate. Pure module `_ideasearchlab-src/src/utils/usefulnessKpis.js`; full
+editable list T, negations like "no electronics needed" ignored)) and their
+percentile composite Usefulness score. The rule: no usefulness KPI may reuse R or
+the idea-to-idea similarities, or it is just 1 - novelty. A peer-vote measure was
+left out on purpose (owner: it would complicate matters; the final picks are made
+by those votes). An idea with no words is left blank on this side too. A
+per-condition novelty × usefulness cross-check shows how the two relate. Pure module
+`_ideasearchlab-src/src/utils/usefulnessKpis.js` (`usefulnessKpisFromText`); full
 reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
 `node _ideasearchlab-src/tools/usefulness-kpis-guard.mjs`.
+
+**Section 3.1's objective KPIs leave an idea with no words blank.** An idea whose
+text has no word the TF-IDF tokeniser reads (blank, "?", one letter, Greek text)
+vectorises to all zeros, and cosine 0 with everything read as "as different as
+possible": it scored Novelty 1, Distinctiveness 1, Score 1 — the top of the
+ranking — and skewed every other idea's Distinctiveness and the Unique fraction.
+It is now left blank and kept out of every pool and out of the TF-IDF corpus, so
+real ideas get exactly the numbers they would get without it. One pure function,
+`objectiveKpisFromText` in `_ideasearchlab-src/src/utils/objectiveKpis.js`, is
+what the page calls; the offline twin `_idea-kpi-script/idea_kpis.py` applies the
+same rule. Offline test `node _ideasearchlab-src/tools/det-kpi-guard.mjs` (36
+checks, incl. number-for-number parity with the Python twin).
 
 **The AI rater's model list is five models of each provider's newest
 generation, most capable first, and the rater can now actually call them**

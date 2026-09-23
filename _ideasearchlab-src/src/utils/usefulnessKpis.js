@@ -31,21 +31,21 @@
  *                    "Feasibility" criterion.
  *   • Usefulness score — the composite of the three (mean of their percentile
  *                    ranks in the pool, so no one scale dominates).
- *   • Peer vote share — the share of the idea's teammates (author excluded) who
- *                    voted for it: usefulness REVEALED by the people who chose
- *                    between the ideas. People selecting ideas
- *                    favour feasible, practical ones over original ones (Rietzschel
- *                    et al. 2010; Mueller, Melwani & Goncalo 2012). Behavioural, so
- *                    it is kept OUT of the composite — and note the final picks are
- *                    made BY these votes.
  *
- * Everything is pure arithmetic over the idea text (and, for vote share, the vote
- * ballots), so it is unit-testable offline (tools/usefulness-kpis-guard.mjs) and
- * reproducible from the Step-2 data alone. Vectors come from utils/tfidf.js; ideas,
- * the need set U and the reference set R must be vectorised in ONE call so they
- * share a vocabulary and IDF weights.
+ * (A behavioural "peer vote share" was considered and left out, per the owner: the
+ * Final Ideas are chosen by those votes, which makes it circular.)
+ *
+ * Everything is pure arithmetic over the idea text, so it is unit-testable offline
+ * (tools/usefulness-kpis-guard.mjs) and reproducible from the Step-2 data alone.
+ * `usefulnessKpisFromText` is the whole pipeline the page runs. Ideas + U are
+ * vectorised together (one vocabulary, one IDF) but SEPARATELY from ideas + R, so
+ * editing U never moves a novelty number. An idea with no word the tokeniser reads
+ * is left unscored on every usefulness KPI and kept out of the corpus: the same
+ * rule objectiveKpis.js applies to the novelty side (isReadable).
  */
-import { cosine } from './deterministicKpis.js'
+import { cosine, hasTerms } from './deterministicKpis.js'
+import { tfidfVectors } from './tfidf.js'
+import { isReadable } from './objectiveKpis.js'
 
 // ── Stop words (usefulness side only) ───────────────────────────────────────
 // Short ideas share function words with everything ("that", "when", "for"), and
@@ -90,9 +90,13 @@ export function contentText(text) {
  * U. Higher = closer to a stated user need. Returns null if U is empty.
  */
 export function needFit(ideaVec, needVecs) {
-  if (!needVecs || needVecs.length === 0) return null
+  // An idea with no content word left (blank, or only filler words) has nothing to
+  // compare: null, not "fits no need" (0). A need line with no terms is ignored.
+  if (!hasTerms(ideaVec)) return null
+  const needs = (needVecs || []).filter(hasTerms)
+  if (needs.length === 0) return null
   let max = 0
-  for (const u of needVecs) { const s = cosine(ideaVec, u); if (s > max) max = s }
+  for (const u of needs) { const s = cosine(ideaVec, u); if (s > max) max = s }
   return max
 }
 
@@ -328,88 +332,62 @@ export function usefulnessComposite(rankLists) {
   return out
 }
 
-// ── Peer vote share (behavioural) ───────────────────────────────────────────
-
-/** Voter ids from an array or a "a, b, c" string; null when unknown. */
-export function parseVoters(v) {
-  if (v == null) return null
-  if (Array.isArray(v)) return v.map(x => String(x).trim()).filter(Boolean)
-  const s = String(v).trim()
-  if (!s) return []
-  return s.split(/[,;|]/).map(x => x.trim()).filter(Boolean)
-}
-
-/**
- * The voters of one analysis row, or null when they are unknown. A row carries
- * `voted_by` (ids, "a, b") when it came from Firestore or from an export with a
- * "Voted By (IDs)" column. An empty `voted_by` means "nobody" only when the row
- * also says it got 0 votes; with a vote count above 0 (or none) and no ids, the
- * file simply did not record who voted, so the voters are unknown.
- */
-export function rowVoters(r) {
-  const vb = r?.voted_by
-  if (vb == null) return null
-  if (String(vb).trim() !== '') return parseVoters(vb)
-  return Number(r.votes) === 0 && String(r.votes ?? '').trim() !== '' ? [] : null
-}
-
-/**
- * Peer vote share = the share of an idea's TEAMMATES who voted for it: the group
- * members other than its author who backed it, over the group members other than
- * its author who cast any vote. The author's own vote is left out on both sides,
- * so it is the group's judgment of the idea, not the author's (0 to 1).
- *
- * `items` = [{ group, author, voters, eligible }] where `voters` is the list of ids
- * who voted for the idea (null = unknown) and `eligible` = the idea was on its
- * group's ballot. The group's voters are the union of every item's voters. An idea
- * gets null — never 0 — when it was not on a ballot, its voters are unknown, or no
- * teammate voted at all: "not on the ballot" is not "nobody chose it".
- */
-export function peerVoteShares(items) {
-  const groupVoters = new Map()
-  items.forEach(it => {
-    const vs = parseVoters(it.voters)
-    if (!it.group || !vs) return
-    if (!groupVoters.has(it.group)) groupVoters.set(it.group, new Set())
-    for (const v of vs) groupVoters.get(it.group).add(v)
-  })
-  return items.map(it => {
-    const vs = parseVoters(it.voters)
-    if (!it.eligible || !it.group || !vs) return null
-    const author = String(it.author || '')
-    const pool = [...(groupVoters.get(it.group) || [])].filter(v => v !== author)
-    if (!pool.length) return null
-    const backers = new Set(vs.filter(v => v !== author))
-    return backers.size / pool.length
-  })
-}
-
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 
 /**
- * Compute every per-idea usefulness KPI.
- * @param ideaVecs   number[][] — one TF-IDF vector per idea (pool order)
+ * Compute every per-idea usefulness KPI from vectors already built.
+ * @param ideaVecs   number[][] — one TF-IDF vector per idea (pool order; all zeros
+ *                   or null for an idea with nothing to compare)
  * @param needVecs   number[][] — one vector per line of the need set U
- * @param texts      string[]   — the idea texts (for specificity)
- * @param voteItems  optional [{ group, author, voters, eligible }] in pool order
+ * @param texts      string[]   — the idea texts (for specificity and workability)
  * @param techTerms  the extra-technology list T (strings) for Workability
- * @returns { perIdea: [{ needFit, specificity, workability, usefulness, voteShare, facets, tech }] }
+ * @returns { perIdea: [{ needFit, specificity, workability, usefulness, facets, tech }] }
+ *   An unreadable idea (isReadable false) gets null on every KPI.
  */
-export function computeUsefulnessKpis(ideaVecs, needVecs, texts, voteItems, techTerms = []) {
+export function computeUsefulnessKpis(ideaVecs, needVecs, texts, techTerms = []) {
   const compiled = compileTerms(techTerms)
-  const nf = ideaVecs.map(v => needFit(v, needVecs))
-  const sp = texts.map(specificity)
-  const wk = texts.map(t => workability(t, compiled))
-  // The composite: the three TEXT components as percentile ranks, equally weighted.
-  // The vote share is behavioural and circular with the final picks, so it stays out.
+  const readable = texts.map(isReadable)
+  const nf = ideaVecs.map((v, i) => (readable[i] ? needFit(v, needVecs) : null))
+  const sp = texts.map((t, i) => (readable[i] ? specificity(t) : null))
+  const wk = texts.map((t, i) => (readable[i] ? workability(t, compiled) : null))
+  // The composite: the three components as percentile ranks, equally weighted.
   const comp = usefulnessComposite([percentileRanks(nf), percentileRanks(sp), percentileRanks(wk)])
-  const vs = voteItems ? peerVoteShares(voteItems) : ideaVecs.map(() => null)
   return {
     perIdea: ideaVecs.map((_, i) => ({
-      needFit: nf[i], specificity: sp[i], workability: wk[i], usefulness: comp[i], voteShare: vs[i],
-      facets: specificityFacets(texts[i]), tech: techTermsIn(texts[i], compiled),
+      needFit: nf[i], specificity: sp[i], workability: wk[i], usefulness: comp[i],
+      facets: readable[i] ? specificityFacets(texts[i]) : null,
+      tech: readable[i] ? techTermsIn(texts[i], compiled) : [],
     })),
   }
+}
+
+/**
+ * The whole usefulness pipeline from TEXT, as the page runs it (the counterpart of
+ * objectiveKpisFromText). Only readable ideas and non-empty need lines enter the
+ * TF-IDF corpus, after contentText (stop words dropped, plurals folded), so an
+ * unreadable idea cannot shift the IDF weights of the others.
+ * @param ideaTexts string[]  one text per idea, in pool order
+ * @param needTexts string[]  the need set U, one need per item
+ * @param techTerms string[]  the extra-technology list T
+ * @returns { error } | { perIdea, needs, measured, unmeasured }
+ */
+export function usefulnessKpisFromText(ideaTexts, needTexts, techTerms = []) {
+  const needs = (needTexts || []).map(s => String(s ?? '').trim()).filter(t => contentText(t))
+  if (!needs.length) return { error: 'The need set U is empty. Add the needs or problems people have (one per line).' }
+  const texts = (ideaTexts || []).map(t => String(t ?? ''))
+  const readable = texts.map(isReadable)
+  // The corpus holds only ideas with a content word left after contentText: an idea
+  // of filler words alone ("it is what it is") would enter as an EMPTY document and
+  // still shift every IDF weight (N counts documents). It gets no need fit, but its
+  // specificity and workability are still read from its text.
+  const content = texts.map(t => contentText(t))
+  const corpusIdx = texts.map((_, i) => i).filter(i => readable[i] && content[i])
+  const { vectors } = tfidfVectors([...corpusIdx.map(i => content[i]), ...needs.map(contentText)])
+  const ideaVecs = texts.map(() => null)
+  corpusIdx.forEach((i, k) => { ideaVecs[i] = vectors[k] })
+  const { perIdea } = computeUsefulnessKpis(ideaVecs, vectors.slice(corpusIdx.length), texts, techTerms)
+  const measured = readable.filter(Boolean).length
+  return { perIdea, needs, measured, unmeasured: texts.length - measured }
 }
 
 // ── Novelty × usefulness cross-check (pool level) ───────────────────────────
@@ -446,31 +424,6 @@ export function partialPearson(xs, ys, zs) {
   if (rxz == null || ryz == null) return rxy            // z constant: nothing to hold fixed
   const d = Math.sqrt((1 - rxz * rxz) * (1 - ryz * ryz))
   return d > 1e-12 ? (rxy - rxz * ryz) / d : null
-}
-
-/**
- * Pooled WITHIN-group Pearson r: each variable is centred on its group's mean (over
- * the ideas of that group that have both values) before correlating, so it asks
- * "inside the same group, do the ideas higher on x also get more of y?" — the right
- * question for votes, whose level depends on how many ideas a group had to choose
- * from. Groups with fewer than two such ideas are skipped. null if undefined.
- */
-export function withinGroupPearson(xs, ys, groups) {
-  const by = new Map()
-  for (let i = 0; i < xs.length; i++) {
-    const x = xs[i], y = ys[i], g = groups[i]
-    if (!g || x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) continue
-    if (!by.has(g)) by.set(g, [])
-    by.get(g).push([x, y])
-  }
-  const dx = [], dy = []
-  for (const pairs of by.values()) {
-    if (pairs.length < 2) continue
-    const mx = pairs.reduce((a, p) => a + p[0], 0) / pairs.length
-    const my = pairs.reduce((a, p) => a + p[1], 0) / pairs.length
-    for (const [x, y] of pairs) { dx.push(x - mx); dy.push(y - my) }
-  }
-  return pearson(dx, dy)
 }
 
 /** Median of the finite values; null if none. */

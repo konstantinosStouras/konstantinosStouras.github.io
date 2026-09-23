@@ -21,9 +21,9 @@ import {
   scoreGaps, gapSummary, shouldRunAnotherPass, mergeAiScoresIntoRows, ideaScoreState,
   scorableText, pickScoredSheet,
 } from '../utils/scoreGaps'
-import { tfidfVectors } from '../utils/tfidf'
-import { computeDeterministicKpis, uniqueFraction, productivityCount, cosine, simMatrix } from '../utils/deterministicKpis'
-import { computeUsefulnessKpis, contentText, rowVoters, pearson, partialPearson, withinGroupPearson, median, quadrantCounts, FACETS } from '../utils/usefulnessKpis'
+import { objectiveKpisFromText } from '../utils/objectiveKpis'
+import { measuredUniqueFraction, productivityCount, cosine, hasTerms } from '../utils/deterministicKpis'
+import { usefulnessKpisFromText, pearson, partialPearson, median, quadrantCounts, FACETS } from '../utils/usefulnessKpis'
 import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById, modelOptionLabel, CATALOGUE_AS_OF } from '../data/aiModels'
 import { MODEL_PRICES } from '../data/aiPricing'
 import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
@@ -71,7 +71,7 @@ const ALL_KPI_KEYS = [
   'novelty', 'usefulness', 'overall_quality',
   'ext_novelty', 'ext_usefulness', 'ext_quality',
   'det_novelty', 'det_distinctiveness', 'det_score',
-  'det_need_fit', 'det_specificity', 'det_workability', 'det_usefulness', 'det_vote_share',
+  'det_need_fit', 'det_specificity', 'det_workability', 'det_usefulness',
 ]
 const hasAnyKpi = r =>
   ALL_KPI_KEYS.some(k => r[k] !== '' && r[k] != null) ||
@@ -475,43 +475,35 @@ export default function DataAnalytics() {
   //    SEPARATE vectorisation of ideas + U, so the novelty numbers are exactly what
   //    they were before U existed and neither side depends on the other's anchor),
   //    Specificity (who / what / where-when / why / how the idea states), their
-  //    composite Usefulness score, and Peer vote share (share of the group's votes).
+  //    Workability (extra technology named) and their composite Usefulness score.
   // Then a pool-level cross-check: how the novelty and usefulness scores relate, and
   // how many ideas are novel AND useful, per condition.
   async function computeDeterministic() {
     setDetErr(''); setDetResult(null)
     const pool = effectiveRows                         // distinctiveness pool = all loaded ideas
     if (pool.length < 2) { setDetErr('Load at least two ideas first.'); return }
-    const refs = referenceSet.split('\n').map(s => s.trim()).filter(Boolean)
-    if (!refs.length) { setDetErr('The reference set R is empty. Add the products that already exist (one per line).'); return }
-    const needs = needSet.split('\n').map(s => s.trim()).filter(Boolean)
-    if (!needs.length) { setDetErr('The need set U is empty. Add the needs or problems people have (one per line).'); return }
-    setDetComputing({ phase: 'Vectorising ideas (TF-IDF)', done: 0, total: pool.length + refs.length + needs.length })
+    const refLines = referenceSet.split('\n').map(s => s.trim()).filter(Boolean)
+    if (!refLines.length) { setDetErr('The reference set R is empty. Add the products that already exist (one per line).'); return }
+    const needLines = needSet.split('\n').map(s => s.trim()).filter(Boolean)
+    if (!needLines.length) { setDetErr('The need set U is empty. Add the needs or problems people have (one per line).'); return }
+    setDetComputing({ phase: 'Vectorising ideas (TF-IDF)', done: 0, total: pool.length + refLines.length + needLines.length })
     // Let the "computing…" state paint before the synchronous TF-IDF work.
     await new Promise(res => setTimeout(res, 0))
     try {
-      // Vectorise ideas + reference set TOGETHER so they share one vocabulary and
-      // IDF space — required for the idea-vs-R cosine in Novelty to be meaningful.
+      // Ideas + R are vectorised together (one vocabulary, one IDF). An idea with no
+      // word the tokeniser reads (blank, "?", one letter, Greek text) has nothing to
+      // compare: it is left blank and kept out of every pool and out of the TF-IDF
+      // corpus — it used to score a perfect 1 on every KPI. See objectiveKpis.js.
       const ideaTexts = pool.map(r => r.text || ideaText(r))
-      const { vectors } = tfidfVectors([...ideaTexts, ...refs])
-      const ideaVecs = vectors.slice(0, pool.length)
-      const refVecs = vectors.slice(pool.length)
-      // Per-idea KPIs over the full pool.
-      const { perIdea } = computeDeterministicKpis(ideaVecs, refVecs, { tau: 0.8 })
-      // Usefulness side: ideas + U in their own vectorisation (see above).
-      // Stop words dropped first (contentText) so "that/when/for" do not count as a match.
-      const useVec = tfidfVectors([...ideaTexts, ...needs].map(contentText)).vectors
-      // Peer vote share needs WHO voted (to leave the author's own vote out): rows
-      // loaded from Firestore carry it, and so does an export with "Voted By (IDs)".
-      // A row without that column has voters unknown (null), never "nobody".
-      const voteItems = pool.map(r => ({
-        group: r.group_id ? `${r.session}|${r.group_id}` : '',
-        author: r.author_id,
-        voters: rowVoters(r),
-        eligible: enteredGroupPhase(r) || Number(r.votes) > 0,
-      }))
+      const res = objectiveKpisFromText(ideaTexts, refLines, { tau: 0.8 })
+      if (res.error) { setDetErr(res.error); return }
+      const { perIdea, ideaVecs, refs, unmeasured } = res
+      // Usefulness side: ideas + U in their OWN vectorisation (usefulnessKpis.js), so
+      // editing U never moves a novelty number; unreadable ideas are left blank there too.
       const techTerms = techSet.split('\n').map(s => s.trim()).filter(Boolean)
-      const { perIdea: useIdea } = computeUsefulnessKpis(useVec.slice(0, pool.length), useVec.slice(pool.length), ideaTexts, voteItems, techTerms)
+      const use = usefulnessKpisFromText(ideaTexts, needLines, techTerms)
+      if (use.error) { setDetErr(use.error); return }
+      const { perIdea: useIdea, needs } = use
       const round4 = x => (x == null ? '' : Math.round(x * 1e4) / 1e4)
       const byRid = new Map(pool.map((r, i) => [r.rid, { ...perIdea[i], use: useIdea[i] }]))
       setRows(prev => recomputeOverall(prev.map(r => {
@@ -521,7 +513,7 @@ export default function DataAnalytics() {
           ...r,
           det_novelty: round4(d.novelty), det_distinctiveness: round4(d.distinctiveness), det_score: round4(d.score),
           det_need_fit: round4(d.use.needFit), det_specificity: round4(d.use.specificity), det_workability: round4(d.use.workability),
-          det_usefulness: round4(d.use.usefulness), det_vote_share: round4(d.use.voteShare),
+          det_usefulness: round4(d.use.usefulness),
         }
       })))
       // Novelty × usefulness cross-check. Both composites, split at the WHOLE pool's
@@ -540,24 +532,28 @@ export default function DataAnalytics() {
         }
       }
       // Facet coverage (share of ideas stating each of who/what/where-when/why/how),
-      // plus the share that needs no extra technology (Workability = 1).
-      const facetShare = idxs => ({
-        ...Object.fromEntries(FACETS.map(f => [f.key,
-          idxs.length ? idxs.filter(i => useIdea[i].facets[f.key]).length / idxs.length : null])),
-        notech: idxs.length ? idxs.filter(i => useIdea[i].workability === 1).length / idxs.length : null,
-      })
+      // plus the share that needs no extra technology (Workability = 1). Taken over
+      // the MEASURED ideas only: an idea with no words has no facets to count.
+      const facetShare = idxs => {
+        const m = idxs.filter(i => useIdea[i].facets)
+        const share = pred => (m.length ? m.filter(pred).length / m.length : null)
+        return {
+          ...Object.fromEntries(FACETS.map(f => [f.key, share(i => useIdea[i].facets[f.key])])),
+          notech: share(i => useIdea[i].workability === 1),
+        }
+      }
       // Pool-level KPIs per condition (unique fraction at three thresholds + KPI 2 productivity).
       const perCond = []
       for (const cond of CONDITIONS) {
         const idxs = pool.map((r, i) => (r.condition === cond ? i : -1)).filter(i => i >= 0)
         if (!idxs.length) continue
         const vecs = idxs.map(i => ideaVecs[i])
-        const M = simMatrix(vecs)
         const items = idxs.map(i => ({ text: pool[i].text || ideaText(pool[i]), group: pool[i].group_id }))
         const prod = productivityCount(items, (a, b) => cosine(vecs[a], vecs[b]), { dedupTau: 0.9, minWords: 2 })
         perCond.push({
-          condition: cond, n: idxs.length,
-          uf80: uniqueFraction(M, 0.8), uf75: uniqueFraction(M, 0.75), uf85: uniqueFraction(M, 0.85),
+          // n = the ideas the Unique fraction is taken over (those with words).
+          condition: cond, n: vecs.filter(hasTerms).length,
+          uf80: measuredUniqueFraction(vecs, 0.8), uf75: measuredUniqueFraction(vecs, 0.75), uf85: measuredUniqueFraction(vecs, 0.85),
           productivity: prod.count,
           ...cross(idxs), facets: facetShare(idxs),
         })
@@ -575,35 +571,22 @@ export default function DataAnalytics() {
         ['Novelty (objective)', perIdea.map(d => d.novelty)], ['Combined score', novAll],
         ['Need fit (objective)', useIdea.map(d => d.needFit)], ['Specificity (objective)', useIdea.map(d => d.specificity)],
         ['Workability (objective)', useIdea.map(d => d.workability)], ['Usefulness score (objective)', useAll],
-        ['Peer vote share (objective)', useIdea.map(d => d.voteShare)],
       ]
-      // …and against what TEAMMATES voted for, compared WITHIN each group (a vote's
-      // level depends on how many ideas the group had), so the votes validate the
-      // text KPIs instead of being an outcome circular with the final picks.
-      const shares = useIdea.map(d => d.voteShare)
-      const groupOf = pool.map(r => (r.group_id ? `${r.session}|${r.group_id}` : ''))
-      const withVotes = shares.filter(v => v != null).length >= 3
-      const validation = (RATINGS.length || withVotes) ? {
-        cols: [...RATINGS.map(([, label]) => label), ...(withVotes ? ['Teammates\u2019 votes (same group)'] : [])],
+      const validation = RATINGS.length ? {
+        cols: RATINGS.map(([, label]) => label),
         rows: OBJ.map(([label, vals]) => ({
           label,
           side: /Novelty|Combined/.test(label) ? 'novelty' : 'usefulness',
-          cells: [
-            ...RATINGS.map(([k]) => {
-              const ys = pool.map(r => num(r[k]))
-              return { r: pearson(vals, ys), n: vals.filter((v, i) => v != null && ys[i] != null).length }
-            }),
-            ...(withVotes ? [/Peer vote/.test(label)
-              ? { r: null, n: 0 }
-              : { r: withinGroupPearson(vals, shares, groupOf), n: vals.filter((v, i) => v != null && shares[i] != null).length }] : []),
-          ],
+          cells: RATINGS.map(([k]) => {
+            const ys = pool.map(r => num(r[k]))
+            return { r: pearson(vals, ys), n: vals.filter((v, i) => v != null && ys[i] != null).length }
+          }),
         })),
       } : null
       setDetResult({
         validation,
-        perCond, refCount: refs.length, needCount: needs.length, ideas: pool.length,
+        perCond, refCount: refs.length, needCount: needs.length, ideas: pool.length - unmeasured, unmeasured,
         overall: { ...cross(all), facets: facetShare(all) }, novCut, useCut,
-        voteCovered: useIdea.filter(d => d.voteShare != null).length,
       })
     } catch (err) {
       setDetErr(err.message || String(err))
@@ -1172,7 +1155,7 @@ export default function DataAnalytics() {
         for (const r of rows) {
           const hasAi = has(r.novelty) || has(r.usefulness)
           const hasDet = has(r.det_novelty) || has(r.det_distinctiveness) || has(r.det_score) ||
-            has(r.det_need_fit) || has(r.det_specificity) || has(r.det_workability) || has(r.det_usefulness) || has(r.det_vote_share)
+            has(r.det_need_fit) || has(r.det_specificity) || has(r.det_workability) || has(r.det_usefulness)
           const extra = {}
           let hasUp = false
           for (const d of upDefs) { extra[d.key] = r[d.key]; if (has(r[d.key])) hasUp = true }
@@ -1181,7 +1164,7 @@ export default function DataAnalytics() {
               novelty: r.novelty, usefulness: r.usefulness, quality: r.overall_quality,
               detNovelty: r.det_novelty, detDistinctiveness: r.det_distinctiveness, detScore: r.det_score,
               detNeedFit: r.det_need_fit, detSpecificity: r.det_specificity, detWorkability: r.det_workability,
-              detUsefulness: r.det_usefulness, detVoteShare: r.det_vote_share,
+              detUsefulness: r.det_usefulness,
               extra,
             })
           }
@@ -1719,12 +1702,7 @@ export default function DataAnalytics() {
                     five things the idea spells out: who it is for, what it is, where or when it is used, why it helps,
                     how it works), <em>Workability</em> (can it be built with the fabric alone: 1 when it needs no extra
                     technology from list T, ½ with one such as an app or a battery, ⅓ with two, and so on) and their
-                    {' '}<em>Usefulness score</em> (the mean of the three as percentile ranks, 0 to 1). Also <em>Peer vote
-                    share</em>: the share of the idea&apos;s teammates (not counting its author) who voted for it, which is
-                    usefulness as judged by the people who chose between the ideas. The Final Ideas are picked by these
-                    same votes, and each voter backs three ideas, so its average falls when a group has more ideas to
-                    choose from. It is therefore kept out of the Usefulness score and out of the Step-5 regressions, and
-                    used instead in the check table below: do teammates vote for the ideas the text KPIs call useful?
+                    {' '}<em>Usefulness score</em> (the mean of the three as percentile ranks, 0 to 1).
                   </li>
                 </ul>
                 Novelty and usefulness are different things and research finds they often pull against each other
@@ -2471,8 +2449,11 @@ function ObjectiveKpiResults({ res }) {
       <p className={styles.loadMsg}>
         Computed the novelty side for {res.ideas} idea{res.ideas === 1 ? '' : 's'} against {res.refCount} existing
         product{res.refCount === 1 ? '' : 's'} (R), and the usefulness side against {res.needCount} need{res.needCount === 1 ? '' : 's'} (U).
-        {' '}Peer vote share is available for {res.voteCovered} idea{res.voteCovered === 1 ? '' : 's'} (the ones that were on a
-        group ballot with vote data).
+        {res.unmeasured > 0 && (
+          <>{' '}{res.unmeasured} idea{res.unmeasured === 1 ? ' has' : 's have'} no words to compare
+          {' '}(blank, a single letter, or text in a non-Latin script) and {res.unmeasured === 1 ? 'was' : 'were'} left
+          {' '}blank on both sides and kept out of the pools.</>
+        )}
       </p>
 
       <div className={styles.regBlock}>
@@ -2547,8 +2528,7 @@ function ObjectiveKpiResults({ res }) {
             </table>
           </div>
           <p className={styles.regNote}>
-            Pearson r over the ideas that have both values (hover a cell for n); the votes column compares ideas inside
-            the same group, since how many votes an idea can get depends on how many ideas its group had. Expect modest numbers: even GPT-4 agreed
+            Pearson r over the ideas that have both values (hover a cell for n). Expect modest numbers: even GPT-4 agreed
             with human &quot;value&quot; ratings at only about r = .33 (Kern &amp; Chao 2026), and human raters often let novelty
             colour their usefulness scores, so the ratings may correlate with each other more than these KPIs do.
           </p>

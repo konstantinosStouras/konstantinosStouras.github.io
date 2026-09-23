@@ -553,6 +553,27 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    per-idea dataset), *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and
    *Removed participants* when any — plus a raw-dataset **CSV**. Both reflect the current
    post-removal `effectiveRows`.
+   - **3.1: an idea with no words is not measured** (owner request 2026-09-23). The
+     objective KPIs are TF-IDF cosines, and an idea whose text has no word the tokeniser
+     reads (blank, "?", a one-letter answer, text in a non-Latin script such as Greek)
+     vectorises to ALL ZEROS; a zero vector has cosine 0 with everything, which every
+     formula reads as "as different as possible". Such an idea scored **Novelty 1,
+     Distinctiveness 1, Score 1 — the top of the ranking** — sat in every other idea's
+     Distinctiveness mean as a fake "completely different" neighbour, and counted as a
+     unique concept in the Unique fraction. It is now left **blank**, kept out of every
+     pool, and kept out of the TF-IDF corpus itself (it used to add to N in the IDF, which
+     nudged every real idea's numbers), so the real ideas get EXACTLY the numbers they
+     would get without it; a reference line with nothing to read is dropped the same way.
+     The page reports how many were left blank. The text → KPI path is one pure function,
+     **`objectiveKpisFromText`** in `src/utils/objectiveKpis.js`, which the page calls
+     (`hasTerms`/`measuredUniqueFraction` in `deterministicKpis.js`); the offline twin
+     `_idea-kpi-script/idea_kpis.py` applies the same rule. Deliberately NOT changed: an
+     idea that HAS words but shares none with R or with any other idea still scores 1 —
+     that is the formula working (it is lexically unlike everything), not a missing
+     value. Offline test: **`node _ideasearchlab-src/tools/det-kpi-guard.mjs`** (36
+     checks: the building blocks, the pipeline with blank/"?"/Greek/Chinese ideas mixed
+     in, that real ideas' numbers are unchanged to 1e-12, that the page goes through the
+     pipeline, and number-for-number parity with the Python twin when numpy is present).
    - **The rater could not call ANY provider until 2026-09-23 — `callProvider` was defined
      nowhere.** `llmClient.js` called it on every batch, no module defined or imported it, and the
      shipped bundle carried it as a bare global (`call:S=>callProvider(…)` in the minified chunk), so
@@ -773,17 +794,16 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        last line, "battery-free", "without an app"): `NEGATED_BEFORE`/`NEGATED_AFTER`.
      - `det_usefulness` **Usefulness score (objective)**: mean of the three as mid-rank
        percentiles in the pool (0 to 1), so no one scale dominates.
-     - `det_vote_share` **Peer vote share (objective)**: teammates (author excluded) who
-       voted for the idea / teammates who voted at all. Needs WHO voted: rows now carry
-       `votes` + `voted_by` (Firestore: the export's `countedFor` rule; import: "Vote
-       Count" + "Voted By (IDs)"); unknown voters → blank, never 0. Kept OUT of the
-       composite: the Final Ideas are chosen by these votes, so read it on "all ideas that
-       entered the group phase" (Rietzschel et al. 2010; Mueller et al. 2012: selectors
-       favour practical over original). Its mean also falls with ballot size (each voter
-       backs 3 ideas). So it is ALSO kept out of the Step-5 Python/R registries (a
-       commented line in each adds it back) and used as a VALIDATION signal instead: the
-       check table's "Teammates' votes (same group)" column is `withinGroupPearson`
-       (each variable centred on its group mean) between each text KPI and the share.
+     - **Not shipped: a peer-vote measure** (owner 2026-09: "using Peer vote share would
+       complicate matters. ignore it for now"). It was built (teammates, author excluded,
+       who voted for the idea) and removed: the Final Ideas are picked by those votes,
+       and its mean falls with ballot size. Rows carry no vote columns because of it.
+     - **An idea with no words is left blank on this side too**, the same rule
+       `objectiveKpis.js` applies to the novelty side (`isReadable`, imported, one
+       definition). `usefulnessKpisFromText` is the whole pipeline the page calls: only
+       readable ideas with a content word left after `contentText` enter the need-fit
+       TF-IDF corpus (an idea of filler words alone would be an EMPTY document that still
+       shifts every IDF weight), so adding such ideas never moves the others' numbers.
      - **A saved Step-5 script goes stale**: one saved before a KPI existed ("Save" /
        "Make this the default", `da:code:python`/`da:code:r`) keeps its old KPI list and
        silently skips built-in keys it does not name (only `x_` columns are discovered at

@@ -47,28 +47,56 @@ export function simMatrix(vecs) {
 }
 
 /**
+ * Does this vector carry any term at all?
+ *
+ * A text with no word of two or more letters/digits ("", "?", "a", or a script
+ * the tokeniser does not read, such as Greek) vectorises to ALL ZEROS, and a zero
+ * vector has cosine 0 with everything. Every KPI below turns "similarity 0" into
+ * "as different as possible", so such an idea used to score Novelty 1,
+ * Distinctiveness 1 and Score 1 — the TOP of the ranking — for having nothing to
+ * measure. It also sat in every other idea's Distinctiveness mean as a fake
+ * "completely different" neighbour, and counted as a unique concept of its own
+ * in the Unique fraction. An idea like that is not measured: its KPIs are left
+ * blank and it is kept out of every pool.
+ */
+export function hasTerms(vec) {
+  if (!vec) return false
+  for (let k = 0; k < vec.length; k++) if (vec[k] !== 0) return true
+  return false
+}
+
+/**
  * Novelty of an idea = 1 − the highest cosine similarity to any item in the
  * reference set R. Higher = further from everything that already exists.
- * Returns null if R is empty (novelty is undefined without a reference set).
+ * Returns null if R is empty (novelty is undefined without a reference set),
+ * and null for an idea with no terms (see hasTerms). A reference item with no
+ * terms is ignored rather than counted as an existing product nothing resembles.
  */
 export function novelty(ideaVec, refVecs) {
-  if (!refVecs || refVecs.length === 0) return null
+  if (!hasTerms(ideaVec)) return null
+  const refs = (refVecs || []).filter(hasTerms)
+  if (refs.length === 0) return null
   let max = -Infinity
-  for (const r of refVecs) { const s = cosine(ideaVec, r); if (s > max) max = s }
+  for (const r of refs) { const s = cosine(ideaVec, r); if (s > max) max = s }
   return 1 - max
 }
 
 /**
- * Pool distinctiveness of idea i = 1 − mean cosine similarity to the other N−1
+ * Pool distinctiveness of idea i = 1 − mean cosine similarity to the other
  * ideas in the pool. `sims` is the i-th row of a similarity matrix (sims[i] = 1
- * is skipped). Returns null for a pool of one (the mean is undefined).
+ * is skipped). `include` (optional, one boolean per pool member) restricts the
+ * pool: excluded members are neither averaged over nor given a value of their
+ * own. Returns null when no other member is left (the mean is undefined).
  */
-export function distinctiveness(sims, i) {
+export function distinctiveness(sims, i, include) {
   const n = sims.length
-  if (n < 2) return null
-  let sum = 0
-  for (let j = 0; j < n; j++) if (j !== i) sum += sims[j]
-  return 1 - sum / (n - 1)
+  if (include && !include[i]) return null
+  let sum = 0, count = 0
+  for (let j = 0; j < n; j++) {
+    if (j === i || (include && !include[j])) continue
+    sum += sims[j]; count++
+  }
+  return count === 0 ? null : 1 - sum / count
 }
 
 /**
@@ -171,23 +199,44 @@ export function productivityCount(items, getSim, opts = {}) {
 }
 
 /**
+ * Unique fraction over only the vectors that carry terms (see hasTerms) — an idea
+ * with nothing to compare is not a unique concept. Null when none carry terms.
+ */
+export function measuredUniqueFraction(vecs, tau = 0.8) {
+  return uniqueFraction(simMatrix(vecs.filter(hasTerms)), tau)
+}
+
+/**
  * Orchestrator: given the idea vectors and reference-set vectors (already embedded),
  * compute every per-idea deterministic KPI plus the pool unique fraction.
+ *
+ * Ideas with no terms (hasTerms false) get null KPIs and are left out of every
+ * other idea's Distinctiveness and out of the Unique fraction.
  *
  * @param ideaVecs  number[][] — one embedding per idea (pool order)
  * @param refVecs   number[][] — one embedding per reference-set item (R)
  * @param opts      { tau = 0.8, wNovelty = 0.5, wDistinct = 0.5 }
- * @returns { perIdea: [{ novelty, distinctiveness, score }], uniqueFraction, tau }
+ * @returns { perIdea: [{ novelty, distinctiveness, score }], uniqueFraction, tau,
+ *            measured, unmeasured }
  */
 export function computeDeterministicKpis(ideaVecs, refVecs, opts = {}) {
   const tau = opts.tau ?? 0.8
   const wNov = opts.wNovelty ?? 0.5
   const wDist = opts.wDistinct ?? 0.5
+  const include = ideaVecs.map(hasTerms)
   const M = simMatrix(ideaVecs)
   const perIdea = ideaVecs.map((vec, i) => {
+    if (!include[i]) return { novelty: null, distinctiveness: null, score: null }
     const nov = novelty(vec, refVecs)
-    const dist = distinctiveness(M[i], i)
+    const dist = distinctiveness(M[i], i, include)
     return { novelty: nov, distinctiveness: dist, score: combinedScore(nov, dist, wNov, wDist) }
   })
-  return { perIdea, uniqueFraction: uniqueFraction(M, tau), tau }
+  const measured = include.filter(Boolean).length
+  return {
+    perIdea,
+    uniqueFraction: measuredUniqueFraction(ideaVecs, tau),
+    tau,
+    measured,
+    unmeasured: ideaVecs.length - measured,
+  }
 }
