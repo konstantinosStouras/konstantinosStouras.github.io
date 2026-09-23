@@ -5,7 +5,8 @@
  * the Data Analytics results, formatted like the tables in Boussioux et al. (2024,
  * Organization Science):
  *   • Table 1 — summary statistics + correlation matrix (from Section 4), and
- *   • Tables 3–6 — the regression tables parsed from the Step-5 run.
+ *   • Tables 3–7 — the regression tables parsed from the Step-5 run (Table 7 = the
+ *     length check: Table 4 with log(1 + word count) held fixed).
  * The string it returns is offered via the Section-6 "Download LaTeX (.tex)" button
  * and compiles with any LaTeX engine (pdflatex/xelatex) to a publication-quality PDF
  * formatted like the paper. Only standard packages (float, booktabs, array, caption)

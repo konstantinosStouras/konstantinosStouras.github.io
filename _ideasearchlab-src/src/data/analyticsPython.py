@@ -96,6 +96,10 @@ KPI_DEFS = [
 
 TOP_RATING = 5.0           # a "top" idea earned the top of the 1–5 scale (Tables 5/6)
 USE_CONTROLS = False       # add word-count + stage controls? (size-guarded below)
+LENGTH_CHECK = True        # add Table 7: Table 4 re-fitted with log(1 + word count) held
+                           # fixed. Longer ideas score higher on most KPIs (text measures
+                           # AND raters), so this shows which condition effects are more
+                           # than wordiness. Tables 3-6 are unchanged either way.
 MIN_RESID_DF_FOR_CONTROLS = 8
 MIN_CELL = 2               # min ideas per condition (per KPI) to enter a model
 PRIMARY_CONTRAST = ("Solo", "Group")   # AI-timing contrast (solo- vs group-stage AI)
@@ -196,6 +200,7 @@ def prepare(df):
     df["stage_group"] = phase.str.contains("group").astype(int)
     text = df.get("text", pd.Series([""] * len(df), index=df.index)).astype(str)
     df["word_count"] = text.str.split().apply(len)
+    df["log_words"] = np.log1p(df["word_count"])
 
     # Top-rating binaries for the present 1–5 KPIs only — NaN where the KPI is missing
     # (so a missing score is never miscounted as "not top").
@@ -226,6 +231,17 @@ def control_terms(df):
         warnings.warn("Too few rows for controls; fitting without them.")
         return []
     return terms
+
+
+def length_terms(df):
+    """The Table 7 control: log(1 + word count), when LENGTH_CHECK, it varies, and
+    there are enough rows (same size guard as the other controls)."""
+    if not LENGTH_CHECK or df["log_words"].nunique() < 2:
+        return []
+    if (len(df) - 5) < MIN_RESID_DF_FOR_CONTROLS:
+        warnings.warn("Too few rows for the length check; Table 7 skipped.")
+        return []
+    return ["log_words"]
 
 
 # ── Which condition dummies are large enough to enter a model (per subset) ──────
@@ -291,9 +307,11 @@ def cell(model, term):
 
 
 # ── 3. Build one table (shared shape behind Tables 3–6) ────────────────────────
-def build_table(df, num, title, sub_desc, dvs, split, controls):
+def build_table(df, num, title, sub_desc, dvs, split, controls, extra_rows=(), ctrl_label=None):
     """dvs = list of (column, label). Each column is fitted on its own non-NaN subset
-    (KPIs differ in coverage), so a table's columns can have different N."""
+    (KPIs differ in coverage), so a table's columns can have different N.
+    extra_rows = further (term, label) coefficient rows to show (e.g. the length
+    control in Table 7); ctrl_label overrides the "Controls" cell text."""
     if split:
         rows = [(c.lower(), f"{c} (vs {REFERENCE})") for c in ["Solo", "Group", "Both"]]
     else:
@@ -318,7 +336,7 @@ def build_table(df, num, title, sub_desc, dvs, split, controls):
             ses.append(fmt_se(c[1]) if c else "")
         return {"label": label, "est": ests, "se": ses}
 
-    coef_rows = [coef_block(name, label) for name, label in rows]
+    coef_rows = [coef_block(name, label) for name, label in list(rows) + list(extra_rows)]
     coef_rows.append(coef_block("Intercept", f"Intercept ({REFERENCE})"))
 
     def stat(fn):
@@ -328,7 +346,8 @@ def build_table(df, num, title, sub_desc, dvs, split, controls):
             out.append(fn(model, s) if model is not None else DASH)
         return out
 
-    ctrl_label = "Yes" if controls else "No"
+    if ctrl_label is None:
+        ctrl_label = "Yes" if controls else "No"
     stat_rows = [
         {"label": "N (ideas)", "cells": stat(lambda m, s: str(int(m.nobs)))},
         {"label": "Number of groups", "cells": stat(lambda m, s: str(s["group_id"].nunique()) if "group_id" in s else "0")},
@@ -393,6 +412,32 @@ def emit_machine(tables):
         print(f"@@NOTE {t['note']}")
         print("@@ENDTABLE")
     print("===END REGRESSION TABLES===\n")
+
+
+# ── 5b. Length check: which Table-4 effects change once length is held fixed ──
+def length_check_summary(t4, t7, dvs):
+    """Plain-language read-out comparing Table 4 with Table 7 at p < .05."""
+    print("=" * 78)
+    print("LENGTH CHECK  (Table 4 vs Table 7: the same models, with idea length held fixed)")
+    print("=" * 78)
+    changed = []
+    for dv, label in dvs:
+        for term, name in (("solo", "Solo"), ("group", "Group"), ("both", "Both")):
+            a = cell(t4["fits"][dv][0], term)
+            b = cell(t7["fits"][dv][0], term)
+            if a is None or b is None:
+                continue
+            if a[2] < .05 and b[2] >= .05:
+                changed.append(f"  {label}: {name} vs None was significant, but NOT once length is held fixed "
+                               f"({a[0]:+.3f} -> {b[0]:+.3f}); the difference may be mostly wordiness.")
+            elif a[2] >= .05 and b[2] < .05:
+                changed.append(f"  {label}: {name} vs None becomes significant once length is held fixed "
+                               f"({a[0]:+.3f} -> {b[0]:+.3f}).")
+    if changed:
+        print("\n".join(changed))
+    else:
+        print("  No condition effect changes significance (p < .05) when length is held fixed.")
+    print("  (The 'log(1 + word count)' row of Table 7 shows how much length itself moves each KPI.)\n")
 
 
 # ── 6. Primary planned contrast: Solo − Group, per KPI ────────────────────────
@@ -656,8 +701,20 @@ def main():
         ]
     else:
         print("NOTE: no 1-5 KPI has variation in its top-rating outcome; Tables 5 & 6 are skipped.\n")
+    # Table 7 — the length check: Table 4 again, with log(1 + word count) held fixed.
+    lterms = length_terms(df)
+    length_table = None
+    if lterms:
+        length_table = build_table(
+            df, 7, "Robustness - Solo / Group / Both with idea length held fixed",
+            "OLS of each KPI on the condition dummies plus log(1 + word count) (reference = None).",
+            level_dvs, split=True, controls=lterms,
+            extra_rows=[("log_words", "log(1 + word count)")], ctrl_label="Length")
+        tables.append(length_table)
     for t in tables:
         print_table(t)
+    if length_table is not None:
+        length_check_summary(tables[1], length_table, level_dvs)
 
     # ── Primary planned contrast across KPIs (uses Table 4's split models) ─────
     print("=" * 78)

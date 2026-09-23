@@ -1709,7 +1709,8 @@ export default function DataAnalytics() {
                 Novelty and usefulness are different things and research finds they often pull against each other
                 (Runco &amp; Charles 1993; Rietzschel et&nbsp;al. 2010), so the cross-check below shows how the two scores
                 relate and how many ideas are both novel and useful. Longer ideas tend to score higher on text measures,
-                so compare with the word count in Section&nbsp;4. <em>Prototypicality (KS)</em> is not computed in the
+                so compare with the word count in Section&nbsp;4; Step&nbsp;5&apos;s Table&nbsp;7 repeats the condition comparison with
+                {' '}length held fixed. <em>Prototypicality (KS)</em> is not computed in the
                 browser yet: compute it elsewhere and <strong>Upload additional KPIs</strong> below. Every numeric column
                 (matched to your ideas by Idea&nbsp;ID) becomes a KPI that flows into Section&nbsp;4, the Step-2 aggregate
                 {' '}<em>Rankings</em> tab and the Step-5 regressions. <em>Download ideas&nbsp;+&nbsp;KPIs</em> exports the ideas
@@ -2182,7 +2183,11 @@ export default function DataAnalytics() {
             Both tabs run the <em>same</em> analysis (after any removed participants) on the
             {' '}<strong>scope you pick below</strong>: one linear regression per KPI across the four
             conditions (<em>None</em> = no-AI baseline; Tables 3–6 in the paper's layout), the planned
-            {' '}<em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. The conditions are
+            {' '}<em>Solo</em> vs <em>Group</em> contrast, a best→worst ranking, and plots. <strong>Table&nbsp;7</strong> repeats
+            {' '}Table&nbsp;4 with each idea&apos;s length held fixed (log of 1&nbsp;+&nbsp;word count), because longer ideas score
+            {' '}higher on most KPIs, text measures and raters alike; a line after it names any condition effect that
+            {' '}appears or disappears once length is held fixed, so you can tell a real effect from wordiness. Tables
+            {' '}3–6 do not change. The conditions are
             {' '}<strong>unbalanced</strong> (different n per condition), so every model uses
             {' '}<strong>HC3 heteroscedasticity-robust standard errors</strong>, a condition with fewer than 2
             ideas for a KPI is dropped from that KPI's model, and each condition's n is printed. Edit
@@ -2279,7 +2284,7 @@ export default function DataAnalytics() {
             {lastRun && (
               <span className={styles.row}>
                 <button className="btn-primary" onClick={exportInsightsPdf}>⬇ Export PDF</button>
-                <button className={`btn-ghost ${styles.miniBtn}`} onClick={exportLatex} title="Download the LaTeX (.tex) source of Table 1 + Tables 3–6 — compile with pdflatex for a publication-quality PDF formatted like the paper">⬇ Download LaTeX (.tex)</button>
+                <button className={`btn-ghost ${styles.miniBtn}`} onClick={exportLatex} title="Download the LaTeX (.tex) source of Table 1 + the regression tables — compile with pdflatex for a publication-quality PDF formatted like the paper">⬇ Download LaTeX (.tex)</button>
               </span>
             )}
           </h2>
@@ -2615,7 +2620,7 @@ function RegressionTables({ tables }) {
   if (!tables || !tables.length) return null
   return (
     <div className={styles.regTablesWrap}>
-      <h3 className={styles.kpiName}>Regression tables (Tables 3–6)</h3>
+      <h3 className={styles.kpiName}>Regression tables (Tables {tables.map(t => t.num).filter(n => n != null).join(', ')})</h3>
       {tables.map((t, ti) => {
         const firstStat = t.rows.findIndex(r => r.kind === 'stat')
         return (
