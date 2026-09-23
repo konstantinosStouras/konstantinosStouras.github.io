@@ -4,8 +4,37 @@
  * Single source of truth for the AI provider + model catalogue, shared by the
  * AI Settings page (the global per-session assistant config) and the Data
  * Analytics page (the idea-scoring rater). Keep model ids in sync with
- * functions/ai.js MODEL_LABELS and src/data/aiPricing.js.
+ * functions/ai.js MODEL_LABELS and src/data/aiPricing.js — the offline guard
+ * `tools/ai-models-guard.mjs` fails when they drift.
+ *
+ * WHAT IS LISTED, AND IN WHAT ORDER (owner, 2026-09-23): each provider offers
+ * FIVE models of its newest generation, most capable first (the first of each
+ * provider is also its most expensive; prices are printed beside every
+ * option). "Newest" is by generation, not strictly by date: Gemini keeps its
+ * only Pro tier, 3.1 Pro (preview), over the later 3.5 Flash-Lite, and OpenAI
+ * keeps GPT-5.6 Sol and Terra over the same-day 5.6 Luna. The list was rebuilt
+ * from the providers' line-ups on that date (release dates in the comments),
+ * so an older model that is still served — Claude Opus 4.8 / Haiku 4.5,
+ * GPT-5.5 / GPT-5.4, Gemini 2.5 — no longer appears in the dropdowns. A
+ * model id already saved under AI Settings keeps working until its provider
+ * retires it, and the AI Settings dropdown shows it as its own "Saved: …
+ * (no longer listed)" option — a controlled <select> whose value matches no
+ * option would otherwise silently display the first row, "Use default", while
+ * the assistant kept running on the saved id and Save re-persisted it.
+ * "Best first" is by CAPABILITY, with each model's price printed beside it —
+ * the two are not the same ordering (Opus 5.5 is cheaper than the Opus 5 it
+ * outperforms; GPT-6 Sol is cheaper than GPT-5.6 Terra), and the first entry
+ * of each provider is both its most capable and its most expensive.
+ *
+ * WHY A MODEL IS CHOSEN AT ALL (owner question, 2026-09-23: "isn't the API
+ * attached to a specific model?"): no — an API key belongs to a provider
+ * ACCOUNT and unlocks every model that provider serves; the model is named on
+ * every request (`model: "…"`), so a key alone does not say which one runs.
+ * That is why each page pairs the provider (which key) with a model (which
+ * brain, at which price).
  */
+export const CATALOGUE_AS_OF = '2026-09-23'
+
 export const PROVIDERS = [
   {
     id: 'claude',
@@ -13,16 +42,15 @@ export const PROVIDERS = [
     keyLabel: 'API Key',
     keyPlaceholder: 'sk-ant-...',
     keyLink: 'https://console.anthropic.com',
+    // The AI-assistant default lives in functions/ai.js (PROVIDER_DEFAULTS) and
+    // is deployed separately, so this mirrors what the deployed function uses.
     defaultModel: 'claude-sonnet-4-6',
     models: [
-      { id: 'claude-opus-4-8', label: 'Claude Opus 4.8 — most capable Opus (recommended)' },
-      { id: 'claude-fable-5', label: 'Claude Fable 5 — frontier model (premium pricing)' },
-      { id: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
-      { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 — best speed/cost balance' },
-      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 — fastest, most cost-effective' },
-      { id: 'claude-opus-4-5', label: 'Claude Opus 4.5 (older)' },
-      { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 (older)' },
+      { id: 'claude-fable-5-1', label: 'Claude Fable 5.1 — most capable (Sep 2026)' },
+      { id: 'claude-fable-5', label: 'Claude Fable 5 — previous Fable (Jun 2026)' },
+      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 — Fable-5.1-level at Opus price (Sep 2026)' },
+      { id: 'claude-opus-5', label: 'Claude Opus 5 (Jul 2026)' },
+      { id: 'claude-sonnet-5', label: 'Claude Sonnet 5 — best speed/cost balance (Jun 2026)' },
     ],
   },
   {
@@ -33,42 +61,73 @@ export const PROVIDERS = [
     keyLink: 'https://platform.openai.com/api-keys',
     defaultModel: 'gpt-5.5',
     models: [
-      { id: 'gpt-5.5', label: 'GPT-5.5 — flagship (recommended)' },
-      { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini — fast, cost-efficient' },
-      { id: 'gpt-5.4-nano', label: 'GPT-5.4 nano — fastest, cheapest' },
-      { id: 'gpt-5.2', label: 'GPT-5.2 — previous flagship' },
-      { id: 'gpt-5.1', label: 'GPT-5.1' },
-      { id: 'gpt-4.1', label: 'GPT-4.1 (older)' },
-      { id: 'gpt-4o', label: 'GPT-4o (legacy)' },
+      { id: 'gpt-6-astra', label: 'GPT-6 Astra — flagship (Sep 2026)' },
+      { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol — previous flagship (Jul 2026)' },
+      { id: 'gpt-6-sol', label: 'GPT-6 Sol — workhorse (Sep 2026)' },
+      { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra — mid tier (Jul 2026)' },
+      { id: 'gpt-6-luna', label: 'GPT-6 Luna — fastest, cheapest (Sep 2026)' },
     ],
   },
   {
     id: 'gemini',
     name: 'Gemini (Google)',
     keyLabel: 'API Key',
-    keyPlaceholder: 'AIza...',
+    keyPlaceholder: 'AQ.… (older keys: AIza…)',
     keyLink: 'https://aistudio.google.com/app/apikey',
     defaultModel: 'gemini-3.5-flash',
+    // Gemini 3.5 Pro was announced at I/O (May 2026) but has no API model id
+    // yet; 3.1 Pro (preview) is the only Pro tier the API serves.
     models: [
-      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash — latest GA (recommended)' },
       { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (preview) — deepest reasoning' },
-      { id: 'gemini-3-flash', label: 'Gemini 3 Flash' },
-      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash — newest, most capable Flash (Sep 2026)' },
+      { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash (Aug 2026)' },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Jul 2026)' },
+      { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (May 2026)' },
     ],
   },
 ]
 
 // Defaults for the Data Analytics idea-scoring rater. Scoring runs over every
-// idea, so the default leans fast/cheap — Haiku for Claude.
+// idea (hundreds of calls), so the default is the cheapest of each provider's
+// five — each is still a current-generation model.
 export const DEFAULT_SCORING_PROVIDER = 'claude'
 export const SCORING_DEFAULT_MODEL = {
-  claude: 'claude-haiku-4-5',
-  openai: 'gpt-5.4-mini',
-  gemini: 'gemini-3.5-flash',
+  claude: 'claude-sonnet-5',
+  openai: 'gpt-6-luna',
+  gemini: 'gemini-3.8-flash',
 }
 
 export function providerById(id) {
   return PROVIDERS.find(p => p.id === id) || PROVIDERS[0]
+}
+
+/** Every model id the catalogue offers, across providers. */
+export function allModelIds() {
+  return PROVIDERS.flatMap(p => p.models.map(m => m.id))
+}
+
+/**
+ * Dropdown text for a model: its label plus the price per 1M tokens, so the
+ * "most capable first" ordering carries its cost rather than implying it.
+ * `prices` is the MODEL_PRICES map from aiPricing.js (passed in, so this data
+ * module stays import-free and the guard can test it with a fake table); a
+ * promotional row prints its expiry while it holds and its list price after
+ * (`at` = the day to price for, default today).
+ */
+export function modelOptionLabel(model, prices, at) {
+  const p = prices?.[model.id]
+  if (!p) return model.label
+  const today = dayString(at)
+  const live = p.until && today > p.until && p.list ? p.list : p
+  const promo = p.until && today <= p.until ? ` (promotional price until ${p.until})` : ''
+  return `${model.label} · $${fmtPrice(live.in)} in / $${fmtPrice(live.out)} out per 1M tokens${promo}`
+}
+
+function dayString(at) {
+  const d = at instanceof Date ? at : at ? new Date(at) : new Date()
+  return (Number.isNaN(d.getTime()) ? new Date() : d).toISOString().slice(0, 10)
+}
+
+function fmtPrice(n) {
+  return Number.isInteger(n) ? String(n) : String(n).replace(/^0\./, '0.')
 }

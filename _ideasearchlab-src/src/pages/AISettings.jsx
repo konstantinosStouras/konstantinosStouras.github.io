@@ -5,7 +5,8 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 import { db, auth, functions } from '../firebase'
 import { useTheme } from '../context/ThemeContext'
-import { PROVIDERS } from '../data/aiModels'
+import { PROVIDERS, CATALOGUE_AS_OF, modelOptionLabel } from '../data/aiModels'
+import { MODEL_PRICES } from '../data/aiPricing'
 import styles from './AISettings.module.css'
 
 // The same three default-management buttons used across the admin panel,
@@ -268,13 +269,23 @@ export default function AISettings() {
               onChange={e => setModel(e.target.value)}
             >
               <option value="">Use default ({activeProvider?.defaultModel})</option>
+              {/* A saved id the pruned list no longer offers gets its own option, or the
+                  controlled select would show "Use default" while the assistant kept
+                  running on the saved model and Save wrote it back unchanged. */}
+              {model && !activeProvider?.models.some(m => m.id === model) && (
+                <option value={model}>{modelOptionLabel({ id: model, label: `Saved: ${model} (no longer listed)` }, MODEL_PRICES)}</option>
+              )}
               {activeProvider?.models.map(m => (
-                <option key={m.id} value={m.id}>{m.label}</option>
+                <option key={m.id} value={m.id}>{modelOptionLabel(m, MODEL_PRICES)}</option>
               ))}
             </select>
             <p className={styles.hint}>
-              Model lists updated June 2026. A previously saved model keeps working
-              until its provider retires it; models marked preview may change.
+              Each provider lists five models of its newest generation, most capable first, with
+              each model's price per 1M tokens beside it (list updated {CATALOGUE_AS_OF}). Your API key belongs
+              to the provider account, not to one model — it unlocks every model that provider
+              serves, and the model named here is the one each request runs on. A previously
+              saved model keeps working until its provider retires it (it shows above as
+              "Saved: …" if it is no longer listed); models marked preview may change.
             </p>
           </div>
           <DefaultActions

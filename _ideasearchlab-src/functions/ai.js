@@ -15,7 +15,10 @@ const DEFAULTS = {
   systemPrompt: null,
 }
 
-// Keep in sync with the model lists in src/pages/AISettings.jsx (June 2026).
+// Keep in sync with the model catalogue in src/data/aiModels.js (September
+// 2026): its per-provider `defaultModel` MIRRORS these, because this file is
+// deployed separately and the page must not claim a default the deployed
+// function does not use.
 const PROVIDER_DEFAULTS = {
   claude: { model: 'claude-sonnet-4-6' },
   openai: { model: 'gpt-5.5' },
@@ -26,6 +29,10 @@ const PROVIDER_DEFAULTS = {
 // public settings/aiPublic doc so the app can say which model is in use without
 // exposing keys. Unknown ids fall back to the provider brand.
 const MODEL_LABELS = {
+  'claude-fable-5-1': "Anthropic's Claude Fable 5.1",
+  'claude-opus-5-5': "Anthropic's Claude Opus 5.5",
+  'claude-opus-5': "Anthropic's Claude Opus 5",
+  'claude-sonnet-5': "Anthropic's Claude Sonnet 5",
   'claude-opus-4-8': "Anthropic's Claude Opus 4.8",
   'claude-fable-5': "Anthropic's Claude Fable 5",
   'claude-opus-4-7': "Anthropic's Claude Opus 4.7",
@@ -34,14 +41,26 @@ const MODEL_LABELS = {
   'claude-haiku-4-5': "Anthropic's Claude Haiku 4.5",
   'claude-opus-4-5': "Anthropic's Claude Opus 4.5",
   'claude-sonnet-4-5': "Anthropic's Claude Sonnet 4.5",
+  'gpt-6-astra': "OpenAI's GPT-6 Astra",
+  'gpt-6-sol': "OpenAI's GPT-6 Sol",
+  'gpt-6-luna': "OpenAI's GPT-6 Luna",
+  'gpt-5.6-sol': "OpenAI's GPT-5.6 Sol",
+  'gpt-5.6': "OpenAI's GPT-5.6 Sol",
+  'gpt-5.6-terra': "OpenAI's GPT-5.6 Terra",
+  'gpt-5.6-luna': "OpenAI's GPT-5.6 Luna",
   'gpt-5.5': "OpenAI's GPT-5.5",
+  'gpt-5.4': "OpenAI's GPT-5.4",
   'gpt-5.4-mini': "OpenAI's GPT-5.4 mini",
   'gpt-5.4-nano': "OpenAI's GPT-5.4 nano",
   'gpt-5.2': "OpenAI's GPT-5.2",
   'gpt-5.1': "OpenAI's GPT-5.1",
   'gpt-4.1': "OpenAI's GPT-4.1",
   'gpt-4o': "OpenAI's GPT-4o",
+  'gemini-3.8-flash': "Google's Gemini 3.8 Flash",
+  'gemini-3.7-flash': "Google's Gemini 3.7 Flash",
+  'gemini-3.6-flash': "Google's Gemini 3.6 Flash",
   'gemini-3.5-flash': "Google's Gemini 3.5 Flash",
+  'gemini-3.5-flash-lite': "Google's Gemini 3.5 Flash-Lite",
   'gemini-3.1-pro-preview': "Google's Gemini 3.1 Pro",
   'gemini-3-flash': "Google's Gemini 3 Flash",
   'gemini-2.5-pro': "Google's Gemini 2.5 Pro",
@@ -120,10 +139,15 @@ function resolveAIConfig(sessionAIConfig, globalSettings, scope) {
 
 // ─── Provider API calls ───────────────────────────────────────────────────────
 
+// Models that think by default (thinking counts toward max_tokens) — see callClaude.
+const CLAUDE_THINKS_BY_DEFAULT = /^claude-(fable|mythos|opus-5|sonnet-5)/
+const CLAUDE_THINKING_HEADROOM = 4000
+
 async function callClaude(messages, config) {
-  // Claude Opus 4.7+ and the Fable/Mythos family removed sampling parameters —
-  // sending `temperature` to them returns a 400. Older models still accept it.
-  const supportsTemperature = !/^claude-(opus-4-(?:[7-9]|\d{2})|fable|mythos)/.test(config.model || '')
+  // Claude Opus 4.7+, Opus 5 / 5.5, Sonnet 5 and the Fable/Mythos family
+  // removed sampling parameters — sending `temperature` to them returns a 400.
+  // Older models (Sonnet 4.6, Haiku 4.5, Opus 4.6) still accept it.
+  const supportsTemperature = !/^claude-(opus-(?:4-(?:[7-9]|\d{2})|5)|sonnet-5|fable|mythos)/.test(config.model || '')
   const body = {
     model:      config.model,
     max_tokens: config.maxTokens,
@@ -132,6 +156,18 @@ async function callClaude(messages, config) {
   }
   if (supportsTemperature && config.temperature != null) {
     body.temperature = config.temperature
+  }
+  // Opus 5 / 5.5, Sonnet 5 and Fable/Mythos THINK BY DEFAULT (always-on on
+  // Fable and Opus 5.5) and the thinking tokens count toward `max_tokens`,
+  // so the assistant's 1000-token reply ceiling could be spent on hidden
+  // thinking alone and come back as a thinking block with no text — a blank
+  // AI message and no error. Keep the thinking short (`effort: low` — the
+  // assistant is a chat, not a long task) and give it headroom ABOVE the
+  // admin's reply ceiling; the older models run without thinking when the
+  // parameter is omitted, so they keep the plain ceiling.
+  if (CLAUDE_THINKS_BY_DEFAULT.test(config.model || '')) {
+    body.max_tokens = config.maxTokens + CLAUDE_THINKING_HEADROOM
+    body.output_config = { effort: 'low' }
   }
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -158,9 +194,10 @@ async function callOpenAI(messages, config) {
     { role: 'system', content: config.systemPrompt },
     ...messages,
   ]
-  // GPT-5-family and o-series reasoning models take max_completion_tokens and
-  // reject non-default temperature; older chat models keep the legacy params.
-  const isReasoningFamily = /^(gpt-5|o\d)/.test(config.model || '')
+  // GPT-5 / GPT-6 families and o-series reasoning models take
+  // max_completion_tokens and reject non-default temperature; older chat
+  // models keep the legacy params.
+  const isReasoningFamily = /^(gpt-5|gpt-6|o\d)/.test(config.model || '')
   const body = { model: config.model, messages: openAIMessages }
   if (isReasoningFamily) {
     body.max_completion_tokens = config.maxTokens
@@ -185,23 +222,40 @@ async function callOpenAI(messages, config) {
   }
 }
 
+// Gemini 3.x thinks by default (thoughts count toward maxOutputTokens) — see callGemini.
+const GEMINI_THINKS_BY_DEFAULT = /^gemini-3/
+const GEMINI_THINKING_HEADROOM = 4000
+
 async function callGemini(messages, config) {
   // Convert to Gemini format
   const contents = messages.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }))
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`
+  // The key travels in the `x-goog-api-key` HEADER, never as `?key=` in the
+  // URL: the URL form lands the key in logs and error text, and the "AQ."-format
+  // keys AI Studio issues since mid-2026 are refused (404) as a query parameter.
+  // Same shape as the browser rater (src/utils/providerRequest.js).
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent`
+  const generationConfig = {
+    temperature: config.temperature,
+    maxOutputTokens: config.maxTokens,
+  }
+  // Gemini 3.x thinks by default (at MEDIUM) and the thought tokens count
+  // against maxOutputTokens — the same blank-reply trap as callClaude's, so
+  // the same cure: a low thinking level and headroom above the reply ceiling.
+  // 2.5 models take the older `thinkingBudget` and reject `thinkingLevel`.
+  if (GEMINI_THINKS_BY_DEFAULT.test(config.model || '')) {
+    generationConfig.maxOutputTokens = config.maxTokens + GEMINI_THINKING_HEADROOM
+    generationConfig.thinkingConfig = { thinkingLevel: 'low' }
+  }
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: config.systemPrompt }] },
       contents,
-      generationConfig: {
-        temperature: config.temperature,
-        maxOutputTokens: config.maxTokens,
-      },
+      generationConfig,
     }),
   })
   if (!response.ok) throw new Error(`Gemini API error: ${await response.text()}`)
@@ -355,7 +409,7 @@ exports.saveAISettings = functions.https.onCall(async (data, context) => {
   // it falls back to the built-in default in resolveAIConfig.
   const update = {}
   if (provider)                    update.provider      = provider
-  if (apiKeys)                     update.apiKeys       = apiKeys       // { claude: 'sk-ant-...', openai: 'sk-...', gemini: 'AIza...' }
+  if (apiKeys)                     update.apiKeys       = apiKeys       // { claude: 'sk-ant-...', openai: 'sk-...', gemini: 'AQ.… (older keys: AIza…)' }
   if (model !== undefined)         update.model         = model         // null = provider default
   if (temperature !== undefined)   update.temperature   = temperature
   if (maxTokens !== undefined)     update.maxTokens     = maxTokens
