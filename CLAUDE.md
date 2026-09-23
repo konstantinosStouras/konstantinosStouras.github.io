@@ -3008,6 +3008,28 @@ reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
 `node _ideasearchlab-src/tools/score-gaps-guard.mjs` (60+ checks, including the
 owner's own 741-idea scenario driven through the real scoring engine).
 
+**The AI rater's model list is each provider's five newest, best and most
+expensive first, and the rater can now actually call them** (owner,
+2026-09-23). The Data Analytics 3.2 "Fill the N missing AI scores" button and
+the AI Settings page share one catalogue, `_ideasearchlab-src/src/data/aiModels.js`
+(Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Sonnet 5; GPT-6 Astra /
+GPT-5.6 Sol / GPT-6 Sol / GPT-5.6 Terra / GPT-6 Luna; Gemini 3.1 Pro preview /
+3.8 / 3.7 / 3.6 / 3.5 Flash), each option printing its price per 1M tokens from
+`aiPricing.js`. Rebuilding the list found that the rater's `callProvider` was
+defined NOWHERE — referenced in `llmClient.js`, absent from the source and a
+bare global in the shipped bundle — so with any key saved the button threw
+`ReferenceError` on its first batch; it is `src/utils/providerRequest.js` now
+(Firebase-free, fetch injected), and `tools/ai-models-guard.mjs` drives every
+provider's request shape and error path offline and reads the SHIPPED bundle
+so a stale rebuild fails the test. **A key is per provider account, not per
+model** — it unlocks every model the provider serves and the model is named on
+each request — which is why both pages pair a provider (whose key) with a model
+(which brain, at what price); both say so in their hint text. The assistant's
+own defaults in `functions/ai.js` are untouched (they deploy separately); its
+`MODEL_LABELS` and its no-`temperature` / reasoning-family rules were extended
+to the new ids for the next `firebase deploy --only functions`. Full detail in
+`_ideasearchlab-src/CLAUDE.md`.
+
 **Excel export per session, from the session list.** Both admins let the
 instructor download ONE session's research workbook straight from its card —
 ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export data**

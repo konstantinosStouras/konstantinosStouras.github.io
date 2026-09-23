@@ -5,7 +5,8 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 import { db, auth, functions } from '../firebase'
 import { useTheme } from '../context/ThemeContext'
-import { PROVIDERS } from '../data/aiModels'
+import { PROVIDERS, CATALOGUE_AS_OF, modelOptionLabel } from '../data/aiModels'
+import { MODEL_PRICES } from '../data/aiPricing'
 import styles from './AISettings.module.css'
 
 // The same three default-management buttons used across the admin panel,
@@ -269,12 +270,15 @@ export default function AISettings() {
             >
               <option value="">Use default ({activeProvider?.defaultModel})</option>
               {activeProvider?.models.map(m => (
-                <option key={m.id} value={m.id}>{m.label}</option>
+                <option key={m.id} value={m.id}>{modelOptionLabel(m, MODEL_PRICES)}</option>
               ))}
             </select>
             <p className={styles.hint}>
-              Model lists updated June 2026. A previously saved model keeps working
-              until its provider retires it; models marked preview may change.
+              Each provider lists its five newest models, best and most expensive first, with the
+              price per 1M tokens (list updated {CATALOGUE_AS_OF}). Your API key belongs to the
+              provider account, not to one model — it unlocks every model that provider serves,
+              and the model named here is the one each request runs on. A previously saved model
+              keeps working until its provider retires it; models marked preview may change.
             </p>
           </div>
           <DefaultActions

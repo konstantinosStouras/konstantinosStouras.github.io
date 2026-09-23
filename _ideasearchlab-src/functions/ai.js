@@ -15,7 +15,10 @@ const DEFAULTS = {
   systemPrompt: null,
 }
 
-// Keep in sync with the model lists in src/pages/AISettings.jsx (June 2026).
+// Keep in sync with the model catalogue in src/data/aiModels.js (September
+// 2026): its per-provider `defaultModel` MIRRORS these, because this file is
+// deployed separately and the page must not claim a default the deployed
+// function does not use.
 const PROVIDER_DEFAULTS = {
   claude: { model: 'claude-sonnet-4-6' },
   openai: { model: 'gpt-5.5' },
@@ -26,6 +29,10 @@ const PROVIDER_DEFAULTS = {
 // public settings/aiPublic doc so the app can say which model is in use without
 // exposing keys. Unknown ids fall back to the provider brand.
 const MODEL_LABELS = {
+  'claude-fable-5-1': "Anthropic's Claude Fable 5.1",
+  'claude-opus-5-5': "Anthropic's Claude Opus 5.5",
+  'claude-opus-5': "Anthropic's Claude Opus 5",
+  'claude-sonnet-5': "Anthropic's Claude Sonnet 5",
   'claude-opus-4-8': "Anthropic's Claude Opus 4.8",
   'claude-fable-5': "Anthropic's Claude Fable 5",
   'claude-opus-4-7': "Anthropic's Claude Opus 4.7",
@@ -34,14 +41,26 @@ const MODEL_LABELS = {
   'claude-haiku-4-5': "Anthropic's Claude Haiku 4.5",
   'claude-opus-4-5': "Anthropic's Claude Opus 4.5",
   'claude-sonnet-4-5': "Anthropic's Claude Sonnet 4.5",
+  'gpt-6-astra': "OpenAI's GPT-6 Astra",
+  'gpt-6-sol': "OpenAI's GPT-6 Sol",
+  'gpt-6-luna': "OpenAI's GPT-6 Luna",
+  'gpt-5.6-sol': "OpenAI's GPT-5.6 Sol",
+  'gpt-5.6': "OpenAI's GPT-5.6 Sol",
+  'gpt-5.6-terra': "OpenAI's GPT-5.6 Terra",
+  'gpt-5.6-luna': "OpenAI's GPT-5.6 Luna",
   'gpt-5.5': "OpenAI's GPT-5.5",
+  'gpt-5.4': "OpenAI's GPT-5.4",
   'gpt-5.4-mini': "OpenAI's GPT-5.4 mini",
   'gpt-5.4-nano': "OpenAI's GPT-5.4 nano",
   'gpt-5.2': "OpenAI's GPT-5.2",
   'gpt-5.1': "OpenAI's GPT-5.1",
   'gpt-4.1': "OpenAI's GPT-4.1",
   'gpt-4o': "OpenAI's GPT-4o",
+  'gemini-3.8-flash': "Google's Gemini 3.8 Flash",
+  'gemini-3.7-flash': "Google's Gemini 3.7 Flash",
+  'gemini-3.6-flash': "Google's Gemini 3.6 Flash",
   'gemini-3.5-flash': "Google's Gemini 3.5 Flash",
+  'gemini-3.5-flash-lite': "Google's Gemini 3.5 Flash-Lite",
   'gemini-3.1-pro-preview': "Google's Gemini 3.1 Pro",
   'gemini-3-flash': "Google's Gemini 3 Flash",
   'gemini-2.5-pro': "Google's Gemini 2.5 Pro",
@@ -121,9 +140,10 @@ function resolveAIConfig(sessionAIConfig, globalSettings, scope) {
 // ─── Provider API calls ───────────────────────────────────────────────────────
 
 async function callClaude(messages, config) {
-  // Claude Opus 4.7+ and the Fable/Mythos family removed sampling parameters —
-  // sending `temperature` to them returns a 400. Older models still accept it.
-  const supportsTemperature = !/^claude-(opus-4-(?:[7-9]|\d{2})|fable|mythos)/.test(config.model || '')
+  // Claude Opus 4.7+, Opus 5 / 5.5, Sonnet 5 and the Fable/Mythos family
+  // removed sampling parameters — sending `temperature` to them returns a 400.
+  // Older models (Sonnet 4.6, Haiku 4.5, Opus 4.6) still accept it.
+  const supportsTemperature = !/^claude-(opus-(?:4-(?:[7-9]|\d{2})|5)|sonnet-5|fable|mythos)/.test(config.model || '')
   const body = {
     model:      config.model,
     max_tokens: config.maxTokens,
@@ -158,9 +178,10 @@ async function callOpenAI(messages, config) {
     { role: 'system', content: config.systemPrompt },
     ...messages,
   ]
-  // GPT-5-family and o-series reasoning models take max_completion_tokens and
-  // reject non-default temperature; older chat models keep the legacy params.
-  const isReasoningFamily = /^(gpt-5|o\d)/.test(config.model || '')
+  // GPT-5 / GPT-6 families and o-series reasoning models take
+  // max_completion_tokens and reject non-default temperature; older chat
+  // models keep the legacy params.
+  const isReasoningFamily = /^(gpt-5|gpt-6|o\d)/.test(config.model || '')
   const body = { model: config.model, messages: openAIMessages }
   if (isReasoningFamily) {
     body.max_completion_tokens = config.maxTokens

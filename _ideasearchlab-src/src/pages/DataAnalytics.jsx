@@ -23,7 +23,8 @@ import {
 } from '../utils/scoreGaps'
 import { tfidfVectors } from '../utils/tfidf'
 import { computeDeterministicKpis, uniqueFraction, productivityCount, cosine, simMatrix } from '../utils/deterministicKpis'
-import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById } from '../data/aiModels'
+import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById, modelOptionLabel, CATALOGUE_AS_OF } from '../data/aiModels'
+import { MODEL_PRICES } from '../data/aiPricing'
 import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
 import { runPython } from '../utils/pyodideRunner'
 import { runR } from '../utils/webrRunner'
@@ -1674,8 +1675,9 @@ export default function DataAnalytics() {
               <h3 className={styles.subTitle} style={{ marginTop: 22 }}><span className={styles.subBadge}>3.2</span>AI-generated KPIs</h3>
               <div className={styles.banner}>
                 <strong>Score each idea with an LLM, or upload an offline AI-scoring file.</strong> The AI rater scores each
-                idea on novelty and usefulness (1–5); quality is their mean. Choose the API and model below — it uses the
-                matching key saved under AI&nbsp;Settings. Scores flow into the <em>Rankings</em> tab of the Step&nbsp;2
+                idea on novelty and usefulness (1–5); quality is their mean. Choose the API provider and the model below —
+                the run uses that provider's key saved under AI&nbsp;Settings, and the model is named on every request
+                (a key unlocks all of a provider's models; it is not tied to one). Scores flow into the <em>Rankings</em> tab of the Step&nbsp;2
                 aggregate and the Step&nbsp;5 regressions. <strong>Both the AI run and an uploaded file only fill ideas
                 that have no score yet</strong> — ideas already scored (in an earlier sitting, by a past AI rater, or by
                 hand) keep their scores. To change one, edit it directly in the table below.
@@ -1688,16 +1690,26 @@ export default function DataAnalytics() {
 
               <div className={styles.raterRow}>
                 <span className={styles.raterLabel}>AI rater</span>
-                <select className={styles.miniSelect} value={scoreProvider} onChange={e => onScoreProviderChange(e.target.value)} disabled={!!scoring}>
+                <select className={styles.miniSelect} value={scoreProvider} onChange={e => onScoreProviderChange(e.target.value)} disabled={!!scoring} title="Which provider's API key to use">
                   {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                <select className={styles.miniSelect} value={scoreModel} onChange={e => setScoreModel(e.target.value)} disabled={!!scoring}>
-                  {activeProvider.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                {/* Each provider's five newest models, best and most expensive first,
+                    with the price per 1M tokens (catalogue in src/data/aiModels.js). */}
+                <select className={styles.miniSelect} value={scoreModel} onChange={e => setScoreModel(e.target.value)} disabled={!!scoring} title="Which of that provider's models rates the ideas">
+                  {activeProvider.models.map(m => <option key={m.id} value={m.id}>{modelOptionLabel(m, MODEL_PRICES)}</option>)}
                 </select>
                 {aiSettings && !selectedHasKey && (
                   <span className={styles.unscored}>no {activeProvider.name} key saved — add it under AI Settings</span>
                 )}
               </div>
+              <p className={styles.hint}>
+                Why pick a model as well as a provider? An API key belongs to your {activeProvider.name} account, not to
+                one model — it unlocks every model that provider serves, and each request names the model it runs on.
+                The list shows the provider's five newest models, best and most expensive first (as of {CATALOGUE_AS_OF});
+                the pre-selected one is the cheapest current model, which is enough for a 1–5 rating over hundreds of ideas.
+                Every idea is scored by the model you pick here, so the AI&nbsp;Novelty and AI&nbsp;Usefulness columns
+                are that model's ratings.
+              </p>
 
               <label className={styles.checkRow}>
                 <input type="checkbox" checked={scoreOnlyFinal} onChange={e => setScoreOnlyFinal(e.target.checked)} disabled={!!scoring} />
