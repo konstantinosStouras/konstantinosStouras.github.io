@@ -3051,7 +3051,12 @@ then the number of ideas behind each r), beside **Pool KPIs by condition**, whic
 gained the two medians that define "novel" and "useful". One builder writes both
 (`detResultSheets`), and both names sit in `REBUILT_SHEETS` in `sessionExport.js`, so
 a re-imported download never stacks a second copy into the aggregate. Pinned by
-section 9 of `node _ideasearchlab-src/tools/analytics-page-guard.mjs`.
+section 9 of `node _ideasearchlab-src/tools/analytics-page-guard.mjs`. **Step 4's
+Table 1** (summary statistics + the correlation matrix, which reached only the PDF
+and LaTeX reports) is in the same three downloads too, as a **Table 1 summary +
+correlations** tab built from the table the page renders (`summaryTableSheetRows`),
+with the number of ideas behind each correlation and a note on which ideas it
+covers; pinned by sections 10a/10b of the same guard.
 
 **Section 3.1's objective KPIs leave an idea that cannot be scored blank.** An
 idea needs at least two meaningful words (two different words not on NLTK's

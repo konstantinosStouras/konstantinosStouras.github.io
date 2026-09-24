@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, summarize,
-  buildSummaryTable, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
+  buildSummaryTable, summaryTableSheetRows, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition, scriptKpiKeys,
@@ -48,7 +48,7 @@ import { parseRunOutput, buildInsightsPrintHtml, kpiLabel, tableCell } from '../
 import { buildLatexSource } from '../utils/latexReport'
 import {
   fetchSessionExportData, buildSessionSheets, mergeSessionSheets,
-  appendSheetsToWorkbook, rankingsSheetFromIdeas, conditionOf, POOL_KPI_SHEET, RATING_CHECK_SHEET,
+  appendSheetsToWorkbook, rankingsSheetFromIdeas, conditionOf, POOL_KPI_SHEET, RATING_CHECK_SHEET, TABLE1_SHEET,
 } from '../utils/sessionExport'
 import styles from './DataAnalytics.module.css'
 
@@ -1445,6 +1445,9 @@ export default function DataAnalytics() {
     }
     addSheet(wb, 'Summary by condition', summaryByConditionRows(data))
     addSheet(wb, 'Summary by session', summaryBySessionRows(data))
+    // Section 4's Table 1 (summary statistics + correlations), as the page shows it.
+    const t1 = table1Sheet()
+    if (t1) addSheet(wb, t1.name, t1.rows)
     // The 3.1 results: the pool KPIs + novelty × usefulness + specificity tables,
     // and the check of the empirical KPIs against the ratings.
     for (const sh of detResultSheets(detResult)) addSheet(wb, sh.name, sh.rows)
@@ -1491,6 +1494,9 @@ export default function DataAnalytics() {
     // check against the ratings is per KPI, so each lives on its own tab when a
     // compute run produced it.
     for (const sh of detResultSheets(detResult)) addSheet(wb, sh.name, sh.rows)
+    // …and Section 4's Table 1 (summary statistics + correlations).
+    const t1 = table1Sheet()
+    if (t1) addSheet(wb, t1.name, t1.rows)
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     saveBlob(out, 'ideas_with_kpis.xlsx', 'application/octet-stream')
   }
@@ -1654,6 +1660,9 @@ export default function DataAnalytics() {
       // carries them on their own tabs (the per-idea KPIs already sit as columns in
       // Rankings).
       for (const sh of detResultSheets(detResult)) merged.push({ name: sh.name, kind: 'json', rows: sh.rows })
+      // Section 4's Table 1 (summary statistics + correlations), as the page shows it.
+      const t1 = table1Sheet()
+      if (t1) merged.push({ name: t1.name, kind: 'json', rows: t1.rows })
       // Step 1b: every text in English (owner, 2026-09-23: "show me updated file with
       // all data collected in English"); the original of each replaced cell is kept
       // on the "Translations" sheet, which an import of this file reads back.
@@ -1921,8 +1930,16 @@ export default function DataAnalytics() {
     return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : '—'
   }, [statRows])
   // Table 1 (summary statistics + correlation matrix), in the style of the paper's
-  // Table 1 — computed over the fully-scored ideas in the Section-4 dataset.
+  // Table 1 — computed over the Section-4 dataset (by default, the ideas that carry
+  // at least one KPI; each correlation over the ideas that have both values).
   const summaryTable = useMemo(() => buildSummaryTable(statRows), [statRows])
+  // The same Table 1 as a sheet, for every Excel download on the page (owner,
+  // 2026-09-24: "add Table 1 to the Excel files too"): built from the memo the page
+  // renders, so the file holds exactly the table on screen, with its scope stated.
+  function table1Sheet() {
+    const rows = summaryTableSheetRows(summaryTable, { ideas: statRows.length, onlyScored: statsOnlyScored })
+    return rows ? { name: TABLE1_SHEET, rows } : null
+  }
 
   const code = tab === 'python' ? pyCode : rCode
   const setCode = tab === 'python' ? setPyCode : setRCode
@@ -2454,7 +2471,7 @@ export default function DataAnalytics() {
                 </button>
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={downloadIdeasWithKpis}
                   disabled={!!detComputing || !effectiveRows.some(r => r.det_score !== '' && r.det_score != null)}
-                  title='Download the input "ideas" file with a column added per idea for each computed KPI, plus the result tables below (Pool KPIs by condition, Empirical KPIs vs ratings)'>
+                  title='Download the input "ideas" file with a column added per idea for each computed KPI, plus the result tables below (Pool KPIs by condition, Empirical KPIs vs ratings) and Table 1 of Step 4'>
                   Download ideas + KPIs (Excel)
                 </button>
                 {detComputing && <span className={styles.statusLine}><span className={styles.spinner} /> computing TF-IDF in your browser…</span>}
@@ -2704,7 +2721,8 @@ export default function DataAnalytics() {
                   the idea counts), a <em>Usefulness score check</em> sheet (each idea&apos;s three
                   parts, their ranks and the mean), summaries by condition and by session, and the 3.1 results: a
                   {' '}<em>Pool KPIs by condition</em> sheet (the pool KPIs, novelty × usefulness and specificity tables) and an
-                  {' '}<em>Empirical KPIs vs ratings</em> sheet (each empirical KPI&apos;s r with the ratings, and the idea counts). For the
+                  {' '}<em>Empirical KPIs vs ratings</em> sheet (each empirical KPI&apos;s r with the ratings, and the idea counts),
+                  and Table&nbsp;1 of Step&nbsp;4 (summary statistics and correlations). For the
                   whole study (surveys, chats, every tab) use <strong>Download all data in English</strong> in Step&nbsp;1b.
                 </span>
               </div>
@@ -3347,8 +3365,10 @@ function SummaryStatsTable({ summary }) {
         </table>
       </div>
       <p className={styles.regNote}>
-        N = {summary.n} fully-scored ideas. Cells are Pearson correlations (lower triangle).
-        Dummies: AI (any) / Solo / Group / Both are coded vs the None baseline.
+        N = {summary.n} ideas with at least one KPI value. Cells are Pearson correlations (lower triangle), each over
+        {' '}the ideas that have both values. Dummies: AI (any) / Solo / Group / Both are coded vs the None baseline.
+        {' '}This table is also in every Excel download on this page (Download ideas + KPIs, Download all idea data,
+        {' '}the aggregate Excel), on the <em>{TABLE1_SHEET}</em> sheet, with the number of ideas behind each correlation.
       </p>
     </div>
   )

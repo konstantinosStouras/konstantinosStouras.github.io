@@ -1066,7 +1066,7 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      whose stored value predates the current rule or lists (press Compute again);
      then Summary by condition / by session (every KPI, in order), Pool KPIs,
      Empirical KPIs vs ratings (the 3.1 check, when ratings were loaded),
-     Removed participants. The old unwired `downloadExcel` / `downloadCsv` and the
+     Table 1 summary + correlations (Step 4's Table 1), Removed participants. The old unwired `downloadExcel` / `downloadCsv` and the
      unused `ideaSheetRows` are gone. **With Step 1b** (translation, merged the same
      day): the idea sheet of every idea download goes through `translatedIdeaSheet`
      (`translateSheets` + `carryTranslationsSheet`, as Step 2 does), so the ideas are
@@ -1278,6 +1278,28 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    a stage breakdown (individual vs group, final-pick rate). A checkbox **"Only include ideas
    scored on all 3 KPIs"** (`statsOnlyScored`, **default on**) restricts every figure to
    fully-scored ideas.
+   **Table 1 (summary statistics + correlations) is in the Excel files** (owner,
+   2026-09-24: "add Table 1 to the Excel files too"; it used to reach only the PDF and
+   LaTeX reports). `summaryTableSheetRows` in analyticsData.js turns the SAME
+   `summaryTable` memo the page renders into the **"Table 1 summary + correlations"**
+   tab of all three Excel downloads (ideas + KPIs, all idea data, the aggregate):
+   one row per numbered variable with its n / Mean / Median / SD / Min / Max and the
+   lower-triangular Pearson correlations (3 decimals, upper triangle blank), then,
+   under a heading row, the number of ideas behind each correlation
+   (`buildSummaryTable` now returns `pairN`: the correlations are pairwise-complete,
+   so each pair has its own n), then notes naming the scope (how many ideas Section 4
+   analyses and whether it keeps only ideas with a KPI) and the dummy coding. The
+   correlation columns are keyed on the numbered LABEL ("1. Novelty (empirical)"),
+   never a bare "1": an integer-like key is ordered before every other key of a JS
+   object, so the matrix would land left of the Variable column. `TABLE1_SHEET` sits
+   in `REBUILT_SHEETS` with the 3.1 tabs, so a re-imported download never stacks a
+   second copy into the aggregate (mutation-checked: without it the aggregate throws
+   "Worksheet … already exists!" and builds no file). The page and PDF footnotes said
+   "N = … fully-scored ideas", which was never what N counts (ideas with at least
+   one KPI value, as the checkbox says); both now say so, as the LaTeX note already
+   did. Pinned by sections 10a (Node, the sheet builder) and 10b (every statistic,
+   correlation and count in the three downloads against the page) of
+   `tools/analytics-page-guard.mjs`.
 5. **Regressions — edit & compile online.** Runs on the **group-selected Final Ideas only**
    (`effectiveRows.filter(final_pick == 1)` → `dataCsv`; the guard needs ≥2 scored final ideas) —
    "currently we compare conditions for the ideas the group selected after the group phase; other
