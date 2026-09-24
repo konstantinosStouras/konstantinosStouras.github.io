@@ -1273,7 +1273,14 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      participant removed) an effect clears it and says why (`detNote`), so neither the
      page nor any download carries tables computed on other ideas. Scores or
      translations added to the same ideas keep the rids and keep the result.
-     Pinned by sections 9a (Node, the builders) and 9 of
+     **The check against the ratings is LIVE** (owner, 2026-09-24: "make the check
+     update automatically", after a file computed in 3.1 and topped up with six
+     models in 3.2 had no check at all): `ratingCheck(rows)` in kpiResultSheets.js
+     reads the stored `det_*` columns and whatever rating columns the ideas carry
+     NOW; `detView` (a memo over `detResult` + `effectiveRows`) puts it in
+     `validation`, and the page and all three downloads read `detView`, never
+     `detResult`, so a rating filled, loaded or typed after Compute is in the table
+     and the files at once. Pinned by sections 9a (Node, the builders) and 9 of
      `tools/analytics-page-guard.mjs` (the downloaded tabs match the page's own r and
      n, a re-imported file still builds, new scores keep the result, new ideas clear it).
      R, U and T are three side-by-side editors (saved to `da:refset`/`da:needset`/

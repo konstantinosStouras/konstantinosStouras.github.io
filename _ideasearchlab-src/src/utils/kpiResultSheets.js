@@ -3,7 +3,8 @@
 // download on the page writes these tabs: Download ideas + KPIs, Download all
 // idea data and the aggregate (owner, 2026-09-24: "I see lots of correlation
 // calculations here … these data are also exported in the Excel output").
-import { FACETS } from './usefulnessKpis.js'
+import { FACETS, pearson } from './usefulnessKpis.js'
+import { aiKpiDefs } from './aiScoreColumns.js'
 
 // The two Section 3.1 result tabs.
 export const POOL_KPI_SHEET = 'Pool KPIs by condition'
@@ -55,14 +56,58 @@ export const poolKpiRows = res => withOverall(res).map(c => {
   return row
 })
 
+// The empirical KPIs the check compares with the ratings: each one's stored column
+// (written by the 3.1 Compute, 4 decimals) and its label on the page.
+const CHECK_KPIS = [
+  ['det_novelty', 'Novelty (empirical)'], ['det_score', 'NoveltyScore'],
+  ['det_need_fit', 'Need fit (empirical)'], ['det_specificity', 'Specificity (empirical)'],
+  ['det_workability', 'Workability (empirical)'], ['det_usefulness', 'Usefulness score (empirical)'],
+]
+const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
+
+/**
+ * The 3.1 "Check against the ratings": Pearson's r of each empirical KPI with
+ * each rating the ideas carry NOW (owner, 2026-09-24: "make the check update
+ * automatically"). It used to be computed once, when Compute was pressed, so
+ * ratings filled or loaded after it (the page's own order: 3.1, then 3.2) never
+ * reached the table or the files. It reads the stored KPI columns and the rating
+ * columns of `rows` (the ideas the Compute measured), so it follows every rating
+ * added, corrected or cleared. Ratings: every AI model's own columns, the mean
+ * across models when several, then the evaluators; AI Quality is left out (it is
+ * not a novelty or a usefulness rating), and a rating joins once at least three
+ * ideas carry it. Returns `{ cols, rows: [{ label, side, cells: [{ r, n }] }] }`,
+ * or null when no rating qualifies (the page then shows no table).
+ */
+export function ratingCheck(rows) {
+  const pool = rows || []
+  const ratings = [
+    ...aiKpiDefs(pool).filter(d => d.key !== 'overall_quality').map(d => [d.key, d.label]),
+    ['ext_novelty', 'Eval. Novelty'], ['ext_usefulness', 'Eval. Usefulness'],
+  ].filter(([k]) => pool.filter(r => num(r[k]) != null).length >= 3)
+  if (!ratings.length) return null
+  return {
+    cols: ratings.map(([, label]) => label),
+    rows: CHECK_KPIS.map(([key, label]) => {
+      const xs = pool.map(r => num(r[key]))
+      return {
+        label,
+        side: /Novelty/.test(label) ? 'novelty' : 'usefulness',
+        cells: ratings.map(([k]) => {
+          const ys = pool.map(r => num(r[k]))
+          return { r: pearson(xs, ys), n: xs.filter((x, i) => x != null && ys[i] != null).length }
+        }),
+      }
+    }),
+  }
+}
+
 /**
  * Rows for the "Empirical KPIs vs ratings" tab: the 3.1 "Check against the
- * ratings" table. Pearson's r of each empirical KPI with each rating loaded when
- * Compute was pressed (every AI model's own columns, the mean across models when
- * several, the evaluators), then, under a heading row, the number of ideas behind
- * each r (the page shows it on hover). Blank where r is not defined: fewer than
- * three ideas carry both values, or one side is constant. Null when no rating was
- * loaded, as the page then shows no table either.
+ * ratings" table (`ratingCheck`, over the ratings loaded now). Pearson's r of each
+ * empirical KPI with each rating, then, under a heading row, the number of ideas
+ * behind each r (the page shows it on hover). Blank where r is not defined: fewer
+ * than three ideas carry both values, or one side is constant. Null when no rating
+ * is loaded, as the page then shows no table either.
  */
 export const ratingCheckRows = validation => {
   if (!validation?.rows?.length || !validation.cols?.length) return null
@@ -85,6 +130,8 @@ export const ratingCheckRows = validation => {
  * written whenever there is a result (its "All ideas" row is always there, even
  * when no idea carries a recognised condition and there is no per-condition row),
  * and the ratings tab whenever the page shows the check against the ratings.
+ * `res.validation` is the check as the page shows it: the page puts the live
+ * `ratingCheck` there, so the file and the screen hold the same numbers.
  */
 export const detResultSheets = res => {
   if (!res) return []
