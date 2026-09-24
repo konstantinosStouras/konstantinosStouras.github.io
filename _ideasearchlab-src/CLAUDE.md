@@ -1065,6 +1065,7 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      and the score as computed — they agree to rounding, and a **Note** flags a row
      whose stored value predates the current rule or lists (press Compute again);
      then Summary by condition / by session (every KPI, in order), Pool KPIs,
+     Empirical KPIs vs ratings (the 3.1 check, when ratings were loaded),
      Removed participants. The old unwired `downloadExcel` / `downloadCsv` and the
      unused `ideaSheetRows` are gone. **With Step 1b** (translation, merged the same
      day): the idea sheet of every idea download goes through `translatedIdeaSheet`
@@ -1242,6 +1243,26 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      and evaluator novelty/usefulness ratings, when loaded: convergent vs discriminant)
      and a facet-coverage table; the first and last
      go to the "Pool KPIs by condition" tab of the downloads with an "All ideas" row.
+     **Every 3.1 table is in the Excel files** (owner, 2026-09-24: "I see lots of
+     correlation calculations here … these data are also exported in the Excel
+     output"). The validation table had never reached a file: it is now the
+     **"Empirical KPIs vs ratings"** tab (`ratingCheckRows`) — one row per empirical
+     KPI with its side, r against each rating column the page showed (3 decimals,
+     blank where r is not defined), then a blank row, a heading row and the same grid
+     holding the number of ideas behind each r (the page shows it only on hover).
+     "Pool KPIs by condition" also gained the two whole-pool medians that define
+     "novel" and "useful" (the cut behind the four shares, printed in the note under
+     the table and in no file until now). Both tabs come from ONE builder,
+     `detResultSheets(detResult)`, written by all three Excel downloads (ideas + KPIs,
+     all idea data, the aggregate), so they cannot drift apart; both names live in
+     `sessionExport.js` (`POOL_KPI_SHEET`, `RATING_CHECK_SHEET`) inside
+     `REBUILT_SHEETS`, the set `mergeSessionSheets` drops from an imported workbook —
+     without it, re-importing a downloaded file and building the aggregate would
+     stack the old tab beside the new one and `book_append_sheet` would throw on the
+     duplicate name (no file at all). The tabs are a snapshot of the last Compute
+     press, exactly as the page is; the note under the tables says so and names the
+     sheets. Pinned by section 9 of `tools/analytics-page-guard.mjs` (the downloaded
+     tabs match the page's own r and n, and a re-imported file still builds).
      R, U and T are three side-by-side editors (saved to `da:refset`/`da:needset`/
      `da:techset`). Registered everywhere a KPI must be (KPI_DEFS, COLUMNS, row builders,
      importer, `canonicalKpiField` (usefulness checks run BEFORE "score", and a bare key

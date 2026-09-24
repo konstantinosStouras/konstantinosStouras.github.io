@@ -697,6 +697,14 @@ export async function exportSessionWorkbook(session) {
  * `{ label, sheets }` where sheets is the array from buildSessionSheets() (or
  * sheets read from an imported workbook, same shape with kind:'json').
  */
+// The two Section 3.1 result tabs every Data Analytics Excel download carries.
+export const POOL_KPI_SHEET = 'Pool KPIs by condition'
+export const RATING_CHECK_SHEET = 'Empirical KPIs vs ratings'
+// The tabs the aggregate download writes afresh (Rankings from the scored rows, the
+// two 3.1 result tabs from the last Compute run, Translations from the memory), so
+// an imported copy of any of them is dropped rather than stacked beside the new one.
+export const REBUILT_SHEETS = new Set(['Rankings', POOL_KPI_SHEET, RATING_CHECK_SHEET, 'Translations'])
+
 export function mergeSessionSheets(sources, aboutMeta = []) {
   const byName = new Map()     // name -> concatenated json rows
   let pricing = null           // first AI Pricing seen (kept once)
@@ -705,13 +713,14 @@ export function mergeSessionSheets(sources, aboutMeta = []) {
   for (const src of sources) {
     for (const sheet of src.sheets || []) {
       if (sheet.name === 'About') continue                 // replaced by aggregate About
-      // These two are REBUILT by the caller from the live scored rows. Letting an
-      // imported copy through meant re-importing a previously downloaded
-      // aggregate produced two sheets of the same name, and `book_append_sheet`
-      // threw ("Worksheet with name |Rankings| already exists!") — no file at all.
+      // These are REBUILT by the caller from the live scored rows and the last 3.1
+      // Compute run. Letting an imported copy through meant re-importing a
+      // previously downloaded aggregate produced two sheets of the same name, and
+      // `book_append_sheet` threw ("Worksheet with name |Rankings| already
+      // exists!") — no file at all.
       // …and so is the Step 1b "Translations" log (translation.js), which the
       // caller rebuilds from the translation memory for the cells it translates.
-      if (sheet.name === 'Rankings' || sheet.name === 'Pool KPIs by condition' || sheet.name === 'Translations') continue
+      if (REBUILT_SHEETS.has(sheet.name)) continue
       if (sheet.name === 'AI Pricing') { if (!pricing) pricing = sheet.rows; continue }
       const rows = sheet.rows || []
       if (!rows.length) continue
@@ -759,7 +768,7 @@ function buildAggregateAbout(entries) {
     ['Clustering unit (triad)', 'use Group UID (= "SessionCode:groupId"), NOT the bare Group ID — g0/g1… repeat across sessions.'],
     [],
     ['WHERE EACH MEASURE LIVES'],
-    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea). Rankings columns, in order: first the EMPIRICAL KPIs computed in Section 3.1 (novelty side: Novelty (empirical) / Pool distinctiveness / NoveltyScore; usefulness side: Need fit / Specificity / Workability / Usefulness score (empirical)); then the AI ratings, one pair per model, e.g. AI Novelty (GPT-6 Astra) / AI Usefulness (GPT-6 Astra), with the mean over the models when several rated the ideas; then Eval. Novelty / Eval. Usefulness / Eval. Quality, left empty for blind expert raters until their ratings are loaded (raters fill Eval. Novelty and Eval. Usefulness; Eval. Quality is always computed as their mean, so a value typed there is not read back). Each row also carries its Session Code: ideas are numbered per session, so Session Code + Idea ID is what names one idea. The "Pool KPIs by condition" sheet, when present, adds the novelty x usefulness cross-check per condition.'],
+    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea). Rankings columns, in order: first the EMPIRICAL KPIs computed in Section 3.1 (novelty side: Novelty (empirical) / Pool distinctiveness / NoveltyScore; usefulness side: Need fit / Specificity / Workability / Usefulness score (empirical)); then the AI ratings, one pair per model, e.g. AI Novelty (GPT-6 Astra) / AI Usefulness (GPT-6 Astra), with the mean over the models when several rated the ideas; then Eval. Novelty / Eval. Usefulness / Eval. Quality, left empty for blind expert raters until their ratings are loaded (raters fill Eval. Novelty and Eval. Usefulness; Eval. Quality is always computed as their mean, so a value typed there is not read back). Each row also carries its Session Code: ideas are numbered per session, so Session Code + Idea ID is what names one idea. The "Pool KPIs by condition" sheet, when present, adds the Section 3.1 results per condition: the pool KPIs (Unique fraction, Productivity), the novelty x usefulness cross-check (r, r with length held fixed, the shares of novel/useful ideas and the medians that define them) and the share of ideas stating each part of an idea. The "Empirical KPIs vs ratings" sheet, when present, holds the check of each empirical KPI against the AI and evaluator ratings (Pearson r, then the number of ideas behind each r).'],
     ['Selected ideas (group level)', '"Ideas" sheet → Final Group Pick = Yes; "Groups" sheet lists them as titles.'],
     ['Vote completeness', '"Participants" sheet → Ballot Status + Votes Cast (a submitted ballot can hold zero votes).'],
     ['Who voted for which idea', '"Votes" sheet: one row per cast vote (voter x idea), stacked across every session.'],

@@ -25,6 +25,11 @@
  *   8. A run whose every answer came back without a rating stops after one pass
  *      and says why (not "check the API key"); after two such batches in a row
  *      it stops sending.
+ *   9. Every 3.1 result table reaches the Excel files (owner, 2026-09-24): the
+ *      "Check against the ratings" r and n on an "Empirical KPIs vs ratings" tab,
+ *      the pool / novelty × usefulness / specificity tables with their two medians
+ *      on "Pool KPIs by condition", in all three Excel downloads, and a downloaded
+ *      file re-imported still builds an aggregate (no duplicate tab).
  */
 const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs'
 const { chromium } = await import(PW)
@@ -345,6 +350,98 @@ try {
   anthropicReply = null
   await p.close()
   await ctx4.close()
+
+  // ── 9. The 3.1 result tables in the Excel files ─────────────────────────────
+  head('9. every 3.1 result table reaches the Excel downloads')
+  const ctx5 = await newContext()
+  await openPage(ctx5, 'det-export')
+  await importFile(ideasBook(), 'ideas.xlsx')
+  dialogs = []
+  await btn(/^Compute empirical KPIs for \d+ idea/).click()
+  await p.getByText(/Check against the ratings\./).first().waitFor({ timeout: 20000 })
+  // What the page shows: the check table (r to 2 decimals, n in each cell's title)
+  // and the two medians printed in the note under the novelty × usefulness table.
+  const shown = await p.evaluate(() => {
+    const t = [...document.querySelectorAll('table')].find(x => x.querySelector('thead th')?.innerText.trim() === 'Empirical KPI')
+    if (!t) return null
+    const cols = [...t.querySelectorAll('thead th')].slice(1).map(th => th.innerText.trim())
+    const rows = [...t.querySelectorAll('tbody tr')].map(tr => {
+      const tds = [...tr.querySelectorAll('td')]
+      return {
+        label: tds[0].innerText.replace(/\s*\((novelty|usefulness) side\)\s*$/, '').trim(),
+        side: (tds[0].innerText.match(/\((novelty|usefulness) side\)/) || [])[1],
+        cells: tds.slice(1).map(td => ({ r: td.innerText.trim(), n: Number((td.title.match(/n = (\d+)/) || [])[1]) })),
+      }
+    })
+    const note = [...document.querySelectorAll('p')].map(x => x.innerText).find(x => /loaded ideas \(NoveltyScore/.test(x)) || ''
+    const m = note.match(/NoveltyScore (-?[\d.]+), Usefulness score (-?[\d.]+)/)
+    return { cols, rows, novCut: m && m[1], useCut: m && m[2] }
+  })
+  check('the page shows the check table, with at least one rating column', !!shown && shown.cols.length >= 1 && shown.rows.length === 6,
+    JSON.stringify(shown))
+  const f2 = v => (v === '' || v == null ? '—' : Number(v).toFixed(2))
+  // One downloaded workbook's two 3.1 tabs, measured against the page.
+  const checkBook = (wb, what) => {
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets['Empirical KPIs vs ratings'] || {}, { header: 1, defval: '' })
+    check(`${what}: has an "Empirical KPIs vs ratings" tab`, aoa.length > 0, wb.SheetNames.join(' | '))
+    if (!aoa.length || !shown) return
+    const hdr = aoa[0]
+    check(`${what}: its columns are the page's (Empirical KPI, Side, then every rating in order)`,
+      JSON.stringify(hdr) === JSON.stringify(['Empirical KPI', 'Side', ...shown.cols]), JSON.stringify(hdr))
+    const rTable = aoa.slice(1, 1 + shown.rows.length)
+    const at = aoa.findIndex(r => /^Ideas with both values/.test(String(r[0])))
+    const nTable = at > 0 ? aoa.slice(at + 1, at + 1 + shown.rows.length) : []
+    const mism = []
+    shown.rows.forEach((row, i) => {
+      if (rTable[i]?.[0] !== row.label || rTable[i]?.[1] !== row.side) mism.push(`r row ${i}: ${JSON.stringify(rTable[i])}`)
+      if (nTable[i]?.[0] !== row.label) mism.push(`n row ${i}: ${JSON.stringify(nTable[i])}`)
+      row.cells.forEach((c, j) => {
+        // The file keeps 3 decimals, the page prints 2 of the unrounded r: equal
+        // within the page's own rounding (0.655 in the file can print as 0.65).
+        const fr = rTable[i]?.[j + 2]
+        const same = c.r === '—' ? fr === '' : (typeof fr === 'number' && Math.abs(fr - Number(c.r)) <= 0.0051)
+        if (!same) mism.push(`${row.label} × ${shown.cols[j]}: file r ${rTable[i]?.[j + 2]}, page ${c.r}`)
+        if (nTable[i]?.[j + 2] !== c.n) mism.push(`${row.label} × ${shown.cols[j]}: file n ${nTable[i]?.[j + 2]}, page ${c.n}`)
+      })
+    })
+    check(`${what}: every r and every n is the page's`, at > 0 && mism.length === 0, `${at} ${mism.slice(0, 4).join(' | ')}`)
+    check(`${what}: some r is a number (not a blank tab)`, rTable.some(r => r.slice(2).some(v => typeof v === 'number')))
+    const pool = sheetRows(wb, 'Pool KPIs by condition')
+    const novCol = 'Novel = NoveltyScore above (median of all ideas)', useCol = 'Useful = Usefulness score above (median of all ideas)'
+    const allRow = pool.find(r => r.Condition === 'All ideas')
+    check(`${what}: "Pool KPIs by condition" carries the two medians the page prints`,
+      pool.length > 1 && pool.every(r => f2(r[novCol]) === shown.novCut && f2(r[useCol]) === shown.useCut),
+      JSON.stringify({ page: [shown.novCut, shown.useCut], file: pool.map(r => [r[novCol], r[useCol]]) }))
+    check(`${what}: …and still the cross-check r and the specificity shares`,
+      !!allRow && 'Novelty x usefulness r' in allRow && Object.keys(allRow).some(k => /^States: /.test(k)), JSON.stringify(allRow))
+  }
+  checkBook(await captureDownload(() => btn('Download ideas + KPIs (Excel)').click()), 'ideas + KPIs')
+  checkBook(await captureDownload(() => btn('Download all idea data (Excel)').click()), 'all idea data')
+  const aggBook = await captureDownload(() => btn(/^Download Excel$/).click())
+  checkBook(aggBook, 'aggregate')
+  check('no dialog while computing and downloading', dialogs.length === 0, dialogs.join(' | '))
+  await p.close()
+  await ctx5.close()
+
+  // A downloaded aggregate, imported again: the aggregate is rebuilt with ONE copy
+  // of each 3.1 tab (the imported ones are dropped, as Rankings is), not two —
+  // book_append_sheet throws on a duplicate name and the file would not be built.
+  const ctx6 = await newContext()
+  await openPage(ctx6, 'det-reimport')
+  await importFile(Buffer.from(XLSX.write(aggBook, { bookType: 'xlsx', type: 'buffer' })), 'aggregate.xlsx')
+  dialogs = []
+  const before9 = await captureDownload(() => btn(/^Download Excel$/).click())
+  check('re-imported, before Compute: the imported 3.1 tabs are dropped, not carried stale',
+    !before9.SheetNames.includes('Empirical KPIs vs ratings') && !before9.SheetNames.includes('Pool KPIs by condition'), before9.SheetNames.join(' | '))
+  await btn(/^Compute empirical KPIs for \d+ idea/).click()
+  await p.getByText(/Check against the ratings\./).first().waitFor({ timeout: 20000 })
+  const after9 = await captureDownload(() => btn(/^Download Excel$/).click())
+  const count = name => after9.SheetNames.filter(n => n === name).length
+  check('re-imported + computed: the aggregate builds with one copy of each 3.1 tab',
+    count('Empirical KPIs vs ratings') === 1 && count('Pool KPIs by condition') === 1 && dialogs.length === 0,
+    `${after9.SheetNames.join(' | ')} ${dialogs.join(' | ')}`)
+  await p.close()
+  await ctx6.close()
 } catch (e) {
   check('the page sections ran to the end', false, e.stack || e.message)
 }

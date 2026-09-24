@@ -48,7 +48,7 @@ import { parseRunOutput, buildInsightsPrintHtml, kpiLabel, tableCell } from '../
 import { buildLatexSource } from '../utils/latexReport'
 import {
   fetchSessionExportData, buildSessionSheets, mergeSessionSheets,
-  appendSheetsToWorkbook, rankingsSheetFromIdeas, conditionOf,
+  appendSheetsToWorkbook, rankingsSheetFromIdeas, conditionOf, POOL_KPI_SHEET, RATING_CHECK_SHEET,
 } from '../utils/sessionExport'
 import styles from './DataAnalytics.module.css'
 
@@ -1445,7 +1445,9 @@ export default function DataAnalytics() {
     }
     addSheet(wb, 'Summary by condition', summaryByConditionRows(data))
     addSheet(wb, 'Summary by session', summaryBySessionRows(data))
-    if (detResult?.perCond?.length) addSheet(wb, 'Pool KPIs by condition', poolKpiRows(withOverall(detResult)))
+    // The 3.1 results: the pool KPIs + novelty × usefulness + specificity tables,
+    // and the check of the empirical KPIs against the ratings.
+    for (const sh of detResultSheets(detResult)) addSheet(wb, sh.name, sh.rows)
     if (excludedUsers.size) {
       addSheet(wb, 'Removed participants', users.filter(u => excludedUsers.has(u.key)).map(u => ({
         // "Author Name", not a bare "Author": Step 1b skips a *name* column, so a
@@ -1484,11 +1486,11 @@ export default function DataAnalytics() {
     if (!data.length) return
     const wb = XLSX.utils.book_new()
     addIdeaSheet(wb, data)
-    // Pool-level KPIs (Unique fraction / Productivity) are per condition, not per
-    // idea, so they live on their own tab when a compute run produced them.
-    if (detResult?.perCond?.length) {
-      addSheet(wb, 'Pool KPIs by condition', poolKpiRows(withOverall(detResult)))
-    }
+    // Pool-level KPIs (Unique fraction / Productivity, the novelty × usefulness
+    // cross-check, the specificity shares) are per condition, not per idea, and the
+    // check against the ratings is per KPI, so each lives on its own tab when a
+    // compute run produced it.
+    for (const sh of detResultSheets(detResult)) addSheet(wb, sh.name, sh.rows)
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     saveBlob(out, 'ideas_with_kpis.xlsx', 'application/octet-stream')
   }
@@ -1646,12 +1648,12 @@ export default function DataAnalytics() {
         const lookup = ideaValueLookup(rows, cols, r => recomputeOverall([r])[0])
         merged.push(rankingsSheetFromIdeas(ideasSheet.rows, lookup, cols))
       }
-      // The per-pool deterministic KPIs (Unique fraction / Productivity) are batch-
-      // level, not per idea, so the consolidated aggregate carries them on their own
-      // tab (the per-idea KPIs already sit as columns in Rankings).
-      if (detResult?.perCond?.length) {
-        merged.push({ name: 'Pool KPIs by condition', kind: 'json', rows: poolKpiRows(withOverall(detResult)) })
-      }
+      // The per-pool deterministic KPIs (Unique fraction / Productivity, the novelty ×
+      // usefulness cross-check, the specificity shares) are batch-level, not per idea,
+      // and the check against the ratings is per KPI, so the consolidated aggregate
+      // carries them on their own tabs (the per-idea KPIs already sit as columns in
+      // Rankings).
+      for (const sh of detResultSheets(detResult)) merged.push({ name: sh.name, kind: 'json', rows: sh.rows })
       // Step 1b: every text in English (owner, 2026-09-23: "show me updated file with
       // all data collected in English"); the original of each replaced cell is kept
       // on the "Translations" sheet, which an import of this file reads back.
@@ -2452,7 +2454,7 @@ export default function DataAnalytics() {
                 </button>
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={downloadIdeasWithKpis}
                   disabled={!!detComputing || !effectiveRows.some(r => r.det_score !== '' && r.det_score != null)}
-                  title='Download the input "ideas" file with a column added per idea for each computed KPI'>
+                  title='Download the input "ideas" file with a column added per idea for each computed KPI, plus the result tables below (Pool KPIs by condition, Empirical KPIs vs ratings)'>
                   Download ideas + KPIs (Excel)
                 </button>
                 {detComputing && <span className={styles.statusLine}><span className={styles.spinner} /> computing TF-IDF in your browser…</span>}
@@ -2700,7 +2702,9 @@ export default function DataAnalytics() {
                   {' '}<em>Translations</em> sheet and adds an <em>AI novelty correlations</em> and an <em>AI usefulness
                   correlations</em> sheet (Pearson&apos;s r between every pair of AI models over the ideas both rated, with
                   the idea counts), a <em>Usefulness score check</em> sheet (each idea&apos;s three
-                  parts, their ranks and the mean), summaries by condition and by session, and the pool KPIs. For the
+                  parts, their ranks and the mean), summaries by condition and by session, and the 3.1 results: a
+                  {' '}<em>Pool KPIs by condition</em> sheet (the pool KPIs, novelty × usefulness and specificity tables) and an
+                  {' '}<em>Empirical KPIs vs ratings</em> sheet (each empirical KPI&apos;s r with the ratings, and the idea counts). For the
                   whole study (surveys, chats, every tab) use <strong>Download all data in English</strong> in Step&nbsp;1b.
                 </span>
               </div>
@@ -3297,6 +3301,13 @@ function ObjectiveKpiResults({ res }) {
           </table>
         </div>
       </div>
+      <p className={styles.kpiMuted}>
+        These tables are in every Excel download on this page (Download ideas + KPIs, Download all idea data, and the aggregate
+        {' '}Excel): the pool KPIs, novelty × usefulness and specificity tables on the <em>{POOL_KPI_SHEET}</em> sheet,
+        {' '}with the two medians that define &quot;novel&quot; and &quot;useful&quot;
+        {res.validation ? <>, and the check against the ratings on the <em>{RATING_CHECK_SHEET}</em> sheet, with the number of ideas behind each r</> : null}.
+        {' '}They are a snapshot of this Compute run: after loading new ratings, press Compute again to refresh them here and in the files.
+      </p>
     </div>
   )
 }
@@ -3486,16 +3497,24 @@ function saveBlob(content, filename, type) {
 
 const round3 = x => (x == null || !Number.isFinite(x)) ? '' : Number(x.toFixed(3))
 
+// The two 3.1 result tabs (POOL_KPI_SHEET, RATING_CHECK_SHEET) go into every Excel
+// download: all data, ideas + KPIs, and the aggregate. Both are REBUILT from the
+// last Compute run, so the aggregate drops an imported copy of either
+// (REBUILT_SHEETS in sessionExport.js, where the two names live).
+//
 // Rows for the "Pool KPIs by condition" tab — the per-pool deterministic KPIs
 // (Unique fraction at three thresholds + Productivity) the spec reports separately
 // from the per-idea columns, then the novelty × usefulness cross-check and the
-// specificity facet shares. Shared by the standalone 3.1 download and the aggregate.
-// The per-condition rows plus one "All ideas" row carrying the pooled cross-check.
+// specificity facet shares: the three tables of the 3.1 results, one row per
+// condition plus one "All ideas" row carrying the pooled cross-check. The medians
+// that split "novel" from "not novel" and "useful" from "not useful" are the same
+// for every row (the WHOLE pool's, so every condition is judged against one line);
+// they sit beside the shares they define.
 const withOverall = res => [
   ...(res?.perCond || []),
   ...(res?.overall ? [{ condition: 'All ideas', n: res.ideas, ...res.overall }] : []),
 ]
-const poolKpiRows = perCond => (perCond || []).map(c => {
+const poolKpiRows = res => withOverall(res).map(c => {
   const q = c.q || { n: 0 }
   const share = k => (q.n ? round3(k / q.n) : '')
   const row = {
@@ -3511,11 +3530,44 @@ const poolKpiRows = perCond => (perCond || []).map(c => {
     'Share novel only': share(q.novelOnly),
     'Share useful only': share(q.usefulOnly),
     'Share neither': share(q.neither),
+    'Novel = NoveltyScore above (median of all ideas)': round3(res?.novCut),
+    'Useful = Usefulness score above (median of all ideas)': round3(res?.useCut),
   }
   for (const f of FACETS) row[`States: ${f.label}`] = round3(c.facets?.[f.key])
   row['Needs no extra technology'] = round3(c.facets?.notech)
   return row
 })
+
+// Rows for the "Empirical KPIs vs ratings" tab — the 3.1 "Check against the
+// ratings" table: Pearson's r of each empirical KPI with each rating loaded when
+// Compute was pressed (every AI model's own columns, the mean across models when
+// several, the evaluators), then, under a heading row, the number of ideas behind
+// each r (the page shows it on hover). Blank where r is not defined: fewer than
+// three ideas carry both values, or one side is constant. Null when no rating was
+// loaded, as the page then shows no table either.
+const ratingCheckRows = validation => {
+  if (!validation?.rows?.length || !validation.cols?.length) return null
+  const table = pick => validation.rows.map(row => {
+    const out = { 'Empirical KPI': row.label, Side: row.side }
+    validation.cols.forEach((col, i) => { out[col] = pick(row.cells[i] || {}) })
+    return out
+  })
+  return [
+    ...table(c => round3(c.r)),
+    {},
+    { 'Empirical KPI': 'Ideas with both values (n behind each r above)' },
+    ...table(c => (c.n == null ? '' : c.n)),
+  ]
+}
+// Both 3.1 result tabs, as { name, rows }, for whichever download is being built.
+const detResultSheets = res => {
+  if (!res?.perCond?.length) return []
+  const check = ratingCheckRows(res.validation)
+  return [
+    { name: POOL_KPI_SHEET, rows: poolKpiRows(res) },
+    ...(check ? [{ name: RATING_CHECK_SHEET, rows: check }] : []),
+  ]
+}
 
 // Step-3 table columns: header label + how to read/sort each one. `condition`
 // sorts by the canonical None<Solo<Group<Both order, scores numerically (blanks
