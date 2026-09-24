@@ -772,5 +772,28 @@ console.log('page wiring')
   check('no "objective" wording left in the page\'s visible copy', left.length === 0, left.join(' | '))
 }
 
+// ── 9. No AI score is rounded; the API's ratings are whole numbers ─────────────
+// Owner, 2026-09-24: "you should not round any AI score. rather the kpis the any
+// AI computes from the api should be integers in 1-5". The rater asks for whole
+// numbers and accepts nothing else (score-batch-guard runs that end to end); no
+// upload, import or derived column rounds anything.
+console.log('no AI score is rounded; the rater asks for whole numbers')
+{
+  const page = src('src/pages/DataAnalytics.jsx')
+  const topped = mergeAiScoresIntoRows([{ idea_id: 'i1', session: 'S', idea_title: 'Fever sock', text: 'Fever sock' }],
+    [{ idea_id: 'i1', session: 'S', idea_title: 'Fever sock', [ASTRA.novelty]: 3.25, [ASTRA.usefulness]: 4.67 }])
+  check('the top-up upload keeps 3.25 and 4.67 as they are (it used to round them to 3.3 and 4.7)',
+    topped.rows[0][ASTRA.novelty] === 3.25 && topped.rows[0][ASTRA.usefulness] === 4.67, JSON.stringify(topped.rows[0]))
+  const two = recomputeOverall([{ [ASTRA.novelty]: 3, [ASTRA.usefulness]: 4, [GEM.novelty]: 4, [GEM.usefulness]: 4 }])[0]
+  check('the mean across models and AI Quality are exact, not rounded', two.novelty === 3.5 && two.usefulness === 4 && two.overall_quality === 3.75, JSON.stringify(two))
+  check('no upload rounds an AI score', ![src('src/utils/scoreGaps.js'), src('src/utils/analyticsData.js'), src('src/utils/scoreBatch.js'), page]
+    .some(t => /Math\.round\([nv] \* 10\) \/ 10/.test(t)) && /if \(v !== ''\) values\[x\.field\] = Math\.max\(1, Math\.min\(5, v\)\)/.test(page))
+  const llm = src('src/utils/llmClient.js')
+  check('the rater asks every model for whole numbers from 1 to 5', /Every rating is a WHOLE NUMBER: 1, 2, 3, 4 or 5/.test(llm)
+    && /"novelty": <integer 1-5>, "usefulness": <integer 1-5>/.test(llm) && /each rating a whole number from 1 to 5/.test(llm))
+  check('...and keeps only whole-number replies (wholeRating), which the page says', /novelty: wholeRating\(item\.novelty\), usefulness: wholeRating\(item\.usefulness\)/.test(src('src/utils/scoreBatch.js'))
+    && /The rater only accepts whole numbers/.test(page))
+}
+
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll AI-column checks passed.')
 process.exit(failures ? 1 : 0)

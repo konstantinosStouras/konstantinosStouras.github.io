@@ -361,10 +361,11 @@ function joinableId(v) {
   return /^import_\d+$/i.test(id) ? '' : id
 }
 
-/** Coerce a file's rating to the 1–5 scale, or '' when it is not a usable number. */
+/** A file's rating held to the 1–5 scale, or '' when it is not a usable number.
+ *  Never rounded (owner, 2026-09-24: "you should not round any AI score"). */
 function clampScore(v) {
   if (v == null || String(v).trim() === '') return ''
   const n = Number(v)
   if (!Number.isFinite(n)) return ''
-  return Math.max(1, Math.min(5, Math.round(n * 10) / 10))
+  return Math.max(1, Math.min(5, n))
 }

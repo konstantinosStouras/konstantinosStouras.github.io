@@ -398,9 +398,6 @@ console.log('Workability — 1 / (1 + extra technologies named)')
     ['Get the app free today and pair it with the patch.', ['app']],
     ['It is battery free and turns red at 37°C.', []],
   ])
-  // A known miss, kept on purpose (P6): "no need to charge a battery" is also said of
-  // a device whose battery simply lasts, and "open" an app is not a using verb, so
-  // both stay counted. Precision first: an unclear case counts its technology.
   // Third review: a negator that does NOT open its clause (a verb, a "no" after a
   // verb, a clause in front), then a comma, then a list that is the SUBJECT of the
   // next clause. Each row fails with one rule taken back.
@@ -441,6 +438,29 @@ console.log('Workability — 1 / (1 + extra technologies named)')
     ['It is sensor free.', []],
     ['No app\nLED blinks red.', ['led']],
   ])
+  // The two misses the fourth review left: "free" at no cost, and an upkeep noun
+  // that only a thing the idea HAS can take.
+  expectTerms('must count ("free" at no cost, an upkeep the idea has)', [
+    ['Kids get LEDs free with every shirt.', ['led']],
+    ['The first 100 buyers get sensors free.', ['sensor']],
+    ['Buyers receive two extra sensors free.', ['sensor']],
+    ['Two LEDs free with every shirt.', ['led']],
+    ['The coin cell lasts two years, with no battery changes needed.', ['battery']],
+    ['It runs for years without battery replacement.', ['battery']],
+    ['No sensor calibration is needed.', ['sensor']],
+  ])
+  expectTerms('must negate (the same two rules, the other way)', [
+    ['It is battery free.', []],
+    ['It is completely app free, so it is simple.', []],
+    // the owner's data: "battery life" is not an upkeep only a battery can have
+    ['It becomes a coaching tool, with zero electronics and zero battery life to manage.', []],
+    // an implied battery does not outweigh a plain "no battery"
+    ['It needs no battery, so no battery changes.', []],
+    ['No battery changes, because it has no battery at all.', []],
+  ])
+  // A known miss, kept on purpose (P6): "no need to charge a battery" is also said of
+  // a device whose battery simply lasts, and "open" an app is not a using verb, so
+  // both stay counted. Precision first: an unclear case counts its technology.
   expectTerms('known miss (counted on purpose)', [
     ['There is no need to charge a battery or open an app.', ['battery', 'app']],
   ])

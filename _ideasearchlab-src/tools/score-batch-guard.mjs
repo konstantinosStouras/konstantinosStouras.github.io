@@ -13,7 +13,7 @@
  * say so and the user can press Score again.
  */
 import {
-  runScoring, extractScoreObjects, assignScores, withRetry, clamp1to5, isScoredEntry, isFatalApiError,
+  runScoring, extractScoreObjects, assignScores, withRetry, wholeRating, isScoredEntry, isFatalApiError,
 } from '../src/utils/scoreBatch.js'
 
 let failures = 0
@@ -71,7 +71,12 @@ console.log('assignScores — one score per idea, whatever indices come back')
   const partial = assignScores([{ i: 0, novelty: 'n/a', usefulness: 4 }], 1)
   check('a non-numeric rating is null, and the entry counts as UNSCORED (so it retries)',
     partial[0].novelty === null && !isScoredEntry(partial[0]))
-  check('clamp1to5 keeps ratings on the scale', clamp1to5(9) === 5 && clamp1to5(0) === 1 && clamp1to5('x') === null)
+  // The API's ratings must be whole numbers from 1 to 5; nothing is rounded or held
+  // to the scale (owner, 2026-09-24).
+  check('wholeRating accepts a whole number from 1 to 5 and nothing else',
+    wholeRating(1) === 1 && wholeRating(5) === 5 && wholeRating('4') === 4 && wholeRating(4.0) === 4 && wholeRating(' 3 ') === 3
+    && wholeRating(3.5) === null && wholeRating('2.5') === null && wholeRating(0) === null && wholeRating(6) === null && wholeRating(9) === null
+    && wholeRating(-1) === null && wholeRating('x') === null && wholeRating('') === null && wholeRating(null) === null && wholeRating(true) === null)
 }
 
 // ── Retry ──────────────────────────────────────────────────────────────────
@@ -87,6 +92,31 @@ console.log('withRetry — transient failures are retried, fatal ones are not')
   await withRetry(badKey, { attempts: 3, sleep: nosleep, isFatal: e => e.status === 401 }).catch(() => {})
   check('a FATAL error is not retried (a rejected key fails the same way every time)',
     fatalCalls === 1, `calls=${fatalCalls}`)
+}
+
+// ── A rating that is not a whole number from 1 to 5 ───────────────────────────
+console.log('runScoring — only whole-number ratings from 1 to 5 are kept, none is rounded')
+{
+  // The batch answers 3.5 / 0 / 7 for three ideas; asked again one at a time, the
+  // model answers whole numbers. Those are what is kept, exactly as given.
+  const asked = []
+  const call = async ts => {
+    asked.push(ts.length)
+    if (ts.length > 1) return JSON.stringify(ts.map((_, i) => ({ i, novelty: i === 1 ? 3.5 : i === 2 ? 0 : 2, usefulness: i === 3 ? 7 : 4 })))
+    return JSON.stringify([{ i: 0, novelty: 5, usefulness: 1 }])
+  }
+  const r = await runScoring({ texts: texts(6), call, batchSize: 6, sleep: nosleep })
+  check('the three ideas with a fractional or off-scale rating are asked again, one at a time',
+    asked[0] === 6 && asked.slice(1).length === 3 && asked.slice(1).every(n => n === 1), JSON.stringify(asked))
+  check('every kept rating is exactly what the model said, a whole number from 1 to 5 (nothing rounded)',
+    r.unscored === 0 && r.scores.every(e => [e.novelty, e.usefulness].every(v => Number.isInteger(v) && v >= 1 && v <= 5))
+    && r.scores[0].novelty === 2 && r.scores[0].usefulness === 4 && [1, 2, 3].every(i => r.scores[i].novelty === 5 && r.scores[i].usefulness === 1),
+    JSON.stringify(r.scores))
+  // A model that keeps answering 3.5 leaves the idea unscored rather than rounded.
+  const stubborn = async ts => JSON.stringify(ts.map((_, i) => ({ i, novelty: 3.5, usefulness: 4 })))
+  const s2 = await runScoring({ texts: texts(2), call: stubborn, batchSize: 2, sleep: nosleep })
+  check('a model that only answers 3.5 leaves the idea unscored, never rounded to 4',
+    s2.unscored === 2 && s2.scores.every(e => e == null || e.novelty == null), JSON.stringify(s2.scores))
 }
 
 // ── The whole run ──────────────────────────────────────────────────────────

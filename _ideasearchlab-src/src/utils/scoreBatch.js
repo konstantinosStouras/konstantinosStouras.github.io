@@ -31,11 +31,18 @@
  * can reproduce each of those failures deterministically with no network.
  */
 
-/** Coerce a model's rating to the 1–5 scale, or null when it isn't a number. */
-export function clamp1to5(v) {
+/**
+ * A model's rating when it is a WHOLE number from 1 to 5, else null (owner,
+ * 2026-09-24: "you should not round any AI score. rather the kpis the any AI
+ * computes from the api should be integers in 1-5"). Nothing is rounded or held
+ * to the scale here: a reply of 3.5, 0 or 7 is not a rating, so the idea counts
+ * as unscored and runScoring asks for it again (the prompt asks for whole
+ * numbers, so this is the rare case). "4" and 4.0 are the whole number 4.
+ */
+export function wholeRating(v) {
+  if (v == null || typeof v === 'boolean' || String(v).trim() === '') return null
   const n = Number(v)
-  if (!Number.isFinite(n)) return null
-  return Math.max(1, Math.min(5, Math.round(n * 10) / 10))
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null
 }
 
 /** A usable score = BOTH dimensions present (an idea missing one still shows an
@@ -96,7 +103,7 @@ export function assignScores(parsed, count) {
   const out = new Array(count).fill(null)
   const leftovers = []
   const write = (idx, item) => {
-    out[idx] = { novelty: clamp1to5(item.novelty), usefulness: clamp1to5(item.usefulness) }
+    out[idx] = { novelty: wholeRating(item.novelty), usefulness: wholeRating(item.usefulness) }
   }
   for (const item of parsed || []) {
     if (!item || typeof item !== 'object') continue

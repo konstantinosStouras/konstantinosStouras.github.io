@@ -3134,9 +3134,15 @@ Analytics page and documented in `_ideasearchlab-src/CLAUDE.md`:
   rule is a closed grammar written for precision (a real technology must never be
   hidden: "washed without damaging the sensor", "Parents replace the coin battery",
   "No app, the sensor turns red", "Instead of a thermometer, a sensor or an LED,
-  hidden in the collar, alerts parents" all still count it). In the owner's 741
-  ideas it moved 39 ideas, 30 of them in the Both condition, every one a genuine
+  hidden in the collar, alerts parents", "Kids get LEDs free with every shirt",
+  "with no battery changes needed" all still count it). In the owner's 741 ideas
+  it moved 39 ideas, 30 of them in the Both condition, every one a genuine
   negation.
+- **The API's AI ratings are whole numbers, and no AI score is rounded** (owner,
+  2026-09-24). The rater asks every model for a whole number from 1 to 5 and keeps
+  nothing else (`wholeRating`): an idea answered with 3.5 is asked again. The
+  uploads hold a rating to 1–5 without rounding it, and the mean across models
+  and AI Quality stay exact means.
 - **Four more rater providers.** Mistral, Meta (Muse and Llama, through OpenRouter,
   since Meta closed its own Llama API on 2026-07-06), DeepSeek (stores data in
   China, which the page says) and Qwen (International endpoint). They serve the
