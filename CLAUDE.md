@@ -3158,9 +3158,13 @@ Analytics page and documented in `_ideasearchlab-src/CLAUDE.md`:
   "with no battery changes needed" all still count it). In the owner's 741 ideas
   it moved 39 ideas, 30 of them in the Both condition, every one a genuine
   negation.
-- **The API's AI ratings are whole numbers, and no AI score is rounded** (owner,
-  2026-09-24). The rater asks every model for a whole number from 1 to 5 and keeps
-  nothing else (`wholeRating`): an idea answered with 3.5 is asked again. The
+- **Every AI rating is one of 1, 2, 3, 4, 5, constrained in the request; no AI
+  score is rounded** (owner, 2026-09-24). Each rating call carries a fixed answer
+  schema whose ratings are an `enum` of 1..5 (`RATING_SCHEMA`: Claude
+  `output_config.format`, OpenAI and Mistral strict `json_schema`, Gemini
+  `responseSchema`; OpenRouter, DeepSeek and Qwen have no schema mode and get the
+  prompt's rule), and `wholeRating` drops any value that is not one of the five,
+  never rounding it. The
   uploads hold a rating to 1–5 without rounding it, and the mean across models
   and AI Quality stay exact means. The API is called at a pace it will not
   block: one call at a time, a per-provider gap between calls, and a 429 waited

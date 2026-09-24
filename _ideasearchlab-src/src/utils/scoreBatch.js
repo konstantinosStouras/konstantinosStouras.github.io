@@ -47,10 +47,14 @@ export const DEFAULT_PACE_MS = 500
 /**
  * A model's rating when it is a WHOLE number from 1 to 5, else null (owner,
  * 2026-09-24: "you should not round any AI score. rather the kpis the any AI
- * computes from the api should be integers in 1-5"). Nothing is rounded or held
- * to the scale here: a reply of 3.5, 0 or 7 is not a rating, so the idea counts
- * as unscored and runScoring asks for it again (the prompt asks for whole
- * numbers, so this is the rare case). "4" and 4.0 are the whole number 4.
+ * computes from the api should be integers in 1-5", then "constrain scores
+ * from AIs to be integers in 1, 2, 3, 4, 5 only"). The request itself carries
+ * that constraint as an answer schema wherever the provider takes one
+ * (`RATING_SCHEMA` in providerRequest.js: Claude, OpenAI, Gemini, Mistral); this
+ * is the last line behind it, for the providers without a schema mode and for a
+ * reply that slips a schema anyway. Nothing is rounded or held to the scale: a
+ * value that is not 1, 2, 3, 4 or 5 is dropped, so the idea stays unscored.
+ * "4" and 4.0 are the whole number 4.
  */
 export function wholeRating(v) {
   if (v == null || typeof v === 'boolean' || String(v).trim() === '') return null
