@@ -254,12 +254,22 @@ console.log('review findings')
   // 10. A model whose last value was cleared keeps its columns in the table.
   check('10: aiModelSlugs can count a model with only blank cells (the table keeps its columns)',
     JSON.stringify(aiModelSlugs([{ [GEM.novelty]: '' }], { includeBlank: true })) === JSON.stringify(['gemini_3_1_pro_preview']) && aiModelSlugs([{ [GEM.novelty]: '' }]).length === 0)
+  check('10: …and the table uses it (plus the catalogue order), so a cleared model stays in place',
+    /sortModelSlugs\(\[\.\.\.aiModelSlugs\(effectiveRows, \{ includeBlank: true \}\)/.test(src('src/pages/DataAnalytics.jsx')))
   const page = src('src/pages/DataAnalytics.jsx')
-  check('3: a run asks first when ideas carry unlabelled scores', /unrecInScope && !confirm\(/.test(page) && /use "Label them"/.test(page))
-  check('4: the chosen model\'s placeholder pair is not editable', /placeholder: true/.test(page) && /d\.source === 'ai' && d\.slug && !d\.placeholder/.test(page))
-  check('6: the Rankings tab merges duplicate idea ids per column', /first non-blank\s*\n\s*\/\/ value wins/.test(page) || /blankV\(prev\[c\.key\]\) && !blankV\(r\[c\.key\]\)/.test(page))
+  // Pin the BEHAVIOUR, not an identifier: Cancel must stop the run (`)) return`).
+  check('3: a run asks first when ideas carry unlabelled scores, and Cancel stops it',
+    /unrecInScope && !confirm\(/.test(page) && /use "Label them"/.test(page) && /anyway, as a separate column\.`\)\) return\n/.test(page))
+  check('4: the chosen model\'s pair is read-only until it has a field; a blank model cell is never typed into',
+    /sl === scoreSlug && fresh \? \{ \.\.\.d, placeholder: true \}/.test(page)
+    && /d\.source === 'ai' && d\.slug && !d\.placeholder && \(hasScore \|\| editingCell === cellId\)/.test(page))
+  // The merge itself is tested in Node (analytics-page-guard section 0); here, that
+  // the page uses it with the recompute.
+  check('6: the Rankings tab merges each idea\'s copies and rebuilds the means',
+    /ideaValueLookup\(rows, cols, r => recomputeOverall\(\[r\]\)\[0\]\)/.test(page) && /rankingsSheetFromIdeas\(ideasSheet\.rows, lookup, cols\)/.test(page))
   check('8: the CSV never prefixes a number', /typeof v !== 'number' && \/\^\[=\+\\-@/.test(page))
-  check('11: the 3.2 upload counts ideas, not model pairs', /filledIdeas = res\.rows\.filter/.test(page))
+  check('11: the 3.2 upload matches each file row once (all its models to one idea) and counts ideas',
+    /const res = matchScoreTable\(rows, fileRows, \{/.test(page) && !/for \(const \[ciNov, ciUse, target\] of pairs\)/.test(page))
   check('12: the Rankings hint lists exactly what the tab writes', /const labels = exportKpiColumns\(rows, \{ allEmpirical: true, evaluatorColumns: true \}\)/.test(page))
   const pr = src('src/utils/providerRequest.js')
   check('13: the "exhausted" message names no fixed token count', /spent its whole token ceiling on/.test(pr) && !/\$\{SCORING_MAX_TOKENS\}-token ceiling/.test(pr))
@@ -283,11 +293,11 @@ console.log('page wiring')
   check('a changed English version clears every model\'s AI columns, not just the mean',
     /for \(const k of aiKeys\(r\)\) x\[k\] = ''/.test(page) && /Object\.keys\(r\)\.filter\(isAiModelKey\)/.test(page))
   check('the check sheet reads the text 3.1 measured (the English version)', /const text = measureText\(r\)\n\s*const facets = specificityFacets\(text\)/.test(page))
-  check('the scores upload also matches English titles (Step 1b)', /matchScoresIntoRows\(res\.rows, entries, r => !isExcludedRow\(r\), target, englishTitle\)/.test(page))
+  check('the scores upload also matches English titles (Step 1b)', /altTitle: \(_r, i\) => withEn\[i\]\?\.title_en/.test(page))
   check('the check sheet is added when the Usefulness score exists', /addUsefulnessCheckSheet\(wb, data, techSet\)/.test(page) && /function addUsefulnessCheckSheet\(/.test(page))
-  check('the Rankings tab takes the page\'s ordered columns', /rankingsSheetFromIdeas\(ideasSheet\.rows, valuesById, cols\)/.test(page) && /exportKpiColumns\(rows, \{ allEmpirical: true, evaluatorColumns: true \}\)/.test(page))
+  check('the Rankings tab takes the page\'s ordered columns', /rankingsSheetFromIdeas\(ideasSheet\.rows, lookup, cols\)/.test(page) && /exportKpiColumns\(rows, \{ allEmpirical: true, evaluatorColumns: true \}\)/.test(page))
   check('the top-up merges every model in the file', /mergeAiScoresIntoRows\(rows, incoming\)/.test(page))
-  check('unlabelled scores can be given a model', /labelUnrecordedScores\(rows, labelTarget\)/.test(page) && /Label them/.test(page))
+  check('unlabelled scores can be given a model (the ideas on show only)', /labelUnrecordedScores\(rows\.filter\(\(_, i\) => shown\[i\]\), labelTarget\)/.test(page) && /Label them/.test(page))
   check('a derived AI column is never imported by the 3.1 upload', /if \(isDerivedAiKey\(canon\)\) continue/.test(page))
   const OLD_COPY = ['Deterministic and objective KPIs', 'Objective, repeatable', 'Obj. computed', 'Compute objective KPIs',
     '>Objective KPI<', 'objective KPIs (3.1)', 'objective compute', 'Novelty&nbsp;(objective)', 'Evaluator · Objective']

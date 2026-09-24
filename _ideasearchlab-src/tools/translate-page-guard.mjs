@@ -449,7 +449,7 @@ try {
   await p.getByText(/^Merged “scored\.xlsx”/).waitFor({ timeout: 5000 })
   await p.waitForTimeout(500)
   const merged = await p.getByText(/^Merged “scored\.xlsx”/).innerText()
-  check('the top-up fills all six ideas', /filled 6 that had no AI score yet/.test(merged), merged.slice(0, 160))
+  check('the top-up fills all six ideas', /filled 6 ideas' empty .* cells/.test(merged), merged.slice(0, 160))
   check('the file\'s translations come back, so Step 3 unlocks', /✓ Every loaded idea can be measured in English/.test(await bodyText()))
   // The file's plain "AI Novelty" / "AI Usefulness" columns name no model, so they
   // land under "model not recorded" (per-model columns, 2026-09-24) and the
@@ -486,7 +486,7 @@ try {
   await p.getByText(/^Loaded scores from/).waitFor({ timeout: 5000 })
   const loaded = await p.getByText(/^Loaded scores from/).innerText()
   check('every English title in the file finds its idea (6 scored, 0 unmatched)',
-    /scored 6 ideas that had no score yet/.test(loaded) && /; 0 file rows had no match/.test(loaded), loaded)
+    /filled the empty cells of 6 ideas/.test(loaded) && /; 0 file rows had no match/.test(loaded), loaded)
   await closePage()
   await ctx.close()
 } catch (e) {

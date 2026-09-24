@@ -759,7 +759,7 @@ function buildAggregateAbout(entries) {
     ['Clustering unit (triad)', 'use Group UID (= "SessionCode:groupId"), NOT the bare Group ID — g0/g1… repeat across sessions.'],
     [],
     ['WHERE EACH MEASURE LIVES'],
-    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea). Rankings columns, in order: first the EMPIRICAL KPIs computed in Section 3.1 (novelty side: Novelty (empirical) / Pool distinctiveness / NoveltyScore; usefulness side: Need fit / Specificity / Workability / Usefulness score (empirical)); then the AI ratings, one pair per model, e.g. AI Novelty (GPT-6 Astra) / AI Usefulness (GPT-6 Astra), with the mean over the models when several rated the ideas; then Eval. Novelty / Eval. Usefulness / Eval. Quality, left empty for blind expert raters until their ratings are loaded. The "Pool KPIs by condition" sheet, when present, adds the novelty x usefulness cross-check per condition.'],
+    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea). Rankings columns, in order: first the EMPIRICAL KPIs computed in Section 3.1 (novelty side: Novelty (empirical) / Pool distinctiveness / NoveltyScore; usefulness side: Need fit / Specificity / Workability / Usefulness score (empirical)); then the AI ratings, one pair per model, e.g. AI Novelty (GPT-6 Astra) / AI Usefulness (GPT-6 Astra), with the mean over the models when several rated the ideas; then Eval. Novelty / Eval. Usefulness / Eval. Quality, left empty for blind expert raters until their ratings are loaded (raters fill Eval. Novelty and Eval. Usefulness; Eval. Quality is always computed as their mean, so a value typed there is not read back). Each row also carries its Session Code: ideas are numbered per session, so Session Code + Idea ID is what names one idea. The "Pool KPIs by condition" sheet, when present, adds the novelty x usefulness cross-check per condition.'],
     ['Selected ideas (group level)', '"Ideas" sheet → Final Group Pick = Yes; "Groups" sheet lists them as titles.'],
     ['Vote completeness', '"Participants" sheet → Ballot Status + Votes Cast (a submitted ballot can hold zero votes).'],
     ['Who voted for which idea', '"Votes" sheet: one row per cast vote (voter x idea), stacked across every session.'],
@@ -774,7 +774,9 @@ function buildAggregateAbout(entries) {
 /**
  * Build the extra "Rankings" tab from the aggregated Ideas rows: one row per idea,
  * its identity columns, then one column per KPI in `columns` ([{ key, label }], in
- * order), each read from `valuesById` (Idea ID → the page's row for that idea).
+ * order), each read from `valuesById`: a lookup (sessionCode, ideaId) => the page's
+ * record for that idea (see ideaValueLookup in rankingsMerge.js), or, for older
+ * callers, a Map keyed by Idea ID alone.
  *
  * The column order is the page's (owner, 2026-09-24): the EMPIRICAL proxies of
  * novelty and usefulness first (Section 3.1, plus any extra KPI uploaded there),
@@ -785,10 +787,17 @@ function buildAggregateAbout(entries) {
  */
 export function rankingsSheetFromIdeas(ideaRows, valuesById, columns = []) {
   const blank = v => (v == null ? '' : v)
+  const get = typeof valuesById === 'function'
+    ? r => valuesById(r['Session Code'] ?? '', r['Idea ID'] ?? '')
+    : r => valuesById && valuesById.get(String(r['Idea ID'] ?? ''))
   const rows = (ideaRows || []).map(r => {
-    const vals = valuesById && valuesById.get(String(r['Idea ID'] ?? ''))
+    const vals = get(r)
     const row = {
       'Idea ID': r['Idea ID'] ?? '',
+      // Ideas are numbered per session, so the Idea ID alone can name two ideas;
+      // the session code makes each row's identity whole (and lets the 3.3 upload
+      // match a rated row back to the right idea).
+      'Session Code': r['Session Code'] ?? '',
       'Condition': r['Condition'] ?? '',
       'Stage': r['Stage'] ?? '',
       'Final Group Pick': r['Final Group Pick'] ?? '',

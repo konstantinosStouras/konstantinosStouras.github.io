@@ -7,16 +7,16 @@ import { auth, db } from '../firebase'
 import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
-  recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
-  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
+  recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, summarize,
+  buildSummaryTable, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition, scriptKpiKeys,
-  exportKpiColumns, isDerivedAiKey,
+  exportKpiColumns, isDerivedAiKey, matchScoreTable, isBareAiScoreHeader,
 } from '../utils/analyticsData'
 import {
   aiFieldsFor, aiModelName, aiColumnLabel, aiModelSlugs, modelSlug, isAiModelKey, parseAiHeader,
-  labelUnrecordedScores, UNRECORDED, slugOfKey, aiKpiDefs,
+  labelUnrecordedScores, UNRECORDED, slugOfKey, aiKpiDefs, sortModelSlugs, aiNovKey, aiUseKey, aiPanelCoverage,
 } from '../utils/aiScoreColumns'
 import { scoreIdeas, fetchAISettings, translateTexts } from '../utils/llmClient'
 import {
@@ -27,6 +27,7 @@ import {
 // From scoreBatch, not llmClient: that module owns what is worth retrying and
 // carries no Firebase import, so the offline guard can pin this rule.
 import { isFatalScoringError } from '../utils/scoreBatch'
+import { ideaValueLookup } from '../utils/rankingsMerge'
 import {
   scoreGaps, gapSummary, shouldRunAnotherPass, mergeAiScoresIntoRows, ideaScoreState,
   scorableText, pickScoredSheet,
@@ -263,6 +264,9 @@ export default function DataAnalytics() {
   // The chosen model's OWN two columns: a run fills these and nothing else, so a
   // second model rates the same ideas into its own "AI Novelty (…)" pair.
   const scoreFields = useMemo(() => aiFieldsFor(scoreModel), [scoreModel])
+  // The Step-3 AI cell being hand-edited ("rid|field"): it stays an input while it
+  // has focus, even when its value is cleared (see the table's cell renderer).
+  const [editingCell, setEditingCell] = useState('')
   const scoreSlug = modelSlug(scoreModel)
   const scoreModelName = aiModelName(scoreSlug)
   // "Which model made these?" — for the scores that came in with no model name.
@@ -458,54 +462,75 @@ export default function DataAnalytics() {
           wb.SheetNames.find(n => /rank/i.test(n)) ||
           wb.SheetNames[0]
         const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' })
-        // The data table can sit below a preamble; find the header row that has
-        // both an "Idea Title" and a "Novelty" column.
+        // The data table can sit below a preamble; find the header row that names
+        // its ideas (an Idea Title or an Idea ID) and carries a score column.
         let h = -1
         for (let i = 0; i < aoa.length; i++) {
           const cells = aoa[i].map(c => String(c).toLowerCase())
-          if (cells.some(c => c.includes('idea title') || c === 'title') && cells.some(c => c.includes('novelty'))) { h = i; break }
+          const names = cells.some(c => c.includes('idea title') || c === 'title' || c === 'idea id' || c === 'idea_id')
+          if (names && cells.some(c => c.includes('novelty') || c.includes('useful'))) { h = i; break }
         }
-        if (h === -1) { alert(`This scores file does not match the expected format and was not imported.\n\nExpected an "All Ideas Ranked" (or Rankings) sheet with a header row containing "Idea Title" and "Novelty" columns (none found on the "${sheetName}" sheet).`); return }
-        const header = aoa[h].map(c => String(c).toLowerCase().trim())
+        if (h === -1) { alert(`This scores file does not match the expected format and was not imported.\n\nExpected an "All Ideas Ranked" (or Rankings) sheet with a header row containing "Idea Title" (or "Idea ID") and "Novelty" / "Usefulness" columns (none found on the "${sheetName}" sheet).`); return }
+        // The header as written (a model's name keeps its capitals), and lower-cased.
+        const headerRaw = aoa[h].map(c => String(c).trim())
+        const header = headerRaw.map(c => c.toLowerCase())
         const find = pred => header.findIndex(pred)
         const ciTitle = find(c => c.includes('idea title') || c === 'title')
+        const ciId = find(c => c === 'idea id' || c === 'idea_id')
+        const ciSession = find(c => c === 'session code' || c === 'session' || c === 'session_code')
         // Never the 3.1 NoveltyScore or an empirical (formerly "objective") KPI,
         // and never a DERIVED AI column (the mean across models), in any order.
         const notEmpirical = c => !isNoveltyScoreHeader(c) && !/objective|empirical|\bobj\b|obj\.|need fit|distinctiveness/.test(c) && !/\(mean\b/.test(c)
         const isEvalish = c => /\beval|evaluator|external|rater|expert/.test(c)
-        // Column pairs to read: [novIndex, useIndex, targetFields].
-        const pairs = []
+        const isRaterCol = c => /\((rater|expert)\b|\brater\s*\d|_rater/.test(c)
+        const numeric = v => v !== '' && v != null && typeof v !== 'boolean' && Number.isFinite(Number(v))
+        const mean = vs => (vs.length ? vs.reduce((x, y) => x + y, 0) / vs.length : '')
+        // What to read from each file row: [{ field, cols: [column index…], bare? }].
+        // A field fed by several columns (the raters of 3.3) takes their mean.
+        const reads = []
         if (fields === 'ai') {
-          // Every model named in the file gets its own pair, and so does "model
-          // not recorded": its explicit column ("AI Novelty (model not recorded)")
-          // first, else a bare "Novelty" — the same rule as normalizeImportedRows,
-          // decided once for the file (bare columns are derived means only beside
-          // the analysis CSV's ai_nov__ keys).
+          // Every model named in the file fills its own columns, and a score with no
+          // model name fills "model not recorded": its explicit column ("AI Novelty
+          // (model not recorded)") first, else a bare "Novelty" — the rule of
+          // normalizeImportedRows. A bare column beside the analysis CSV's ai_nov__
+          // keys is that row's derived mean, so it is read only on a row that carries
+          // no per-model value.
           const bareIsDerived = header.some(c => /^ai_(nov|use)__/.test(c))
           const explicitUnrec = c => /\(model not recorded\)|^ai_(nov|use)__unrecorded$/.test(c)
-          const bySlug = new Map()
+          const byField = new Map()   // field -> { col, explicit }
           header.forEach((c, i) => {
             if (isEvalish(c) || !notEmpirical(c)) return
-            const a = parseAiHeader(c)
+            const a = parseAiHeader(headerRaw[i])
             if (!a || a.derived) return
-            if (a.slug === UNRECORDED && !explicitUnrec(c) && bareIsDerived) return
-            if (!bySlug.has(a.slug)) bySlug.set(a.slug, { nov: -1, use: -1, novExplicit: false, useExplicit: false })
-            const ix = bySlug.get(a.slug)
-            const side = a.kind === 'novelty' ? 'nov' : 'use'
+            const field = (a.kind === 'novelty' ? aiNovKey : aiUseKey)(a.slug)
+            const prev = byField.get(field)
             // An explicit column beats a bare one for the same model.
-            if (ix[side] < 0 || (explicitUnrec(c) && !ix[`${side}Explicit`])) { ix[side] = i; ix[`${side}Explicit`] = explicitUnrec(c) }
+            if (!prev || (explicitUnrec(c) && !prev.explicit)) byField.set(field, { col: i, explicit: explicitUnrec(c), bare: a.slug === UNRECORDED && !explicitUnrec(c) })
           })
-          for (const [slug, ix] of bySlug) pairs.push([ix.nov, ix.use, { novelty: `ai_nov__${slug}`, usefulness: `ai_use__${slug}` }])
-        } else {
-          // Evaluator ratings: an evaluator-labelled column first ("Eval. Novelty"
-          // in the Rankings tab), then a plain "Novelty"; never an AI model's.
-          const pick = kind => {
-            const hit = c => c.includes(kind) && notEmpirical(c)
-            let i = find(c => hit(c) && isEvalish(c))
-            if (i < 0) i = find(c => hit(c) && !/^ai\b/.test(c))
-            return i
+          // A decorated bare column ("Novelty Rating", "Novelty (1-5)", "Avg Novelty")
+          // is read as a score with no model name, but only for a side no recognised
+          // column feeds (review, 2026-09-24: these files used to load, and then
+          // were refused).
+          for (const kind of ['novelty', 'usefulness']) {
+            const prefix = kind === 'novelty' ? 'ai_nov__' : 'ai_use__'
+            if ([...byField.keys()].some(f => f.startsWith(prefix))) continue
+            const i = header.findIndex((c, j) => !isEvalish(c) && notEmpirical(c) && isBareAiScoreHeader(headerRaw[j]) === kind)
+            if (i >= 0) byField.set((kind === 'novelty' ? aiNovKey : aiUseKey)(UNRECORDED), { col: i, explicit: false, bare: true })
           }
-          pairs.push([pick('novelty'), pick('useful'), fields])
+          for (const [field, v] of byField) reads.push({ field, cols: [v.col], bare: v.bare && bareIsDerived })
+        } else {
+          // Evaluator ratings, per kind: the individual raters' columns ("Novelty
+          // (rater 1)", …) averaged when any carries a value, else the evaluator
+          // column ("Eval. Novelty" in the Rankings tab), else a plain "Novelty" —
+          // never an AI model's. The rule of the Step-1 importer's meanRaterCols, so
+          // both paths give the same number.
+          for (const [kind, field] of [['novelty', fields.novelty], ['useful', fields.usefulness]]) {
+            const hit = c => c.includes(kind) && notEmpirical(c)
+            const raters = header.map((c, i) => (hit(c) && isRaterCol(c) ? i : -1)).filter(i => i >= 0)
+            let one = find(c => hit(c) && isEvalish(c) && !isRaterCol(c))
+            if (one < 0) one = find(c => hit(c) && !isEvalish(c) && !/^ai\b/.test(c))
+            reads.push({ field, cols: raters, fallback: one })
+          }
         }
         const isExcludedRow = r => excludedUsers.has(userKey(r.session, r.author_id))
         // Step 1b: the downloads raters fill in carry each idea's ENGLISH title, while
@@ -515,41 +540,42 @@ export default function DataAnalytics() {
         const trName = wb.SheetNames.find(n => n === TRANSLATIONS_SHEET)
         const fileTm = trName ? tmFromTranslationsRows(XLSX.utils.sheet_to_json(wb.Sheets[trName], { defval: '' })) : {}
         const withEn = applyTranslationMemory(rows, tmMerge(tm, fileTm).tm)
-        const englishTitle = (_r, i) => withEn[i]?.title_en
-        let res = { rows, matched: 0, unmatched: 0, filled: 0, kept: 0 }
-        let anyEntries = false
-        const targetKeys = pairs.flatMap(([, , t]) => [t.novelty, t.usefulness])
-        for (const [ciNov, ciUse, target] of pairs) {
-          const entries = []
-          for (let i = h + 1; i < aoa.length; i++) {
-            const r = aoa[i]
-            const title = String(r[ciTitle] ?? '').trim()
-            if (!title) continue
-            const nov = ciNov >= 0 ? r[ciNov] : ''
-            const use = ciUse >= 0 ? r[ciUse] : ''
-            if ((nov === '' || nov == null) && (use === '' || use == null)) continue
-            entries.push({ title, novelty: nov, usefulness: use })
+        // One entry per FILE ROW, carrying every field it has a value for, so all of
+        // a row's scores go to the same idea (review, 2026-09-24: one pass per model
+        // wrote two models' ratings of one row onto two different ideas).
+        const perModelFields = reads.filter(x => !x.bare).map(x => x.field)
+        const fileRows = []
+        for (let i = h + 1; i < aoa.length; i++) {
+          const r = aoa[i]
+          const title = ciTitle >= 0 ? String(r[ciTitle] ?? '').trim() : ''
+          const id = ciId >= 0 ? String(r[ciId] ?? '').trim() : ''
+          if (!title && !id) continue
+          const values = {}
+          for (const x of reads) {
+            let v = mean(x.cols.map(c => r[c]).filter(numeric).map(Number))
+            if (v === '' && x.fallback >= 0 && numeric(r[x.fallback])) v = Number(r[x.fallback])
+            if (v !== '') values[x.field] = v
           }
-          if (!entries.length) continue
-          anyEntries = true
-          // Don't let a removed participant's idea absorb a title match meant for a visible one.
-          const one = matchScoresIntoRows(res.rows, entries, r => !isExcludedRow(r), target, englishTitle)
-          res = { rows: one.rows, matched: Math.max(res.matched, one.matched), unmatched: Math.max(res.unmatched, one.unmatched), filled: res.filled + one.filled, kept: res.kept + one.kept }
+          // The bare mean beside per-model columns belongs to a row with none.
+          if (perModelFields.some(f => f in values)) for (const x of reads) if (x.bare) delete values[x.field]
+          if (!Object.keys(values).length) continue
+          fileRows.push({ id, session: ciSession >= 0 ? String(r[ciSession] ?? '').trim() : '', title, values })
         }
-        if (!anyEntries) { alert(`This scores file does not match the expected format and was not imported.\n\nNo scored idea rows (with a Novelty/Usefulness value) were found under "${sheetName}".`); return }
+        if (!fileRows.length) { alert(`This scores file does not match the expected format and was not imported.\n\nNo scored idea rows (with a Novelty/Usefulness value) were found under "${sheetName}".`); return }
         if (Object.keys(fileTm).length) setTm(prev => tmMerge(prev, fileTm).tm)
-        // Per IDEA, not per model pair: an idea that gained two models' scores is one
-        // idea filled (the per-pair sums double-counted it).
-        if (pairs.length > 1) {
-          const filledIdeas = res.rows.filter((r, i) => targetKeys.some(k => r[k] !== rows[i][k])).length
-          res = { ...res, filled: filledIdeas, kept: Math.max(0, res.matched - filledIdeas) }
-        }
+        // Matched once per file row: by Idea ID (and session) when the file has one,
+        // else by title; fill-blank only. Don't let a removed participant's idea
+        // absorb a match meant for a visible one.
+        const res = matchScoreTable(rows, fileRows, {
+          isEligible: r => !isExcludedRow(r),
+          altTitle: (_r, i) => withEn[i]?.title_en,
+        })
         setRows(recomputeOverall(res.rows))
         // Say what was ADDED and what was left alone: the upload only fills ideas
         // with no score yet, so a file re-imported over already-scored ideas must
         // not read as if it had updated them.
         setMsg(
-          `Loaded scores from "${sheetName}": scored ${res.filled} idea${res.filled === 1 ? '' : 's'} that had no score yet`
+          `Loaded scores from "${sheetName}": filled the empty cells of ${res.filled} idea${res.filled === 1 ? '' : 's'}`
           + (res.kept ? `; kept the existing scores of ${res.kept} already-scored idea${res.kept === 1 ? '' : 's'}` : '')
           + `; ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} had no match in the loaded data.`
         )
@@ -758,7 +784,14 @@ export default function DataAnalytics() {
         // A DERIVED AI column (the mean across models, AI Quality) is recomputed
         // from the per-model columns, never imported.
         if (isDerivedAiKey(canon)) continue
-        if (seen.has(canon)) continue          // first column wins for a given canonical KPI
+        // Several evaluator columns ("Novelty (rater 1)", "(rater 2)", …) are ONE
+        // measure: collect them all and average per idea below, as the Step-1
+        // importer does (review, 2026-09-24: here the first rater silently won).
+        if (seen.has(canon) && (canon === 'ext_novelty' || canon === 'ext_usefulness')) {
+          cols.find(c => c.key === canon).names.push(h)
+          continue
+        }
+        if (seen.has(canon)) continue          // first column wins for any other canonical KPI
         key = canon
         label = isAiModelKey(canon)
           ? aiColumnLabel(canon.startsWith('ai_nov__') ? 'novelty' : 'usefulness', slugOfKey(canon))
@@ -769,14 +802,28 @@ export default function DataAnalytics() {
         label = uploadedKpiLabel(key)
       }
       seen.add(key)
-      cols.push({ name: h, key, label })
+      cols.push({ name: h, names: [h], key, label })
     }
     if (!cols.length) { setKpiUploadMsg('No numeric KPI columns found beyond the standard idea columns.'); return }
     const keys = cols.map(c => c.key)
+    // One column's value, or for an evaluator measure spread over several columns
+    // the mean of the individual raters' values (the "(rater n)" columns) when any
+    // carries one, else of the others (an "Eval. Novelty" column): the rule of the
+    // Step-1 importer's meanRaterCols, so both uploads give the same number.
+    const isRaterCol = h => /\((rater|expert)\b|\brater\s*\d|_rater/i.test(String(h))
+    const meanOf = (r, hs) => {
+      const v = hs.map(h => r[h]).filter(numeric).map(Number)
+      return v.length ? v.reduce((a, b) => a + b, 0) / v.length : ''
+    }
+    const valueOf = (r, c) => {
+      if (c.names.length === 1) return r[c.name]
+      const raters = meanOf(r, c.names.filter(isRaterCol))
+      return raters !== '' ? raters : meanOf(r, c.names.filter(h => !isRaterCol(h)))
+    }
     const entries = rawRows.map(r => ({
       idea_id: idCol ? r[idCol] : '',
       title: titleCol ? r[titleCol] : '',
-      values: Object.fromEntries(cols.map(c => [c.key, r[c.name]])),
+      values: Object.fromEntries(cols.map(c => [c.key, valueOf(r, c)])),
     }))
     const { rows: next, matched, unmatched, kept } = matchUploadedKpisIntoRows(rows, entries, keys)
     // Recompute, like every other KPI-writing path. Filling `usefulness` from an
@@ -902,39 +949,35 @@ export default function DataAnalytics() {
   const uploadedNow = useMemo(() => uploadedKpiDefs(effectiveRows), [effectiveRows])
   // KPI columns of the Step-3 table, in the export order (owner, 2026-09-24): the
   // empirical KPIs (3.1) and uploaded extras, then each AI model's Novelty and
-  // Usefulness side by side (editable), the mean across models and AI Quality
-  // (derived, read-only), then the evaluators. The model chosen in the rater
-  // dropdown always has its pair here, empty until it rates — so the admin sees
-  // where a run will write.
+  // Usefulness side by side, the mean across models and AI Quality (derived,
+  // read-only), then the evaluators. The model chosen in the rater dropdown always
+  // has its pair here, empty until it rates, so the admin sees where a run writes.
+  // Every model the rows carry a field for keeps its pair at its catalogue place,
+  // even after its last value was cleared in this table: a column must neither
+  // vanish nor move under the cell being edited (review, 2026-09-24). Exports list
+  // only models with values.
   const tableKpiCols = useMemo(() => {
     const cols = exportKpiColumns(effectiveRows)
-    // A model whose last value was just cleared in this table keeps its columns
-    // (its fields are still on the rows, blank): a column must not vanish under
-    // the cell being edited. Exports list only models with values.
-    const present = new Set(cols.filter(d => d.slug).map(d => d.slug))
-    const cleared = aiModelSlugs(effectiveRows, { includeBlank: true }).filter(sl => !present.has(sl) && sl !== scoreSlug)
-    if (cleared.length) {
-      let at = cols.length
-      for (let i = 0; i < cols.length; i++) if (cols[i].source === 'ai' && cols[i].slug) at = i + 1
-      if (!present.size) { const j = cols.findIndex(d => d.source === 'ai' || d.source === 'ext'); if (j >= 0) at = j }
-      cols.splice(at, 0, ...cleared.flatMap(sl => [
-        { key: `ai_nov__${sl}`, label: aiColumnLabel('novelty', sl), source: 'ai', slug: sl, kind: 'novelty' },
-        { key: `ai_use__${sl}`, label: aiColumnLabel('usefulness', sl), source: 'ai', slug: sl, kind: 'usefulness' },
-      ]))
+    const own = d => d.source === 'ai' && d.slug
+    // The chosen model before it has any field at all: its pair shows where a run
+    // will write, and is read-only (a hand rating typed there would be exported as
+    // that model's).
+    const fresh = !effectiveRows.some(r => Object.prototype.hasOwnProperty.call(r, scoreFields.novelty)
+      || Object.prototype.hasOwnProperty.call(r, scoreFields.usefulness))
+    const slugs = sortModelSlugs([...aiModelSlugs(effectiveRows, { includeBlank: true }), ...(scoreSlug ? [scoreSlug] : [])])
+    const models = slugs.flatMap(sl => [
+      { key: aiNovKey(sl), label: aiColumnLabel('novelty', sl), source: 'ai', slug: sl, kind: 'novelty' },
+      { key: aiUseKey(sl), label: aiColumnLabel('usefulness', sl), source: 'ai', slug: sl, kind: 'usefulness' },
+    ].map(d => (sl === scoreSlug && fresh ? { ...d, placeholder: true } : d)))
+    // Where the models' pairs go: where exportKpiColumns put them, else before the
+    // derived AI columns and the evaluators.
+    const rest = cols.filter(d => !own(d))
+    let at = cols.findIndex(own)
+    if (at < 0) {
+      at = rest.findIndex(d => d.source === 'ai' || d.source === 'ext')
+      if (at < 0) at = rest.length
     }
-    if (cols.some(d => d.key === scoreFields.novelty)) return cols
-    const mine = [
-      { key: scoreFields.novelty, label: aiColumnLabel('novelty', scoreSlug), source: 'ai', slug: scoreSlug, kind: 'novelty', placeholder: true },
-      { key: scoreFields.usefulness, label: aiColumnLabel('usefulness', scoreSlug), source: 'ai', slug: scoreSlug, kind: 'usefulness', placeholder: true },
-    ]
-    // After the last model's own pair, before the derived AI columns and the evaluators.
-    let at = cols.length
-    for (let i = 0; i < cols.length; i++) if (cols[i].source === 'ai' && cols[i].slug) at = i + 1
-    if (!cols.some(d => d.source === 'ai' && d.slug)) {
-      const firstLater = cols.findIndex(d => d.source === 'ai' || d.source === 'ext')
-      if (firstLater >= 0) at = firstLater
-    }
-    return [...cols.slice(0, at), ...mine, ...cols.slice(at)]
+    return [...rest.slice(0, at), ...models, ...rest.slice(at)]
   }, [effectiveRows, scoreFields, scoreSlug])
 
   // Distinct participants in the loaded data (for the remove/restore panel).
@@ -1084,9 +1127,14 @@ export default function DataAnalytics() {
           // and stops the run at once: retrying it only makes the admin wait
           // through the pauses before being told what is actually wrong.
           if (isFatalScoringError(err)) throw err
-          threw = true
           lastError = err
           scores = []
+          // …except when the provider ANSWERED every batch without a rating (a
+          // refusal, or its whole token ceiling spent on reasoning: `replyProblem`).
+          // That is not a transport failure, and sending the same ideas again gets
+          // the same answer, so it earns no recovery pass (review, 2026-09-24: 16
+          // ideas cost 162 calls and ended in advice about the API key).
+          threw = !err?.replyProblem
         }
         // A pass that THREW failed for transport reasons whatever the report
         // says: `scoreIdeas` also throws when every batch was attempted and
@@ -1147,7 +1195,15 @@ export default function DataAnalytics() {
       if (aborted) {
         bits.push(`The run stopped early — ${scoreProvider} kept failing${lastError ? ` (${lastError.message || lastError})` : ''}, so the remaining ideas were never sent. Check the API key and quota under AI Settings, then press the button again.`)
       } else if (finalGaps.fillable > 0) {
-        bits.push(`${finalGaps.fillable.toLocaleString()} idea${finalGaps.fillable === 1 ? '' : 's'} still ${finalGaps.fillable === 1 ? 'has' : 'have'} an empty cell — the model's reply for ${finalGaps.fillable === 1 ? 'it' : 'them'} could not be read. Press the button again to retry just ${finalGaps.fillable === 1 ? 'it' : 'those'}.`)
+        const n = finalGaps.fillable
+        const still = `${n.toLocaleString()} idea${n === 1 ? '' : 's'} still ${n === 1 ? 'has' : 'have'} an empty cell`
+        const problem = lastError?.replyProblem
+        bits.push(problem
+          ? `${still}: ${runModelName} answered without a rating (${lastError.message || lastError}). `
+            + (problem === 'exhausted'
+              ? 'Pick a model that reasons less (or one without reasoning) and press the button again.'
+              : 'Pressing the button again sends the same text and will likely get the same answer.')
+          : `${still}: the model's reply for ${n === 1 ? 'it' : 'them'} could not be read. Press the button again to retry just ${n === 1 ? 'it' : 'those'}.`)
       }
       if (finalGaps.unratable > 0) {
         bits.push(`${finalGaps.unratable.toLocaleString()} ${finalGaps.unratable === 1 ? 'idea has' : 'ideas have'} no text to rate, so ${finalGaps.unratable === 1 ? 'it' : 'they'} can never be scored — they are counted apart above.`)
@@ -1155,7 +1211,7 @@ export default function DataAnalytics() {
       // A cause the provider gave (a refusal, a ceiling spent on thinking, a
       // 429 it kept answering) used to be dropped unless the run aborted; the
       // still-empty ideas then read as "could not be read" with no reason.
-      if (lastError && !aborted && finalGaps.fillable > 0) {
+      if (lastError && !aborted && finalGaps.fillable > 0 && !lastError.replyProblem) {
         bits.push(`Last cause reported: ${lastError.message || lastError}`)
       }
       if (bits.length) setScoreErr(bits.join(' '))
@@ -1233,8 +1289,7 @@ export default function DataAnalytics() {
           { onlyFinal: scoreOnlyFinal, isFinal, fields: scoreFields })
         setScoreLoadMsg(
           `Merged “${file.name}”${isCsv ? '' : ` (sheet “${sheetName}”)`} onto ${res.matched} of ${rows.length} loaded idea${rows.length === 1 ? '' : 's'} by Idea ID: `
-          + `filled ${res.filled} that had no AI score yet`
-          + (res.models.length ? ` (${res.models.map(aiModelName).join(', ')})` : '')
+          + `filled ${res.filled} idea${res.filled === 1 ? '' : 's'}' empty ${res.models.length ? res.models.map(aiModelName).join(' / ') : 'AI'} cells`
           + (res.kept ? `, kept the existing scores of ${res.kept}` : '')
           + (res.unmatched ? `. ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} matched no loaded idea and ${res.unmatched === 1 ? 'was' : 'were'} NOT added — clear Step 1 and import the file there to load it as the dataset` : '')
           + `. ${gapSummary(after, scoreOnlyFinal, scoreModelName)}`
@@ -1291,8 +1346,12 @@ export default function DataAnalytics() {
   // before the columns carried a model name). Fill-blank only, like every path.
   function onLabelUnrecorded() {
     if (!labelTarget) return
-    const res = labelUnrecordedScores(rows, labelTarget)
-    setRows(recomputeOverall(res.rows))
+    // The ideas on show only (after removals), the ones the panel counted: a removed
+    // participant's hidden ideas are left as they are.
+    const shown = rows.map(r => !isExcluded(r))
+    const res = labelUnrecordedScores(rows.filter((_, i) => shown[i]), labelTarget)
+    let k = 0
+    setRows(recomputeOverall(rows.map((r, i) => (shown[i] ? res.rows[k++] : r))))
     const name = aiModelName(modelSlug(labelTarget))
     setScoreLoadMsg(
       `Labelled the scores of ${res.moved} idea${res.moved === 1 ? '' : 's'} as ${name}.`
@@ -1558,20 +1617,10 @@ export default function DataAnalytics() {
         // are computed) and the uploaded extras, then each AI model's pair, then the
         // evaluator columns (kept, empty, for blind expert raters).
         const cols = exportKpiColumns(rows, { allEmpirical: true, evaluatorColumns: true })
-        // One entry per Idea ID. The same idea can be loaded twice (a session from
-        // Firestore AND its own export); merge them per column, first non-blank
-        // value wins, so an unscored copy never blanks a scored one.
-        const blankV = v => v === '' || v == null
-        const valuesById = new Map()
-        for (const r of rows) {
-          const id = String(r.idea_id)
-          const prev = valuesById.get(id)
-          if (!prev) { valuesById.set(id, r); continue }
-          const fill = {}
-          for (const c of cols) if (blankV(prev[c.key]) && !blankV(r[c.key])) fill[c.key] = r[c.key]
-          if (Object.keys(fill).length) valuesById.set(id, { ...prev, ...fill })
-        }
-        merged.push(rankingsSheetFromIdeas(ideasSheet.rows, valuesById, cols))
+        // One record per idea (session + Idea ID): copies of an idea loaded twice are
+        // merged per column, and the derived means rebuilt from the merged record.
+        const lookup = ideaValueLookup(rows, cols, r => recomputeOverall([r])[0])
+        merged.push(rankingsSheetFromIdeas(ideasSheet.rows, lookup, cols))
       }
       // The per-pool deterministic KPIs (Unique fraction / Productivity) are batch-
       // level, not per idea, so the consolidated aggregate carries them on their own
@@ -1780,9 +1829,33 @@ export default function DataAnalytics() {
       const g = scoreGaps(effectiveRows, { onlyFinal: scoreOnlyFinal, isFinal, fields: f })
       return { slug: sl, name: aiModelName(sl), scored: g.scored, total: g.total }
     }), [effectiveRows, scoreSlug, scoreOnlyFinal])
+  // Over the ideas on show (after removals), like the coverage line beside it.
   const unrecordedCount = useMemo(
-    () => rows.filter(r => [`ai_nov__${UNRECORDED}`, `ai_use__${UNRECORDED}`].some(k => r[k] !== '' && r[k] != null)).length,
-    [rows])
+    () => effectiveRows.filter(r => [`ai_nov__${UNRECORDED}`, `ai_use__${UNRECORDED}`].some(k => r[k] !== '' && r[k] != null)).length,
+    [effectiveRows])
+  // Steps 4–5 read AI Novelty / AI Usefulness as each idea's mean over the models
+  // that rated it. When the ideas in scope were not all rated by the same models, a
+  // difference between conditions can come from WHICH models rated which ideas
+  // (review, 2026-09-24: a second model that stopped part-way moved the Both-vs-
+  // Group contrast by 0.19), so the two steps say so, naming the groups.
+  function panelNote(scopeRows) {
+    const cov = aiPanelCoverage(scopeRows)
+    if (!cov.uneven) return null
+    const name = sl => (sl === UNRECORDED ? 'a model not recorded' : aiModelName(sl))
+    const shown = cov.groups.slice(0, 4).map(g => `${g.n.toLocaleString()} by ${g.slugs.map(name).join(' and ')}${g.slugs.length === 1 ? ' only' : ''}`)
+    const more = cov.groups.length > 4 ? `; ${cov.groups.slice(4).reduce((t, g) => t + g.n, 0).toLocaleString()} by other sets` : ''
+    return (
+      <p className={styles.hint}>
+        <strong className={styles.unscored}>Not every idea here was rated by the same AI models</strong>: {shown.join('; ')}{more}.
+        {' '}AI&nbsp;Novelty and AI&nbsp;Usefulness here are each idea&apos;s mean over the models that rated it, so a difference
+        {' '}between conditions can come from which models rated which ideas. Fill the missing ratings in 3.2 (pick each
+        {' '}model in turn) so every idea has the same models.
+      </p>
+    )
+  }
+  const regScopeRows = useMemo(
+    () => (regScope === 'group' ? effectiveRows.filter(enteredGroupPhase) : effectiveRows.filter(isFinal)),
+    [effectiveRows, regScope])
   // Step-5 regression dataset: Final-Group-Pick ideas carrying at least one KPI
   // (from any source — AI / evaluator / empirical).
   const finalScoredCount = effectiveRows.filter(r => isFinal(r) && hasAnyKpi(r)).length
@@ -2131,13 +2204,13 @@ export default function DataAnalytics() {
             export</strong> — all the same tabs (<em>About, Participants, Ideas, Survey, Timing,
             Group&nbsp;Chat, AI&nbsp;Chat, AI&nbsp;Usage, AI&nbsp;Pricing, Groups, Conditions</em>),
             with every session's rows stacked together and condition-stamped. It adds one extra tab,
-            <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Condition, Stage,
+            <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Session&nbsp;Code, Condition, Stage,
             Final&nbsp;Group&nbsp;Pick, Title, Description</em>, then first the Section&nbsp;3.1
             <strong>empirical</strong> KPIs (novelty side and usefulness side), then the <strong>AI
             ratings model by model</strong> (e.g. <em>AI&nbsp;Novelty&nbsp;(GPT-6&nbsp;Astra)</em> beside
             {' '}<em>AI&nbsp;Usefulness&nbsp;(GPT-6&nbsp;Astra)</em>, then the next model's pair), and the
             {' '}<em>Eval.&nbsp;Novelty / Eval.&nbsp;Usefulness / Eval.&nbsp;Quality</em> columns, empty and ready
-            for blind expert rating.
+            for blind expert rating (raters fill the first two; Eval.&nbsp;Quality is always their mean).
             You can also <strong>Import Excel / CSV</strong>
             here (same importer as Step&nbsp;1): the file is added to the source list above <strong>and
             loaded right away</strong>, so the aggregate, the stats below and Steps&nbsp;3–6 fill in
@@ -2206,7 +2279,7 @@ export default function DataAnalytics() {
               <div className={styles.stats}>
                 <div className={styles.statBox}><div className={styles.statNum}>{effectiveRows.length}</div><div className={styles.statLabel}>Ideas{excludedUsers.size ? ` (${rows.length - effectiveRows.length} removed)` : ''}</div></div>
                 <div className={styles.statBox}><div className={styles.statNum}>{detScoredCount}</div><div className={styles.statLabel}>Empirical computed (3.1)</div></div>
-                <div className={styles.statBox}><div className={styles.statNum}>{scoredCount}</div><div className={styles.statLabel}>AI scored (3.2)</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{scoredCount}</div><div className={styles.statLabel}>AI scored, any model (3.2)</div></div>
                 <div className={styles.statBox}><div className={styles.statNum}>{extScoredCount}</div><div className={styles.statLabel}>Eval. rated (3.3)</div></div>
                 {CONDITIONS.map(c => (
                   <div className={styles.statBox} key={c}>
@@ -2450,7 +2523,7 @@ export default function DataAnalytics() {
                   {scoreOnlyFinal && allGaps.fillable > gaps.fillable && (
                     <p className={styles.coverageLine}>
                       Across the <strong>whole</strong> dataset {allGaps.fillable.toLocaleString()} idea{allGaps.fillable === 1 ? '' : 's'} still
-                      need an AI score — untick <em>Only score the Final Ideas</em> above to fill those too.
+                      need a score from {scoreModelName} — untick <em>Only score the Final Ideas</em> above to fill those too.
                     </p>
                   )}
                   {gaps.unratable > 0 && (
@@ -2478,7 +2551,7 @@ export default function DataAnalytics() {
                 </button>
                 <input ref={datasetFileRef} type="file" accept=".xlsx,.xls,.csv" className={styles.fileInput} onChange={onPickDatasetTopUp} />
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => scoreFileRef.current?.click()} disabled={!!scoring}
-                  title='Upload an offline AI-scoring file ("All Ideas Ranked" / Rankings sheet, matched by idea title) → fills the AI KPI columns of ideas that have no score yet (already-scored ideas keep theirs)'>Load AI scores file</button>
+                  title='Upload an offline AI-scoring file ("All Ideas Ranked" / Rankings sheet, matched by Idea ID and Session Code when it has them, else by idea title) → fills the AI KPI columns of ideas that have no score yet (already-scored ideas keep theirs)'>Load AI scores file</button>
                 <input ref={scoreFileRef} type="file" accept=".xlsx,.xls" className={styles.fileInput} onChange={onPickScores} />
                 {scoring && (
                   <span className={styles.statusLine}>
@@ -2601,22 +2674,29 @@ export default function DataAnalytics() {
                         <td>{isFinal(r) ? 'Yes' : 'No'}</td>
                         {tableKpiCols.map(d => {
                           const v = r[d.key]
-                          // A model's own AI score is editable (1–5); every other
-                          // column — empirical, derived means, evaluators — is read-only.
-                          // (The chosen model's placeholder pair, before it has rated
-                          // anything, is NOT editable: a hand rating typed there would be
-                          // exported as that model's — review finding, 2026-09-24.)
-                          if (d.source === 'ai' && d.slug && !d.placeholder) {
+                          // A score a model GAVE can be corrected here (1–5); a blank
+                          // cell cannot be typed into, because a hand rating there would
+                          // be exported, and averaged, as that model's (review,
+                          // 2026-09-24): a blank is filled by the model's own run. The
+                          // cell being edited stays an input while it has focus, so
+                          // clearing it and typing a new value is one edit. Every other
+                          // column (empirical, derived means, evaluators) is read-only.
+                          const cellId = `${r.rid}|${d.key}`
+                          const hasScore = v !== '' && v != null
+                          if (d.source === 'ai' && d.slug && !d.placeholder && (hasScore || editingCell === cellId)) {
                             return (
                               <td key={d.key} className="num">
                                 <input className={styles.scoreInput} type="number" min="1" max="5" step="0.5"
-                                  value={v ?? ''} onChange={e => updateScore(r.rid, d.key, e.target.value)} />
+                                  value={v ?? ''} onChange={e => updateScore(r.rid, d.key, e.target.value)}
+                                  onFocus={() => setEditingCell(cellId)}
+                                  onBlur={() => setEditingCell(c => (c === cellId ? '' : c))} />
                               </td>
                             )
                           }
                           const blank = v === '' || v == null || !Number.isFinite(Number(v))
                           return (
-                            <td key={d.key} className={`num ${blank ? styles.unscored : ''}`}>
+                            <td key={d.key} className={`num ${blank ? styles.unscored : ''}`}
+                              title={blank && d.source === 'ai' && d.slug && d.slug !== UNRECORDED ? `Not rated by ${aiModelName(d.slug)} yet: its own run in 3.2 fills this cell` : undefined}>
                               {blank ? '—' : Number(v).toFixed(2)}
                             </td>
                           )
@@ -2709,6 +2789,7 @@ export default function DataAnalytics() {
                 <input type="checkbox" checked={statsOnlyScored} onChange={e => setStatsOnlyScored(e.target.checked)} />
                 <span>Only include ideas that carry at least one KPI (any source — AI, evaluator, empirical or uploaded)</span>
               </label>
+              {panelNote(statRows)}
 
               <div className={styles.stats} style={{ marginTop: 12 }}>
                 <div className={styles.statBox}><div className={styles.statNum}>{statRows.length}</div><div className={styles.statLabel}>Ideas analysed</div></div>
@@ -2788,6 +2869,7 @@ export default function DataAnalytics() {
             </span>
             <span className={styles.kpiPill}>{regScope === 'group' ? `${groupPhaseCount} in group phase` : `${finalCount} final`}</span>
           </label>
+          {panelNote(regScopeRows)}
           {regScopedScored < 2 && (
             <p className={styles.hint}>
               <span className={styles.unscored}>Give at least two {regScope === 'group' ? 'ideas that entered the group phase' : 'Final Ideas'} a KPI in Step&nbsp;3 first — via AI&nbsp;(3.2), evaluator upload&nbsp;(3.3) or empirical compute&nbsp;(3.1). Only {regScopedScored} so far.</span>
@@ -3486,11 +3568,14 @@ function addUsefulnessCheckSheet(wb, data, techSet) {
   const wk = rows.map(r => num(r.det_workability))
   const pn = percentileRanks(nf), ps = percentileRanks(sp), pw = percentileRanks(wk)
   const compiled = compileTerms(String(techSet || '').split('\n').map(t => t.trim()).filter(Boolean))
-  const r3 = v => (v == null ? '' : Math.round(v * 1000) / 1000)
+  // Four decimals, the precision the stored KPIs carry (review, 2026-09-24: at three,
+  // a mean and a score that agree to four decimals printed as 0.459 and 0.458).
+  const r4 = v => (v == null ? '' : Math.round(v * 10000) / 10000)
   const notes = [
     ['How the empirical Usefulness score is built, idea by idea'],
     [`Each of the three parts is turned into a rank among these ${rows.length} ideas: the lowest gets 0, the highest 1, and ideas with the same value share the average of their places (rank = (average place − 1) / (number of ideas − 1)). The Usefulness score is the mean of the ranks the idea has.`],
     ['Need fit = how close the idea\'s words are to the closest need in the list U. Specificity = the share of five things the idea states (who it is for, what it is, where or when it is used, why it helps, how it works). Workability = 1 / (1 + the number of extra technologies from the list T it needs).'],
+    ['The ranks here are taken again from the stored parts, which are rounded to 4 decimals. Where that rounding makes two ideas tie, the mean can differ from the stored score in the last decimal; a larger difference is named in the Note column.'],
     [],
   ]
   const header = [
@@ -3516,13 +3601,17 @@ function addUsefulnessCheckSheet(wb, data, techSet) {
     const stale = []
     if (wk[i] != null && Math.abs(wk[i] - 1 / (1 + nTech)) > 0.001) stale.push('Workability')
     if (sp[i] != null && nStated != null && Math.abs(sp[i] - nStated / FACETS.length) > 0.001) stale.push('Specificity')
+    // The mean and the stored score disagree beyond rounding: the pool changed
+    // since the score was computed (ideas added or removed).
+    const stored = num(r.det_usefulness)
+    if (meanRank != null && stored != null && Math.abs(meanRank - stored) > 0.002) stale.push('Usefulness score')
     const note = stale.length
-      ? `${stale.join(' and ')} stored from an earlier computation (an older rule, or lists edited since); press "Compute empirical KPIs" again to refresh.`
+      ? `${stale.join(' and ')} stored from an earlier computation (an older rule, lists edited, or ideas added or removed since); press "Compute empirical KPIs" again to refresh.`
       : ''
     return [
       r.idea_id, r.condition, (hasEnglishVersion(r) && r.title_en) || r.idea_title || String(text).split(': ')[0],
-      r3(nf[i]), r3(pn[i]), r3(sp[i]), stated || '(none)', r3(ps[i]),
-      r3(wk[i]), tech || '(none)', r3(pw[i]), r3(meanRank), r3(num(r.det_usefulness)), note,
+      r4(nf[i]), r4(pn[i]), r4(sp[i]), stated || '(none)', r4(ps[i]),
+      r4(wk[i]), tech || '(none)', r4(pw[i]), r4(meanRank), r4(stored), note,
     ]
   })
   const ws = XLSX.utils.aoa_to_sheet([...notes, header, ...body])
