@@ -39,8 +39,9 @@
  *      download into an empty browser brings them back.
  *   9. No Claude key: Translate refuses with a clear message and sends nothing.
  *  9b. In a browser that knows no translation, a scored English file still works:
- *      the full-dataset top-up keeps the scores it fills, and a scores file with
- *      English titles matches the Chinese originals.
+ *      the full-dataset top-up keeps the scores it fills (and a later edit of one
+ *      idea's English clears that idea's scores in every model's columns), and a
+ *      scores file with English titles matches the Chinese originals.
  *
  * Plus: no page error or console error, nothing leaves the machine except the
  * stubbed Anthropic call, Firebase only read, and at 1280px no sideways scroll
@@ -455,6 +456,18 @@ try {
   // coverage panel offers to label them — which it can only do if they survived.
   check('…and the scores it filled are still there (not cleared as "changed text")',
     /6 ideas have AI scores with no model name/.test(await bodyText()),
+    (await bodyText()).match(/[^\n]*AI scores[^\n]*/g)?.slice(0, 3).join(' | '))
+  // A LATER change to one idea's English clears that idea's AI scores in every
+  // model's columns (here "model not recorded"), not just the mean: the mean is
+  // rebuilt from the per-model columns, so clearing it alone would bring it back.
+  await scan()
+  await reviewRow(ZH_A.title).locator('textarea').fill('Colour-changing gym top')
+  await reviewRow(ZH_A.title).getByRole('button', { name: 'Save edit' }).click()
+  const cleared = p.getByText(/^An English version changed, so the measures computed from the old text were cleared/)
+  await cleared.waitFor({ timeout: 5000 })
+  check('editing one idea\'s English clears its AI ratings…', /the AI ratings of 1 idea/.test(await cleared.innerText()), await cleared.innerText())
+  check('…in its per-model columns too (6 → 5 ideas still scored)',
+    /5 ideas have AI scores with no model name/.test(await bodyText()),
     (await bodyText()).match(/[^\n]*AI scores[^\n]*/g)?.slice(0, 3).join(' | '))
   await closePage()
   await ctx.close()
