@@ -912,18 +912,27 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        is a score with no model name, skipped only in the page's analysis CSV, where it
        is the derived mean: when the FILE has `ai_nov__`/`ai_use__` keys AND that ROW
        has a per-model value;
-     - a bracket after "AI Novelty" names a model only when it is not a note: a scale
-       or summary note (1-5, 0-10 scale, out of 5, avg, median, score, rating, Final
-       Ideas) means model not recorded; a statistic (sd, se, rank, percentile, n, min,
-       max) is not a score; "(mean …)" is derived; "Novelty (<catalogue model>)"
-       without "AI" names that model; a model outside the catalogue keeps the file's
-       capitals;
+     - a bracket after "AI Novelty" names a model only when it is not a note
+       (`headerNoteKind`): a 1-5 scale or summary note (1-5, 5-point, out of 5,
+       "1 = low, 5 = high", avg, median, score, rating, Final Ideas) or a "no model"
+       note (not recorded, unknown model, NA) means model not recorded; a note of
+       ANOTHER scale (0-1, 0-100, 1-10, 0-10 scale, "1 = low, 7 = high") is not a 1-5
+       score and stays an x_ extra (third review: "Novelty (0-1)" moved 731 of the
+       owner's 741 ideas' AI Novelty); a statistic (sd, se, rank, percentile, n, min,
+       max) is not a score; "(mean …)" is derived; "(run 1)" / "(seed 2)" is a source
+       of its own, kept apart like a model so a second run's scores are not dropped;
+       "(GPT-6 Astra, 1-5)" is that model; "(human)" / "(raters)" are not AI scores;
+       "Novelty (<catalogue model>)" without "AI" names that model; a model outside
+       the catalogue keeps the file's capitals;
      - nothing is routed by SUBSTRING any more (`canonicalKpiField`): "Embedding
        novelty", "Quality index", "Novelty SD" stay uploaded x_ extras. Before, such a
        column became an AI model and was averaged into every idea's AI Novelty;
      - evaluator columns are exact headers only (`parseEvalHeader`: Eval. Novelty /
        Usefulness / Quality, ext_*, Evaluator / External / Expert Novelty, "Novelty
-       (rater|expert|evaluator|judge N)"); the raters are averaged, else the labelled
+       (rater|expert|evaluator|judge N)"). A note on how the rating was given is
+       read, not dropped ("Eval. Novelty (1-5)", "(mean)", "(avg)", "Evaluator
+       Novelty Rating", "Novelty rater 1 (blind)", "Novelty (external evaluator 1)");
+       a statistic, another scale or a model name in the note is refused. The raters are averaged, else the labelled
        columns (`evaluatorMean`), in the Step-1 import, the 3.1 KPI upload and the 3.3
        upload alike. **Eval. Quality is DERIVED** (their mean): it is kept as the
        evaluator quality only on a row without the Novelty/Usefulness pair;
@@ -1037,7 +1046,17 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      others move under 0.01. Pinned by the usefulness guard: every sentence of the
      review, fever-garment sentences both ways, each guard alone, a test that a
      negator more than 60 characters back does not negate, and timing checks on the
-     pasted-hyphen inputs.
+     pasted-hyphen inputs. **Third review (same day):** a preposition or "no" that
+     OPENS its clause hid the next clause's subject ("Instead of a thermometer, a
+     sensor or an LED, hidden in the collar, alerts parents" counted nothing). The
+     negators now come in three kinds (preposition, quantifier, verb); an opening
+     one's comma list must end where a new clause clearly starts (a comma or dash plus
+     a subject, a full stop, "needed"), never at an aside its own verb follows;
+     "instead of" / "rather than" name what IS used; a line break ends a clause like a
+     full stop; the take-away verbs do not negate before "from"; an upkeep noun after
+     the term ("eliminating battery changes") keeps it. Same 39 ideas on the owner's
+     data; the guard pins one row per rule and that the cost grows linearly with an
+     idea's length.
    - **Four more rater providers** (owner: "Add Mistral, Meta's Llama, DeepSeek and
      Qwen's top models available"), all OpenAI-compatible
      (`buildOpenAICompatRequest` in providerRequest.js), sending ONLY
