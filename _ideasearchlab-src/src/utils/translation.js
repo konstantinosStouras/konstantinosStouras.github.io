@@ -8,7 +8,7 @@
  * all data collected in English."
  *
  * Why it comes first: every Section 3 measure reads an idea's words. The 3.1
- * objective KPIs compare them with an ENGLISH list of existing products and needs and
+ * empirical KPIs compare them with an ENGLISH list of existing products and needs and
  * with the other ideas, and the 3.2 AI rater is prompted in English — so an idea in
  * Chinese was measured on its language, not its content. And the aggregate workbook
  * (Step 2) is the study's record: chats and survey answers in another language are

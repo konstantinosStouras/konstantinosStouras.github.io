@@ -31,6 +31,7 @@ import {
 import { objectiveKpisFromText } from '../src/utils/objectiveKpis.js'
 import { scorableText } from '../src/utils/scoreGaps.js'
 import { matchScoresIntoRows } from '../src/utils/analyticsData.js'
+import { aiNovKey, aiUseKey, UNRECORDED } from '../src/utils/aiScoreColumns.js'
 import { MODEL_PRICES } from '../src/data/aiPricing.js'
 import { buildClaudeRequest, SCORING_MAX_TOKENS } from '../src/utils/providerRequest.js'
 
@@ -203,12 +204,14 @@ head('a scores file with English titles still matches the loaded (original) idea
     { rid: 'e', idea_title: 'Mood mug', idea_description: 'A mug', text: 'Mood mug: A mug', novelty: '', usefulness: '' },
   ]
   const entries = [{ title: 'Smart socks', novelty: 4, usefulness: 3 }, { title: 'Mood mug', novelty: 2, usefulness: 5 }]
+  // A file that names no model fills "model not recorded" (per-model columns).
+  const NOV = aiNovKey(UNRECORDED), USE = aiUseKey(UNRECORDED)
   const plain = matchScoresIntoRows(loaded, entries)
-  check('without the English titles, the translated idea matches nothing', plain.matched === 1 && plain.rows[0].novelty === '')
+  check('without the English titles, the translated idea matches nothing', plain.matched === 1 && !plain.rows[0][NOV])
   const withEn = applyTranslationMemory(loaded, tm)
   const res = matchScoresIntoRows(loaded, entries, null, undefined, (_r, i) => withEn[i]?.title_en)
   check('with them, both match and the rows keep their original fields (no English written into them)',
-    res.matched === 2 && res.rows[0].novelty === 4 && res.rows[1].usefulness === 5 && !('title_en' in res.rows[0]) && res.rows[0].idea_title === '智能袜子')
+    res.matched === 2 && res.rows[0][NOV] === 4 && res.rows[1][USE] === 5 && !('title_en' in res.rows[0]) && res.rows[0].idea_title === '智能袜子')
 }
 
 head('translateSheets: the English goes into every cell, the original onto the log')
@@ -419,7 +422,8 @@ check('the productivity count reads measureText too', /text: measureText\(pool\[
 check('3.2 rates measureText', /\.map\(r => \(\{ rid: r\.rid, text: measureText\(r\) \}\)\)/.test(page))
 check('3.2 works off the rows WITH their English versions', /let working = applyTranslationMemory\(rows, tm\)/.test(page))
 check('every downstream view reads the rows with their English versions', /const effectiveRows = useMemo\(\(\) => rowsEn\.filter/.test(page))
-check('the regressions\' word count and the CSV read the English text', (page.match(/withMeasuredText\(/g) || []).length >= 3)
+check('the regressions\' word count reads the English text, and the idea CSV writes the translated sheet',
+  (page.match(/withMeasuredText\(/g) || []).length >= 2 && /function downloadAllDataCsv\(\) \{[\s\S]{0,500}translatedIdeaSheet\(data\)\.rows/.test(page))
 check('the aggregate is translated and carries the originals on a Translations sheet',
   /const tr = translateSheets\(merged, tm\)/.test(page) && /carryTranslationsSheet\(tr\.log, sources/.test(page))
 check('the ideas + KPIs download is translated as well, carrying a loaded file\'s originals',
@@ -430,7 +434,7 @@ check('…but an idea getting its FIRST English version clears nothing (an uploa
   /if \(p && p\.en && p\.t !== v\.t\) changed\.add\(rid\)/.test(page))
 check('…and a removed participant\'s idea never clears the 3.1 pool\'s KPIs', /const inPool = rowsEn\.some\(r => changed\.has\(r\.rid\) && !isExcluded\(r\)\)/.test(page))
 check('the scores-file upload matches English titles too (this browser\'s memory + the file\'s own)',
-  /\(_r, i\) => withEn\[i\]\?\.title_en\)/.test(page) && /tmMerge\(tm, fileTm\)\.tm/.test(page))
+  /\(_r, i\) => withEn\[i\]\?\.title_en/.test(page) && /tmMerge\(tm, fileTm\)\.tm/.test(page))
 check('a browser that cannot save the translations says so', /could not save the translations/.test(page))
 check('both branches of the full-dataset upload read a Translations sheet back', (page.match(/restoreTranslationsFrom\(bookSheets\)/g) || []).length === 3)
 check('translateTexts calls Claude Fable 5.1 through the shared provider call',

@@ -17,6 +17,7 @@
 // goes through it, and — when python3 + numpy are available — checks the offline
 // twin _idea-kpi-script/idea_kpis.py gives the same numbers.
 
+import { isBareAiScoreHeader } from '../src/utils/aiScoreColumns.js'
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -31,7 +32,9 @@ import {
 } from '../src/utils/objectiveKpis.js'
 import {
   DEFAULT_REFERENCE_SET, KPI_DEFS, canonicalKpiField, isNoveltyScoreHeader, normalizeImportedRows,
+  exportKpiColumns,
 } from '../src/utils/analyticsData.js'
+import { aiNovKey, UNRECORDED } from '../src/utils/aiScoreColumns.js'
 import { pickScoredSheet } from '../src/utils/scoreGaps.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -167,8 +170,11 @@ check('error when fewer than two ideas have two meaningful words',
   /At least two ideas/.test(objectiveKpisFromText(['Thermochromic socks', 'Zorblax', '?'], DEFAULT_REFERENCE_SET).error || ''))
 {
   const page = readFileSync(join(HERE, '../src/pages/DataAnalytics.jsx'), 'utf8')
-  const banner = page.slice(page.indexOf('Objective, repeatable KPIs computed from the idea text'),
-    page.indexOf('Reference set R — products that already exist'))
+  // Markers: the banner's opening words ("Empirical" since 2026-09-24, when the
+  // 3.1 KPIs stopped being called objective) and the R editor's own label.
+  const banner = page.slice(page.indexOf('Empirical, repeatable proxies computed from the idea text'),
+    page.indexOf('Reference set R: products that already exist'))
+  check('the 3.1 banner slice is found (a vacuous slice would pass the checks below)', banner.length > 500, `slice length ${banner.length}`)
   check('the 3.1 description above the Compute button states the two-meaningful-words rule',
     banner.length > 500 && /Ideas that cannot be scored are left blank/.test(banner)
     && /two meaningful[\s\S]{0,40}words/.test(banner) && /Zorblax/.test(banner) && /Bouschery/.test(banner),
@@ -202,7 +208,9 @@ console.log('\n--- the combined KPI is labelled NoveltyScore (owner, 2026-09-23)
   check('KPI_DEFS labels det_score "NoveltyScore"', det && det.label === 'NoveltyScore')
   const heads = { 'NoveltyScore': 'det_score', 'Novelty Score': 'det_score', 'novelty_score': 'det_score',
     'Obj. NoveltyScore': 'det_score', 'Combined score': 'det_score', 'Obj. Score': 'det_score',
-    'Novelty': 'novelty', 'AI Novelty': 'novelty', 'Novelty (objective)': 'det_novelty',
+    // A plain AI column has no model name → "model not recorded" (aiScoreColumns.js).
+    'Novelty': aiNovKey(UNRECORDED), 'AI Novelty': aiNovKey(UNRECORDED), 'AI Novelty (GPT-6 Astra)': aiNovKey('gpt_6_astra'),
+    'Novelty (objective)': 'det_novelty', 'Novelty (empirical)': 'det_novelty',
     'Obj. Novelty': 'det_novelty', 'Pool distinctiveness': 'det_distinctiveness', 'Eval. Novelty': 'ext_novelty' }
   const wrong = Object.entries(heads).filter(([h, want]) => canonicalKpiField(h) !== want)
   check('canonicalKpiField: NoveltyScore (new and old spellings) → det_score, Novelty headers unchanged',
@@ -216,12 +224,13 @@ console.log('\n--- the combined KPI is labelled NoveltyScore (owner, 2026-09-23)
     'Novelty (objective)': 0.61, 'Pool distinctiveness': 0.93, 'NoveltyScore': 0.77 }]
   const [row] = normalizeImportedRows(exported)
   check('re-import: NoveltyScore → det_score, not AI Novelty',
-    row.det_score === 0.77 && row.novelty === 3 && row.det_novelty === 0.61 && row.det_distinctiveness === 0.93,
-    JSON.stringify({ novelty: row.novelty, det_score: row.det_score, det_novelty: row.det_novelty }))
+    row.det_score === 0.77 && row[aiNovKey(UNRECORDED)] === 3 && row.det_novelty === 0.61 && row.det_distinctiveness === 0.93,
+    JSON.stringify({ novelty: row[aiNovKey(UNRECORDED)], det_score: row.det_score, det_novelty: row.det_novelty }))
   check('re-import: NoveltyScore is not also carried as an uploaded extra (x_) column',
     !Object.keys(row).some(k => /^x_.*novelty/.test(k)))
   const [only] = normalizeImportedRows([{ 'Idea ID': 'i2', 'Title': 't', 'NoveltyScore': 0.5 }])
-  check('re-import: a file with ONLY NoveltyScore leaves AI Novelty empty', only.novelty === '' && only.det_score === 0.5)
+  check('re-import: a file with ONLY NoveltyScore leaves AI Novelty empty',
+    only.novelty === '' && !Object.keys(only).some(k => k.startsWith('ai_nov__')) && only.det_score === 0.5)
   const [legacy] = normalizeImportedRows([{ 'Idea ID': 'i3', 'Title': 't', 'Combined score': 0.4 }])
   check('re-import: an older file\'s "Combined score" still lands in det_score', legacy.det_score === 0.4)
   const picked = pickScoredSheet([
@@ -230,11 +239,20 @@ console.log('\n--- the combined KPI is labelled NoveltyScore (owner, 2026-09-23)
   check('"Upload full dataset" does not count NoveltyScore values as AI scores', picked && picked.scored === 0,
     JSON.stringify(picked && { scored: picked.scored }))
   const exp = readFileSync(join(HERE, '../src/utils/sessionExport.js'), 'utf8')
+  // The Rankings tab's KPI columns come from exportKpiColumns (all seven 3.1
+  // columns, in the page's order) — sessionExport writes whatever it is handed.
   check('the Rankings export column is "NoveltyScore" (and no "Combined score" column is left)',
-    /'NoveltyScore': sc \? blank\(sc\.detScore\)/.test(exp) && !/'Combined score':/.test(exp))
+    exportKpiColumns([], { allEmpirical: true }).some(c => c.key === 'det_score' && c.label === 'NoveltyScore') &&
+    /for \(const c of columns\) row\[c\.label\]/.test(exp) && !/'Combined score':/.test(exp))
   const page = readFileSync(join(HERE, '../src/pages/DataAnalytics.jsx'), 'utf8')
   check('the 3.2 AI-scores upload skips the NoveltyScore column when it looks for "Novelty"',
-    /const ciNov = find\(c => c\.includes\('novelty'\) && !isNoveltyScoreHeader\(c\)/.test(page))
+    // Both paths filter with notEmpirical, which rules NoveltyScore out first: the
+    // AI path before parsing a header, the evaluator path's plain-column fallback in
+    // its pick (its evaluator columns are exact headers, evaluatorMean). And the
+    // shared bare-header reader never takes NoveltyScore for a score.
+    /const notEmpirical = c => !isNoveltyScoreHeader\(c\)/.test(page) && /if \(isEvalish\(c\) \|\| !notEmpirical\(c\)\) return/.test(page)
+    && /!isEvalish\(c\) && notEmpirical\(c\) && !\/\^ai\\b\/\.test\(c\) && isBareAiScoreHeader\(headerRaw\[j\]\) === kind/.test(page)
+    && ['NoveltyScore', 'Novelty Score', 'novelty_score', 'Obj. NoveltyScore'].every(h => isBareAiScoreHeader(h) === null))
   check('the page no longer shows the bare "Score" / "Combined score" label for this KPI',
     !/their mean <em>Score<\/em>|Distinctiveness \/ Score for|Obj\.&nbsp;Score/.test(page))
 }

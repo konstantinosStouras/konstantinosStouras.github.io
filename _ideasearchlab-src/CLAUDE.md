@@ -26,7 +26,7 @@ to give Claude full context about this project instantly.
 - saveAISettings: saves global AI provider settings
 - submitVote: legacy Cloud Function, still deployed but no longer called by the frontend. Voting now happens via direct Firestore writes from GroupPhase.jsx.
 - onParticipantUpdated: Firestore trigger with two jobs. (1) When a participant's `votesSubmitted` flips to true, `finishGroupVoting()` checks whether every member of that group has submitted; if so it tallies that group's votes (top 3 -> `finalIdeas`), marks the group 'done', moves the members to the next phase in the sequence (survey for individual_first, individual for group_first), and advances the session status once every participant has moved past the group phase. This is how groups reach the survey automatically -- "Force advance" remains the manual override. (2) On any participant phase change, `maybeAdvanceSession` re-syncs the session status — **capped at 'survey', never 'done'**: a session must never auto-close, because every CURRENT participant being finished does not mean the session is over (a groupSize-1 session is run as many independent solo plays, and a late joiner can arrive after the first cohort finished). `status: 'done'` — which closes the session (JoinSession filters done sessions out of code lookup; useSessionEnded ends every open page) — is set ONLY by the instructor: Close Session or Force advance.
-**AI providers supported:** Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google). Keys stored in Firestore settings/ai document, managed via /admin/ai-settings page. Saved keys reload into the page on every visit (password fields + "saved ✓" tags). `saveAISettings` is admin-only (admin@admin.com) and accepts partial updates — sending `null` clears a field back to its built-in default. Firestore rule: ALL `settings/*` reads are `isAdmin()` (participants must never read settings/ai — it holds the API keys; Cloud Functions use the Admin SDK and bypass rules). The AI Settings page's Model, Parameters and System Prompt sections each have the standard three default buttons (Make this the default / Reset this page to defaults / Restore built-in default) doing per-section partial saves. **The model catalogue is `src/data/aiModels.js`** (shared by AI Settings and the Data Analytics rater; rebuilt 2026-09-23, per the owner's "top 5 newest, starting with their best and most expensive": FIVE models of each provider's newest generation, most capable first — the first of each list is also its most expensive, below it the order is by capability with every price printed (Opus 5.5 is cheaper than the Opus 5 it outperforms; GPT-6 Sol cheaper than GPT-5.6 Terra) — Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Sonnet 5; GPT-6 Astra / GPT-5.6 Sol / GPT-6 Sol / GPT-5.6 Terra / GPT-6 Luna; Gemini 3.1 Pro (preview, the only Pro the API serves — 3.5 Pro is announced with no model id) / 3.8 Flash / 3.7 Flash / 3.6 Flash / 3.5 Flash), every option label printing the price per 1M tokens from `src/data/aiPricing.js` (`modelOptionLabel`; a promotional row — GPT-5.6 Sol to 2026-11-21, Gemini 3.8/3.7/3.6 Flash to 2026-12-31 — carries `until` + `list`, prints its expiry, and fails the guard the day PRICES_AS_OF passes it, so a lapsed promotion cannot keep understating the AI Usage export), and `tools/ai-models-guard.mjs` pinning that every id is priced there AND labelled in functions/ai.js `MODEL_LABELS`. Provider defaults for the ASSISTANT in functions/ai.js stay claude-sonnet-4-6, gpt-5.5, gemini-3.5-flash (still served; the catalogue's `defaultModel` MIRRORS them because the function is deployed separately and the page must not claim a default the deployed function does not use — the guard pins the mirror). callClaude omits `temperature` for Opus 4.7+, Opus 5/5.5, Sonnet 5 and Fable/Mythos (they 400 on sampling params) and reads the first text block (thinking blocks may come first); callOpenAI uses `max_completion_tokens` and no temperature for gpt-5*/gpt-6*/o* reasoning models. **Why a model is chosen beside the key (owner question 2026-09-23):** a key belongs to the provider ACCOUNT and unlocks every model it serves; the model is named on every request, so the pages pair "which key" (provider) with "which model" — both pages say so in their hint text. Session aiConfig.model defaults to null = defer to global AI Settings.
+**AI providers supported:** Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google) for the participants' assistant AND the Data Analytics rater; since 2026-09-24 also **Mistral AI, Meta (Muse / Llama, through OpenRouter), DeepSeek and Qwen (Alibaba Cloud, International)** for the rater ONLY (`raterOnly` in `aiModels.js`: the assistant's `callLLM` speaks only the first three, so AI Settings shows the four as key fields marked "rater only" and never as an assistant card — `ASSISTANT_PROVIDERS`). Keys stored in Firestore settings/ai document, managed via /admin/ai-settings page. Saved keys reload into the page on every visit (password fields + "saved ✓" tags). `saveAISettings` is admin-only (admin@admin.com) and accepts partial updates — sending `null` clears a field back to its built-in default. Firestore rule: ALL `settings/*` reads are `isAdmin()` (participants must never read settings/ai — it holds the API keys; Cloud Functions use the Admin SDK and bypass rules). The AI Settings page's Model, Parameters and System Prompt sections each have the standard three default buttons (Make this the default / Reset this page to defaults / Restore built-in default) doing per-section partial saves. **The model catalogue is `src/data/aiModels.js`** (shared by AI Settings and the Data Analytics rater; rebuilt 2026-09-23, per the owner's "top 5 newest, starting with their best and most expensive": FIVE models of each provider's newest generation, most capable first — the first of each list is also its most expensive, below it the order is by capability with every price printed (Opus 5.5 is cheaper than the Opus 5 it outperforms; GPT-6 Sol cheaper than GPT-5.6 Terra) — Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Sonnet 5; GPT-6 Astra / GPT-5.6 Sol / GPT-6 Sol / GPT-5.6 Terra / GPT-6 Luna; Gemini 3.1 Pro (preview, the only Pro the API serves — 3.5 Pro is announced with no model id) / 3.8 Flash / 3.7 Flash / 3.6 Flash / 3.5 Flash), every option label printing the price per 1M tokens from `src/data/aiPricing.js` (`modelOptionLabel`; a promotional row — GPT-5.6 Sol to 2026-11-21, Gemini 3.8/3.7/3.6 Flash to 2026-12-31 — carries `until` + `list`, prints its expiry, and fails the guard the day PRICES_AS_OF passes it, so a lapsed promotion cannot keep understating the AI Usage export), and `tools/ai-models-guard.mjs` pinning that every id is priced there AND labelled in functions/ai.js `MODEL_LABELS`. Provider defaults for the ASSISTANT in functions/ai.js stay claude-sonnet-4-6, gpt-5.5, gemini-3.5-flash (still served; the catalogue's `defaultModel` MIRRORS them because the function is deployed separately and the page must not claim a default the deployed function does not use — the guard pins the mirror). callClaude omits `temperature` for Opus 4.7+, Opus 5/5.5, Sonnet 5 and Fable/Mythos (they 400 on sampling params) and reads the first text block (thinking blocks may come first); callOpenAI uses `max_completion_tokens` and no temperature for gpt-5*/gpt-6*/o* reasoning models. **Why a model is chosen beside the key (owner question 2026-09-23):** a key belongs to the provider ACCOUNT and unlocks every model it serves; the model is named on every request, so the pages pair "which key" (provider) with "which model" — both pages say so in their hint text. Session aiConfig.model defaults to null = defer to global AI Settings.
 **Session flow:** waiting -> individual -> group -> survey -> done (order and active phases configurable per session). Note: 'voting' was removed from the backend phase sequence. Voting now happens client-side as a sub-phase within GroupPhase.
 
 ## Participant onboarding flow
@@ -535,9 +535,9 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      has nothing left to replace. `mergeSessionSheets` drops a source's Translations sheet
      so the aggregate never holds two. The raters' files carry the ENGLISH titles while
      the loaded idea keeps its original, so "Load AI scores file" / the 3.3 evaluator
-     upload (matched by title) also match each idea's English title
-     (`matchScoresIntoRows`'s `altTitle`), from this browser's memory plus the file's
-     own Translations sheet.
+     upload (matched by title when the file has no Idea ID) also match each idea's
+     English title (`matchScoreTable`'s `altTitle`), from this browser's memory plus the
+     file's own Translations sheet.
    - Tests: `node tools/translate-guard.mjs` (144 offline checks: detection, the memory,
      sheets, the fake-Claude run, the page wiring, the shipped bundle) and
      `node tools/translate-page-guard.mjs` (Playwright over `tools/translate-page/`, the
@@ -609,9 +609,11 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    so score edits / AI write-back stay correct even when the table shows the filtered view.
    **Load scores file:** a second button reads idea scores from an external ranked-ideas file
    — it locates the **"All Ideas Ranked"** sheet (skipping any preamble to the header row that
-   has *Idea Title* + *Novelty* columns) and matches each row's Novelty/Usefulness onto the
-   loaded ideas **by normalised title** (`matchScoresIntoRows` in `analyticsData.js`: exact,
-   then length-guarded contains; each idea used once), reporting matched/unmatched counts. So
+   has *Idea Title* (or *Idea ID*) + a *Novelty* / *Usefulness* column) and matches each file
+   row ONCE onto the loaded ideas (`matchScoreTable` in `analyticsData.js`: by Idea ID within
+   the row's session when the file has them, else **by normalised title** — exact, then
+   length-guarded contains; each idea used once), writing every model's pair of that row
+   into that idea and reporting matched/unmatched counts. So
    you can score externally and pull the scores back in, then re-download.
    - **An upload ADDS scores — it never overrides one that is already there** (owner 2026-08).
      A scores file typically carries ideas rated in an earlier sitting (by a past AI rater or
@@ -620,9 +622,10 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      unparseable**. Now each KPI is filled ONLY where the row is still blank AND the incoming
      value is usable — the same rule the LLM run already applied (`scoreUnscored` fills only
      the missing field(s)). It covers **both** paths into the canonical KPI columns:
-     `matchScoresIntoRows` (3.2 AI scores, 3.3 evaluator ratings) and
-     `matchUploadedKpisIntoRows` (3.1 "Upload additional KPIs", whose `canonicalKpiField`
-     routing means a file with a "Novelty" column lands in the AI Novelty column). The one
+     `matchScoreTable` (3.2 AI scores, 3.3 evaluator ratings; `matchScoresIntoRows` remains
+     for older callers) and `matchUploadedKpisIntoRows` (3.1 "Upload additional KPIs", whose
+     `canonicalKpiField` routing means a file with a bare "Novelty" column lands in the
+     "model not recorded" AI column). The one
      deliberate exception: an **`x_…` uploaded-extra column is the file's OWN column**
      (prototypicality, ks, …), so re-uploading it REPLACES it — that is the point of
      re-uploading a corrected file. Both matchers now also return `filled` / `kept` (per-idea
@@ -632,16 +635,22 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      the Step-3 table — the one deliberate path, stated in the 3.2/3.3 banners.
      Offline test: `node _ideasearchlab-src/tools/analytics-scores-guard.mjs` (no network,
      no deps — imports `analyticsData.js` directly).
-   - **The Step-3 table's three AI columns are headed *AI Novelty* / *AI Usefulness* /
-     *AI Quality*** (`SORT_GETTERS` labels, used only for that header row), so they read
-     unambiguously beside the evaluator (3.3) and objective (3.1) KPI columns appended after
-     them. The Excel exports' own column labels are unchanged (*Novelty* / *Usefulness* /
-     *Overall Quality*), and `canonicalKpiField` already accepts both spellings, so a
-     re-imported workbook still lands in the right columns. **Download:** a
-   single summarized **Excel** workbook (`xlsx-js-style`, bold headers) — sheets *Ideas* (the
-   per-idea dataset), *Summary by condition* (n + mean/SD/n per KPI), *Summary by session*, and
-   *Removed participants* when any — plus a raw-dataset **CSV**. Both reflect the current
-   post-removal `effectiveRows`.
+   - **The Step-3 table's KPI columns are the export's, in the export's order**
+     (since 2026-09-24; they were three fixed "AI Novelty / AI Usefulness / AI Quality"
+     columns): the empirical KPIs, then each AI model's own pair — "AI Novelty (GPT-6
+     Astra)", editable — then the derived means and AI Quality, then the evaluators
+     (`tableKpiCols`, built on `exportKpiColumns`; see "One pair of AI columns PER
+     MODEL" below). The model chosen in the rater dropdown always has its pair in the
+     table, empty until it rates. **Download:** "Download all idea data (Excel)" + "CSV" above
+   the table (see below) — both reflect the current post-removal `effectiveRows`.
+   - **3.1 is called EMPIRICAL, not objective** (owner, 2026-09-24: "Don't call them
+     'objective' and update it to 'empirical'"). Every label, heading and export
+     column says "(empirical)" — `Novelty (empirical)`, `Need fit (empirical)`,
+     `Specificity (empirical)`, `Workability (empirical)`, `Usefulness score
+     (empirical)` — and every importer still reads the old "(objective)" / "Obj."
+     spellings, so a file saved before still loads into the same fields. Only
+     labels moved: the data keys are still `det_*`, and the source file is still
+     `objectiveKpis.js`.
    - **3.1: an idea with no words is not measured** (owner request 2026-09-23). The
      objective KPIs are TF-IDF cosines, and an idea whose text has no word the tokeniser
      reads (blank, "?", a one-letter answer, text in a non-Latin script such as Greek)
@@ -700,9 +709,19 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      `generateContent` with the key in the `x-goog-api-key` HEADER, never the URL, `thinkingLevel:
      low` on 3.x only — 2.5 rejects the field — and `responseMimeType: application/json`), the
      per-provider reply parsers (thinking block first / thought parts skipped), and `callProvider`,
-     whose errors carry the HTTP `status` scoreBatch's `isFatalApiError` reads (401/403/400/404
-     abort, 429/5xx retry, a network failure has none) and whose messages are scrubbed of the API
-     key. **A 2xx that carries no rating is thrown, not returned as ''** (`replyProblem`, review
+     whose errors carry the HTTP `status` scoreBatch's `isFatalApiError` reads (400/401/402/403/404/422
+     abort, 429/5xx retry, a network failure or an unreadable body has none) and whose messages are
+     scrubbed of the API key in both spellings, as saved and trimmed (fetch strips a header value's
+     surrounding spaces, so a key pasted with a trailing space reaches the provider, and is echoed
+     back, without it; `resolveProvider` trims with `cleanApiKey` and AI Settings saves every key
+     through `trimApiKeys`). **A 2xx that is really a failed request throws like a non-2xx**
+     (`replyFailure`, second review of 2026-09-24): an `error` in the body, top level or on the
+     first choice (OpenRouter sends an upstream failure after generation started as HTTP 200 +
+     `{error:{code,message}}`), throws with `error.code` when that is an HTTP error code, else 502;
+     an EMPTY reply with finish_reason `error` (OpenRouter, Mistral) or `insufficient_system_resource`
+     (DeepSeek out of capacity) throws 503 with no `replyProblem`. Both used to come back as '' and
+     read as unreadable replies: no backoff, no circuit breaker, every idea re-sent singly (186
+     ideas, 396 calls). Mistral's `model_length` with no text is an `exhausted` reply, like `length`. **A 2xx that carries no rating is thrown, not returned as ''** (`replyProblem`, review
      finding): a safety refusal (Claude `stop_reason: refusal` + its category, an OpenAI
      `message.refusal`, a Gemini `blockReason` / non-STOP finish) or a ceiling spent entirely on
      hidden thinking (`max_tokens` / `length` / `MAX_TOKENS` with no text) used to look exactly like
@@ -720,9 +739,9 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      costs each reply at its own timestamp; the AI Pricing sheet shows `until` and the after-price),
      the dropdown label switches on its own, and the guard fails from the lapse day (against
      today's date, not `PRICES_AS_OF`) so the row gets re-snapshotted. **The hint states the
-     fill-blank rule:** a fresh dataset's AI columns are the chosen model's ratings; a dataset
-     already scored by another rater keeps those — press Clear in section 3 first to re-rate every
-     idea with a different provider. `SCORING_EFFORT` is the one knob if deeper
+     fill-blank rule:** a run fills the chosen model's OWN columns where they are empty, so a
+     second model rates the same ideas into a new pair (since 2026-09-24; before, one shared
+     pair meant a second provider found nothing to fill). `SCORING_EFFORT` is the one knob if deeper
      deliberation per idea is wanted. Offline test: **`node _ideasearchlab-src/tools/ai-models-guard.mjs`**
      (catalogue shape and order, the three catalogues in sync, every request shape,
      every error path against a fake fetch, and — read from `lab/ideasearchlab/index.html`'s own main
@@ -860,6 +879,220 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        owner's own scenario through the REAL `runScoring`: 741 ideas with 24 empty, against
        a healthy model, a transient outage that aborts the first pass, a dead provider, and
        a model returning short batches.
+   - **One pair of AI columns PER MODEL** (owner, 2026-09-24: "AI Novelty (GPT-6
+     Astra), AI usefulness (GPT-6 Astra), and append close to it the respective
+     columns for another AI provider's model"). Before, every model wrote the same
+     two cells and only ever filled blanks, so a dataset rated by GPT-6 Astra could
+     not also be rated by Gemini (the run found nothing empty) and no file said
+     which model made its numbers. Now `src/utils/aiScoreColumns.js` (pure, no
+     Firebase) keys each model's scores on a slug of its id — `ai_nov__gpt_6_astra`
+     / `ai_use__gpt_6_astra`, titled **AI Novelty (GPT-6 Astra)** / **AI
+     Usefulness (GPT-6 Astra)** (`shortModelName`: the catalogue's `short`, else the
+     label up to " — " with a trailing date dropped, so a title never nests
+     brackets) — and the run, the coverage panel, the fill-blank rule and the
+     editable table cells all work on the MODEL CHOSEN in the rater dropdown
+     (`scoreFields = aiFieldsFor(scoreModel)`). A second model therefore rates the
+     same ideas into its own pair beside the first. The old `novelty` /
+     `usefulness` / `overall_quality` fields are now DERIVED in `recomputeOverall`:
+     the mean across the models that rated the idea (one model: its scores;
+     several: the panel mean, shown as **AI Novelty (mean across models)** — "across
+     models", not "of N", since a model may have rated only the Final Ideas), and
+     that mean is what Steps 4–5 and the regression scripts analyse as the AI
+     score. A derived column is never imported (`isDerivedAiKey`,
+     `parseAiHeader(...).derived`); a plain "Novelty" / "AI Novelty" column — every
+     file saved before this change — has no model name and lands under **"model
+     not recorded"** (`UNRECORDED`), never guessed onto a model; the coverage panel
+     then offers "Which model rated them? … Label them" (`labelUnrecordedScores`, over
+     the ideas on show: an idea's unlabelled PAIR moves whole, only when both of the
+     target model's cells are empty; otherwise it stays and is counted a conflict).
+     **Import rules** (`normalizeImportedRows`; the 3.2 upload reads the same way):
+     - an explicit "AI Novelty (model not recorded)" / `ai_nov__unrecorded` always
+       imports; a BARE column, plain or decorated ("Novelty", "AI Novelty", "Novelty
+       Rating", "Avg Novelty", "Novelty (1-5)", "AI Novelty (avg)"; `isBareAiScoreHeader`)
+       is a score with no model name, skipped only in the page's analysis CSV, where it
+       is the derived mean: when the FILE has `ai_nov__`/`ai_use__` keys AND that ROW
+       has a per-model value;
+     - a bracket after "AI Novelty" names a model only when it is not a note
+       (`headerNoteKind`): a 1-5 scale or summary note (1-5, 5-point, out of 5,
+       "1 = low, 5 = high", avg, median, score, rating, Final Ideas) or a "no model"
+       note (not recorded, unknown model, NA) means model not recorded; a note of
+       ANOTHER scale (0-1, 0-100, 1-10, 0-10 scale, "1 = low, 7 = high") is not a 1-5
+       score and stays an x_ extra (third review: "Novelty (0-1)" moved 731 of the
+       owner's 741 ideas' AI Novelty); a statistic (sd, se, rank, percentile, n, min,
+       max) is not a score; "(mean …)" is derived; "(run 1)" / "(seed 2)" is a source
+       of its own, kept apart like a model so a second run's scores are not dropped;
+       "(GPT-6 Astra, 1-5)" is that model; "(human)" / "(raters)" are not AI scores;
+       "Novelty (<catalogue model>)" without "AI" names that model; a model outside
+       the catalogue keeps the file's capitals;
+     - nothing is routed by SUBSTRING any more (`canonicalKpiField`): "Embedding
+       novelty", "Quality index", "Novelty SD" stay uploaded x_ extras. Before, such a
+       column became an AI model and was averaged into every idea's AI Novelty;
+     - evaluator columns are exact headers only (`parseEvalHeader`: Eval. Novelty /
+       Usefulness / Quality, ext_*, Evaluator / External / Expert Novelty, "Novelty
+       (rater|expert|evaluator|judge N)"). A note on how the rating was given is
+       read, not dropped ("Eval. Novelty (1-5)", "(mean)", "(avg)", "Evaluator
+       Novelty Rating", "Novelty rater 1 (blind)", "Novelty (external evaluator 1)");
+       a statistic, another scale or a model name in the note is refused. The raters are averaged, else the labelled
+       columns (`evaluatorMean`), in the Step-1 import, the 3.1 KPI upload and the 3.3
+       upload alike. **Eval. Quality is DERIVED** (their mean): it is kept as the
+       evaluator quality only on a row without the Novelty/Usefulness pair;
+     - the Step-1 import keeps values as the file has them (no clamping); both 3.2
+       uploads keep a rating on the 1–5 scale, to one decimal, as they always have;
+     - AI Quality is named after a model (or "mean across models") only when every
+       quality value came from the per-model columns; with any standalone quality it
+       is plain "AI Quality", which reads back.
+     **Attribution in the table:** a model's BLANK cell cannot be typed into (a hand
+     rating there was exported, and averaged, as that model's; the model's own run
+     fills it); a score a model gave can be corrected, and the cell being edited
+     stays an input while it has focus, so clearing it and typing a new value is one
+     edit. Every model the rows carry keeps its column pair at its catalogue place,
+     even after its last value is cleared, so a column never vanishes or moves under
+     the cell being edited. A run asks first when ideas in scope carry unlabelled
+     scores (they would all be rated, and paid for, again — "Label them" is the fix
+     when they are this model's scores). **Uneven panels:** the derived mean is over
+     whichever models rated THAT idea, so when a second model rated only some ideas a
+     difference between conditions can come from which models rated which ideas (the
+     review measured +0.19 on the Both-vs-Group contrast after a part-way run).
+     `aiPanelCoverage` counts the model sets; Steps 4 and 5 say so, naming the groups,
+     whenever the ideas in their scope were not all rated by the same models. Offline
+     tests: **`node _ideasearchlab-src/tools/ai-columns-guard.mjs`** (its review
+     sections pin each fix) and **`tools/analytics-page-guard.mjs`** (Playwright over
+     the page itself, Firebase stubbed: the table's editing and columns, the scores
+     upload, the Rankings tab, the rater averaging, the Steps 4–5 note and the
+     answered-without-a-rating stop).
+   - **Column ORDER, everywhere** (owner, same day: "first, the empirical proxies
+     for novelty and usefulness … Second, the AI estimated novelty and usefulness
+     by mentioning each model used"): `exportKpiColumns(rows, opts)` in
+     analyticsData.js is the one ordering — empirical (3.1) KPIs, then the uploaded
+     extras beside them, then each AI model's pair (catalogue order, "model not
+     recorded" last), the means and AI Quality, then the evaluators. `presentKpis`
+     returns it, so the Step-3 table, Section 4, the downloads and the aggregate
+     **Rankings** tab (`rankingsSheetFromIdeas(ideaRows, lookup, columns)` now
+     takes the ordered columns; all seven empirical columns always, and the
+     evaluator columns **Eval. Novelty / Eval. Usefulness / Eval. Quality** kept
+     EMPTY for blind raters — they replaced the old plain "Novelty / Usefulness /
+     Quality" rating columns, which had also been carrying the AI scores) cannot
+     disagree. The 3.3 evaluator upload reads the evaluator columns (`evaluatorMean`),
+     else a plain score column, never an "AI …" column. **Ideas are numbered per
+     session, so Session Code + Idea ID is what names one idea** (second review: two
+     sessions that both number from 1 had their Rankings rows fused across
+     conditions). The Rankings tab carries a Session Code column and keys each idea on
+     session + Idea ID (`ideaValueLookup` in `rankingsMerge.js`, pure: copies of one
+     idea merged column by column, then the means rebuilt from the merged record); the
+     3.2 top-up and the 3.1 KPI upload join an Idea ID within the file row's session
+     (`ideaIndexBySession`: an id two sessions share, with no session in the file, is
+     left unmatched rather than guessed). **"Load AI scores file" matches each FILE ROW
+     once** (`matchScoreTable`: by Idea ID and session when the file has them, else by
+     title, English title included) and writes every model's pair from that row into
+     that one idea: one pass per model used to put two models' ratings of one row on
+     two different ideas when titles repeated.
+   - **"Download all idea data (Excel)" + CSV**, above the Step-3 table (owner: "there
+     is no download button that would download for me all the data collected so
+     far"). One `ideaExportRows` sheet (the identity columns, then the ordered KPI
+     columns — the same sheet "Download ideas + KPIs" now writes, so the two never
+     disagree, and every header reads back through the importer), plus
+     **Usefulness score check** (owner: "show me examples … to understand and test
+     it"): for every idea with an empirical Usefulness score, its Need fit /
+     Specificity (with the parts stated) / Workability (with the technology named),
+     each as its rank among these ideas (`percentileRanks`), the mean of the ranks
+     and the score as computed — they agree to rounding, and a **Note** flags a row
+     whose stored value predates the current rule or lists (press Compute again);
+     then Summary by condition / by session (every KPI, in order), Pool KPIs,
+     Removed participants. The old unwired `downloadExcel` / `downloadCsv` and the
+     unused `ideaSheetRows` are gone. **With Step 1b** (translation, merged the same
+     day): the idea sheet of every idea download goes through `translatedIdeaSheet`
+     (`translateSheets` + `carryTranslationsSheet`, as Step 2 does), so the ideas are
+     in English and the originals sit on a Translations sheet (the CSV has no room
+     for one and carries the English only); the check sheet reads `measureText`, the
+     text 3.1 measured; a changed English version clears EVERY model's AI columns,
+     not just the mean (`recomputeOverall` would rebuild the mean from them); and the
+     scores upload matches an English title too. The check sheet prints four
+     decimals, the precision the stored KPIs carry, and its Note also names a score the
+     pool has moved away from since it was computed. The "Removed participants" sheet
+     names its column "Author Name", which Step 1b skips as a name. The button says
+     "all IDEA data" because Step 1b's "Download all data in English" is the
+     whole-study workbook (surveys, chats, every tab).
+   - **Workability now reads a NEGATED LIST** (found in the owner's own data,
+     2026-09-24: "it removes the battery or Bluetooth wearable device" scored as
+     needing both). The negation reached only the first item of "no battery or
+     Bluetooth needed" / "without a battery or an app". `isNegated` in
+     usefulnessKpis.js now reads a CLOSED grammar, written for precision first,
+     because the first list rule hid real technology in ordinary sentences (second
+     review, 2026-09-24: "washed without damaging the sensor", "Parents replace the
+     coin battery", "a no-contact sensor", "Do not iron or the LEDs will melt", "No
+     app, the sensor turns red or green" all lifted Workability to 1). Every word from
+     the negator to the term must fit: a negator (closed list, a whole word followed
+     by a space, so "no-contact" is an adjective; remove / replace / eliminate only as
+     "it / this / which / that removes …" or "removes the need for"; "unlike … that
+     rely on / use / need / require") → an optional lead-in (closed using/needing
+     verbs, "the need for", "the help of", "having to use"; after "without" also
+     "<-ing verb> … or using") → items joined by or / nor / "/" / comma, each ending in
+     a term of T or a kit noun (device, screen, thermometer, phone, wire …) → at most
+     two describing words (never a function word, a number, or a word ending -ing /
+     -ed / -ly / -s) → the term. "the" only after a take-away verb (or after "or" when
+     the item before had "the"): "without the app" names an app the idea has.
+     "not" / "never" reach only a / an / any. A comma list must close with or / nor
+     INSIDE the list and end in a list end (. ; : ! ?, a dash, "needed", "and" +
+     non-article …); an "or" item running into a verb starts a new clause. "and"
+     never carries a negation, deliberately (so "free from batteries, apps and
+     sensors" still counts two). The window is reduced to marks before matching, so
+     the matchers do not depend on T and never backtrack on long inputs (a pasted run
+     of hyphens used to freeze the page for seconds). In the owner's 741 ideas it
+     changes 39 ideas' Workability against the rule before this change (Solo 7, Both
+     30, Group 2), every one read and a genuine negation — the 35 of the first version
+     plus four ("unlike … that require", "without waking … or using", "without any
+     tech, apps, or batteries"); the **Both** condition's mean Usefulness score rises
+     by about 0.02 (AI-assisted text tends to spell out "no battery, no app"), the
+     others move under 0.01. Pinned by the usefulness guard: every sentence of the
+     review, fever-garment sentences both ways, each guard alone, a test that a
+     negator more than 60 characters back does not negate, and timing checks on the
+     pasted-hyphen inputs. **Third review (same day):** a preposition or "no" that
+     OPENS its clause hid the next clause's subject ("Instead of a thermometer, a
+     sensor or an LED, hidden in the collar, alerts parents" counted nothing). The
+     negators now come in three kinds (preposition, quantifier, verb); an opening
+     one's comma list must end where a new clause clearly starts (a comma or dash plus
+     a subject, a full stop, "needed"), never at an aside its own verb follows;
+     "instead of" / "rather than" name what IS used; a line break ends a clause like a
+     full stop, unless the next line goes on in lower case (a hard wrap); the
+     take-away verbs do not negate before "from"; an upkeep noun after the term
+     ("eliminating battery changes") keeps it. **Fourth review:** the same holds for
+     a negator that does NOT open its clause ("Because it needs no app, sensors or
+     LEDs in the collar show the fever"): "in the / on its …" and "inside" end a list
+     only when no verb follows in that clause, a comma ends it only when it is not an
+     aside the list's own verb follows, and "is / are needed" ends it only after a
+     negator that opens its clause. Same 39 ideas on the owner's data; the guard pins
+     one row per rule (each rule taken back fails it) and that the cost grows
+     linearly with an idea's length (8 times the text, timed in turns so a busy
+     machine cannot fail it).
+   - **Four more rater providers** (owner: "Add Mistral, Meta's Llama, DeepSeek and
+     Qwen's top models available"), all OpenAI-compatible
+     (`buildOpenAICompatRequest` in providerRequest.js), sending ONLY
+     `Authorization` + `Content-Type` (DeepSeek's and Qwen's CORS preflights refuse
+     any other header) and no `response_format` (JSON mode forces an object; the
+     rater asks for an array), thinking off where it can be: **Mistral** (Medium 3.5
+     / Large 3 / Small 4 / Ministral 3 14B / 8B; `reasoning_effort: "none"` on the
+     hybrid two; `content` may come back as an array of chunks), **Meta via
+     OpenRouter** (Muse Spark 1.3 / Muse Glimmer 30B / Llama 4 Maverick — Meta's own
+     Llama API closed on 2026-07-06 and its new API serves only the closed Muse
+     models; Muse cannot stop thinking, so `reasoning: {effort: low, exclude: true}`
+     and the 8000 ceiling), **DeepSeek** (V4 Pro / V4.1 Flash, the only two its API
+     serves; `thinking: {type: "disabled"}`; its data is stored in China — the
+     provider `note`, shown under the rater and in AI Settings, says so), **Qwen**
+     (3.8-Max / 3.7-Max / 3.7-Plus / 3.8-Flash on the International (Singapore)
+     endpoint; `enable_thinking: false`, which a non-streaming call requires; the
+     key must be made in that region). Prices in aiPricing.js (DeepSeek at its PEAK
+     price). A 402 (out of credit) now stops a run at once (`isFatalApiError`), and so
+     does a 422 (DeepSeek's "Invalid Parameters", Mistral's request validation), which
+     fails identically every time. **A model that answers without a rating stops
+     early:** a run whose batches come back with nothing but refusals or ceilings spent
+     on thinking stops after two such batches in a row (`stoppedOnReply` in
+     scoreBatch.js; one refused batch among good ones never stops it) and the page says
+     so, with the cause; such a pass earns no recovery pass either. An always-
+     exhausting model used to be sent every idea, each call retried: 2,502 paid calls
+     for 741 ideas in the test, now 54.
+     These ids were taken from the providers' pages as indexed on 2026-09-24 and
+     could not be called from the build environment: a wrong id shows as a 400/404
+     naming the model on the first batch.
    - **Score scope toggle (`scoreOnlyFinal`, default ON):** a checkbox **"Only score the Final
      Ideas"** scopes the AI scoring to the group-selected ideas (`final_pick == 1`) — the set
      Step 5 analyses — or, unticked, to every idea. The button label + count adapt
@@ -901,7 +1134,9 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        the editable **technology list T** (`DEFAULT_TECH_SET`: app, battery, sensor, AI …)
        the idea names. Dean et al. workability; the brief's own "Feasibility" criterion.
        NEGATED mentions do not count ("no electronics needed" is the worked example's
-       last line, "battery-free", "without an app"): `NEGATED_BEFORE`/`NEGATED_AFTER`.
+       last line, "battery-free", "without an app"): `isNegated`, the negation grammar
+       described under "Workability now reads a NEGATED LIST", plus `NEGATED_SHORT` /
+       `NEGATED_AFTER`.
      - `det_usefulness` **Usefulness score (objective)**: mean of the three as mid-rank
        percentiles in the pool (0 to 1), so no one scale dominates.
      - **Not shipped: a peer-vote measure** (owner 2026-09: "using Peer vote share would

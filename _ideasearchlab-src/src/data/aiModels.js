@@ -33,7 +33,7 @@
  * That is why each page pairs the provider (which key) with a model (which
  * brain, at which price).
  */
-export const CATALOGUE_AS_OF = '2026-09-23'
+export const CATALOGUE_AS_OF = '2026-09-24'
 
 export const PROVIDERS = [
   {
@@ -78,14 +78,95 @@ export const PROVIDERS = [
     // Gemini 3.5 Pro was announced at I/O (May 2026) but has no API model id
     // yet; 3.1 Pro (preview) is the only Pro tier the API serves.
     models: [
-      { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (preview) — deepest reasoning' },
+      // `short` = the name in a column title ("AI Novelty (Gemini 3.1 Pro Preview)");
+      // without it the label's own brackets would nest inside the title's.
+      { id: 'gemini-3.1-pro-preview', short: 'Gemini 3.1 Pro Preview', label: 'Gemini 3.1 Pro (preview) — deepest reasoning' },
       { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash — newest, most capable Flash (Sep 2026)' },
       { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash (Aug 2026)' },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Jul 2026)' },
       { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (May 2026)' },
     ],
   },
+  // ── Rater-only providers (owner, 2026-09-24: "Add Mistral, Meta's Llama,
+  // DeepSeek and Qwen's top models available") ──────────────────────────────
+  // `raterOnly`: offered by the Data Analytics AI rater, whose calls go straight
+  // from the admin's browser; NOT by the participants' AI assistant, whose Cloud
+  // Function (functions/ai.js callLLM) speaks only Claude / OpenAI / Gemini. All
+  // four are OpenAI-compatible (providerRequest.js buildOpenAICompatRequest).
+  // `note` is shown under the rater when the provider is chosen: what the key is
+  // and where the ideas go, which matters for research data.
+  {
+    id: 'mistral',
+    name: 'Mistral AI',
+    raterOnly: true,
+    keyLabel: 'API Key',
+    keyPlaceholder: 'Mistral API key',
+    keyLink: 'https://console.mistral.ai/api-keys',
+    note: 'Mistral runs in the EU by default. Paid (Scale) traffic is not used for training; on the free Experiment plan, turn training off under Admin Console → Privacy.',
+    defaultModel: 'mistral-small-2603',
+    models: [
+      { id: 'mistral-medium-2604', short: 'Mistral Medium 3.5', label: 'Mistral Medium 3.5 — most capable (Apr 2026)' },
+      { id: 'mistral-large-2512', short: 'Mistral Large 3', label: 'Mistral Large 3 — largest, no reasoning mode (Dec 2025)' },
+      { id: 'mistral-small-2603', short: 'Mistral Small 4', label: 'Mistral Small 4 (Mar 2026)' },
+      { id: 'ministral-14b-2512', short: 'Ministral 3 14B', label: 'Ministral 3 14B (Dec 2025)' },
+      { id: 'ministral-8b-2512', short: 'Ministral 3 8B', label: 'Ministral 3 8B — smallest (Dec 2025)' },
+    ],
+  },
+  {
+    // Meta's own Llama API closed on 2026-07-06, and the Meta Model API that
+    // replaced it serves only the closed Muse Spark models (US-only, reasoning
+    // cannot be switched off). OpenRouter serves Meta's models — Muse and Llama —
+    // with one key, from US/EU hosts, and answers browser calls.
+    id: 'openrouter',
+    name: 'Meta Llama / Muse (via OpenRouter)',
+    raterOnly: true,
+    keyLabel: 'OpenRouter API Key',
+    keyPlaceholder: 'sk-or-…',
+    keyLink: 'https://openrouter.ai/keys',
+    note: 'Meta no longer runs a Llama API of its own (closed 6 July 2026), so Meta\'s models are reached through OpenRouter with an OpenRouter key and prepaid credits.',
+    defaultModel: 'meta-llama/llama-4-maverick',
+    models: [
+      { id: 'meta/muse-spark-1.3', short: 'Muse Spark 1.3', label: 'Meta Muse Spark 1.3 — Meta\'s newest flagship, closed (Sep 2026)' },
+      { id: 'meta/muse-glimmer-30b', short: 'Muse Glimmer 30B', label: 'Meta Muse Glimmer 30B — open weights (Aug 2026)' },
+      { id: 'meta-llama/llama-4-maverick', short: 'Llama 4 Maverick', label: 'Meta Llama 4 Maverick — newest Llama (Apr 2025)' },
+    ],
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    raterOnly: true,
+    keyLabel: 'API Key',
+    keyPlaceholder: 'sk-…',
+    keyLink: 'https://platform.deepseek.com/api_keys',
+    note: 'DeepSeek stores requests on servers in China and has no EU or US region; check that this fits your ethics approval before sending participants\' ideas. Prepaid: top up the balance first. Its API offers these two models only.',
+    defaultModel: 'deepseek-flash',
+    models: [
+      { id: 'deepseek-v4-pro', short: 'DeepSeek V4 Pro', label: 'DeepSeek V4 Pro — flagship (Aug 2026)' },
+      { id: 'deepseek-flash', short: 'DeepSeek V4.1 Flash', label: 'DeepSeek V4.1 Flash — fast, cheap (Sep 2026)' },
+    ],
+  },
+  {
+    id: 'qwen',
+    name: 'Qwen (Alibaba Cloud)',
+    raterOnly: true,
+    keyLabel: 'API Key (International / Singapore)',
+    keyPlaceholder: 'sk-… (Model Studio, International region)',
+    keyLink: 'https://modelstudio.console.alibabacloud.com/',
+    note: 'Uses Alibaba Cloud Model Studio\'s International (Singapore) endpoint, which runs outside mainland China. The key must be made in that region; a key from another region is refused.',
+    defaultModel: 'qwen3.8-flash',
+    // Most capable first; Qwen3.7-Max's list price is above Qwen3.8-Max's, the
+    // one list here whose first model is not also its most expensive.
+    models: [
+      { id: 'qwen3.8-max', short: 'Qwen3.8-Max', label: 'Qwen3.8-Max — flagship (Aug 2026)' },
+      { id: 'qwen3.7-max', short: 'Qwen3.7-Max', label: 'Qwen3.7-Max (May 2026)' },
+      { id: 'qwen3.7-plus', short: 'Qwen3.7-Plus', label: 'Qwen3.7-Plus (Jun 2026)' },
+      { id: 'qwen3.8-flash', short: 'Qwen3.8-Flash', label: 'Qwen3.8-Flash — fast, cheap (Aug 2026)' },
+    ],
+  },
 ]
+
+/** Providers the participants' AI assistant can use (functions/ai.js speaks these). */
+export const ASSISTANT_PROVIDERS = PROVIDERS.filter(p => !p.raterOnly)
 
 // Defaults for the Data Analytics idea-scoring rater. Scoring runs over every
 // idea (hundreds of calls), so the default is the cheapest of each provider's
@@ -95,6 +176,12 @@ export const SCORING_DEFAULT_MODEL = {
   claude: 'claude-sonnet-5',
   openai: 'gpt-6-luna',
   gemini: 'gemini-3.8-flash',
+  // The four rater-only providers: a cheap model that still rates sensibly (not
+  // the tiniest — Ministral 8B is cheaper than Small 4 but a much weaker judge).
+  mistral: 'mistral-small-2603',
+  openrouter: 'meta-llama/llama-4-maverick',
+  deepseek: 'deepseek-flash',
+  qwen: 'qwen3.8-flash',
 }
 
 export function providerById(id) {

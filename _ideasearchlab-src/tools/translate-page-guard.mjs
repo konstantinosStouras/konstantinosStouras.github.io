@@ -39,8 +39,9 @@
  *      download into an empty browser brings them back.
  *   9. No Claude key: Translate refuses with a clear message and sends nothing.
  *  9b. In a browser that knows no translation, a scored English file still works:
- *      the full-dataset top-up keeps the scores it fills, and a scores file with
- *      English titles matches the Chinese originals.
+ *      the full-dataset top-up keeps the scores it fills (and a later edit of one
+ *      idea's English clears that idea's scores in every model's columns), and a
+ *      scores file with English titles matches the Chinese originals.
  *
  * Plus: no page error or console error, nothing leaves the machine except the
  * stubbed Anthropic call, Firebase only read, and at 1280px no sideways scroll
@@ -261,7 +262,7 @@ try {
   const i1b = order.findIndex(h => /Translate everything to English/.test(h))
   check('the Step 1b section sits between Step 1 and Step 2',
     i1b > 0 && /^1[^b]/.test(order[i1b - 1]) && /^2\D/.test(order[i1b + 1]), JSON.stringify(order.slice(0, 4)))
-  await btn(/^Compute objective KPIs for 6 ideas$/).click()
+  await btn(/^Compute empirical KPIs for 6 ideas$/).click()
   await p.waitForTimeout(300)
   const errs = await errorsShown()
   check('3.1 Compute refuses, pointing at Step 1b',
@@ -315,7 +316,7 @@ try {
   check('Step 1b says every idea can be measured in English (7 translations on record)',
     /✓ Every loaded idea can be measured in English \(7 translations on record\)\./.test(await bodyText()))
   check('the 3.1 lock message is gone', !(await errorsShown()).some(e => e.includes('Step 1b')))
-  await btn(/^Compute objective KPIs for 6 ideas$/).click()
+  await btn(/^Compute empirical KPIs for 6 ideas$/).click()
   await p.waitForFunction(() => [...document.querySelectorAll('thead th')].some(th => th.innerText.includes('NoveltyScore')), null, { timeout: 10000 })
   await p.waitForTimeout(200)
   const s1 = await noveltyScores()
@@ -358,6 +359,18 @@ try {
   const ideasLog = XLSX.utils.sheet_to_json(ideasFile.wb.Sheets[TRANSLATIONS_SHEET] || {}, { defval: '' })
   check('…and its originals on a Translations sheet (ideas only, no chat)',
     [ZH_A.title, ZH_B.desc, FR.title].every(t => ideasLog.some(l => l.Original === t)) && !ideasLog.some(l => l.Original === CHAT))
+  // "Download all idea data" (Excel + CSV) writes the same English idea sheet: its
+  // own check could not tell (the 3.1 download calls the same helper).
+  const allFile = await captureDownload(() => btn('Download all idea data (Excel)').click())
+  const ab = XLSX.utils.sheet_to_json(allFile.wb.Sheets.ideas || {}, { defval: '' }).find(r => r['Idea ID'] === ZH_B.id)
+  check('"Download all idea data" carries the ideas in English too',
+    ab && ab.Title === MODEL[ZH_B.title][1] && ab.Description === MODEL[ZH_B.desc][1], JSON.stringify(ab))
+  const allLog = XLSX.utils.sheet_to_json(allFile.wb.Sheets[TRANSLATIONS_SHEET] || {}, { defval: '' })
+  check('…with the originals on its Translations sheet', [ZH_A.title, ZH_B.desc, FR.title].every(t => allLog.some(l => l.Original === t)))
+  const allCsv = await captureDownload(() => p.locator('xpath=//button[normalize-space()="Download all idea data (Excel)"]/following-sibling::button[1]').click())
+  const csvText = allCsv.buffer.toString('utf8')
+  check('…and its CSV carries the English, not the originals',
+    allCsv.name.endsWith('.csv') && csvText.includes(MODEL[ZH_B.title][1]) && !csvText.includes(ZH_B.title), allCsv.name)
 
   // ── 7. Corrections ─────────────────────────────────────────────────────────
   head('7. edit, remove, translate again')
@@ -365,12 +378,12 @@ try {
   await reviewRow(ZH_A.title).getByRole('button', { name: 'Save edit' }).click()
   await p.getByText(/^An English version changed, so the measures computed from the old text were cleared/).waitFor({ timeout: 5000 })
   const s2 = await noveltyScores()
-  check('editing a translation clears the objective KPIs (press Compute again)', !s2 || IDEAS.every(i => !isNum(s2[i.id])), JSON.stringify(s2))
+  check('editing a translation clears the empirical KPIs (press Compute again)', !s2 || IDEAS.every(i => !isNum(s2[i.id])), JSON.stringify(s2))
   await reviewRow(FR.desc).getByRole('button', { name: 'Remove' }).click()
   check('removing one locks Step 3 again: "1 idea (French 1) is not in English yet"',
     /1 idea \(French 1\)\s*is not in English yet, so Step 3 is locked\./.test(await bodyText()))
   check('the removed text is back to be translated', await btn('Translate 1 text with Claude Fable 5.1').count() === 1)
-  await btn(/^Compute objective KPIs for 6 ideas$/).click()
+  await btn(/^Compute empirical KPIs for 6 ideas$/).click()
   await p.waitForTimeout(300)
   check('3.1 refuses again', (await errorsShown()).some(e => /^1 idea \(French 1\) is not in English yet\. Translate it in Step 1b first/.test(e)))
   await btn('Translate 1 text with Claude Fable 5.1').click()
@@ -411,7 +424,7 @@ try {
     && ORIGINALS.every(t => XLSX.utils.sheet_to_json(again.wb.Sheets[TRANSLATIONS_SHEET], { defval: '' }).some(l => l.Original === t)),
     again.wb.SheetNames.join(','))
   check('…and never a second Translations sheet', again.wb.SheetNames.filter(n => n === TRANSLATIONS_SHEET).length === 1)
-  await btn(/^Compute objective KPIs for \d+ ideas$/).click()
+  await btn(/^Compute empirical KPIs for \d+ ideas$/).click()
   await p.waitForFunction(() => [...document.querySelectorAll('thead th')].some(th => th.innerText.includes('NoveltyScore')), null, { timeout: 10000 })
   const ideasAgain = await captureDownload(() => btn('Download ideas + KPIs (Excel)').click())
   const carried = XLSX.utils.sheet_to_json(ideasAgain.wb.Sheets[TRANSLATIONS_SHEET] || {}, { defval: '' })
@@ -448,11 +461,26 @@ try {
   await p.getByText(/^Merged “scored\.xlsx”/).waitFor({ timeout: 5000 })
   await p.waitForTimeout(500)
   const merged = await p.getByText(/^Merged “scored\.xlsx”/).innerText()
-  check('the top-up fills all six ideas', /filled 6 that had no AI score yet/.test(merged), merged.slice(0, 160))
+  check('the top-up fills all six ideas', /filled 6 ideas' empty .* cells/.test(merged), merged.slice(0, 160))
   check('the file\'s translations come back, so Step 3 unlocks', /✓ Every loaded idea can be measured in English/.test(await bodyText()))
+  // The file's plain "AI Novelty" / "AI Usefulness" columns name no model, so they
+  // land under "model not recorded" (per-model columns, 2026-09-24) and the
+  // coverage panel offers to label them — which it can only do if they survived.
   check('…and the scores it filled are still there (not cleared as "changed text")',
-    await btn(/^All (final )?ideas have AI scores$/).count() === 1,
-    await p.locator('button', { hasText: /AI scores?/ }).first().innerText())
+    /6 ideas have AI scores with no model name/.test(await bodyText()),
+    (await bodyText()).match(/[^\n]*AI scores[^\n]*/g)?.slice(0, 3).join(' | '))
+  // A LATER change to one idea's English clears that idea's AI scores in every
+  // model's columns (here "model not recorded"), not just the mean: the mean is
+  // rebuilt from the per-model columns, so clearing it alone would bring it back.
+  await scan()
+  await reviewRow(ZH_A.title).locator('textarea').fill('Colour-changing gym top')
+  await reviewRow(ZH_A.title).getByRole('button', { name: 'Save edit' }).click()
+  const cleared = p.getByText(/^An English version changed, so the measures computed from the old text were cleared/)
+  await cleared.waitFor({ timeout: 5000 })
+  check('editing one idea\'s English clears its AI ratings…', /the AI ratings of 1 idea/.test(await cleared.innerText()), await cleared.innerText())
+  check('…in its per-model columns too (6 → 5 ideas still scored)',
+    /5 ideas have AI scores with no model name/.test(await bodyText()),
+    (await bodyText()).match(/[^\n]*AI scores[^\n]*/g)?.slice(0, 3).join(' | '))
   await closePage()
   await ctx.close()
 
@@ -470,7 +498,7 @@ try {
   await p.getByText(/^Loaded scores from/).waitFor({ timeout: 5000 })
   const loaded = await p.getByText(/^Loaded scores from/).innerText()
   check('every English title in the file finds its idea (6 scored, 0 unmatched)',
-    /scored 6 ideas that had no score yet/.test(loaded) && /; 0 file rows had no match/.test(loaded), loaded)
+    /filled the empty cells of 6 ideas/.test(loaded) && /; 0 file rows had no match/.test(loaded), loaded)
   await closePage()
   await ctx.close()
 } catch (e) {

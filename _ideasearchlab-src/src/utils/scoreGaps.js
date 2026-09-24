@@ -33,10 +33,15 @@
  * Everything here is pure — no React, no Firebase, no `fetch` — so
  * `tools/score-gaps-guard.mjs` reproduces each case offline.
  */
-import { normTitle, rowTitle, isNoveltyScoreHeader } from './analyticsData.js'
+import { normTitle, rowTitle, isNoveltyScoreHeader, ideaIndexBySession } from './analyticsData.js'
+import { isAiModelKey, aiNovKey, aiUseKey, UNRECORDED, parseAiHeader } from './aiScoreColumns.js'
 
-/** The two AI columns this step fills. Quality is derived from them, never filled. */
+/** The two AI columns this step fills. Quality is derived from them, never filled.
+ *  Since 2026-09-24 every model has its OWN pair (aiScoreColumns.js: the caller
+ *  passes `fields` = aiFieldsFor(model)); these names are the default, the
+ *  derived panel mean, for a caller that does not say which model. */
 export const AI_SCORE_FIELDS = ['novelty', 'usefulness']
+const DEFAULT_FIELDS = { novelty: 'novelty', usefulness: 'usefulness' }
 
 /** Is this KPI cell empty (so a run or an upload may fill it)? Scores are 1–5 or ''. */
 export function isBlankScore(v) {
@@ -85,9 +90,9 @@ export const isFinalRow = r => Number(r?.final_pick) === 1
  * makes the run report it as "the model's reply could not be read" when in truth
  * nothing was ever sent.
  */
-export function ideaScoreState(r) {
-  const nov = !isBlankScore(r?.novelty)
-  const use = !isBlankScore(r?.usefulness)
+export function ideaScoreState(r, fields = DEFAULT_FIELDS) {
+  const nov = !isBlankScore(r?.[fields.novelty])
+  const use = !isBlankScore(r?.[fields.usefulness])
   if (nov && use) return 'scored'
   if (!hasIdeaText(r)) return 'unratable'
   return (nov || use) ? 'partial' : 'missing'
@@ -103,10 +108,13 @@ export function ideaScoreState(r) {
  * must never be counted as "still to do", or the panel can never reach zero).
  *
  * @param rows      the dataset rows in scope
- * @param opts      { onlyFinal, isFinal } — mirror the page's scope toggle
+ * @param opts      { onlyFinal, isFinal, fields } — mirror the page's scope toggle;
+ *                  `fields` = the model's own two columns (aiFieldsFor), so the
+ *                  count answers "how many ideas has THIS model not rated yet"
  */
 export function scoreGaps(rows, opts = {}) {
   const isFinal = opts.isFinal || isFinalRow
+  const fields = opts.fields || DEFAULT_FIELDS
   const scope = (rows || []).filter(r => (opts.onlyFinal ? isFinal(r) : true))
   const out = {
     total: scope.length,
@@ -119,10 +127,10 @@ export function scoreGaps(rows, opts = {}) {
     ids: [],          // idea ids of the fillable gaps, in order — for the run
   }
   for (const r of scope) {
-    const state = ideaScoreState(r)
+    const state = ideaScoreState(r, fields)
     out[state === 'scored' ? 'scored' : state]++
-    if (isBlankScore(r.novelty)) out.missingNovelty++
-    if (isBlankScore(r.usefulness)) out.missingUsefulness++
+    if (isBlankScore(r[fields.novelty])) out.missingNovelty++
+    if (isBlankScore(r[fields.usefulness])) out.missingUsefulness++
     if (state === 'partial' || state === 'missing') out.ids.push(r.idea_id ?? r.rid)
   }
   // Every gap except an `unratable` one is worth a call.
@@ -134,15 +142,17 @@ export function scoreGaps(rows, opts = {}) {
 
 /** One line of English for the coverage panel — kept here so the page and the
  *  guard agree on what the numbers mean. */
-export function gapSummary(g, onlyFinal = false) {
+export function gapSummary(g, onlyFinal = false, modelName = '') {
   const n = k => k.toLocaleString()
   const noun = onlyFinal ? 'final idea' : 'idea'
+  const by = modelName ? ` from ${modelName}` : ''
+  const tag = modelName ? ` (${modelName})` : ''
   if (!g.total) return 'No ideas loaded yet.'
-  if (g.complete) return `All ${n(g.total)} ${noun}${g.total === 1 ? '' : 's'} have an AI Novelty and an AI Usefulness score.`
+  if (g.complete) return `All ${n(g.total)} ${noun}${g.total === 1 ? '' : 's'} have an AI Novelty${tag} and an AI Usefulness${tag} score.`
   const parts = [
-    `${n(g.fillable)} of ${n(g.total)} ${noun}${g.total === 1 ? '' : 's'} still need an AI score`,
-    `${n(g.missingNovelty)} missing AI Novelty`,
-    `${n(g.missingUsefulness)} missing AI Usefulness`,
+    `${n(g.fillable)} of ${n(g.total)} ${noun}${g.total === 1 ? '' : 's'} still need an AI score${by}`,
+    `${n(g.missingNovelty)} missing AI Novelty${tag}`,
+    `${n(g.missingUsefulness)} missing AI Usefulness${tag}`,
   ]
   if (g.unratable) parts.push(`${n(g.unratable)} cannot be scored (no idea text)`)
   return parts.join(' · ') + '.'
@@ -239,14 +249,19 @@ export function pickScoredSheet(sheets) {
 
 const ID_COLUMNS = ['idea id', 'idea_id', 'id', 'ideaid', 'idea title', 'title']
 
-/** An AI Novelty / AI Usefulness column — not a blind rater's, not an objective KPI. */
+/** An AI Novelty / AI Usefulness column — not a blind rater's, not an empirical KPI,
+ *  not the derived mean of several models, and not a column that only mentions
+ *  the word ("Embedding novelty", "Novelty SD"). The same test the importer
+ *  (normalizeImportedRows) reads the columns by, parseAiHeader, so the sheet
+ *  chosen here is one whose scores the import will actually find. */
 function isAiScoreColumn(col) {
   const c = String(col).toLowerCase()
-  if (!/novelty|usefulness/.test(c)) return false
-  if (/rater|\(rater/.test(c)) return false            // human evaluators (3.3)
-  if (/objective|obj\.|distinctiveness/.test(c)) return false  // the 3.1 KPIs
+  if (isAiModelKey(c)) return true                      // the analysis CSV's per-model keys
+  if (/rater|\(rater|\beval|evaluator/.test(c)) return false  // human evaluators (3.3)
+  if (/objective|empirical|obj\.|distinctiveness|need fit/.test(c)) return false  // the 3.1 KPIs
   if (isNoveltyScoreHeader(c)) return false                    // 3.1 NoveltyScore
-  return true
+  const a = parseAiHeader(col)
+  return !!a && !a.derived && a.kind !== 'quality'       // derived means are never imported
 }
 
 /**
@@ -270,17 +285,22 @@ function isAiScoreColumn(col) {
  *    it leaves the decision — re-import in Step 1 to load the file AS the
  *    dataset — with the person who knows which file they uploaded.
  *
+ * Every model's scores come across, each into its own columns: `normalizeImportedRows`
+ * has already put "AI Novelty (GPT-6 Astra)" under ai_nov__gpt_6_astra and a plain
+ * "Novelty" under the "model not recorded" key, so the fields merged are exactly
+ * the per-model AI fields the incoming row carries. `fields`, when given, limits
+ * the merge to one pair (the 3.3 evaluator path passes ext_*).
+ *
  * @param rows      the loaded dataset
  * @param incoming  rows normalised to the analysis schema (`normalizeImportedRows`)
- * @param fields    which two columns to fill (the 3.3 evaluator upload passes ext_*)
- * @returns { rows, matched, unmatched, filled, kept, gainedNovelty, gainedUsefulness }
+ * @param fields    optional: only these two columns
+ * @returns { rows, matched, unmatched, filled, kept, gainedNovelty, gainedUsefulness, models }
  */
-export function mergeAiScoresIntoRows(rows, incoming, fields = { novelty: 'novelty', usefulness: 'usefulness' }) {
-  const byId = new Map()
+export function mergeAiScoresIntoRows(rows, incoming, fields = null) {
+  // By Idea ID within the file row's session: ideas are numbered per session.
+  const byId = ideaIndexBySession(rows, joinableId)
   const byTitle = new Map()
   ;(rows || []).forEach((r, i) => {
-    const id = joinableId(r.idea_id)
-    if (id && !byId.has(id)) byId.set(id, i)
     const t = normTitle(rowTitle(r))
     if (t && !byTitle.has(t)) byTitle.set(t, i)
   })
@@ -289,10 +309,11 @@ export function mergeAiScoresIntoRows(rows, incoming, fields = { novelty: 'novel
   const used = new Set()
   let matched = 0, unmatched = 0, filled = 0, kept = 0
   let gainedNovelty = 0, gainedUsefulness = 0
+  const models = new Set()   // slugs of the models the file gave a score to
 
   for (const e of incoming || []) {
     const id = joinableId(e?.idea_id)
-    let idx = id ? byId.get(id) : undefined
+    let idx = id ? byId(id, e?.session) : undefined
     if (idx == null) idx = byTitle.get(normTitle(rowTitle(e || {})))
     // One file row per idea: a duplicate row in the file must not be counted as a
     // second match, and must not get a second chance to fill what the first left.
@@ -301,14 +322,31 @@ export function mergeAiScoresIntoRows(rows, incoming, fields = { novelty: 'novel
     matched++
     const cur = next[idx]
     const patch = {}
-    const nov = clampScore(e?.novelty)
-    const use = clampScore(e?.usefulness)
-    if (nov !== '' && isBlankScore(cur[fields.novelty])) { patch[fields.novelty] = nov; gainedNovelty++ }
-    if (use !== '' && isBlankScore(cur[fields.usefulness])) { patch[fields.usefulness] = use; gainedUsefulness++ }
+    // [target column, where the file row holds its value]. With `fields`, the value
+    // is the row's own column of that name, else its plain novelty / usefulness.
+    // Without, every per-model column the file row carries, each into itself; a
+    // row with none but a plain novelty / usefulness (a caller that did not go
+    // through normalizeImportedRows) is a score with no model name.
+    let pairs
+    if (fields) {
+      pairs = [[fields.novelty, e?.[fields.novelty] ?? e?.novelty], [fields.usefulness, e?.[fields.usefulness] ?? e?.usefulness]]
+    } else {
+      pairs = Object.keys(e || {}).filter(isAiModelKey).map(k => [k, e[k]])
+      if (!pairs.length) pairs = [[aiNovKey(UNRECORDED), e?.novelty], [aiUseKey(UNRECORDED), e?.usefulness]]
+    }
+    for (const [key, raw] of pairs) {
+      const kind = key === (fields?.novelty) || key.startsWith('ai_nov__') ? 'novelty' : 'usefulness'
+      const v = clampScore(raw)
+      if (v === '' || !isBlankScore(cur[key])) continue
+      patch[key] = v
+      if (isAiModelKey(key)) models.add(key.slice('ai_nov__'.length))
+      if (kind === 'novelty') gainedNovelty++
+      else gainedUsefulness++
+    }
     if (Object.keys(patch).length) { next[idx] = { ...cur, ...patch }; filled++ }
     else kept++
   }
-  return { rows: next, matched, unmatched, filled, kept, gainedNovelty, gainedUsefulness }
+  return { rows: next, matched, unmatched, filled, kept, gainedNovelty, gainedUsefulness, models: [...models] }
 }
 
 /**

@@ -3098,6 +3098,58 @@ its batch-mates their scores. Promotional prices resolve by day (`priceAt`), so
 neither the dropdown nor the cost export keeps charging a lapsed promotion. Full detail
 in `_ideasearchlab-src/CLAUDE.md`.
 
+**Every AI model gets its own columns, the empirical proxies come first, and one
+button downloads everything** (owner, 2026-09-24). Six changes, all in the Data
+Analytics page and documented in `_ideasearchlab-src/CLAUDE.md`:
+- **Per-model AI columns.** A rater's scores are stored under that model's own two
+  fields and titled after it, **AI Novelty (GPT-6 Astra)** / **AI Usefulness (GPT-6
+  Astra)**, with the next model's pair beside them (`src/utils/aiScoreColumns.js`).
+  A run fills only the chosen model's cells, so a second model rates the same
+  ideas instead of finding nothing empty. The old AI Novelty / Usefulness / Quality
+  fields are the mean across the models that rated each idea, which is what Steps
+  4–5 analyse, and Steps 4 and 5 warn when the ideas in scope were not all rated
+  by the same models (a part-way second model shifted a condition contrast by 0.19
+  in review). A file saved before this, whose columns name no model, lands under
+  "model not recorded", and the panel asks which model made it. A model's blank
+  cell in the table cannot be typed into (it would count as that model's rating).
+- **"Objective" became "empirical"** in every 3.1 label and export column. The old
+  headers still import.
+- **One column order everywhere** (`exportKpiColumns`): the empirical proxies of
+  novelty and usefulness first, then the AI ratings model by model, then the
+  evaluators. The table, the downloads and the aggregate Rankings tab all use it;
+  Rankings' blind-rater columns are now *Eval. Novelty / Usefulness / Quality*
+  (raters fill the first two; Eval. Quality is their mean). Ideas are numbered per
+  session, so Rankings carries a Session Code and every upload joins an Idea ID
+  within its session. Nothing is routed by substring any more: an extra measure
+  named "Embedding novelty" stays an extra instead of becoming an AI model, and a
+  score on another scale ("Novelty (0-1)", "(1-10)") stays an extra instead of
+  joining the 1-5 AI mean.
+- **"Download all idea data (Excel)" + CSV**, with a **Usefulness score check** sheet
+  showing each idea's three parts, their ranks and the mean, so the empirical score
+  can be checked by hand. The ideas come out in English where Step 1b translated
+  them, originals on a Translations sheet (Step 1b's "Download all data in English"
+  is the whole-study workbook).
+- **Workability now reads a negated list.** "removes the battery or Bluetooth",
+  "no battery or Bluetooth needed" used to count the later items as needed. The
+  rule is a closed grammar written for precision (a real technology must never be
+  hidden: "washed without damaging the sensor", "Parents replace the coin battery",
+  "No app, the sensor turns red", "Instead of a thermometer, a sensor or an LED,
+  hidden in the collar, alerts parents" all still count it). In the owner's 741
+  ideas it moved 39 ideas, 30 of them in the Both condition, every one a genuine
+  negation.
+- **Four more rater providers.** Mistral, Meta (Muse and Llama, through OpenRouter,
+  since Meta closed its own Llama API on 2026-07-06), DeepSeek (stores data in
+  China, which the page says) and Qwen (International endpoint). They serve the
+  RATER ONLY: the participants' assistant function still speaks Claude / OpenAI /
+  Gemini, so no functions deploy is needed. A provider failure reported inside a
+  200 reply is retried with backoff and trips the circuit breaker; a 422 stops the
+  run at once; a model that answers two batches in a row without a rating stops
+  the run (it used to cost 2,502 paid calls for 741 ideas).
+Offline tests: `tools/ai-columns-guard.mjs` and `tools/analytics-page-guard.mjs`
+(a browser test of the page itself, Firebase stubbed) beside the existing
+ai-models, score-batch, score-gaps, analytics-scores, usefulness-kpis and det-kpi
+guards.
+
 **Excel export per session, from the session list.** Both admins let the
 instructor download ONE session's research workbook straight from its card —
 ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export data**

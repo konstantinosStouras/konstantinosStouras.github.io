@@ -7,8 +7,10 @@
 #   Sci), for THIS study's conditions (baseline = None) and EVERY KPI that has data
 #   across the three sources scored on the page:
 #     • AI-generated (3.2):        novelty / usefulness / overall_quality   (1–5)
+#       (each model the page used also has its own ai_nov__<model> / ai_use__<model>
+#       columns; with several models, novelty / usefulness are the mean across them)
 #     • External evaluators (3.3): ext_novelty / ext_usefulness / ext_quality (1–5)
-#     • Deterministic/objective (3.1): det_novelty / det_distinctiveness / det_score (0–1)
+#     • Deterministic/empirical (3.1): det_novelty / det_distinctiveness / det_score (0–1)
 #       and the usefulness side det_need_fit / det_specificity / det_workability /
 #       det_usefulness (0–1)
 #   One table column per available KPI, so conditions can be compared on every
@@ -48,10 +50,10 @@ KPI_KEYS   <- c("novelty","usefulness","overall_quality",
                 "det_need_fit","det_specificity","det_workability","det_usefulness")
 KPI_LABELS <- c(novelty="AI Novelty", usefulness="AI Usefulness", overall_quality="AI Quality",
                 ext_novelty="Eval Novelty", ext_usefulness="Eval Usefulness", ext_quality="Eval Quality",
-                det_novelty="Novelty (objective)", det_distinctiveness="Pool distinctiveness", det_score="NoveltyScore",
-                det_need_fit="Need fit (objective)", det_specificity="Specificity (objective)",
-                det_workability="Workability (objective)",
-                det_usefulness="Usefulness score (objective)")
+                det_novelty="Novelty (empirical)", det_distinctiveness="Pool distinctiveness", det_score="NoveltyScore",
+                det_need_fit="Need fit (empirical)", det_specificity="Specificity (empirical)",
+                det_workability="Workability (empirical)",
+                det_usefulness="Usefulness score (empirical)")
 KPI_SCALE5 <- c(novelty=TRUE, usefulness=TRUE, overall_quality=TRUE,
                 ext_novelty=TRUE, ext_usefulness=TRUE, ext_quality=TRUE,
                 det_novelty=FALSE, det_distinctiveness=FALSE, det_score=FALSE,

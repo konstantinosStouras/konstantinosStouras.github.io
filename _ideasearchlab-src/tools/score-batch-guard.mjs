@@ -13,7 +13,7 @@
  * say so and the user can press Score again.
  */
 import {
-  runScoring, extractScoreObjects, assignScores, withRetry, clamp1to5, isScoredEntry,
+  runScoring, extractScoreObjects, assignScores, withRetry, clamp1to5, isScoredEntry, isFatalApiError,
 } from '../src/utils/scoreBatch.js'
 
 let failures = 0
@@ -247,6 +247,70 @@ console.log('runScoring — a long run keeps every score it can get')
   const refusal = () => Object.assign(new Error('declined'), { replyProblem: 'refusal', retryable: false })
   const r = await runScoring({ texts: texts(32), call: async ts => { if (ts.length > 1) throw refusal(); return reply(1) }, batchSize: 8, sleep: nosleep })
   check('refusals never trip the breaker; every idea is scored singly', r.aborted === false && r.scores.every(isScoredEntry))
+}
+
+{
+  // A request the provider rejects as INVALID fails identically every time:
+  // 422 (DeepSeek's "Invalid Parameters", Mistral's request validation) is
+  // fatal like 400. It used to be retried: 27 calls over 52.8 s, then "check
+  // the API key and quota", which is not the cause.
+  check('422 and 400 are fatal; 429 and 503 are not',
+    isFatalApiError({ status: 422 }) && isFatalApiError({ status: 400 }) && !isFatalApiError({ status: 429 }) && !isFatalApiError({ status: 503 }))
+  let calls = 0
+  const invalid = async () => { calls++; const e = new Error('422 Invalid Parameters'); e.status = 422; throw e }
+  let threw = null
+  await runScoring({ texts: texts(24), call: invalid, batchSize: 8, sleep: nosleep, isFatal: isFatalApiError }).catch(e => { threw = e })
+  check('a 422 stops the run on its first call', threw?.status === 422 && calls === 1, `calls=${calls}`)
+}
+{
+  // What the Data Analytics page reads when a pass scored NOTHING because the
+  // provider answered every call without a rating (here: every reply spent its
+  // ceiling on thinking). scoreIdeas throws this run's lastError; the page must
+  // be able to tell it from a transport failure, so it has to carry the
+  // replyProblem, and the report must show no failed batch and no abort.
+  const exhausted = () => Object.assign(new Error('spent its whole token ceiling on reasoning and returned no text'), { replyProblem: 'exhausted', retryable: true })
+  const r = await runScoring({ texts: texts(16), call: async () => { throw exhausted() }, batchSize: 8, sleep: nosleep, isFatal: isFatalApiError })
+  check('every call exhausted: nothing scored, but no failed batch and no abort',
+    r.unscored === 16 && r.failedBatches === 0 && r.aborted === false, `unscored=${r.unscored} failedBatches=${r.failedBatches} aborted=${r.aborted}`)
+  check('…and lastError is the provider\'s own error, replyProblem and retryable intact',
+    r.lastError?.replyProblem === 'exhausted' && r.lastError?.retryable === true && r.lastError?.status === undefined)
+  const refusal = () => Object.assign(new Error('declined to rate this batch'), { replyProblem: 'refusal', retryable: false })
+  const rr = await runScoring({ texts: texts(16), call: async () => { throw refusal() }, batchSize: 8, sleep: nosleep, isFatal: isFatalApiError })
+  check('every call refused: the same, with retryable false',
+    rr.unscored === 16 && rr.failedBatches === 0 && rr.aborted === false && rr.lastError?.replyProblem === 'refusal' && rr.lastError?.retryable === false)
+}
+
+// ── A model that answers every call without a rating stops early ────────────
+// Review, 2026-09-24: a model that always spent its ceiling on thinking was sent
+// every idea of the run, each call retried: ~2,500 paid calls for 741 ideas. Two
+// batches in a row that come back with nothing but such answers now stop the run.
+console.log('answered without a rating, batch after batch')
+{
+  const exhausted = () => Object.assign(new Error('spent its whole token ceiling on thinking and returned no text'), { replyProblem: 'exhausted', retryable: true })
+  let calls = 0
+  const r = await runScoring({ texts: texts(741), call: async () => { calls++; throw exhausted() }, batchSize: 8, sleep: nosleep, isFatal: isFatalApiError })
+  check('741 ideas, every call exhausted: the run stops after two such batches', r.stoppedOnReply === true && calls <= 54, `calls=${calls}`)
+  check('…reported honestly: nothing scored, no failed batch, not "aborted"', r.unscored === 741 && r.failedBatches === 0 && r.aborted === false)
+  // A batch whose batch call is refused but whose ideas score one by one is not
+  // "nothing but refusals": it resets the count.
+  let n = 0
+  const r2 = await runScoring({
+    texts: texts(40), batchSize: 8, sleep: nosleep, isFatal: isFatalApiError,
+    call: async ts => { n++; if (ts.length > 1) throw Object.assign(new Error('declined'), { replyProblem: 'refusal', retryable: false }); return reply(1) },
+  })
+  check('batch calls refused but singles scoring: never stops, every idea scored', r2.stoppedOnReply === false && r2.scores.every(isScoredEntry), `calls=${n}`)
+  // Reply-only, good, reply-only: not two IN A ROW.
+  let b = 0
+  const r3 = await runScoring({
+    texts: texts(24), batchSize: 8, sleep: nosleep, isFatal: isFatalApiError,
+    call: async ts => {
+      const batch = Math.floor(Number(ts[0].match(/\d+/)[0]) / 8)
+      b++
+      if (batch !== 1) throw exhausted()
+      return reply(ts.length)
+    },
+  })
+  check('reply-only, good, reply-only batches: the run goes to the end', r3.stoppedOnReply === false && r3.scores.slice(8, 16).every(isScoredEntry) && r3.unscored === 16, `unscored=${r3.unscored}`)
 }
 
 console.log(failures

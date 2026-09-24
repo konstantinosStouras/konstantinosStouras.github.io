@@ -7,12 +7,17 @@ import { auth, db } from '../firebase'
 import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
-  recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, ideaText, summarize,
-  matchScoresIntoRows, buildSummaryTable, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
+  recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, summarize,
+  buildSummaryTable, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition, scriptKpiKeys,
+  exportKpiColumns, isDerivedAiKey, matchScoreTable, isBareAiScoreHeader, evaluatorMean,
 } from '../utils/analyticsData'
+import {
+  aiFieldsFor, aiModelName, aiColumnLabel, aiModelSlugs, modelSlug, isAiModelKey, parseAiHeader,
+  labelUnrecordedScores, UNRECORDED, slugOfKey, aiKpiDefs, sortModelSlugs, aiNovKey, aiUseKey, aiPanelCoverage,
+} from '../utils/aiScoreColumns'
 import { scoreIdeas, fetchAISettings, translateTexts } from '../utils/llmClient'
 import {
   measureText, untranslatedRows, languageSummary, applyTranslationMemory, collectTexts, translateSheets, withMeasuredText,
@@ -22,13 +27,17 @@ import {
 // From scoreBatch, not llmClient: that module owns what is worth retrying and
 // carries no Firebase import, so the offline guard can pin this rule.
 import { isFatalScoringError } from '../utils/scoreBatch'
+import { ideaValueLookup } from '../utils/rankingsMerge'
 import {
   scoreGaps, gapSummary, shouldRunAnotherPass, mergeAiScoresIntoRows, ideaScoreState,
   scorableText, pickScoredSheet,
 } from '../utils/scoreGaps'
 import { objectiveKpisFromText } from '../utils/objectiveKpis'
 import { measuredUniqueFraction, productivityCount, cosine, hasTerms } from '../utils/deterministicKpis'
-import { usefulnessKpisFromText, pearson, partialPearson, median, quadrantCounts, FACETS } from '../utils/usefulnessKpis'
+import {
+  usefulnessKpisFromText, pearson, partialPearson, median, quadrantCounts, FACETS,
+  percentileRanks, specificityFacets, compileTerms, techTermsIn,
+} from '../utils/usefulnessKpis'
 import { PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById, modelOptionLabel, CATALOGUE_AS_OF } from '../data/aiModels'
 import { MODEL_PRICES } from '../data/aiPricing'
 import { PYTHON_TEMPLATE, R_TEMPLATE } from '../data/analyticsTemplates'
@@ -53,24 +62,26 @@ const MAX_FILL_PASSES = 4
 // window is what this is for, so the pause grows with each attempt (10s, 20s)
 // rather than going straight back at a provider that has just refused us.
 const RECOVERY_WAIT_MS = 10000
-// Apply a pass's scores onto a row list: fill only the missing field(s), never
-// overwrite a value already there (hand-entered or previously scored), and
-// ignore a null the model omitted. Because it is fill-blank-only it is safe to
-// apply to the LIVE state as well as to the run's own working copy — a score the
-// admin typed into the table mid-run is not blank, so it survives.
-const applyPassScores = (list, byRid) => recomputeOverall(list.map(r => {
+// Apply a pass's scores onto a row list, into the RATING MODEL's own two columns
+// (`fields` = aiFieldsFor(model): "AI Novelty (GPT-6 Astra)" …): fill only the
+// missing field(s), never overwrite a value already there (hand-entered or
+// previously scored), and ignore a null the model omitted. Because it is
+// fill-blank-only it is safe to apply to the LIVE state as well as to the run's
+// own working copy — a score the admin typed into the table mid-run is not
+// blank, so it survives. Another model's columns are never touched.
+const blankCell = v => v == null || v === ''
+const applyPassScores = (list, byRid, fields) => recomputeOverall(list.map(r => {
   const sc = byRid.get(r.rid)
   if (!sc) return r
-  return {
-    ...r,
-    novelty: r.novelty === '' && sc.novelty != null ? sc.novelty : r.novelty,
-    usefulness: r.usefulness === '' && sc.usefulness != null ? sc.usefulness : r.usefulness,
-  }
+  const out = { ...r }
+  if (blankCell(r[fields.novelty]) && sc.novelty != null) out[fields.novelty] = sc.novelty
+  if (blankCell(r[fields.usefulness]) && sc.usefulness != null) out[fields.usefulness] = sc.usefulness
+  return out
 }))
 const condClass = cond => styles[`cond${Math.max(0, CONDITIONS.indexOf(cond))}`]
 const userKey = (session, authorId) => `${session}|${authorId || ''}`
 
-// Every KPI column across the three sources (AI / external / objective); a row is
+// Every KPI column across the three sources (AI / external / empirical); a row is
 // "scored" for the analysis if it carries at least one of these.
 const ALL_KPI_KEYS = [
   'novelty', 'usefulness', 'overall_quality',
@@ -80,7 +91,7 @@ const ALL_KPI_KEYS = [
 ]
 const hasAnyKpi = r =>
   ALL_KPI_KEYS.some(k => r[k] !== '' && r[k] != null) ||
-  Object.keys(r).some(k => k.startsWith('x_') && r[k] !== '' && r[k] != null)
+  Object.keys(r).some(k => (k.startsWith('x_') || isAiModelKey(k)) && r[k] !== '' && r[k] != null)
 
 // localStorage keys for the per-section Save / Make-default persistence. Kept in
 // the browser (no Firestore-rules change needed); "Save" and "Make this the
@@ -141,7 +152,7 @@ export default function DataAnalytics() {
   // ideas that entered the group phase (group-stage + carried-forward individual).
   const [regScope, setRegScope] = useState('final')
 
-  // ── Section 3.1 — deterministic / objective KPIs (in-browser TF-IDF) ──
+  // ── Section 3.1 — deterministic / empirical KPIs (in-browser TF-IDF) ──
   // No API key / billing: similarity is computed locally from the idea text.
   const [referenceSet, setReferenceSet] = useState(() => DEFAULT_REFERENCE_SET.join('\n'))
   // The need set U — the usefulness counterpart of R (what people NEED, where R is
@@ -250,6 +261,16 @@ export default function DataAnalytics() {
 
   const activeProvider = providerById(scoreProvider)
   const selectedHasKey = !!aiSettings?.apiKeys?.[scoreProvider]
+  // The chosen model's OWN two columns: a run fills these and nothing else, so a
+  // second model rates the same ideas into its own "AI Novelty (…)" pair.
+  const scoreFields = useMemo(() => aiFieldsFor(scoreModel), [scoreModel])
+  // The Step-3 AI cell being hand-edited ("rid|field"): it stays an input while it
+  // has focus, even when its value is cleared (see the table's cell renderer).
+  const [editingCell, setEditingCell] = useState('')
+  const scoreSlug = modelSlug(scoreModel)
+  const scoreModelName = aiModelName(scoreSlug)
+  // "Which model made these?" — for the scores that came in with no model name.
+  const [labelTarget, setLabelTarget] = useState('')
   function onScoreProviderChange(pid) {
     setScoreProvider(pid)
     setScoreModel(SCORING_DEFAULT_MODEL[pid] || providerById(pid).defaultModel)
@@ -425,6 +446,9 @@ export default function DataAnalytics() {
   // Shared by the 3.2 AI-scores upload (→ novelty/usefulness) and the 3.3
   // external-evaluator upload (→ ext_novelty/ext_usefulness). `fields` chooses the
   // target KPI columns; `setMsg` reports the result for that subsection.
+  // `fields` = { novelty, usefulness } target columns, or 'ai' for the 3.2 AI
+  // upload: then every model named in the file ("AI Novelty (GPT-6 Astra)") fills
+  // its own columns, and a plain "Novelty" column fills "model not recorded".
   function loadScoresFile(file, fields, setMsg) {
     if (!file) return
     setMsg('')
@@ -438,48 +462,121 @@ export default function DataAnalytics() {
           wb.SheetNames.find(n => /rank/i.test(n)) ||
           wb.SheetNames[0]
         const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' })
-        // The data table can sit below a preamble; find the header row that has
-        // both an "Idea Title" and a "Novelty" column.
+        // The data table can sit below a preamble; find the header row that names
+        // its ideas (an Idea Title or an Idea ID) and carries a score column.
         let h = -1
         for (let i = 0; i < aoa.length; i++) {
           const cells = aoa[i].map(c => String(c).toLowerCase())
-          if (cells.some(c => c.includes('idea title') || c === 'title') && cells.some(c => c.includes('novelty'))) { h = i; break }
+          const names = cells.some(c => c.includes('idea title') || c === 'title' || c === 'idea id' || c === 'idea_id')
+          if (names && cells.some(c => c.includes('novelty') || c.includes('useful'))) { h = i; break }
         }
-        if (h === -1) { alert(`This scores file does not match the expected format and was not imported.\n\nExpected an "All Ideas Ranked" (or Rankings) sheet with a header row containing "Idea Title" and "Novelty" columns (none found on the "${sheetName}" sheet).`); return }
-        const header = aoa[h].map(c => String(c).toLowerCase().trim())
+        if (h === -1) { alert(`This scores file does not match the expected format and was not imported.\n\nExpected an "All Ideas Ranked" (or Rankings) sheet with a header row containing "Idea Title" (or "Idea ID") and "Novelty" / "Usefulness" columns (none found on the "${sheetName}" sheet).`); return }
+        // The header as written (a model's name keeps its capitals), and lower-cased.
+        const headerRaw = aoa[h].map(c => String(c).trim())
+        const header = headerRaw.map(c => c.toLowerCase())
         const find = pred => header.findIndex(pred)
         const ciTitle = find(c => c.includes('idea title') || c === 'title')
-        // Not the 3.1 NoveltyScore or objective Novelty column, whatever order they come in.
-        const ciNov = find(c => c.includes('novelty') && !isNoveltyScoreHeader(c) && !/objective|\bobj\b|obj\./.test(c))
-        const ciUse = find(c => c.includes('usefulness') || c.includes('useful'))
-        const entries = []
-        for (let i = h + 1; i < aoa.length; i++) {
-          const r = aoa[i]
-          const title = String(r[ciTitle] ?? '').trim()
-          if (!title) continue
-          const nov = ciNov >= 0 ? r[ciNov] : ''
-          const use = ciUse >= 0 ? r[ciUse] : ''
-          if ((nov === '' || nov == null) && (use === '' || use == null)) continue
-          entries.push({ title, novelty: nov, usefulness: use })
+        const ciId = find(c => c === 'idea id' || c === 'idea_id')
+        const ciSession = find(c => c === 'session code' || c === 'session' || c === 'session_code')
+        // Never the 3.1 NoveltyScore or an empirical (formerly "objective") KPI,
+        // and never a DERIVED AI column (the mean across models), in any order.
+        const notEmpirical = c => !isNoveltyScoreHeader(c) && !/objective|empirical|\bobj\b|obj\.|need fit|distinctiveness/.test(c) && !/\(mean\b/.test(c)
+        const isEvalish = c => /\beval|evaluator|external|rater|expert/.test(c)
+        const numeric = v => v !== '' && v != null && typeof v !== 'boolean' && Number.isFinite(Number(v))
+        const mean = vs => (vs.length ? vs.reduce((x, y) => x + y, 0) / vs.length : '')
+        // What to read from each file row: [{ field, cols: [column index…], bare? }].
+        // A field fed by several columns (the raters of 3.3) takes their mean.
+        const reads = []
+        if (fields === 'ai') {
+          // Every model named in the file fills its own columns, and a score with no
+          // model name fills "model not recorded": its explicit column ("AI Novelty
+          // (model not recorded)") first, else a bare "Novelty" — the rule of
+          // normalizeImportedRows. A bare column beside the analysis CSV's ai_nov__
+          // keys is that row's derived mean, so it is read only on a row that carries
+          // no per-model value.
+          const bareIsDerived = header.some(c => /^ai_(nov|use)__/.test(c))
+          const explicitUnrec = c => /\(model not recorded\)|^ai_(nov|use)__unrecorded$/.test(c)
+          const byField = new Map()   // field -> { col, explicit }
+          header.forEach((c, i) => {
+            if (isEvalish(c) || !notEmpirical(c)) return
+            const a = parseAiHeader(headerRaw[i])
+            if (!a || a.derived) return
+            const field = (a.kind === 'novelty' ? aiNovKey : aiUseKey)(a.slug)
+            const prev = byField.get(field)
+            // An explicit column beats a bare one for the same model.
+            if (!prev || (explicitUnrec(c) && !prev.explicit)) byField.set(field, { col: i, explicit: explicitUnrec(c), bare: a.slug === UNRECORDED && !explicitUnrec(c) })
+          })
+          // A decorated bare column ("Novelty Rating", "Novelty (1-5)", "Avg Novelty")
+          // is read as a score with no model name, but only for a side no recognised
+          // column feeds (review, 2026-09-24: these files used to load, and then
+          // were refused).
+          for (const kind of ['novelty', 'usefulness']) {
+            const prefix = kind === 'novelty' ? 'ai_nov__' : 'ai_use__'
+            if ([...byField.keys()].some(f => f.startsWith(prefix))) continue
+            const i = header.findIndex((c, j) => !isEvalish(c) && notEmpirical(c) && isBareAiScoreHeader(headerRaw[j]) === kind)
+            if (i >= 0) byField.set((kind === 'novelty' ? aiNovKey : aiUseKey)(UNRECORDED), { col: i, explicit: false, bare: true })
+          }
+          for (const [field, v] of byField) reads.push({ field, cols: [v.col], bare: v.bare && bareIsDerived })
+        } else {
+          // Evaluator ratings, per kind, by the Step-1 importer's own rule
+          // (evaluatorMean): the raters' columns ("Novelty (rater 1)", …) averaged
+          // when any carries a value, else the evaluator columns ("Eval. Novelty"
+          // in the Rankings tab), exact headers only — never "Eval. Novelty SD".
+          // Failing both, a plain score column ("Novelty", "Novelty Rating") is an
+          // offline rater sheet's; never an AI model's.
+          for (const [kind, field] of [['novelty', fields.novelty], ['usefulness', fields.usefulness]]) {
+            const plain = header.findIndex((c, j) => !isEvalish(c) && notEmpirical(c) && !/^ai\b/.test(c) && isBareAiScoreHeader(headerRaw[j]) === kind)
+            reads.push({ field, evalKind: kind, cols: [], fallback: plain })
+          }
         }
-        if (!entries.length) { alert(`This scores file does not match the expected format and was not imported.\n\nNo scored idea rows (with a Novelty/Usefulness value) were found under "${sheetName}".`); return }
+        const isExcludedRow = r => excludedUsers.has(userKey(r.session, r.author_id))
         // Step 1b: the downloads raters fill in carry each idea's ENGLISH title, while
         // the loaded idea keeps its original, so the English title matches too — from
         // this browser's translations plus the file's own Translations sheet (which
         // is also kept, like any import's).
         const trName = wb.SheetNames.find(n => n === TRANSLATIONS_SHEET)
         const fileTm = trName ? tmFromTranslationsRows(XLSX.utils.sheet_to_json(wb.Sheets[trName], { defval: '' })) : {}
-        if (Object.keys(fileTm).length) setTm(prev => tmMerge(prev, fileTm).tm)
         const withEn = applyTranslationMemory(rows, tmMerge(tm, fileTm).tm)
-        // Don't let a removed participant's idea absorb a title match meant for a visible one.
-        const res = matchScoresIntoRows(rows, entries, r => !excludedUsers.has(userKey(r.session, r.author_id)), fields,
-          (_r, i) => withEn[i]?.title_en)
+        // One entry per FILE ROW, carrying every field it has a value for, so all of
+        // a row's scores go to the same idea (review, 2026-09-24: one pass per model
+        // wrote two models' ratings of one row onto two different ideas).
+        const perModelFields = reads.filter(x => !x.bare).map(x => x.field)
+        const fileRows = []
+        for (let i = h + 1; i < aoa.length; i++) {
+          const r = aoa[i]
+          const title = ciTitle >= 0 ? String(r[ciTitle] ?? '').trim() : ''
+          const id = ciId >= 0 ? String(r[ciId] ?? '').trim() : ''
+          if (!title && !id) continue
+          const values = {}
+          const byHeader = Object.fromEntries(headerRaw.map((c, j) => [c, r[j]]))
+          for (const x of reads) {
+            let v = x.evalKind ? evaluatorMean(byHeader, x.evalKind) : mean(x.cols.map(c => r[c]).filter(numeric).map(Number))
+            if (v === '' && x.fallback >= 0 && numeric(r[x.fallback])) v = Number(r[x.fallback])
+            // Both 3.2 uploads keep a rating on the 1–5 scale, as they always have
+            // (an AI score to one decimal, like "Upload full dataset"); an
+            // evaluator mean is clamped, not rounded.
+            if (v !== '') values[x.field] = x.evalKind ? Math.max(1, Math.min(5, v)) : Math.max(1, Math.min(5, Math.round(v * 10) / 10))
+          }
+          // The bare mean beside per-model columns belongs to a row with none.
+          if (perModelFields.some(f => f in values)) for (const x of reads) if (x.bare) delete values[x.field]
+          if (!Object.keys(values).length) continue
+          fileRows.push({ id, session: ciSession >= 0 ? String(r[ciSession] ?? '').trim() : '', title, values })
+        }
+        if (!fileRows.length) { alert(`This scores file does not match the expected format and was not imported.\n\nNo scored idea rows (with a Novelty/Usefulness value) were found under "${sheetName}".`); return }
+        if (Object.keys(fileTm).length) setTm(prev => tmMerge(prev, fileTm).tm)
+        // Matched once per file row: by Idea ID (and session) when the file has one,
+        // else by title; fill-blank only. Don't let a removed participant's idea
+        // absorb a match meant for a visible one.
+        const res = matchScoreTable(rows, fileRows, {
+          isEligible: r => !isExcludedRow(r),
+          altTitle: (_r, i) => withEn[i]?.title_en,
+        })
         setRows(recomputeOverall(res.rows))
         // Say what was ADDED and what was left alone: the upload only fills ideas
         // with no score yet, so a file re-imported over already-scored ideas must
         // not read as if it had updated them.
         setMsg(
-          `Loaded scores from "${sheetName}": scored ${res.filled} idea${res.filled === 1 ? '' : 's'} that had no score yet`
+          `Loaded scores from "${sheetName}": filled the empty cells of ${res.filled} idea${res.filled === 1 ? '' : 's'}`
           + (res.kept ? `; kept the existing scores of ${res.kept} already-scored idea${res.kept === 1 ? '' : 's'}` : '')
           + `; ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} had no match in the loaded data.`
         )
@@ -489,9 +586,9 @@ export default function DataAnalytics() {
     }
     reader.readAsArrayBuffer(file)
   }
-  // 3.2 — AI scores upload (fills the AI KPI columns).
+  // 3.2 — AI scores upload (fills each named model's columns, or "model not recorded").
   function onPickScores(e) {
-    loadScoresFile(e.target.files?.[0], { novelty: 'novelty', usefulness: 'usefulness' }, setScoreLoadMsg)
+    loadScoresFile(e.target.files?.[0], 'ai', setScoreLoadMsg)
     e.target.value = ''
   }
   // 3.3 — external-evaluator scores upload (fills the ext_* KPI columns).
@@ -500,7 +597,7 @@ export default function DataAnalytics() {
     e.target.value = ''
   }
 
-  // ── Section 3.1: compute the deterministic / objective KPIs via TF-IDF ──────
+  // ── Section 3.1: compute the deterministic / empirical KPIs via TF-IDF ──────
   // Two sides, each with its OWN anchor so neither is a re-labelled copy of the other:
   //  • NOVELTY — vectorises every loaded idea + the reference set R with classical
   //    TF-IDF (in the browser, no API key, no model download), then per-idea Novelty
@@ -601,17 +698,21 @@ export default function DataAnalytics() {
       }
       const all = pool.map((_, i) => i)
       // Validation against the ratings already on the page (AI rater 3.2, evaluators
-      // 3.3), where present: each objective KPI should correlate more with the
+      // 3.3), where present: each empirical KPI should correlate more with the
       // matching rating (usefulness with usefulness) than with the other one.
       const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
+      // Each AI model's own columns (and the mean across models, when several),
+      // then the evaluators; AI Quality is left out, it is not a novelty or a
+      // usefulness rating.
+      const aiRatingDefs = aiKpiDefs(pool).filter(d => d.key !== 'overall_quality')
       const RATINGS = [
-        ['novelty', 'AI Novelty'], ['usefulness', 'AI Usefulness'],
+        ...aiRatingDefs.map(d => [d.key, d.label]),
         ['ext_novelty', 'Eval. Novelty'], ['ext_usefulness', 'Eval. Usefulness'],
       ].filter(([k]) => pool.filter(r => num(r[k]) != null).length >= 3)
       const OBJ = [
-        ['Novelty (objective)', perIdea.map(d => d.novelty)], ['NoveltyScore', novAll],
-        ['Need fit (objective)', useIdea.map(d => d.needFit)], ['Specificity (objective)', useIdea.map(d => d.specificity)],
-        ['Workability (objective)', useIdea.map(d => d.workability)], ['Usefulness score (objective)', useAll],
+        ['Novelty (empirical)', perIdea.map(d => d.novelty)], ['NoveltyScore', novAll],
+        ['Need fit (empirical)', useIdea.map(d => d.needFit)], ['Specificity (empirical)', useIdea.map(d => d.specificity)],
+        ['Workability (empirical)', useIdea.map(d => d.workability)], ['Usefulness score (empirical)', useAll],
       ]
       const validation = RATINGS.length ? {
         cols: RATINGS.map(([, label]) => label),
@@ -659,6 +760,7 @@ export default function DataAnalytics() {
     const headers = Object.keys(rawRows[0])
     const lc = h => String(h).toLowerCase().trim()
     const idCol = headers.find(h => ['idea id', 'idea_id', 'id', 'ideaid'].includes(lc(h)))
+    const sessionCol = headers.find(h => ['session code', 'session', 'session_code'].includes(lc(h)))
     const titleCol = headers.find(h => ['title', 'idea title'].includes(lc(h)))
     if (!idCol && !titleCol) { setKpiUploadMsg('The file needs an "Idea ID" (or "Title") column so the KPIs can be matched onto your ideas.'); return }
     const KPI_LABEL = Object.fromEntries(KPI_DEFS.map(d => [d.key, d.label]))
@@ -673,7 +775,7 @@ export default function DataAnalytics() {
     const isFrac = v => numeric(v) && !Number.isInteger(Number(v))
     for (const h of headers) {
       if (STD_KPI_COLS.has(lc(h))) continue
-      // Recognised KPI columns (Novelty / Usefulness / Quality / objective /
+      // Recognised KPI columns (Novelty / Usefulness / Quality / empirical /
       // evaluator) route onto their CANONICAL row field, so a re-uploaded
       // "ideas_with_kpis" fills the right Rankings columns and feeds Steps 4–5.
       // Anything else (prototypicality, ks, …) stays an uploaded extra (x_ column).
@@ -681,23 +783,50 @@ export default function DataAnalytics() {
       if (canon ? !rawRows.some(r => numeric(r[h])) : !rawRows.some(r => isFrac(r[h]))) continue
       let key, label
       if (canon) {
-        if (seen.has(canon)) continue          // first column wins for a given canonical KPI
+        // A DERIVED AI column (the mean across models, AI Quality) is recomputed
+        // from the per-model columns, never imported.
+        if (isDerivedAiKey(canon)) continue
+        // Several evaluator columns ("Novelty (rater 1)", "(rater 2)", …) are ONE
+        // measure: collect them all and average per idea below, as the Step-1
+        // importer does (review, 2026-09-24: here the first rater silently won).
+        if (seen.has(canon) && (canon === 'ext_novelty' || canon === 'ext_usefulness')) {
+          cols.find(c => c.key === canon).names.push(h)
+          continue
+        }
+        if (seen.has(canon)) continue          // first column wins for any other canonical KPI
         key = canon
-        label = KPI_LABEL[canon] || canon
+        label = isAiModelKey(canon)
+          ? aiColumnLabel(canon.startsWith('ai_nov__') ? 'novelty' : 'usefulness', slugOfKey(canon))
+          : (KPI_LABEL[canon] || canon)
       } else {
         key = sanitizeKpiKey(h)
         if (key === UPLOADED_KPI_PREFIX || seen.has(key)) key = `${key}_${cols.length + 1}`
         label = uploadedKpiLabel(key)
       }
       seen.add(key)
-      cols.push({ name: h, key, label })
+      cols.push({ name: h, names: [h], key, label })
     }
     if (!cols.length) { setKpiUploadMsg('No numeric KPI columns found beyond the standard idea columns.'); return }
     const keys = cols.map(c => c.key)
+    // One column's value, or for an evaluator measure spread over several columns
+    // the mean of the individual raters' values (the "(rater n)" columns) when any
+    // carries one, else of the others (an "Eval. Novelty" column): the rule of the
+    // Step-1 importer's meanRaterCols, so both uploads give the same number.
+    const isRaterCol = h => /\((rater|expert)\b|\brater\s*\d|_rater/i.test(String(h))
+    const meanOf = (r, hs) => {
+      const v = hs.map(h => r[h]).filter(numeric).map(Number)
+      return v.length ? v.reduce((a, b) => a + b, 0) / v.length : ''
+    }
+    const valueOf = (r, c) => {
+      if (c.names.length === 1) return r[c.name]
+      const raters = meanOf(r, c.names.filter(isRaterCol))
+      return raters !== '' ? raters : meanOf(r, c.names.filter(h => !isRaterCol(h)))
+    }
     const entries = rawRows.map(r => ({
       idea_id: idCol ? r[idCol] : '',
+      session: sessionCol ? r[sessionCol] : '',   // ideas are numbered per session
       title: titleCol ? r[titleCol] : '',
-      values: Object.fromEntries(cols.map(c => [c.key, r[c.name]])),
+      values: Object.fromEntries(cols.map(c => [c.key, valueOf(r, c)])),
     }))
     const { rows: next, matched, unmatched, kept } = matchUploadedKpisIntoRows(rows, entries, keys)
     // Recompute, like every other KPI-writing path. Filling `usefulness` from an
@@ -774,7 +903,7 @@ export default function DataAnalytics() {
   }, [ideasNotEnglish.length])
   // When an idea's ENGLISH VERSION is edited or removed in Step 1b after measures
   // exist, what was computed from the old English no longer describes it: its AI
-  // ratings are cleared (the Fill button re-rates just those), and the objective
+  // ratings are cleared (the Fill button re-rates just those), and the empirical
   // KPIs are cleared for every idea, since Distinctiveness and the pool KPIs depend
   // on the whole pool (Compute again). An idea getting its FIRST English version is
   // not a change of that kind: while it had none, nothing on this page could
@@ -782,7 +911,7 @@ export default function DataAnalytics() {
   // above all the 3.2 top-up upload, whose Translations sheet and scores land in
   // the same render (review of 2026-09-24: clearing there blanked exactly the
   // scores the upload had just filled). Only an idea in the 3.1 pool (not a
-  // removed participant's) clears the objective KPIs. Nothing else is touched.
+  // removed participant's) clears the empirical KPIs. Nothing else is touched.
   const measuredTextRef = useRef(new Map())
   useEffect(() => {
     const prev = measuredTextRef.current
@@ -798,29 +927,61 @@ export default function DataAnalytics() {
     const detKeys = KPI_DEFS.filter(d => d.source === 'det').map(d => d.key)
     const inPool = rowsEn.some(r => changed.has(r.rid) && !isExcluded(r))
     const anyDet = inPool && rowsEn.some(r => detKeys.some(k => has(r[k])))
-    const aiChanged = rowsEn.filter(r => changed.has(r.rid) && (has(r.novelty) || has(r.usefulness))).length
+    // Every model's pair, not just the derived mean: recomputeOverall rebuilds the
+    // mean from the per-model columns, so clearing only the mean would bring it back.
+    const aiKeys = r => Object.keys(r).filter(isAiModelKey)
+    const hasAi = r => has(r.novelty) || has(r.usefulness) || aiKeys(r).some(k => has(r[k]))
+    const aiChanged = rowsEn.filter(r => changed.has(r.rid) && hasAi(r)).length
     if (!anyDet && !aiChanged) return
     setRows(prevRows => recomputeOverall(prevRows.map(r => {
       let x = r
       if (anyDet) { x = { ...x }; for (const k of detKeys) x[k] = '' }
-      if (changed.has(r.rid) && (has(r.novelty) || has(r.usefulness))) x = { ...x, novelty: '', usefulness: '', overall_quality: '' }
+      if (changed.has(r.rid) && hasAi(r)) {
+        x = { ...x, novelty: '', usefulness: '', overall_quality: '' }
+        for (const k of aiKeys(r)) x[k] = ''
+      }
       return x
     })))
     if (anyDet) setDetResult(null)
     setTrMsg(`An English version changed, so the measures computed from the old text were cleared: `
-      + [anyDet ? 'the objective KPIs (press Compute in 3.1 again)' : '',
+      + [anyDet ? 'the empirical KPIs (press Compute in 3.1 again)' : '',
         aiChanged ? `the AI ratings of ${aiChanged} idea${aiChanged === 1 ? '' : 's'} (Fill in 3.2 re-rates just ${aiChanged === 1 ? 'it' : 'those'})` : '']
         .filter(Boolean).join(' and ') + '.')
   }, [rowsEn])
   // Uploaded extra KPIs currently present in the data (drives the 3.1 chip + Clear).
   const uploadedNow = useMemo(() => uploadedKpiDefs(effectiveRows), [effectiveRows])
-  // KPI columns shown in the Step-3 table beyond the editable AI ones (Novelty /
-  // Usefulness / Quality already have their own columns): the objective KPIs (3.1),
-  // evaluator KPIs (3.3) and any uploaded KPIs — appended read-only after Quality.
-  const AI_KPI_KEYS = ['novelty', 'usefulness', 'overall_quality']
-  const extraKpiCols = useMemo(
-    () => presentKpis(effectiveRows).filter(d => !AI_KPI_KEYS.includes(d.key)),
-    [effectiveRows])
+  // KPI columns of the Step-3 table, in the export order (owner, 2026-09-24): the
+  // empirical KPIs (3.1) and uploaded extras, then each AI model's Novelty and
+  // Usefulness side by side, the mean across models and AI Quality (derived,
+  // read-only), then the evaluators. The model chosen in the rater dropdown always
+  // has its pair here, empty until it rates, so the admin sees where a run writes.
+  // Every model the rows carry a field for keeps its pair at its catalogue place,
+  // even after its last value was cleared in this table: a column must neither
+  // vanish nor move under the cell being edited (review, 2026-09-24). Exports list
+  // only models with values.
+  const tableKpiCols = useMemo(() => {
+    const cols = exportKpiColumns(effectiveRows)
+    const own = d => d.source === 'ai' && d.slug
+    // The chosen model before it has any field at all: its pair shows where a run
+    // will write, and is read-only (a hand rating typed there would be exported as
+    // that model's).
+    const fresh = !effectiveRows.some(r => Object.prototype.hasOwnProperty.call(r, scoreFields.novelty)
+      || Object.prototype.hasOwnProperty.call(r, scoreFields.usefulness))
+    const slugs = sortModelSlugs([...aiModelSlugs(effectiveRows, { includeBlank: true }), ...(scoreSlug ? [scoreSlug] : [])])
+    const models = slugs.flatMap(sl => [
+      { key: aiNovKey(sl), label: aiColumnLabel('novelty', sl), source: 'ai', slug: sl, kind: 'novelty' },
+      { key: aiUseKey(sl), label: aiColumnLabel('usefulness', sl), source: 'ai', slug: sl, kind: 'usefulness' },
+    ].map(d => (sl === scoreSlug && fresh ? { ...d, placeholder: true } : d)))
+    // Where the models' pairs go: where exportKpiColumns put them, else before the
+    // derived AI columns and the evaluators.
+    const rest = cols.filter(d => !own(d))
+    let at = cols.findIndex(own)
+    if (at < 0) {
+      at = rest.findIndex(d => d.source === 'ai' || d.source === 'ext')
+      if (at < 0) at = rest.length
+    }
+    return [...rest.slice(0, at), ...models, ...rest.slice(at)]
+  }, [effectiveRows, scoreFields, scoreSlug])
 
   // Distinct participants in the loaded data (for the remove/restore panel).
   const users = useMemo(() => {
@@ -883,22 +1044,38 @@ export default function DataAnalytics() {
     setScoreLoadMsg('')
     if (scopeUnscored === 0) {
       setScoreErr(scoreOnlyFinal
-        ? 'No unscored Final Ideas to score (none are marked Final Group Pick, or they are all scored). Untick the box to score all ideas.'
-        : 'Every idea already has an AI Novelty and an AI Usefulness score.')
+        ? `No Final Ideas left for ${scoreModelName} to score (none are marked Final Group Pick, or ${scoreModelName} has scored them all). Untick the box to score all ideas.`
+        : `${scoreModelName} has already given every idea an AI Novelty and an AI Usefulness score.`)
       return
     }
+    // The model this run rates with, pinned for the whole run: the dropdowns are
+    // disabled while it runs, but the columns must not move under it regardless.
+    const fields = scoreFields
+    const runModelName = scoreModelName
     // Step 1b first: the rater is prompted in English and must rate the idea, not
     // its language. Only the ideas this run would score are checked.
     {
       const scope = rowsEn.filter(r =>
         !excludedUsers.has(userKey(r.session, r.author_id)) && (!scoreOnlyFinal || isFinal(r)))
-        .filter(r => { const st = ideaScoreState(r); return st === 'missing' || st === 'partial' })
+        .filter(r => { const st = ideaScoreState(r, fields); return st === 'missing' || st === 'partial' })
       const notEnglish = untranslatedRows(scope)
       if (notEnglish.length) {
         setScoreErr(`${languageSummary(notEnglish)} ${notEnglish.length === 1 ? 'is' : 'are'} not in English yet. Translate ${notEnglish.length === 1 ? 'it' : 'them'} in Step 1b first.`)
         return
       }
     }
+    // Ideas whose only AI scores carry no model name (an older file) would all be
+    // rated again — paid for, and then averaged with scores that may well be this
+    // same model's (review finding, 2026-09-24). Ask first; "Label them" is the fix
+    // when the old scores are this model's.
+    const unrecInScope = effectiveRows.filter(r =>
+      (!scoreOnlyFinal || isFinal(r)) &&
+      [`ai_nov__${UNRECORDED}`, `ai_use__${UNRECORDED}`].some(k => r[k] !== '' && r[k] != null) &&
+      ['missing', 'partial'].includes(ideaScoreState(r, fields))).length
+    if (unrecInScope && !confirm(
+      `${unrecInScope.toLocaleString()} of these ideas already have an AI score with no model name (from an older file).\n\n`
+      + `If those scores came from ${runModelName}, press Cancel and use "Label them" in the coverage panel, so they are not rated (and paid for) again.\n\n`
+      + `Press OK to rate them with ${runModelName} anyway, as a separate column.`)) return
     // Always use the API keys CURRENTLY saved in AI Settings (settings/ai), even if
     // they were added/changed after this page was opened — re-read them at score
     // time and refresh the on-page "no key" hint. Falls back to the loaded copy.
@@ -913,6 +1090,7 @@ export default function DataAnalytics() {
     let pass = 0
     let recoveries = 0
     let aborted = false
+    let stoppedOnReply = false   // the rater stopped: batches in a row answered without a rating
     let lastError = null
     let targets = []
     const startedWith = scopeUnscored
@@ -926,7 +1104,7 @@ export default function DataAnalytics() {
         const pool = working.filter(r =>
           !excludedUsers.has(userKey(r.session, r.author_id)) && (!scoreOnlyFinal || isFinal(r)))
         targets = pool
-          .filter(r => { const st = ideaScoreState(r); return st === 'missing' || st === 'partial' })
+          .filter(r => { const st = ideaScoreState(r, fields); return st === 'missing' || st === 'partial' })
           // `scorableText` is the SAME function `hasIdeaText` uses to decide an
           // idea is ratable, so the panel can never offer to fill an idea the
           // run then sends as an empty string.
@@ -953,9 +1131,14 @@ export default function DataAnalytics() {
           // and stops the run at once: retrying it only makes the admin wait
           // through the pauses before being told what is actually wrong.
           if (isFatalScoringError(err)) throw err
-          threw = true
           lastError = err
           scores = []
+          // …except when the provider ANSWERED every batch without a rating (a
+          // refusal, or its whole token ceiling spent on reasoning: `replyProblem`).
+          // That is not a transport failure, and sending the same ideas again gets
+          // the same answer, so it earns no recovery pass (review, 2026-09-24: 16
+          // ideas cost 162 calls and ended in advice about the API key).
+          threw = !err?.replyProblem
         }
         // A pass that THREW failed for transport reasons whatever the report
         // says: `scoreIdeas` also throws when every batch was attempted and
@@ -963,14 +1146,15 @@ export default function DataAnalytics() {
         // `aborted` false. Either way the ideas got no real answer, and that is
         // what the recovery rule is deciding about.
         aborted = !!report?.aborted || threw
+        stoppedOnReply = stoppedOnReply || !!report?.stoppedOnReply
         if (!threw) lastError = report?.lastError || null
 
         const byRid = new Map(targets.map((t, k) => [t.rid, scores[k]]))
         const before = working
-        working = applyPassScores(working, byRid)
+        working = applyPassScores(working, byRid, fields)
         let filledThisPass = 0
         for (let i = 0; i < working.length; i++) {
-          if (working[i].novelty !== before[i].novelty || working[i].usefulness !== before[i].usefulness) filledThisPass++
+          if (working[i][fields.novelty] !== before[i][fields.novelty] || working[i][fields.usefulness] !== before[i][fields.usefulness]) filledThisPass++
         }
         totalFilled += filledThisPass
         // Show each pass's progress as it lands, so a long run is not one silent
@@ -979,11 +1163,11 @@ export default function DataAnalytics() {
         // editable while a run is going, and replacing the state wholesale would
         // discard a score the admin typed during it. `applyPassScores` fills
         // blanks only, so `prev` keeps every edit and gains the same fills.
-        setRows(prev => applyPassScores(prev, byRid))
+        setRows(prev => applyPassScores(prev, byRid, fields))
 
         const after = scoreGaps(
           working.filter(r => !excludedUsers.has(userKey(r.session, r.author_id))),
-          { onlyFinal: scoreOnlyFinal, isFinal })
+          { onlyFinal: scoreOnlyFinal, isFinal, fields })
         if (!shouldRunAnotherPass({
           pass, maxPasses: MAX_FILL_PASSES, filled: filledThisPass,
           remaining: after.fillable, aborted, recoveries,
@@ -1004,19 +1188,28 @@ export default function DataAnalytics() {
       // them, and lumping them in would leave a panel that can never reach zero.
       const finalGaps = scoreGaps(
         working.filter(r => !excludedUsers.has(userKey(r.session, r.author_id))),
-        { onlyFinal: scoreOnlyFinal, isFinal })
+        { onlyFinal: scoreOnlyFinal, isFinal, fields })
       // What WORKED is a neutral line; only a genuine shortfall is red. A run
       // that filled every gap used to report through the same error slot, so a
       // complete success was painted as a failure.
       setScoreLoadMsg(
-        `Filled ${totalFilled.toLocaleString()} of ${startedWith.toLocaleString()} idea${startedWith === 1 ? '' : 's'} that had no AI score`
+        `${runModelName} scored ${totalFilled.toLocaleString()} of the ${startedWith.toLocaleString()} idea${startedWith === 1 ? '' : 's'} it had not rated yet`
         + (pass > 1 ? ` (${pass} passes)` : '')
-        + `. ${gapSummary(finalGaps, scoreOnlyFinal)}`)
+        + `. ${gapSummary(finalGaps, scoreOnlyFinal, runModelName)}`)
       const bits = []
       if (aborted) {
         bits.push(`The run stopped early — ${scoreProvider} kept failing${lastError ? ` (${lastError.message || lastError})` : ''}, so the remaining ideas were never sent. Check the API key and quota under AI Settings, then press the button again.`)
       } else if (finalGaps.fillable > 0) {
-        bits.push(`${finalGaps.fillable.toLocaleString()} idea${finalGaps.fillable === 1 ? '' : 's'} still ${finalGaps.fillable === 1 ? 'has' : 'have'} an empty cell — the model's reply for ${finalGaps.fillable === 1 ? 'it' : 'them'} could not be read. Press the button again to retry just ${finalGaps.fillable === 1 ? 'it' : 'those'}.`)
+        const n = finalGaps.fillable
+        const still = `${n.toLocaleString()} idea${n === 1 ? '' : 's'} still ${n === 1 ? 'has' : 'have'} an empty cell`
+        const problem = lastError?.replyProblem
+        bits.push(problem
+          ? `${still}: ${runModelName} answered without a rating (${lastError.message || lastError}). `
+            + (stoppedOnReply ? 'It stopped after two batches in a row came back like that, so the other ideas were not sent (every call is billed). ' : '')
+            + (problem === 'exhausted'
+              ? 'Pick a model that reasons less (or one without reasoning) and press the button again.'
+              : 'Pressing the button again sends the same text and will likely get the same answer.')
+          : `${still}: the model's reply for ${n === 1 ? 'it' : 'them'} could not be read. Press the button again to retry just ${n === 1 ? 'it' : 'those'}.`)
       }
       if (finalGaps.unratable > 0) {
         bits.push(`${finalGaps.unratable.toLocaleString()} ${finalGaps.unratable === 1 ? 'idea has' : 'ideas have'} no text to rate, so ${finalGaps.unratable === 1 ? 'it' : 'they'} can never be scored — they are counted apart above.`)
@@ -1024,7 +1217,7 @@ export default function DataAnalytics() {
       // A cause the provider gave (a refusal, a ceiling spent on thinking, a
       // 429 it kept answering) used to be dropped unless the run aborted; the
       // still-empty ideas then read as "could not be read" with no reason.
-      if (lastError && !aborted && finalGaps.fillable > 0) {
+      if (lastError && !aborted && finalGaps.fillable > 0 && !lastError.replyProblem) {
         bits.push(`Last cause reported: ${lastError.message || lastError}`)
       }
       if (bits.length) setScoreErr(bits.join(' '))
@@ -1084,23 +1277,28 @@ export default function DataAnalytics() {
             rows: bookRows, selected: true,
           }])
           setRows(recomputeOverall(bookRows))
-          const g = scoreGaps(bookRows)
-          setScoreLoadMsg(`Loaded ${incoming.length} idea${incoming.length === 1 ? '' : 's'} from “${file.name}”${isCsv ? '' : ` (sheet “${sheetName}”)`}. ${gapSummary(g)}`)
+          const g = scoreGaps(bookRows, { fields: scoreFields })
+          const inFile = aiModelSlugs(bookRows).map(aiModelName)
+          setScoreLoadMsg(`Loaded ${incoming.length} idea${incoming.length === 1 ? '' : 's'} from “${file.name}”${isCsv ? '' : ` (sheet “${sheetName}”)`}`
+            + (inFile.length ? `, with AI scores from: ${inFile.join(', ')}` : '')
+            + `. ${gapSummary(g, false, scoreModelName)}`)
           return
         }
 
         restoreTranslationsFrom(bookSheets)
+        // Every model's columns in the file come across into that model's own
+        // columns (normalizeImportedRows has already read the model names).
         const res = mergeAiScoresIntoRows(rows, incoming)
         setRows(recomputeOverall(res.rows))
         const after = scoreGaps(
           res.rows.filter(r => !excludedUsers.has(userKey(r.session, r.author_id))),
-          { onlyFinal: scoreOnlyFinal, isFinal })
+          { onlyFinal: scoreOnlyFinal, isFinal, fields: scoreFields })
         setScoreLoadMsg(
           `Merged “${file.name}”${isCsv ? '' : ` (sheet “${sheetName}”)`} onto ${res.matched} of ${rows.length} loaded idea${rows.length === 1 ? '' : 's'} by Idea ID: `
-          + `filled ${res.filled} that had no AI score yet`
+          + `filled ${res.filled} idea${res.filled === 1 ? '' : 's'}' empty ${res.models.length ? res.models.map(aiModelName).join(' / ') : 'AI'} cells`
           + (res.kept ? `, kept the existing scores of ${res.kept}` : '')
           + (res.unmatched ? `. ${res.unmatched} file row${res.unmatched === 1 ? '' : 's'} matched no loaded idea and ${res.unmatched === 1 ? 'was' : 'were'} NOT added — clear Step 1 and import the file there to load it as the dataset` : '')
-          + `. ${gapSummary(after, scoreOnlyFinal)}`
+          + `. ${gapSummary(after, scoreOnlyFinal, scoreModelName)}`
         )
       } catch (err) {
         setScoreLoadMsg('Could not read the file: ' + (err.message || err))
@@ -1139,62 +1337,47 @@ export default function DataAnalytics() {
     return arr.map(([r]) => r)
   }, [effectiveRows, sortCol, sortDir])
 
+  // Hand-edit one model's AI score (1–5). The derived columns (the mean across
+  // models, AI Quality) follow in recomputeOverall — which also clears the quality
+  // when every AI component of the idea has been cleared.
   function updateScore(rid, field, value) {
     setRows(prev => recomputeOverall(prev.map(r => {
       if (r.rid !== rid) return r
       const v = value === '' ? '' : Math.max(1, Math.min(5, Number(value)))
-      const next = { ...r, [field]: Number.isNaN(v) ? '' : v }
-      // Hand-clearing BOTH components clears the derived quality too (recomputeOverall
-      // deliberately preserves a standalone quality when both components are missing,
-      // which would otherwise freeze the stale mean here — quality isn't editable).
-      if (next.novelty === '' && next.usefulness === '') next.overall_quality = ''
-      return next
+      return { ...r, [field]: Number.isNaN(v) ? '' : v }
     })))
   }
 
+  // Give the "model not recorded" scores a model (they came from a file saved
+  // before the columns carried a model name). Fill-blank only, like every path.
+  function onLabelUnrecorded() {
+    if (!labelTarget) return
+    // The ideas on show only (after removals), the ones the panel counted: a removed
+    // participant's hidden ideas are left as they are.
+    const shown = rows.map(r => !isExcluded(r))
+    const res = labelUnrecordedScores(rows.filter((_, i) => shown[i]), labelTarget)
+    let k = 0
+    setRows(recomputeOverall(rows.map((r, i) => (shown[i] ? res.rows[k++] : r))))
+    const name = aiModelName(modelSlug(labelTarget))
+    setScoreLoadMsg(
+      `Labelled the scores of ${res.moved} idea${res.moved === 1 ? '' : 's'} as ${name}.`
+      + (res.conflicts ? ` ${res.conflicts} idea${res.conflicts === 1 ? '' : 's'} already had a ${name} score, so ${res.conflicts === 1 ? 'its' : 'their'} unlabelled score${res.conflicts === 1 ? ' was' : 's were'} left under “model not recorded”.` : ''))
+    setLabelTarget('')
+  }
+
   // ── Downloads ──
-  function downloadCsv() {
-    if (!effectiveRows.length) return
-    const data = withMeasuredText(effectiveRows)   // text = what the measures read (Step 1b English)
-    saveBlob(rowsToCsv(data, analysisColumns(data)), 'idea_analytics_dataset.csv', 'text/csv;charset=utf-8')
-  }
-
-  function downloadExcel() {
-    const data = effectiveRows
-    if (!data.length) return
-    const wb = XLSX.utils.book_new()
-    addSheet(wb, 'Ideas', ideaSheetRows(data))
-    addSheet(wb, 'Summary by condition', summaryByConditionRows(data))
-    addSheet(wb, 'Summary by session', summaryBySessionRows(data))
-    if (excludedUsers.size) {
-      addSheet(wb, 'Removed participants', users.filter(u => excludedUsers.has(u.key)).map(u => ({
-        Session: u.session, Author: u.author_name || '', 'Author ID': u.author_id, 'Ideas removed': u.count,
-      })))
-    }
-    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-    saveBlob(out, 'idea_analytics_summary.xlsx', 'application/octet-stream')
-  }
-
-  // ── Section 3.1: download the input "ideas" file with a KPI column per idea ──
-  // Re-emits each idea in the original Rankings/"ideas" layout (Idea ID, Condition,
-  // Stage, Final Group Pick, Title, Description) and appends one column for every
-  // computed KPI that has data (the 3.1 objective KPIs, plus AI/evaluator scores if
-  // present). A second tab carries the per-condition pool KPIs (not per-idea).
-  function downloadIdeasWithKpis() {
-    const data = effectiveRows
-    if (!data.length) return
-    const kpis = presentKpis(data)
+  // One idea sheet, shared by every "ideas" download on the page, so they cannot
+  // disagree: the identity columns, then the KPI columns in the page's order (owner,
+  // 2026-09-24) — the EMPIRICAL proxies of novelty and usefulness first, then the AI
+  // ratings MODEL BY MODEL ("AI Novelty (GPT-6 Astra)", "AI Usefulness (GPT-6
+  // Astra)", then the next model's pair), then the evaluators. Every header is one
+  // the importers read back, so this sheet can be re-uploaded as the dataset (3.2
+  // "Upload full dataset") without losing a column or a model name.
+  function ideaExportRows(data) {
+    const kpis = exportKpiColumns(data)
     const stageLabel = ph => (ph === 'group' ? 'group' : ph === 'individual' ? 'individual (solo)' : (ph || ''))
     const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? '' : Number(v))
-    // The identity columns are here so this workbook can be RE-UPLOADED as the
-    // dataset (owner 2026-08-25: "upload my entire data set … and update the
-    // entire dataset"). Without Session Code and the author columns the round
-    // trip was lossy — every re-imported idea landed in a nameless "imported"
-    // session with no author, which empties the participant panel and the
-    // per-session summaries. Every one of these headers is a name
-    // `normalizeImportedRows` already reads, and all of them are skipped by the
-    // KPI-column sweep, so nothing else about the file changes.
-    const ideaRows = data.map(r => {
+    return data.map(r => {
       const row = {
         'Idea ID': r.idea_id,
         'Session Code': r.session || '',
@@ -1213,17 +1396,78 @@ export default function DataAnalytics() {
       for (const k of kpis) row[k.label] = num(r[k.key])
       return row
     })
-    const wb = XLSX.utils.book_new()
-    // Step 1b: the file carries every idea in English; each replaced cell's original
-    // is kept on a "Translations" sheet, which an import reads back.
-    // A loaded file's own Translations rows for its idea sheets are carried forward
-    // (a re-imported English file replaces nothing, but its originals must not be lost).
-    const tr = translateSheets([{ name: 'ideas', kind: 'json', rows: ideaRows }], tm)
-    addSheet(wb, 'ideas', tr.sheets[0].rows)
+  }
+
+  // Step 1b: every idea download carries the ideas in English; each replaced cell's
+  // original is kept on a "Translations" sheet, which an import reads back. A loaded
+  // file's own Translations rows for its idea sheets are carried forward (a
+  // re-imported English file replaces nothing, but its originals must not be lost).
+  function translatedIdeaSheet(data) {
+    const tr = translateSheets([{ name: 'ideas', kind: 'json', rows: ideaExportRows(data) }], tm)
     const trSheet = carryTranslationsSheet(tr.log,
       importedBooks.filter(b => loadedBookIds.has(b.id)).flatMap(b => b.sheets || []),
       r => /idea|ranking/i.test(String(r.Sheet ?? '')))
+    return { rows: tr.sheets[0].rows, trSheet }
+  }
+  function addIdeaSheet(wb, data) {
+    const { rows: ideaRows, trSheet } = translatedIdeaSheet(data)
+    addSheet(wb, 'ideas', ideaRows)
     if (trSheet) addSheet(wb, TRANSLATIONS_SHEET, trSheet.rows)
+  }
+
+  // "Download all idea data" (owner, 2026-09-24: "there is no download button that
+  // would download for me all the data collected so far"): every loaded idea with
+  // every column collected so far, in the order above, plus the check of the
+  // Usefulness score, the summaries, the pool KPIs and who was removed.
+  function downloadAllData() {
+    const data = effectiveRows
+    if (!data.length) return
+    const wb = XLSX.utils.book_new()
+    addIdeaSheet(wb, data)
+    if (data.some(r => r.det_usefulness !== '' && r.det_usefulness != null)) {
+      addUsefulnessCheckSheet(wb, data, techSet)
+    }
+    addSheet(wb, 'Summary by condition', summaryByConditionRows(data))
+    addSheet(wb, 'Summary by session', summaryBySessionRows(data))
+    if (detResult?.perCond?.length) addSheet(wb, 'Pool KPIs by condition', poolKpiRows(withOverall(detResult)))
+    if (excludedUsers.size) {
+      addSheet(wb, 'Removed participants', users.filter(u => excludedUsers.has(u.key)).map(u => ({
+        // "Author Name", not a bare "Author": Step 1b skips a *name* column, so a
+        // re-imported copy of this file never sends a participant's name to translation.
+        Session: u.session, 'Author Name': u.author_name || '', 'Author ID': u.author_id, 'Ideas removed': u.count,
+      })))
+    }
+    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    saveBlob(out, 'idea_analytics_all_data.xlsx', 'application/octet-stream')
+  }
+
+  // The same idea sheet as a CSV, for R / Stata / SPSS.
+  function downloadAllDataCsv() {
+    const data = effectiveRows
+    if (!data.length) return
+    // The English version of every idea, like the Excel file (Step 1b); a CSV has
+    // no room for the Translations sheet, so the originals travel in the Excel one.
+    const objs = translatedIdeaSheet(data).rows
+    const cols = Object.keys(objs[0] || {})
+    const esc = v => {
+      let t = v == null ? '' : String(v)
+      // No formula injection when opened in Excel — for TEXT only: a number such as
+      // -0.25 must stay a number for R / Stata and for re-import.
+      if (typeof v !== 'number' && /^[=+\-@\t\r]/.test(t)) t = "'" + t
+      return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t
+    }
+    const csv = [cols.map(esc).join(','), ...objs.map(o => cols.map(c => esc(o[c])).join(','))].join('\n')
+    saveBlob('\ufeff' + csv, 'idea_analytics_all_data.csv', 'text/csv;charset=utf-8')
+  }
+
+  // ── Section 3.1: download the input "ideas" file with a KPI column per idea ──
+  // The same idea sheet as "Download all idea data" (so the two files never disagree),
+  // plus the per-condition pool KPIs, which are per condition, not per idea.
+  function downloadIdeasWithKpis() {
+    const data = effectiveRows
+    if (!data.length) return
+    const wb = XLSX.utils.book_new()
+    addIdeaSheet(wb, data)
     // Pool-level KPIs (Unique fraction / Productivity) are per condition, not per
     // idea, so they live on their own tab when a compute run produced them.
     if (detResult?.perCond?.length) {
@@ -1376,30 +1620,15 @@ export default function DataAnalytics() {
       const merged = mergeSessionSheets(sources, aboutMeta)
       const ideasSheet = merged.find(s => s.name === 'Ideas')
       if (ideasSheet) {
-        // Carry any KPI set on the page into the Rankings tab (by Idea ID), so the
-        // consolidated file reflects the AI scoring (3.2), the objective KPIs
-        // computed in 3.1, AND any uploaded extra KPIs. Include a row if it has any.
-        const has = v => v !== '' && v != null
-        const upDefs = uploadedKpiDefs(rows)         // [{ key:'x_…', label }]
-        const scoreById = new Map()
-        for (const r of rows) {
-          const hasAi = has(r.novelty) || has(r.usefulness)
-          const hasDet = has(r.det_novelty) || has(r.det_distinctiveness) || has(r.det_score) ||
-            has(r.det_need_fit) || has(r.det_specificity) || has(r.det_workability) || has(r.det_usefulness)
-          const extra = {}
-          let hasUp = false
-          for (const d of upDefs) { extra[d.key] = r[d.key]; if (has(r[d.key])) hasUp = true }
-          if (hasAi || hasDet || hasUp) {
-            scoreById.set(String(r.idea_id), {
-              novelty: r.novelty, usefulness: r.usefulness, quality: r.overall_quality,
-              detNovelty: r.det_novelty, detDistinctiveness: r.det_distinctiveness, detScore: r.det_score,
-              detNeedFit: r.det_need_fit, detSpecificity: r.det_specificity, detWorkability: r.det_workability,
-              detUsefulness: r.det_usefulness,
-              extra,
-            })
-          }
-        }
-        merged.push(rankingsSheetFromIdeas(ideasSheet.rows, scoreById, upDefs))
+        // Carry every KPI set on the page into the Rankings tab (by Idea ID), in the
+        // page's order: the empirical KPIs (3.1, all seven columns even before they
+        // are computed) and the uploaded extras, then each AI model's pair, then the
+        // evaluator columns (kept, empty, for blind expert raters).
+        const cols = exportKpiColumns(rows, { allEmpirical: true, evaluatorColumns: true })
+        // One record per idea (session + Idea ID): copies of an idea loaded twice are
+        // merged per column, and the derived means rebuilt from the merged record.
+        const lookup = ideaValueLookup(rows, cols, r => recomputeOverall([r])[0])
+        merged.push(rankingsSheetFromIdeas(ideasSheet.rows, lookup, cols))
       }
       // The per-pool deterministic KPIs (Unique fraction / Productivity) are batch-
       // level, not per idea, so the consolidated aggregate carries them on their own
@@ -1428,14 +1657,14 @@ export default function DataAnalytics() {
   }
 
   // Section-3 "Clear": removes ONLY the KPI data added in THIS step — AI scores (3.2),
-  // objective KPIs (3.1), evaluator scores (3.3) and any uploaded extra KPIs (e.g.
+  // empirical KPIs (3.1), evaluator scores (3.3) and any uploaded extra KPIs (e.g.
   // Prototypicality). The loaded ideas (Sections 1–2) and the Step-5/6 analysis are
   // left untouched. `stripAllKpis` blanks every built-in KPI and drops all x_ columns
   // while keeping the idea data.
   function clearData() {
     const hasUploaded = uploadedKpiKeys(rows).length > 0
     if ((scoredCount > 0 || extScoredCount > 0 || detScoredCount > 0 || hasUploaded) &&
-        !confirm('Clear the KPIs added in this step — AI scores, objective KPIs, evaluator scores and any uploaded extra KPIs (e.g. Prototypicality)? Your loaded ideas in Sections 1–2 stay.')) return
+        !confirm('Clear the KPIs added in this step — every model\'s AI scores, the empirical KPIs, evaluator scores and any uploaded extra KPIs (e.g. Prototypicality)? Your loaded ideas in Sections 1–2 stay.')) return
     setRows(prev => stripAllKpis(prev))
     setDetResult(null); setDetErr('')
     setScoreErr(''); setScoreLoadMsg(''); setEvalLoadMsg(''); setKpiUploadMsg('')
@@ -1463,7 +1692,7 @@ export default function DataAnalytics() {
     const scored = analysisRows.filter(hasAnyKpi)
     if (scored.length < 2) {
       const where = regScope === 'group' ? 'ideas that entered the group phase' : 'Final-Group-Pick ideas'
-      setRunError(`Need at least a couple of ${where} with a KPI. In Step 3, score them with AI (3.2), upload evaluator scores (3.3), or compute the objective KPIs (3.1).`)
+      setRunError(`Need at least a couple of ${where} with a KPI. In Step 3, score them with AI (3.2), upload evaluator scores (3.3), or compute the empirical KPIs (3.1).`)
       return
     }
     setRunning(true)
@@ -1589,27 +1818,65 @@ export default function DataAnalytics() {
   // an idea with no text at all can never be rated, so counting it as outstanding
   // would leave a panel that never reaches zero however many times it is pressed.
   const scorePool = scoreOnlyFinal ? effectiveRows.filter(isFinal) : effectiveRows
+  // Coverage is PER MODEL: "how many ideas has the model chosen above not rated
+  // yet", so pressing Fill with a second model fills that model's own columns.
   const gaps = useMemo(
-    () => scoreGaps(effectiveRows, { onlyFinal: scoreOnlyFinal, isFinal }),
-    [effectiveRows, scoreOnlyFinal])
+    () => scoreGaps(effectiveRows, { onlyFinal: scoreOnlyFinal, isFinal, fields: scoreFields }),
+    [effectiveRows, scoreOnlyFinal, scoreFields])
   // Coverage over the WHOLE dataset, regardless of the Final-Ideas tick — so the
   // panel can say when the tick is what is hiding a gap ("0 final ideas to score"
   // over a dataset that still has 24 unscored ideas is the reading that misled).
-  const allGaps = useMemo(() => scoreGaps(effectiveRows), [effectiveRows])
+  const allGaps = useMemo(() => scoreGaps(effectiveRows, { fields: scoreFields }), [effectiveRows, scoreFields])
   const scopeUnscored = gaps.fillable
+  // Every OTHER model with scores in the data, with how many ideas it has rated
+  // (both columns), for the line under the coverage panel.
+  const otherModelCoverage = useMemo(() => aiModelSlugs(effectiveRows)
+    .filter(sl => sl !== scoreSlug)
+    .map(sl => {
+      const f = { novelty: `ai_nov__${sl}`, usefulness: `ai_use__${sl}` }
+      const g = scoreGaps(effectiveRows, { onlyFinal: scoreOnlyFinal, isFinal, fields: f })
+      return { slug: sl, name: aiModelName(sl), scored: g.scored, total: g.total }
+    }), [effectiveRows, scoreSlug, scoreOnlyFinal])
+  // Over the ideas on show (after removals), like the coverage line beside it.
+  const unrecordedCount = useMemo(
+    () => effectiveRows.filter(r => [`ai_nov__${UNRECORDED}`, `ai_use__${UNRECORDED}`].some(k => r[k] !== '' && r[k] != null)).length,
+    [effectiveRows])
+  // Steps 4–5 read AI Novelty / AI Usefulness as each idea's mean over the models
+  // that rated it. When the ideas in scope were not all rated by the same models, a
+  // difference between conditions can come from WHICH models rated which ideas
+  // (review, 2026-09-24: a second model that stopped part-way moved the Both-vs-
+  // Group contrast by 0.19), so the two steps say so, naming the groups.
+  function panelNote(scopeRows) {
+    const cov = aiPanelCoverage(scopeRows)
+    if (!cov.uneven) return null
+    const name = sl => (sl === UNRECORDED ? 'a model not recorded' : aiModelName(sl))
+    const shown = cov.groups.slice(0, 4).map(g => `${g.n.toLocaleString()} by ${g.slugs.map(name).join(' and ')}${g.slugs.length === 1 ? ' only' : ''}`)
+    const more = cov.groups.length > 4 ? `; ${cov.groups.slice(4).reduce((t, g) => t + g.n, 0).toLocaleString()} by other sets` : ''
+    return (
+      <p className={styles.hint}>
+        <strong className={styles.unscored}>Not every idea here was rated by the same AI models</strong>: {shown.join('; ')}{more}.
+        {' '}AI&nbsp;Novelty and AI&nbsp;Usefulness here are each idea&apos;s mean over the models that rated it, so a difference
+        {' '}between conditions can come from which models rated which ideas. Fill the missing ratings in 3.2 (pick each
+        {' '}model in turn) so every idea has the same models.
+      </p>
+    )
+  }
+  const regScopeRows = useMemo(
+    () => (regScope === 'group' ? effectiveRows.filter(enteredGroupPhase) : effectiveRows.filter(isFinal)),
+    [effectiveRows, regScope])
   // Step-5 regression dataset: Final-Group-Pick ideas carrying at least one KPI
-  // (from any source — AI / evaluator / objective).
+  // (from any source — AI / evaluator / empirical).
   const finalScoredCount = effectiveRows.filter(r => isFinal(r) && hasAnyKpi(r)).length
 
   // ── Step 4: summary statistics over the consolidated Step-3 data ──
-  // "scored" = carries at least one KPI from ANY source (AI / evaluator / objective
+  // "scored" = carries at least one KPI from ANY source (AI / evaluator / empirical
   // / uploaded), so Section 4 reflects whatever Step 3 produced — not only AI-rated
-  // ideas (objective KPIs alone now populate the summary).
+  // ideas (empirical KPIs alone now populate the summary).
   const statRows = useMemo(
     () => withMeasuredText(statsOnlyScored ? effectiveRows.filter(hasAnyKpi) : effectiveRows),
     [effectiveRows, statsOnlyScored])
   // Per-condition counts + mean (SD) for EVERY present KPI (each KPI over its own
-  // non-missing rows), so the table shows objective / uploaded KPIs, not just AI.
+  // non-missing rows), so the table shows empirical / uploaded KPIs, not just AI.
   const statByCondition = useMemo(() => {
     const present = presentKpis(statRows)
     const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
@@ -1945,10 +2212,13 @@ export default function DataAnalytics() {
             export</strong> — all the same tabs (<em>About, Participants, Ideas, Survey, Timing,
             Group&nbsp;Chat, AI&nbsp;Chat, AI&nbsp;Usage, AI&nbsp;Pricing, Groups, Conditions</em>),
             with every session's rows stacked together and condition-stamped. It adds one extra tab,
-            <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Condition, Stage,
-            Final&nbsp;Group&nbsp;Pick, Title, Description</em>, the <em>Novelty / Usefulness / Quality</em>
-            columns ready for blind expert rating, and the Section&nbsp;3.1 objective KPIs
-            (<em>Novelty&nbsp;(objective) / Pool&nbsp;distinctiveness / NoveltyScore</em>) when computed.
+            <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Session&nbsp;Code, Condition, Stage,
+            Final&nbsp;Group&nbsp;Pick, Title, Description</em>, then first the Section&nbsp;3.1
+            <strong>empirical</strong> KPIs (novelty side and usefulness side), then the <strong>AI
+            ratings model by model</strong> (e.g. <em>AI&nbsp;Novelty&nbsp;(GPT-6&nbsp;Astra)</em> beside
+            {' '}<em>AI&nbsp;Usefulness&nbsp;(GPT-6&nbsp;Astra)</em>, then the next model's pair), and the
+            {' '}<em>Eval.&nbsp;Novelty / Eval.&nbsp;Usefulness / Eval.&nbsp;Quality</em> columns, empty and ready
+            for blind expert rating (raters fill the first two; Eval.&nbsp;Quality is always their mean).
             You can also <strong>Import Excel / CSV</strong>
             here (same importer as Step&nbsp;1): the file is added to the source list above <strong>and
             loaded right away</strong>, so the aggregate, the stats below and Steps&nbsp;3–6 fill in
@@ -2003,7 +2273,7 @@ export default function DataAnalytics() {
           </h2>
           <p className={styles.hint}>
             Each idea can carry KPIs from independent sources, kept separate so the analysis
-            can compare them: <strong>3.1 deterministic/objective</strong> KPIs computed from the idea
+            can compare them: <strong>3.1 empirical</strong> KPIs computed from the idea
             text (plus any <strong>extra KPIs you upload</strong>, e.g. Prototypicality&nbsp;/&nbsp;KS),
             <strong> 3.2 AI-generated</strong> KPIs (scored now via an API or uploaded), and
             <strong> 3.3 external-evaluator</strong> KPIs (uploaded). Every available KPI flows into the
@@ -2016,8 +2286,8 @@ export default function DataAnalytics() {
             <>
               <div className={styles.stats}>
                 <div className={styles.statBox}><div className={styles.statNum}>{effectiveRows.length}</div><div className={styles.statLabel}>Ideas{excludedUsers.size ? ` (${rows.length - effectiveRows.length} removed)` : ''}</div></div>
-                <div className={styles.statBox}><div className={styles.statNum}>{detScoredCount}</div><div className={styles.statLabel}>Obj. computed (3.1)</div></div>
-                <div className={styles.statBox}><div className={styles.statNum}>{scoredCount}</div><div className={styles.statLabel}>AI scored (3.2)</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{detScoredCount}</div><div className={styles.statLabel}>Empirical computed (3.1)</div></div>
+                <div className={styles.statBox}><div className={styles.statNum}>{scoredCount}</div><div className={styles.statLabel}>AI scored, any model (3.2)</div></div>
                 <div className={styles.statBox}><div className={styles.statNum}>{extScoredCount}</div><div className={styles.statLabel}>Eval. rated (3.3)</div></div>
                 {CONDITIONS.map(c => (
                   <div className={styles.statBox} key={c}>
@@ -2027,10 +2297,10 @@ export default function DataAnalytics() {
                 ))}
               </div>
 
-              {/* ── Sub-step 3.1 — Deterministic & objective KPIs ───────────── */}
-              <h3 className={styles.subTitle}><span className={styles.subBadge}>3.1</span>Deterministic and objective KPIs</h3>
+              {/* ── Sub-step 3.1 — Empirical KPIs ─────────────────────────────── */}
+              <h3 className={styles.subTitle}><span className={styles.subBadge}>3.1</span>Empirical KPIs</h3>
               <div className={styles.banner}>
-                <strong>Objective, repeatable KPIs computed from the idea text</strong>, in your browser with classical
+                <strong>Empirical, repeatable proxies computed from the idea text</strong>, in your browser with classical
                 {' '}<strong>TF-IDF</strong> similarity (no&nbsp;API key, no&nbsp;model download). They come in two sides, and each
                 side has its own anchor, so one is never just the other turned upside down.
                 <ul className={styles.bannerList}>
@@ -2129,7 +2399,7 @@ export default function DataAnalytics() {
               </p>
               <div className={styles.row} style={{ marginBottom: 8 }}>
                 <button className="btn-primary" onClick={computeDeterministic} disabled={!!detComputing || effectiveRows.length < 2}>
-                  {detComputing ? `${detComputing.phase}… ${detComputing.done}/${detComputing.total}` : `Compute objective KPIs for ${effectiveRows.length} idea${effectiveRows.length === 1 ? '' : 's'}`}
+                  {detComputing ? `${detComputing.phase}… ${detComputing.done}/${detComputing.total}` : `Compute empirical KPIs for ${effectiveRows.length} idea${effectiveRows.length === 1 ? '' : 's'}`}
                 </button>
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={downloadIdeasWithKpis}
                   disabled={!!detComputing || !effectiveRows.some(r => r.det_score !== '' && r.det_score != null)}
@@ -2169,7 +2439,11 @@ export default function DataAnalytics() {
               <h3 className={styles.subTitle} style={{ marginTop: 22 }}><span className={styles.subBadge}>3.2</span>AI-generated KPIs</h3>
               <div className={styles.banner}>
                 <strong>Score each idea with an LLM, or upload an offline AI-scoring file.</strong> The AI rater scores each
-                idea on novelty and usefulness (1–5); quality is their mean. Choose the API provider and the model below —
+                idea on novelty and usefulness (1–5); quality is their mean. <strong>Every model gets its own two
+                columns</strong>, named after it: <em>AI&nbsp;Novelty&nbsp;(GPT-6&nbsp;Astra)</em> and
+                {' '}<em>AI&nbsp;Usefulness&nbsp;(GPT-6&nbsp;Astra)</em>, and beside them the next model's pair. When two or
+                more models rated an idea, <em>AI&nbsp;Novelty&nbsp;(mean across models)</em> and <em>AI&nbsp;Usefulness&nbsp;(mean
+                across models)</em> are their average, and that average is what Steps&nbsp;4–5 analyse as the AI score. Choose the API provider and the model below —
                 the run uses that provider's key saved under AI&nbsp;Settings, and the model is named on every request
                 (a key unlocks all of a provider's models; it is not tied to one). Scores flow into the <em>Rankings</em> tab of the Step&nbsp;2
                 aggregate and the Step&nbsp;5 regressions. <strong>Both the AI run and an uploaded file only fill ideas
@@ -2196,16 +2470,16 @@ export default function DataAnalytics() {
                   <span className={styles.unscored}>no {activeProvider.name} key saved — add it under AI Settings</span>
                 )}
               </div>
+              {activeProvider.note && <p className={styles.hint}><strong>{activeProvider.name}:</strong> {activeProvider.note}</p>}
               <p className={styles.hint}>
                 Why pick a model as well as a provider? An API key belongs to your {activeProvider.name} account, not to
                 one model — it unlocks every model that provider serves, and each request names the model it runs on.
-                The list shows five models of the provider's newest generation, most capable first, with each model's
-                price per 1M tokens beside it (as of {CATALOGUE_AS_OF}); the pre-selected one is the cheapest current
-                model, which is enough for a 1–5 rating over hundreds of ideas.
-                The run rates only ideas that have no AI score yet: on a fresh dataset the AI&nbsp;Novelty and
-                AI&nbsp;Usefulness columns are entirely the ratings of the model you pick here, while a dataset already
-                scored by another rater keeps those scores — to re-rate every idea with a different provider or model,
-                press <em>Clear</em> in this section first, then fill.
+                The list shows the provider's newest models (five each for Claude, OpenAI and Gemini), most capable
+                first, with each model's price per 1M tokens beside it (as of {CATALOGUE_AS_OF}); the pre-selected one
+                is a cheap current model, which is enough for a 1–5 rating over hundreds of ideas.
+                The run fills <em>this model's own</em> columns and only where they are still empty, so a second
+                model rates the same ideas into a new pair of columns without touching the first model's scores
+                (to re-rate with the SAME model, clear its cells in the table, or press <em>Clear</em> in this section).
               </p>
 
               <label className={styles.checkRow}>
@@ -2222,18 +2496,42 @@ export default function DataAnalytics() {
               {effectiveRows.length > 0 && (
                 <div className={`${styles.coverage} ${gaps.complete ? styles.coverageDone : ''}`}>
                   <div className={styles.coverageHead}>
-                    <strong>AI score coverage</strong>
+                    <strong>AI score coverage · {scoreModelName}</strong>
                     <span className={styles.kpiPill}>{gaps.scored.toLocaleString()} of {gaps.total.toLocaleString()} scored</span>
                     {gaps.fillable > 0 && <span className={styles.unscored}>{gaps.fillable.toLocaleString()} still empty</span>}
                     {gaps.unratable > 0 && <span className={styles.kpiPill}>{gaps.unratable.toLocaleString()} unratable</span>}
                   </div>
-                  <p className={styles.coverageLine}>{gapSummary(gaps, scoreOnlyFinal)}</p>
+                  <p className={styles.coverageLine}>{gapSummary(gaps, scoreOnlyFinal, scoreModelName)}</p>
+                  {otherModelCoverage.length > 0 && (
+                    <p className={styles.coverageLine}>
+                      Other models in the data:{' '}
+                      {otherModelCoverage.map((m, i) => (
+                        <span key={m.slug}>{i ? ' · ' : ''}<strong>{m.name}</strong> {m.scored.toLocaleString()} of {m.total.toLocaleString()} rated</span>
+                      ))}
+                      . Each model keeps its own columns; where two or more rated an idea, <em>AI Novelty (mean across models)</em> is their average.
+                    </p>
+                  )}
+                  {unrecordedCount > 0 && (
+                    <div className={styles.coverageLine}>
+                      <strong>{unrecordedCount.toLocaleString()} idea{unrecordedCount === 1 ? ' has' : 's have'} AI scores with no model name</strong>
+                      {' '}(from a file saved before the columns named their model). Which model rated {unrecordedCount === 1 ? 'it' : 'them'}?{' '}
+                      <select className={styles.miniSelect} value={labelTarget} onChange={e => setLabelTarget(e.target.value)} disabled={!!scoring}>
+                        <option value="">Choose the model…</option>
+                        {PROVIDERS.map(p => (
+                          <optgroup key={p.id} label={p.name}>
+                            {p.models.map(m => <option key={m.id} value={m.id}>{aiModelName(modelSlug(m.id))}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>{' '}
+                      <button className={`btn-ghost ${styles.miniBtn}`} onClick={onLabelUnrecorded} disabled={!labelTarget || !!scoring}>Label them</button>
+                    </div>
+                  )}
                   {/* A gap the tick is hiding: say so, rather than letting the scope
                       count read as "there is nothing left to do". */}
                   {scoreOnlyFinal && allGaps.fillable > gaps.fillable && (
                     <p className={styles.coverageLine}>
                       Across the <strong>whole</strong> dataset {allGaps.fillable.toLocaleString()} idea{allGaps.fillable === 1 ? '' : 's'} still
-                      need an AI score — untick <em>Only score the Final Ideas</em> above to fill those too.
+                      need a score from {scoreModelName} — untick <em>Only score the Final Ideas</em> above to fill those too.
                     </p>
                   )}
                   {gaps.unratable > 0 && (
@@ -2252,8 +2550,8 @@ export default function DataAnalytics() {
                       ? `Waiting for ${scoreProvider} to recover…`
                       : `Scoring ${scoring.done}/${scoring.total}…${scoring.pass > 1 ? ` (pass ${scoring.pass})` : ''}`
                     : scopeUnscored === 0
-                      ? `All ${scoreOnlyFinal ? 'final ' : ''}ideas have AI scores`
-                      : `Fill the ${scopeUnscored.toLocaleString()} missing AI score${scopeUnscored === 1 ? '' : 's'} with AI`}
+                      ? `${scoreModelName} has rated all ${scoreOnlyFinal ? 'final ' : ''}ideas`
+                      : `Fill the ${scopeUnscored.toLocaleString()} missing ${scoreModelName} score${scopeUnscored === 1 ? '' : 's'}`}
                 </button>
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => datasetFileRef.current?.click()} disabled={!!scoring}
                   title="Upload your whole dataset (the ideas_with_kpis / analysis Excel or CSV you downloaded) → its AI scores are merged onto the loaded ideas by Idea ID, filling only the cells that are still empty. Nothing is duplicated and nothing already scored is overwritten.">
@@ -2261,7 +2559,7 @@ export default function DataAnalytics() {
                 </button>
                 <input ref={datasetFileRef} type="file" accept=".xlsx,.xls,.csv" className={styles.fileInput} onChange={onPickDatasetTopUp} />
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => scoreFileRef.current?.click()} disabled={!!scoring}
-                  title='Upload an offline AI-scoring file ("All Ideas Ranked" / Rankings sheet, matched by idea title) → fills the AI KPI columns of ideas that have no score yet (already-scored ideas keep theirs)'>Load AI scores file</button>
+                  title='Upload an offline AI-scoring file ("All Ideas Ranked" / Rankings sheet, matched by Idea ID and Session Code when it has them, else by idea title) → fills the AI KPI columns of ideas that have no score yet (already-scored ideas keep theirs)'>Load AI scores file</button>
                 <input ref={scoreFileRef} type="file" accept=".xlsx,.xls" className={styles.fileInput} onChange={onPickScores} />
                 {scoring && (
                   <span className={styles.statusLine}>
@@ -2332,15 +2630,32 @@ export default function DataAnalytics() {
                 </div>
               )}
 
-              <div className={styles.tableWrap} style={{ marginTop: 14 }}>
+              {/* Everything collected so far, in the page's column order (owner, 2026-09-24). */}
+              <div className={styles.row} style={{ marginTop: 14, alignItems: 'center', gap: 10 }}>
+                <button className="btn-primary" onClick={downloadAllData} disabled={!effectiveRows.length}
+                  title="Every loaded idea with every column collected so far: the empirical KPIs first, then each AI model's Novelty and Usefulness, then the evaluators">
+                  Download all idea data (Excel)
+                </button>
+                <button className={`btn-ghost ${styles.miniBtn}`} onClick={downloadAllDataCsv} disabled={!effectiveRows.length}>CSV</button>
+                <span className={styles.hint} style={{ margin: 0 }}>
+                  Every idea in the table with every column collected so far, in this order: the ideas&apos; details, the
+                  {' '}<strong>empirical</strong> KPIs, then the <strong>AI</strong> scores model by model, then the evaluators.
+                  The ideas are in English where Step&nbsp;1b translated them; the Excel file keeps the originals on a
+                  {' '}<em>Translations</em> sheet and adds a <em>Usefulness score check</em> sheet (each idea&apos;s three
+                  parts, their ranks and the mean), summaries by condition and by session, and the pool KPIs. For the
+                  whole study (surveys, chats, every tab) use <strong>Download all data in English</strong> in Step&nbsp;1b.
+                </span>
+              </div>
+              <div className={styles.tableWrap} style={{ marginTop: 10 }}>
                 <table className={styles.dataTable}>
                   <thead>
                     <tr>
                       {TABLE_COLS.map(key => {
-                        // Inject the computed/uploaded KPI headers just before the Idea text column.
+                        // Inject the KPI headers (empirical, then AI per model, then
+                        // evaluators) just before the Idea text column.
                         const head = []
                         if (key === 'idea') {
-                          for (const d of extraKpiCols) head.push(
+                          for (const d of tableKpiCols) head.push(
                             <th key={d.key} className={styles.sortableTh} onClick={() => toggleSort(d.key)} title={`${d.label} — click to sort`}>
                               {d.label}
                               <span className={styles.sortArrow}>{sortCol === d.key ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}</span>
@@ -2365,22 +2680,31 @@ export default function DataAnalytics() {
                         <td><span className={`${styles.condTag} ${condClass(r.condition)}`}>{r.condition}</span></td>
                         <td>{r.phase}</td>
                         <td>{isFinal(r) ? 'Yes' : 'No'}</td>
-                        <td className="num">
-                          <input className={styles.scoreInput} type="number" min="1" max="5" step="0.5"
-                            value={r.novelty} onChange={e => updateScore(r.rid, 'novelty', e.target.value)} />
-                        </td>
-                        <td className="num">
-                          <input className={styles.scoreInput} type="number" min="1" max="5" step="0.5"
-                            value={r.usefulness} onChange={e => updateScore(r.rid, 'usefulness', e.target.value)} />
-                        </td>
-                        <td className={`num ${r.overall_quality === '' ? styles.unscored : ''}`}>
-                          {r.overall_quality === '' ? '—' : Number(r.overall_quality).toFixed(2)}
-                        </td>
-                        {extraKpiCols.map(d => {
+                        {tableKpiCols.map(d => {
                           const v = r[d.key]
+                          // A score a model GAVE can be corrected here (1–5); a blank
+                          // cell cannot be typed into, because a hand rating there would
+                          // be exported, and averaged, as that model's (review,
+                          // 2026-09-24): a blank is filled by the model's own run. The
+                          // cell being edited stays an input while it has focus, so
+                          // clearing it and typing a new value is one edit. Every other
+                          // column (empirical, derived means, evaluators) is read-only.
+                          const cellId = `${r.rid}|${d.key}`
+                          const hasScore = v !== '' && v != null
+                          if (d.source === 'ai' && d.slug && !d.placeholder && (hasScore || editingCell === cellId)) {
+                            return (
+                              <td key={d.key} className="num">
+                                <input className={styles.scoreInput} type="number" min="1" max="5" step="0.5"
+                                  value={v ?? ''} onChange={e => updateScore(r.rid, d.key, e.target.value)}
+                                  onFocus={() => setEditingCell(cellId)}
+                                  onBlur={() => setEditingCell(c => (c === cellId ? '' : c))} />
+                              </td>
+                            )
+                          }
                           const blank = v === '' || v == null || !Number.isFinite(Number(v))
                           return (
-                            <td key={d.key} className={`num ${blank ? styles.unscored : ''}`}>
+                            <td key={d.key} className={`num ${blank ? styles.unscored : ''}`}
+                              title={blank && d.source === 'ai' && d.slug && d.slug !== UNRECORDED ? `Not rated by ${aiModelName(d.slug)} yet: its own run in 3.2 fills this cell` : undefined}>
                               {blank ? '—' : Number(v).toFixed(2)}
                             </td>
                           )
@@ -2413,7 +2737,7 @@ export default function DataAnalytics() {
 
               {/* Download the UPDATED consolidated workbook: the same multi-tab
                   idea_analytics_aggregate.xlsx as Step 2, but with the KPIs added here
-                  (AI / objective / evaluator / uploaded like Prototypicality) merged into
+                  (AI / empirical / evaluator / uploaded like Prototypicality) merged into
                   the Rankings tab by Idea ID. This file is the input to the next stages. */}
               <div className={styles.row} style={{ marginTop: 18, alignItems: 'center', gap: 10 }}>
                 <button className="btn-primary" onClick={downloadAggregate} disabled={aggregating || !effectiveRows.length}>
@@ -2427,12 +2751,14 @@ export default function DataAnalytics() {
               {(() => {
                 // Show exactly which KPI columns will be written into the Rankings tab,
                 // so the admin can confirm (before downloading) that every KPI they loaded
-                // — AI, objective and any uploaded extra like Prototypicality — is included.
-                const labels = presentKpis(effectiveRows).map(k => k.label)
+                // — AI, empirical and any uploaded extra like Prototypicality — is included.
+                // Exactly the columns downloadAggregate writes, in its order: the
+                // empirical KPIs first, then each AI model, then the evaluators.
+                const labels = exportKpiColumns(rows, { allEmpirical: true, evaluatorColumns: true }).map(k => k.label)
                 return (
                   <p className={styles.hint} style={{ marginTop: 8, marginBottom: 0 }}>
                     {labels.length
-                      ? <>The <em>Rankings</em> tab will include these KPIs (matched by Idea&nbsp;ID): <strong>{labels.join(', ')}</strong>.</>
+                      ? <>The <em>Rankings</em> tab will carry these KPIs, in this order (matched by Idea&nbsp;ID): <strong>{labels.join(', ')}</strong>. Columns not computed yet stay in the tab, empty.</>
                       : <>No KPIs loaded yet — compute/score/upload them above, then download.</>}
                   </p>
                 )
@@ -2446,7 +2772,7 @@ export default function DataAnalytics() {
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>4</span>Summary Statistics</span>
             <span className={styles.row}>
-              <span className={styles.kpiPill}>KPIs: AI · Evaluator · Objective (per source)</span>
+              <span className={styles.kpiPill}>KPIs: Empirical · AI · Evaluator (per source)</span>
               <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => sec4FileRef.current?.click()} disabled={!!scoring}>Upload data</button>
               <input ref={sec4FileRef} type="file" accept=".xlsx,.xls,.csv" className={styles.fileInput} onChange={e => onPickFile(e, true)} />
               {rows.length > 0 && (
@@ -2456,7 +2782,7 @@ export default function DataAnalytics() {
           </h2>
           <p className={styles.hint}>
             Descriptive statistics of the consolidated dataset from Step&nbsp;3 — counts by condition and
-            stage, and <strong>every available KPI's</strong> mean (SD) per condition (AI, evaluator, objective
+            stage, and <strong>every available KPI's</strong> mean (SD) per condition (AI, evaluator, empirical
             and any uploaded KPI). Optionally restrict to ideas that carry at least one KPI. You can also
             <strong> Upload data</strong> here to skip Steps 1–3 and chart a file directly (e.g. an
             <em> idea_analytics_aggregate</em> / <em>ideas_with_kpis</em> workbook); it stays loaded until you
@@ -2469,8 +2795,9 @@ export default function DataAnalytics() {
             <>
               <label className={styles.checkRow}>
                 <input type="checkbox" checked={statsOnlyScored} onChange={e => setStatsOnlyScored(e.target.checked)} />
-                <span>Only include ideas that carry at least one KPI (any source — AI, evaluator, objective or uploaded)</span>
+                <span>Only include ideas that carry at least one KPI (any source — AI, evaluator, empirical or uploaded)</span>
               </label>
+              {panelNote(statRows)}
 
               <div className={styles.stats} style={{ marginTop: 12 }}>
                 <div className={styles.statBox}><div className={styles.statNum}>{statRows.length}</div><div className={styles.statLabel}>Ideas analysed</div></div>
@@ -2521,7 +2848,7 @@ export default function DataAnalytics() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
             <span><span className={styles.stepBadge}>5</span>Regressions — edit &amp; compile online</span>
-            <span className={styles.kpiPill}>KPIs: AI · Evaluator · Objective (per source)</span>
+            <span className={styles.kpiPill}>KPIs: Empirical · AI · Evaluator (per source)</span>
           </h2>
           <p className={styles.hint}>
             Both tabs run the <em>same</em> analysis (after any removed participants) on the
@@ -2550,9 +2877,10 @@ export default function DataAnalytics() {
             </span>
             <span className={styles.kpiPill}>{regScope === 'group' ? `${groupPhaseCount} in group phase` : `${finalCount} final`}</span>
           </label>
+          {panelNote(regScopeRows)}
           {regScopedScored < 2 && (
             <p className={styles.hint}>
-              <span className={styles.unscored}>Give at least two {regScope === 'group' ? 'ideas that entered the group phase' : 'Final Ideas'} a KPI in Step&nbsp;3 first — via AI&nbsp;(3.2), evaluator upload&nbsp;(3.3) or objective compute&nbsp;(3.1). Only {regScopedScored} so far.</span>
+              <span className={styles.unscored}>Give at least two {regScope === 'group' ? 'ideas that entered the group phase' : 'Final Ideas'} a KPI in Step&nbsp;3 first — via AI&nbsp;(3.2), evaluator upload&nbsp;(3.3) or empirical compute&nbsp;(3.1). Only {regScopedScored} so far.</span>
             </p>
           )}
 
@@ -2868,13 +3196,13 @@ function ObjectiveKpiResults({ res }) {
       {res.validation && (
         <div className={styles.regBlock}>
           <div className={styles.regCap}>
-            <strong>Check against the ratings.</strong> Correlation of each objective KPI with the scores already loaded
+            <strong>Check against the ratings.</strong> Correlation of each empirical KPI with the scores already loaded
             <span className={styles.regSub}> A usefulness KPI should go with the usefulness ratings more than with the novelty ones, and the reverse for a novelty KPI.</span>
           </div>
           <div className={styles.tableWrap}>
             <table className={styles.regTable}>
               <thead>
-                <tr><th className={styles.regVar}>Objective KPI</th>{res.validation.cols.map(c => <th key={c}>{c}</th>)}</tr>
+                <tr><th className={styles.regVar}>Empirical KPI</th>{res.validation.cols.map(c => <th key={c}>{c}</th>)}</tr>
               </thead>
               <tbody>
                 {res.validation.rows.map(row => (
@@ -3140,14 +3468,12 @@ const SORT_GETTERS = {
   condition: { label: 'Condition', get: r => CONDITIONS.indexOf(r.condition), type: 'num' },
   phase: { label: 'Phase', get: r => r.phase, type: 'str' },
   final: { label: 'Final', get: r => Number(r.final_pick) || 0, type: 'num' },
-  // Named "AI …" because these three are the AI rater's columns (3.2) — the
-  // evaluator (3.3) and objective (3.1) KPIs get their own columns after them.
-  novelty: { label: 'AI Novelty', get: r => r.novelty, type: 'num' },
-  usefulness: { label: 'AI Usefulness', get: r => r.usefulness, type: 'num' },
-  quality: { label: 'AI Quality', get: r => r.overall_quality, type: 'num' },
+  // The KPI columns (empirical, then each AI model's pair, then the evaluators)
+  // are not listed here: they come from `tableKpiCols` and sort numerically by
+  // their row field.
   idea: { label: 'Idea', get: r => r.text, type: 'str' },
 }
-const TABLE_COLS = ['idea_id', 'session', 'condition', 'phase', 'final', 'novelty', 'usefulness', 'quality', 'idea']
+const TABLE_COLS = ['idea_id', 'session', 'condition', 'phase', 'final', 'idea']
 
 // Does an imported sheet/CSV look like idea data we can analyse? Requires a
 // condition column AND at least one idea/KPI column (matches what
@@ -3167,22 +3493,6 @@ const importFormatMsg = kind =>
   `This ${kind} file does not match the expected format and was not imported.\n\n` +
   `Expected the admin Excel export (its "Ideas" sheet — a Condition column plus the idea / score columns), ` +
   `or a plain CSV with condition / novelty / usefulness columns.`
-
-// The "Ideas" sheet (one row per idea) — shared by the Download Excel and the
-// Step-2 aggregate workbook so both keep an identical Ideas tab.
-function ideaSheetRows(data) {
-  const labels = {
-    idea_id: 'Idea ID', session: 'Session', condition: 'Condition', phase: 'Phase',
-    group_id: 'Group', author_id: 'Author ID', author_name: 'Author',
-    novelty: 'Novelty', usefulness: 'Usefulness', overall_quality: 'Overall Quality',
-    final_pick: 'Final Group Pick', text: 'Idea',
-  }
-  const cols = Object.keys(labels)
-  return data.map(r => Object.fromEntries(cols.map(c => {
-    const v = c === 'author_name' ? (r.author_name || '') : c === 'final_pick' ? (r.final_pick ? 'Yes' : 'No') : r[c]
-    return [labels[c], v]
-  })))
-}
 
 // About-sheet metadata for an imported export workbook (one entry per session it
 // contains): prefer its "Conditions" rows, else infer from its "Ideas" sheet.
@@ -3209,22 +3519,30 @@ function bookAboutMeta(book) {
   }]
 }
 
+// Mean / SD / n of every KPI with data, per condition — in the page's column order
+// (empirical first, then each AI model, then the evaluators).
 function summaryByConditionRows(rs) {
-  const s = summarize(rs)
-  return CONDITIONS.filter(c => (s[c]?.count || 0) > 0).map(c => {
-    const k = s[c].kpis
-    return {
-      Condition: c,
-      Ideas: s[c].count,
-      Scored: s[c].scored,
-      'Novelty mean': round3(k.novelty.mean), 'Novelty SD': round3(k.novelty.sd), 'Novelty n': k.novelty.n,
-      'Usefulness mean': round3(k.usefulness.mean), 'Usefulness SD': round3(k.usefulness.sd), 'Usefulness n': k.usefulness.n,
-      'Overall mean': round3(k.overall_quality.mean), 'Overall SD': round3(k.overall_quality.sd), 'Overall n': k.overall_quality.n,
+  const kpis = exportKpiColumns(rs)
+  const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
+  return CONDITIONS.map(c => {
+    const sub = rs.filter(r => r.condition === c)
+    if (!sub.length) return null
+    const row = { Condition: c, Ideas: sub.length }
+    for (const d of kpis) {
+      const vals = sub.map(r => num(r[d.key])).filter(v => v != null)
+      const n = vals.length
+      const mean = n ? vals.reduce((a, b) => a + b, 0) / n : null
+      const sd = n > 1 ? Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : null
+      row[`${d.label} mean`] = round3(mean)
+      row[`${d.label} SD`] = round3(sd)
+      row[`${d.label} n`] = n
     }
-  })
+    return row
+  }).filter(Boolean)
 }
 
 function summaryBySessionRows(rs) {
+  const kpis = exportKpiColumns(rs)
   const by = new Map()
   for (const r of rs) {
     if (!by.has(r.session)) by.set(r.session, { session: r.session, condition: r.condition, rows: [] })
@@ -3235,15 +3553,85 @@ function summaryBySessionRows(rs) {
     const v = arr.map(x => x[key]).filter(x => x !== '' && x != null).map(Number).filter(Number.isFinite)
     return v.length ? round3(v.reduce((a, b) => a + b, 0) / v.length) : ''
   }
-  return [...by.values()].map(g => ({
-    Session: g.session,
-    Condition: g.condition,
-    Ideas: g.rows.length,
-    Scored: g.rows.filter(r => r.novelty !== '' && r.usefulness !== '').length,
-    'Novelty mean': mean(g.rows, 'novelty'),
-    'Usefulness mean': mean(g.rows, 'usefulness'),
-    'Overall mean': mean(g.rows, 'overall_quality'),
-  }))
+  return [...by.values()].map(g => {
+    const row = { Session: g.session, Condition: g.condition, Ideas: g.rows.length }
+    for (const d of kpis) row[`${d.label} mean`] = mean(g.rows, d.key)
+    return row
+  })
+}
+
+// "Usefulness score check" (owner, 2026-09-24: "show me … examples … to understand
+// and test it"): for every idea with an empirical Usefulness score, its three parts,
+// each part's rank among the ideas in this file (0 = lowest, 1 = highest, ties
+// share the average of their places), the mean of the three ranks, and the score
+// the page computed. The two last columns agree unless ideas were removed or added
+// after the score was computed (the ranks are taken over the ideas in the pool).
+// The parts an idea states and the extra technology it names are read again from
+// its text, with the technology list T as it is now.
+function addUsefulnessCheckSheet(wb, data, techSet) {
+  const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
+  const rows = data.filter(r => num(r.det_usefulness) != null)
+  const nf = rows.map(r => num(r.det_need_fit))
+  const sp = rows.map(r => num(r.det_specificity))
+  const wk = rows.map(r => num(r.det_workability))
+  const pn = percentileRanks(nf), ps = percentileRanks(sp), pw = percentileRanks(wk)
+  const compiled = compileTerms(String(techSet || '').split('\n').map(t => t.trim()).filter(Boolean))
+  // Four decimals, the precision the stored KPIs carry (review, 2026-09-24: at three,
+  // a mean and a score that agree to four decimals printed as 0.459 and 0.458).
+  const r4 = v => (v == null ? '' : Math.round(v * 10000) / 10000)
+  const notes = [
+    ['How the empirical Usefulness score is built, idea by idea'],
+    [`Each of the three parts is turned into a rank among these ${rows.length} ideas: the lowest gets 0, the highest 1, and ideas with the same value share the average of their places (rank = (average place − 1) / (number of ideas − 1)). The Usefulness score is the mean of the ranks the idea has.`],
+    ['Need fit = how close the idea\'s words are to the closest need in the list U. Specificity = the share of five things the idea states (who it is for, what it is, where or when it is used, why it helps, how it works). Workability = 1 / (1 + the number of extra technologies from the list T it needs).'],
+    ['The ranks here are taken again from the stored parts, which are rounded to 4 decimals. Where that rounding makes two ideas tie, the mean can differ from the stored score in the last decimal; a larger difference is named in the Note column.'],
+    [],
+  ]
+  const header = [
+    'Idea ID', 'Condition', 'Title', 'Need fit', 'Need fit rank (0–1)',
+    'Specificity', 'Parts stated', 'Specificity rank (0–1)',
+    'Workability', 'Extra technology named', 'Workability rank (0–1)',
+    'Mean of the three ranks', 'Usefulness score (as computed)', 'Note',
+  ]
+  const body = rows.map((r, i) => {
+    // The text 3.1 measured: the English version (Step 1b) when there is one.
+    const text = measureText(r)
+    const facets = specificityFacets(text)
+    const stated = facets ? FACETS.filter(f => facets[f.key]).map(f => f.label).join('; ') : ''
+    const tech = techTermsIn(text, compiled).join(', ')
+    const ranks = [pn[i], ps[i], pw[i]].filter(v => v != null)
+    const meanRank = ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : null
+    // The parts and the technology are read from the text NOW; the stored values
+    // were computed when 3.1 was last pressed. Say so when the two disagree (an
+    // older rule, or a list T edited since), rather than printing a row that
+    // contradicts itself.
+    const nTech = techTermsIn(text, compiled).length
+    const nStated = facets ? FACETS.filter(f => facets[f.key]).length : null
+    const stale = []
+    if (wk[i] != null && Math.abs(wk[i] - 1 / (1 + nTech)) > 0.001) stale.push('Workability')
+    if (sp[i] != null && nStated != null && Math.abs(sp[i] - nStated / FACETS.length) > 0.001) stale.push('Specificity')
+    // The mean and the stored score disagree beyond rounding: the pool changed
+    // since the score was computed (ideas added or removed).
+    const stored = num(r.det_usefulness)
+    if (meanRank != null && stored != null && Math.abs(meanRank - stored) > 0.002) stale.push('Usefulness score')
+    const note = stale.length
+      ? `${stale.join(' and ')} stored from an earlier computation (an older rule, lists edited, or ideas added or removed since); press "Compute empirical KPIs" again to refresh.`
+      : ''
+    return [
+      r.idea_id, r.condition, (hasEnglishVersion(r) && r.title_en) || r.idea_title || String(text).split(': ')[0],
+      r4(nf[i]), r4(pn[i]), r4(sp[i]), stated || '(none)', r4(ps[i]),
+      r4(wk[i]), tech || '(none)', r4(pw[i]), r4(meanRank), r4(stored), note,
+    ]
+  })
+  const ws = XLSX.utils.aoa_to_sheet([...notes, header, ...body])
+  const hr = notes.length
+  header.forEach((_, c) => {
+    const cell = ws[XLSX.utils.encode_cell({ r: hr, c })]
+    if (cell) cell.s = { font: { bold: true } }
+  })
+  const title = ws[XLSX.utils.encode_cell({ r: 0, c: 0 })]
+  if (title) title.s = { font: { bold: true } }
+  ws['!cols'] = [{ wch: 22 }, { wch: 10 }, { wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 11 }, { wch: 60 }, { wch: 12 }, { wch: 11 }, { wch: 24 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 60 }]
+  XLSX.utils.book_append_sheet(wb, ws, 'Usefulness score check')
 }
 
 // Build a styled worksheet (bold header row + auto-fit columns) and append it.
