@@ -123,6 +123,9 @@ export function isFatalApiError(err) {
   const s = err?.status
   if (s === 401 || s === 403 || s === 404) return true
   if (s === 400) return true
+  // 402 Payment Required: DeepSeek / OpenRouter with no credit left. Retrying
+  // cannot top the balance up, so say so at once instead of backing off.
+  if (s === 402) return true
   return false
 }
 

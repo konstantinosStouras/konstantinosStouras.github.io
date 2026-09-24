@@ -267,16 +267,48 @@ export function compileTerms(terms) {
 // the term ("no", "not", "without", "never", "zero", "free of", "instead of",
 // "rather than", "doesn't need"), or "-free"/" free" straight after it.
 const NEGATED_BEFORE = /\b(?:no|not|without|never|zero|nor|free of|instead of|rather than|(?:does|do|did)(?:n'?t| not) (?:need|require|use))\b(?:[\s,/&-]+(?:and|or|any|an|a|the|extra|other|external|[a-z-]+s)){0,3}[\s,/&-]*$/i
+// ...and the LATER items of a negated list (owner's data, 2026-09-24: "it removes
+// the battery or Bluetooth wearable device" was scored as needing both). The rule
+// above reaches only the first item unless the words before the term end in "s",
+// so "no battery or Bluetooth needed" still counted Bluetooth and "without a
+// battery or an app" still counted the app. This second rule lets the negator run
+// over a LIST: items joined by "or" / "nor" / "/", and items joined by a comma when
+// the item before the comma is itself on the technology list ("without batteries,
+// electronics or apps"). A comma after anything else, and "and", do NOT carry the
+// negation: in "no delay, the app alerts parents" or "no wires and an app" the app
+// is not negated. Up to three describing words may sit right before the term ("no
+// ELECTRONIC sensors", "without USING AN electronic sensor"), never a joining word
+// or "only / just / even" ("not only the app" keeps the app). It also knows the
+// verbs that take technology AWAY (removes, eliminates, replaces, gets rid of,
+// ditches) and "no need for". Built per technology list, since the comma rule
+// needs the list's own terms.
+const NEG_WORDS = String.raw`(?:no|not|without|never|zero|nor|free of|instead of|rather than|(?:does|do|did)(?:n'?t| not) (?:need|require|use)|remov(?:e|es|ed|ing)|eliminat(?:e|es|ed|ing)|replac(?:e|es|ed|ing)|get(?:s|ting)? rid of|ditch(?:es|ed|ing)?)`
+const NEG_ARTICLES = String.raw`(?:[\s/&-]+(?:any|an|a|the|extra|other|external|separate|additional)){0,2}`
+const NEG_MOD = String.raw`(?:[\s-]+(?!(?:and|but|with|while|which|that|so|then|than|plus|also|yet|only|just|even|merely)\b)[a-z0-9-]+)`
+const negatedListCache = new WeakMap()
+function negatedListRe(compiled) {
+  let re = negatedListCache.get(compiled)
+  if (re) return re
+  const techAlt = compiled.length ? `(?:${compiled.map(c => c.re.source).join('|')})` : '(?!)'
+  const orItem = String.raw`(?:[\s-]+[a-z0-9-]+(?:[\s-]+[a-z0-9-]+)?\s*(?:\bor\b|\bnor\b|/)` + NEG_ARTICLES + ')'
+  const commaTechItem = String.raw`(?:${NEG_MOD}{0,2}[\s-]+${techAlt}\s*,` + NEG_ARTICLES + ')'
+  re = new RegExp(
+    String.raw`\b${NEG_WORDS}\b(?:\s+(?:the\s+)?(?:need|needs)\s+(?:for|of))?` + NEG_ARTICLES
+    + `(?:${orItem}|${commaTechItem})*` + NEG_MOD + '{0,3}' + NEG_ARTICLES + String.raw`[\s/&-]*$`, 'i')
+  negatedListCache.set(compiled, re)
+  return re
+}
 const NEGATED_AFTER = /^[\s-]*free\b/i
 
 /** Does `text` name this entry at least once without negating it? */
-function namesTerm(text, re) {
+function namesTerm(text, re, listRe) {
   const g = new RegExp(re.source, 'gi')
   let m
   while ((m = g.exec(text))) {
-    const before = text.slice(Math.max(0, m.index - 40), m.index)
+    const before = text.slice(Math.max(0, m.index - 60), m.index)
     const after = text.slice(m.index + m[0].length, m.index + m[0].length + 8)
-    if (!NEGATED_BEFORE.test(before) && !NEGATED_AFTER.test(after)) return true
+    const negated = NEGATED_BEFORE.test(before.slice(-40)) || (listRe && listRe.test(before)) || NEGATED_AFTER.test(after)
+    if (!negated) return true
   }
   return false
 }
@@ -284,7 +316,8 @@ function namesTerm(text, re) {
 /** The list entries an idea names, not negated (distinct, in list order). */
 export function techTermsIn(text, compiled) {
   const t = String(text || '').replace(/[’‘]/g, "'").replace(/\s+/g, ' ')
-  return compiled.filter(c => namesTerm(t, c.re)).map(c => c.term)
+  const listRe = negatedListRe(compiled)
+  return compiled.filter(c => namesTerm(t, c.re, listRe)).map(c => c.term)
 }
 
 /** Workability = 1 / (1 + number of extra technologies named); null for no text. */

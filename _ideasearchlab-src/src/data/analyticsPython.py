@@ -10,8 +10,10 @@ WHAT THIS SCRIPT PRODUCES
   (baseline = None / no AI) and to EVERY KPI that has data — across all three
   sources scored on the page:
     • AI-generated (3.2):        novelty / usefulness / overall_quality   (1–5)
+      (each model the page used also has its own ai_nov__<model> / ai_use__<model>
+      columns; with several models, novelty / usefulness are the mean across them)
     • External evaluators (3.3): ext_novelty / ext_usefulness / ext_quality (1–5)
-    • Deterministic/objective (3.1): det_novelty / det_distinctiveness / det_score (0–1)
+    • Deterministic/empirical (3.1): det_novelty / det_distinctiveness / det_score (0–1)
       and the usefulness side det_need_fit / det_specificity / det_workability /
       det_usefulness (0–1)
 
@@ -85,13 +87,13 @@ KPI_DEFS = [
     ("ext_novelty", "Eval Novelty", True),
     ("ext_usefulness", "Eval Usefulness", True),
     ("ext_quality", "Eval Quality", True),
-    ("det_novelty", "Novelty (objective)", False),
+    ("det_novelty", "Novelty (empirical)", False),
     ("det_distinctiveness", "Pool distinctiveness", False),
     ("det_score", "NoveltyScore", False),
-    ("det_need_fit", "Need fit (objective)", False),
-    ("det_specificity", "Specificity (objective)", False),
-    ("det_workability", "Workability (objective)", False),
-    ("det_usefulness", "Usefulness score (objective)", False),
+    ("det_need_fit", "Need fit (empirical)", False),
+    ("det_specificity", "Specificity (empirical)", False),
+    ("det_workability", "Workability (empirical)", False),
+    ("det_usefulness", "Usefulness score (empirical)", False),
 ]
 
 TOP_RATING = 5.0           # a "top" idea earned the top of the 1–5 scale (Tables 5/6)

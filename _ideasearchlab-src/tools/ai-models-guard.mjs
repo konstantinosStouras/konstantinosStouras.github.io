@@ -21,12 +21,18 @@
  *  3. **The list is what the owner asked for**: five models per provider, the
  *     most expensive first, the scoring default the cheapest of the five, and
  *     the price printed in each option label.
+ *  4. **The four rater-only providers** (owner, 2026-09-24: Mistral, Meta's
+ *     Llama, DeepSeek, Qwen): each listed with its top models, priced, marked
+ *     `raterOnly` (the assistant's Cloud Function does not speak them, so they
+ *     need no MODEL_LABELS entry and get no assistant card), carrying the note
+ *     that says where the ideas go, and called with an OpenAI-compatible
+ *     request that sends only `Authorization` + `Content-Type`.
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById,
+  PROVIDERS, ASSISTANT_PROVIDERS, SCORING_DEFAULT_MODEL, DEFAULT_SCORING_PROVIDER, providerById,
   allModelIds, modelOptionLabel, CATALOGUE_AS_OF,
 } from '../src/data/aiModels.js'
 import { MODEL_PRICES, PRICES_AS_OF, replyCostUSD, priceAt, dayOf } from '../src/data/aiPricing.js'
@@ -34,8 +40,10 @@ import {
   buildRequest, parseReplyText, callProvider, scrubKey, replyProblem,
   claudeSupportsEffort, openaiIsReasoning, geminiTakesThinkingLevel,
   SCORING_MAX_TOKENS, LEGACY_CHAT_MAX_TOKENS, SCORING_EFFORT,
+  OPENAI_COMPAT_URLS, mistralTakesReasoningEffort, isMuseModel,
 } from '../src/utils/providerRequest.js'
 import { isFatalApiError } from '../src/utils/scoreBatch.js'
+import { shortModelName } from '../src/utils/aiScoreColumns.js'
 
 // THE ONE PLACE the owner's requested line-up is written down (2026-09-23:
 // each provider's five newest, most capable first). When the list is next
@@ -45,6 +53,13 @@ const OWNER_LINEUP = {
   claude: ['claude-fable-5-1', 'claude-fable-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5'],
   openai: ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-6-sol', 'gpt-5.6-terra', 'gpt-6-luna'],
   gemini: ['gemini-3.1-pro-preview', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'],
+  // 2026-09-24, "Add Mistral, Meta's Llama, DeepSeek and Qwen's top models
+  // available": each provider's top models its own API (or, for Meta, OpenRouter)
+  // serves, most capable first. DeepSeek's API offers two; Meta runs no Llama API.
+  mistral: ['mistral-medium-2604', 'mistral-large-2512', 'mistral-small-2603', 'ministral-14b-2512', 'ministral-8b-2512'],
+  openrouter: ['meta/muse-spark-1.3', 'meta/muse-glimmer-30b', 'meta-llama/llama-4-maverick'],
+  deepseek: ['deepseek-v4-pro', 'deepseek-flash'],
+  qwen: ['qwen3.8-max', 'qwen3.7-max', 'qwen3.7-plus', 'qwen3.8-flash'],
 }
 // Former scoring defaults (and the retired per-provider fallbacks) that must
 // never quietly become the scoring default again.
@@ -60,23 +75,36 @@ function check(cond, msg) {
 
 // ── 1. The catalogue shape ──────────────────────────────────────────────────
 console.log('catalogue')
-check(PROVIDERS.length === 3, 'three providers')
-check(new Set(PROVIDERS.map(p => p.id)).size === 3, 'provider ids unique')
+check(PROVIDERS.length === 7, 'seven providers (three for the assistant and the rater, four for the rater only)')
+check(new Set(PROVIDERS.map(p => p.id)).size === PROVIDERS.length, 'provider ids unique')
+check(JSON.stringify(ASSISTANT_PROVIDERS.map(p => p.id)) === JSON.stringify(['claude', 'openai', 'gemini']), 'the assistant providers are exactly the three functions/ai.js speaks')
+check(PROVIDERS.filter(p => p.raterOnly).every(p => Object.keys(OPENAI_COMPAT_URLS).includes(p.id)), 'every rater-only provider has an OpenAI-compatible endpoint')
 const ids = allModelIds()
 check(new Set(ids).size === ids.length, 'model ids unique across providers')
 check(/^\d{4}-\d{2}-\d{2}$/.test(CATALOGUE_AS_OF), 'CATALOGUE_AS_OF is a date')
 check(/^\d{4}-\d{2}-\d{2}$/.test(PRICES_AS_OF) && PRICES_AS_OF >= CATALOGUE_AS_OF, `prices (${PRICES_AS_OF}) were snapshotted no earlier than the catalogue (${CATALOGUE_AS_OF}) — a price-only update may re-date aiPricing.js alone`)
 for (const p of PROVIDERS) {
-  check(p.models.length === 5, `${p.id}: five models (has ${p.models.length})`)
+  if (p.raterOnly) check(p.models.length >= 1 && p.models.length <= 5, `${p.id}: one to five models (has ${p.models.length})`)
+  else check(p.models.length === 5, `${p.id}: five models (has ${p.models.length})`)
   check(p.models.every(m => m.id && m.label), `${p.id}: every model has id + label`)
+  // A column title reads "AI Novelty (<short name>)": no brackets inside it.
+  check(p.models.every(m => shortModelName(m) && !/[()]/.test(shortModelName(m))), `${p.id}: every short name is bracket-free (give the model a \`short\`): ${p.models.map(shortModelName).join(' | ')}`)
   const prices = p.models.map(m => MODEL_PRICES[m.id])
   check(prices.every(Boolean), `${p.id}: every listed model has a price (missing: ${p.models.filter(m => !MODEL_PRICES[m.id]).map(m => m.id).join(', ') || 'none'})`)
   const outs = prices.map(x => x?.out ?? -1)
-  check(outs[0] === Math.max(...outs), `${p.id}: the first model is the most expensive (${p.models[0].id})`)
   const def = SCORING_DEFAULT_MODEL[p.id]
   check(p.models.some(m => m.id === def), `${p.id}: scoring default ${def} is in its list`)
   const defPrice = MODEL_PRICES[def]?.out ?? Infinity
-  check(defPrice === Math.min(...outs), `${p.id}: scoring default ${def} is the cheapest of the five`)
+  if (p.raterOnly) {
+    // Most capable first (the OWNER_LINEUP table pins the order); Qwen3.7-Max's
+    // list price is above the Qwen3.8-Max flagship's, so the price rule is not
+    // applied here. The default is a cheap model, never the flagship.
+    check(p.models.length === 1 || def !== p.models[0].id || p.models.length < 3, `${p.id}: scoring default ${def} is not the flagship`)
+    check(typeof p.note === 'string' && p.note.length > 40, `${p.id}: carries a note on the key and where the ideas go`)
+  } else {
+    check(outs[0] === Math.max(...outs), `${p.id}: the first model is the most expensive (${p.models[0].id})`)
+    check(defPrice === Math.min(...outs), `${p.id}: scoring default ${def} is the cheapest of the five`)
+  }
   check(!!MODEL_PRICES[p.defaultModel], `${p.id}: assistant default ${p.defaultModel} is priced`)
   // The scoring default is a current-generation id, never a retired one.
   check(!FORMER_SCORING_DEFAULTS.includes(def), `${p.id}: scoring default ${def} is not a former scoring default`)
@@ -132,7 +160,8 @@ const fn = src('functions/ai.js')
 const labelsStart = fn.indexOf('const MODEL_LABELS = {')
 const labelsBlock = labelsStart === -1 ? '' : fn.slice(labelsStart, fn.indexOf('\n}', labelsStart))
 check(labelsBlock.length > 0, 'found the MODEL_LABELS block in functions/ai.js')
-for (const id of ids) check(labelsBlock.includes(`'${id}'`), `MODEL_LABELS names ${id}`)
+// Only the assistant's models: the function never runs a rater-only provider.
+for (const id of ASSISTANT_PROVIDERS.flatMap(p => p.models.map(m => m.id))) check(labelsBlock.includes(`'${id}'`), `MODEL_LABELS names ${id}`)
 // A regex literal scraped from the function's source; null when the line moved
 // or was reshaped — reported as a failed check, never a crash that hides the
 // hundred checks after it.
@@ -142,7 +171,7 @@ function scrapedRegex(source, pattern, what) {
   if (!m) return { test: () => false }
   try { return new Function(`return ${m[1]}`)() } catch { check(false, `${what} regex parses`); return { test: () => false } }
 }
-for (const p of PROVIDERS) {
+for (const p of ASSISTANT_PROVIDERS) {
   const re = new RegExp(`${p.id}:\\s*\\{\\s*model:\\s*'([^']+)'`)
   const m = fn.match(re)
   check(m && m[1] === p.defaultModel, `functions PROVIDER_DEFAULTS.${p.id} (${m && m[1]}) == catalogue defaultModel (${p.defaultModel})`)
@@ -215,6 +244,38 @@ check(g.body.system_instruction.parts[0].text === 'SYS' && g.body.contents[0].pa
 for (const id of ['gemini-3.1-pro-preview', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3-flash']) check(geminiTakesThinkingLevel(id), `gemini: ${id} takes thinkingLevel`)
 const g25 = buildRequest('gemini', { ...args, model: 'gemini-2.5-flash' })
 check(!('thinkingConfig' in g25.body.generationConfig), 'gemini: 2.5 gets no thinkingLevel (it rejects the field)')
+// The four rater-only providers: OpenAI-compatible, two headers only (DeepSeek's
+// and Qwen's CORS preflights refuse any other), no JSON mode (it forces an
+// object; the rater asks for an array), thinking off where it can be.
+const COMPAT = {
+  mistral: 'https://api.mistral.ai/v1/chat/completions',
+  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+  deepseek: 'https://api.deepseek.com/chat/completions',
+  qwen: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+}
+for (const [pid, url] of Object.entries(COMPAT)) {
+  for (const m of providerById(pid).models) {
+    const r = buildRequest(pid, { ...args, model: m.id })
+    check(r.url === url, `${pid}: ${m.id} goes to ${url}`)
+    check(JSON.stringify(Object.keys(r.headers).sort()) === JSON.stringify(['Authorization', 'Content-Type']) && r.headers.Authorization === `Bearer ${KEY}`, `${pid}: ${m.id} sends only Authorization + Content-Type`)
+    check(!('response_format' in r.body) && !r.url.includes(KEY), `${pid}: ${m.id} no JSON mode, key not in the URL`)
+    check(r.body.model === m.id && r.body.messages[0].content === 'SYS' && r.body.messages[1].content === 'USER' && r.body.max_tokens > 0, `${pid}: ${m.id} model, system + user, a token ceiling`)
+  }
+}
+check(buildRequest('mistral', { ...args, model: 'mistral-medium-2604' }).body.reasoning_effort === 'none' && buildRequest('mistral', { ...args, model: 'mistral-small-2603' }).body.reasoning_effort === 'none', 'mistral: thinking off on Medium 3.5 and Small 4')
+check(!('reasoning_effort' in buildRequest('mistral', { ...args, model: 'mistral-large-2512' }).body) && !mistralTakesReasoningEffort('ministral-8b-2512'), 'mistral: no reasoning_effort on the models without a reasoning mode')
+check(buildRequest('deepseek', { ...args, model: 'deepseek-v4-pro' }).body.thinking?.type === 'disabled', 'deepseek: thinking disabled (V4 thinks by default)')
+check(buildRequest('qwen', { ...args, model: 'qwen3.8-max' }).body.enable_thinking === false, 'qwen: enable_thinking false (required on a non-streaming call)')
+{
+  const muse = buildRequest('openrouter', { ...args, model: 'meta/muse-spark-1.3' }).body
+  const llama = buildRequest('openrouter', { ...args, model: 'meta-llama/llama-4-maverick' }).body
+  check(isMuseModel('meta/muse-glimmer-30b') && muse.reasoning?.effort === SCORING_EFFORT && muse.reasoning?.exclude === true && muse.max_tokens === SCORING_MAX_TOKENS, 'openrouter: Muse (cannot stop thinking) gets low effort, hidden reasoning, the 8000 ceiling')
+  check(!('reasoning' in llama) && llama.max_tokens === LEGACY_CHAT_MAX_TOKENS, 'openrouter: Llama 4 Maverick gets no reasoning field')
+}
+check(parseReplyText('mistral', { choices: [{ message: { content: [{ type: 'thinking', thinking: [{ type: 'text', text: 'hm' }] }, { type: 'text', text: '[{"i":0}]' }] } }] }) === '[{"i":0}]', 'mistral: content as an array of chunks — the text chunks are the reply')
+for (const pid of Object.keys(COMPAT)) check(parseReplyText(pid, { choices: [{ message: { content: '[]' } }] }) === '[]', `${pid}: string content parses`)
+check(replyProblem('deepseek', { choices: [{ message: { content: '' }, finish_reason: 'length' }] }, '')?.kind === 'exhausted' && replyProblem('qwen', { choices: [{ message: { refusal: 'no' } }] }, '')?.kind === 'refusal', 'rater-only providers: the OpenAI reply-problem rules apply')
+check(isFatalApiError({ status: 402 }), '402 (DeepSeek / OpenRouter out of credit) stops the run at once')
 let threw = false
 try { buildRequest('nope', { ...args, model: 'x' }) } catch { threw = true }
 check(threw, 'unknown provider throws')
@@ -300,10 +361,14 @@ check(!/^(async )?function callProvider/m.test(llm), 'llmClient keeps no copy of
 check(!/import .*firebase/.test(src('src/utils/providerRequest.js')), 'providerRequest imports no Firebase (offline-testable)')
 const page = src('src/pages/DataAnalytics.jsx')
 check(/modelOptionLabel\(m, MODEL_PRICES\)/.test(page), 'Data Analytics dropdown prints the price per model')
-check(/newest generation, most capable first/.test(page), 'Data Analytics explains the list order')
+check(/newest models \(five each for Claude, OpenAI and Gemini\), most capable/.test(page), 'Data Analytics explains the list order')
+check(/activeProvider\.note/.test(page), 'Data Analytics shows the chosen provider\'s note (where the ideas go)')
 check(/A key unlocks all of a provider's models|An API key belongs to your/.test(page), 'Data Analytics explains why a model is chosen beside the key')
 const settings = src('src/pages/AISettings.jsx')
 check(/modelOptionLabel\(m, MODEL_PRICES\)/.test(settings), 'AI Settings dropdown prints the price per model')
+check(/ASSISTANT_PROVIDERS\.map\(p => \(/.test(settings), 'AI Settings offers only the assistant providers as the assistant\'s provider')
+check(/PROVIDERS\.map\(p => \(\s*<div key=\{p\.id\} className=\{styles\.field\}>/.test(settings) && /rater only/.test(settings), 'AI Settings has a key field for every provider, rater-only ones marked')
+check(/Object\.fromEntries\(PROVIDERS\.map\(p => \[p\.id, ''\]\)\)/.test(settings), 'AI Settings starts and clears keys for every provider')
 // A saved id the pruned list no longer offers must render as ITSELF, not as
 // "Use default" (a controlled <select> with no matching option shows the first
 // row while Save re-persists the invisible id).
@@ -333,7 +398,12 @@ if (existsSync(shippedIndex)) {
     ['token ceiling on', 'the thinking-exhausted reply problem'],
     ['promotional price until', 'the promotional-price label'],
     ['Last cause reported', 'the reported cause on the analytics page'],
-    ['in this section first, then fill', 'the fill-blank hint'],
+    ['(mean across models)', 'the per-model AI columns (aiScoreColumns)'],
+    ['model not recorded', 'the unlabelled-score column'],
+    ['Download all data (Excel)', 'the download-all button'],
+    ['Usefulness score check', 'the usefulness check sheet'],
+    ['Novelty (empirical)', 'the empirical labels'],
+    ['api.deepseek.com', 'the rater-only providers'],
   ]
   for (const [marker, what] of BUNDLE_MARKERS) check(chunk.includes(marker), `shipped bundle carries ${what} ("${marker}")`)
 } else {

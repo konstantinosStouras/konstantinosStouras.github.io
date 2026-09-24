@@ -5,7 +5,7 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 import { db, auth, functions } from '../firebase'
 import { useTheme } from '../context/ThemeContext'
-import { PROVIDERS, CATALOGUE_AS_OF, modelOptionLabel } from '../data/aiModels'
+import { PROVIDERS, ASSISTANT_PROVIDERS, CATALOGUE_AS_OF, modelOptionLabel } from '../data/aiModels'
 import { MODEL_PRICES } from '../data/aiPricing'
 import styles from './AISettings.module.css'
 
@@ -89,7 +89,7 @@ export default function AISettings() {
   const { dark, toggle } = useTheme()
   const [current, setCurrent] = useState(null)
   const [provider, setProvider] = useState('claude')
-  const [apiKeys, setApiKeys] = useState({ claude: '', openai: '', gemini: '' })
+  const [apiKeys, setApiKeys] = useState(() => Object.fromEntries(PROVIDERS.map(p => [p.id, ''])))
   const [model, setModel] = useState('')
   const [temperature, setTemperature] = useState(1.0)
   const [maxTokens, setMaxTokens] = useState(1000)
@@ -189,8 +189,11 @@ export default function AISettings() {
         {/* Provider selector */}
         <div className={styles.section}>
           <h2 className={styles.sectionTitle}>Provider</h2>
+          {/* Only the providers the assistant's Cloud Function speaks (Claude, OpenAI,
+              Gemini). Mistral, Meta, DeepSeek and Qwen rate ideas on the Data
+              Analytics page only, so they have a key field below but no card here. */}
           <div className={styles.providerGrid}>
-            {PROVIDERS.map(p => (
+            {ASSISTANT_PROVIDERS.map(p => (
               <div
                 key={p.id}
                 className={`${styles.providerCard} ${provider === p.id ? styles.providerActive : ''}`}
@@ -218,7 +221,9 @@ export default function AISettings() {
         <div className={styles.section}>
           <h2 className={styles.sectionTitle}>API Keys</h2>
           <p className={styles.hint}>
-            You can store keys for multiple providers. Only the active provider's key is used.
+            You can store keys for multiple providers. The AI assistant uses the active provider's key;
+            the Data Analytics AI rater can use any of them. Mistral AI, Meta (via OpenRouter), DeepSeek
+            and Qwen are for the rater only — each is marked below.
             Keys are saved when you click Save below (or Save Settings at the bottom) and load
             back automatically every time you open this page — only the administrator account
             can read or change them.
@@ -228,6 +233,7 @@ export default function AISettings() {
               <label className={styles.label}>
                 <span className={styles.labelLeft}>
                   {p.name}
+                  {p.raterOnly && <span className={styles.keyMissing}>rater only</span>}
                   {current?.apiKeys?.[p.id] && <span className={styles.keySet}>saved ✓</span>}
                 </span>
                 <a href={p.keyLink} target="_blank" rel="noopener noreferrer" className={styles.keyLink}>
@@ -242,6 +248,7 @@ export default function AISettings() {
                 placeholder={p.keyPlaceholder}
                 autoComplete="off"
               />
+              {p.note && <p className={styles.hint}>{p.note}</p>}
             </div>
           ))}
           <DefaultActions
@@ -249,7 +256,7 @@ export default function AISettings() {
             onMakeDefault={() => saveSection('keys', { apiKeys }, 'Keys saved — now the default for all sessions.')}
             onRestore={() => {
               if (!window.confirm('Remove all saved API keys and go back to no keys (the built-in default)?')) return
-              const cleared = { claude: '', openai: '', gemini: '' }
+              const cleared = Object.fromEntries(PROVIDERS.map(p => [p.id, '']))
               setApiKeys(cleared)
               saveSection('keys', { apiKeys: cleared }, 'Removed saved API keys.')
             }}

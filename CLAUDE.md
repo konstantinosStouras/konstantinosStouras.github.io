@@ -3077,6 +3077,37 @@ its batch-mates their scores. Promotional prices resolve by day (`priceAt`), so
 neither the dropdown nor the cost export keeps charging a lapsed promotion. Full detail
 in `_ideasearchlab-src/CLAUDE.md`.
 
+**Every AI model gets its own columns, the empirical proxies come first, and one
+button downloads everything** (owner, 2026-09-24). Six changes, all in the Data
+Analytics page and documented in `_ideasearchlab-src/CLAUDE.md`:
+- **Per-model AI columns.** A rater's scores are stored under that model's own two
+  fields and titled after it, **AI Novelty (GPT-6 Astra)** / **AI Usefulness (GPT-6
+  Astra)**, with the next model's pair beside them (`src/utils/aiScoreColumns.js`).
+  A run fills only the chosen model's cells, so a second model rates the same
+  ideas instead of finding nothing empty. The old AI Novelty / Usefulness / Quality
+  fields are the mean across the models that rated each idea, which is what Steps
+  4–5 analyse. A file saved before this, whose columns name no model, lands under
+  "model not recorded", and the panel asks which model made it.
+- **"Objective" became "empirical"** in every 3.1 label and export column. The old
+  headers still import.
+- **One column order everywhere** (`exportKpiColumns`): the empirical proxies of
+  novelty and usefulness first, then the AI ratings model by model, then the
+  evaluators. The table, the downloads and the aggregate Rankings tab all use it;
+  Rankings' blind-rater columns are now *Eval. Novelty / Usefulness / Quality*.
+- **"Download all data (Excel)" + CSV**, with a **Usefulness score check** sheet
+  showing each idea's three parts, their ranks and the mean, so the empirical score
+  can be checked by hand.
+- **Workability now reads a negated list.** "removes the battery or Bluetooth",
+  "no battery or Bluetooth needed" used to count the later items as needed. In the
+  owner's 741 ideas it moved 36 ideas, 29 of them in the Both condition.
+- **Four more rater providers.** Mistral, Meta (Muse and Llama, through OpenRouter,
+  since Meta closed its own Llama API on 2026-07-06), DeepSeek (stores data in
+  China, which the page says) and Qwen (International endpoint). They serve the
+  RATER ONLY: the participants' assistant function still speaks Claude / OpenAI /
+  Gemini, so no functions deploy is needed.
+Offline tests: `tools/ai-columns-guard.mjs` (new) beside the existing ai-models,
+score-gaps, analytics-scores, usefulness-kpis and det-kpi guards.
+
 **Excel export per session, from the session list.** Both admins let the
 instructor download ONE session's research workbook straight from its card —
 ideasearchlab's `/admin` Active + Completed cards gained a green **⬇ Export data**

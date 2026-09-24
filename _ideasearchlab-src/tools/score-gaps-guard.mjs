@@ -25,6 +25,7 @@ import {
   mergeAiScoresIntoRows, hasIdeaText, isBlankScore, scorableText, MAX_RECOVERY_PASSES,
   pickScoredSheet,
 } from '../src/utils/scoreGaps.js'
+import { aiFieldsFor, UNRECORDED } from '../src/utils/aiScoreColumns.js'
 
 let failures = 0
 function check(name, cond, detail) {
@@ -142,91 +143,122 @@ console.log('gapSummary — the sentence on the panel')
 }
 
 // ── mergeAiScoresIntoRows ──────────────────────────────────────────────────
+// Since 2026-09-24 every model has its own two columns (aiScoreColumns.js), so the
+// merge is written against one model's pair, N / U below; `novelty` / `usefulness`
+// are the derived means and are never merged into.
+const N = aiFieldsFor('gpt-6-astra').novelty, U = aiFieldsFor('gpt-6-astra').usefulness
+const GN = aiFieldsFor('gemini-3.8-flash').novelty, GU = aiFieldsFor('gemini-3.8-flash').usefulness
 console.log('mergeAiScoresIntoRows — topping the loaded dataset up from a file')
 {
   const rows = [
-    { rid: 'r1', idea_id: 'i1', idea_title: 'Thermo jacket', text: 'Thermo jacket: hue at 37C', novelty: 4, usefulness: 3 },
-    { rid: 'r2', idea_id: 'i2', idea_title: 'Zone map top',  text: 'Zone map top: heat zones',  novelty: '', usefulness: '' },
-    { rid: 'r3', idea_id: 'i3', idea_title: 'Half scored',   text: 'Half scored: one column',   novelty: 5, usefulness: '' },
+    { rid: 'r1', idea_id: 'i1', idea_title: 'Thermo jacket', text: 'Thermo jacket: hue at 37C', [N]: 4, [U]: 3 },
+    { rid: 'r2', idea_id: 'i2', idea_title: 'Zone map top',  text: 'Zone map top: heat zones',  [N]: '', [U]: '' },
+    { rid: 'r3', idea_id: 'i3', idea_title: 'Half scored',   text: 'Half scored: one column',   [N]: 5, [U]: '' },
   ]
   const incoming = [
-    { idea_id: 'i1', idea_title: 'Thermo jacket', novelty: 1, usefulness: 1 },
-    { idea_id: 'i2', idea_title: 'Zone map top',  novelty: 2, usefulness: 5 },
-    { idea_id: 'i3', idea_title: 'Half scored',   novelty: 1, usefulness: 4 },
-    { idea_id: 'i9', idea_title: 'An idea nobody loaded', novelty: 3, usefulness: 3 },
+    { idea_id: 'i1', idea_title: 'Thermo jacket', [N]: 1, [U]: 1 },
+    { idea_id: 'i2', idea_title: 'Zone map top',  [N]: 2, [U]: 5 },
+    { idea_id: 'i3', idea_title: 'Half scored',   [N]: 1, [U]: 4 },
+    { idea_id: 'i9', idea_title: 'An idea nobody loaded', [N]: 3, [U]: 3 },
   ]
   const res = mergeAiScoresIntoRows(rows, incoming)
   const [a, b, c] = res.rows
 
   check('an already-scored idea keeps BOTH its scores',
-    a.novelty === 4 && a.usefulness === 3, `${a.novelty}/${a.usefulness}`)
+    a[N] === 4 && a[U] === 3, `${a[N]}/${a[U]}`)
   check('an unscored idea gains the file\'s scores',
-    b.novelty === 2 && b.usefulness === 5, `${b.novelty}/${b.usefulness}`)
+    b[N] === 2 && b[U] === 5, `${b[N]}/${b[U]}`)
   check('a half-scored idea keeps its score and gains only the missing one',
-    c.novelty === 5 && c.usefulness === 4, `${c.novelty}/${c.usefulness}`)
+    c[N] === 5 && c[U] === 4, `${c[N]}/${c[U]}`)
   check('counts: matched=3, filled=2, kept=1, unmatched=1',
     res.matched === 3 && res.filled === 2 && res.kept === 1 && res.unmatched === 1,
     `matched=${res.matched} filled=${res.filled} kept=${res.kept} unmatched=${res.unmatched}`)
   check('per-column tallies: 1 novelty, 2 usefulness',
     res.gainedNovelty === 1 && res.gainedUsefulness === 2,
     `nov=${res.gainedNovelty} use=${res.gainedUsefulness}`)
+  check('the models the file filled are reported',
+    JSON.stringify(res.models) === JSON.stringify(['gpt_6_astra']), JSON.stringify(res.models))
   check('an unmatched file row is NEVER appended — the dataset keeps its length',
     res.rows.length === 3, `length=${res.rows.length}`)
   check('the input rows are not mutated',
-    rows[1].novelty === '' && rows[0].novelty === 4)
+    rows[1][N] === '' && rows[0][N] === 4)
+}
+
+console.log('mergeAiScoresIntoRows — one model never fills another')
+{
+  // The dataset carries GPT-6 Astra's ratings; the file carries Gemini's. Gemini's
+  // go into Gemini's own columns, every idea of them, and Astra's are untouched —
+  // the per-model rule the owner asked for ("append close to it the respective
+  // columns for another AI provider's model").
+  const rows = [
+    { rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One', [N]: 4, [U]: 3 },
+    { rid: 'r2', idea_id: 'i2', idea_title: 'Two', text: 'Two', [N]: 2, [U]: 2 },
+  ]
+  const res = mergeAiScoresIntoRows(rows, [
+    { idea_id: 'i1', [GN]: 5, [GU]: 1 },
+    { idea_id: 'i2', [GN]: 3, [GU]: 3, [N]: 5 },
+  ])
+  check('the second model fills its own columns on every idea',
+    res.rows[0][GN] === 5 && res.rows[0][GU] === 1 && res.rows[1][GN] === 3 && res.rows[1][GU] === 3)
+  check('and the first model\'s scores are untouched, even where the file has one for it',
+    res.rows[0][N] === 4 && res.rows[1][N] === 2)
+  // A plain novelty / usefulness (no model name) goes under "model not recorded".
+  const plain = mergeAiScoresIntoRows([{ rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One' }], [{ idea_id: 'i1', novelty: 3, usefulness: 4 }])
+  check('a file row with no model name fills "model not recorded"',
+    plain.rows[0][aiFieldsFor(UNRECORDED).novelty] === 3 && plain.rows[0][aiFieldsFor(UNRECORDED).usefulness] === 4 && !('novelty' in plain.rows[0]))
 }
 
 console.log('mergeAiScoresIntoRows — matching rules')
 {
   const rows = [
-    { rid: 'r1', idea_id: 'i1', idea_title: 'Renamed since export', text: 'Renamed since export: x', novelty: '', usefulness: '' },
-    { rid: 'r2', idea_id: '',   idea_title: 'No id here',           text: 'No id here: y',           novelty: '', usefulness: '' },
+    { rid: 'r1', idea_id: 'i1', idea_title: 'Renamed since export', text: 'Renamed since export: x', [N]: '', [U]: '' },
+    { rid: 'r2', idea_id: '',   idea_title: 'No id here',           text: 'No id here: y',           [N]: '', [U]: '' },
   ]
   const res = mergeAiScoresIntoRows(rows, [
     // Same Idea ID, DIFFERENT title — the id must win, or an edited title
     // silently orphans the score.
-    { idea_id: 'i1', idea_title: 'What it was called before', novelty: 3, usefulness: 3 },
+    { idea_id: 'i1', idea_title: 'What it was called before', [N]: 3, [U]: 3 },
     // No id at all — the title fallback is what carries an offline rating sheet.
-    { idea_id: '', idea_title: 'no  id-HERE!!', novelty: 4, usefulness: 4 },
+    { idea_id: '', idea_title: 'no  id-HERE!!', [N]: 4, [U]: 4 },
   ])
   check('Idea ID wins over a changed title',
-    res.rows[0].novelty === 3, `got ${res.rows[0].novelty}`)
+    res.rows[0][N] === 3, `got ${res.rows[0][N]}`)
   check('a file row with no id falls back to the normalised title',
-    res.rows[1].novelty === 4, `got ${res.rows[1].novelty}`)
+    res.rows[1][N] === 4, `got ${res.rows[1][N]}`)
 
   // A duplicated file row must not be counted as a second match.
   const dup = mergeAiScoresIntoRows(
-    [{ rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One', novelty: '', usefulness: '' }],
-    [{ idea_id: 'i1', novelty: 2, usefulness: 2 }, { idea_id: 'i1', novelty: 5, usefulness: 5 }])
+    [{ rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One', [N]: '', [U]: '' }],
+    [{ idea_id: 'i1', [N]: 2, [U]: 2 }, { idea_id: 'i1', [N]: 5, [U]: 5 }])
   check('a duplicate file row is reported unmatched, not matched twice',
     dup.matched === 1 && dup.unmatched === 1, `matched=${dup.matched} unmatched=${dup.unmatched}`)
   check('and the first row\'s values are the ones kept',
-    dup.rows[0].novelty === 2, `got ${dup.rows[0].novelty}`)
+    dup.rows[0][N] === 2, `got ${dup.rows[0][N]}`)
 
   // Nothing usable in the file must never blank what is already there.
   const blanked = mergeAiScoresIntoRows(
-    [{ rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One', novelty: 4, usefulness: 4 }],
-    [{ idea_id: 'i1', novelty: '', usefulness: 'n/a' }])
+    [{ rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One', [N]: 4, [U]: 4 }],
+    [{ idea_id: 'i1', [N]: '', [U]: 'n/a' }])
   check('an empty or unparseable file cell never blanks a stored score',
-    blanked.rows[0].novelty === 4 && blanked.rows[0].usefulness === 4)
+    blanked.rows[0][N] === 4 && blanked.rows[0][U] === 4)
   check('a row the file has nothing usable for counts as kept',
     blanked.kept === 1 && blanked.filled === 0)
 
   // Out-of-range values are clamped to the 1–5 rating scale.
   const clamped = mergeAiScoresIntoRows(
-    [{ rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One', novelty: '', usefulness: '' }],
-    [{ idea_id: 'i1', novelty: 9, usefulness: -2 }])
+    [{ rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One', [N]: '', [U]: '' }],
+    [{ idea_id: 'i1', [N]: 9, [U]: -2 }])
   check('scores are clamped to 1–5',
-    clamped.rows[0].novelty === 5 && clamped.rows[0].usefulness === 1,
-    `${clamped.rows[0].novelty}/${clamped.rows[0].usefulness}`)
+    clamped.rows[0][N] === 5 && clamped.rows[0][U] === 1,
+    `${clamped.rows[0][N]}/${clamped.rows[0][U]}`)
 
   // The 3.3 evaluator upload reuses the same matcher against ext_* columns.
   const ext = mergeAiScoresIntoRows(
-    [{ rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One', novelty: 4, usefulness: 4, ext_novelty: '', ext_usefulness: '' }],
+    [{ rid: 'r1', idea_id: 'i1', idea_title: 'One', text: 'One', [N]: 4, [U]: 4, ext_novelty: '', ext_usefulness: '' }],
     [{ idea_id: 'i1', novelty: 2, usefulness: 2 }],
     { novelty: 'ext_novelty', usefulness: 'ext_usefulness' })
   check('`fields` retargets the merge without touching the AI columns',
-    ext.rows[0].ext_novelty === 2 && ext.rows[0].novelty === 4)
+    ext.rows[0].ext_novelty === 2 && ext.rows[0][N] === 4)
 }
 
 // ── shouldRunAnotherPass ───────────────────────────────────────────────────
@@ -441,17 +473,17 @@ console.log('an auto-generated import id never joins two unrelated files')
   // column. Those are POSITIONS: joining on one writes the third row of one file
   // onto the third row of another.
   const rows = [{ rid: 'r1', idea_id: 'import_1', idea_title: 'Solar awning', text: 'Solar awning', novelty: '', usefulness: '' }]
-  const wrong = mergeAiScoresIntoRows(rows, [{ idea_id: 'import_1', idea_title: 'A completely different idea', novelty: 5, usefulness: 5 }])
+  const wrong = mergeAiScoresIntoRows(rows, [{ idea_id: 'import_1', idea_title: 'A completely different idea', [N]: 5, [U]: 5 }])
   check('a positional id does NOT match a different idea',
-    wrong.rows[0].novelty === '' && wrong.unmatched === 1,
-    `novelty=${wrong.rows[0].novelty} unmatched=${wrong.unmatched}`)
-  const right = mergeAiScoresIntoRows(rows, [{ idea_id: 'import_9', idea_title: 'Solar awning', novelty: 5, usefulness: 5 }])
+    !wrong.rows[0][N] && wrong.unmatched === 1,
+    `novelty=${wrong.rows[0][N]} unmatched=${wrong.unmatched}`)
+  const right = mergeAiScoresIntoRows(rows, [{ idea_id: 'import_9', idea_title: 'Solar awning', [N]: 5, [U]: 5 }])
   check('the title still matches it, so a genuine top-up is not lost',
-    right.rows[0].novelty === 5 && right.matched === 1)
+    right.rows[0][N] === 5 && right.matched === 1)
   check('a REAL Idea ID still joins',
     mergeAiScoresIntoRows(
       [{ rid: 'r1', idea_id: 'abc123', idea_title: 'One', text: 'One', novelty: '', usefulness: '' }],
-      [{ idea_id: 'abc123', idea_title: 'Renamed', novelty: 2, usefulness: 2 }]).rows[0].novelty === 2)
+      [{ idea_id: 'abc123', idea_title: 'Renamed', [N]: 2, [U]: 2 }]).rows[0][N] === 2)
 }
 
 // ── Which sheet of an uploaded workbook carries the scores ────────────────

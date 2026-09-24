@@ -31,7 +31,9 @@ import { computeDeterministicKpis } from '../src/utils/deterministicKpis.js'
 import {
   KPI_DEFS, COLUMNS, canonicalKpiField, normalizeImportedRows, buildRowsForSession,
   DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, stripAllKpis, scriptKpiKeys,
+  exportKpiColumns,
 } from '../src/utils/analyticsData.js'
+import { aiUseKey, UNRECORDED } from '../src/utils/aiScoreColumns.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const src = p => readFileSync(join(here, '..', p), 'utf8')
@@ -101,6 +103,36 @@ console.log('Workability — 1 / (1 + extra technologies named)')
   for (const [t, want] of neg) {
     const got = techTermsIn(t, c.concat(compileTerms(['electronics'])))
     check(`negation: "${t}" → [${want.join(', ')}]`, got.join() === want.join(), got.join())
+  }
+  // A negated LIST (owner's data, 2026-09-24): the negation reaches every item,
+  // not only the first — "it removes the battery or Bluetooth wearable device"
+  // was scored as needing both. Each phrasing below is from, or shaped like, a
+  // real idea in the owner's 741-idea dataset; the "must still count" ones pin
+  // the other side, so the rule cannot drift into swallowing real technology.
+  const lists = [
+    ['it removes the battery or Bluetooth wearable device', []],
+    ['no battery or Bluetooth needed', []],
+    ['without a battery or an app', []],
+    ['no need for App or charging', []],
+    ['requires no electronic sensors or batteries', []],
+    ['without using an electronic sensor', []],
+    ['without requiring batteries, electronics, or a phone', []],
+    ['without electronic sensors, apps or charging', []],
+    ['without adding sensors or electronics', []],
+    ['works without batteries, screens or uncomfortable electronic sensors', []],
+    // must still count
+    ['there is no delay and the app alerts parents', ['app']],
+    ['no delay, the app alerts parents', ['app']],
+    ['It does not look like a watch, and the app shows it', ['app']],
+    ['not only the app but also a sensor', ['app', 'sensor']],
+    ['uses a battery and an app', ['app', 'battery']],
+    ['It is not expensive. The app shows data', ['app', 'data']],
+    ['replaces a thermometer with an app', ['app']],
+    ['A sensor with no app', ['sensor']],
+  ]
+  for (const [t, want] of lists) {
+    const got = techTermsIn(t, T).slice().sort()
+    check(`negated list: "${t}" → [${want.join(', ')}]`, got.join() === want.slice().sort().join(), got.join())
   }
 }
 
@@ -239,7 +271,11 @@ console.log('Registry — every new KPI reaches every consumer')
   const blankRow = buildRowsForSession({ code: 'S' }, [{ id: 'i1', title: 't' }], [], [])[0]
   for (const k of NEW) {
     const d = defs[k]
-    check(`${k}: in KPI_DEFS with a "(objective)" label, not on the 1–5 scale`, d && /\(objective\)$/.test(d.label) && d.scale5 === false, d && d.label)
+    // "(empirical)" since 2026-09-24 (owner: "Don't call them objective").
+    check(`${k}: in KPI_DEFS with an "(empirical)" label, not on the 1–5 scale`, d && /\(empirical\)$/.test(d.label) && d.scale5 === false, d && d.label)
+    check(`${k}: the old "(objective)" label still imports into it`,
+      canonicalKpiField(d.label.replace('(empirical)', '(objective)')) === k &&
+      normalizeImportedRows([{ Condition: 'Solo', Title: 'x', [d.label.replace('(empirical)', '(objective)')]: 0.42 }])[0][k] === 0.42)
     if (!d) continue
     check(`${k}: in COLUMNS (the analysis CSV)`, COLUMNS.includes(k))
     check(`${k}: canonicalKpiField routes its label AND its key back to it`,
@@ -255,11 +291,17 @@ console.log('Registry — every new KPI reaches every consumer')
     check(`${k}: in the Python KPI_DEFS with the same label`, pyActive.includes(`("${k}", "${d.label}", False)`))
     check(`${k}: in the R KPI_KEYS / KPI_LABELS / KPI_SCALE5`,
       rKeys.includes(`"${k}"`) && R_.includes(`${k}="${d.label}"`) && R_.includes(`${k}=FALSE`))
-    check(`${k}: a column of the aggregate Rankings tab`, exp.includes(`'${d.label}':`))
+    // The Rankings tab takes its KPI columns from exportKpiColumns (the page's
+    // order: empirical first), all seven 3.1 columns even before they are computed.
+    check(`${k}: a column of the aggregate Rankings tab`,
+      exportKpiColumns([], { allEmpirical: true }).some(c => c.key === k && c.label === d.label) &&
+      /for \(const c of columns\) row\[c\.label\]/.test(exp))
   }
   check('the old novelty labels still route (no regression)',
-    canonicalKpiField('Novelty (objective)') === 'det_novelty' && canonicalKpiField('Combined score') === 'det_score' &&
-    canonicalKpiField('Pool distinctiveness') === 'det_distinctiveness' && canonicalKpiField('Usefulness') === 'usefulness' &&
+    canonicalKpiField('Novelty (objective)') === 'det_novelty' && canonicalKpiField('Novelty (empirical)') === 'det_novelty' &&
+    canonicalKpiField('Combined score') === 'det_score' && canonicalKpiField('Pool distinctiveness') === 'det_distinctiveness' &&
+    // a plain AI column has no model name: "model not recorded" (aiScoreColumns.js)
+    canonicalKpiField('Usefulness') === aiUseKey(UNRECORDED) &&
     canonicalKpiField('Eval. Usefulness') === 'ext_usefulness')
   // Stale saved scripts: the page compares the template's registry with the script's.
   const pyNow = scriptKpiKeys(py, 'python'), rNow = scriptKpiKeys(R_, 'r')

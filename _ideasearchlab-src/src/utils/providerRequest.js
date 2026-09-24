@@ -42,6 +42,20 @@
  *    `responseMimeType: application/json` makes the array come back as JSON
  *    rather than prose around it.
  *
+ *  - Mistral, DeepSeek, Qwen and Meta-via-OpenRouter (rater-only, added
+ *    2026-09-24): one OpenAI-compatible `chat/completions` shape each
+ *    (`buildOpenAICompatRequest`), sending ONLY `Authorization` and
+ *    `Content-Type` — DeepSeek's and Qwen's CORS preflights allow nothing else —
+ *    and no `response_format` (the rater asks for a JSON ARRAY; the providers'
+ *    JSON mode forces an OBJECT). Thinking is switched OFF where the provider
+ *    allows it, for a cheap and repeatable 1–5 rating: Mistral Medium 3.5 /
+ *    Small 4 `reasoning_effort: "none"`, DeepSeek V4 `thinking: {type:
+ *    "disabled"}` (it thinks by default), Qwen `enable_thinking: false`
+ *    (required on a non-streaming call); Meta's Muse models cannot stop
+ *    thinking, so they get OpenRouter's `reasoning: {effort: "low", exclude:
+ *    true}` and the 8000-token ceiling. Mistral may return `content` as an
+ *    ARRAY of chunks (a thinking chunk, then text) — its text chunks are joined.
+ *
  * Errors carry the HTTP `status` (scoreBatch's `isFatalApiError` reads it: a
  * 401/403/400/404 aborts the run at once, a 429/5xx is retried), and the
  * message can never contain the API key — a provider that echoes the key in
@@ -70,6 +84,28 @@ export const PROVIDER_NAMES = {
   claude: 'Claude (Anthropic)',
   openai: 'ChatGPT (OpenAI)',
   gemini: 'Gemini (Google)',
+  mistral: 'Mistral AI',
+  openrouter: 'OpenRouter (Meta models)',
+  deepseek: 'DeepSeek',
+  qwen: 'Qwen (Alibaba Cloud)',
+}
+
+/** The OpenAI-compatible rater-only providers and their chat-completions endpoint. */
+export const OPENAI_COMPAT_URLS = {
+  mistral: 'https://api.mistral.ai/v1/chat/completions',
+  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+  deepseek: 'https://api.deepseek.com/chat/completions',
+  qwen: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+}
+export const isOpenAICompat = provider => Object.prototype.hasOwnProperty.call(OPENAI_COMPAT_URLS, provider)
+
+/** Mistral's hybrid models, which take `reasoning_effort` ("none" switches thinking off). */
+export function mistralTakesReasoningEffort(model) {
+  return /^(mistral-medium-(2604|3-5|latest)|mistral-small-(2603|latest))/.test(model || '')
+}
+/** Meta's Muse models think on every call (reasoning cannot be turned off). */
+export function isMuseModel(model) {
+  return /^meta\/muse-/.test(model || '')
 }
 
 /** Models that accept `output_config.effort` (Opus 4.5+, Sonnet 4.6+, Fable/Mythos). */
@@ -151,14 +187,56 @@ export function buildGeminiRequest({ model, apiKey, system, user }) {
   }
 }
 
+export function buildOpenAICompatRequest(provider, { model, apiKey, system, user }) {
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    max_tokens: LEGACY_CHAT_MAX_TOKENS,
+  }
+  if (provider === 'mistral' && mistralTakesReasoningEffort(model)) body.reasoning_effort = 'none'
+  if (provider === 'deepseek') body.thinking = { type: 'disabled' }
+  if (provider === 'qwen') body.enable_thinking = false
+  if (provider === 'openrouter' && isMuseModel(model)) {
+    body.reasoning = { effort: SCORING_EFFORT, exclude: true }
+    body.max_tokens = SCORING_MAX_TOKENS          // thinking counts toward the ceiling
+  }
+  return {
+    url: OPENAI_COMPAT_URLS[provider],
+    // Only these two: DeepSeek's and Qwen's CORS preflights refuse any other header.
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body,
+  }
+}
+
 /** `{ url, headers, body }` for one scoring call, by provider id. */
 export function buildRequest(provider, args) {
   switch (provider) {
     case 'claude': return buildClaudeRequest(args)
     case 'openai': return buildOpenAIRequest(args)
     case 'gemini': return buildGeminiRequest(args)
-    default: throw new Error(`Unknown AI provider: ${provider}`)
+    default:
+      if (isOpenAICompat(provider)) return buildOpenAICompatRequest(provider, args)
+      throw new Error(`Unknown AI provider: ${provider}`)
   }
+}
+
+/** An OpenAI-style `message.content`: a string, or (Mistral, with thinking) an
+ *  array of chunks whose TEXT chunks are the reply. */
+function chatContentText(content) {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .filter(c => c && (c.type === 'text' || c.type == null) && typeof c.text === 'string')
+      .map(c => c.text)
+      .join('')
+  }
+  return ''
 }
 
 /** The reply's text, by provider — '' when the model returned none. */
@@ -172,6 +250,11 @@ export function parseReplyText(provider, data) {
         .join('')
     case 'openai':
       return data?.choices?.[0]?.message?.content || ''
+    case 'mistral':
+    case 'openrouter':
+    case 'deepseek':
+    case 'qwen':
+      return chatContentText(data?.choices?.[0]?.message?.content)
     case 'gemini':
       // Thought parts are only present when asked for; skip them if they are.
       return (data?.candidates?.[0]?.content?.parts || [])
@@ -260,7 +343,11 @@ export function replyProblem(provider, data, text) {
       if (empty && data?.stop_reason === 'max_tokens') return exhausted('thinking')
       return null
     }
-    case 'openai': {
+    case 'openai':
+    case 'mistral':
+    case 'openrouter':
+    case 'deepseek':
+    case 'qwen': {
       const choice = data?.choices?.[0]
       if (choice?.message?.refusal) return refusal(`declined to rate this batch (refusal: ${String(choice.message.refusal).slice(0, 200)})`)
       if (empty && choice?.finish_reason === 'length') return exhausted('reasoning')

@@ -17,7 +17,7 @@
  * fails on the day a promotion lapses, so the row gets re-snapshotted.
  */
 
-export const PRICES_AS_OF = '2026-09-23'
+export const PRICES_AS_OF = '2026-09-24'
 // Exchange-rate snapshot (same date). Update as needed.
 export const USD_TO_EUR = 0.866
 
@@ -70,6 +70,30 @@ export const MODEL_PRICES = {
   'gemini-2.5-pro': { in: 1.25, out: 10 },
   'gemini-2.5-flash': { in: 0.3, out: 2.5 },
   'gemini-2.5-flash-lite': { in: 0.1, out: 0.4 },
+
+  // The four rater-only providers (added 2026-09-24; figures from the providers'
+  // pages and price trackers as indexed that week — re-check before a big run).
+  // Mistral AI (La Plateforme, EU)
+  'mistral-medium-2604': { in: 1.5, out: 7.5 },
+  'mistral-large-2512': { in: 0.5, out: 1.5 },
+  'mistral-small-2603': { in: 0.15, out: 0.6 },
+  'ministral-14b-2512': { in: 0.2, out: 0.2 },
+  'ministral-8b-2512': { in: 0.15, out: 0.15 },
+  // DeepSeek: the PEAK price (weekdays 01:00–04:00 and 06:00–10:00 UTC); off-peak
+  // is half. Costed at peak so an estimate never comes out low.
+  'deepseek-v4-pro': { in: 1.32, out: 3.96 },
+  'deepseek-flash': { in: 0.3, out: 1.2 },
+  // Alibaba Qwen (Model Studio, international / Singapore). Qwen3.7-Max at its
+  // list price; a 50% promotion was reported but could not be confirmed.
+  'qwen3.8-max': { in: 2, out: 6 },
+  'qwen3.7-max': { in: 2.5, out: 7.5 },
+  'qwen3.7-plus': { in: 0.4, out: 1.6 },
+  'qwen3.8-flash': { in: 0.15, out: 0.45 },
+  // Meta, through OpenRouter (Meta's own Llama API closed on 2026-07-06; its new
+  // API serves only the closed Muse models). OpenRouter's prices.
+  'meta/muse-spark-1.3': { in: 1.25, out: 4.25 },
+  'meta/muse-glimmer-30b': { in: 0.3, out: 1.1 },
+  'meta-llama/llama-4-maverick': { in: 0.19, out: 0.65 },
 }
 
 /** 'YYYY-MM-DD' for a Date, epoch ms, ISO string or Firestore-like {seconds}; today when absent. */

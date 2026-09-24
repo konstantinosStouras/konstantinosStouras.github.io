@@ -757,7 +757,7 @@ function buildAggregateAbout(entries) {
     ['Clustering unit (triad)', 'use Group UID (= "SessionCode:groupId"), NOT the bare Group ID — g0/g1… repeat across sessions.'],
     [],
     ['WHERE EACH MEASURE LIVES'],
-    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea: Novelty / Usefulness / Quality columns for blind expert rating, plus the objective KPIs computed in Section 3.1: on the novelty side Novelty (objective) / Pool distinctiveness / NoveltyScore, on the usefulness side Need fit / Specificity / Workability / Usefulness score (objective)). The "Pool KPIs by condition" sheet, when present, adds the novelty x usefulness cross-check per condition.'],
+    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea). Rankings columns, in order: first the EMPIRICAL KPIs computed in Section 3.1 (novelty side: Novelty (empirical) / Pool distinctiveness / NoveltyScore; usefulness side: Need fit / Specificity / Workability / Usefulness score (empirical)); then the AI ratings, one pair per model, e.g. AI Novelty (GPT-6 Astra) / AI Usefulness (GPT-6 Astra), with the mean over the models when several rated the ideas; then Eval. Novelty / Eval. Usefulness / Eval. Quality, left empty for blind expert raters until their ratings are loaded. The "Pool KPIs by condition" sheet, when present, adds the novelty x usefulness cross-check per condition.'],
     ['Selected ideas (group level)', '"Ideas" sheet → Final Group Pick = Yes; "Groups" sheet lists them as titles.'],
     ['Vote completeness', '"Participants" sheet → Ballot Status + Votes Cast (a submitted ballot can hold zero votes).'],
     ['Who voted for which idea', '"Votes" sheet: one row per cast vote (voter x idea), stacked across every session.'],
@@ -770,17 +770,21 @@ function buildAggregateAbout(entries) {
 }
 
 /**
- * Build the extra "Rankings" tab from the aggregated Ideas rows. One row per idea
- * with fixed headings. The AI Novelty / Usefulness / Quality columns are filled from
- * `scoreById` (Idea ID → { novelty, usefulness, quality, detNovelty,
- * detDistinctiveness, detScore }) when scores were set on the page in Step 3;
- * otherwise the AI columns are left EMPTY for blind expert rating. The three
- * objective KPI columns (computed in Section 3.1) are carried through the same map.
+ * Build the extra "Rankings" tab from the aggregated Ideas rows: one row per idea,
+ * its identity columns, then one column per KPI in `columns` ([{ key, label }], in
+ * order), each read from `valuesById` (Idea ID → the page's row for that idea).
+ *
+ * The column order is the page's (owner, 2026-09-24): the EMPIRICAL proxies of
+ * novelty and usefulness first (Section 3.1, plus any extra KPI uploaded there),
+ * then the AI ratings MODEL BY MODEL — "AI Novelty (GPT-6 Astra)", "AI Usefulness
+ * (GPT-6 Astra)", then the next model's pair — then the evaluator columns, which
+ * stay in the file empty until evaluator ratings are loaded so the tab can go to
+ * blind expert raters as it is (the 3.3 upload reads them back).
  */
-export function rankingsSheetFromIdeas(ideaRows, scoreById, extraKpis = []) {
+export function rankingsSheetFromIdeas(ideaRows, valuesById, columns = []) {
   const blank = v => (v == null ? '' : v)
   const rows = (ideaRows || []).map(r => {
-    const sc = scoreById && scoreById.get(String(r['Idea ID'] ?? ''))
+    const vals = valuesById && valuesById.get(String(r['Idea ID'] ?? ''))
     const row = {
       'Idea ID': r['Idea ID'] ?? '',
       'Condition': r['Condition'] ?? '',
@@ -788,19 +792,8 @@ export function rankingsSheetFromIdeas(ideaRows, scoreById, extraKpis = []) {
       'Final Group Pick': r['Final Group Pick'] ?? '',
       'Title': r['Title'] ?? '',
       'Description': r['Description'] ?? '',
-      'Novelty': sc ? blank(sc.novelty) : '',
-      'Usefulness': sc ? blank(sc.usefulness) : '',
-      'Quality': sc ? blank(sc.quality) : '',
-      'Novelty (objective)': sc ? blank(sc.detNovelty) : '',
-      'Pool distinctiveness': sc ? blank(sc.detDistinctiveness) : '',
-      'NoveltyScore': sc ? blank(sc.detScore) : '',
-      'Need fit (objective)': sc ? blank(sc.detNeedFit) : '',
-      'Specificity (objective)': sc ? blank(sc.detSpecificity) : '',
-      'Workability (objective)': sc ? blank(sc.detWorkability) : '',
-      'Usefulness score (objective)': sc ? blank(sc.detUsefulness) : '',
     }
-    // Admin-uploaded extra KPIs (Section 3.1), each carried through sc.extra.
-    for (const k of extraKpis) row[k.label] = sc ? blank(sc.extra?.[k.key]) : ''
+    for (const c of columns) row[c.label] = vals ? blank(vals[c.key]) : ''
     return row
   })
   return { name: 'Rankings', kind: 'json', rows }

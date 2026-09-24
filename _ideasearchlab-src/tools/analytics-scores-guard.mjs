@@ -18,6 +18,8 @@
 import {
   matchScoresIntoRows, matchUploadedKpisIntoRows, UPLOADED_KPI_PREFIX,
 } from '../src/utils/analyticsData.js'
+import { aiFieldsFor, UNRECORDED } from '../src/utils/aiScoreColumns.js'
+const { novelty: N, usefulness: U } = aiFieldsFor('gpt-6-astra')
 
 let failures = 0
 function check(name, cond, detail) {
@@ -30,9 +32,9 @@ function check(name, cond, detail) {
 console.log('matchScoresIntoRows — an upload only fills unscored ideas')
 {
   const rows = [
-    { rid: 'a', idea_title: 'Thermo signal commuter Jacket', novelty: 4, usefulness: 3 }, // fully scored
-    { rid: 'b', idea_title: 'Zone map Athletic Top', novelty: '', usefulness: '' },        // unscored
-    { rid: 'c', idea_title: 'Half scored idea', novelty: 5, usefulness: '' },              // half scored
+    { rid: 'a', idea_title: 'Thermo signal commuter Jacket', [N]: 4, [U]: 3 }, // fully scored
+    { rid: 'b', idea_title: 'Zone map Athletic Top', [N]: '', [U]: '' },        // unscored
+    { rid: 'c', idea_title: 'Half scored idea', [N]: 5, [U]: '' },              // half scored
   ]
   const entries = [
     { title: 'Thermo signal commuter Jacket', novelty: 1, usefulness: 1 },
@@ -40,22 +42,32 @@ console.log('matchScoresIntoRows — an upload only fills unscored ideas')
     { title: 'Half scored idea', novelty: 1, usefulness: 4 },
     { title: 'An idea nobody loaded', novelty: 3, usefulness: 3 },
   ]
-  const res = matchScoresIntoRows(rows, entries)
+  // Since 2026-09-24 the AI upload fills ONE MODEL's own columns (aiScoreColumns.js).
+  const res = matchScoresIntoRows(rows, entries, null, { novelty: N, usefulness: U })
   const [a, b, c] = res.rows
 
   check('an already-scored idea keeps BOTH its scores',
-    a.novelty === 4 && a.usefulness === 3, `got ${a.novelty}/${a.usefulness}`)
+    a[N] === 4 && a[U] === 3, `got ${a[N]}/${a[U]}`)
   check('an unscored idea receives the file\'s scores',
-    b.novelty === 2 && b.usefulness === 5, `got ${b.novelty}/${b.usefulness}`)
+    b[N] === 2 && b[U] === 5, `got ${b[N]}/${b[U]}`)
   check('a half-scored idea keeps its score and gains only the missing one',
-    c.novelty === 5 && c.usefulness === 4, `got ${c.novelty}/${c.usefulness}`)
+    c[N] === 5 && c[U] === 4, `got ${c[N]}/${c[U]}`)
   check('counts: filled=2, kept=1, unmatched=1',
     res.filled === 2 && res.kept === 1 && res.unmatched === 1,
     `filled=${res.filled} kept=${res.kept} unmatched=${res.unmatched}`)
   check('matched still counts every file row that found an idea (3)',
     res.matched === 3, `matched=${res.matched}`)
   check('the input rows are not mutated',
-    rows[0].novelty === 4 && rows[1].novelty === '', 'source array was written through')
+    rows[0][N] === 4 && rows[1][N] === '', 'source array was written through')
+}
+
+{
+  // With no target named, a file's plain Novelty / Usefulness has no model name:
+  // it goes under "model not recorded", never into the derived mean columns.
+  const res = matchScoresIntoRows([{ rid: 'a', idea_title: 'Plain file' }], [{ title: 'Plain file', novelty: 3, usefulness: 4 }])
+  const R = aiFieldsFor(UNRECORDED)
+  check('the default target is "model not recorded"', res.rows[0][R.novelty] === 3 && res.rows[0][R.usefulness] === 4 && !('novelty' in res.rows[0]),
+    JSON.stringify(res.rows[0]))
 }
 
 console.log('matchScoresIntoRows — a blank/unusable file cell never blanks a score')

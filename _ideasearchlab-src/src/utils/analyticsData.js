@@ -26,6 +26,12 @@
 // Canonical condition encoding — the "Set A (placement)" short names. "None"
 // (no AI) is first so it is the natural regression reference level in both the
 // Python and R templates. Each maps to a paper name + where AI is present.
+// Per-model AI score columns ("AI Novelty (GPT-6 Astra)" …): see aiScoreColumns.js.
+import {
+  UNRECORDED, aiNovKey, aiUseKey, isAiModelKey, parseAiHeader,
+  aiKpiDefs, aiModelSlugs, hasAiModelFields, panelMean,
+} from './aiScoreColumns.js'
+
 export const CONDITIONS = ['None', 'Solo', 'Group', 'Both']
 
 // The encoding key shown to the admin (top-of-page table + insights) and written
@@ -45,9 +51,11 @@ export function paperNameFor(encoding) {
 // Columns of the analysis table, in CSV order. Keep in sync with the Python/R
 // templates (they read these exact names). KPIs come from THREE sources, each
 // kept in its own columns so they can be compared side by side (Section 3.1/3.2/3.3):
-//   • AI-generated (3.2):        novelty / usefulness / overall_quality
+//   • AI-generated (3.2):        novelty / usefulness / overall_quality — DERIVED:
+//     the mean over the per-model columns ai_nov__<model> / ai_use__<model>
+//     (aiScoreColumns.js), which are what a rater actually writes
 //   • External evaluators (3.3): ext_novelty / ext_usefulness / ext_quality
-//   • Deterministic/objective (3.1): det_* — the novelty side (det_novelty /
+//   • Deterministic/empirical (3.1): det_* — the novelty side (det_novelty /
 //     det_distinctiveness / det_score) and the usefulness side (det_need_fit /
 //     det_specificity / det_workability / det_usefulness, see usefulnessKpis.js).
 export const COLUMNS = [
@@ -94,23 +102,25 @@ export const KPI_DEFS = [
   { key: 'ext_novelty', label: 'Eval. Novelty', source: 'ext', scale5: true },
   { key: 'ext_usefulness', label: 'Eval. Usefulness', source: 'ext', scale5: true },
   { key: 'ext_quality', label: 'Eval. Quality', source: 'ext', scale5: true },
-  // 3.1 Deterministic / objective KPIs (range 0–1; not a 1–5 scale, so no "top
-  // rating" Tables 5/6). "Novelty (objective)" is qualified so it never clashes
-  // with the AI "Novelty" column. The mean of the two is labelled NoveltyScore
-  // (owner, 2026-09-23; it was "Combined score"). Its header contains "novelty",
+  // 3.1 Deterministic / EMPIRICAL KPIs (range 0–1; not a 1–5 scale, so no "top
+  // rating" Tables 5/6). Called "empirical" since 2026-09-24 (owner: "Don't call
+  // them objective"); every importer still reads the old "(objective)" headers.
+  // "Novelty (empirical)" is qualified so it never clashes with the AI columns.
+  // The mean of the two is labelled NoveltyScore (owner, 2026-09-23; it was
+  // "Combined score"). Its header contains "novelty",
   // so every importer asks isNoveltyScoreHeader BEFORE any "novelty" match — or
   // a re-uploaded NoveltyScore column would land in AI Novelty. Computed in
   // deterministicKpis.js.
-  { key: 'det_novelty', label: 'Novelty (objective)', source: 'det', scale5: false },
+  { key: 'det_novelty', label: 'Novelty (empirical)', source: 'det', scale5: false },
   { key: 'det_distinctiveness', label: 'Pool distinctiveness', source: 'det', scale5: false },
   { key: 'det_score', label: 'NoveltyScore', source: 'det', scale5: false },
-  // 3.1 objective USEFULNESS KPIs (usefulnessKpis.js), each anchored on something
+  // 3.1 empirical USEFULNESS KPIs (usefulnessKpis.js), each anchored on something
   // the novelty KPIs never look at, so the two sides are not tied by construction.
-  // Every label ends "(objective)" so canonicalKpiField routes a re-upload back here.
-  { key: 'det_need_fit', label: 'Need fit (objective)', source: 'det', scale5: false },
-  { key: 'det_specificity', label: 'Specificity (objective)', source: 'det', scale5: false },
-  { key: 'det_workability', label: 'Workability (objective)', source: 'det', scale5: false },
-  { key: 'det_usefulness', label: 'Usefulness score (objective)', source: 'det', scale5: false },
+  // Every label ends "(empirical)" so canonicalKpiField routes a re-upload back here.
+  { key: 'det_need_fit', label: 'Need fit (empirical)', source: 'det', scale5: false },
+  { key: 'det_specificity', label: 'Specificity (empirical)', source: 'det', scale5: false },
+  { key: 'det_workability', label: 'Workability (empirical)', source: 'det', scale5: false },
+  { key: 'det_usefulness', label: 'Usefulness score (empirical)', source: 'det', scale5: false },
 ]
 
 /**
@@ -155,9 +165,11 @@ export function uploadedKpiDefs(rows) {
   return uploadedKpiKeys(rows).map(key => ({ key, label: uploadedKpiLabel(key), source: 'upload', scale5: false }))
 }
 
-/** Every analysis column for the CSV/regressions: the fixed COLUMNS + uploaded KPIs. */
+/** Every analysis column for the CSV/regressions: the fixed COLUMNS, each AI
+ *  model's own two columns (ai_nov__… / ai_use__…) and the uploaded KPIs. */
 export function analysisColumns(rows) {
-  return [...COLUMNS, ...uploadedKpiKeys(rows)]
+  const perModel = aiModelSlugs(rows).flatMap(s => [aiNovKey(s), aiUseKey(s)])
+  return [...COLUMNS, ...perModel, ...uploadedKpiKeys(rows)]
 }
 
 /**
@@ -194,7 +206,7 @@ export const ALL_KPI_COLUMNS = KPI_DEFS.map(d => d.key)
 
 /**
  * Return rows with NO pre-computed KPIs: every built-in KPI value blanked and all
- * uploaded extra-KPI (x_*) columns dropped. Used for the persisted dataset default,
+ * uploaded extra-KPI (x_*) and per-model AI (ai_nov__* / ai_use__*) columns dropped. Used for the persisted dataset default,
  * so a page refresh starts clean across all of Section 3 — the admin re-computes
  * (3.1) / re-scores (3.2) / re-uploads (3.3 + extra KPIs) within the session.
  */
@@ -202,7 +214,7 @@ export function stripAllKpis(rows) {
   return (rows || []).map(r => {
     const out = {}
     for (const k of Object.keys(r)) {
-      if (k.startsWith(UPLOADED_KPI_PREFIX)) continue
+      if (k.startsWith(UPLOADED_KPI_PREFIX) || isAiModelKey(k)) continue
       out[k] = ALL_KPI_COLUMNS.includes(k) ? '' : r[k]
     }
     return out
@@ -287,14 +299,18 @@ export function canonicalKpiField(header) {
   const h = String(header || '').toLowerCase().trim()
   // A column already named by its row key (the analysis CSV: det_score,
   // det_need_fit, …) is that KPI. Without this, keys like det_distinctiveness
-  // matched nothing below and came back in as a duplicate x_det_… extra.
-  const exact = KPI_DEFS.find(d => d.key === h)
+  // matched nothing below and came back in as a duplicate x_det_… extra. The AI
+  // keys (novelty / usefulness / overall_quality) are NOT taken here: they are
+  // derived now, and parseAiHeader below decides where a plain AI column goes.
+  const exact = KPI_DEFS.find(d => d.key === h && d.source !== 'ai')
   if (exact) return exact.key
   const has = w => h.includes(w)
   // First: the NoveltyScore header also contains "novelty".
   if (isNoveltyScoreHeader(h)) return 'det_score'
-  const isObj = /\bobj\b|\bobjective\b|\(objective\)/.test(h)
-  const isEval = /\beval\b|\bevaluator\b|external/.test(h)
+  // "(empirical)" since 2026-09-24; "(objective)" / "Obj." before it — both read.
+  const isObj = /\bobj\b|\bobjective\b|\bempirical\b|\(objective\)|\(empirical\)/.test(h)
+  // A blind rater's / expert's column is an evaluator's (3.3), never an AI model's.
+  const isEval = /\beval\b|\bevaluator\b|external|\brater\b|\bexpert\b/.test(h)
   if (isObj) {
     // Usefulness side first: "Usefulness score (objective)" also contains "score".
     if (has('need')) return 'det_need_fit'
@@ -314,10 +330,25 @@ export function canonicalKpiField(header) {
     if (has('quality')) return 'ext_quality'
     return null
   }
-  if (has('novelty')) return 'novelty'
-  if (has('useful')) return 'usefulness'
+  // An AI score column. A model's own column ("AI Novelty (GPT-6 Astra)", or the
+  // analysis CSV's ai_nov__gpt_6_astra) goes to that model; a column with no model
+  // name ("Novelty", "AI Novelty") to "model not recorded"; a DERIVED column (the
+  // mean of several models, AI Quality) to the derived key, which every importer
+  // then skips — it is recomputed from the per-model columns, never imported.
+  const ai = parseAiHeader(h)
+  if (ai) {
+    if (ai.derived) return ai.kind === 'novelty' ? 'novelty' : ai.kind === 'usefulness' ? 'usefulness' : 'overall_quality'
+    return ai.kind === 'novelty' ? aiNovKey(ai.slug) : aiUseKey(ai.slug)
+  }
+  if (has('novelty')) return aiNovKey(UNRECORDED)
+  if (has('useful')) return aiUseKey(UNRECORDED)
   if (has('quality')) return 'overall_quality'
   return null
+}
+
+/** Is this a DERIVED AI column (the canonical mean fields), never to be imported? */
+export function isDerivedAiKey(k) {
+  return k === 'novelty' || k === 'usefulness' || k === 'overall_quality'
 }
 
 /**
@@ -325,8 +356,25 @@ export function canonicalKpiField(header) {
  * Includes any admin-uploaded extra KPIs (x_* columns) after the built-in registry.
  */
 export function presentKpis(rows) {
-  const known = KPI_DEFS.filter(d => (rows || []).some(r => Number.isFinite(Number(r[d.key])) && r[d.key] !== ''))
-  return [...known, ...uploadedKpiDefs(rows)]
+  return exportKpiColumns(rows)
+}
+
+/**
+ * The KPI columns to show or export, in order (owner, 2026-09-24): the EMPIRICAL
+ * proxies first (the 3.1 KPIs, then the extra KPIs uploaded beside them), then the
+ * AI ratings model by model (each model's Novelty and Usefulness side by side,
+ * then the panel means and AI Quality), then the external evaluators.
+ *   allEmpirical      — list all seven 3.1 columns even before they are computed
+ *                       (the Rankings tab keeps a fixed layout)
+ *   evaluatorColumns  — list the three evaluator columns even when empty (the
+ *                       Rankings tab goes to blind expert raters as it is)
+ * Only columns with data otherwise.
+ */
+export function exportKpiColumns(rows, { allEmpirical = false, evaluatorColumns = false } = {}) {
+  const has = d => (rows || []).some(r => Number.isFinite(Number(r[d.key])) && r[d.key] !== '' && r[d.key] != null)
+  const det = KPI_DEFS.filter(d => d.source === 'det' && (allEmpirical || has(d)))
+  const ext = KPI_DEFS.filter(d => d.source === 'ext' && (evaluatorColumns || has(d)))
+  return [...det, ...uploadedKpiDefs(rows), ...aiKpiDefs(rows), ...ext]
 }
 
 /**
@@ -491,13 +539,15 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       author_email: authorEmail[idea.authorId] || '',
       idea_title: idea.title || '',
       idea_description: idea.description || '',
-      // AI-generated KPIs (3.2) — filled later by AI scoring / manual edit / import.
-      novelty: numOrBlank(idea.novelty),
-      usefulness: numOrBlank(idea.usefulness),
-      overall_quality:
-        idea.overall_quality != null
-          ? numOrBlank(idea.overall_quality)
-          : numOrBlankOrNull(overallQuality(idea.novelty, idea.usefulness)),
+      // AI-generated KPIs (3.2) — filled later by AI scoring / manual edit / import,
+      // each model into its OWN columns (ai_nov__<model> / ai_use__<model>); these
+      // three are recomputed from them. An idea doc carrying a bare score (none do
+      // today) has no model name, so it is kept as "model not recorded".
+      novelty: '',
+      usefulness: '',
+      overall_quality: '',
+      ...(numOrBlank(idea.novelty) !== '' ? { [aiNovKey(UNRECORDED)]: numOrBlank(idea.novelty) } : {}),
+      ...(numOrBlank(idea.usefulness) !== '' ? { [aiUseKey(UNRECORDED)]: numOrBlank(idea.usefulness) } : {}),
       // External-evaluator KPIs (3.3) — filled by the evaluator-scores upload.
       ext_novelty: '',
       ext_usefulness: '',
@@ -536,17 +586,31 @@ function numOrBlankOrNull(v) {
   return v == null ? '' : numOrBlank(v)
 }
 
-/** Recompute each source's quality = mean(novelty, usefulness) for every row.
- *  When BOTH components are missing (overallQuality → null) an existing quality
- *  value is kept, so an imported file that carries only a standalone quality
- *  column isn't wiped by the recompute that runs after every load/score. */
+/** Recompute the derived columns for every row:
+ *  - AI novelty / usefulness = the mean over the per-model AI columns
+ *    (ai_nov__* / ai_use__*), when the row carries any — one model: its scores;
+ *    several: the panel mean. A row with no per-model fields keeps what it has.
+ *  - each source's quality = mean(novelty, usefulness). When BOTH components are
+ *    missing (overallQuality → null) an existing quality value is kept, so an
+ *    imported file that carries only a standalone quality column isn't wiped by
+ *    the recompute that runs after every load/score. */
 export function recomputeOverall(rows) {
   return rows.map(r => {
-    const oq = overallQuality(r.novelty, r.usefulness)
+    let novelty = r.novelty, usefulness = r.usefulness
+    if (hasAiModelFields(r)) {
+      const n = panelMean(r, 'novelty'), u = panelMean(r, 'usefulness')
+      novelty = n == null ? '' : n
+      usefulness = u == null ? '' : u
+    }
+    const oq = overallQuality(novelty, usefulness)
     const eq = overallQuality(r.ext_novelty, r.ext_usefulness)
+    // Every AI component gone (a hand-cleared model): the quality goes with it.
+    const aiCleared = hasAiModelFields(r) && novelty === '' && usefulness === ''
     return {
       ...r,
-      overall_quality: oq != null ? numOrBlank(oq) : numOrBlank(r.overall_quality),
+      novelty,
+      usefulness,
+      overall_quality: oq != null ? numOrBlank(Math.round(oq * 1e4) / 1e4) : aiCleared ? '' : numOrBlank(r.overall_quality),
       ext_quality: eq != null ? numOrBlank(eq) : numOrBlank(r.ext_quality),
     }
   })
@@ -641,13 +705,27 @@ export function normalizeImportedRows(rawRows) {
     //    or an offline AI scoring sheet).
     //  • External evaluators (3.3): the blind-rater columns "Novelty (rater n)" etc.
     //    of the admin Excel export are human evaluators → averaged into ext_*.
-    const novelty = numOrBlank(pick('novelty', 'ai novelty', 'nov'))
-    const usefulness = numOrBlank(pick('usefulness', 'ai usefulness', 'useful'))
-    let overall = pick('overall_quality', 'overall quality', 'overall', 'quality', 'ai quality')
-    if (overall === '' && (novelty !== '' || usefulness !== '')) {
-      const oq = overallQuality(novelty, usefulness)
-      overall = oq == null ? '' : oq
+    // AI scores, per model (aiScoreColumns.js): "AI Novelty (GPT-6 Astra)" lands in
+    // that model's own column; a plain "Novelty" / "AI Novelty" (a file saved
+    // before scores were labelled by model) under "model not recorded" — but only
+    // when the row carries no per-model column, since in a newer file the plain
+    // column would be the derived mean. Derived columns (the mean of several
+    // models, AI Quality) are never read: they are recomputed.
+    const aiScores = {}
+    for (const [k, v] of Object.entries(lower)) {
+      const a = parseAiHeader(k)
+      if (!a || a.derived || a.slug === UNRECORDED) continue
+      if (/rater|expert|\beval|evaluator|external|objective|empirical/.test(k) || isNoveltyScoreHeader(k)) continue
+      const val = clampScore(v)
+      if (val !== '') aiScores[(a.kind === 'novelty' ? aiNovKey : aiUseKey)(a.slug)] = val
     }
+    if (!Object.keys(aiScores).length) {
+      const nov = clampScore(pick('novelty', 'ai novelty', 'nov', aiNovKey(UNRECORDED)))
+      const use = clampScore(pick('usefulness', 'ai usefulness', 'useful', aiUseKey(UNRECORDED)))
+      if (nov !== '') aiScores[aiNovKey(UNRECORDED)] = nov
+      if (use !== '') aiScores[aiUseKey(UNRECORDED)] = use
+    }
+    const overall = Object.keys(aiScores).length ? '' : pick('overall_quality', 'overall quality', 'overall', 'quality', 'ai quality')
     const extNovelty = meanRaterCols(lower, 'novelty')        // blind-rater averages
     const extUsefulness = meanRaterCols(lower, 'usefulness')
     const extOverall = overallQuality(extNovelty, extUsefulness)
@@ -677,19 +755,22 @@ export function normalizeImportedRows(rawRows) {
       author_email: String(pick('author email', 'email', 'author_email')),
       idea_title: title,
       idea_description: description,
-      novelty: numOrBlank(novelty),
-      usefulness: numOrBlank(usefulness),
+      novelty: '',
+      usefulness: '',
       overall_quality: numOrBlank(overall),
+      ...aiScores,
       ext_novelty: numOrBlank(extNovelty),
       ext_usefulness: numOrBlank(extUsefulness),
       ext_quality: numOrBlankOrNull(extOverall),
-      det_novelty: numOrBlank(pick('det_novelty', 'novelty (objective)', 'objective novelty', 'obj. novelty', 'obj novelty')),
-      det_distinctiveness: numOrBlank(pick('det_distinctiveness', 'pool distinctiveness', 'objective distinctiveness', 'obj. distinctiveness', 'obj distinctiveness')),
+      // 3.1 empirical KPIs: the "(empirical)" labels since 2026-09-24, and every
+      // older "(objective)" / "Obj." spelling, so files saved before still load.
+      det_novelty: numOrBlank(pick('det_novelty', 'novelty (empirical)', 'novelty (objective)', 'empirical novelty', 'objective novelty', 'obj. novelty', 'obj novelty')),
+      det_distinctiveness: numOrBlank(pick('det_distinctiveness', 'pool distinctiveness', 'empirical distinctiveness', 'objective distinctiveness', 'obj. distinctiveness', 'obj distinctiveness')),
       det_score: numOrBlank(pick('det_score', 'noveltyscore', 'novelty score', 'novelty_score', 'combined score', 'objective score', 'obj. score', 'obj score')),
-      det_need_fit: numOrBlank(pick('det_need_fit', 'need fit (objective)')),
-      det_specificity: numOrBlank(pick('det_specificity', 'specificity (objective)')),
-      det_workability: numOrBlank(pick('det_workability', 'workability (objective)')),
-      det_usefulness: numOrBlank(pick('det_usefulness', 'usefulness score (objective)')),
+      det_need_fit: numOrBlank(pick('det_need_fit', 'need fit (empirical)', 'need fit (objective)')),
+      det_specificity: numOrBlank(pick('det_specificity', 'specificity (empirical)', 'specificity (objective)')),
+      det_workability: numOrBlank(pick('det_workability', 'workability (empirical)', 'workability (objective)')),
+      det_usefulness: numOrBlank(pick('det_usefulness', 'usefulness score (empirical)', 'usefulness score (objective)')),
       final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
       carried: /^(1|yes|true)$/i.test(String(pick('carried to group', 'carried', 'carried_to_group')).trim()) ? 1 : 0,
       text,
@@ -703,7 +784,7 @@ export function normalizeImportedRows(rawRows) {
     // vote counts and blind-rater columns are skipped too.
     for (const [k, v] of Object.entries(lower)) {
       if (STD_IMPORT_COLS.has(k)) continue
-      if (canonicalKpiField(k)) continue
+      if (canonicalKpiField(k) || isAiModelKey(k)) continue
       if (/\brater\b|\(rater/.test(k)) continue
       if (v === '' || v == null || typeof v === 'boolean') continue
       const n = Number(v)
@@ -862,7 +943,7 @@ function clampScore(v) {
  * KPI while holding the other counts as filled — so the two never double-count
  * an idea in the message the page reports.
  */
-export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelty: 'novelty', usefulness: 'usefulness' }) {
+export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelty: aiNovKey(UNRECORDED), usefulness: aiUseKey(UNRECORDED) }) {
   const eligible = typeof isEligible === 'function' ? isEligible : () => true
   const byTitle = new Map()
   rows.forEach((r, i) => {
