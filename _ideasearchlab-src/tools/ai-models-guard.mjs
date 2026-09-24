@@ -44,7 +44,7 @@ import {
 import { MODEL_PRICES, PRICES_AS_OF, replyCostUSD, priceAt, dayOf } from '../src/data/aiPricing.js'
 import {
   buildRequest, parseReplyText, callProvider, scrubKey, replyProblem, replyFailure, retryAfterMs,
-  cleanApiKey, trimApiKeys,
+  cleanApiKey, trimApiKeys, refusalHint,
   claudeSupportsEffort, openaiIsReasoning, geminiTakesThinkingLevel,
   SCORING_MAX_TOKENS, LEGACY_CHAT_MAX_TOKENS, SCORING_EFFORT,
   OPENAI_COMPAT_URLS, mistralTakesReasoningEffort, isMuseModel,
@@ -63,7 +63,7 @@ const OWNER_LINEUP = {
   // 2026-09-24, "Add Mistral, Meta's Llama, DeepSeek and Qwen's top models
   // available": each provider's top models its own API (or, for Meta, OpenRouter)
   // serves, most capable first. DeepSeek's API offers two; Meta runs no Llama API.
-  mistral: ['mistral-medium-2604', 'mistral-large-2512', 'mistral-small-2603', 'ministral-14b-2512', 'ministral-8b-2512'],
+  mistral: ['mistral-medium-latest', 'mistral-large-2512', 'mistral-small-2603', 'ministral-14b-2512', 'ministral-8b-2512'],
   openrouter: ['meta/muse-spark-1.3', 'meta/muse-glimmer-30b', 'meta-llama/llama-4-maverick'],
   deepseek: ['deepseek-v4-pro', 'deepseek-flash'],
   qwen: ['qwen3.8-max', 'qwen3.7-max', 'qwen3.7-plus', 'qwen3.8-flash'],
@@ -287,13 +287,13 @@ const grq = buildRequest('gemini', { ...R, model: 'gemini-3.8-flash' })
 const gi = grq.body.generationConfig.responseSchema?.properties?.ratings?.items?.properties
 check(gi?.novelty?.type === 'INTEGER' && gi.novelty.minimum === 1 && gi.novelty.maximum === 5 && gi.usefulness.type === 'INTEGER' && gi.usefulness.minimum === 1 && gi.usefulness.maximum === 5
   && grq.body.generationConfig.responseMimeType === 'application/json', 'gemini: responseSchema INTEGER 1..5 (its enum is string-only) under JSON mode')
-const mrq = buildRequest('mistral', { ...R, model: 'mistral-medium-2604' })
+const mrq = buildRequest('mistral', { ...R, model: 'mistral-medium-latest' })
 check(mrq.body.response_format?.type === 'json_schema' && mrq.body.response_format.json_schema.strict === true && enum5(mrq.body.response_format.json_schema.schema), 'mistral: strict json_schema with the 1..5 enum')
 for (const pid of ['openrouter', 'deepseek', 'qwen']) check(!('response_format' in buildRequest(pid, { ...R, model: providerById(pid).models[0].id }).body), `${pid}: no schema mode to rely on — the prompt rule and the wholeRating gate`)
 check(!('response_format' in buildRequest('openai', { ...args, model: 'gpt-6-astra' }).body) && !('format' in (buildRequest('claude', { ...args, model: 'claude-fable-5-1' }).body.output_config || {}))
-  && !('responseSchema' in buildRequest('gemini', { ...args, model: 'gemini-3.8-flash' }).body.generationConfig) && !('response_format' in buildRequest('mistral', { ...args, model: 'mistral-medium-2604' }).body),
+  && !('responseSchema' in buildRequest('gemini', { ...args, model: 'gemini-3.8-flash' }).body.generationConfig) && !('response_format' in buildRequest('mistral', { ...args, model: 'mistral-medium-latest' }).body),
   'a call built without ratings:true (Step 1b translations) carries no rating schema')
-check(buildRequest('mistral', { ...args, model: 'mistral-medium-2604' }).body.reasoning_effort === 'none' && buildRequest('mistral', { ...args, model: 'mistral-small-2603' }).body.reasoning_effort === 'none', 'mistral: thinking off on Medium 3.5 and Small 4')
+check(buildRequest('mistral', { ...args, model: 'mistral-medium-latest' }).body.reasoning_effort === 'none' && buildRequest('mistral', { ...args, model: 'mistral-small-2603' }).body.reasoning_effort === 'none', 'mistral: thinking off on Medium 3.5 and Small 4')
 check(!('reasoning_effort' in buildRequest('mistral', { ...args, model: 'mistral-large-2512' }).body) && !mistralTakesReasoningEffort('ministral-8b-2512'), 'mistral: no reasoning_effort on the models without a reasoning mode')
 check(buildRequest('deepseek', { ...args, model: 'deepseek-v4-pro' }).body.thinking?.type === 'disabled', 'deepseek: thinking disabled (V4 thinks by default)')
 check(buildRequest('qwen', { ...args, model: 'qwen3.8-max' }).body.enable_thinking === false, 'qwen: enable_thinking false (required on a non-streaming call)')
@@ -376,6 +376,12 @@ check(okCut.startsWith('[{"i":0'), 'a truncated reply WITH text is returned for 
 const e429 = await errorOf(fakeFetch(429, 'rate limited'))
 check(e429 && e429.status === 429 && !isFatalApiError(e429), '429 is not fatal (retried with backoff)')
 const e400 = await errorOf(fakeFetch(400, { error: 'unknown model' }), { provider: 'openai', apiKey: KEY, model: 'gpt-nope' })
+// The two account gates the owner hit (2026-09-24) name the next step, not just the provider's code.
+const eQwen = await errorOf(fakeFetch(403, { error: { message: 'Access to model denied. Please make sure you are eligible for using the model.', type: 'AccessDenied.Unpurchased', code: 'AccessDenied.Unpurchased' } }), { provider: 'qwen', apiKey: KEY, model: 'qwen3.8-max' })
+check(eQwen?.status === 403 && /Model Gallery.*Activate/.test(eQwen.message) && isFatalApiError(eQwen), 'qwen: AccessDenied.Unpurchased says to activate the model in Model Gallery, and stops the run')
+const eOr = await errorOf(fakeFetch(403, { error: { message: 'This model requires you to complete the following before use: 18+ age confirmation. Confirm at https://openrouter.ai/settings/preferences.', code: 403, metadata: { missing_attestation_types: ['age_18plus'] } } }), { provider: 'openrouter', apiKey: KEY, model: 'meta/muse-spark-1.3' })
+check(eOr?.status === 403 && /Settings, Preferences/.test(eOr.message) && isFatalApiError(eOr), 'openrouter: the age gate says where to confirm, and stops the run')
+check(refusalHint('claude', 403, 'AccessDenied.Unpurchased') === '' && refusalHint('qwen', 200, 'ok') === '', 'refusalHint: nothing for other providers or a clean reply')
 check(e400 && e400.status === 400 && isFatalApiError(e400) && /ChatGPT \(OpenAI\)/.test(e400.message), '400 (bad model / param) is fatal and names OpenAI')
 const eNet = await errorOf(async () => { throw new TypeError(`Failed to fetch ${KEY}`) })
 check(eNet && eNet.status === undefined && !isFatalApiError(eNet), 'a network failure carries no status → retried')
@@ -436,7 +442,7 @@ console.log('a 2xx that is a failed request')
 
   // Mistral's model_length: a token limit reached with nothing to show, the
   // same failure as "length", so the same kind (exhausted, worth another go).
-  const eLen = await errorOf(fakeFetch(200, { choices: [{ message: { content: [{ type: 'thinking', thinking: [{ type: 'text', text: 'hm' }] }] }, finish_reason: 'model_length' }] }), compat('mistral', 'mistral-medium-2604'))
+  const eLen = await errorOf(fakeFetch(200, { choices: [{ message: { content: [{ type: 'thinking', thinking: [{ type: 'text', text: 'hm' }] }] }, finish_reason: 'model_length' }] }), compat('mistral', 'mistral-medium-latest'))
   check(eLen && eLen.replyProblem === 'exhausted' && eLen.retryable === true && eLen.status === undefined && /model_length/.test(eLen.message), 'mistral: an empty reply with finish_reason "model_length" is an exhausted reply (retryable, not a transport failure)')
 
   // End to end through the real batching loop: the failure now backs off and

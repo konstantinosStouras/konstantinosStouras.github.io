@@ -282,7 +282,13 @@ check('the coverage panel lists the six other models', ORDER.slice(0, 6).every(p
 head('3. download all idea data: every column, whole numbers, exact means')
 const { buf } = await captureDownload(() => btn('Download all idea data (Excel)').click())
 const wb = XLSX.read(buf, { type: 'buffer' })
-check('sheets: ideas, the Usefulness score check, the summaries', ['ideas', 'Usefulness score check', 'Summary by condition', 'Summary by session'].every(n => wb.SheetNames.includes(n)), wb.SheetNames.join(' | '))
+check('sheets: ideas, the Usefulness score check, the summaries, the two AI correlation tables', ['ideas', 'Usefulness score check', 'Summary by condition', 'Summary by session', 'AI novelty correlations', 'AI usefulness correlations'].every(n => wb.SheetNames.includes(n)), wb.SheetNames.join(' | '))
+for (const kind of ['novelty', 'usefulness']) {
+  const corr = XLSX.utils.sheet_to_json(wb.Sheets[`AI ${kind} correlations`], { defval: '' })
+  const names = corr.slice(0, ORDER.length).map(r => r.Model)
+  check(`${kind} correlations: one row per model (${ORDER.length}), diagonal 1, every pair filled`, names.length === ORDER.length
+    && corr.slice(0, ORDER.length).every((r, i) => r[names[i]] === 1 && names.every(n => r[n] !== '')), JSON.stringify(corr.slice(0, 2)))
+}
 const ideas = XLSX.utils.sheet_to_json(wb.Sheets.ideas, { defval: '' })
 const cols = Object.keys(ideas[0] || {})
 check(`${IDEAS.length} ideas in the file`, ideas.length === IDEAS.length, String(ideas.length))

@@ -32,6 +32,7 @@ import {
   aiColumnLabel, aiModelSlugs, labelUnrecordedScores, aiKpiDefs, shortModelName,
   isBareAiScoreHeader, rememberModelName, aiPanelCoverage, slugFromModelName,
 } from '../src/utils/aiScoreColumns.js'
+import { pearson, aiCorrelationRows, aiCorrelationSheetRows } from '../src/utils/aiCorrelations.js'
 import {
   normalizeImportedRows, recomputeOverall, presentKpis, exportKpiColumns, stripAllKpis,
   canonicalKpiField, analysisColumns, buildRowsForSession, KPI_DEFS,
@@ -795,6 +796,31 @@ console.log('no AI score is rounded; the rater asks for whole numbers')
     && /Every AI rating is one of 1, 2, 3, 4 or 5/.test(page))
   check('...and every rating call carries the 1..5 answer schema (ratings: true → RATING_SCHEMA)', /buildBatchPrompt\(batch, opts\.brief\), \{ ratings: true \}\)/.test(llm)
     && /ratings: opts\.ratings === true/.test(src('src/utils/providerRequest.js')))
+}
+
+// ── 10. AI model correlations (owner, 2026-09-24) ──────────────────────────────
+console.log('the AI correlation sheets: Pearson r per model pair, per rating kind')
+{
+  check('pearson: +1, -1, 0-variance null, one point null', pearson([1, 2, 3], [2, 4, 6]) === 1 && pearson([1, 2, 3], [3, 2, 1]) === -1
+    && pearson([2, 2, 2], [1, 2, 3]) === null && pearson([1], [1]) === null)
+  const rows = [
+    { [ASTRA.novelty]: 1, [GEM.novelty]: 2, [ASTRA.usefulness]: 5, [GEM.usefulness]: 1 },
+    { [ASTRA.novelty]: 2, [GEM.novelty]: 3, [ASTRA.usefulness]: 4, [GEM.usefulness]: 2 },
+    { [ASTRA.novelty]: 3, [GEM.novelty]: 5, [ASTRA.usefulness]: 3, [GEM.usefulness]: 3 },
+    { [ASTRA.novelty]: 5, [GEM.novelty]: '', [ASTRA.usefulness]: 1, [GEM.usefulness]: 5 },   // Gemini did not rate the novelty
+  ]
+  const nov = aiCorrelationRows(rows, 'novelty')
+  const g = nov.names.indexOf(aiModelName(modelSlug('gemini-3.1-pro-preview'))), a = nov.names.indexOf(aiModelName(modelSlug('gpt-6-astra')))
+  check('novelty: both models named, diagonal 1, symmetric', nov.names.length === 2 && nov.matrix[a][nov.names[a]] === 1 && nov.matrix[g][nov.names[g]] === 1
+    && nov.matrix[a][nov.names[g]] === nov.matrix[g][nov.names[a]], JSON.stringify(nov))
+  check('novelty: r over the 3 ideas both rated (the blank one left out), counts say 3', Math.abs(nov.matrix[a][nov.names[g]] - 0.982) < 0.001 && nov.counts[a][nov.names[g]] === 3 && nov.counts[a][nov.names[a]] === 4, JSON.stringify(nov))
+  const use = aiCorrelationRows(rows, 'usefulness')
+  check('usefulness: its own table (r = -1 over 4 ideas), separate from novelty', use.matrix[a][use.names[g]] === -1 && use.counts[a][use.names[g]] === 4, JSON.stringify(use))
+  const sheet = aiCorrelationSheetRows(rows, 'novelty')
+  check('the sheet: the r table, a gap, a heading, the counts', sheet.length === 2 + 2 + 2 && sheet[3].Model === 'Ideas rated by both models')
+  check('one model only: no sheet', aiCorrelationSheetRows([{ [ASTRA.novelty]: 3 }], 'novelty') === null)
+  const page = src('src/pages/DataAnalytics.jsx')
+  check('"Download all idea data" appends both sheets', /for \(const kind of \['novelty', 'usefulness'\]\) \{\s*const corr = aiCorrelationSheetRows\(data, kind\)\s*if \(corr\) addSheet\(wb, `AI \$\{kind\} correlations`, corr\)/.test(page))
 }
 
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll AI-column checks passed.')

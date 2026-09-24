@@ -18,6 +18,7 @@ import {
   aiFieldsFor, aiModelName, aiColumnLabel, aiModelSlugs, modelSlug, isAiModelKey, parseAiHeader,
   labelUnrecordedScores, UNRECORDED, slugOfKey, aiKpiDefs, sortModelSlugs, aiNovKey, aiUseKey, aiPanelCoverage,
 } from '../utils/aiScoreColumns'
+import { aiCorrelationSheetRows } from '../utils/aiCorrelations'
 import { scoreIdeas, fetchAISettings, translateTexts } from '../utils/llmClient'
 import {
   measureText, untranslatedRows, languageSummary, applyTranslationMemory, collectTexts, translateSheets, withMeasuredText,
@@ -1436,6 +1437,12 @@ export default function DataAnalytics() {
     if (data.some(r => r.det_usefulness !== '' && r.det_usefulness != null)) {
       addUsefulnessCheckSheet(wb, data, techSet)
     }
+    // How the AI models agree: one r table per rating kind, over the ideas both
+    // models rated (owner, 2026-09-24), only when two or more models rated something.
+    for (const kind of ['novelty', 'usefulness']) {
+      const corr = aiCorrelationSheetRows(data, kind)
+      if (corr) addSheet(wb, `AI ${kind} correlations`, corr)
+    }
     addSheet(wb, 'Summary by condition', summaryByConditionRows(data))
     addSheet(wb, 'Summary by session', summaryBySessionRows(data))
     if (detResult?.perCond?.length) addSheet(wb, 'Pool KPIs by condition', poolKpiRows(withOverall(detResult)))
@@ -2690,7 +2697,9 @@ export default function DataAnalytics() {
                   Every idea in the table with every column collected so far, in this order: the ideas&apos; details, the
                   {' '}<strong>empirical</strong> KPIs, then the <strong>AI</strong> scores model by model, then the evaluators.
                   The ideas are in English where Step&nbsp;1b translated them; the Excel file keeps the originals on a
-                  {' '}<em>Translations</em> sheet and adds a <em>Usefulness score check</em> sheet (each idea&apos;s three
+                  {' '}<em>Translations</em> sheet and adds an <em>AI novelty correlations</em> and an <em>AI usefulness
+                  correlations</em> sheet (Pearson&apos;s r between every pair of AI models over the ideas both rated, with
+                  the idea counts), a <em>Usefulness score check</em> sheet (each idea&apos;s three
                   parts, their ranks and the mean), summaries by condition and by session, and the pool KPIs. For the
                   whole study (surveys, chats, every tab) use <strong>Download all data in English</strong> in Step&nbsp;1b.
                 </span>
