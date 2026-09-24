@@ -353,12 +353,11 @@ export async function callProvider(resolved, system, user, opts = {}) {
   let data
   try {
     data = await res.json()
-  } catch (e) {
+  } catch {
     // No status, like a dropped connection: worth another go. The parser's own
-    // message can quote the start of the body, so it is scrubbed too.
-    const err = new Error(`${name}: the reply could not be read as JSON (${scrubKey(e?.message || e, apiKey).slice(0, 300)})`)
-    err.cause = e
-    throw err
+    // message is left out (and not kept as a cause): it quotes the first few
+    // characters of the body, too few for scrubKey to recognise a key in.
+    throw new Error(`${name}: the reply could not be read as JSON`)
   }
   const text = parseReplyText(provider, data)
   const failure = replyFailure(provider, data, text)

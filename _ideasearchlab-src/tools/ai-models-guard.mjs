@@ -442,6 +442,15 @@ console.log('a 2xx that is a failed request')
   // own message scrubbed (it can quote the start of the body).
   const eJson = await errorOf(async () => ({ ok: true, status: 200, statusText: '', text: async () => KEY, json: async () => { throw new SyntaxError(`Unexpected token 's', "${KEY}" is not valid JSON`) } }))
   check(eJson && eJson.status === undefined && !isFatalApiError(eJson) && /could not be read as JSON/.test(eJson.message) && !eJson.message.includes(KEY), 'an unreadable 2xx body is a retried error whose message never carries the key')
+  // Only a few characters of the body reach the parser's message: too few for
+  // scrubKey, so none of it is shown.
+  const eFrag = await errorOf(async () => ({ ok: true, status: 200, statusText: '', text: async () => `oops ${KEY}`, json: async () => { throw new SyntaxError(`Unexpected token 'o', "oops ${KEY.slice(0, 5)}"... is not valid JSON`) } }))
+  check(eFrag && !eFrag.message.includes(KEY.slice(0, 5)) && eFrag.cause === undefined, 'no fragment of the key is kept in the message or as a cause')
+  // An error code written as a string still names the status.
+  check(replyFailure('openrouter', { error: { code: '429', message: 'slow down' } }, '')?.status === 429
+    && replyFailure('openrouter', { error: { code: 'rate_limited', message: 'slow down' } }, '')?.status === 502
+    && replyFailure('openrouter', { choices: [{ error: { code: '503', message: 'upstream down' } }] }, '')?.status === 503,
+    'a 3-digit string error.code is that status; any other code is 502')
 }
 
 // ── 5c. The key as the provider saw it (2026-09-24) ────────────────────────
