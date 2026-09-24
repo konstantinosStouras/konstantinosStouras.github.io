@@ -63,7 +63,7 @@ const OWNER_LINEUP = {
   // 2026-09-24, "Add Mistral, Meta's Llama, DeepSeek and Qwen's top models
   // available": each provider's top models its own API (or, for Meta, OpenRouter)
   // serves, most capable first. DeepSeek's API offers two; Meta runs no Llama API.
-  mistral: ['mistral-medium-2604', 'mistral-large-2512', 'mistral-small-2603', 'ministral-14b-2512', 'ministral-8b-2512'],
+  mistral: ['mistral-medium-latest', 'mistral-large-2512', 'mistral-small-2603', 'ministral-14b-2512', 'ministral-8b-2512'],
   openrouter: ['meta/muse-spark-1.3', 'meta/muse-glimmer-30b', 'meta-llama/llama-4-maverick'],
   deepseek: ['deepseek-v4-pro', 'deepseek-flash'],
   qwen: ['qwen3.8-max', 'qwen3.7-max', 'qwen3.7-plus', 'qwen3.8-flash'],
@@ -287,13 +287,13 @@ const grq = buildRequest('gemini', { ...R, model: 'gemini-3.8-flash' })
 const gi = grq.body.generationConfig.responseSchema?.properties?.ratings?.items?.properties
 check(gi?.novelty?.type === 'INTEGER' && gi.novelty.minimum === 1 && gi.novelty.maximum === 5 && gi.usefulness.type === 'INTEGER' && gi.usefulness.minimum === 1 && gi.usefulness.maximum === 5
   && grq.body.generationConfig.responseMimeType === 'application/json', 'gemini: responseSchema INTEGER 1..5 (its enum is string-only) under JSON mode')
-const mrq = buildRequest('mistral', { ...R, model: 'mistral-medium-2604' })
+const mrq = buildRequest('mistral', { ...R, model: 'mistral-medium-latest' })
 check(mrq.body.response_format?.type === 'json_schema' && mrq.body.response_format.json_schema.strict === true && enum5(mrq.body.response_format.json_schema.schema), 'mistral: strict json_schema with the 1..5 enum')
 for (const pid of ['openrouter', 'deepseek', 'qwen']) check(!('response_format' in buildRequest(pid, { ...R, model: providerById(pid).models[0].id }).body), `${pid}: no schema mode to rely on — the prompt rule and the wholeRating gate`)
 check(!('response_format' in buildRequest('openai', { ...args, model: 'gpt-6-astra' }).body) && !('format' in (buildRequest('claude', { ...args, model: 'claude-fable-5-1' }).body.output_config || {}))
-  && !('responseSchema' in buildRequest('gemini', { ...args, model: 'gemini-3.8-flash' }).body.generationConfig) && !('response_format' in buildRequest('mistral', { ...args, model: 'mistral-medium-2604' }).body),
+  && !('responseSchema' in buildRequest('gemini', { ...args, model: 'gemini-3.8-flash' }).body.generationConfig) && !('response_format' in buildRequest('mistral', { ...args, model: 'mistral-medium-latest' }).body),
   'a call built without ratings:true (Step 1b translations) carries no rating schema')
-check(buildRequest('mistral', { ...args, model: 'mistral-medium-2604' }).body.reasoning_effort === 'none' && buildRequest('mistral', { ...args, model: 'mistral-small-2603' }).body.reasoning_effort === 'none', 'mistral: thinking off on Medium 3.5 and Small 4')
+check(buildRequest('mistral', { ...args, model: 'mistral-medium-latest' }).body.reasoning_effort === 'none' && buildRequest('mistral', { ...args, model: 'mistral-small-2603' }).body.reasoning_effort === 'none', 'mistral: thinking off on Medium 3.5 and Small 4')
 check(!('reasoning_effort' in buildRequest('mistral', { ...args, model: 'mistral-large-2512' }).body) && !mistralTakesReasoningEffort('ministral-8b-2512'), 'mistral: no reasoning_effort on the models without a reasoning mode')
 check(buildRequest('deepseek', { ...args, model: 'deepseek-v4-pro' }).body.thinking?.type === 'disabled', 'deepseek: thinking disabled (V4 thinks by default)')
 check(buildRequest('qwen', { ...args, model: 'qwen3.8-max' }).body.enable_thinking === false, 'qwen: enable_thinking false (required on a non-streaming call)')
@@ -436,7 +436,7 @@ console.log('a 2xx that is a failed request')
 
   // Mistral's model_length: a token limit reached with nothing to show, the
   // same failure as "length", so the same kind (exhausted, worth another go).
-  const eLen = await errorOf(fakeFetch(200, { choices: [{ message: { content: [{ type: 'thinking', thinking: [{ type: 'text', text: 'hm' }] }] }, finish_reason: 'model_length' }] }), compat('mistral', 'mistral-medium-2604'))
+  const eLen = await errorOf(fakeFetch(200, { choices: [{ message: { content: [{ type: 'thinking', thinking: [{ type: 'text', text: 'hm' }] }] }, finish_reason: 'model_length' }] }), compat('mistral', 'mistral-medium-latest'))
   check(eLen && eLen.replyProblem === 'exhausted' && eLen.retryable === true && eLen.status === undefined && /model_length/.test(eLen.message), 'mistral: an empty reply with finish_reason "model_length" is an exhausted reply (retryable, not a transport failure)')
 
   // End to end through the real batching loop: the failure now backs off and

@@ -74,7 +74,7 @@ export const MODEL_PRICES = {
   // The four rater-only providers (added 2026-09-24; figures from the providers'
   // pages and price trackers as indexed that week — re-check before a big run).
   // Mistral AI (La Plateforme, EU)
-  'mistral-medium-2604': { in: 1.5, out: 7.5 },
+  'mistral-medium-latest': { in: 1.5, out: 7.5 },
   'mistral-large-2512': { in: 0.5, out: 1.5 },
   'mistral-small-2603': { in: 0.15, out: 0.6 },
   'ministral-14b-2512': { in: 0.2, out: 0.2 },

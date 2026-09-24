@@ -105,7 +105,11 @@ export const PROVIDERS = [
     note: 'Mistral runs in the EU by default. Paid (Scale) traffic is not used for training; on the free Experiment plan, turn training off under Admin Console → Privacy.',
     defaultModel: 'mistral-small-2603',
     models: [
-      { id: 'mistral-medium-2604', short: 'Mistral Medium 3.5', label: 'Mistral Medium 3.5 — most capable (Apr 2026)' },
+      // The alias, not the dated id `mistral-medium-2604` (owner 2026-09-24): a
+      // pay-as-you-go org's Limits page lists an allowance for `mistral-medium-latest`
+      // and none for the dated id, and Mistral answers the latter 429 "rate limited"
+      // on every call, so 741 ideas scored nothing.
+      { id: 'mistral-medium-latest', short: 'Mistral Medium 3.5', label: 'Mistral Medium 3.5 — most capable (Apr 2026)' },
       { id: 'mistral-large-2512', short: 'Mistral Large 3', label: 'Mistral Large 3 — largest, no reasoning mode (Dec 2025)' },
       { id: 'mistral-small-2603', short: 'Mistral Small 4', label: 'Mistral Small 4 (Mar 2026)' },
       { id: 'ministral-14b-2512', short: 'Ministral 3 14B', label: 'Ministral 3 14B (Dec 2025)' },
