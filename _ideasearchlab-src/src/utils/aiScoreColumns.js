@@ -181,16 +181,53 @@ const STAT_WORDS = new Set([
 // A lone word that is a statistic although, next to numbers, it names a scale's end.
 const STAT_ALONE = /^(?:n|min|max|minimum|maximum|range|s\.d\.|s\.e\.)$/
 const OTHER_NOTE = /\b(?:raters?|experts?|evaluators?|eval|judges?|external|empirical|objective|human)\b/
+// "Which model? We do not know": a score with no model name, not a model called that.
+const NO_MODEL_NOTE = /^(?:(?:model )?not recorded|unknown(?: model)?|model unknown|no model|n\/?a|unspecified|unnamed)$/
+// One run of several ("(run 1)", "(seed 2)"): a SOURCE, kept apart like a model, as
+// it always was (third review: collapsing both into "model not recorded" dropped
+// the second run's scores).
+const RUN_NOTE = /\b(?:run|seed|trial|sample|repeat|rep|replicate)\s*#?\s*\d+\b/
+// The scale a score note states, when it states one: "(1-5)", "(0-10 scale)",
+// "(out of 5)", "(7-point)", "(1 = low, 5 = high)". Null when it states none.
+function statedScale(s) {
+  let lo = null, hi = null
+  const r = s.match(/(-?\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(-?\d+(?:\.\d+)?)/)
+  if (r) { lo = Number(r[1]); hi = Number(r[2]) }
+  const out = s.match(/out of\s*(\d+(?:\.\d+)?)/)
+  if (out) hi = Number(out[1])
+  const pt = s.match(/(\d+)[\s-]*(?:point|pt)s?\b/)
+  if (pt) { hi = Number(pt[1]); if (lo == null) lo = 1 }
+  const loEq = s.match(/(\d+(?:\.\d+)?)\s*=\s*(?:very\s+)?(?:low|lowest|worst|least|poor|bad|not|none)\b/)
+  const hiEq = s.match(/(\d+(?:\.\d+)?)\s*=\s*(?:very\s+|extremely\s+)?(?:high|highest|best|most|excellent|good)\b/)
+  if (loEq) lo = Number(loEq[1])
+  if (hiEq) hi = Number(hiEq[1])
+  return lo == null && hi == null ? null : { lo, hi }
+}
 function noteKind(inner) {
   const s = String(inner ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
   if (!s) return 'score'
   if (catalogueSlug(inner)) return 'model'
+  if (NO_MODEL_NOTE.test(s)) return 'score'
   if (s === 'mean' || (/^(?:mean|avg|average)\b/.test(s) && /\bmodels?\b/.test(s))) return 'derived'
   if (OTHER_NOTE.test(s)) return 'other'
+  if (RUN_NOTE.test(s)) return 'model'
   if (STAT_ALONE.test(s)) return 'stat'
   const words = s.match(/%|[a-z]+/g) || []
   if (words.some(w => !SCALE_WORDS.has(w) && !STAT_WORDS.has(w))) return 'model'
-  return words.some(w => STAT_WORDS.has(w)) ? 'stat' : 'score'
+  if (words.some(w => STAT_WORDS.has(w))) return 'stat'
+  // A score on ANOTHER scale ("(0-1)", "(0-100)", "(1-10)", "(1 = low, 7 = high)")
+  // is not a 1–5 AI score: averaged into the panel mean it moved every idea's AI
+  // Novelty (third review: 731 of the owner's 741 ideas). It stays an extra.
+  const sc = statedScale(s)
+  if (sc && !(sc.hi === 5 && (sc.lo == null || sc.lo === 1))) return 'stat'
+  return 'score'
+}
+/** What the note in brackets after a score header says (see noteKind). */
+export function headerNoteKind(inner) { return noteKind(inner) }
+// "GPT-6 Astra, 1-5": a model name followed by a note. Returns [name, note] or null.
+function splitModelNote(inner) {
+  const m = String(inner ?? '').match(/^(.*?)\s*[,;]\s*(.+)$/)
+  return m && m[1] ? [m[1], m[2]] : null
 }
 
 const kindOf = w => (w.startsWith('nov') ? 'novelty' : w === 'quality' ? 'quality' : 'usefulness')
@@ -218,7 +255,10 @@ function bareAiScore(h) {
   if (note === 'score') return { kind, slug: UNRECORDED, derived: false }
   // "Novelty (GPT-6 Astra)" without the "AI": a model only when the catalogue
   // knows it, since a bare bracket is as likely a measure ("Novelty (TF-IDF)").
-  const known = note === 'model' ? catalogueSlug(inner) : null
+  // "Novelty (GPT-6 Astra, 1-5)": the model, when its note is a 1-5 score note.
+  let known = note === 'model' ? catalogueSlug(inner) : null
+  const split = !known && note === 'model' ? splitModelNote(inner) : null
+  if (split && noteKind(split[1]) === 'score') known = catalogueSlug(split[0])
   return known ? { kind, slug: known, derived: false } : null
 }
 
@@ -265,11 +305,19 @@ function readAiHeader(header) {
   const m = lower.match(/^ai[\s_.-]*(novelty|usefulness|useful|quality)\s*\((.*)\)\s*$/)
   if (m) {
     const kind = kindOf(m[1])
-    const inner = h.slice(h.indexOf('(') + 1, h.lastIndexOf(')')).trim()
+    let inner = h.slice(h.indexOf('(') + 1, h.lastIndexOf(')')).trim()
     const note = noteKind(inner)
     if (note === 'stat' || note === 'other') return null
     if (kind === 'quality' || note === 'derived') return { kind, slug: null, derived: true }
     if (note === 'score') return { kind, slug: UNRECORDED, derived: false }
+    // "AI Novelty (GPT-6 Astra, 1-5)": the model, not a model called "GPT-6 Astra,
+    // 1-5"; with a note of another scale it is not a 1–5 score at all.
+    const split = catalogueSlug(inner) ? null : splitModelNote(inner)
+    if (split) {
+      const tail = noteKind(split[1])
+      if (tail === 'stat') return null
+      if (tail === 'score') inner = split[0]
+    }
     return { kind, slug: slugFromModelName(inner), derived: false }
   }
   // Not a bare "Overall": in a 3.1 KPI upload that is a measure of its own and

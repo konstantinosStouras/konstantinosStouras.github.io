@@ -297,8 +297,8 @@ console.log('second review: headers, import rules, labelling')
   // P9. A bracket that is a scale or a statistic is not a model name.
   const note = h => { const a = parseAiHeader(h); return a && [a.kind, a.slug, a.derived] }
   check('P9: "AI Novelty (1-5)" is a score with no model name, not a model called "1-5"', same(note('AI Novelty (1-5)'), ['novelty', UNRECORDED, false]), JSON.stringify(note('AI Novelty (1-5)')))
-  check('P9: so are (0-10 scale), (avg), (average), (score), (Final Ideas)',
-    ['AI Novelty (0-10 scale)', 'AI Novelty (avg)', 'AI Novelty (average)', 'AI Usefulness (score)', 'AI Usefulness (Final Ideas)', 'AI Novelty (1–5)']
+  check('P9: so are (avg), (average), (score), (Final Ideas)',
+    ['AI Novelty (avg)', 'AI Novelty (average)', 'AI Usefulness (score)', 'AI Usefulness (Final Ideas)', 'AI Novelty (1–5)']
       .every(h => { const a = parseAiHeader(h); return a && a.slug === UNRECORDED && !a.derived }))
   check('P9: "(mean)" is the derived mean, "(sd)" / "(rank)" are not scores at all',
     parseAiHeader('AI Novelty (mean)')?.derived === true && parseAiHeader('AI Novelty (sd)') === null && parseAiHeader('AI Usefulness (rank)') === null)
@@ -469,7 +469,7 @@ console.log('second review: headers, import rules, labelling')
   // isBareAiScoreHeader: the scores with no model name, decorated or not (for the 3.2 upload).
   {
     const yes = { Novelty: 'novelty', 'AI Novelty': 'novelty', nov: 'novelty', 'Novelty Rating': 'novelty', 'Novelty Ratings': 'novelty', 'Avg Novelty': 'novelty',
-      'Avg. Novelty': 'novelty', 'Average Novelty': 'novelty', 'Mean Novelty': 'novelty', 'Novelty (1-5)': 'novelty', 'Novelty (0-10 scale)': 'novelty',
+      'Avg. Novelty': 'novelty', 'Average Novelty': 'novelty', 'Mean Novelty': 'novelty', 'Novelty (1-5)': 'novelty',
       'AI Novelty (avg)': 'novelty', 'Novelty avg': 'novelty', Usefulness: 'usefulness', 'Usefulness Rating': 'usefulness', 'Useful': 'usefulness',
       'Usefulness (1–5)': 'usefulness', 'AI Usefulness Rating (1-5)': 'usefulness' }
     const no = ['AI Novelty (GPT-6 Astra)', 'Novelty (GPT-6 Astra)', 'AI Novelty (model not recorded)', 'ai_nov__unrecorded', 'ai_nov__gpt_6_astra', 'ai_nov__',
@@ -482,6 +482,48 @@ console.log('second review: headers, import rules, labelling')
     check('isBareAiScoreHeader refuses named, explicit, derived, empirical, evaluator, rank, SD and embedding columns', !wrongNo.length, JSON.stringify(wrongNo))
     const [r] = normalizeImportedRows([{ ...base, 'Novelty Rating': 4, 'Usefulness (1-5)': 2 }])
     check('a decorated bare column imports as "model not recorded"', r[REC.novelty] === 4 && r[REC.usefulness] === 2)
+  }
+
+  // Third review: what a note in brackets says about a score column.
+  {
+    // A score on ANOTHER scale is not a 1-5 AI score: it stays an extra column.
+    const other = ['AI Novelty (0-1)', 'AI Novelty (0-100)', 'AI Novelty (1-10)', 'AI Novelty (0-10 scale)', 'AI Novelty (1 = low, 7 = high)',
+      'Novelty (0-1)', 'Novelty (0-10 scale)', 'AI Novelty (GPT-6 Astra, 0-1)']
+    const readOther = other.filter(h => parseAiHeader(h) !== null || isBareAiScoreHeader(h) !== null)
+    check('a note of another scale is not a 1-5 AI score', !readOther.length, JSON.stringify(readOther))
+    check('...not even through the 3.1 upload (it loads as an extra)', canonicalKpiField('Novelty (0-1)') === null && canonicalKpiField('AI Novelty (0-100)') === null,
+      JSON.stringify([canonicalKpiField('Novelty (0-1)'), canonicalKpiField('AI Novelty (0-100)')]))
+    const [r] = recomputeOverall(normalizeImportedRows([{ ...base, 'AI Novelty (0-1)': 0.42, [ASTRA.novelty]: 4, [ASTRA.usefulness]: 3 }]))
+    check('...so it does not move the AI Novelty mean', r.novelty === 4 && same(aiModelSlugs([r]), ['gpt_6_astra']), JSON.stringify({ n: r.novelty, m: aiModelSlugs([r]) }))
+    // The 1-5 notes still mean "a score, model not recorded".
+    const five = ['AI Novelty (1-5)', 'AI Novelty (5-point)', 'AI Novelty (out of 5)', 'AI Novelty (1 = low, 5 = high)',
+      'AI Novelty (not recorded)', 'AI Novelty (unknown model)', 'AI Novelty (NA)', 'AI Novelty (n/a)']
+    const wrongFive = five.filter(h => parseAiHeader(h)?.slug !== UNRECORDED)
+    check('1-5 and "no model" notes read as model not recorded', !wrongFive.length, JSON.stringify(wrongFive.map(h => [h, parseAiHeader(h)])))
+    // One run of several is a source of its own, kept apart as it always was.
+    const r1 = parseAiHeader('AI Novelty (run 1)'), r2 = parseAiHeader('AI Novelty (run 2)')
+    check('(run 1) and (run 2) are two sources, not one', r1 && r2 && r1.slug !== UNRECORDED && r1.slug !== r2.slug, JSON.stringify([r1, r2]))
+    const [runs] = recomputeOverall(normalizeImportedRows([{ ...base, 'AI Novelty (run 1)': 2, 'AI Novelty (run 2)': 4, 'AI Usefulness (run 1)': 3, 'AI Usefulness (run 2)': 5 }]))
+    check('...and both runs\' scores are kept (the mean of 2 and 4 is 3)', runs.novelty === 3 && aiModelSlugs([runs]).length === 2, JSON.stringify({ n: runs.novelty, m: aiModelSlugs([runs]) }))
+    // A model name with a note.
+    check('"(GPT-6 Astra, 1-5)" is GPT-6 Astra', parseAiHeader('AI Novelty (GPT-6 Astra, 1-5)')?.slug === 'gpt_6_astra'
+      && isBareAiScoreHeader('Novelty (GPT-6 Astra, 1-5)') === null && canonicalKpiField('Novelty (GPT-6 Astra, 1-5)') === ASTRA.novelty,
+      JSON.stringify([parseAiHeader('AI Novelty (GPT-6 Astra, 1-5)'), canonicalKpiField('Novelty (GPT-6 Astra, 1-5)')]))
+    // People are not an AI model.
+    check('"(human)" and "(raters)" are not AI scores', parseAiHeader('AI Novelty (human)') === null && parseAiHeader('AI Novelty (raters)') === null)
+  }
+  {
+    // Evaluator headers with a note on how the rating was given.
+    const yes = { 'Evaluator Novelty Rating': ['novelty', false], 'Eval. Novelty (1-5)': ['novelty', false], 'Eval. Novelty (mean)': ['novelty', false],
+      'Eval. Usefulness (avg)': ['usefulness', false], 'Eval. Novelty avg': ['novelty', false], 'Novelty (external evaluator 1)': ['novelty', true],
+      'Novelty rater 1 (blind)': ['novelty', true], 'Usefulness (blind rater 2)': ['usefulness', true] }
+    const wrongYes = Object.entries(yes).filter(([h, [k, r]]) => { const e = parseEvalHeader(h); return !e || e.kind !== k || e.rater !== r })
+    check('decorated evaluator headers are read, not dropped', !wrongYes.length, JSON.stringify(wrongYes.map(([h]) => [h, parseEvalHeader(h)])))
+    const no = ['Eval. Novelty SD', 'Eval. Novelty (sd)', 'Eval. Novelty (0-1)', 'Eval. Novelty rank', 'Eval. Novelty (GPT-6 Astra)']
+    const wrongNo = no.filter(h => parseEvalHeader(h) !== null)
+    check('...but a statistic, another scale or a model name is not an evaluator rating', !wrongNo.length, JSON.stringify(wrongNo.map(h => [h, parseEvalHeader(h)])))
+    check('evaluatorMean reads the decorated headers', evaluatorMean({ 'Eval. Novelty (1-5)': 2, 'Evaluator Novelty Rating': 4 }, 'novelty') === 3
+      && evaluatorMean({ 'Eval. Novelty (0-1)': 0.4 }, 'novelty') === '')
   }
 
   // P40. The unrecorded pair moves whole.
@@ -542,6 +584,9 @@ console.log('matchScoreTable (the 3.2 / 3.3 score-file match)')
     const twins = [{ idea_id: '1', session: 'S1', idea_title: 'Fever sock' }, { idea_id: '1', session: 'S2', idea_title: 'Fever sock' }]
     const tw = matchScoreTable(twins, [{ id: '1', session: 'S2', title: 'Fever sock', values: { [CL.novelty]: 5 } }])
     check('...and where the titles agree too, the session alone decides', tw.rows[1][CL.novelty] === 5 && tw.rows[0][CL.novelty] === undefined && tw.filled === 1)
+    // The file's session code in another case is still that session.
+    const lower = matchScoreTable(twins, [{ id: '1', session: 's2', title: 'Fever sock', values: { [CL.novelty]: 5 } }])
+    check('...whatever case the file writes the session code in', lower.rows[1][CL.novelty] === 5 && lower.rows[0][CL.novelty] === undefined && lower.filled === 1)
   }
   {
     // The same idea loaded twice (a session and its export): both copies are filled.

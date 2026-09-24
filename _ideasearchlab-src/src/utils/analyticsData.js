@@ -28,7 +28,7 @@
 // Python and R templates. Each maps to a paper name + where AI is present.
 // Per-model AI score columns ("AI Novelty (GPT-6 Astra)" …): see aiScoreColumns.js.
 import {
-  UNRECORDED, aiNovKey, aiUseKey, isAiModelKey, parseAiHeader, isBareAiScoreHeader,
+  UNRECORDED, aiNovKey, aiUseKey, isAiModelKey, parseAiHeader, isBareAiScoreHeader, headerNoteKind,
   aiKpiDefs, aiModelSlugs, hasAiModelFields, panelMean,
 } from './aiScoreColumns.js'
 // The page reads AI headers through this file too.
@@ -411,9 +411,22 @@ const EV_LABEL = '(?:eval\\.?|evaluators?|external(?: evaluators?)?|experts?|ext
 // is one rater's column, as it always was.
 const EV_GROUP = '(?:eval\\.?|evaluators|external(?: evaluators?)?|experts|raters|ext\\.?)'
 const EV_LABELLED = [new RegExp(`^${EV_LABEL}[ _]*${EV_KIND}$`), new RegExp(`^${EV_KIND} ?\\(${EV_GROUP}\\)$`)]
-const EV_RATER = new RegExp(`^${EV_KIND}[ _]*\\(? ?(?:raters?|experts?|evaluators?|judges?)(?![a-z])(.*)$`)
+const EV_RATER = new RegExp(`^${EV_KIND}[ _]*\\(? ?(?:(?:external|blind) )?(?:raters?|experts?|evaluators?|judges?)(?![a-z])(.*)$`)
 export function parseEvalHeader(header) {
-  const h = String(header ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
+  let h = String(header ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
+  // A note on how the rating was given — "Eval. Novelty (1-5)", "(mean)", "(avg)",
+  // "Evaluator Novelty Rating" — does not change what the column is (third review:
+  // such headers were read before and then dropped without a word). A note of
+  // another scale or a statistic ("(0-1)", "(sd)") makes it something else.
+  // "Novelty rater 1 (blind)": the bracket describes one rater's column, which the
+  // rater rule below reads (and refuses when it names a statistic).
+  const pm = h.match(/^(.*?)\s*\((.*)\)$/)
+  if (pm && !EV_RATER.test(pm[1]) && !/\b(?:raters?|experts?|evaluators?|judges?|eval|external|ext)\b/.test(pm[2])) {
+    const note = headerNoteKind(pm[2])
+    if (note === 'stat' || note === 'model' || note === 'other') return null
+    h = pm[1]
+  }
+  h = h.replace(/[ _](?:ratings?|avg\.?|average|mean)$/, '')
   let m = h.match(EV_LABELLED[0]) || h.match(EV_LABELLED[1])
   if (m) return { kind: kindOfWord(m[1]), rater: false }
   m = h.match(EV_RATER)
