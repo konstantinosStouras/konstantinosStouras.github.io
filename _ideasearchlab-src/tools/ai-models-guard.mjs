@@ -44,7 +44,7 @@ import {
 import { MODEL_PRICES, PRICES_AS_OF, replyCostUSD, priceAt, dayOf } from '../src/data/aiPricing.js'
 import {
   buildRequest, parseReplyText, callProvider, scrubKey, replyProblem, replyFailure, retryAfterMs,
-  cleanApiKey, trimApiKeys,
+  cleanApiKey, trimApiKeys, refusalHint,
   claudeSupportsEffort, openaiIsReasoning, geminiTakesThinkingLevel,
   SCORING_MAX_TOKENS, LEGACY_CHAT_MAX_TOKENS, SCORING_EFFORT,
   OPENAI_COMPAT_URLS, mistralTakesReasoningEffort, isMuseModel,
@@ -376,6 +376,12 @@ check(okCut.startsWith('[{"i":0'), 'a truncated reply WITH text is returned for 
 const e429 = await errorOf(fakeFetch(429, 'rate limited'))
 check(e429 && e429.status === 429 && !isFatalApiError(e429), '429 is not fatal (retried with backoff)')
 const e400 = await errorOf(fakeFetch(400, { error: 'unknown model' }), { provider: 'openai', apiKey: KEY, model: 'gpt-nope' })
+// The two account gates the owner hit (2026-09-24) name the next step, not just the provider's code.
+const eQwen = await errorOf(fakeFetch(403, { error: { message: 'Access to model denied. Please make sure you are eligible for using the model.', type: 'AccessDenied.Unpurchased', code: 'AccessDenied.Unpurchased' } }), { provider: 'qwen', apiKey: KEY, model: 'qwen3.8-max' })
+check(eQwen?.status === 403 && /Model Gallery.*Activate/.test(eQwen.message) && isFatalApiError(eQwen), 'qwen: AccessDenied.Unpurchased says to activate the model in Model Gallery, and stops the run')
+const eOr = await errorOf(fakeFetch(403, { error: { message: 'This model requires you to complete the following before use: 18+ age confirmation. Confirm at https://openrouter.ai/settings/preferences.', code: 403, metadata: { missing_attestation_types: ['age_18plus'] } } }), { provider: 'openrouter', apiKey: KEY, model: 'meta/muse-spark-1.3' })
+check(eOr?.status === 403 && /Settings, Preferences/.test(eOr.message) && isFatalApiError(eOr), 'openrouter: the age gate says where to confirm, and stops the run')
+check(refusalHint('claude', 403, 'AccessDenied.Unpurchased') === '' && refusalHint('qwen', 200, 'ok') === '', 'refusalHint: nothing for other providers or a clean reply')
 check(e400 && e400.status === 400 && isFatalApiError(e400) && /ChatGPT \(OpenAI\)/.test(e400.message), '400 (bad model / param) is fatal and names OpenAI')
 const eNet = await errorOf(async () => { throw new TypeError(`Failed to fetch ${KEY}`) })
 check(eNet && eNet.status === undefined && !isFatalApiError(eNet), 'a network failure carries no status → retried')

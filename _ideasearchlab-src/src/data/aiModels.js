@@ -127,7 +127,7 @@ export const PROVIDERS = [
     keyLabel: 'OpenRouter API Key',
     keyPlaceholder: 'sk-or-…',
     keyLink: 'https://openrouter.ai/keys',
-    note: 'Meta no longer runs a Llama API of its own (closed 6 July 2026), so Meta\'s models are reached through OpenRouter with an OpenRouter key and prepaid credits.',
+    note: 'Meta no longer runs a Llama API of its own (closed 6 July 2026), so Meta\'s models are reached through OpenRouter with an OpenRouter key and prepaid credits. Meta\'s models are age-gated there: confirm 18+ once under openrouter.ai → Settings → Preferences, or every call is refused with a 403.',
     defaultModel: 'meta-llama/llama-4-maverick',
     models: [
       { id: 'meta/muse-spark-1.3', short: 'Muse Spark 1.3', label: 'Meta Muse Spark 1.3 — Meta\'s newest flagship, closed (Sep 2026)' },
@@ -156,7 +156,7 @@ export const PROVIDERS = [
     keyLabel: 'API Key (International / Singapore)',
     keyPlaceholder: 'sk-… (Model Studio, International region)',
     keyLink: 'https://modelstudio.console.alibabacloud.com/',
-    note: 'Uses Alibaba Cloud Model Studio\'s International (Singapore) endpoint, which runs outside mainland China. The key must be made in that region; a key from another region is refused.',
+    note: 'Uses Alibaba Cloud Model Studio\'s International (Singapore) endpoint, which runs outside mainland China. The key must be made in that region; a key from another region is refused. Each model must be activated once in Model Studio\'s Model Gallery (a 403 "AccessDenied.Unpurchased" means it is not yet).',
     defaultModel: 'qwen3.8-flash',
     // Most capable first; Qwen3.7-Max's list price is above Qwen3.8-Max's, the
     // one list here whose first model is not also its most expensive.

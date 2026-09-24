@@ -394,6 +394,30 @@ export function scrubKey(text, apiKey) {
 }
 
 /**
+ * What to DO about a refusal the provider phrases in its own codes (owner,
+ * 2026-09-24: two flagships refused with a 403 that read as a broken app):
+ *   Qwen `AccessDenied.Unpurchased` — the Alibaba Cloud account has not activated
+ *     that model; it is switched on per model in Model Studio's Model Gallery.
+ *   OpenRouter `missing_attestation_types` / "18+ age confirmation" — Meta's
+ *     models are gated behind a one-time confirmation on the OpenRouter account.
+ * Appended to the error message so the page shows the next step, not just the
+ * code. Nothing here retries: both are 4xx the run stops on.
+ */
+export function refusalHint(provider, status, detail) {
+  const d = String(detail || '')
+  if (provider === 'qwen' && /AccessDenied\.Unpurchased|Access to model denied/i.test(d)) {
+    return 'Your Alibaba Cloud account has not activated this model: open Model Studio (International), Model Gallery, find the model and press Activate (some flagships need a purchase there), then press the button again.'
+  }
+  if (provider === 'openrouter' && /age_18plus|18\+ age confirmation|missing_attestation/i.test(d)) {
+    return 'Meta\'s models on OpenRouter need a one-time 18+ confirmation on YOUR OpenRouter account: sign in at openrouter.ai, open Settings, Preferences, confirm, then press the button again.'
+  }
+  if (status === 403 && provider === 'openrouter' && /insufficient|credits|balance/i.test(d)) {
+    return 'OpenRouter is prepaid: add credits at openrouter.ai, Credits, then press the button again.'
+  }
+  return ''
+}
+
+/**
  * One scoring call: POST the batch to the provider and return the reply text.
  *
  * @param resolved { provider, apiKey, model } from llmClient's resolveProvider
@@ -426,8 +450,10 @@ export async function callProvider(resolved, system, user, opts = {}) {
   if (!res.ok) {
     let detail = ''
     try { detail = await res.text() } catch { /* no body */ }
+    const hint = refusalHint(provider, res.status, detail)
     const err = new Error(
       `${name} API error ${res.status} for model "${model}": ${scrubKey(detail, apiKey).slice(0, 500) || res.statusText || 'request refused'}`
+      + (hint ? ` — ${hint}` : '')
     )
     err.status = res.status
     // How long the provider asked us to wait (a 429, or a 503 while overloaded):
