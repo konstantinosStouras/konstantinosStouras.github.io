@@ -251,6 +251,18 @@ export default function AISettings() {
                 placeholder={p.keyPlaceholder}
                 autoComplete="off"
               />
+              {p.endpointField && (
+                <input
+                  className="input-field"
+                  type="text"
+                  style={{ marginTop: 6 }}
+                  value={apiKeys[p.endpointField.key] || ''}
+                  onChange={e => setApiKeys(k => ({ ...k, [p.endpointField.key]: e.target.value }))}
+                  placeholder={`${p.endpointField.label}: ${p.endpointField.placeholder}`}
+                  autoComplete="off"
+                  title={p.endpointField.label}
+                />
+              )}
               {p.note && <p className={styles.hint}>{p.note}</p>}
             </div>
           ))}

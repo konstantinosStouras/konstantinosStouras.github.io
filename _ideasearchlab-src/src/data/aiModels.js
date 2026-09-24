@@ -156,7 +156,11 @@ export const PROVIDERS = [
     keyLabel: 'API Key (International / Singapore)',
     keyPlaceholder: 'sk-… (Model Studio, International region)',
     keyLink: 'https://modelstudio.console.alibabacloud.com/',
-    note: 'Uses Alibaba Cloud Model Studio\'s International (Singapore) endpoint, which runs outside mainland China. The key must be made in that region; a key from another region is refused. Each model must be activated once in Model Studio\'s Model Gallery (a 403 "AccessDenied.Unpurchased" means it is not yet).',
+    note: 'Alibaba Cloud Model Studio, International (Singapore), outside mainland China. Paste the Pay-as-you-go Base URL shown above your key on Model Studio\'s API Key page (https://ws-….ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1): that workspace domain is what pay-as-you-go billing runs through, and the shared dashscope-intl domain the app otherwise uses answers 403 "AccessDenied.Unpurchased" for a paid model. The key must be made in that region.',
+    // The per-workspace endpoint, saved in the same apiKeys map under this key
+    // (saveAISettings, deployed separately, stores that map whole, so no functions
+    // deploy is needed); the rater sends the key there instead of dashscope-intl.
+    endpointField: { key: 'qwenEndpoint', label: 'Pay-as-you-go Base URL', placeholder: 'https://ws-….ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1' },
     defaultModel: 'qwen3.8-flash',
     // Most capable first; Qwen3.7-Max's list price is above Qwen3.8-Max's, the
     // one list here whose first model is not also its most expensive.

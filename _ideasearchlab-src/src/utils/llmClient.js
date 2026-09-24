@@ -21,7 +21,7 @@
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { runScoring, extractScoreObjects, isFatalApiError, PROVIDER_PACE_MS, DEFAULT_PACE_MS } from './scoreBatch'
-import { callProvider, cleanApiKey } from './providerRequest'
+import { callProvider, cleanApiKey, providerBaseUrl } from './providerRequest'
 import { runTranslation, TRANSLATOR_SYSTEM_PROMPT, buildTranslatePrompt, TRANSLATION_PROVIDER, TRANSLATION_MODEL, TRANSLATION_MAX_TOKENS } from './translation'
 import { PROVIDERS } from '../data/aiModels'
 
@@ -43,7 +43,7 @@ export function resolveProvider(settings, providerOverride, modelOverride) {
   // the key the provider actually saw and may echo back.
   const apiKey = cleanApiKey(settings?.apiKeys?.[provider])
   const model = modelOverride || settings?.model || PROVIDER_DEFAULTS[provider] || PROVIDER_DEFAULTS.claude
-  return { provider, apiKey, model }
+  return { provider, apiKey, model, baseUrl: providerBaseUrl(settings, provider) }
 }
 
 const RATER_SYSTEM_PROMPT = `You are one of several independent expert evaluators rating ideas produced in a

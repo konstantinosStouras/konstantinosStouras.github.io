@@ -44,7 +44,7 @@ import {
 import { MODEL_PRICES, PRICES_AS_OF, replyCostUSD, priceAt, dayOf } from '../src/data/aiPricing.js'
 import {
   buildRequest, parseReplyText, callProvider, scrubKey, replyProblem, replyFailure, retryAfterMs,
-  cleanApiKey, trimApiKeys, refusalHint,
+  cleanApiKey, trimApiKeys, refusalHint, providerBaseUrl, compatUrl,
   claudeSupportsEffort, openaiIsReasoning, geminiTakesThinkingLevel,
   SCORING_MAX_TOKENS, LEGACY_CHAT_MAX_TOKENS, SCORING_EFFORT,
   OPENAI_COMPAT_URLS, mistralTakesReasoningEffort, isMuseModel,
@@ -378,7 +378,18 @@ check(e429 && e429.status === 429 && !isFatalApiError(e429), '429 is not fatal (
 const e400 = await errorOf(fakeFetch(400, { error: 'unknown model' }), { provider: 'openai', apiKey: KEY, model: 'gpt-nope' })
 // The two account gates the owner hit (2026-09-24) name the next step, not just the provider's code.
 const eQwen = await errorOf(fakeFetch(403, { error: { message: 'Access to model denied. Please make sure you are eligible for using the model.', type: 'AccessDenied.Unpurchased', code: 'AccessDenied.Unpurchased' } }), { provider: 'qwen', apiKey: KEY, model: 'qwen3.8-max' })
-check(eQwen?.status === 403 && /Model Gallery.*Activate/.test(eQwen.message) && isFatalApiError(eQwen), 'qwen: AccessDenied.Unpurchased says to activate the model in Model Gallery, and stops the run')
+check(eQwen?.status === 403 && /Pay-as-you-go Base URL.*AI Settings/.test(eQwen.message) && isFatalApiError(eQwen), 'qwen: AccessDenied.Unpurchased says to paste the workspace Base URL under AI Settings, and stops the run')
+// Qwen's per-workspace pay-as-you-go endpoint (owner 2026-09-24), saved in the apiKeys map.
+const WS = 'https://ws-e68w5xniqgdos9a7.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1'
+check(providerBaseUrl({ apiKeys: { qwen: KEY, qwenEndpoint: ` ${WS}/ ` } }, 'qwen') === `${WS}/` && providerBaseUrl({ apiKeys: { qwen: KEY } }, 'qwen') === '' && providerBaseUrl({ apiKeys: { qwenEndpoint: WS } }, 'deepseek') === '',
+  'providerBaseUrl: Qwen reads apiKeys.qwenEndpoint (trimmed), nothing without it, nothing for another provider')
+check(compatUrl('qwen', WS) === `${WS}/chat/completions` && compatUrl('qwen', `${WS}/`) === `${WS}/chat/completions` && compatUrl('qwen', `${WS}/chat/completions`) === `${WS}/chat/completions` && compatUrl('qwen', '') === COMPAT.qwen,
+  'compatUrl: the base URL with or without a slash or the path, else the shared endpoint')
+const rq = buildRequest('qwen', { ...args, model: 'qwen3.8-max', baseUrl: WS })
+check(rq.url === `${WS}/chat/completions` && rq.headers.Authorization === `Bearer ${KEY}` && !rq.url.includes(KEY), 'qwen: the request goes to the workspace endpoint with the same key header')
+const wsCalls = []
+await errorOf(async (url, init) => { wsCalls.push(url); return fakeFetch(200, { choices: [{ message: { content: '{"ratings":[]}' }, finish_reason: 'stop' }] })(url, init) }, { provider: 'qwen', apiKey: KEY, model: 'qwen3.8-max', baseUrl: WS })
+check(wsCalls[0] === `${WS}/chat/completions`, 'callProvider sends a resolved baseUrl there')
 const eOr = await errorOf(fakeFetch(403, { error: { message: 'This model requires you to complete the following before use: 18+ age confirmation. Confirm at https://openrouter.ai/settings/preferences.', code: 403, metadata: { missing_attestation_types: ['age_18plus'] } } }), { provider: 'openrouter', apiKey: KEY, model: 'meta/muse-spark-1.3' })
 check(eOr?.status === 403 && /Settings, Preferences/.test(eOr.message) && isFatalApiError(eOr), 'openrouter: the age gate says where to confirm, and stops the run')
 check(refusalHint('claude', 403, 'AccessDenied.Unpurchased') === '' && refusalHint('qwen', 200, 'ok') === '', 'refusalHint: nothing for other providers or a clean reply')
