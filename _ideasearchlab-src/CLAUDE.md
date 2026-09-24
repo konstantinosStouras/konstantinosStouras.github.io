@@ -872,7 +872,17 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    `?raw` in `analyticsTemplates.js`) that runs the SAME analysis: paper-style **Tables 3–6**
    (one OLS/`lm` column per KPI on the Any-AI dummy and on the condition dummies, Human-Only =
    baseline, plus top-rating linear-probability models), the **primary planned contrast
-   Individual + AI − Group + AI** per KPI,
+   Individual + AI − Group + AI** per KPI, **Table 7, the length check** (owner 2026-09:
+   "Longer ideas score higher … Should you control for length?"): Table 4 re-fitted
+   with `log(1 + word count)` held fixed, with its own coefficient row showing how much
+   length moves each KPI, then a "LENGTH CHECK" read-out naming every condition effect
+   that gains or loses significance (p < .05) once length is held fixed. On by default
+   (`LENGTH_CHECK`), in both scripts with identical output; Tables 3–6 are untouched
+   (their optional `USE_CONTROLS` is separate and stays off). Both views, not just the
+   adjusted one: part of the length effect is real (saying who it is for and why it
+   helps takes words), part is an artifact (more words hit more lexicon cues, AI-assisted
+   text is longer, and raters reward length too), so a paper reports both, as Boussioux
+   et al. 2024 control for word count. Pinned by the usefulness guard,
    then an **INSIGHTS** section that reads the results back in plain language (per-KPI
    best→worst ranking of the conditions + a DATA-COVERAGE CHECK that flags any of the four
    conditions with no data, e.g. "Full AI", and excludes it from the rankings), and plots

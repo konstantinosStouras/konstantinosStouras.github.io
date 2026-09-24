@@ -277,6 +277,18 @@ console.log('Registry — every new KPI reaches every consumer')
     page.includes('const m = idxs.filter(i => useIdea[i].facets)'))
   check('the page runs the shared text pipelines, not its own vectorisation',
     page.includes('usefulnessKpisFromText(ideaTexts, needLines, techTerms)') && page.includes('objectiveKpisFromText(ideaTexts, refLines'))
+  // Length check: Table 7 = Table 4 with log(1 + word count) held fixed, in BOTH
+  // scripts (they must stay in step), on by default, Tables 3-6 untouched.
+  check('Python and R both run Table 7 (length held fixed) by default',
+    /^LENGTH_CHECK = True/m.test(py) && /^LENGTH_CHECK <- TRUE/m.test(R_) &&
+    py.includes('df["log_words"] = np.log1p(df["word_count"])') && R_.includes('dat$log_words   <- log1p(dat$word_count)') &&
+    py.includes('df, 7, "Robustness - Solo / Group / Both with idea length held fixed"') &&
+    R_.includes('dat, 7, "Robustness - Solo / Group / Both with idea length held fixed"'))
+  check('both print the same length-check read-out after Table 7',
+    py.includes('def length_check_summary(') && R_.includes('length_check_summary <- function(') &&
+    py.includes('LENGTH CHECK  (Table 4 vs Table 7') && R_.includes('LENGTH CHECK  (Table 4 vs Table 7'))
+  check('Tables 3-6 keep their own controls (the length control is Table 7 only)',
+    (py.match(/controls=controls\)/g) || []).length === 4 && (py.match(/controls=lterms/g) || []).length === 1)
   check('a det_* key column is no longer re-imported as an x_ duplicate',
     !Object.keys(normalizeImportedRows([{ Condition: 'Solo', Title: 'x', det_distinctiveness: 0.37 }])[0]).some(k => k.startsWith('x_')))
 }
