@@ -10,10 +10,11 @@
  *   - each measure's arithmetic (Need fit, Specificity, Workability, the composite,
  *     the novelty × usefulness cross-check helpers),
  *   - Workability's negation rule, both directions: a technology the idea really
- *     uses is never hidden (every sentence the 2026-09-24 review found hidden,
- *     plus fever-garment sentences of the same shapes, each guard also alone),
- *     a negated list is read ("no batteries, charging, or apps"), a negator more
- *     than 60 characters back does not count, and pasted hyphen runs stay fast,
+ *     uses is never hidden (every sentence the two 2026-09-24 reviews found
+ *     hidden, plus fever-garment sentences of the same shapes, each rule also
+ *     alone), a negated list is read ("no batteries, charging, or apps"), a
+ *     negator more than 60 characters back does not count, pasted hyphen runs
+ *     stay fast, and the cost grows no faster than the length of the idea,
  *   - that the composite does not move when only novelty moves,
  *   - the "idea with no words" rule the novelty side follows (objectiveKpis.js):
  *     such an idea is left blank on every usefulness KPI and kept out of the corpus,
@@ -155,7 +156,8 @@ console.log('Workability — 1 / (1 + extra technologies named)')
     for (const [t, want] of rows) {
       const w = want.filter(x => T.some(c => c.term === x)).sort()
       const got = techTermsIn(t, T).slice().sort()
-      check(`${label}: "${t}" → [${w.join(', ')}]`, got.join() === w.join(), got.join())
+      const shown = t.replace(/\r/g, '\\r').replace(/\n/g, '\\n')      // a line break stays on one line
+      check(`${label}: "${shown}" → [${w.join(', ')}]`, got.join() === w.join(), got.join())
     }
   }
   expectTerms('negated list', lists)
@@ -305,6 +307,104 @@ console.log('Workability — 1 / (1 + extra technologies named)')
     ['No app, a sensor or an ultra-mega-bright-orange super-high-contrast-mini LED shows the warning.', ['sensor', 'led']],
   ])
 
+  // SECOND REVIEW (2026-09-24). A preposition or a "no" that OPENS its clause, then
+  // a comma: the comma usually closes the negated phrase, and what follows is the
+  // subject of the sentence. Every sentence here was hidden by the first rewrite.
+  expectTerms('must count (a clause-opening negator + a comma list)', [
+    ['Instead of a bulky thermometer, a small sensor or an LED, hidden in the collar, alerts parents at 37°C.', ['sensor', 'led']],
+    ['Without a smartphone, a buzzer or an LED, built into the patch, tells the nurse.', ['buzzer', 'led']],
+    ['Instead of a screen, a vibration motor or buzzer is needed to wake the parent.', ['vibration', 'motor', 'buzzer']],
+    ['Rather than a thermometer, a sensor or an LED, placed in the armpit seam, flags the fever.', ['sensor', 'led']],
+    ['Unlike thermometers that need batteries, a sensor or chip, woven into the fabric, reads the heat.', ['sensor', 'chip']],
+    ['Free from wires, a chip or sensor, woven into the sleeve, reads the heat.', ['chip', 'sensor']],
+    ['Without Wi-Fi, Bluetooth or NFC is needed to send the alert.', ['bluetooth', 'nfc']],
+    ['Instead of an app, an LED or a buzzer is included to alert parents.', ['led', 'buzzer']],
+    ['Instead of an app, an LED or a buzzer, sewn into the collar, warns parents.', ['led', 'buzzer']],
+    ['Instead of a battery, a solar panel or USB cable is required.', ['solar panel']],
+    ['Rather than an app, an LED or buzzer - cheap and simple - alerts parents.', ['led', 'buzzer']],
+    ['Without an app, a sensor or LED, powered by a coin cell, warns the nurse.', ['sensor', 'led']],
+    ['Instead of Wi-Fi, Bluetooth or NFC is required, and the app shows the fever.', ['bluetooth', 'nfc', 'app']],
+    ['No app, a sensor or an LED, sewn into the cuff, shows the warning.', ['sensor', 'led']],
+    ['Rather than an app, a buzzer or LED is included in the collar.', ['buzzer', 'led']],
+    ['Rather than a thermometer, an LED or a buzzer - both cheap - warns parents.', ['led', 'buzzer']],
+    ['Without Wi-Fi, NFC or Bluetooth is required for syncing.', ['nfc', 'bluetooth']],
+    // fever garment, the same shapes
+    ['No app, sensors or LEDs, sewn into the cuff, alert parents.', ['sensor', 'led']],
+    ['Instead of a thermometer, a sensor or an LED, the size of a coin, alerts parents.', ['sensor', 'led']],
+    ['Rather than an app or a screen, a buzzer or an LED, stitched into the hem, warns the nurse.', ['buzzer', 'led']],
+    ['Instead of a thermometer or an app, a sensor, a buzzer or an LED is sewn into the sleeve.', ['sensor', 'buzzer', 'led']],
+    ['Unlike patches that rely on apps, a chip or a sensor, placed in the seam, reads the heat.', ['chip', 'sensor']],
+    ['At night, without a screen, a buzzer or an LED, hidden in the collar, wakes the parent.', ['buzzer', 'led']],
+    ['Without a charger, a solar panel or a coin battery, sewn into the hem, powers the LED.', ['solar panel', 'battery', 'led']],
+    ['Instead of a phone, a buzzer or vibration motor is included in the cuff.', ['buzzer', 'vibration', 'motor']],
+    ['Free of wires, a sensor or a chip, printed on the fabric, detects the fever.', ['sensor', 'chip']],
+    ['No screen, sensors or chips, built into the lining, detect the heat.', ['sensor', 'chip']],
+    ['Without an app, a Bluetooth chip or an NFC tag, read by a phone, logs the fever.', ['bluetooth', 'chip', 'nfc']],
+    ['Instead of a battery, a solar panel or kinetic charger, woven into the sleeve, powers the sensor.', ['solar panel', 'charger', 'sensor']],
+    ['Instead of a phone app, a baby camera or a very loud buzzer, sewn into the collar, wakes the parent.', ['camera', 'buzzer']],
+    // a pronoun or a "just / so …" that starts an aside is not a new clause
+    ['Rather than a thermometer, a sensor or an LED, we think, works best.', ['sensor', 'led']],
+    ['Without a thermometer, sensors or LEDs, we are told, alert parents.', ['sensor', 'led']],
+    ['No thermometer, sensors or LEDs, just like before, alert parents.', ['sensor', 'led']],
+    ['No screen, sensors or chips, so small they are invisible, alert the nurse.', ['sensor', 'chip']],
+    ['Instead of an app, an LED or a buzzer - it is cheap - alerts parents.', ['led', 'buzzer']],
+    ['No app, sensors or LEDs - just tiny ones - alert parents.', ['sensor', 'led']],
+    // "with no" is a preposition like "without"
+    ['With no wires, sensors or LEDs, hidden in the collar, alert parents.', ['sensor', 'led']],
+  ])
+  // Each of these stands on ONE of the new rules, so taking that rule out fails it.
+  expectTerms('must count (one new rule at a time)', [
+    // "instead of" / "rather than" name the substitute: a fragment is not a negation
+    ['Instead of an app, an LED or a buzzer.', ['led', 'buzzer']],
+    // a bare "no" does not reach an item with "a / an" after a comma
+    ['No app, a sensor or an LED.', ['sensor', 'led']],
+    ['It needs no app, a sensor or an LED.', ['sensor', 'led']],
+    ['No thermometer, a sensor or an LED is needed.', ['sensor', 'led']],
+    ['No thermometer, sensors or an LED is needed.', ['sensor', 'led']],
+    ['With no app, a sensor or an LED.', ['sensor', 'led']],
+    // a preposition's list never runs into "is needed" (with or without a comma)
+    ['Without Wi-Fi or Bluetooth is needed to send the alert.', ['bluetooth']],
+    ['It works without a cable, Bluetooth or NFC is required.', ['bluetooth', 'nfc']],
+    // a line break ends the clause
+    ['Idea 3\nNo app\nBluetooth sensor tag clips onto the sleeve', ['bluetooth', 'sensor']],
+    ['Key points\nNo app\nLED blinks red at 37C', ['led']],
+    ['No wires\nBluetooth sensor inside the cuff sends the reading.', ['bluetooth', 'sensor']],
+    ['No batteries\nSolar panel on the sleeve powers the LED', ['solar panel', 'led']],
+    ['Without batteries\r\nSensor strip in the collar reads the heat', ['sensor']],
+    // "removes / replaces / gets rid of" with a person as the subject is upkeep
+    ['The nurse replaces the battery every week.', ['battery']],
+    ['Dad removes the sensor before washing.', ['sensor']],
+    ['She replaces the coin battery each month.', ['battery']],
+    ['The clinic removes the chip before the sleeve is washed.', ['chip']],
+    ['The nurse gets rid of the sensor after each patient.', ['sensor']],
+    ['The nurse eliminates the sensor readings that look wrong.', ['sensor']],
+    // "removes … from" moves it
+    ['The shirt has a pocket, which removes the sensor from direct skin contact.', ['sensor']],
+    // an upkeep noun after the term, reached through a verb or a lead-in
+    ['It lasts a year, eliminating battery changes.', ['battery']],
+    ['It works without having a battery change for a year.', ['battery']],
+    ['It does not need battery replacements for two years.', ['battery']],
+    ["It won't need battery swaps.", ['battery']],
+    ['There is no need for sensor calibration or battery swaps.', ['sensor', 'battery']],
+    // "no ordinary / simple …" and "no risk / chance …" do not negate what follows
+    ['It is no ordinary sensor: it changes colour.', ['sensor']],
+    ['This is no simple app, it predicts fever.', ['app']],
+    ['There is no risk sensor data leaks.', ['sensor', 'data']],
+    ['There is no chance the sensor misses a fever.', ['sensor']],
+    // "whether or not" negates nothing
+    ['The patch works whether or not Bluetooth is on.', ['bluetooth']],
+    // "the app free" is at no cost; "battery free" with no determiner is no battery
+    ['Parents download the app free.', ['app']],
+    ['Get the app free today and pair it with the patch.', ['app']],
+    ['It is battery free and turns red at 37°C.', []],
+  ])
+  // A known miss, kept on purpose (P6): "no need to charge a battery" is also said of
+  // a device whose battery simply lasts, and "open" an app is not a using verb, so
+  // both stay counted. Precision first: an unclear case counts its technology.
+  expectTerms('known miss (counted on purpose)', [
+    ['There is no need to charge a battery or open an app.', ['battery', 'app']],
+  ])
+
   // The other direction (P6): phrasings that DO say the idea needs none of it,
   // read through closed phrases ("having to use", "relying on", "the help of",
   // "no longer need", "neither … nor") rather than open word classes.
@@ -361,6 +461,60 @@ console.log('Workability — 1 / (1 + extra technologies named)')
     ['It replaces the electronic thermometer with dyed fabric.', []],
     ['Free from batteries: the dye does the work.', []],
   ])
+  // What the stricter comma rule must still read as a negated list: a clause-opening
+  // negator whose list ends where a new clause clearly starts (a subject, or after
+  // "no" also "just / so …", ":" or "needed"), and every list in the middle of a clause.
+  expectTerms('must negate (a comma list that ends where a new clause starts)', [
+    ['Without batteries, wires or sensors, it is cheap.', []],
+    ['Without batteries, apps or sensors, the patch is cheap to make.', []],
+    ['Without Wi-Fi, Bluetooth or NFC, the shirt still works.', []],
+    ['Free from batteries, apps or sensors, it is safe for babies.', []],
+    ['Unlike thermometers that need batteries, apps or sensors, it simply changes colour.', []],
+    ['The patch warns parents, and without batteries, apps or sensors, it stays light.', []],
+    ['It is washable because, without batteries, chips or sensors, there is nothing to break.', []],
+    ['Without having to use an app, a battery or a sensor, parents see the fever.', []],
+    ['Instead of using an app, a battery or a sensor, parents glance at the collar.', []],
+    ['Rather than relying on an app, a battery or a sensor, the patch simply turns red.', []],
+    ['Unlike smart patches that need an app, a battery or Bluetooth, the dye does the work.', []],
+    ['Without batteries, apps or sensors - it is washable.', []],
+    ['No app, Bluetooth or Wi-Fi is required.', []],
+    ['No batteries, sensors or apps, just dye that turns red at 37°C.', []],
+    ['No batteries, sensors or apps, just dye that turns red, so parents know at a glance.', []],
+    ['Without any app, battery or sensor needed, the patch turns red at 37°C.', []],
+    ['With no app, battery or sensor, it is safe for newborns.', []],
+    ['No batteries, sensors or apps: the fabric does the work.', []],
+    ['No app, sensors or LEDs.', []],
+    ['Zero batteries, sensors or apps, so it is safe for newborns.', []],
+    ['It changes colour at 37°C, without an app, battery, or electronic temperature sensor.', []],
+    ['It turns red at 37°C, without batteries, apps or sensors.', []],
+    ['A sleeve that turns red at 37°C, free of batteries, apps or sensors.', []],
+    ['It works without an app, a battery, or a sensor, so it is cheap.', []],
+    ['There are no batteries, sensors, or apps in the sleeve.', []],
+    ['It works without any battery, chip or sensor in the fabric.', []],
+    ['Parents no longer need a thermometer, an app or a charger.', []],
+    ['The patch needs no app, battery or sensor, which keeps it cheap.', []],
+    ['The sleeve turns red at 37°C, with no app, battery, or sensor involved.', []],
+    ['It needs no Bluetooth, NFC or Wi-Fi, making it safe for newborns.', []],
+    ['Ditching the battery or the app, the patch simply turns red.', []],
+    ['Key points\nWithout an app, a battery or a sensor\nWashable at 40°C', []],
+    // "zero battery life" means no battery (owner's data): a bare "no / zero" keeps
+    // an upkeep noun negated, only a verb or a lead-in lets it through
+    ['It becomes a coaching tool, with zero electronics and zero battery life to manage.', []],
+    // the owner's own sentences, in full: the window before the last term starts
+    // inside the word before "without", so what precedes it is read from the text
+    ['The playful design reduces children\'s anxiety. It works without batteries, screens or uncomfortable electronic sensors.', []],
+    ['The blanket warms up at night. It works continuously without an app, battery, or electronic temperature sensor.', []],
+    ['It provides a simple visual warning of possible fever without requiring batteries, electronics, or a smartphone.', []],
+    ['The fabric provides real-time feedback without electronic sensors, apps or charging and returns to its original colour.', []],
+  ])
+  // The same window edge for "rather than": in the middle of a clause it negates its
+  // whole list, so reading an unknown start as "opens the clause" would be wrong.
+  {
+    const s = 'Parents see the warning on the collar rather than a phone app, a baby camera or a very loud buzzer.'
+    const d = s.indexOf('buzzer') - s.indexOf('rather')
+    check(`mid-clause "rather than" at the window's edge (${d} characters back) negates its whole list`,
+      d > 50 && d <= 60 && /[a-z]/.test(s[s.indexOf('buzzer') - 61]) && techTermsIn(s, T).length === 0, techTermsIn(s, T).join())
+  }
   // A real idea from the owner's 741 (PnSzJyM52e07j6TyswqO): it says four times that
   // it needs no electronics, and the first list rule still counted three terms.
   {
@@ -403,6 +557,18 @@ console.log('Workability — 1 / (1 + extra technologies named)')
     }
     check(`the dashed separator ends the clause ("no app ---- Idea 2: a sensor patch" keeps the sensor)`,
       techTermsIn(inputs[6][1], T).join() === 'sensor', techTermsIn(inputs[6][1], T).join())
+    // The costliest honest input: every one of hundreds of mentions negated, so each
+    // is read in full. The cost grows in step with the length (about 2 µs a
+    // character), never faster: 4 times the text may take at most about 4 times as long.
+    const best = text => {
+      let ms = Infinity
+      for (let k = 0; k < 5; k++) { const t0 = performance.now(); techTermsIn(text, T); ms = Math.min(ms, performance.now() - t0) }
+      return ms
+    }
+    const dense = n => 'no app/battery/sensor/chip/led/app/app/app, without an app, a battery or a sensor. '.repeat(n)
+    const small = best(dense(12)), large = best(dense(48))
+    check(`fully negated, ${dense(48).length.toLocaleString('en')} characters: grows linearly (${small.toFixed(1)} ms → ${large.toFixed(1)} ms for 4× the text)`,
+      large < 25 && large < 8 * Math.max(small, 0.5))
   }
 }
 
