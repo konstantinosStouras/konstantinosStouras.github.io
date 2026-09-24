@@ -60,6 +60,10 @@ KPI_SCALE5 <- c(novelty=TRUE, usefulness=TRUE, overall_quality=TRUE,
 
 TOP_RATING   <- 5.0
 USE_CONTROLS <- FALSE
+LENGTH_CHECK <- TRUE   # add Table 7: Table 4 re-fitted with log(1 + word count) held fixed.
+                       # Longer ideas score higher on most KPIs (text measures AND raters),
+                       # so this shows which condition effects are more than wordiness.
+                       # Tables 3-6 are unchanged either way.
 MIN_RESID_DF_FOR_CONTROLS <- 8
 MIN_CELL     <- 2
 PRIMARY_CONTRAST <- c("Solo", "Group")
@@ -123,6 +127,7 @@ load_prepare <- function() {
   dat$stage_group <- as.integer(grepl("group", ph))
   tx <- if (is.null(dat$text)) rep("", nrow(dat)) else as.character(dat$text)
   dat$word_count  <- lengths(strsplit(trimws(tx), "\\s+"))
+  dat$log_words   <- log1p(dat$word_count)
   # Top-rating binaries for present 1–5 KPIs only; NA where the KPI is missing.
   for (k in KPI_KEYS) if (isTRUE(KPI_SCALE5[[k]]) && k %in% names(dat)) {
     dat[[paste0("top_", k)]] <- ifelse(is.na(dat[[k]]), NA_real_, as.numeric(dat[[k]] >= TOP_RATING))
@@ -141,6 +146,16 @@ control_terms <- function(dat) {
     cat("NOTE: too few rows for controls; fitting without them.\n"); return(character(0))
   }
   terms
+}
+
+# The Table 7 control: log(1 + word count), when LENGTH_CHECK, it varies and there
+# are enough rows (same size guard as the other controls).
+length_terms <- function(dat) {
+  if (!LENGTH_CHECK || length(unique(dat$log_words)) < 2) return(character(0))
+  if ((nrow(dat) - 5) < MIN_RESID_DF_FOR_CONTROLS) {
+    cat("NOTE: too few rows for the length check; Table 7 skipped.\n"); return(character(0))
+  }
+  "log_words"
 }
 
 # Condition dummies large enough to enter a model, computed on a given subset.
@@ -188,7 +203,10 @@ cell_of <- function(entry, term) {
 }
 
 # ── 3. Build one table; dvs = named list key->label, each fitted on its subset ─
-build_table <- function(dat, num, title, sub_desc, dvs, split, controls) {
+# extra_rows = further coefficient rows to show (named term -> label, e.g. the length
+# control in Table 7); ctrl_label overrides the "Controls" cell text.
+build_table <- function(dat, num, title, sub_desc, dvs, split, controls,
+                        extra_rows = NULL, ctrl_label = NULL) {
   if (split) {
     row_terms  <- c("solo","group","both")
     row_labels <- sprintf(c("Solo (vs %s)","Group (vs %s)","Both (vs %s)"), REFERENCE)
@@ -220,10 +238,11 @@ build_table <- function(dat, num, title, sub_desc, dvs, split, controls) {
   }
   coef_rows <- list()
   for (i in seq_along(row_terms)) coef_rows[[length(coef_rows)+1]] <- add_coef(row_terms[i], row_labels[i])
+  for (term in names(extra_rows)) coef_rows[[length(coef_rows)+1]] <- add_coef(term, extra_rows[[term]])
   coef_rows[[length(coef_rows)+1]] <- add_coef("(Intercept)", sprintf("Intercept (%s)", REFERENCE))
 
   stat_cell <- function(fn) sapply(keys, function(dv) if (is.null(fits[[dv]]$m)) DASH else fn(fits[[dv]]))
-  ctrl_label <- if (length(controls) > 0) "Yes" else "No"
+  if (is.null(ctrl_label)) ctrl_label <- if (length(controls) > 0) "Yes" else "No"
   stat_rows <- list(
     list(label = "N (ideas)",          cells = stat_cell(function(f) as.character(length(residuals(f$m))))),
     list(label = "Number of groups",   cells = stat_cell(function(f) as.character(if (!is.null(f$sub$group_id)) length(unique(f$sub$group_id)) else 0))),
@@ -285,6 +304,32 @@ emit_machine <- function(tables) {
 }
 
 # ── 6. Planned contrast Solo − Group, per KPI ─────────────────────────────────
+# ── 5b. Length check: which Table-4 effects change once length is held fixed ──
+length_check_summary <- function(t4, t7, dvs) {
+  cat(paste(rep("=", 78), collapse = ""), "\n", sep = "")
+  cat("LENGTH CHECK  (Table 4 vs Table 7: the same models, with idea length held fixed)\n")
+  cat(paste(rep("=", 78), collapse = ""), "\n", sep = "")
+  changed <- character(0)
+  for (dv in names(dvs)) {
+    label <- dvs[[dv]]
+    for (term in c("solo", "group", "both")) {
+      name <- c(solo = "Solo", group = "Group", both = "Both")[[term]]
+      a <- cell_of(t4$fits[[dv]], term); b <- cell_of(t7$fits[[dv]], term)
+      if (is.null(a) || is.null(b)) next
+      if (a["p"] < .05 && b["p"] >= .05) {
+        changed <- c(changed, sprintf("  %s: %s vs None was significant, but NOT once length is held fixed (%+.3f -> %+.3f); the difference may be mostly wordiness.",
+                                      label, name, a["est"], b["est"]))
+      } else if (a["p"] >= .05 && b["p"] < .05) {
+        changed <- c(changed, sprintf("  %s: %s vs None becomes significant once length is held fixed (%+.3f -> %+.3f).",
+                                      label, name, a["est"], b["est"]))
+      }
+    }
+  }
+  if (length(changed) > 0) cat(paste(changed, collapse = "\n"), "\n", sep = "")
+  else cat("  No condition effect changes significance (p < .05) when length is held fixed.\n")
+  cat("  (The 'log(1 + word count)' row of Table 7 shows how much length itself moves each KPI.)\n\n")
+}
+
 planned_contrast <- function(fit, label) {
   if (is.null(fit) || is.null(fit$m)) return(NULL)
   m <- fit$m; cn <- names(coef(m))
@@ -486,7 +531,18 @@ if (nrow(dat) == 0) {
     } else {
       cat("NOTE: no 1-5 KPI has variation in its top-rating outcome; Tables 5 & 6 are skipped.\n\n")
     }
+    # Table 7 — the length check: Table 4 again, with log(1 + word count) held fixed.
+    lterms <- length_terms(dat)
+    length_table <- NULL
+    if (length(lterms) > 0) {
+      length_table <- build_table(dat, 7, "Robustness - Solo / Group / Both with idea length held fixed",
+                                  "OLS of each KPI on the condition dummies plus log(1 + word count) (reference = None).",
+                                  level_dvs, TRUE, lterms,
+                                  extra_rows = list(log_words = "log(1 + word count)"), ctrl_label = "Length")
+      tables <- c(tables, list(length_table))
+    }
     for (t in tables) print_table(t)
+    if (!is.null(length_table)) length_check_summary(tables[[2]], length_table, level_dvs)
 
     cat(paste(rep("=", 78), collapse = ""), "\n", sep = "")
     cat(sprintf("PRIMARY PLANNED CONTRAST:  '%s'  -  '%s'   (AI timing)\n", PRIMARY_CONTRAST[1], PRIMARY_CONTRAST[2]))
