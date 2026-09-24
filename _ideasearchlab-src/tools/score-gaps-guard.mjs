@@ -26,6 +26,7 @@ import {
   pickScoredSheet,
 } from '../src/utils/scoreGaps.js'
 import { aiFieldsFor, UNRECORDED } from '../src/utils/aiScoreColumns.js'
+import { normalizeImportedRows } from '../src/utils/analyticsData.js'
 import { measureText } from '../src/utils/translation.js'
 
 let failures = 0
@@ -574,6 +575,28 @@ console.log('pickScoredSheet — the scores are not always on the sheet called I
   // ...while a decorated score with no model name is one, as the importer reads it.
   check('"Novelty Rating" / "Usefulness (1-5)" are AI scores (no model name)',
     pickScoredSheet([{ name: 'Scores', rows: [{ 'Idea ID': 'i1', 'Novelty Rating': 4, 'Usefulness (1-5)': 3 }] }]).scored === 2)
+}
+
+// ── Ideas are numbered per session: the top-up joins on Idea ID WITHIN a session ──
+console.log('\nIdea ID + session (review, 2026-09-24)')
+{
+  const rows = [
+    { rid: 'a', idea_id: '1', session: 'S1', idea_title: 'Fever sock' },
+    { rid: 'b', idea_id: '1', session: 'S2', idea_title: 'Heat cup' },
+  ]
+  const astra = aiFieldsFor('gpt-6-astra')
+  const inc = normalizeImportedRows([
+    { 'Idea ID': '1', 'Session Code': 'S2', Condition: 'Group', Title: 'Heat cup', 'AI Novelty (GPT-6 Astra)': 4, 'AI Usefulness (GPT-6 Astra)': 3 },
+  ])
+  const r = mergeAiScoresIntoRows(rows, inc)
+  check('a file row for S2\'s idea 1 fills S2\'s idea 1, not S1\'s', r.rows[1][astra.novelty] === 4 && r.rows[0][astra.novelty] == null, JSON.stringify(r.rows))
+  const amb = mergeAiScoresIntoRows(rows, normalizeImportedRows([
+    { 'Idea ID': '1', Condition: 'Group', Title: 'Something else', 'AI Novelty (GPT-6 Astra)': 2, 'AI Usefulness (GPT-6 Astra)': 2 },
+  ]))
+  check('an id two sessions share, with no session in the file and no title match, is left unmatched (never guessed)',
+    amb.matched === 0 && amb.unmatched === 1 && amb.rows.every(x => x[astra.novelty] == null))
+  const one = mergeAiScoresIntoRows([rows[0]], inc)
+  check('an id only one session uses still matches, whatever the file calls its session', one.matched === 1 && one.rows[0][astra.novelty] === 4)
 }
 
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed.')

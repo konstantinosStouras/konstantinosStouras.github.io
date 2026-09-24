@@ -17,6 +17,7 @@
 // goes through it, and — when python3 + numpy are available — checks the offline
 // twin _idea-kpi-script/idea_kpis.py gives the same numbers.
 
+import { isBareAiScoreHeader } from '../src/utils/aiScoreColumns.js'
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -246,9 +247,12 @@ console.log('\n--- the combined KPI is labelled NoveltyScore (owner, 2026-09-23)
   const page = readFileSync(join(HERE, '../src/pages/DataAnalytics.jsx'), 'utf8')
   check('the 3.2 AI-scores upload skips the NoveltyScore column when it looks for "Novelty"',
     // Both paths filter with notEmpirical, which rules NoveltyScore out first: the
-    // AI path before parsing a header, the evaluator path in its column pick.
+    // AI path before parsing a header, the evaluator path's plain-column fallback in
+    // its pick (its evaluator columns are exact headers, evaluatorMean). And the
+    // shared bare-header reader never takes NoveltyScore for a score.
     /const notEmpirical = c => !isNoveltyScoreHeader\(c\)/.test(page) && /if \(isEvalish\(c\) \|\| !notEmpirical\(c\)\) return/.test(page)
-    && /c\.includes\(kind\) && notEmpirical\(c\)/.test(page))
+    && /!isEvalish\(c\) && notEmpirical\(c\) && !\/\^ai\\b\/\.test\(c\) && isBareAiScoreHeader\(headerRaw\[j\]\) === kind/.test(page)
+    && ['NoveltyScore', 'Novelty Score', 'novelty_score', 'Obj. NoveltyScore'].every(h => isBareAiScoreHeader(h) === null))
   check('the page no longer shows the bare "Score" / "Combined score" label for this KPI',
     !/their mean <em>Score<\/em>|Distinctiveness \/ Score for|Obj\.&nbsp;Score/.test(page))
 }

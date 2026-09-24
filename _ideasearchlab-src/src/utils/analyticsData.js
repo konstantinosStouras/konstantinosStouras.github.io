@@ -224,6 +224,33 @@ export function stripAllKpis(rows) {
 }
 
 /**
+ * Idea IDs repeat across sessions (each session numbers its own ideas), so an id
+ * names ONE idea only together with its session. Returns (id, session) => row
+ * index, or undefined when the id is unknown, or names ideas in several sessions
+ * and the file row's session does not say which (the caller then tries the title).
+ * `idOf` turns a row's idea_id into its joinable form ('' = not joinable).
+ */
+export function ideaIndexBySession(rows, idOf = v => String(v ?? '').trim()) {
+  const byId = new Map()
+  ;(rows || []).forEach((r, i) => {
+    const id = idOf(r.idea_id)
+    if (!id) return
+    if (!byId.has(id)) byId.set(id, [])
+    byId.get(id).push(i)
+  })
+  return (id, session) => {
+    const list = id ? byId.get(id) : null
+    if (!list) return undefined
+    const sess = String(session ?? '').trim()
+    if (sess && sess !== 'imported') {
+      const same = list.filter(i => String(rows[i].session ?? '') === sess)
+      if (same.length) return same[0]
+    }
+    return new Set(list.map(i => String(rows[i].session ?? ''))).size === 1 ? list[0] : undefined
+  }
+}
+
+/**
  * Apply uploaded extra-KPI values onto the loaded rows, matched by Idea ID (then,
  * if no id match, by normalised title). `entries` = [{ idea_id, title, values }]
  * where `values` maps each key to a number; `keys` is the columns to write.
@@ -244,18 +271,16 @@ export function stripAllKpis(rows) {
  * ideas that gained / retained a canonical KPI (an extras-only upload leaves both 0).
  */
 export function matchUploadedKpisIntoRows(rows, entries, keys) {
-  const byId = new Map()
+  const byId = ideaIndexBySession(rows)
   const byTitle = new Map()
   rows.forEach((r, i) => {
-    const id = String(r.idea_id ?? '')
-    if (id && !byId.has(id)) byId.set(id, i)
     const t = normTitle(r.idea_title || rowTitle(r))
     if (t && !byTitle.has(t)) byTitle.set(t, i)
   })
   const next = rows.slice()
   let matched = 0, unmatched = 0, filled = 0, kept = 0
   for (const e of entries || []) {
-    let idx = byId.get(String(e.idea_id ?? ''))
+    let idx = byId(String(e.idea_id ?? '').trim(), e.session)
     if (idx == null) idx = byTitle.get(normTitle(e.title))
     if (idx == null) { unmatched++; continue }
     matched++

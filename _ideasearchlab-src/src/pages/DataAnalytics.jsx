@@ -12,7 +12,7 @@ import {
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition, scriptKpiKeys,
-  exportKpiColumns, isDerivedAiKey, matchScoreTable, isBareAiScoreHeader,
+  exportKpiColumns, isDerivedAiKey, matchScoreTable, isBareAiScoreHeader, evaluatorMean,
 } from '../utils/analyticsData'
 import {
   aiFieldsFor, aiModelName, aiColumnLabel, aiModelSlugs, modelSlug, isAiModelKey, parseAiHeader,
@@ -482,7 +482,6 @@ export default function DataAnalytics() {
         // and never a DERIVED AI column (the mean across models), in any order.
         const notEmpirical = c => !isNoveltyScoreHeader(c) && !/objective|empirical|\bobj\b|obj\.|need fit|distinctiveness/.test(c) && !/\(mean\b/.test(c)
         const isEvalish = c => /\beval|evaluator|external|rater|expert/.test(c)
-        const isRaterCol = c => /\((rater|expert)\b|\brater\s*\d|_rater/.test(c)
         const numeric = v => v !== '' && v != null && typeof v !== 'boolean' && Number.isFinite(Number(v))
         const mean = vs => (vs.length ? vs.reduce((x, y) => x + y, 0) / vs.length : '')
         // What to read from each file row: [{ field, cols: [column index…], bare? }].
@@ -519,17 +518,15 @@ export default function DataAnalytics() {
           }
           for (const [field, v] of byField) reads.push({ field, cols: [v.col], bare: v.bare && bareIsDerived })
         } else {
-          // Evaluator ratings, per kind: the individual raters' columns ("Novelty
-          // (rater 1)", …) averaged when any carries a value, else the evaluator
-          // column ("Eval. Novelty" in the Rankings tab), else a plain "Novelty" —
-          // never an AI model's. The rule of the Step-1 importer's meanRaterCols, so
-          // both paths give the same number.
-          for (const [kind, field] of [['novelty', fields.novelty], ['useful', fields.usefulness]]) {
-            const hit = c => c.includes(kind) && notEmpirical(c)
-            const raters = header.map((c, i) => (hit(c) && isRaterCol(c) ? i : -1)).filter(i => i >= 0)
-            let one = find(c => hit(c) && isEvalish(c) && !isRaterCol(c))
-            if (one < 0) one = find(c => hit(c) && !isEvalish(c) && !/^ai\b/.test(c))
-            reads.push({ field, cols: raters, fallback: one })
+          // Evaluator ratings, per kind, by the Step-1 importer's own rule
+          // (evaluatorMean): the raters' columns ("Novelty (rater 1)", …) averaged
+          // when any carries a value, else the evaluator columns ("Eval. Novelty"
+          // in the Rankings tab), exact headers only — never "Eval. Novelty SD".
+          // Failing both, a plain score column ("Novelty", "Novelty Rating") is an
+          // offline rater sheet's; never an AI model's.
+          for (const [kind, field] of [['novelty', fields.novelty], ['usefulness', fields.usefulness]]) {
+            const plain = header.findIndex((c, j) => !isEvalish(c) && notEmpirical(c) && !/^ai\b/.test(c) && isBareAiScoreHeader(headerRaw[j]) === kind)
+            reads.push({ field, evalKind: kind, cols: [], fallback: plain })
           }
         }
         const isExcludedRow = r => excludedUsers.has(userKey(r.session, r.author_id))
@@ -551,10 +548,14 @@ export default function DataAnalytics() {
           const id = ciId >= 0 ? String(r[ciId] ?? '').trim() : ''
           if (!title && !id) continue
           const values = {}
+          const byHeader = Object.fromEntries(headerRaw.map((c, j) => [c, r[j]]))
           for (const x of reads) {
-            let v = mean(x.cols.map(c => r[c]).filter(numeric).map(Number))
+            let v = x.evalKind ? evaluatorMean(byHeader, x.evalKind) : mean(x.cols.map(c => r[c]).filter(numeric).map(Number))
             if (v === '' && x.fallback >= 0 && numeric(r[x.fallback])) v = Number(r[x.fallback])
-            if (v !== '') values[x.field] = v
+            // Both 3.2 uploads keep a rating on the 1–5 scale, as they always have
+            // (an AI score to one decimal, like "Upload full dataset"); an
+            // evaluator mean is clamped, not rounded.
+            if (v !== '') values[x.field] = x.evalKind ? Math.max(1, Math.min(5, v)) : Math.max(1, Math.min(5, Math.round(v * 10) / 10))
           }
           // The bare mean beside per-model columns belongs to a row with none.
           if (perModelFields.some(f => f in values)) for (const x of reads) if (x.bare) delete values[x.field]
@@ -759,6 +760,7 @@ export default function DataAnalytics() {
     const headers = Object.keys(rawRows[0])
     const lc = h => String(h).toLowerCase().trim()
     const idCol = headers.find(h => ['idea id', 'idea_id', 'id', 'ideaid'].includes(lc(h)))
+    const sessionCol = headers.find(h => ['session code', 'session', 'session_code'].includes(lc(h)))
     const titleCol = headers.find(h => ['title', 'idea title'].includes(lc(h)))
     if (!idCol && !titleCol) { setKpiUploadMsg('The file needs an "Idea ID" (or "Title") column so the KPIs can be matched onto your ideas.'); return }
     const KPI_LABEL = Object.fromEntries(KPI_DEFS.map(d => [d.key, d.label]))
@@ -822,6 +824,7 @@ export default function DataAnalytics() {
     }
     const entries = rawRows.map(r => ({
       idea_id: idCol ? r[idCol] : '',
+      session: sessionCol ? r[sessionCol] : '',   // ideas are numbered per session
       title: titleCol ? r[titleCol] : '',
       values: Object.fromEntries(cols.map(c => [c.key, valueOf(r, c)])),
     }))

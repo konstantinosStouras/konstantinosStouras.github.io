@@ -33,7 +33,7 @@
  * Everything here is pure — no React, no Firebase, no `fetch` — so
  * `tools/score-gaps-guard.mjs` reproduces each case offline.
  */
-import { normTitle, rowTitle, isNoveltyScoreHeader } from './analyticsData.js'
+import { normTitle, rowTitle, isNoveltyScoreHeader, ideaIndexBySession } from './analyticsData.js'
 import { isAiModelKey, aiNovKey, aiUseKey, UNRECORDED, parseAiHeader } from './aiScoreColumns.js'
 
 /** The two AI columns this step fills. Quality is derived from them, never filled.
@@ -297,11 +297,10 @@ function isAiScoreColumn(col) {
  * @returns { rows, matched, unmatched, filled, kept, gainedNovelty, gainedUsefulness, models }
  */
 export function mergeAiScoresIntoRows(rows, incoming, fields = null) {
-  const byId = new Map()
+  // By Idea ID within the file row's session: ideas are numbered per session.
+  const byId = ideaIndexBySession(rows, joinableId)
   const byTitle = new Map()
   ;(rows || []).forEach((r, i) => {
-    const id = joinableId(r.idea_id)
-    if (id && !byId.has(id)) byId.set(id, i)
     const t = normTitle(rowTitle(r))
     if (t && !byTitle.has(t)) byTitle.set(t, i)
   })
@@ -314,7 +313,7 @@ export function mergeAiScoresIntoRows(rows, incoming, fields = null) {
 
   for (const e of incoming || []) {
     const id = joinableId(e?.idea_id)
-    let idx = id ? byId.get(id) : undefined
+    let idx = id ? byId(id, e?.session) : undefined
     if (idx == null) idx = byTitle.get(normTitle(rowTitle(e || {})))
     // One file row per idea: a duplicate row in the file must not be counted as a
     // second match, and must not get a second chance to fill what the first left.

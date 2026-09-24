@@ -184,5 +184,18 @@ console.log('CSV — values leave and come back as they were')
   check('a text that itself starts with "\'" and a letter is left alone', csvToRows("t\n'Quoted'")[0].t === "'Quoted'")
 }
 
+// ── Ideas are numbered per session: the 3.1 KPI upload joins on Idea ID within a session ──
+console.log('\nIdea ID + session in the KPI upload (review, 2026-09-24)')
+{
+  const rows = [
+    { rid: 'a', idea_id: '1', session: 'S1', idea_title: 'Fever sock' },
+    { rid: 'b', idea_id: '1', session: 'S2', idea_title: 'Heat cup' },
+  ]
+  const k = matchUploadedKpisIntoRows(rows, [{ idea_id: '1', session: 'S2', title: '', values: { x_p: 0.5 } }], ['x_p'])
+  check('a KPI row for S2\'s idea 1 lands on S2\'s idea 1', k.rows[1].x_p === 0.5 && k.rows[0].x_p == null, JSON.stringify(k.rows))
+  const amb = matchUploadedKpisIntoRows(rows, [{ idea_id: '1', session: '', title: '', values: { x_p: 0.9 } }], ['x_p'])
+  check('…and one with no session, whose id two sessions share, is left unmatched', amb.unmatched === 1 && amb.rows.every(x => x.x_p == null))
+}
+
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed.')
 process.exit(failures ? 1 : 0)

@@ -477,7 +477,7 @@ check(/const apiKey = cleanApiKey\(settings\?\.apiKeys\?\.\[provider\]\)/.test(l
 // report it gets BEFORE scoreIdeas throws, plus the thrown error itself: that
 // is runScoring's lastError, unchanged, so it carries replyProblem/retryable.
 {
-  const iReport = llm.indexOf('if (opts.onReport) opts.onReport({ unscored, blank, failedBatches, aborted, lastError })')
+  const iReport = llm.indexOf('if (opts.onReport) opts.onReport({ unscored, blank, failedBatches, aborted, stoppedOnReply, lastError })')
   const iThrow = llm.indexOf('if (lastError && unscored === scores.length) throw lastError')
   check(iReport > 0 && iThrow > iReport, 'scoreIdeas reports the run (failedBatches included) BEFORE it throws, and throws lastError itself')
 }
