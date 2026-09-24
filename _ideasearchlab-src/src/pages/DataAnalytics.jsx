@@ -2318,12 +2318,39 @@ export default function DataAnalytics() {
                     {' '}<em>Novelty</em> (1&nbsp;−&nbsp;highest similarity to the reference set R of products that already
                     exist), <em>Pool distinctiveness</em> (1&nbsp;−&nbsp;average similarity to the other ideas) and the
                     {' '}<em>NoveltyScore</em> (the mean of the two as percentile ranks, 0 to 1, so both count equally:
-                    Pool distinctiveness varies over a narrow range, and a plain mean was Novelty alone). Per condition:
-                    {' '}<em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2). Words are compared after dropping
-                    common words, folding UK spelling to US (colour, color), reducing each word to its stem (sock, socks)
-                    and merging a short list of synonyms (tee and t-shirt, pullover and hoodie, cup and mug). The title and
-                    each sentence of an idea are also compared with R and the closest counts, so a longer description
-                    cannot make an existing product look new.
+                    Pool distinctiveness varies over a narrow range, and a plain mean was Novelty alone).
+                  </li>
+                  <li>
+                    <strong>Per condition: Unique fraction and Productivity.</strong> Novelty, Pool distinctiveness and
+                    NoveltyScore each give one number per idea. These two give one number per condition
+                    (None / Solo / Group / Both), because they describe the whole pool of ideas and not any single idea.
+                    <ul className={styles.bannerList}>
+                      <li>
+                        <em>Unique fraction.</em> Among the ideas in a condition, it links any two whose similarity is above
+                        a threshold (0.80, with 0.75 and 0.85 as robustness checks). Each linked cluster is one distinct
+                        idea. The result is the number of clusters divided by the number of ideas: 1.0 means every idea is
+                        different, 0.5 means on average each idea has a near copy. It answers: did this condition produce
+                        varied ideas, or the same few ideas over and over? This matters for the AI conditions in particular.
+                        If everyone asks the same assistant, ideas can get individually novel but look alike across people.
+                        A per-idea score cannot see that. A pool score can.
+                      </li>
+                      <li>
+                        <em>Productivity</em> (KPI&nbsp;2). This counts the non-redundant ideas a condition produced
+                        (Bouschery et&nbsp;al. 2024). It drops ideas with fewer than two words, then merges near-copies
+                        (similarity above 0.9) within the same group, so one group writing the same idea three times counts
+                        once. It answers: how many genuinely different ideas did this condition generate? That is a
+                        quantity measure, which complements the quality measures.
+                      </li>
+                    </ul>
+                    So per idea you ask &ldquo;how new is this idea?&rdquo;, and per condition you ask &ldquo;how many
+                    different ideas, and how varied?&rdquo;
+                  </li>
+                  <li>
+                    <strong>How the words are compared.</strong> Words are compared after dropping common words, folding
+                    UK spelling to US (colour, color), reducing each word to its stem (sock, socks) and merging a short
+                    list of synonyms (tee and t-shirt, pullover and hoodie, cup and mug). The title and each sentence of
+                    an idea are also compared with R and the closest counts, so a longer description cannot make an
+                    existing product look new.
                   </li>
                   <li>
                     <strong>Usefulness side</strong> (Dean, Hender, Rodgers &amp; Santanen 2006; Rietzschel, Nijstad &amp;
