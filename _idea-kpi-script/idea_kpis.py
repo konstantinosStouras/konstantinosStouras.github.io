@@ -136,6 +136,182 @@ def is_measurable(text):
     return len(meaningful_words(text)) >= MIN_MEANINGFUL_WORDS
 
 
+# ── How the novelty KPIs read words (mirrors kpiText.js + porter.js) ───────────
+# Common words dropped, UK spelling folded to US, Porter stems, a short synonym list
+# (owner, 2026-09-24: spelling, plurals and synonyms must not change the scores).
+# det-kpi-guard.mjs checks these tables and the resulting numbers match the app.
+
+# Martin Porter's algorithm, line for line as porter.js (his reference JS version).
+STEP2 = dict(ational='ate', tional='tion', enci='ence', anci='ance', izer='ize', bli='ble', alli='al', entli='ent', eli='e',
+             ousli='ous', ization='ize', ation='ate', ator='ate', alism='al', iveness='ive', fulness='ful', ousness='ous',
+             aliti='al', iviti='ive', biliti='ble', logi='log')
+STEP3 = dict(icate='ic', ative='', alize='al', iciti='ic', ical='ic', ful='', ness='')
+c, v = '[^aeiou]', '[aeiouy]'
+C, V = c + '[^aeiouy]*', v + '[aeiou]*'
+MGR0 = re.compile('^(' + C + ')?' + V + C)
+MEQ1 = re.compile('^(' + C + ')?' + V + C + '(' + V + ')?$')
+MGR1 = re.compile('^(' + C + ')?' + V + C + V + C)
+SV = re.compile('^(' + C + ')?' + v)
+CVC = re.compile('^' + C + v + '[^aeiouwxy]$')
+R1A, R1A2 = re.compile(r'^(.+?)(ss|i)es$'), re.compile(r'^(.+?)([^s])s$')
+R1B, R1B2 = re.compile(r'^(.+?)eed$'), re.compile(r'^(.+?)(ed|ing)$')
+R1C = re.compile(r'^(.+?)y$')
+R2 = re.compile(r'^(.+?)(ational|tional|enci|anci|izer|bli|alli|entli|eli|ousli|ization|ation|ator|alism|iveness|fulness|ousness|aliti|iviti|biliti|logi)$')
+R3 = re.compile(r'^(.+?)(icate|ative|alize|iciti|ical|ful|ness)$')
+R4 = re.compile(r'^(.+?)(al|ance|ence|er|ic|able|ible|ant|ement|ment|ent|ou|ism|ate|iti|ous|ive|ize)$')
+R4B = re.compile(r'^(.+?)(s|t)(ion)$')
+R5 = re.compile(r'^(.+?)e$')
+DBL = re.compile(r'([^aeiouylsz])\1$')
+
+
+def _ms(rx, s):  # JS RegExp.test == search
+    return rx.search(s) is not None
+
+
+def porter_stem(w):
+    if len(w) < 3:
+        return w
+    firstch = w[0]
+    if firstch == 'y':
+        w = 'Y' + w[1:]
+    m = R1A.search(w)
+    if m:
+        w = m.group(1) + m.group(2)
+    else:
+        m = R1A2.search(w)
+        if m:
+            w = m.group(1) + m.group(2)
+    m = R1B.search(w)
+    if m:
+        if _ms(MGR0, m.group(1)):
+            w = w[:-1]
+    else:
+        m = R1B2.search(w)
+        if m:
+            stem = m.group(1)
+            if _ms(SV, stem):
+                w = stem
+                if re.search(r'(at|bl|iz)$', w):
+                    w += 'e'
+                elif DBL.search(w):
+                    w = w[:-1]
+                elif _ms(CVC, w):
+                    w += 'e'
+    m = R1C.search(w)
+    if m and _ms(SV, m.group(1)):
+        w = m.group(1) + 'i'
+    m = R2.search(w)
+    if m and _ms(MGR0, m.group(1)):
+        w = m.group(1) + STEP2[m.group(2)]
+    m = R3.search(w)
+    if m and _ms(MGR0, m.group(1)):
+        w = m.group(1) + STEP3[m.group(2)]
+    m = R4.search(w)
+    if m:
+        if _ms(MGR1, m.group(1)):
+            w = m.group(1)
+    else:
+        m = R4B.search(w)
+        if m and _ms(MGR1, m.group(1) + m.group(2)):
+            w = m.group(1) + m.group(2)
+    m = R5.search(w)
+    if m:
+        stem = m.group(1)
+        if _ms(MGR1, stem) or (_ms(MEQ1, stem) and not _ms(CVC, stem)):
+            w = stem
+    if w.endswith('ll') and _ms(MGR1, w):
+        w = w[:-1]
+    if firstch == 'y':
+        w = 'y' + w[1:]
+    return w
+
+
+UK_US_WORDS = {
+    "grey": "gray", "greys": "grays", "cosy": "cozy", "cosier": "cozier", "centre": "center", "centres": "centers",
+    "metre": "meter", "metres": "meters", "litre": "liter", "litres": "liters", "fibre": "fiber", "fibres": "fibers",
+    "fibreglass": "fiberglass", "theatre": "theater", "theatres": "theaters", "pyjamas": "pajamas", "pyjama": "pajama",
+    "tyre": "tire", "tyres": "tires", "mould": "mold", "aluminium": "aluminum", "jewellery": "jewelry",
+    "catalogue": "catalog", "programme": "program", "defence": "defense", "licence": "license", "practise": "practice",
+    "analyse": "analyze", "analysed": "analyzed", "travelling": "traveling", "travelled": "traveled",
+    "modelling": "modeling", "labelled": "labeled", "nappy": "diaper", "nappies": "diapers",
+}
+_OUR_RE = re.compile(r"^(colo|flavo|favo|behavio|humo|labo|neighbo|odo|harbo|hono|rumo|vapo|armo|savo|endeavo|vigo|splendo|tumo|rigo|valo)ur(.*)$")
+_ISE_RE = re.compile(r"^(personal|custom|organ|real|recogn|optim|minim|maxim|visual|priorit|emphas|apolog|categor|sanit|steril|stabil|standard|util|special|mobil|energ|synchron|harmon|memor|summar|critic|final|normal|neutral|person)is(e|ed|es|ing|ation|ations|er|ers)$")
+
+
+def fold_uk_us(t):
+    """One token, UK spelling folded to US."""
+    if t in UK_US_WORDS:
+        return UK_US_WORDS[t]
+    m = _OUR_RE.match(t)
+    if m:
+        return m.group(1) + "r" + m.group(2)
+    m = _ISE_RE.match(t)
+    if m:
+        return m.group(1) + "iz" + m.group(2)
+    return t
+
+
+SYNONYMS = {
+    "tee": "shirt", "tshirt": "shirt", "jersey": "top", "singlet": "top", "vest": "top",
+    "hoody": "hoodie", "sweatshirt": "hoodie", "pullover": "hoodie", "jumper": "hoodie", "sweater": "hoodie",
+    "hosiery": "sock", "trunks": "shorts", "swimsuit": "swim", "swimwear": "swim",
+    "sport": "athletic", "sports": "athletic", "sportswear": "athletic", "gym": "athletic", "workout": "athletic",
+    "fitness": "athletic", "exercise": "athletic", "athlete": "athletic", "athletes": "athletic",
+    "pendant": "necklace", "choker": "necklace", "bangle": "bracelet", "wristband": "bracelet",
+    "spectacles": "eyeglass", "eyewear": "eyeglass", "eyeglasses": "eyeglass", "sunglasses": "eyeglass",
+    "smartphone": "phone", "cellphone": "phone",
+    "varnish": "polish", "lacquer": "polish",
+    "cup": "mug", "tumbler": "mug", "rug": "mat", "showerhead": "shower", "fishtank": "aquarium",
+    "infant": "baby", "infants": "baby", "newborn": "baby", "toddler": "baby", "toddlers": "baby",
+    "decal": "sticker",
+    "hue": "color", "shade": "color", "tint": "color", "warmth": "heat", "warm": "heat", "warmed": "heat",
+}
+_SYN_STEMS = {porter_stem(fold_uk_us(a)): porter_stem(fold_uk_us(b)) for a, b in SYNONYMS.items()}
+
+
+def kpi_tokens(text):
+    """The terms the novelty KPIs compare (mirrors kpiText.kpiTokens)."""
+    out = []
+    for t in _WORD.findall(str(text or "").lower()):
+        if t in COMMON_WORDS:
+            continue
+        st = porter_stem(fold_uk_us(t))
+        out.append(_SYN_STEMS.get(st, st))
+    return out
+
+
+def idea_parts(title, description):
+    """The title and each sentence of the description (mirrors objectiveKpis.ideaParts):
+    each is also compared with R, so a longer description cannot make an existing
+    product look new."""
+    parts = [str(title or "")] + [x.strip() for x in re.split(r"[.!?;\n]+", str(description or "")) if x.strip()]
+    return [x for x in parts if x]
+
+
+def percentile_ranks(values):
+    """Mid-rank percentile in [0, 1] among the non-None values (mirrors percentileRanks)."""
+    idx = [i for i, v in enumerate(values) if v is not None and math.isfinite(v)]
+    out = [None] * len(values)
+    n = len(idx)
+    if not n:
+        return out
+    if n == 1:
+        out[idx[0]] = 0.5
+        return out
+    order = sorted(idx, key=lambda i: values[i])
+    k = 0
+    while k < n:
+        j = k
+        while j + 1 < n and values[order[j + 1]] == values[order[k]]:
+            j += 1
+        mid = (k + j) / 2
+        for m in range(k, j + 1):
+            out[order[m]] = mid / (n - 1)
+        k = j + 1
+    return out
+
+
 def has_terms(vec):
     """True if the vector carries any term at all (mirrors deterministicKpis.hasTerms).
 
@@ -180,7 +356,8 @@ def distinctiveness_from_row(sim_row, i, include=None):
 
 
 def combined_score(nov, dist, w_nov=0.5, w_dist=0.5):
-    """Combined per-idea score = w_nov·Novelty + w_dist·Distinctiveness.
+    """Combined per-idea score = w_nov·Novelty + w_dist·Distinctiveness (compute_kpis
+    feeds it the two KPIs' percentile ranks in the pool, not their raw values).
 
     If distinctiveness is None (a pool of one) the score equals novelty (per spec);
     if novelty is None (no reference set) it falls back to distinctiveness alone.
@@ -302,7 +479,9 @@ class TfidfBackend:
         self.idf = None
 
     def _tokens(self, text):
-        return [t for t in self._TOKEN.findall(str(text or "").lower()) if len(t) > 1]
+        # The novelty KPIs' words (kpi_tokens: common words dropped, UK->US fold,
+        # Porter stems, synonyms) — the same terms as the app's kpiText.kpiTokens.
+        return kpi_tokens(text)
 
     def fit(self, texts):
         df = {}
@@ -600,12 +779,26 @@ def compute_kpis(ideas, refs, backend, *, pool_by="", tau=0.8, w_nov=0.5, w_dist
     measured = [i in readable_set and has_terms(idea_vecs[i]) for i in range(len(texts))]
     ref_ok = [r for r in ref_vecs if has_terms(r)]
 
-    # Novelty (vs R) is independent of the pool — vectorise it for all ideas at once.
+    # Novelty (vs R) is independent of the pool. The idea's title and each sentence of
+    # its description are compared with R too, and the closest counts (idea_parts),
+    # so a longer description cannot make an existing product look new.
     if ref_ok:
         R = np.asarray(ref_ok, dtype=float)
         ideas_to_R = idea_vecs @ R.T  # both already L2-normalised → cosine
         max_sim_to_R = ideas_to_R.max(axis=1)
-        novelties = [1.0 - float(m) if measured[i] else None for i, m in enumerate(max_sim_to_R)]
+        novelties = []
+        for i, m in enumerate(max_sim_to_R):
+            if not measured[i]:
+                novelties.append(None)
+                continue
+            best = float(m)
+            it = ideas[i]
+            parts = idea_parts(it.get("title", ""), it.get("description", "")) if (it.get("title") or it.get("description")) else []
+            if parts:
+                pv = [v for v in backend.transform(parts) if has_terms(v)]
+                if pv:
+                    best = max(best, float((np.asarray(pv) @ R.T).max()))
+            novelties.append(max(0.0, 1.0 - best))
     else:
         novelties = [None] * len(ideas)
 
@@ -615,7 +808,9 @@ def compute_kpis(ideas, refs, backend, *, pool_by="", tau=0.8, w_nov=0.5, w_dist
         key = it.get(pool_by, "") if pool_by else "(all ideas)"
         pools.setdefault(str(key) or "(blank)", []).append(i)
 
-    # Per-idea distinctiveness + combined score, computed within each pool.
+    # Per-idea distinctiveness + NoveltyScore, computed within each pool. NoveltyScore
+    # combines the two KPIs as PERCENTILE RANKS in the pool (percentile_ranks), as the
+    # app does: Distinctiveness sits in a narrow band, so a raw mean was Novelty alone.
     dist = [None] * len(ideas)
     score = [None] * len(ideas)
     for idxs in pools.values():
@@ -624,9 +819,12 @@ def compute_kpis(ideas, refs, backend, *, pool_by="", tau=0.8, w_nov=0.5, w_dist
         for local_i, gi in enumerate(idxs):
             if not measured[gi]:
                 continue  # nothing to measure: novelty, distinctiveness and score stay None
-            d = distinctiveness_from_row(M[local_i], local_i, include)
-            dist[gi] = d
-            score[gi] = combined_score(novelties[gi], d, w_nov, w_dist)
+            dist[gi] = distinctiveness_from_row(M[local_i], local_i, include)
+        p_nov = percentile_ranks([novelties[gi] if measured[gi] else None for gi in idxs])
+        p_dist = percentile_ranks([dist[gi] for gi in idxs])
+        for local_i, gi in enumerate(idxs):
+            if measured[gi]:
+                score[gi] = combined_score(p_nov[local_i], p_dist[local_i], w_nov, w_dist)
 
     for i, it in enumerate(ideas):
         it["novelty"] = novelties[i]
