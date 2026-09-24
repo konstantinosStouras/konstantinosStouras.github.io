@@ -34,8 +34,20 @@ export function tokenize(text) {
  *   vectors are in input order and share one column space:
  *   vectors[i][k] is the TF-IDF weight of vocab[k] in text i.
  */
-export function tfidfVectors(texts) {
-  const docs = texts.map(tokenize)
+export function tfidfVectors(texts, tokenizer = tokenize) {
+  const { vectors, vocab } = tfidfModel(texts, tokenizer)
+  return { vectors, vocab }
+}
+
+/**
+ * The same, keeping the fitted model so further texts can be placed in the SAME
+ * column space with the SAME IDF weights (`transform`) without changing them — the
+ * novelty KPIs compare each idea's title with R this way (objectiveKpis.js).
+ * `tokenizer` defaults to `tokenize`; the novelty KPIs pass kpiText.kpiTokens.
+ * @returns { vectors, vocab, transform(text) -> number[] }
+ */
+export function tfidfModel(texts, tokenizer = tokenize) {
+  const docs = texts.map(t => tokenizer(t))
   const N = docs.length
 
   // Document frequency df(t) = number of docs containing term t.
@@ -50,11 +62,11 @@ export function tfidfVectors(texts) {
   // Smoothed IDF, exactly as sklearn's default (smooth_idf=True).
   const idf = vocab.map(t => Math.log((1 + N) / (1 + df.get(t))) + 1)
 
-  const vectors = docs.map(toks => {
+  const vectorOf = toks => {
     const vec = new Array(vocab.length).fill(0)
-    // Raw term counts → tf, then weight by idf.
+    // Raw term counts → tf, then weight by idf (a term outside the vocabulary is dropped).
     const tf = new Map()
-    for (const t of toks) tf.set(t, (tf.get(t) || 0) + 1)
+    for (const t of toks) if (index.has(t)) tf.set(t, (tf.get(t) || 0) + 1)
     for (const [t, c] of tf) {
       const k = index.get(t)
       vec[k] = c * idf[k]
@@ -65,7 +77,8 @@ export function tfidfVectors(texts) {
     norm = Math.sqrt(norm)
     if (norm > 0) for (let k = 0; k < vec.length; k++) vec[k] /= norm
     return vec
-  })
+  }
+  const vectors = docs.map(vectorOf)
 
-  return { vectors, vocab }
+  return { vectors, vocab, transform: text => vectorOf(tokenizer(text)) }
 }

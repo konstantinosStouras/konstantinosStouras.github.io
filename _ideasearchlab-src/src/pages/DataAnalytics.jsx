@@ -32,7 +32,7 @@ import {
   scoreGaps, gapSummary, shouldRunAnotherPass, mergeAiScoresIntoRows, ideaScoreState,
   scorableText, pickScoredSheet,
 } from '../utils/scoreGaps'
-import { objectiveKpisFromText } from '../utils/objectiveKpis'
+import { objectiveKpisFromText, ideaParts } from '../utils/objectiveKpis'
 import { measuredUniqueFraction, productivityCount, cosine, hasTerms } from '../utils/deterministicKpis'
 import {
   usefulnessKpisFromText, pearson, partialPearson, median, quadrantCounts, FACETS,
@@ -633,7 +633,14 @@ export default function DataAnalytics() {
       // text) cannot be scored: it is left blank and kept out of every pool and out
       // of the TF-IDF corpus — it used to score a perfect 1. See objectiveKpis.js.
       const ideaTexts = pool.map(measureText)   // the English version (Step 1b) when there is one
-      const res = objectiveKpisFromText(ideaTexts, refLines, { tau: 0.8 })
+      // The title and each sentence are compared with R as well (ideaParts), so a long
+      // description cannot make an existing product look new; English when translated.
+      const parts = pool.map(r => {
+        const title = r.title_en || r.idea_title || ''
+        const desc = r.description_en || r.idea_description || ''
+        return title || desc ? ideaParts(title, desc) : []
+      })
+      const res = objectiveKpisFromText(ideaTexts, refLines, { tau: 0.8, parts })
       if (res.error) { setDetErr(res.error); return }
       const { perIdea, ideaVecs, refs, unmeasured } = res
       // Usefulness side: ideas + U in their OWN vectorisation (usefulnessKpis.js), so
@@ -2307,8 +2314,14 @@ export default function DataAnalytics() {
                   <li>
                     <strong>Novelty side</strong> (Lee&nbsp;&amp;&nbsp;Chung 2024; Meincke et&nbsp;al. 2025; Bouschery et&nbsp;al. 2024):
                     {' '}<em>Novelty</em> (1&nbsp;−&nbsp;highest similarity to the reference set R of products that already
-                    exist), <em>Pool distinctiveness</em> (1&nbsp;−&nbsp;average similarity to the other ideas) and their
-                    mean, the <em>NoveltyScore</em>. Per condition: <em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2).
+                    exist), <em>Pool distinctiveness</em> (1&nbsp;−&nbsp;average similarity to the other ideas) and the
+                    {' '}<em>NoveltyScore</em> (the mean of the two as percentile ranks, 0 to 1, so both count equally:
+                    Pool distinctiveness varies over a narrow range, and a plain mean was Novelty alone). Per condition:
+                    {' '}<em>Unique fraction</em> and <em>Productivity</em> (KPI&nbsp;2). Words are compared after dropping
+                    common words, folding UK spelling to US (colour, color), reducing each word to its stem (sock, socks)
+                    and merging a short list of synonyms (tee and t-shirt, pullover and hoodie, cup and mug). The title and
+                    each sentence of an idea are also compared with R and the closest counts, so a longer description
+                    cannot make an existing product look new.
                   </li>
                   <li>
                     <strong>Usefulness side</strong> (Dean, Hender, Rodgers &amp; Santanen 2006; Rietzschel, Nijstad &amp;

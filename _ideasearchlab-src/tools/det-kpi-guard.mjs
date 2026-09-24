@@ -23,6 +23,8 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { kpiTokens, UK_US_WORDS, SYNONYMS } from '../src/utils/kpiText.js'
+import { objectiveKpisFromText as okft, ideaParts } from '../src/utils/objectiveKpis.js'
 import { tfidfVectors, tokenize } from '../src/utils/tfidf.js'
 import {
   hasTerms, novelty, distinctiveness, measuredUniqueFraction, computeDeterministicKpis,
@@ -299,6 +301,64 @@ console.log('\n--- parity with the offline Python twin (_idea-kpi-script/idea_kp
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  }
+}
+
+console.log('\n--- spelling, plurals, synonyms, length, NoveltyScore (owner, 2026-09-24) ---')
+{
+  const R = DEFAULT_REFERENCE_SET
+  const tok = t => kpiTokens(t).join(' ')
+  check('UK and US spelling read alike', tok('colour-changing grey fibre') === tok('color-changing gray fiber'))
+  check('plurals and -ing forms read alike', tok('socks hoodies changing') === tok('sock hoodie change'))
+  check('synonyms read alike (tee/t-shirt, pullover/hoodie, cup/mug)',
+    tok('tee') === tok('t-shirt') && tok('pullover') === tok('hoodie') && tok('cups') === tok('mug'))
+  check('common words do not count', tok('the socks that are for the feet') === tok('socks feet'))
+  check('a word with a second meaning is not merged (ring, patch)', tok('ring') !== tok('bracelet') && tok('patch') !== tok('sticker'))
+  const long = 'Thermochromic socks: warm socks that change colour with your body so you always know when your feet are cold in winter'
+  const others = ['A bandage that shows infection by turning red', 'Baby sleep suit that warns parents of a fever', 'Yoga mat heat map for posture']
+  const texts = ['Thermochromic socks', long, ...others]
+  const parts = [ideaParts('Thermochromic socks', ''), ideaParts('Thermochromic socks', long.split(': ')[1]), ...others.map(t => ideaParts(t, ''))]
+  const r = okft(texts, R, { tau: 0.8, parts })
+  check('"Thermochromic socks" stays at Novelty 0 when its description is long', r.perIdea[0].novelty === 0 && r.perIdea[1].novelty === 0,
+    `${r.perIdea[0].novelty} / ${r.perIdea[1].novelty}`)
+  const noParts = okft(texts, R, { tau: 0.8 })
+  check('…which the full text alone would not give', noParts.perIdea[1].novelty > 0.2, String(noParts.perIdea[1].novelty))
+  check('ideaParts = the title and each sentence', JSON.stringify(ideaParts('T', 'One. Two!  Three;')) === '["T","One","Two","Three"]')
+  const ranks = v => { const o = v.filter(x => x != null).sort((a, b) => a - b); return v.map(x => (x == null ? null : (o.indexOf(x) + o.lastIndexOf(x)) / 2 / (o.length - 1))) }
+  const pn = ranks(r.perIdea.map(d => d.novelty)), pd = ranks(r.perIdea.map(d => d.distinctiveness))
+  check('NoveltyScore = the mean of the two KPIs as percentile ranks in the pool',
+    r.perIdea.every((d, i) => Math.abs(d.score - (pn[i] + pd[i]) / 2) < 1e-12))
+  const py = spawnSync('python3', ['-c', 'import numpy'], { encoding: 'utf8' })
+  if (py.status !== 0) console.log('  [SKIP] python3 with numpy not available')
+  else {
+    const dir = mkdtempSync(join(tmpdir(), 'detkpi2-'))
+    try {
+      const ideas = texts.map((t, i) => { const j = t.indexOf(': '); return j > 0 ? { title: t.slice(0, j), description: t.slice(j + 2), text: t } : { title: t, description: '', text: t } })
+      writeFileSync(join(dir, 'in.json'), JSON.stringify({ ideas, refs: R }))
+      const script = [
+        'import json, sys',
+        `sys.path.insert(0, ${JSON.stringify(join(HERE, '../../_idea-kpi-script'))})`,
+        'import idea_kpis as k',
+        `d = json.load(open(${JSON.stringify(join(dir, 'in.json'))}))`,
+        'ideas = [dict(it, group_uid="") for it in d["ideas"]]',
+        'r = k.compute_kpis(ideas, d["refs"], k.TfidfBackend())',
+        'print(json.dumps({"uk": k.UK_US_WORDS, "syn": k.SYNONYMS}))',
+        'print(json.dumps([[it["novelty"], it["distinctiveness"], it["score"]] for it in r["ideas"]]))',
+      ].join('\n')
+      const out = spawnSync('python3', ['-c', script], { encoding: 'utf8' })
+      if (out.status !== 0) check('Python twin runs (titles + sentences)', false, out.stderr.slice(-400))
+      else {
+        const lines = out.stdout.trim().split('\n')
+        const rows = JSON.parse(lines.pop()), tables = JSON.parse(lines.pop())
+        check('Python twin has the identical spelling and synonym tables',
+          JSON.stringify(tables.uk) === JSON.stringify(UK_US_WORDS) && JSON.stringify(tables.syn) === JSON.stringify(SYNONYMS))
+        const jsParts = ideas.map(it => ideaParts(it.title, it.description))
+        const js = okft(texts, R, { tau: 0.8, parts: jsParts }).perIdea
+        let maxDiff = 0
+        rows.forEach((row, i) => row.forEach((v, j) => { const w = [js[i].novelty, js[i].distinctiveness, js[i].score][j]; maxDiff = Math.max(maxDiff, Math.abs(v - w)) }))
+        check(`Python twin gives the same numbers with titles and sentences (max diff ${maxDiff.toExponential(1)})`, maxDiff < 1e-9)
+      }
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   }
 }
 

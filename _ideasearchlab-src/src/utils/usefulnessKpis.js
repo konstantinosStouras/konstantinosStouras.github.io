@@ -45,7 +45,7 @@
  * objectiveKpis.js applies to the novelty side (isMeasurable), so an idea is blank on
  * both sides or on neither.
  */
-import { cosine, hasTerms } from './deterministicKpis.js'
+import { cosine, hasTerms, percentileRanks } from './deterministicKpis.js'
 import { tfidfVectors } from './tfidf.js'
 import { isMeasurable } from './objectiveKpis.js'
 
@@ -623,30 +623,8 @@ export function workability(text, compiled) {
 
 // ── Percentile ranks + the composite ────────────────────────────────────────
 
-/**
- * Mid-rank percentile of every value in `values` among the non-null ones, in
- * [0, 1] (ties share their average rank; a pool of one gets 0.5). null stays null.
- * Used so two components on different scales (a cosine, a share of five facets)
- * weigh equally in the composite.
- */
-export function percentileRanks(values) {
-  const idx = []
-  values.forEach((v, i) => { if (v != null && Number.isFinite(v)) idx.push(i) })
-  const out = values.map(() => null)
-  const n = idx.length
-  if (!n) return out
-  if (n === 1) { out[idx[0]] = 0.5; return out }
-  const sorted = idx.slice().sort((a, b) => values[a] - values[b])
-  let k = 0
-  while (k < n) {
-    let j = k
-    while (j + 1 < n && values[sorted[j + 1]] === values[sorted[k]]) j++
-    const mid = (k + j) / 2                   // 0-based mid-rank of the tie block
-    for (let m = k; m <= j; m++) out[sorted[m]] = mid / (n - 1)
-    k = j + 1
-  }
-  return out
-}
+// percentileRanks lives in deterministicKpis.js (NoveltyScore uses it too).
+export { percentileRanks }
 
 /**
  * Usefulness score = mean of the available components' percentile ranks. If only
