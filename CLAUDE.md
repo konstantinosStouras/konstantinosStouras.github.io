@@ -3008,6 +3008,27 @@ reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
 `node _ideasearchlab-src/tools/score-gaps-guard.mjs` (60+ checks, including the
 owner's own 741-idea scenario driven through the real scoring engine).
 
+**The Data Analytics page translates everything into English before it measures
+anything** (owner, 2026-09-23: "add a first step in the data analysis process that
+would be translating all text supplied to our app in English using Fable 5.1 and
+Anthropic's API … and then show me updated file with all data collected in
+English"). A new Step 1b between loading and aggregating: **Find text not in
+English** checks every idea and every text cell of the loaded sessions and files
+locally (chats, survey answers, AI chat; names, e-mails, IDs and codes never), and
+**Translate N texts with Claude Fable 5.1** sends only those to `claude-fable-5-1`
+with the Claude key from AI Settings, in checked batches (a reply in the wrong slot
+or still in Chinese is refused, never filed). The English lives in one translation
+memory kept in the browser and written as a **Translations** sheet (each original
+beside its English) into every download, which an import reads back. Every Section 3
+measure reads the English; 3.1 and 3.2 refuse to run while an idea still needs it,
+and editing or removing a translation clears what was computed from the old English
+(a first translation clears nothing, so an uploaded file's scores survive). Score
+files the raters fill carry English titles and still match the original ideas. "Download all
+data in English (Excel)" is the file the owner asked for. Pure module
+`_ideasearchlab-src/src/utils/translation.js`; full reasoning in
+`_ideasearchlab-src/CLAUDE.md`; tests `node _ideasearchlab-src/tools/translate-guard.mjs`
+and `node _ideasearchlab-src/tools/translate-page-guard.mjs` (Playwright).
+
 **Section 3.1 of the Data Analytics page measures USEFULNESS objectively, not
 only novelty** (owner 2026-09). Beside the TF-IDF novelty KPIs (Novelty vs the
 reference set R, Pool distinctiveness, NoveltyScore) sit Need fit (closeness to an

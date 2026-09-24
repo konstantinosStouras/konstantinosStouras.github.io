@@ -862,15 +862,21 @@ function clampScore(v) {
  * KPI while holding the other counts as filled — so the two never double-count
  * an idea in the message the page reports.
  */
-export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelty: 'novelty', usefulness: 'usefulness' }) {
+export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelty: 'novelty', usefulness: 'usefulness' }, altTitle = null) {
   const eligible = typeof isEligible === 'function' ? isEligible : () => true
   const byTitle = new Map()
-  rows.forEach((r, i) => {
-    if (!eligible(r)) return // e.g. skip removed participants' ideas
-    const key = normTitle(rowTitle(r))
+  const index = (key, i) => {
     if (!key) return
     if (!byTitle.has(key)) byTitle.set(key, [])
-    byTitle.get(key).push(i)
+    if (!byTitle.get(key).includes(i)) byTitle.get(key).push(i)
+  }
+  rows.forEach((r, i) => {
+    if (!eligible(r)) return // e.g. skip removed participants' ideas
+    index(normTitle(rowTitle(r)), i)
+    // `altTitle(r, i)`: a second title the file may carry for the same idea — its
+    // English version (Data Analytics Step 1b), since the downloads the raters fill
+    // in carry the English title, while the loaded idea keeps its original.
+    if (altTitle) index(normTitle(altTitle(r, i) || ''), i)
   })
 
   const next = rows.slice()
