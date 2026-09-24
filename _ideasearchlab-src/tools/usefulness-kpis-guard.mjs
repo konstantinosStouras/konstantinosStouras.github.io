@@ -401,6 +401,46 @@ console.log('Workability — 1 / (1 + extra technologies named)')
   // A known miss, kept on purpose (P6): "no need to charge a battery" is also said of
   // a device whose battery simply lasts, and "open" an app is not a using verb, so
   // both stay counted. Precision first: an unclear case counts its technology.
+  // Third review: a negator that does NOT open its clause (a verb, a "no" after a
+  // verb, a clause in front), then a comma, then a list that is the SUBJECT of the
+  // next clause. Each row fails with one rule taken back.
+  expectTerms('must count (the list is the next clause\'s subject)', [
+    // "in the / on its …" ends a list only when no verb follows
+    ['Because it needs no app, sensors or LEDs in the collar show the fever.', ['sensor', 'led']],
+    ['Since the shirt works without Wi-Fi, a sensor or chip in the collar stores the readings.', ['sensor', 'chip']],
+    ['As it has no screen, sensors or LEDs on the sleeve show the warning.', ['sensor', 'led']],
+    ['Although it uses no battery, sensors or LEDs in the cuff still glow.', ['sensor', 'led']],
+    ['The shirt needs no app, sensors or LEDs in the collar do the work.', ['sensor', 'led']],
+    ['It needs no charging, sensors or LEDs on the sleeve glow at 37°C.', ['sensor', 'led']],
+    ['It removes the cable, sensors or LEDs in the collar do the rest.', ['sensor', 'led']],
+    // "inside" / "anywhere" likewise
+    ['While the patch needs no charging, sensors or LEDs inside it last for years.', ['sensor', 'led']],
+    // a comma is not an end when it opens an aside the list's own verb follows
+    ['It does not need an app, a sensor or an LED, hidden in the collar, alerts parents.', ['sensor', 'led']],
+    ['Because it needs no app, sensors or LEDs, placed in the collar, show the fever.', ['sensor', 'led']],
+    ['Rather than a thermometer, a sensor or LED, the nurses have found, works best.', ['sensor', 'led']],
+    // "are needed" ends the list only after a negator that opens its clause
+    ['Since it requires no app, sensors or LEDs are needed on the sleeve.', ['sensor', 'led']],
+    // the closing "or" must come after the list's last comma (P21 / P41)
+    ['It works without Wi-Fi or Bluetooth, sensors in the collar store the data.', ['sensor', 'data']],
+    ['It needs no battery or charger, sensors and LEDs do the rest.', ['sensor', 'led']],
+    ['It has no app or screen, sensors in the collar do the work.', ['sensor']],
+    // a word cut by the window's edge is dropped, and the edge is marked
+    ['It works without an app, sensors or xxxxxxxxxxxxxxxxxxxx-bright super-high-contrast-mini LEDs glow at 37°C.', ['sensor', 'led']],
+    ['The casino app, app, app, app, app, app, sensor, sensor, sensor, or battery.', ['app', 'sensor', 'battery']],
+    // "free to / of / from / for" after a term is not "-free"
+    ['Its sensors are free to move with the fabric.', ['sensor']],
+    ['We give sensors free to hospitals.', ['sensor']],
+    // a hard wrap inside a sentence is a space, not a full stop
+    ['Without an app, a sensor or LED\nwarns the nurse.', ['sensor', 'led']],
+  ])
+  expectTerms('must negate (the same rules, the other way)', [
+    ['There are no batteries, sensors, or apps in the sleeve.', []],
+    ['No app, sensors or LEDs inside.', []],
+    ['The no app, app, app, app, app, app, sensor, sensor, sensor, or battery.', []],
+    ['It is sensor free.', []],
+    ['No app\nLED blinks red.', ['led']],
+  ])
   expectTerms('known miss (counted on purpose)', [
     ['There is no need to charge a battery or open an app.', ['battery', 'app']],
   ])
@@ -559,16 +599,21 @@ console.log('Workability — 1 / (1 + extra technologies named)')
       techTermsIn(inputs[6][1], T).join() === 'sensor', techTermsIn(inputs[6][1], T).join())
     // The costliest honest input: every one of hundreds of mentions negated, so each
     // is read in full. The cost grows in step with the length (about 2 µs a
-    // character), never faster: 4 times the text may take at most about 4 times as long.
+    // character), never faster.
     const best = text => {
       let ms = Infinity
       for (let k = 0; k < 5; k++) { const t0 = performance.now(); techTermsIn(text, T); ms = Math.min(ms, performance.now() - t0) }
       return ms
     }
     const dense = n => 'no app/battery/sensor/chip/led/app/app/app, without an app, a battery or a sensor. '.repeat(n)
-    const small = best(dense(12)), large = best(dense(48))
-    check(`fully negated, ${dense(48).length.toLocaleString('en')} characters: grows linearly (${small.toFixed(1)} ms → ${large.toFixed(1)} ms for 4× the text)`,
-      large < 25 && large < 8 * Math.max(small, 0.5))
+    // The two sizes are timed in turns, so a busy machine slows both alike (timed
+    // one after the other, a parallel run could inflate only the large one).
+    let small = Infinity, large = Infinity
+    // 8 times the text: linear growth reads about 8×, quadratic about 64×, so a
+    // limit of 24× tells them apart with room for a busy machine.
+    for (let k = 0; k < 5; k++) { small = Math.min(small, best(dense(12))); large = Math.min(large, best(dense(96))) }
+    check(`fully negated, ${dense(96).length.toLocaleString('en')} characters: grows linearly (${small.toFixed(1)} ms → ${large.toFixed(1)} ms for 8× the text)`,
+      large < 60 && large < 24 * Math.max(small, 0.5))
   }
 }
 

@@ -453,10 +453,10 @@ const negNext = arts => String.raw`(?: (?:${arts})){0,2}(?: ${NEG_ITEM_MOD}){0,2
 const NEG_END_STOP = String.raw`$| ?[.;:!?)]`
 const NEG_END_BREAK = String.raw` ,| -| ?[—–]`
 const NEG_END_AND = String.raw` and (?!(?:the|${NEG_ART}|some|its|their|his|her|our|your)\b)`
-const NEG_END_BARE = String.raw` (?:needed|required|necessary|involved|included|at all|inside|anywhere|whatsoever)\b`
+// "inside" / "anywhere" end the list only when no verb follows (see NEG_NO_VERB):
+// "While the patch needs no charging, sensors or LEDs inside it last for years".
+const NEG_END_BARE = String.raw` (?:needed|required|necessary|involved|included|at all|whatsoever)\b| (?:inside|anywhere)\b$NO_VERB`
 const NEG_END_FINITE = String.raw` (?:is|are) (?:needed|required|necessary|involved|included|inside)\b`
-// "in the / on its …": the list is still an object ("no sensors or apps in the sleeve").
-const NEG_END_IN = String.raw` (?:in|on|within) (?:the|this|its|a|an)\b`
 // The verbs a clause can carry on with (used to spot an aside, just below).
 const NEG_VERBS = [
   'would|could|should|will|can|may|might|must|shall|cannot|won\'t|can\'t|wouldn\'t|couldn\'t|does|did|has|had|was|were',
@@ -469,15 +469,28 @@ const NEG_VERBS = [
 const NEG_NO_ASIDE = String.raw`(?![^,—–]*?(?: ,| -|[—–]) ?(?:is|are|${NEG_VERBS})\b)`
 // A comma or a dash and a subject: a new clause starts ("…, it is cheap", "…,
 // parents see", "…, the patch is"). Not an aside ("…, we think, works best").
-const NEG_END_SUBJECT = String.raw`(?: , | - | ?[—–] ?)(?:(?:it|this|they|we|you|he|she|there|everything|everyone|nothing|parents|people|users|wearers|kids|children|nurses|doctors|caregivers|carers|athletes|workers) ${NEG_NO_ASIDE}|the (?:\S+ ){1,2}(?:is|are|was|were|has|have|can|could|will|would|does|do|did|still|just|simply|only|uses|works|stays|changes|turns|costs|remains|shows|looks|feels|lets|keeps|gives|provides|offers|makes|becomes|needs|relies|glows|reveals)\b)`
+const NEG_END_SUBJECT = String.raw`(?: , | - | ?[—–] ?)(?:(?:it|this|they|we|you|he|she|there|everything|everyone|nothing|parents|people|users|wearers|kids|children|nurses|doctors|caregivers|carers|athletes|workers) ${NEG_NO_ASIDE}|the (?:\S+ ){1,2}(?:is|are|was|were|has|have|can|could|will|would|does|do|did|still|just|simply|only|uses|works|stays|changes|turns|costs|remains|shows|looks|feels|lets|keeps|gives|provides|offers|makes|becomes|needs|relies|glows|reveals)\b${NEG_NO_ASIDE})`
 // A comma or a dash and a word that carries on a "no" list's own point ("…, just dye").
 const NEG_END_GOES_ON = String.raw`(?: , | - | ?[—–] ?)(?:just|only|simply|merely|nothing|no|so|and|but|yet|making|meaning|keeping|because|since)\b${NEG_NO_ASIDE}`
+// "in the / on its …": the list is still an object ("no sensors or apps in the
+// sleeve"), but only when no verb follows in the same clause. With one, the list
+// was the SUBJECT of a new clause ("Because it needs no app, sensors or LEDs in the
+// collar show the fever"), and its technology is real (third review).
+const NEG_NO_VERB = String.raw`(?![^,.;:!?—–]*? (?:is|are|do|light|sit|${NEG_VERBS})\b)`
+const NEG_END_IN = String.raw` (?:in|on|within) (?:the|this|its|a|an)\b${NEG_NO_VERB}`
+// A comma or a dash ends the list only when it is not an aside the list's own verb
+// follows ("It does not need an app, a sensor or an LED, hidden in the collar,
+// alerts parents": the sensor and the LED do the alerting).
+const NEG_END_BREAK_NO_ASIDE = `(?:${NEG_END_BREAK})${NEG_NO_ASIDE}`
+// "is / are needed" is left out for a negator that does not open its clause:
+// "Since it requires no app, sensors or LEDs are needed on the sleeve" needs them.
+const NEG_END_BARE_V = NEG_END_BARE.replace('$NO_VERB', NEG_NO_VERB)
 const NEG_ENDS = {
-  verb: [NEG_END_STOP, NEG_END_BREAK, NEG_END_AND, NEG_END_BARE, NEG_END_FINITE, NEG_END_IN],
-  prep: [NEG_END_STOP, NEG_END_BREAK, NEG_END_AND, NEG_END_BARE, NEG_END_IN],
+  verb: [NEG_END_STOP, NEG_END_BREAK_NO_ASIDE, NEG_END_AND, NEG_END_BARE_V, NEG_END_IN],
+  prep: [NEG_END_STOP, NEG_END_BREAK_NO_ASIDE, NEG_END_AND, NEG_END_BARE_V, NEG_END_IN],
   swapOpens: [NEG_END_SUBJECT],
-  prepOpens: [NEG_END_SUBJECT, NEG_END_STOP, NEG_END_BARE],
-  quantOpens: [NEG_END_STOP, NEG_END_BARE, NEG_END_FINITE, NEG_END_SUBJECT, NEG_END_GOES_ON],
+  prepOpens: [NEG_END_SUBJECT, NEG_END_STOP, NEG_END_BARE_V],
+  quantOpens: [NEG_END_STOP, NEG_END_BARE_V, NEG_END_FINITE, NEG_END_SUBJECT, NEG_END_GOES_ON],
 }
 const listEndCache = new Map()
 /** The two tests for the end of a comma list, built once per (end set, articles). */
@@ -593,8 +606,11 @@ function namesTerm(text, re, heads) {
 
 /** The list entries an idea names, not negated (distinct, in list order). */
 export function techTermsIn(text, compiled) {
-  // A line break ends a clause like a full stop: "No app\nLED blinks red" keeps the LED.
-  const t = String(text || '').replace(/[’‘]/g, "'").replace(/[\r\n\u2028\u2029]+/g, ' . ').replace(/\s+/g, ' ')
+  // A line break ends a clause like a full stop ("No app\nLED blinks red" keeps the
+  // LED), unless the next line carries on the sentence in lower case: a hard wrap
+  // ("Without an app, a sensor or LED\nwarns the nurse") is a space.
+  const t = String(text || '').replace(/[’‘]/g, "'")
+    .replace(/[ \t]*[\r\n\u2028\u2029]+[ \t]*(?=([a-z])?)/g, (_, lower) => (lower ? ' ' : ' . ')).replace(/\s+/g, ' ')
   const heads = headMarker(compiled)
   return compiled.filter(c => namesTerm(t, c.re, heads)).map(c => c.term)
 }

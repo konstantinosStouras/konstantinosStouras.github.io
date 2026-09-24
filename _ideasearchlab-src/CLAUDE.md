@@ -1053,10 +1053,17 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      one's comma list must end where a new clause clearly starts (a comma or dash plus
      a subject, a full stop, "needed"), never at an aside its own verb follows;
      "instead of" / "rather than" name what IS used; a line break ends a clause like a
-     full stop; the take-away verbs do not negate before "from"; an upkeep noun after
-     the term ("eliminating battery changes") keeps it. Same 39 ideas on the owner's
-     data; the guard pins one row per rule and that the cost grows linearly with an
-     idea's length.
+     full stop, unless the next line goes on in lower case (a hard wrap); the
+     take-away verbs do not negate before "from"; an upkeep noun after the term
+     ("eliminating battery changes") keeps it. **Fourth review:** the same holds for
+     a negator that does NOT open its clause ("Because it needs no app, sensors or
+     LEDs in the collar show the fever"): "in the / on its …" and "inside" end a list
+     only when no verb follows in that clause, a comma ends it only when it is not an
+     aside the list's own verb follows, and "is / are needed" ends it only after a
+     negator that opens its clause. Same 39 ideas on the owner's data; the guard pins
+     one row per rule (each rule taken back fails it) and that the cost grows
+     linearly with an idea's length (8 times the text, timed in turns so a busy
+     machine cannot fail it).
    - **Four more rater providers** (owner: "Add Mistral, Meta's Llama, DeepSeek and
      Qwen's top models available"), all OpenAI-compatible
      (`buildOpenAICompatRequest` in providerRequest.js), sending ONLY
