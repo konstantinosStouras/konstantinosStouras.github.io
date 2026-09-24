@@ -400,7 +400,7 @@ if (existsSync(shippedIndex)) {
     ['Last cause reported', 'the reported cause on the analytics page'],
     ['(mean across models)', 'the per-model AI columns (aiScoreColumns)'],
     ['model not recorded', 'the unlabelled-score column'],
-    ['Download all data (Excel)', 'the download-all button'],
+    ['Download all idea data (Excel)', 'the download-all button'],
     ['Usefulness score check', 'the usefulness check sheet'],
     ['Novelty (empirical)', 'the empirical labels'],
     ['api.deepseek.com', 'the rater-only providers'],

@@ -709,7 +709,9 @@ export function mergeSessionSheets(sources, aboutMeta = []) {
       // imported copy through meant re-importing a previously downloaded
       // aggregate produced two sheets of the same name, and `book_append_sheet`
       // threw ("Worksheet with name |Rankings| already exists!") — no file at all.
-      if (sheet.name === 'Rankings' || sheet.name === 'Pool KPIs by condition') continue
+      // …and so is the Step 1b "Translations" log (translation.js), which the
+      // caller rebuilds from the translation memory for the cells it translates.
+      if (sheet.name === 'Rankings' || sheet.name === 'Pool KPIs by condition' || sheet.name === 'Translations') continue
       if (sheet.name === 'AI Pricing') { if (!pricing) pricing = sheet.rows; continue }
       const rows = sheet.rows || []
       if (!rows.length) continue

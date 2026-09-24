@@ -123,10 +123,12 @@ export function geminiTakesThinkingLevel(model) {
   return /^gemini-3/.test(model || '')
 }
 
-export function buildClaudeRequest({ model, apiKey, system, user }) {
+export function buildClaudeRequest({ model, apiKey, system, user, maxTokens }) {
   const body = {
     model,
-    max_tokens: SCORING_MAX_TOKENS,
+    // A caller may raise the ceiling (Step 1b's translations: a long AI reply in
+    // Chinese comes back as MORE English tokens than a batch of ratings ever does).
+    max_tokens: maxTokens || SCORING_MAX_TOKENS,
     system,
     messages: [{ role: 'user', content: user }],
   }
@@ -288,7 +290,7 @@ export async function callProvider(resolved, system, user, opts = {}) {
   const fetchFn = opts.fetch || globalThis.fetch
   const { provider, apiKey, model } = resolved
   const name = PROVIDER_NAMES[provider] || provider
-  const req = buildRequest(provider, { model, apiKey, system, user })
+  const req = buildRequest(provider, { model, apiKey, system, user, maxTokens: opts.maxTokens })
 
   let res
   try {

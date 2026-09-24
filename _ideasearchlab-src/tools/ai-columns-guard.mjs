@@ -275,8 +275,15 @@ console.log('page wiring')
   check('the table\'s KPI columns follow exportKpiColumns, a model\'s own cells editable',
     /const tableKpiCols = useMemo/.test(page) && /exportKpiColumns\(effectiveRows\)/.test(page) && /d\.source === 'ai' && d\.slug/.test(page))
   check('the old fixed AI columns are gone from the table', !/novelty: \{ label: 'AI Novelty'/.test(page) && /const TABLE_COLS = \['idea_id', 'session', 'condition', 'phase', 'final', 'idea'\]/.test(page))
-  check('"Download all data" exists and uses the shared idea sheet', /function downloadAllData\(\)/.test(page) && /addSheet\(wb, 'ideas', ideaExportRows\(data\)\)/.test(page) && /onClick=\{downloadAllData\}/.test(page))
-  check('the 3.1 download uses the same sheet', /function downloadIdeasWithKpis\(\) \{[\s\S]{0,300}ideaExportRows\(data\)/.test(page))
+  check('"Download all idea data" exists and uses the shared idea sheet', /function downloadAllData\(\)/.test(page) && /addIdeaSheet\(wb, data\)/.test(page) && /onClick=\{downloadAllData\}/.test(page) && /Download all idea data \(Excel\)/.test(page))
+  check('the shared idea sheet goes through Step 1b (English + Translations sheet)',
+    /translateSheets\(\[\{ name: 'ideas', kind: 'json', rows: ideaExportRows\(data\) \}\], tm\)/.test(page) && /if \(trSheet\) addSheet\(wb, TRANSLATIONS_SHEET, trSheet\.rows\)/.test(page))
+  check('the CSV writes the same English idea sheet', /function downloadAllDataCsv\(\) \{[\s\S]{0,500}translatedIdeaSheet\(data\)\.rows/.test(page))
+  check('the 3.1 download uses the same sheet', /function downloadIdeasWithKpis\(\) \{[\s\S]{0,300}addIdeaSheet\(wb, data\)/.test(page))
+  check('a changed English version clears every model\'s AI columns, not just the mean',
+    /for \(const k of aiKeys\(r\)\) x\[k\] = ''/.test(page) && /Object\.keys\(r\)\.filter\(isAiModelKey\)/.test(page))
+  check('the check sheet reads the text 3.1 measured (the English version)', /const text = measureText\(r\)\n\s*const facets = specificityFacets\(text\)/.test(page))
+  check('the scores upload also matches English titles (Step 1b)', /matchScoresIntoRows\(res\.rows, entries, r => !isExcludedRow\(r\), target, englishTitle\)/.test(page))
   check('the check sheet is added when the Usefulness score exists', /addUsefulnessCheckSheet\(wb, data, techSet\)/.test(page) && /function addUsefulnessCheckSheet\(/.test(page))
   check('the Rankings tab takes the page\'s ordered columns', /rankingsSheetFromIdeas\(ideasSheet\.rows, valuesById, cols\)/.test(page) && /exportKpiColumns\(rows, \{ allEmpirical: true, evaluatorColumns: true \}\)/.test(page))
   check('the top-up merges every model in the file', /mergeAiScoresIntoRows\(rows, incoming\)/.test(page))
