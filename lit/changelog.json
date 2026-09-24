@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "elsevier-abstracts",
+      "date": "2026-09-23",
+      "title": "Abstracts for the Elsevier journals — EJOR, JFE, Research Policy and the rest",
+      "summary": "Most papers in the Elsevier journals carried no abstract here, because Elsevier deposits none in the public metadata everything else is built from. They are now collected from the publisher directly, under an institutional agreement with my university. The European Journal of Operational Research — the busiest journal in the database — has gone from 6% of its papers carrying an abstract to 86%, around 19,600 more, and its last ten years are at 93–96%; the Journal of Financial Economics, Research Policy, Accounting Organizations and Society, the Journal of Accounting and Economics and OBHDP have all moved with it. This is about finding papers as much as reading them: the Abstracts search box now reaches this work, and so do e-mail alerts whose filters search abstracts.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "recently-added-on-publication",
       "date": "2026-09-14",
       "title": "Papers that reach their issue now show under Recently added",
