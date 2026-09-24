@@ -44,7 +44,8 @@ import { createRequire } from 'node:module'
 import { buildHarness } from './translate-page/build.mjs'
 import { ideaValueLookup, ideaKey } from '../src/utils/rankingsMerge.js'
 import { buildSummaryTable, summaryTableSheetRows } from '../src/utils/analyticsData.js'
-import { detResultSheets, POOL_KPI_SHEET, RATING_CHECK_SHEET } from '../src/utils/kpiResultSheets.js'
+import { detResultSheets, ratingCheck, POOL_KPI_SHEET, RATING_CHECK_SHEET } from '../src/utils/kpiResultSheets.js'
+import { aiNovKey, aiUseKey, modelSlug } from '../src/utils/aiScoreColumns.js'
 
 const require = createRequire(import.meta.url)
 const XLSX = require('xlsx-js-style')
@@ -138,6 +139,30 @@ head('9a. the 3.1 result tabs (kpiResultSheets.js detResultSheets)')
     noCond.length === 2 && noCond[0].rows.length === 1 && noCond[0].rows[0].Condition === 'All ideas', JSON.stringify(noCond.map(x => [x.name, x.rows.length])))
   check('no ratings loaded: only the pool tab', detResultSheets({ perCond: [cond], overall, validation: null }).map(x => x.name).join('|') === POOL_KPI_SHEET)
   check('no Compute result: no tab', detResultSheets(null).length === 0)
+
+  // The check itself, read from the ideas' stored KPIs and ratings as they are now.
+  const astra = modelSlug('gpt-6-astra')
+  const det = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.2], [0.9, 0.8, 0.6], [0.6, 0.7, 0.9], [0.2, 0.1, 0.4]]
+  const rows = det.map(([nov, sc, use], i) => ({
+    det_novelty: nov, det_score: sc, det_need_fit: use, det_specificity: 0.4, det_workability: 1, det_usefulness: use,
+    overall_quality: 3,
+  }))
+  check('no rating on the ideas: no check (the page draws no table)', ratingCheck(rows) === null)
+  const rated = rows.map((r, i) => ({ ...r, [aiNovKey(astra)]: [1, 2, 5, 4, 1][i], [aiUseKey(astra)]: [2, 2, 3, 5, 3][i], ext_novelty: i < 2 ? 3 : '' }))
+  const live = ratingCheck(rated)
+  check('a model\'s two columns join once three ideas carry them; AI Quality and a 2-idea evaluator column do not',
+    !!live && JSON.stringify(live.cols) === JSON.stringify(['AI Novelty (GPT-6 Astra)', 'AI Usefulness (GPT-6 Astra)']), JSON.stringify(live?.cols))
+  const nov = live?.rows?.find(r => r.label === 'Novelty (empirical)')
+  const xs = det.map(d => d[0]), ys = [1, 2, 5, 4, 1]
+  const mx = xs.reduce((a, b) => a + b) / 5, my = ys.reduce((a, b) => a + b) / 5
+  const want = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / Math.sqrt(xs.reduce((a, x) => a + (x - mx) ** 2, 0) * ys.reduce((a, y) => a + (y - my) ** 2, 0))
+  check('r is Pearson\'s over the ideas with both values, n counts them, and the six KPIs keep their sides',
+    live?.rows?.length === 6 && Math.abs(nov.cells[0].r - want) < 1e-12 && nov.cells[0].n === 5 && nov.side === 'novelty'
+      && live.rows.find(r => r.label === 'Usefulness score (empirical)').side === 'usefulness', JSON.stringify(nov))
+  check('a constant KPI (Workability all 1) gives a blank r, not 0',
+    live.rows.find(r => r.label === 'Workability (empirical)').cells.every(c => c.r === null))
+  check('a rating added later is in the next reading (no recompute needed)',
+    ratingCheck(rated.map((r, i) => ({ ...r, ext_novelty: [3, 3, 4, 5, 1][i] })))?.cols.includes('Eval. Novelty'))
 }
 
 // ── Build + serve the harness ────────────────────────────────────────────────
@@ -524,6 +549,22 @@ try {
   checkTable1(allBook, 'all idea data')
   checkTable1(aggBook, 'aggregate')
   check('no dialog while computing and downloading', dialogs.length === 0, dialogs.join(' | '))
+
+  // A model rated AFTER Compute (the page's own order: 3.1, then 3.2) joins the
+  // check at once, on the page and in the files, without pressing Compute again.
+  const lateModel = ['AI Novelty (Mistral Small 4)', 'AI Usefulness (Mistral Small 4)']
+  const late = book([['Rankings', IDEAS.map((i, k) => ({ 'Idea ID': i.id, 'Session Code': i.s, [lateModel[0]]: [1, 3, 5, 2, 4, 3, 5][k], [lateModel[1]]: [2, 4, 4, 1, 5, 3, 2][k] }))]])
+  await p.locator('button:has-text("Load AI scores file") + input[type=file]').setInputFiles({ name: 'late.xlsx', mimeType: XLSX_MIME, buffer: late })
+  await p.getByText(/^Loaded scores from/).first().waitFor({ timeout: 5000 })
+  const colsNow = await p.evaluate(() => {
+    const t = [...document.querySelectorAll('table')].find(x => x.querySelector('thead th')?.innerText.trim() === 'Empirical KPI')
+    return t ? [...t.querySelectorAll('thead th')].slice(1).map(th => th.innerText.trim()) : []
+  })
+  check('a model rated after Compute joins the check on the page at once', colsNow.includes(lateModel[0]) && colsNow.includes(lateModel[1]), colsNow.join(' | '))
+  const lateBook = await captureDownload(() => btn('Download all idea data (Excel)').click())
+  const lateHdr = (XLSX.utils.sheet_to_json(lateBook.Sheets['Empirical KPIs vs ratings'] || {}, { header: 1, defval: '' })[0]) || []
+  check('…and in the downloaded "Empirical KPIs vs ratings" tab, column for column with the page',
+    JSON.stringify(lateHdr.slice(2)) === JSON.stringify(colsNow), JSON.stringify(lateHdr))
 
   // Scores added to the SAME ideas keep the 3.1 results (the pool is unchanged)…
   const moreScores = book([['All Ideas Ranked', [{ 'Idea Title': 'Night light bib', 'Novelty Rating': 3, 'Usefulness Rating': 4 }]]])

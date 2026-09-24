@@ -50,7 +50,7 @@ import {
   fetchSessionExportData, buildSessionSheets, mergeSessionSheets,
   appendSheetsToWorkbook, rankingsSheetFromIdeas, conditionOf,
 } from '../utils/sessionExport'
-import { POOL_KPI_SHEET, RATING_CHECK_SHEET, TABLE1_SHEET, detResultSheets } from '../utils/kpiResultSheets'
+import { POOL_KPI_SHEET, RATING_CHECK_SHEET, TABLE1_SHEET, detResultSheets, ratingCheck } from '../utils/kpiResultSheets'
 import styles from './DataAnalytics.module.css'
 
 // The study task: rate ideas against THIS design brief (the smart-materials /
@@ -706,37 +706,11 @@ export default function DataAnalytics() {
         })
       }
       const all = pool.map((_, i) => i)
-      // Validation against the ratings already on the page (AI rater 3.2, evaluators
-      // 3.3), where present: each empirical KPI should correlate more with the
-      // matching rating (usefulness with usefulness) than with the other one.
-      const num = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
-      // Each AI model's own columns (and the mean across models, when several),
-      // then the evaluators; AI Quality is left out, it is not a novelty or a
-      // usefulness rating.
-      const aiRatingDefs = aiKpiDefs(pool).filter(d => d.key !== 'overall_quality')
-      const RATINGS = [
-        ...aiRatingDefs.map(d => [d.key, d.label]),
-        ['ext_novelty', 'Eval. Novelty'], ['ext_usefulness', 'Eval. Usefulness'],
-      ].filter(([k]) => pool.filter(r => num(r[k]) != null).length >= 3)
-      const OBJ = [
-        ['Novelty (empirical)', perIdea.map(d => d.novelty)], ['NoveltyScore', novAll],
-        ['Need fit (empirical)', useIdea.map(d => d.needFit)], ['Specificity (empirical)', useIdea.map(d => d.specificity)],
-        ['Workability (empirical)', useIdea.map(d => d.workability)], ['Usefulness score (empirical)', useAll],
-      ]
-      const validation = RATINGS.length ? {
-        cols: RATINGS.map(([, label]) => label),
-        rows: OBJ.map(([label, vals]) => ({
-          label,
-          side: /Novelty/.test(label) ? 'novelty' : 'usefulness',
-          cells: RATINGS.map(([k]) => {
-            const ys = pool.map(r => num(r[k]))
-            return { r: pearson(vals, ys), n: vals.filter((v, i) => v != null && ys[i] != null).length }
-          }),
-        })),
-      } : null
+      // The check against the ratings is not stored here: it is computed live from
+      // the ideas' stored KPIs and ratings (ratingCheck, see detView below), so
+      // ratings filled or loaded after this Compute reach it too.
       setDetResult({
         poolKey: ridKey(pool),   // which ideas these numbers describe (see the effect below)
-        validation,
         perCond, refCount: refs.length, needCount: needs.length, ideas: pool.length - unmeasured, unmeasured,
         overall: { ...cross(all), facets: facetShare(all) }, novCut, useCut,
       })
@@ -909,6 +883,14 @@ export default function DataAnalytics() {
     setDetResult(null)
     setDetNote('The loaded ideas changed since the last Compute, so its result tables were cleared (here and in the downloads). Press Compute again to measure the ideas loaded now.')
   }, [effectiveRows, detResult])
+  // What the 3.1 results show and every download writes: the Compute run's tables,
+  // plus the check against the ratings computed LIVE over the same ideas (owner,
+  // 2026-09-24: "make the check update automatically"), so a rating filled in 3.2,
+  // loaded from a file or typed in the table after Compute is in it at once.
+  const detView = useMemo(() => {
+    if (!detResult || detResult.poolKey !== ridKey(effectiveRows)) return null
+    return { ...detResult, validation: ratingCheck(effectiveRows) }
+  }, [detResult, effectiveRows])
   // Step 1b: what the last scan found, what is still untranslated, what that would
   // cost with Fable 5.1, and the ideas the Step 3 measures are still waiting on.
   const trItems = trScan?.items || []
@@ -1464,7 +1446,7 @@ export default function DataAnalytics() {
     if (t1) addSheet(wb, t1.name, t1.rows)
     // The 3.1 results: the pool KPIs + novelty × usefulness + specificity tables,
     // and the check of the empirical KPIs against the ratings.
-    for (const sh of detResultSheets(detResult)) addSheet(wb, sh.name, sh.rows)
+    for (const sh of detResultSheets(detView)) addSheet(wb, sh.name, sh.rows)
     if (excludedUsers.size) {
       addSheet(wb, 'Removed participants', users.filter(u => excludedUsers.has(u.key)).map(u => ({
         // "Author Name", not a bare "Author": Step 1b skips a *name* column, so a
@@ -1507,7 +1489,7 @@ export default function DataAnalytics() {
     // cross-check, the specificity shares) are per condition, not per idea, and the
     // check against the ratings is per KPI, so each lives on its own tab when a
     // compute run produced it.
-    for (const sh of detResultSheets(detResult)) addSheet(wb, sh.name, sh.rows)
+    for (const sh of detResultSheets(detView)) addSheet(wb, sh.name, sh.rows)
     // …and Section 4's Table 1 (summary statistics + correlations).
     const t1 = table1Sheet()
     if (t1) addSheet(wb, t1.name, t1.rows)
@@ -1673,7 +1655,7 @@ export default function DataAnalytics() {
       // and the check against the ratings is per KPI, so the consolidated aggregate
       // carries them on their own tabs (the per-idea KPIs already sit as columns in
       // Rankings).
-      for (const sh of detResultSheets(detResult)) merged.push({ name: sh.name, kind: 'json', rows: sh.rows })
+      for (const sh of detResultSheets(detView)) merged.push({ name: sh.name, kind: 'json', rows: sh.rows })
       // Section 4's Table 1 (summary statistics + correlations), as the page shows it.
       const t1 = table1Sheet()
       if (t1) merged.push({ name: t1.name, kind: 'json', rows: t1.rows })
@@ -2500,7 +2482,7 @@ export default function DataAnalytics() {
               )}
               {detErr && <p className="error-msg">{detErr}</p>}
               {detNote && !detResult && <p className={styles.loadMsg}>{detNote}</p>}
-              {detResult && <ObjectiveKpiResults res={detResult} />}
+              {detView && <ObjectiveKpiResults res={detView} />}
 
               {/* Upload additional, externally-computed KPIs (matched by Idea ID). */}
               <div className={styles.row} style={{ marginTop: 12 }}>
@@ -3343,7 +3325,8 @@ function ObjectiveKpiResults({ res }) {
         {' '}Excel): the pool KPIs, novelty × usefulness and specificity tables on the <em>{POOL_KPI_SHEET}</em> sheet,
         {' '}with the two medians that define &quot;novel&quot; and &quot;useful&quot;
         {res.validation ? <>, and the check against the ratings on the <em>{RATING_CHECK_SHEET}</em> sheet, with the number of ideas behind each r</> : null}.
-        {' '}They are a snapshot of this Compute run: after loading new ratings, press Compute again to refresh them here and in the files.
+        {' '}The check against the ratings updates by itself when ratings are filled, loaded or changed; the other tables are
+        {' '}from this Compute run (press Compute again after editing R, U or T).
       </p>
     </div>
   )
