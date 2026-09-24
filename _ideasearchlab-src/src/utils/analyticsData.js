@@ -383,22 +383,41 @@ export function canonicalKpiField(header) {
  *   "Eval. Novelty", "Eval. Usefulness", "Eval. Quality"  — the page's own labels
  *   "ext_novelty" … (the analysis CSV), "Evaluator Novelty", "Evaluators Novelty",
  *   "External Novelty", "External evaluator Novelty", "Expert Novelty",
- *   "Novelty (eval.)", "Novelty (evaluators)", "Novelty (external)", "Novelty (experts)"
- *                                                         — rater: false
+ *   "Novelty (eval.)", "Novelty (evaluators)", "Novelty (external)", "Novelty (experts)",
+ *   "Novelty (raters)"                                    — rater: false
+ *   (in brackets the plural is the group; "Novelty (expert)" is one rater's column)
+ *   a kind word, then "rater", "expert", "evaluator" or "judge", then anything:
  *   "Novelty (rater 1)", "Novelty rater 2", "novelty_rater3", "Novelty (expert 1)",
- *   "Novelty (expert)", "Novelty (evaluator 2)", "Novelty (judge 1)"
- *                                                         — rater: true
- * Exact forms only (review finding, 2026-09-24): "Eval. Novelty SD" or "Eval.
+ *   "Novelty (rater 1 - Jane)", "Usefulness (rater Ali)", "Novelty rater 1 (blind)",
+ *   "Novelty (rater avg)"                                 — rater: true
+ * The rater form is the old meanRaterCols prefix rule, widened to "evaluator" and
+ * "judge" (review finding, 2026-09-24: a rater column that carried a name was
+ * dropped). What follows the role word may name the rater, so it is refused only
+ * when it names something that is not a rating (RATER_NOT_A_RATING): "Novelty
+ * (rater 1) SD", "Novelty (rater agreement)", "Novelty rater ID". A lone "min" or
+ * "max" is not in that list: it is as likely a rater's name. "Novelty (rater avg)"
+ * is kept: averaged with the raters it summarises, it moves nothing.
+ * Every other evaluator-flavoured header is refused: "Eval. Novelty SD" or "Eval.
  * Novelty rank" merely mention an evaluator and were read as the rating itself.
  */
+const RATER_NOT_A_RATING = new Set([
+  'sd', 'std', 'stdev', 'stddev', 'deviation', 'variance', 'se', 'sem', 'error', 'rank', 'ranks', 'ranking', 'ranked',
+  'percentile', 'pctl', 'iqr', 'zscore', 'count', 'agreement', 'disagreement', 'icc', 'kappa', 'alpha', 'spread',
+  'id', 'ids', 'code', 'comment', 'comments', 'note', 'notes', 'reason', 'reasons', 'text', 'time', 'date', 'email',
+])
+const EV_KIND = '(novelty|usefulness|useful|quality)'
+const EV_LABEL = '(?:eval\\.?|evaluators?|external(?: evaluators?)?|experts?|ext\\.?)'
+// In brackets, only the plural (or unnumbered group) forms: a singular "(expert)"
+// is one rater's column, as it always was.
+const EV_GROUP = '(?:eval\\.?|evaluators|external(?: evaluators?)?|experts|raters|ext\\.?)'
+const EV_LABELLED = [new RegExp(`^${EV_LABEL}[ _]*${EV_KIND}$`), new RegExp(`^${EV_KIND} ?\\(${EV_GROUP}\\)$`)]
+const EV_RATER = new RegExp(`^${EV_KIND}[ _]*\\(? ?(?:raters?|experts?|evaluators?|judges?)(?![a-z])(.*)$`)
 export function parseEvalHeader(header) {
   const h = String(header ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
-  const KIND = '(novelty|usefulness|useful|quality)'
-  const LABEL = '(?:eval\\.?|evaluators?|external(?: evaluators?)?|experts?|ext\\.?)'
-  let m = h.match(new RegExp(`^${KIND}[ _]*\\(? ?(?:rater|expert|evaluator|judge)(?:[ _#.-]*\\d{1,3}|[ _#.-]+[a-z])? ?\\)?$`))
-  if (m && (h.includes('(') === h.endsWith(')'))) return { kind: kindOfWord(m[1]), rater: true }
-  m = h.match(new RegExp(`^${LABEL}[ _]*${KIND}$`)) || h.match(new RegExp(`^${KIND} ?\\(${LABEL}\\)$`))
+  let m = h.match(EV_LABELLED[0]) || h.match(EV_LABELLED[1])
   if (m) return { kind: kindOfWord(m[1]), rater: false }
+  m = h.match(EV_RATER)
+  if (m && !(m[2].match(/[a-z]+/g) || []).some(w => RATER_NOT_A_RATING.has(w))) return { kind: kindOfWord(m[1]), rater: true }
   return null
 }
 const kindOfWord = w => (w === 'novelty' ? 'novelty' : w === 'quality' ? 'quality' : 'usefulness')
@@ -915,6 +934,10 @@ export function normalizeImportedRows(rawRows) {
     for (const [k, v] of Object.entries(lower)) {
       if (STD_IMPORT_COLS.has(k)) continue
       if (canonicalKpiField(orig[k]) || isAiModelKey(k)) continue
+      // A bare "Overall" is read above as an older file's AI quality, so it is not
+      // also an extra. (canonicalKpiField leaves it alone: in a 3.1 KPI upload it
+      // is a measure of its own.)
+      if (k === 'overall') continue
       if (/\brater\b|\(rater/.test(k)) continue
       if (v === '' || v == null || typeof v === 'boolean') continue
       const n = Number(v)
@@ -1097,7 +1120,7 @@ function titleIndex(rows, eligible, altTitle) {
     if (!byTitle.get(key).includes(i)) byTitle.get(key).push(i)
   }
   ;(rows || []).forEach((r, i) => {
-    if (!eligible(r, i)) return // e.g. skip removed participants' ideas
+    if (!r || !eligible(r, i)) return // e.g. skip removed participants' ideas
     index(normTitle(rowTitle(r)), i)
     if (altTitle) index(normTitle(altTitle(r, i) || ''), i)
   })
@@ -1107,11 +1130,13 @@ function titleIndex(rows, eligible, altTitle) {
 // The ideas a (normalised) file title may be: exact first, else a conservative
 // contains-fallback — both titles reasonably long, of similar length (so a short
 // title can't match inside a much longer one), AND a single candidate idea —
-// otherwise none rather than a guess.
-function titleCandidates(byTitle, key) {
+// otherwise none rather than a guess. `keep(i)`, when given, narrows the ideas
+// first (one session's), exactly as if the others were not loaded.
+function titleCandidates(byTitle, key, keep = null) {
   if (!key) return null
+  const own = list => (keep ? list.filter(keep) : list)
   const exact = byTitle.get(key)
-  if (exact) return exact
+  if (exact && own(exact).length) return own(exact)
   const acc = new Set()
   if (key.length >= 10) {
     for (const [k, list] of byTitle) {
@@ -1119,7 +1144,7 @@ function titleCandidates(byTitle, key) {
       if (!(k.includes(key) || key.includes(k))) continue
       const ratio = Math.min(k.length, key.length) / Math.max(k.length, key.length)
       if (ratio < 0.6) continue
-      list.forEach(i => acc.add(i))
+      own(list).forEach(i => acc.add(i))
     }
   }
   return acc.size === 1 ? [...acc] : null
@@ -1145,27 +1170,38 @@ const POSITIONAL_ID = /^import_\d+$/i
  *                  English title, Step 1b) }
  *
  * Matching, per file row:
- *  1. By Idea ID when it has one: the eligible ideas with that id, narrowed to
- *     its session when it has one. One → it. Several → narrowed to the ones
- *     whose title (or English title) is the file's; if what is left is one idea
- *     loaded more than once (same session and id) every copy is filled, else if
- *     exactly one is left it is that one, else the row is left unmatched — it is
- *     ambiguous, and nothing is guessed. None → the id is not this dataset's, so
- *     the title decides. An `import_<n>` id counts only where the title agrees.
+ *  1. By Idea ID when it has one: the ideas with that id, narrowed to its
+ *     session when it has one. One → it. Several → narrowed to the ones whose
+ *     title (or English title) is the file's; if what is left is one idea loaded
+ *     more than once (same session and id) every copy is filled, else if exactly
+ *     one is left it is that one, else the row is left unmatched — it is
+ *     ambiguous, and nothing is guessed. An `import_<n>` id counts only where the
+ *     title agrees.
+ *     The id is looked up among ALL the loaded ideas, not only the eligible ones
+ *     (review finding, 2026-09-24): an id that belongs to an idea `isEligible`
+ *     refuses (a removed participant's) is still this dataset's idea, so the row
+ *     stays unmatched (counted in `excluded`). Sending it on to the title put a
+ *     removed Final idea's rating on another session's idea with the same title.
+ *     Only an id (and session) that no loaded idea has at all is "not this
+ *     dataset's", and then the title decides.
  *  2. By title (the same rules as matchScoresIntoRows): each idea at most once,
- *     and never one an Idea ID already placed.
+ *     and never one an Idea ID already placed. A file row that names a session
+ *     this dataset has is matched inside that session only: two ideas that share
+ *     a title in two sessions are two ideas.
  * Fill blanks only: a field is written only where the idea's cell is empty and
  * the file's value is a number. Values are kept as given (not clamped).
  *
  * Returns { rows (a new array; untouched rows are the same objects),
  *           matched:   file rows with a value that found an idea,
- *           unmatched: file rows with a value that found none,
+ *           unmatched: file rows with a value that found none (excluded included),
+ *           excluded:  of those, the rows whose Idea ID belongs only to ideas
+ *                      `isEligible` refuses,
  *           filled:    ideas (row indices) that gained at least one value,
  *           kept:      matched ideas that gained nothing although the file had a
  *                      value for them (they were already scored),
  *           matchedIdx: Set of the row indices matched }
  * A file row with no value still takes part in the matching (so an unrated row
- * keeps the ideas in step with the file) but is counted in neither.
+ * keeps the ideas in step with the file) but is counted in none of these.
  */
 export function matchScoreTable(rows, fileRows, opts = {}) {
   const list = rows || []
@@ -1176,11 +1212,16 @@ export function matchScoreTable(rows, fileRows, opts = {}) {
     if (altTitle) t.push(normTitle(altTitle(list[i], i) || ''))
     return t.filter(Boolean)
   }
-  const ideaKey = i => `${String(list[i].session ?? '').trim()}\u0000${String(list[i].idea_id ?? '').trim()}`
+  const sessOf = v => String(v ?? '').trim().toUpperCase()
+  const ideaKey = i => `${sessOf(list[i].session)}\u0000${String(list[i].idea_id ?? '').trim()}`
 
+  // Every loaded idea by id, eligible or not (see 1. above).
   const byId = new Map()
+  const sessions = new Set()
   list.forEach((r, i) => {
-    if (!eligible(r, i)) return
+    if (!r) return
+    const sess = sessOf(r.session)
+    if (sess) sessions.add(sess)
     const id = String(r.idea_id ?? '').trim()
     if (!id) return
     if (!byId.has(id)) byId.set(id, [])
@@ -1195,14 +1236,15 @@ export function matchScoreTable(rows, fileRows, opts = {}) {
     }
     return {
       id: String(f?.id ?? '').trim(),
-      session: String(f?.session ?? '').trim(),
+      session: sessOf(f?.session),
       title: normTitle(f?.title),
       values,
       hasValue: Object.keys(values).length > 0,
     }
   })
 
-  // target[j]: the row indices file row j fills, or 'ambiguous', or null (no match yet).
+  // target[j]: the row indices file row j fills, or 'ambiguous' / 'excluded', or
+  // null (no match yet).
   const target = file.map(() => null)
   const used = new Set()
 
@@ -1210,7 +1252,7 @@ export function matchScoreTable(rows, fileRows, opts = {}) {
   file.forEach((f, j) => {
     if (!f.id) return
     let cands = byId.get(f.id) || []
-    if (f.session) cands = cands.filter(i => String(list[i].session ?? '').trim() === f.session)
+    if (f.session) cands = cands.filter(i => sessOf(list[i].session) === f.session)
     if (POSITIONAL_ID.test(f.id)) cands = f.title ? cands.filter(i => titlesOf(i).includes(f.title)) : []
     if (!cands.length) return
     let pick = cands
@@ -1220,15 +1262,18 @@ export function matchScoreTable(rows, fileRows, opts = {}) {
       pick = new Set(pool.map(ideaKey)).size === 1 ? pool : null
     }
     if (!pick) { target[j] = 'ambiguous'; return }
-    target[j] = pick
-    pick.forEach(i => used.add(i))
+    const live = pick.filter(i => eligible(list[i], i))
+    if (!live.length) { target[j] = 'excluded'; return }
+    target[j] = live
+    live.forEach(i => used.add(i))
   })
 
   // 2. By title, for the rows the id did not place.
   const byTitle = titleIndex(list, eligible, altTitle)
   file.forEach((f, j) => {
     if (target[j]) return
-    const cands = titleCandidates(byTitle, f.title)
+    const keep = f.session && sessions.has(f.session) ? i => sessOf(list[i].session) === f.session : null
+    const cands = titleCandidates(byTitle, f.title, keep)
     const idx = cands && cands.find(i => !used.has(i))
     if (idx == null) return
     used.add(idx)
@@ -1238,10 +1283,13 @@ export function matchScoreTable(rows, fileRows, opts = {}) {
   // 3. Fill blanks; count ideas, not fields or model pairs.
   const next = list.slice()
   const gained = new Set(), held = new Set(), matchedIdx = new Set()
-  let matched = 0, unmatched = 0
+  let matched = 0, unmatched = 0, excluded = 0
   file.forEach((f, j) => {
     const into = Array.isArray(target[j]) ? target[j] : null
-    if (!into) { if (f.hasValue) unmatched++; return }
+    if (!into) {
+      if (f.hasValue) { unmatched++; if (target[j] === 'excluded') excluded++ }
+      return
+    }
     into.forEach(i => matchedIdx.add(i))
     if (!f.hasValue) return
     matched++
@@ -1253,7 +1301,7 @@ export function matchScoreTable(rows, fileRows, opts = {}) {
     }
   })
   const kept = [...held].filter(i => !gained.has(i)).length
-  return { rows: next, matched, unmatched, filled: gained.size, kept, matchedIdx }
+  return { rows: next, matched, unmatched, excluded, filled: gained.size, kept, matchedIdx }
 }
 
 /**

@@ -63,6 +63,26 @@ function catalogue() {
   return PROVIDERS.flatMap(p => p.models.map(m => ({ ...m, provider: p.id })))
 }
 
+// The catalogue's names, looked up once: every header of every imported row is
+// checked against them, and rebuilding the list per header made a 15k-row import
+// take tens of seconds. `byName` maps each model's id, short name and label (as
+// slugs) to its slug, the first model in catalogue order winning a shared name.
+let catalogueIdx = null
+function catalogueIndex() {
+  if (catalogueIdx) return catalogueIdx
+  const bySlug = new Map(), byName = new Map()
+  for (const m of catalogue()) {
+    const slug = modelSlug(m.id)
+    if (!bySlug.has(slug)) bySlug.set(slug, m)
+    for (const n of [m.id, shortModelName(m), m.label]) {
+      const k = modelSlug(n)
+      if (k && !byName.has(k)) byName.set(k, slug)
+    }
+  }
+  catalogueIdx = { bySlug, byName }
+  return catalogueIdx
+}
+
 /** A model's short display name: its `short` field, else its label up to " — "
  *  without a trailing date in brackets ("Claude Opus 5 (Jul 2026)" → "Claude
  *  Opus 5"), so a column title never nests brackets. */
@@ -89,7 +109,7 @@ export function rememberModelName(slug, name) {
 /** Display name for a slug: the catalogue's short name, a learned name, or the slug itself. */
 export function aiModelName(slug) {
   if (slug === UNRECORDED) return UNRECORDED_NAME
-  const m = catalogue().find(x => modelSlug(x.id) === slug)
+  const m = catalogueIndex().bySlug.get(slug)
   if (m) return shortModelName(m)
   return learned.get(slug) || slug.replace(/_/g, ' ')
 }
@@ -106,8 +126,8 @@ export function aiColumnLabel(kind, slug) {
  */
 export function slugFromModelName(name) {
   const raw = String(name ?? '').trim()
-  if (!raw) return UNRECORDED
   const norm = modelSlug(raw)
+  if (!norm) return UNRECORDED   // "", "(-)", "(?)": no name at all, never the key "ai_nov__"
   const known = catalogueSlug(raw)
   if (known) return known
   rememberModelName(norm, raw)
@@ -120,59 +140,79 @@ function catalogueSlug(name) {
   const norm = modelSlug(name)
   if (!norm) return null
   if (norm === modelSlug(UNRECORDED_NAME) || norm === UNRECORDED) return UNRECORDED
-  const hit = catalogue().find(m =>
-    modelSlug(m.id) === norm || modelSlug(shortModelName(m)) === norm || modelSlug(m.label) === norm)
-  return hit ? modelSlug(hit.id) : null
+  return catalogueIndex().byName.get(norm) || null
 }
 
-// What the text in brackets after "Novelty" says (review finding, 2026-09-24:
-// "AI Novelty (1-5)" came in as a model called "1-5", with its own columns). A
-// bracket names a MODEL only when it is not one of these notes:
-//   derived  "(mean …)"                          — the page's own panel mean
-//   score    "(1-5)", "(0-10 scale)", "(out of 5)", "(5-point)", "(avg)",
-//            "(average)", "(median)", "(score)", "(rating)", "(Final Ideas)"
-//            — how the score was given, or which ideas it covers: still a
-//            score, with no model name
-//   stat     "(sd)", "(variance)", "(se)", "(rank)", "(percentile)", "(n)",
-//            "(min)", "(max)" — a statistic ABOUT scores, not a score
+// What the text in brackets after "Novelty" says (review findings, 2026-09-24:
+// "AI Novelty (1-5)" came in as a model called "1-5", with its own columns, and
+// so did "(scale 1-5)", "(1 = low, 5 = high)", "(Likert 1-5)" and "(%)"). A
+// bracket names a MODEL when the catalogue knows the name, or when it carries at
+// least one word that is not a note word below. Otherwise it is a note:
+//   derived  "(mean)", "(mean across models)", "(average of 3 models)"
+//            — the page's own panel mean, recomputed and never imported
+//   score    made only of numbers, punctuation and SCALE_WORDS: "(1-5)",
+//            "(0-10 scale)", "(scale 1-5)", "(Likert 1-5)", "(rated 1-5)",
+//            "(1 = low, 5 = high)", "(out of 5)", "(5-point)", "(avg)",
+//            "(average)", "(avg of 3 runs)", "(n=3)", "(Final Ideas)" — how the
+//            score was given, or which ideas it covers: still a score, with no
+//            model name
+//   stat     the same, with at least one STAT_WORDS word or a "%": "(sd)",
+//            "(rank)", "(percentile)", "(%)", "(percent)", "(normalized)",
+//            "(z-score)", or a lone "(n)", "(min)", "(max)" — a statistic ABOUT
+//            scores, or a score on another scale: not a 1–5 score, so it stays
+//            an uploaded extra instead of joining the panel mean
 //   other    rater / expert / evaluator / judge / external / empirical /
 //            objective / human — not an AI model's column at all
-const NUM = String.raw`\d+(?:\.\d+)?`
-const SCORE_NOTE = new RegExp('^(?:'
-  + `(?:${NUM} ?(?:-|–|—|to) ?${NUM}|out of ${NUM}|/ ?${NUM}|${NUM}[ -]?point)(?: (?:scale|likert|points?|pts))?`
-  + '|(?:scale|likert(?: scale)?)'
-  + '|avg\\.?|average|median|score|scores|rating|ratings'
-  + '|final(?: ideas?)?|all(?: ideas)?'
-  + ')$')
-const STAT_NOTE = /^(?:sd|s\.d\.|std\.?|stdev|std\.? ?dev\.?|standard deviation|var|variance|se|s\.e\.|sem|rank|ranking|percentile|pctl|n|count|min|max|range|iqr|z|z-?score)$/
+const SCALE_WORDS = new Set([
+  'scale', 'likert', 'point', 'points', 'pt', 'pts', 'rated', 'rating', 'ratings', 'rate', 'score', 'scores', 'scored',
+  'from', 'to', 'out', 'of', 'on', 'in', 'a', 'an', 'the', 'per', 'over', 'across', 'by', 'and', 'or', 'is', 'are', 'with', 'where',
+  'low', 'high', 'lowest', 'highest', 'best', 'worst', 'least', 'most', 'very', 'not', 'at', 'all', 'none', 'little', 'somewhat',
+  'extremely', 'highly', 'bad', 'poor', 'good', 'excellent', 'min', 'max', 'minimum', 'maximum', 'range',
+  'higher', 'lower', 'better', 'worse', 'more', 'less', 'greater', 'smaller', 'than', 'means', 'indicates',
+  'avg', 'average', 'averaged', 'mean', 'median', 'final', 'idea', 'ideas', 'selected',
+  'run', 'runs', 'trial', 'trials', 'sample', 'samples', 'seed', 'seeds', 'repeat', 'repeats', 'repetition', 'repetitions',
+  'time', 'times', 'x', 'n', 'novel', 'novelty', 'useful', 'usefulness',
+])
+const STAT_WORDS = new Set([
+  'sd', 'std', 'stdev', 'stddev', 'dev', 'deviation', 'standard', 'var', 'variance', 'se', 'sem', 'error',
+  'rank', 'ranks', 'ranking', 'ranked', 'percentile', 'percentiles', 'pctl', 'iqr', 'z', 'zscore', 'count',
+  'percent', 'percentage', 'pct', 'normalized', 'normalised', 'standardized', 'standardised', 'log', 'share', 'proportion', '%',
+])
+// A lone word that is a statistic although, next to numbers, it names a scale's end.
+const STAT_ALONE = /^(?:n|min|max|minimum|maximum|range|s\.d\.|s\.e\.)$/
 const OTHER_NOTE = /\b(?:raters?|experts?|evaluators?|eval|judges?|external|empirical|objective|human)\b/
 function noteKind(inner) {
   const s = String(inner ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
   if (!s) return 'score'
-  if (/^mean\b/.test(s)) return 'derived'
+  if (catalogueSlug(inner)) return 'model'
+  if (s === 'mean' || (/^(?:mean|avg|average)\b/.test(s) && /\bmodels?\b/.test(s))) return 'derived'
   if (OTHER_NOTE.test(s)) return 'other'
-  if (STAT_NOTE.test(s)) return 'stat'
-  if (SCORE_NOTE.test(s)) return 'score'
-  return 'model'
+  if (STAT_ALONE.test(s)) return 'stat'
+  const words = s.match(/%|[a-z]+/g) || []
+  if (words.some(w => !SCALE_WORDS.has(w) && !STAT_WORDS.has(w))) return 'model'
+  return words.some(w => STAT_WORDS.has(w)) ? 'stat' : 'score'
 }
 
 const kindOf = w => (w.startsWith('nov') ? 'novelty' : w === 'quality' ? 'quality' : 'usefulness')
 
 // A score with no "AI … (model)" shape: "Novelty", "AI Novelty", "nov", and the
 // decorated spellings other tools write — "Novelty Rating", "Avg Novelty",
-// "Average Usefulness", "Novelty (1-5)". Deliberately NOT "… score" (that is the
-// 3.1 NoveltyScore, and a bare "Usefulness score" reads as the empirical one),
-// nor anything else that only mentions the word ("Embedding novelty", "Novelty
-// SD", "Novelty rank"), which the importers keep as an uploaded extra instead.
+// "Average Usefulness", "Novelty (1-5)", "Novelty (scale 1-5)". Deliberately NOT
+// "… score" (that is the 3.1 NoveltyScore, and a bare "Usefulness score" reads as
+// the empirical one), nor anything else that only mentions the word ("Embedding
+// novelty", "Novelty SD", "Novelty rank"), which the importers keep as an
+// uploaded extra instead.
 const BARE_HEAD = /^(?:ai[\s_.-]*)?(?:(?:avg\.?|average|mean)[\s_.-]*)?(novelty|nov|usefulness|useful)(?:[\s_.-]+(?:rating|ratings|avg\.?|average))?$/
 function bareAiScore(h) {
   const lower = h.toLowerCase()
-  const pm = lower.match(/^(.*?)\s*\(([^()]*)\)$/)
+  // From the FIRST "(" to the last ")", like parseAiHeader: a catalogue label
+  // carries brackets of its own ("Claude Opus 5 (Jul 2026)").
+  const pm = lower.match(/^(.*?)\s*\((.*)\)$/)
   const m = (pm ? pm[1] : lower).trim().match(BARE_HEAD)
   if (!m) return null
   const kind = kindOf(m[1])
   if (!pm) return { kind, slug: UNRECORDED, derived: false }
-  const inner = h.slice(h.lastIndexOf('(') + 1, h.lastIndexOf(')')).trim()
+  const inner = h.slice(h.indexOf('(') + 1, h.lastIndexOf(')')).trim()
   const note = noteKind(inner)
   if (note === 'derived') return { kind, slug: null, derived: true }
   if (note === 'score') return { kind, slug: UNRECORDED, derived: false }
@@ -182,6 +222,11 @@ function bareAiScore(h) {
   return known ? { kind, slug: known, derived: false } : null
 }
 
+// A file repeats its headers on every row, and the answer depends on the header
+// alone (the catalogue does not change while the page is open), so each spelling
+// is read once. A caller gets its own copy.
+const headerMemo = new Map()
+
 /**
  * Read an AI-score column header. Returns null when it is not one, else
  * { kind: 'novelty' | 'usefulness' | 'quality', slug, derived }:
@@ -189,23 +234,32 @@ function bareAiScore(h) {
  *   "Novelty (GPT-6 Astra)"             → novelty, gpt_6_astra (a catalogue model only)
  *   "AI Novelty (mean across models)"   → novelty, derived (recomputed, never imported)
  *   "AI Quality (…)", "AI Quality",
- *   "Quality", "Overall"                → quality, derived
+ *   "Quality", "Overall quality"        → quality, derived
  *   "ai_nov__gpt_6_astra"               → novelty, gpt_6_astra (the analysis CSV)
  *   "Novelty", "AI Novelty", "novelty",
  *   "Novelty Rating", "Avg Novelty",
- *   "Novelty (1-5)", "AI Novelty (avg)" → novelty, unrecorded (a score with no model name)
- *   "AI Novelty (sd)", "Novelty rank",
- *   "Embedding novelty"                 → null (not a score)
+ *   "Novelty (1-5)", "AI Novelty (avg)",
+ *   "AI Novelty (scale 1-5)",
+ *   "Novelty (1 = low, 5 = high)"       → novelty, unrecorded (a score with no model name)
+ *   "AI Novelty (sd)", "AI Novelty (%)",
+ *   "Novelty rank", "Novelty (TF-IDF)",
+ *   "Embedding novelty"                 → null (not a 1–5 score)
  * Pass the header as the file wrote it: a model outside the catalogue keeps
  * that spelling. Evaluator, rater, empirical/objective and NoveltyScore headers
  * are NOT AI scores and return null.
  */
 export function parseAiHeader(header) {
+  const key = String(header ?? '')
+  if (!headerMemo.has(key)) headerMemo.set(key, readAiHeader(key))
+  const a = headerMemo.get(key)
+  return a && { ...a }
+}
+function readAiHeader(header) {
   const h = String(header ?? '').trim()
   const lower = h.toLowerCase()
   if (!lower) return null
   if (isAiModelKey(lower)) {
-    return { kind: lower.startsWith(AI_NOV_PREFIX) ? 'novelty' : 'usefulness', slug: slugOfKey(lower), derived: false }
+    return { kind: lower.startsWith(AI_NOV_PREFIX) ? 'novelty' : 'usefulness', slug: slugOfKey(lower) || UNRECORDED, derived: false }
   }
   if (/novelty[\s_-]*score/.test(lower)) return null   // the 3.1 NoveltyScore
   const m = lower.match(/^ai[\s_.-]*(novelty|usefulness|useful|quality)\s*\((.*)\)\s*$/)
@@ -218,7 +272,9 @@ export function parseAiHeader(header) {
     if (note === 'score') return { kind, slug: UNRECORDED, derived: false }
     return { kind, slug: slugFromModelName(inner), derived: false }
   }
-  if (/^(ai[\s_]*)?(overall[\s_]*)?quality$/.test(lower) || lower === 'overall_quality' || lower === 'overall') {
+  // Not a bare "Overall": in a 3.1 KPI upload that is a measure of its own and
+  // stays an extra (the Step-1 import still reads it as an older file's quality).
+  if (/^(ai[\s_]*)?(overall[\s_]*)?quality$/.test(lower) || lower === 'overall_quality') {
     return { kind: 'quality', slug: null, derived: true }
   }
   return bareAiScore(h)
@@ -246,6 +302,7 @@ export function isBareAiScoreHeader(header) {
 export function isExplicitUnrecordedHeader(header) {
   const lower = String(header ?? '').toLowerCase().trim()
   return /\(\s*model not recorded\s*\)$/.test(lower) || lower === aiNovKey(UNRECORDED) || lower === aiUseKey(UNRECORDED)
+    || lower === AI_NOV_PREFIX || lower === AI_USE_PREFIX   // a key with no model left in it
 }
 
 const hasValue = v => v !== '' && v != null && Number.isFinite(Number(v))
