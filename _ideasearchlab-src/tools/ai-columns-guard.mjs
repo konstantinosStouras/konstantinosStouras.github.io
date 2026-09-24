@@ -285,7 +285,11 @@ console.log('page wiring')
   check('the table\'s KPI columns follow exportKpiColumns, a model\'s own cells editable',
     /const tableKpiCols = useMemo/.test(page) && /exportKpiColumns\(effectiveRows\)/.test(page) && /d\.source === 'ai' && d\.slug/.test(page))
   check('the old fixed AI columns are gone from the table', !/novelty: \{ label: 'AI Novelty'/.test(page) && /const TABLE_COLS = \['idea_id', 'session', 'condition', 'phase', 'final', 'idea'\]/.test(page))
-  check('"Download all idea data" exists and uses the shared idea sheet', /function downloadAllData\(\)/.test(page) && /addIdeaSheet\(wb, data\)/.test(page) && /onClick=\{downloadAllData\}/.test(page) && /Download all idea data \(Excel\)/.test(page))
+  // Scoped to downloadAllData's own body: the 3.1 download calls the same helper, so
+  // a page-wide match would pass with this one reverted (review, 2026-09-24).
+  check('"Download all idea data" exists and uses the shared idea sheet',
+    /function downloadAllData\(\) \{\n\s*const data = effectiveRows\n\s*if \(!data\.length\) return\n\s*const wb = XLSX\.utils\.book_new\(\)\n\s*addIdeaSheet\(wb, data\)/.test(page)
+    && /onClick=\{downloadAllData\}/.test(page) && /Download all idea data \(Excel\)/.test(page))
   check('the shared idea sheet goes through Step 1b (English + Translations sheet)',
     /translateSheets\(\[\{ name: 'ideas', kind: 'json', rows: ideaExportRows\(data\) \}\], tm\)/.test(page) && /if \(trSheet\) addSheet\(wb, TRANSLATIONS_SHEET, trSheet\.rows\)/.test(page))
   check('the CSV writes the same English idea sheet', /function downloadAllDataCsv\(\) \{[\s\S]{0,500}translatedIdeaSheet\(data\)\.rows/.test(page))

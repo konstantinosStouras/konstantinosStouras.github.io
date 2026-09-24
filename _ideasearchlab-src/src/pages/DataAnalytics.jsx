@@ -1426,7 +1426,9 @@ export default function DataAnalytics() {
     if (detResult?.perCond?.length) addSheet(wb, 'Pool KPIs by condition', poolKpiRows(withOverall(detResult)))
     if (excludedUsers.size) {
       addSheet(wb, 'Removed participants', users.filter(u => excludedUsers.has(u.key)).map(u => ({
-        Session: u.session, Author: u.author_name || '', 'Author ID': u.author_id, 'Ideas removed': u.count,
+        // "Author Name", not a bare "Author": Step 1b skips a *name* column, so a
+        // re-imported copy of this file never sends a participant's name to translation.
+        Session: u.session, 'Author Name': u.author_name || '', 'Author ID': u.author_id, 'Ideas removed': u.count,
       })))
     }
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })

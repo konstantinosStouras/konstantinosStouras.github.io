@@ -359,6 +359,18 @@ try {
   const ideasLog = XLSX.utils.sheet_to_json(ideasFile.wb.Sheets[TRANSLATIONS_SHEET] || {}, { defval: '' })
   check('…and its originals on a Translations sheet (ideas only, no chat)',
     [ZH_A.title, ZH_B.desc, FR.title].every(t => ideasLog.some(l => l.Original === t)) && !ideasLog.some(l => l.Original === CHAT))
+  // "Download all idea data" (Excel + CSV) writes the same English idea sheet: its
+  // own check could not tell (the 3.1 download calls the same helper).
+  const allFile = await captureDownload(() => btn('Download all idea data (Excel)').click())
+  const ab = XLSX.utils.sheet_to_json(allFile.wb.Sheets.ideas || {}, { defval: '' }).find(r => r['Idea ID'] === ZH_B.id)
+  check('"Download all idea data" carries the ideas in English too',
+    ab && ab.Title === MODEL[ZH_B.title][1] && ab.Description === MODEL[ZH_B.desc][1], JSON.stringify(ab))
+  const allLog = XLSX.utils.sheet_to_json(allFile.wb.Sheets[TRANSLATIONS_SHEET] || {}, { defval: '' })
+  check('…with the originals on its Translations sheet', [ZH_A.title, ZH_B.desc, FR.title].every(t => allLog.some(l => l.Original === t)))
+  const allCsv = await captureDownload(() => p.locator('xpath=//button[normalize-space()="Download all idea data (Excel)"]/following-sibling::button[1]').click())
+  const csvText = allCsv.buffer.toString('utf8')
+  check('…and its CSV carries the English, not the originals',
+    allCsv.name.endsWith('.csv') && csvText.includes(MODEL[ZH_B.title][1]) && !csvText.includes(ZH_B.title), allCsv.name)
 
   // ── 7. Corrections ─────────────────────────────────────────────────────────
   head('7. edit, remove, translate again')
