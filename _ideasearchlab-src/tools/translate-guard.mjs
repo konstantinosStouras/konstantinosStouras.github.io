@@ -262,8 +262,11 @@ head('translateSheets: the English goes into every cell, the original onto the l
     !needsTranslation(applyTranslationMemory([{ rid: 'k', text: keptText }], keptBack)[0]))
   // sessionExport.js imports Firebase, so its merge rule is pinned by source.
   const exp = readFileSync(join(HERE, '../src/utils/sessionExport.js'), 'utf8')
+  // The sheets the aggregate rebuilds are one set, REBUILT_SHEETS, which the merge
+  // skips; Translations must be in it.
+  const rebuilt = (exp.match(/export const REBUILT_SHEETS = new Set\(\[([^\]]*)\]\)/) || [])[1] || ''
   check('mergeSessionSheets drops a source\'s Translations sheet (it is rebuilt, never duplicated)',
-    /sheet\.name === 'Translations'\) continue/.test(exp))
+    /'Translations'/.test(rebuilt) && /if \(REBUILT_SHEETS\.has\(sheet\.name\)\) continue/.test(exp), rebuilt)
 }
 
 // ── Translating with a fake Claude ───────────────────────────────────────────
