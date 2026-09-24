@@ -22,39 +22,19 @@
  * there. A reference line with no word at all is dropped (a one-word reference
  * product such as "Hypercolor" is kept: R is a list of product names).
  *
- * The common-word list is used ONLY for this rule; the TF-IDF vectors of the
- * scored ideas are unchanged (common words still count there, as before).
+ * Since 2026-09-24 the TF-IDF vectors are built from kpiTokens (kpiText.js): common
+ * words dropped, UK spelling folded to US, Porter stems, a short synonym list; each
+ * idea's title is also compared with R; and NoveltyScore is the mean of the two KPIs'
+ * percentile ranks (deterministicKpis.js).
  *
  * Mirrored by compute_kpis in _idea-kpi-script/idea_kpis.py — keep in step.
  */
-import { tfidfVectors, tokenize } from './tfidf.js'
+import { tfidfModel, tokenize } from './tfidf.js'
+import { COMMON_WORDS, kpiTokens } from './kpiText.js'
 import { computeDeterministicKpis } from './deterministicKpis.js'
 
-/**
- * Common English words that do not count toward the two meaningful words: NLTK's
- * English stop-word list (nltk_data corpora/stopwords, "english"), keeping the
- * entries the tokeniser can produce — two or more letters and no apostrophe (it
- * splits "don't" into "don" + "t", and "don" is on the list). Mirrored as
- * COMMON_WORDS in _idea-kpi-script/idea_kpis.py; det-kpi-guard.mjs checks the two
- * are identical.
- */
-export const COMMON_WORDS = new Set([
-  'about', 'above', 'after', 'again', 'against', 'ain', 'all', 'am', 'an', 'and',
-  'any', 'are', 'aren', 'as', 'at', 'be', 'because', 'been', 'before', 'being',
-  'below', 'between', 'both', 'but', 'by', 'can', 'couldn', 'did', 'didn', 'do',
-  'does', 'doesn', 'doing', 'don', 'down', 'during', 'each', 'few', 'for', 'from',
-  'further', 'had', 'hadn', 'has', 'hasn', 'have', 'haven', 'having', 'he', 'her',
-  'here', 'hers', 'herself', 'him', 'himself', 'his', 'how', 'if', 'in', 'into', 'is',
-  'isn', 'it', 'its', 'itself', 'just', 'll', 'ma', 'me', 'mightn', 'more', 'most',
-  'mustn', 'my', 'myself', 'needn', 'no', 'nor', 'not', 'now', 'of', 'off', 'on',
-  'once', 'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
-  're', 'same', 'shan', 'she', 'should', 'shouldn', 'so', 'some', 'such', 'than',
-  'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these',
-  'they', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 've',
-  'very', 'was', 'wasn', 'we', 'were', 'weren', 'what', 'when', 'where', 'which',
-  'while', 'who', 'whom', 'why', 'will', 'with', 'won', 'wouldn', 'you', 'your',
-  'yours', 'yourself', 'yourselves'
-])
+// The common-word list lives in kpiText.js (the novelty KPIs also drop these words).
+export { COMMON_WORDS }
 
 /** An idea needs at least this many different meaningful words to be scored. */
 export const MIN_MEANINGFUL_WORDS = 2
@@ -69,15 +49,27 @@ export function isMeasurable(text) {
   return meaningfulWords(text).length >= MIN_MEANINGFUL_WORDS
 }
 
-/** True if the text has at least one term the TF-IDF tokeniser reads (used for R). */
+/**
+ * The parts of an idea that are compared with R besides its full text: the title and
+ * each sentence of the description (mirrors idea_parts in idea_kpis.py). The closest
+ * part counts, so a longer description cannot make an existing product look new.
+ */
+export function ideaParts(title, description) {
+  const parts = [String(title ?? ''), ...String(description ?? '').split(/[.!?;\n]+/).map(x => x.trim()).filter(Boolean)]
+  return parts.filter(Boolean)
+}
+
+/** True if the text has at least one term the novelty KPIs read (used for R). */
 export function isReadable(text) {
-  return tokenize(text).length > 0
+  return kpiTokens(text).length > 0
 }
 
 /**
  * @param ideaTexts string[]  one text per idea, in pool order
  * @param refTexts  string[]  the reference set R, one existing product per item
- * @param opts      passed to computeDeterministicKpis ({ tau, wNovelty, wDistinct })
+ * @param opts      passed to computeDeterministicKpis ({ tau, wNovelty, wDistinct }), plus
+ *                  parts: string[][] (optional, one list per idea, see ideaParts) — the
+ *                  title and sentences, each also compared with R; or titles: string[]
  * @returns {
  *   error?:     string — set (and nothing else) when there is too little text,
  *   perIdea:    [{ novelty, distinctiveness, score }] (null for an idea with fewer
@@ -99,11 +91,16 @@ export function objectiveKpisFromText(ideaTexts, refTexts, opts = {}) {
   }
   // Ideas + R are vectorised TOGETHER so they share one vocabulary and IDF space —
   // required for the idea-vs-R cosine in Novelty to be meaningful.
-  const { vectors, vocab } = tfidfVectors([...readIdx.map(i => texts[i]), ...refs])
+  // The terms are read by kpiTokens (kpiText.js): common words dropped, UK spelling
+  // folded to US, words stemmed, synonyms merged.
+  const { vectors, vocab, transform } = tfidfModel([...readIdx.map(i => texts[i]), ...refs], kpiTokens)
   const blankVec = new Array(vocab.length).fill(0)
   const ideaVecs = texts.map(() => blankVec)
   readIdx.forEach((i, k) => { ideaVecs[i] = vectors[k] })
   const refVecs = vectors.slice(readIdx.length)
-  const { perIdea, measured, unmeasured } = computeDeterministicKpis(ideaVecs, refVecs, opts)
+  // Each title in the same space and IDF (a title's words are its idea's words).
+  const parts = opts.parts || (opts.titles || []).map(t => (t ? [t] : []))
+  const titleVecs = texts.map((_, i) => (parts[i] || []).filter(Boolean).map(t => transform(String(t))))
+  const { perIdea, measured, unmeasured } = computeDeterministicKpis(ideaVecs, refVecs, { ...opts, titleVecs })
   return { perIdea, ideaVecs, refs, measured, unmeasured }
 }

@@ -684,6 +684,17 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      pipeline, the two-meaningful-words rule and its on-page description, the
      NoveltyScore label below, and number-for-number parity with the Python twin —
      identical common-word list included — when numpy is present).
+   - **3.1 (2026-09-24): spelling, plurals, synonyms and padding no longer move the
+     novelty KPIs, and NoveltyScore is a rank composite.** `kpiTokens` (kpiText.js):
+     COMMON_WORDS dropped (the list moved here from objectiveKpis.js, which re-exports
+     it), UK->US fold, Porter stem (porter.js), then SYNONYMS (conservative: no word with
+     a common second meaning). `tfidfModel` keeps the fitted IDF so each idea's parts
+     (`ideaParts`: title + each sentence) are placed in the same space and compared with R
+     too; the closest part counts (novelty clamps at 0). `computeDeterministicKpis`
+     makes `score` the weighted mean of the percentile ranks (`percentileRanks`, moved to
+     deterministicKpis.js, re-exported by usefulnessKpis.js). The page passes the English
+     title/description when translated. Need fit still uses the plain tokeniser.
+     Benchmark numbers and the remaining length effect are in the root CLAUDE.md.
    - **3.1: the combined KPI is called NoveltyScore** (owner, 2026-09-23; it was
      "Combined score" / "Obj. Score"). It is the mean of objective Novelty and
      Distinctiveness. Only the LABEL moved: the data key is still `det_score`, and an

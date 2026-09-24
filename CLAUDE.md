@@ -3063,6 +3063,26 @@ checks, incl. number-for-number parity with the Python twin). The combined KPI
 because the header contains "novelty" every importer checks
 `isNoveltyScoreHeader` first so it is never read back as the AI Novelty score.
 
+**Section 3.1's novelty KPIs ignore spelling, word form, common synonyms and padding,
+and NoveltyScore weighs both parts equally** (owner, 2026-09-24). Words are read by
+`kpiTokens` (`_ideasearchlab-src/src/utils/kpiText.js`): common words dropped, UK
+spelling folded to US, Porter stems (`porter.js`), and a short, conservative synonym list
+(tee/t-shirt, pullover/hoodie, cup/mug; a word with a second meaning such as ring or
+patch is deliberately not merged). Each idea's title and each sentence of its
+description are also compared with R and the closest counts (`ideaParts`), so
+"Thermochromic socks" plus a long description stays at Novelty 0 (it read 0.78).
+NoveltyScore is now the mean of the two KPIs' PERCENTILE RANKS in the pooled pool, like
+the Usefulness score: Distinctiveness sits in a narrow band (~0.9 to 1.0), so the raw
+mean was Novelty alone (r = 0.995; now 0.81 with Novelty and 0.86 with
+Distinctiveness). Distinctiveness still compares each idea with the whole pool, across
+conditions (owner: correct). Measured on the audit's labelled benchmark: separation of
+new from existing ideas 0.974 -> 0.990; spelling effect 0; plural forms of R's products
+0.55 -> 0.02; synonym-only restatements 0.35 -> 0.70 (AUC); a longer restatement of the
+same product still gains about +0.2 (was +0.32) when its title differs from R's wording,
+so keep the Table 7 length control. The offline twin `_idea-kpi-script/idea_kpis.py`
+mirrors all of it; `node _ideasearchlab-src/tools/det-kpi-guard.mjs` checks the tables
+and the numbers match.
+
 **The AI rater's model list is five models of each provider's newest
 generation, most capable first, and the rater can now actually call them**
 (owner, 2026-09-23: "top 5 newest … starting with their best and most

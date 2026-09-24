@@ -6,7 +6,8 @@
  *   • idea_ranking_kpis_llm_guide.md (Lee & Chung 2024; Meincke et al. 2025):
  *       - Novelty            = 1 − max cosine similarity to a reference set R
  *       - Distinctiveness    = 1 − mean cosine similarity to the other pool ideas
- *       - NoveltyScore       = w_novelty·novelty + w_distinct·distinctiveness  (was "Combined score")
+ *       - NoveltyScore       = w_novelty·pct(novelty) + w_distinct·pct(distinctiveness), as
+ *                              percentile ranks in the pool (was a raw mean, "Combined score")
  *       - Unique fraction    = connected groups / N (edge iff sim > tau), pool-level
  *   • llm_kpi_calculation_spec.md (Bouschery et al. 2024):
  *       - KPI 2 Productivity = count of non-redundant, multi-word ideas
@@ -72,13 +73,23 @@ export function hasTerms(vec) {
  * and null for an idea with no terms (see hasTerms). A reference item with no
  * terms is ignored rather than counted as an existing product nothing resembles.
  */
-export function novelty(ideaVec, refVecs) {
+export function novelty(ideaVec, refVecs, partVecs = null) {
   if (!hasTerms(ideaVec)) return null
   const refs = (refVecs || []).filter(hasTerms)
   if (refs.length === 0) return null
+  // The idea's TITLE is compared with R as well, and the closer of the two counts
+  // (owner, 2026-09-24: "Thermochromic socks" restated with a longer description
+  // went from Novelty 0.00 to 0.78). Extra words in a description dilute the whole
+  // text's cosine with a short product name; the title names the product and does
+  // not grow with the description.
+  // `partVecs`: the title and each sentence of the description (one vector or a list).
+  const parts = (Array.isArray(partVecs) && Array.isArray(partVecs[0]) ? partVecs : [partVecs]).filter(hasTerms)
   let max = -Infinity
-  for (const r of refs) { const s = cosine(ideaVec, r); if (s > max) max = s }
-  return 1 - max
+  for (const r of refs) {
+    const s = cosine(ideaVec, r); if (s > max) max = s
+    for (const p of parts) { const t = cosine(p, r); if (t > max) max = t }
+  }
+  return Math.max(0, 1 - max)   // an exact match can round to -2e-16
 }
 
 /**
@@ -100,7 +111,33 @@ export function distinctiveness(sims, i, include) {
 }
 
 /**
+ * Mid-rank percentile of every value in `values` among the non-null ones, in
+ * [0, 1] (ties share their average rank; a pool of one gets 0.5). null stays null.
+ * Used so two components on different scales weigh equally in a composite: the
+ * Usefulness score (usefulnessKpis.js) and NoveltyScore (below).
+ */
+export function percentileRanks(values) {
+  const idx = []
+  values.forEach((v, i) => { if (v != null && Number.isFinite(v)) idx.push(i) })
+  const out = values.map(() => null)
+  const n = idx.length
+  if (!n) return out
+  if (n === 1) { out[idx[0]] = 0.5; return out }
+  const sorted = idx.slice().sort((a, b) => values[a] - values[b])
+  let k = 0
+  while (k < n) {
+    let j = k
+    while (j + 1 < n && values[sorted[j + 1]] === values[sorted[k]]) j++
+    const mid = (k + j) / 2                   // 0-based mid-rank of the tie block
+    for (let m = k; m <= j; m++) out[sorted[m]] = mid / (n - 1)
+    k = j + 1
+  }
+  return out
+}
+
+/**
  * Combined per-idea score = w_novelty·novelty + w_distinct·distinctiveness.
+ * computeDeterministicKpis feeds it PERCENTILE RANKS (see there), not the raw values.
  * If distinctiveness is null (a pool of one) the score equals novelty (per spec).
  * If novelty is null (no reference set) it falls back to distinctiveness alone.
  */
@@ -215,7 +252,16 @@ export function measuredUniqueFraction(vecs, tau = 0.8) {
  *
  * @param ideaVecs  number[][] — one embedding per idea (pool order)
  * @param refVecs   number[][] — one embedding per reference-set item (R)
- * @param opts      { tau = 0.8, wNovelty = 0.5, wDistinct = 0.5 }
+ * NoveltyScore (`score`) is the weighted mean of the two KPIs' PERCENTILE RANKS in
+ * the pool, not of their raw values (owner, 2026-09-24): Distinctiveness is a mean
+ * over hundreds of mostly-unrelated ideas, so its raw values sit in a narrow band
+ * (about 0.9 to 1.0) while Novelty spans 0 to 1, and a raw 50/50 mean was Novelty
+ * alone (r = 0.995). As ranks both count equally — the same rule the Usefulness
+ * score uses. A rank is taken over the ideas that have that KPI.
+ *
+ * @param opts      { tau = 0.8, wNovelty = 0.5, wDistinct = 0.5, titleVecs }
+ *                  titleVecs (optional, one per idea, same column space): each
+ *                  idea's title, also compared with R (see novelty).
  * @returns { perIdea: [{ novelty, distinctiveness, score }], uniqueFraction, tau,
  *            measured, unmeasured }
  */
@@ -223,14 +269,17 @@ export function computeDeterministicKpis(ideaVecs, refVecs, opts = {}) {
   const tau = opts.tau ?? 0.8
   const wNov = opts.wNovelty ?? 0.5
   const wDist = opts.wDistinct ?? 0.5
+  const titleVecs = opts.titleVecs || []
   const include = ideaVecs.map(hasTerms)
   const M = simMatrix(ideaVecs)
-  const perIdea = ideaVecs.map((vec, i) => {
-    if (!include[i]) return { novelty: null, distinctiveness: null, score: null }
-    const nov = novelty(vec, refVecs)
-    const dist = distinctiveness(M[i], i, include)
-    return { novelty: nov, distinctiveness: dist, score: combinedScore(nov, dist, wNov, wDist) }
-  })
+  const raw = ideaVecs.map((vec, i) => (include[i]
+    ? { novelty: novelty(vec, refVecs, titleVecs[i]), distinctiveness: distinctiveness(M[i], i, include) }
+    : { novelty: null, distinctiveness: null }))
+  const pNov = percentileRanks(raw.map(r => r.novelty))
+  const pDist = percentileRanks(raw.map(r => r.distinctiveness))
+  const perIdea = raw.map((r, i) => (include[i]
+    ? { ...r, score: combinedScore(pNov[i], pDist[i], wNov, wDist) }
+    : { novelty: null, distinctiveness: null, score: null }))
   const measured = include.filter(Boolean).length
   return {
     perIdea,
