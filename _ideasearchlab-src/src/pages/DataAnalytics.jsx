@@ -13,7 +13,12 @@ import {
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition, scriptKpiKeys,
 } from '../utils/analyticsData'
-import { scoreIdeas, fetchAISettings } from '../utils/llmClient'
+import { scoreIdeas, fetchAISettings, translateTexts } from '../utils/llmClient'
+import {
+  measureText, untranslatedRows, languageSummary, applyTranslationMemory, collectTexts, translateSheets, withMeasuredText,
+  tmGet, tmSet, tmMerge, tmToJson, tmFromJson, tmFromTranslationsRows, estimateTranslationCost,
+  detectLanguage, carryTranslationsSheet, TRANSLATIONS_SHEET, TRANSLATION_MODEL,
+} from '../utils/translation'
 // From scoreBatch, not llmClient: that module owns what is worth retrying and
 // carries no Firebase import, so the offline guard can pin this rule.
 import { isFatalScoringError } from '../utils/scoreBatch'
@@ -80,7 +85,7 @@ const hasAnyKpi = r =>
 // localStorage keys for the per-section Save / Make-default persistence. Kept in
 // the browser (no Firestore-rules change needed); "Save" and "Make this the
 // default" both write the same key, which is loaded back on page open.
-const LS = { sessions: 'da:sessions', dataset: 'da:dataset', python: 'da:code:python', r: 'da:code:r', refset: 'da:refset', needset: 'da:needset', techset: 'da:techset' }
+const LS = { sessions: 'da:sessions', dataset: 'da:dataset', python: 'da:code:python', r: 'da:code:r', refset: 'da:refset', needset: 'da:needset', techset: 'da:techset', translations: 'da:translations' }
 
 export default function DataAnalytics() {
   const navigate = useNavigate()
@@ -111,6 +116,19 @@ export default function DataAnalytics() {
   const [scoreErr, setScoreErr] = useState('')
   // Score only the group-selected ideas (Final Group Pick = 1) vs every idea.
   const [scoreOnlyFinal, setScoreOnlyFinal] = useState(true)
+  // Step 1b "Translate everything to English" (translation.js): the translation
+  // memory (original text → { en, lang, by }), kept in this browser and written into
+  // every download as a "Translations" sheet; the last scan of the loaded data; the
+  // run's progress, report and error; and hand-typed edits (original → draft).
+  const [tm, setTm] = useState(() => { try { return tmFromJson(localStorage.getItem(LS.translations) || '') } catch (_) { return {} } })
+  useEffect(() => { try { localStorage.setItem(LS.translations, tmToJson(tm)) } catch (_) { /* storage full or blocked */ } }, [tm])
+  const [trScan, setTrScan] = useState(null)
+  const [scanning, setScanning] = useState(false)
+  const [translating, setTranslating] = useState(null)
+  const [trMsg, setTrMsg] = useState('')
+  const [trErr, setTrErr] = useState('')
+  const [trDraft, setTrDraft] = useState({})
+  const [trReviewOpen, setTrReviewOpen] = useState(false)
   // Summary Statistics: restrict to ideas scored on all three KPIs (default on).
   const [statsOnlyScored, setStatsOnlyScored] = useState(true)
   // Regression scope: 'final' = group-voted Final Ideas (default); 'group' = all
@@ -349,6 +367,7 @@ export default function DataAnalytics() {
           bookSheets = wb.SheetNames.map(sn => ({
             name: sn, kind: 'json', rows: XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }),
           }))
+          restoreTranslationsFrom(bookSheets)
         }
         // Format check: reject anything that doesn't look like idea data (a
         // condition column + idea/KPI columns) with a pop-up, and do NOT import.
@@ -483,6 +502,12 @@ export default function DataAnalytics() {
     setDetErr(''); setDetResult(null)
     const pool = effectiveRows                         // distinctiveness pool = all loaded ideas
     if (pool.length < 2) { setDetErr('Load at least two ideas first.'); return }
+    // Step 1b first: every measure reads the English version of an idea.
+    const notEnglish = untranslatedRows(pool)
+    if (notEnglish.length) {
+      setDetErr(`${languageSummary(notEnglish)} ${notEnglish.length === 1 ? 'is' : 'are'} not in English yet. Translate ${notEnglish.length === 1 ? 'it' : 'them'} in Step 1b first: these KPIs compare words with English lists and with the other ideas.`)
+      return
+    }
     const refLines = referenceSet.split('\n').map(s => s.trim()).filter(Boolean)
     if (!refLines.length) { setDetErr('The reference set R is empty. Add the products that already exist (one per line).'); return }
     const needLines = needSet.split('\n').map(s => s.trim()).filter(Boolean)
@@ -495,7 +520,7 @@ export default function DataAnalytics() {
       // fewer than two meaningful words (blank, one word, only "the/and/it", Greek
       // text) cannot be scored: it is left blank and kept out of every pool and out
       // of the TF-IDF corpus — it used to score a perfect 1. See objectiveKpis.js.
-      const ideaTexts = pool.map(r => r.text || ideaText(r))
+      const ideaTexts = pool.map(measureText)   // the English version (Step 1b) when there is one
       const res = objectiveKpisFromText(ideaTexts, refLines, { tau: 0.8 })
       if (res.error) { setDetErr(res.error); return }
       const { perIdea, ideaVecs, refs, unmeasured } = res
@@ -549,7 +574,7 @@ export default function DataAnalytics() {
         const idxs = pool.map((r, i) => (r.condition === cond ? i : -1)).filter(i => i >= 0)
         if (!idxs.length) continue
         const vecs = idxs.map(i => ideaVecs[i])
-        const items = idxs.map(i => ({ text: pool[i].text || ideaText(pool[i]), group: pool[i].group_id }))
+        const items = idxs.map(i => ({ text: measureText(pool[i]), group: pool[i].group_id }))
         const prod = productivityCount(items, (a, b) => cosine(vecs[a], vecs[b]), { dedupTau: 0.9, minWords: 2 })
         perCond.push({
           // n = the ideas the Unique fraction is taken over (those with words).
@@ -715,7 +740,53 @@ export default function DataAnalytics() {
 
   // ── Derived: the dataset minus any removed participants ──
   const isExcluded = r => excludedUsers.has(userKey(r.session, r.author_id))
-  const effectiveRows = useMemo(() => rows.filter(r => !isExcluded(r)), [rows, excludedUsers])
+  // Every idea with its English version from Step 1b (the originals untouched);
+  // everything downstream — the measures, the tables, the downloads — reads this.
+  const rowsEn = useMemo(() => applyTranslationMemory(rows, tm), [rows, tm])
+  const effectiveRows = useMemo(() => rowsEn.filter(r => !isExcluded(r)), [rowsEn, excludedUsers])
+  // Step 1b: what the last scan found, what is still untranslated, what that would
+  // cost with Fable 5.1, and the ideas the Step 3 measures are still waiting on.
+  const trItems = trScan?.items || []
+  const trPending = useMemo(() => trItems.filter(it => !tmGet(tm, it.text)), [trItems, tm])
+  const trCost = useMemo(() => estimateTranslationCost(trPending, MODEL_PRICES[TRANSLATION_MODEL]), [trPending])
+  const ideasNotEnglish = useMemo(() => untranslatedRows(effectiveRows), [effectiveRows])
+  // Once every idea has its English version, the 3.1 / 3.2 "translate first"
+  // messages no longer apply.
+  useEffect(() => {
+    if (ideasNotEnglish.length) return
+    setDetErr(e => (e && e.includes('Step 1b') ? '' : e))
+    setScoreErr(e => (e && e.includes('Step 1b') ? '' : e))
+  }, [ideasNotEnglish.length])
+  // When an idea's measured text changes after measures exist (a translation added,
+  // edited or removed in Step 1b), what was computed from the old text no longer
+  // describes it: its AI ratings are cleared (the Fill button re-rates just those),
+  // and the objective KPIs are cleared for every idea, since Distinctiveness and the
+  // pool KPIs depend on the whole pool (Compute again). Nothing else is touched.
+  const measuredTextRef = useRef(new Map())
+  useEffect(() => {
+    const prev = measuredTextRef.current
+    const next = new Map(rowsEn.map(r => [r.rid, measureText(r)]))
+    measuredTextRef.current = next
+    const changed = new Set()
+    for (const [rid, t] of next) if (prev.has(rid) && prev.get(rid) !== t) changed.add(rid)
+    if (!changed.size) return
+    const has = v => v !== '' && v != null
+    const detKeys = KPI_DEFS.filter(d => d.source === 'det').map(d => d.key)
+    const anyDet = rowsEn.some(r => detKeys.some(k => has(r[k])))
+    const aiChanged = rowsEn.filter(r => changed.has(r.rid) && (has(r.novelty) || has(r.usefulness))).length
+    if (!anyDet && !aiChanged) return
+    setRows(prevRows => recomputeOverall(prevRows.map(r => {
+      let x = r
+      if (anyDet) { x = { ...x }; for (const k of detKeys) x[k] = '' }
+      if (changed.has(r.rid) && (has(r.novelty) || has(r.usefulness))) x = { ...x, novelty: '', usefulness: '', overall_quality: '' }
+      return x
+    })))
+    if (anyDet) setDetResult(null)
+    setTrMsg(`An English version changed, so the measures computed from the old text were cleared: `
+      + [anyDet ? 'the objective KPIs (press Compute in 3.1 again)' : '',
+        aiChanged ? `the AI ratings of ${aiChanged} idea${aiChanged === 1 ? '' : 's'} (Fill in 3.2 re-rates just ${aiChanged === 1 ? 'it' : 'those'})` : '']
+        .filter(Boolean).join(' and ') + '.')
+  }, [rowsEn])
   // Uploaded extra KPIs currently present in the data (drives the 3.1 chip + Clear).
   const uploadedNow = useMemo(() => uploadedKpiDefs(effectiveRows), [effectiveRows])
   // KPI columns shown in the Step-3 table beyond the editable AI ones (Novelty /
@@ -791,6 +862,18 @@ export default function DataAnalytics() {
         : 'Every idea already has an AI Novelty and an AI Usefulness score.')
       return
     }
+    // Step 1b first: the rater is prompted in English and must rate the idea, not
+    // its language. Only the ideas this run would score are checked.
+    {
+      const scope = rowsEn.filter(r =>
+        !excludedUsers.has(userKey(r.session, r.author_id)) && (!scoreOnlyFinal || isFinal(r)))
+        .filter(r => { const st = ideaScoreState(r); return st === 'missing' || st === 'partial' })
+      const notEnglish = untranslatedRows(scope)
+      if (notEnglish.length) {
+        setScoreErr(`${languageSummary(notEnglish)} ${notEnglish.length === 1 ? 'is' : 'are'} not in English yet. Translate ${notEnglish.length === 1 ? 'it' : 'them'} in Step 1b first.`)
+        return
+      }
+    }
     // Always use the API keys CURRENTLY saved in AI Settings (settings/ai), even if
     // they were added/changed after this page was opened — re-read them at score
     // time and refresh the on-page "no key" hint. Falls back to the loaded copy.
@@ -800,7 +883,7 @@ export default function DataAnalytics() {
     // Work off a local copy so each pass re-reads what the PREVIOUS pass filled;
     // `setRows` is async, so re-deriving the targets from `rows` would ask the
     // model to score the same ideas again.
-    let working = rows
+    let working = applyTranslationMemory(rows, tm)   // with the Step 1b English versions
     let totalFilled = 0
     let pass = 0
     let recoveries = 0
@@ -822,7 +905,7 @@ export default function DataAnalytics() {
           // `scorableText` is the SAME function `hasIdeaText` uses to decide an
           // idea is ratable, so the panel can never offer to fill an idea the
           // run then sends as an empty string.
-          .map(r => ({ rid: r.rid, text: scorableText(r) || ideaText(r) }))
+          .map(r => ({ rid: r.rid, text: measureText(r) }))   // the English version when there is one
         if (!targets.length) break
 
         setScoring({ done: 0, total: targets.length, pass })
@@ -980,6 +1063,7 @@ export default function DataAnalytics() {
           return
         }
 
+        restoreTranslationsFrom(bookSheets)
         const res = mergeAiScoresIntoRows(rows, incoming)
         setRows(recomputeOverall(res.rows))
         const after = scoreGaps(
@@ -1045,7 +1129,8 @@ export default function DataAnalytics() {
   // ── Downloads ──
   function downloadCsv() {
     if (!effectiveRows.length) return
-    saveBlob(rowsToCsv(effectiveRows, analysisColumns(effectiveRows)), 'idea_analytics_dataset.csv', 'text/csv;charset=utf-8')
+    const data = withMeasuredText(effectiveRows)   // text = what the measures read (Step 1b English)
+    saveBlob(rowsToCsv(data, analysisColumns(data)), 'idea_analytics_dataset.csv', 'text/csv;charset=utf-8')
   }
 
   function downloadExcel() {
@@ -1103,7 +1188,16 @@ export default function DataAnalytics() {
       return row
     })
     const wb = XLSX.utils.book_new()
-    addSheet(wb, 'ideas', ideaRows)
+    // Step 1b: the file carries every idea in English; each replaced cell's original
+    // is kept on a "Translations" sheet, which an import reads back.
+    // A loaded file's own Translations rows for its idea sheets are carried forward
+    // (a re-imported English file replaces nothing, but its originals must not be lost).
+    const tr = translateSheets([{ name: 'ideas', kind: 'json', rows: ideaRows }], tm)
+    addSheet(wb, 'ideas', tr.sheets[0].rows)
+    const trSheet = carryTranslationsSheet(tr.log,
+      importedBooks.filter(b => loadedBookIds.has(b.id)).flatMap(b => b.sheets || []),
+      r => /idea|ranking/i.test(String(r.Sheet ?? '')))
+    if (trSheet) addSheet(wb, TRANSLATIONS_SHEET, trSheet.rows)
     // Pool-level KPIs (Unique fraction / Productivity) are per condition, not per
     // idea, so they live on their own tab when a compute run produced them.
     if (detResult?.perCond?.length) {
@@ -1111,6 +1205,131 @@ export default function DataAnalytics() {
     }
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     saveBlob(out, 'ideas_with_kpis.xlsx', 'application/octet-stream')
+  }
+
+  // Every loaded source as sheets: each Firestore session's full export (the same
+  // builder as its own "Download Excel") and each loaded imported workbook. Shared
+  // by Step 1b's scan and Step 2's aggregate, so both see exactly the same text.
+  async function gatherSources() {
+    const loadedImported = importedBooks.filter(b => loadedBookIds.has(b.id))
+    const sources = []
+    const aboutMeta = []
+    // Firestore-loaded sessions: fetch their full data and build all tabs.
+    for (const s of loadedSessions) {
+      const data = await fetchSessionExportData(s)
+      sources.push({ sheets: buildSessionSheets(s, data) })
+      const c = conditionOf(s)
+      aboutMeta.push({
+        code: c.sessionCode, placement: c.placement, paperName: c.paperName,
+        participants: data.participants.length, ideas: data.ideas.length,
+      })
+    }
+    // Imported export workbooks that have been LOADED: contribute their sheets.
+    for (const b of loadedImported) {
+      sources.push({ sheets: b.sheets })
+      aboutMeta.push(...bookAboutMeta(b))
+    }
+    return { sources, aboutMeta }
+  }
+
+  // ── Step 1b: translate everything to English (translation.js) ──────────────
+  // A workbook that carries a "Translations" sheet (any download from this page)
+  // gives its translations back: fill-empty, so nothing is paid for twice and an
+  // edit made on this page is never replaced.
+  function restoreTranslationsFrom(sheets) {
+    const sh = (sheets || []).find(x => x && x.name === TRANSLATIONS_SHEET)
+    if (!sh) return
+    const extra = tmFromTranslationsRows(sh.rows)
+    if (Object.keys(extra).length) setTm(prev => tmMerge(prev, extra).tm)
+  }
+
+  // Find every text in the loaded data that is not in English: each idea, and every
+  // text cell of every sheet the aggregate would contain. Local and free.
+  async function scanForTranslation() {
+    setTrErr(''); setTrMsg('')
+    if (!rows.length) { setTrErr('Load one or more sessions (or import a file) in Step 1 first.'); return }
+    setScanning(true)
+    try {
+      const { sources } = await gatherSources()
+      const sheets = sources.flatMap(x => x.sheets || []).filter(x => x && x.name !== TRANSLATIONS_SHEET)
+      const found = collectTexts({ rows, sheets, tm })
+      setTrScan(found)
+      const pendingNow = found.items.filter(it => !tmGet(tm, it.text)).length
+      setTrReviewOpen(pendingNow > 0)
+      setTrMsg(found.items.length
+        ? `Found ${found.items.length} text${found.items.length === 1 ? '' : 's'} not in English; ${pendingNow} still need${pendingNow === 1 ? 's' : ''} a translation.`
+        : 'Everything in the loaded data is in English. Nothing to translate.')
+    } catch (err) {
+      setTrErr('Could not read the loaded data: ' + (err.message || err))
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  // Translate what the scan found and the memory does not have yet, with Claude
+  // Fable 5.1 (Anthropic's API, the Claude key in AI Settings).
+  async function translatePending() {
+    setTrErr(''); setTrMsg('')
+    const items = (trScan?.items || []).filter(it => !tmGet(tm, it.text))
+    if (!items.length) { setTrMsg('Nothing left to translate.'); return }
+    let settings = aiSettings
+    try { settings = await fetchAISettings(); setAiSettings(settings) } catch (_) { /* keep the loaded copy */ }
+    setTranslating({ done: 0, total: items.length })
+    try {
+      const report = await translateTexts(items.map(it => ({ text: it.text })), {
+        settings, onProgress: ({ done, total }) => setTranslating({ done, total }),
+      })
+      const n = applyTranslated(items, report.results)
+      const left = items.length - n
+      setTrMsg(`Translated ${n} of ${items.length} text${items.length === 1 ? '' : 's'} with Claude Fable 5.1.`
+        + (left
+          ? ` ${left} could not be translated this run${report.lastError ? ` (${report.lastError.message || report.lastError})` : ''}: press Translate again, or type the English below.`
+          : ' Check them below, then download the data in English.'))
+    } catch (err) {
+      // A rejected key mid-run still hands back what was already translated (and paid for).
+      const n = err?.partial ? applyTranslated(items, err.partial.results) : 0
+      setTrErr((err.message || String(err)) + (n ? ` (${n} text${n === 1 ? ' was' : 's were'} translated before this and kept.)` : ''))
+    } finally {
+      setTranslating(null)
+    }
+  }
+  // Put a run's translations into the memory; returns how many there were.
+  function applyTranslated(items, results) {
+    const add = {}
+    let n = 0
+    items.forEach((it, k) => {
+      const t = results?.[k]
+      if (!t) return
+      add[it.text] = { en: t.text, lang: t.lang || it.lang, by: 'Claude Fable 5.1' }
+      n++
+    })
+    if (n) {
+      setTm(prev => tmMerge(prev, add).tm)
+      setTrDraft(prev => { const next = { ...prev }; for (const t of Object.keys(add)) delete next[t]; return next })
+      setTrReviewOpen(true)
+    }
+    return n
+  }
+
+  const trDraftOf = text => (Object.prototype.hasOwnProperty.call(trDraft, text) ? trDraft[text] : (tmGet(tm, text)?.en || ''))
+  function saveTranslationEdit(it) {
+    setTrErr('')
+    const en = String(trDraftOf(it.text) || '').trim()
+    if (!en) { setTrErr('Type the English version first.'); return }
+    if (en !== it.text && !detectLanguage(en).english) {
+      setTrErr('Saved, but this does not read as English: the measures will read exactly what is saved here.')
+    }
+    setTm(prev => tmSet(prev, it.text, { en, lang: tmGet(prev, it.text)?.lang || it.lang, by: 'by hand' }))
+    setTrDraft(prev => { const n = { ...prev }; delete n[it.text]; return n })
+  }
+  // A false alarm: the text is English already, so it stands as its own English version.
+  function keepAsWritten(it) {
+    setTm(prev => tmSet(prev, it.text, { en: it.text, lang: 'English (checked by hand)', by: 'kept as written' }))
+    setTrDraft(prev => { const n = { ...prev }; delete n[it.text]; return n })
+  }
+  function removeTranslation(it) {
+    setTm(prev => tmSet(prev, it.text, null))
+    setTrDraft(prev => { const n = { ...prev }; delete n[it.text]; return n })
   }
 
   // ── Step 2: consolidate every loaded source into ONE workbook ──
@@ -1127,23 +1346,7 @@ export default function DataAnalytics() {
     }
     setAggregating(true)
     try {
-      const sources = []
-      const aboutMeta = []
-      // Firestore-loaded sessions: fetch their full data and build all tabs.
-      for (const s of loadedSessions) {
-        const data = await fetchSessionExportData(s)
-        sources.push({ sheets: buildSessionSheets(s, data) })
-        const c = conditionOf(s)
-        aboutMeta.push({
-          code: c.sessionCode, placement: c.placement, paperName: c.paperName,
-          participants: data.participants.length, ideas: data.ideas.length,
-        })
-      }
-      // Imported export workbooks that have been LOADED: contribute their sheets.
-      for (const b of loadedImported) {
-        sources.push({ sheets: b.sheets })
-        aboutMeta.push(...bookAboutMeta(b))
-      }
+      const { sources, aboutMeta } = await gatherSources()
       const merged = mergeSessionSheets(sources, aboutMeta)
       const ideasSheet = merged.find(s => s.name === 'Ideas')
       if (ideasSheet) {
@@ -1178,10 +1381,18 @@ export default function DataAnalytics() {
       if (detResult?.perCond?.length) {
         merged.push({ name: 'Pool KPIs by condition', kind: 'json', rows: poolKpiRows(withOverall(detResult)) })
       }
+      // Step 1b: every text in English (owner, 2026-09-23: "show me updated file with
+      // all data collected in English"); the original of each replaced cell is kept
+      // on the "Translations" sheet, which an import of this file reads back.
+      // A loaded workbook's own Translations sheet is carried forward too (its cells
+      // are English already, so this run replaces nothing there).
+      const tr = translateSheets(merged, tm)
+      const trSheet = carryTranslationsSheet(tr.log, sources.flatMap(x => x.sheets || []))
+      const finalSheets = trSheet ? [...tr.sheets, trSheet] : tr.sheets
       const wb = XLSX.utils.book_new()
-      appendSheetsToWorkbook(wb, merged)
+      appendSheetsToWorkbook(wb, finalSheets)
       const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-      saveBlob(out, 'idea_analytics_aggregate.xlsx', 'application/octet-stream')
+      saveBlob(out, trSheet ? 'idea_analytics_aggregate_english.xlsx' : 'idea_analytics_aggregate.xlsx', 'application/octet-stream')
     } catch (err) {
       console.error('Aggregate export failed', err)
       alert('Could not build the aggregate file: ' + (err.message || err))
@@ -1234,7 +1445,10 @@ export default function DataAnalytics() {
     setImages([])
     outRef.current = ''
     setOutput('')
-    const dataCsv = rowsToCsv(analysisRows, analysisColumns(analysisRows))
+    // The regressions' word-count control reads `text`: give it the English the
+    // measures read (Step 1b), not an unspaced Chinese original.
+    const measuredRows = withMeasuredText(analysisRows)
+    const dataCsv = rowsToCsv(measuredRows, analysisColumns(measuredRows))
     try {
       const opts = { dataCsv, onStatus: setRunStatus }
       const result = tab === 'python'
@@ -1366,7 +1580,7 @@ export default function DataAnalytics() {
   // / uploaded), so Section 4 reflects whatever Step 3 produced — not only AI-rated
   // ideas (objective KPIs alone now populate the summary).
   const statRows = useMemo(
-    () => (statsOnlyScored ? effectiveRows.filter(hasAnyKpi) : effectiveRows),
+    () => withMeasuredText(statsOnlyScored ? effectiveRows.filter(hasAnyKpi) : effectiveRows),
     [effectiveRows, statsOnlyScored])
   // Per-condition counts + mean (SD) for EVERY present KPI (each KPI over its own
   // non-missing rows), so the table shows objective / uploaded KPIs, not just AI.
@@ -1579,6 +1793,110 @@ export default function DataAnalytics() {
           </div>
 
           <SectionActions onSave={saveSessions} onMakeDefault={saveSessions} onRestore={restoreSessions} hasCustom={saved.sessions} />
+        </section>
+
+        {/* STEP 1b — Translate everything to English (translation.js) */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>
+            <span><span className={styles.stepBadge}>1b</span>Translate everything to English</span>
+            <span className={styles.row}>
+              <button className={`btn-ghost ${styles.miniBtn}`} onClick={scanForTranslation} disabled={scanning || !!translating || !rows.length}>
+                {scanning ? <><span className={styles.spinner} /> Reading the loaded data…</> : 'Find text not in English'}
+              </button>
+              {rows.length > 0 && (
+                <button className={`btn-ghost ${styles.miniBtn}`} onClick={downloadAggregate} disabled={aggregating || !!translating}
+                  title="The aggregate workbook (Step 2) with every translated text in English and the originals on a Translations sheet">
+                  {aggregating ? <><span className={styles.spinner} /> Building…</> : 'Download all data in English (Excel)'}
+                </button>
+              )}
+            </span>
+          </h2>
+          <p className={styles.hint}>
+            Everything participants wrote that is not in English is translated before any analysis: their ideas, survey
+            answers, group-chat messages, their prompts to the AI assistant and its replies, in every loaded session and
+            imported file. <strong>Find text not in English</strong> checks every text locally (no cost): text in another
+            script (Chinese, Japanese, Korean, Greek, Cyrillic, Persian or Arabic, and others) or in another Latin-script
+            language (French, Spanish, German, Italian, Portuguese, Dutch, Indonesian or Malay). Names, e-mails, IDs,
+            labels and codes are never translated. Only the texts found are sent to <strong>Claude Fable 5.1</strong> through
+            Anthropic&apos;s API, using the Claude key saved in AI Settings. The originals are never lost: every download
+            carries a <em>Translations</em> sheet with each original beside its English, and importing that file again
+            brings the translations back. <strong>Step 3&apos;s measures read the English and stay locked until every idea
+            not in English has been translated.</strong>
+          </p>
+          {rows.length > 0 && (
+            <p className={styles.loadMsg}>
+              {ideasNotEnglish.length
+                ? <><strong>{languageSummary(ideasNotEnglish)}</strong> {ideasNotEnglish.length === 1 ? 'is' : 'are'} not in English yet, so Step 3 is locked.</>
+                : `✓ Every loaded idea can be measured in English${Object.keys(tm).length ? ` (${Object.keys(tm).length} translation${Object.keys(tm).length === 1 ? '' : 's'} on record)` : ''}.`}
+              {!trScan && ' Press Find text not in English to check the survey answers and chats as well.'}
+            </p>
+          )}
+          {trScan && trItems.length > 0 && (
+            <>
+              <p className={styles.loadMsg}>
+                {trItems.length} text{trItems.length === 1 ? '' : 's'} not in English
+                {' '}({Object.entries(trScan.byLanguage).map(([l, n]) => `${l} ${n}`).join(', ')}) in
+                {' '}{Object.entries(trScan.bySheet).map(([sh, n]) => `${sh} ${n}`).join(', ')}.
+                {' '}{trPending.length ? `${trPending.length} still to translate.` : 'All translated.'}
+              </p>
+              {trPending.length > 0 && (
+                <div className={styles.row} style={{ marginBottom: 8 }}>
+                  <button className="btn-primary" onClick={translatePending} disabled={!!translating || scanning || !!scoring || !!detComputing}>
+                    {translating
+                      ? `Translating… ${translating.done}/${translating.total}`
+                      : `Translate ${trPending.length} text${trPending.length === 1 ? '' : 's'} with Claude Fable 5.1`}
+                  </button>
+                  <span className={styles.statusLine}>
+                    {trCost ? `about $${trCost.usd < 1 ? trCost.usd.toFixed(2) : trCost.usd.toFixed(0)} at Fable 5.1 prices (an estimate)` : ''}
+                    {aiSettings && !aiSettings?.apiKeys?.claude ? ' · no Claude key saved: add one in AI Settings, or type the English below' : ''}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+          {trErr && <p className="error-msg">{trErr}</p>}
+          {trMsg && <p className={styles.loadMsg}>{trMsg}</p>}
+          {trScan && trItems.length > 0 && (
+            <details open={trReviewOpen} onToggle={e => setTrReviewOpen(e.currentTarget.open)}>
+              <summary className={styles.raterLabel}>Review the translations ({trItems.length - trPending.length} of {trItems.length} done)</summary>
+              <div className={styles.tableWrap} style={{ marginTop: 6, maxHeight: '70vh' }}>
+                <table className={styles.trTable}>
+                  <thead>
+                    <tr><th>Where</th><th>Language</th><th>Original</th><th>English</th><th /></tr>
+                  </thead>
+                  <tbody>
+                    {[...trPending, ...trItems.filter(it => tmGet(tm, it.text))].map(it => {
+                      const e = tmGet(tm, it.text)
+                      return (
+                        <tr key={it.text}>
+                          <td className={styles.trMeta}>{Object.entries(it.where).map(([w, n]) => <div key={w}>{w}{n > 1 ? ` ×${n}` : ''}</div>)}</td>
+                          <td className={styles.trMeta}>{e ? e.lang : it.lang}{e?.by ? <><br />{e.by}</> : null}</td>
+                          <td><div className={styles.trText}>{it.text}</div></td>
+                          <td>
+                            <textarea className={styles.trInput} rows={Math.min(8, Math.max(2, Math.ceil(String(trDraftOf(it.text)).length / 70)))}
+                              placeholder="English" value={trDraftOf(it.text)} disabled={!!translating || !!scoring || !!detComputing}
+                              onChange={ev => { const v = ev.target.value; setTrDraft(prev => ({ ...prev, [it.text]: v })) }} />
+                          </td>
+                          <td><div className={styles.trActions}>
+                            <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => saveTranslationEdit(it)} disabled={!!translating || !!scoring || !!detComputing}>
+                              {e ? 'Save edit' : 'Save'}
+                            </button>
+                            {e ? (
+                              <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => removeTranslation(it)} disabled={!!translating || !!scoring || !!detComputing}
+                                title="Remove this translation (the text goes back to needing one)">Remove</button>
+                            ) : (
+                              <button className={`btn-ghost ${styles.miniBtn}`} onClick={() => keepAsWritten(it)} disabled={!!translating || !!scoring || !!detComputing}
+                                title="The check got it wrong: this text is English, keep it as written">It is English</button>
+                            )}
+                          </div></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
         </section>
 
         {/* STEP 2 — Consolidate every loaded source into one clean Excel */}

@@ -22,6 +22,7 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { runScoring, extractScoreObjects, clamp1to5, isFatalApiError } from './scoreBatch'
 import { callProvider } from './providerRequest'
+import { runTranslation, TRANSLATOR_SYSTEM_PROMPT, buildTranslatePrompt, TRANSLATION_PROVIDER, TRANSLATION_MODEL, TRANSLATION_MAX_TOKENS } from './translation'
 import { PROVIDERS } from '../data/aiModels'
 
 // One source for the per-provider fallback model: the catalogue's own
@@ -140,5 +141,36 @@ export async function scoreIdeas(ideas, opts = {}) {
 // Note: the Section 3.1 deterministic KPIs no longer use text embeddings — they
 // are computed in the browser with classical TF-IDF (see utils/tfidf.js), so
 // there is no embedding API, model download, or billing involved.
+
+/**
+ * Step 1b: translate texts into English with Claude Fable 5.1 through Anthropic's
+ * API (owner, 2026-09-23 — the provider and model are fixed, not the 3.2 choice),
+ * using the Claude key saved in AI Settings. Same transport, retries and fatal-key
+ * rule as `scoreIdeas`; partial results come back rather than being lost, and it
+ * throws only when nothing could be translated.
+ *
+ * @param items  [{ text }] (translation.js collectTexts items)
+ * @param opts   { settings?, onProgress? }
+ * @returns { results, untranslated, failedBatches, aborted, lastError }
+ */
+export async function translateTexts(items, opts = {}) {
+  const settings = opts.settings || (await fetchAISettings())
+  const resolved = resolveProvider(settings, TRANSLATION_PROVIDER, TRANSLATION_MODEL)
+  if (!resolved.apiKey) {
+    const err = new Error(
+      'No Anthropic (Claude) API key is saved. Add it under Admin → AI Settings: the translation step uses Claude Fable 5.1.'
+    )
+    err.fatal = true
+    throw err
+  }
+  const report = await runTranslation({
+    items,
+    onProgress: opts.onProgress,
+    isFatal: isFatalApiError,
+    call: batch => callProvider(resolved, TRANSLATOR_SYSTEM_PROMPT, buildTranslatePrompt(batch), { maxTokens: TRANSLATION_MAX_TOKENS }),
+  })
+  if (report.lastError && report.untranslated === items.length) throw report.lastError
+  return report
+}
 
 export { PROVIDER_DEFAULTS }

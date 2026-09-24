@@ -25,6 +25,7 @@ import {
   mergeAiScoresIntoRows, hasIdeaText, isBlankScore, scorableText, MAX_RECOVERY_PASSES,
   pickScoredSheet,
 } from '../src/utils/scoreGaps.js'
+import { measureText } from '../src/utils/translation.js'
 
 let failures = 0
 function check(name, cond, detail) {
@@ -73,9 +74,21 @@ console.log('scorableText — the panel and the run must mean the same thing')
   // The drift this pins: an idea the panel counts as fillable but the run sends
   // as an empty string is scored by nobody and stays empty for ever.
   const page = readFileSync(new URL('../src/pages/DataAnalytics.jsx', import.meta.url), 'utf8')
-  check('DataAnalytics.jsx builds the rater\'s text with scorableText, not its own rule',
-    /\.map\(r => \(\{ rid: r\.rid, text: scorableText\(r\)/.test(page),
-    'the scoring run no longer routes through scorableText')
+  // Since Step 1b, "Translate everything to English" (translation.js), the run sends
+  // measureText(r): an idea's English version when it has one, else EXACTLY
+  // scorableText(r) — so the invariant above still holds for every shape.
+  check('DataAnalytics.jsx builds the rater\'s text with measureText, not its own rule',
+    /\.map\(r => \(\{ rid: r\.rid, text: measureText\(r\) \}\)\)/.test(page),
+    'the scoring run no longer routes through measureText')
+  const shapes = [
+    { text: 'Zone map top' }, { text: '', idea_title: 'Zone map top' },
+    { text: '', idea_title: 'T', idea_description: 'D' }, { text: '', idea_description: 'D' },
+    { text: '  ', idea_title: '', idea_description: '' }, { idea_title: 'T', text_en: '   ' },
+  ]
+  check('measureText is scorableText for every idea without an English version',
+    shapes.every(r => measureText(r) === scorableText(r)))
+  check('…and the English version when there is one',
+    measureText({ text: '智能袜子', text_en: 'Smart socks: change colour' }) === 'Smart socks: change colour')
   const ratable = { text: '', idea_title: 'Zone map top', novelty: '', usefulness: '' }
   check('hasIdeaText agrees with scorableText on every shape',
     hasIdeaText(ratable) === !!scorableText(ratable) && ideaScoreState(ratable) === 'missing')

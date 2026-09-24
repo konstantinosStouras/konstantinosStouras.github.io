@@ -753,3 +753,17 @@
   margin: 8px 0;
 }
 .anchorGrid > div { min-width: 0; }
+
+/* Step 1b "Translate everything to English" (translation.js): original vs English, side by side. */
+.trTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.trTable th, .trTable td { padding: 6px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+.trTable thead th { position: sticky; top: 0; background: var(--white); font-weight: 600; z-index: 1; }
+.trMeta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.trText { min-width: 220px; max-width: 420px; max-height: 220px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.trInput {
+  display: block; width: 100%; min-width: 260px; box-sizing: border-box;
+  padding: 5px 8px; font: inherit; font-size: 13px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--white); color: var(--ink); resize: vertical;
+}
+.trInput:focus { border-color: var(--accent); outline: none; }
+.trActions { display: flex; flex-direction: column; gap: 4px; white-space: nowrap; }

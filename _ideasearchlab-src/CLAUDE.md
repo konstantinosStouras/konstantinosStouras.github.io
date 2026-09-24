@@ -458,6 +458,78 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      sessions and 1 imported file"*. `loadedBookIds` (derived from `rows._book`) is which imports
      are actually loaded; the Step-2 aggregate uses those. Each imported row has a **Remove**.
    - **"Clear"** here does a full reset (selection + loaded dataset + imported files).
+1b. **Translate everything to English** (owner, 2026-09-23: "add a first step in the
+   data analysis process that would be translating all text supplied to our app in English
+   using Fable 5.1 and Anthropic's API … Everything that is not in English should be
+   translated in English and then show me updated file with all data collected in
+   English"). A section between Step 1 and Step 2; the pure half is
+   `src/utils/translation.js`, the call is `translateTexts` in `llmClient.js`.
+   - **Why it comes first.** Every Section 3 measure reads an idea's words: 3.1 compares
+     them with ENGLISH lists (R, U, T) and with the other ideas, and 3.2 prompts the rater
+     in English, so an idea in Chinese was measured on its language (TF-IDF cannot even
+     read it: it scored blank). The aggregate workbook is also the study's record, and
+     chats or survey answers in another language are unreadable to whoever analyses it.
+   - **Find text not in English** (local, free) runs `detectLanguage` over every idea
+     (title and description separately) and every text cell of every sheet the aggregate
+     would contain (`gatherSources`, shared with Step 2): survey answers, group chat, AI
+     chat, imported workbooks. It flags a non-Latin script (Chinese, Japanese, Korean,
+     Greek, Cyrillic, Persian/Arabic …; a LONE symbol letter such as ΔT or α does not
+     count), letters no English loanword carries (Vietnamese, Turkish, pinyin), or
+     Latin-script text whose function words are clearly another language's (≥3 votes and
+     >1.5× the English ones). Measured: 0 false alarms on 341 + 103 held-out English ideas
+     and on the owner's 741 ideas; 69% recall on 167 non-English ideas (1–3-word Latin
+     titles are the known miss, which is why a flagged idea sends ALL its parts).
+     **Identity columns are never translated** (`SKIP_COLUMN`: name, e-mail, ID, uid,
+     label, code, model): a name in Chinese characters is a name.
+   - **Translate N texts with Claude Fable 5.1** sends ONLY what was found and is not yet
+     translated, to `claude-fable-5-1` through Anthropic's API with the Claude key saved in
+     AI Settings (fixed, not the 3.2 model choice), with a cost estimate beside the button.
+     `runTranslation` mirrors scoreBatch's `runScoring`: batches of ≤10 texts / ~2500
+     characters, a text the reply left out retried alone, a breaker after 3 dead batches,
+     a rejected key fatal but handing back what was already translated (`err.partial`).
+     It is STRICTER than scoring in two ways, because a translation in the wrong slot puts
+     another text's words in its place: `assignByIndex` voids duplicate / out-of-range
+     indices (only a whole 1-based reply is shifted back), and `looksTranslated` rejects
+     an echo or a reply still in another language. Its output ceiling is
+     `TRANSLATION_MAX_TOKENS` 16000 (ratings keep 8000): one long AI reply travels alone
+     and its English plus thinking can pass 8000.
+   - **One translation memory** (`tm`: original text → `{ en, lang, by }`), kept in this
+     browser (`da:translations`). The review table lists every found text with its
+     English in an editable box: **Save** (typed by hand, `by: 'by hand'`; warns when the
+     text does not read as English), **Remove**, and **It is English** for a false alarm
+     (the text stands as its own English, `by: 'kept as written'`, never logged as a
+     translation).
+   - **The measures read the English.** `applyTranslationMemory` gives each idea row
+     `title_en` / `description_en` / `text_en` / `translated_from` / `translated_by` (only
+     when EVERY part is translated; the original fields are never changed);
+     `effectiveRows` derives from those rows, `measureText` is what 3.1, the productivity
+     count and 3.2 read, and `withMeasuredText` feeds the CSV, Section 4 and the Step-5
+     regressions (their word-count control reads `text`). **3.1 and 3.2 refuse to run
+     while an idea in their scope still needs an English version** (`untranslatedRows`),
+     naming Step 1b; the message clears once everything is translated. When an idea's
+     measured text changes afterwards (a translation edited, removed or added), the
+     measures computed from the old text are cleared: all objective KPIs (Distinctiveness
+     depends on the whole pool) and that idea's AI ratings, with a message saying which
+     button re-computes them.
+   - **The files.** "Download all data in English (Excel)" (in 1b, and Step 2's own
+     button) writes the English into every translated cell (`translateSheets`, a joined
+     "Title: Description" resolved from its parts by `tmLookup`) and adds a
+     **Translations** sheet (sheet, row, column, language, original, English, who
+     translated it); it is named `idea_analytics_aggregate_english.xlsx` when anything was
+     translated. "Download ideas + KPIs" does the same for its ideas sheet. Importing
+     either file (Step 1, or 3.2's full-dataset upload) reads the Translations sheet back
+     (`tmFromTranslationsRows`, fill-empty), so nothing is paid for twice, and a second
+     download CARRIES a loaded file's Translations rows forward (`carryTranslationsSheet`;
+     the ideas file keeps only its idea sheets' rows), since a re-imported English file
+     has nothing left to replace. `mergeSessionSheets` drops a source's Translations sheet
+     so the aggregate never holds two.
+   - Tests: `node tools/translate-guard.mjs` (133 offline checks: detection, the memory,
+     sheets, the fake-Claude run, the page wiring, the shipped bundle) and
+     `node tools/translate-page-guard.mjs` (Playwright over `tools/translate-page/`, the
+     page on its own with Firebase stubbed and api.anthropic.com faked: import → locked →
+     find → one typed, six translated in ONE request carrying only those six → 3.1 scores
+     the Chinese ideas → both downloads in English with their originals → edit / remove /
+     translate again → reload and round trip → no key).
 2. **Aggregate Data.** A single **Download aggregate Excel** button (`downloadAggregate`
    in `DataAnalytics.jsx`) consolidates **every loaded source into ONE workbook with the exact
    same multi-tab structure and format as the per-session research export** — *About,
