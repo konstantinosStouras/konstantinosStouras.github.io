@@ -18,7 +18,11 @@
  *  4. a downloaded file reads back to the same per-model fields (the round
  *     trip the "Upload full dataset" button depends on);
  *  5. the "Usefulness score check" sheet's arithmetic reproduces the score;
- *  6. the page is wired to all of it.
+ *  6. each review finding stays fixed (sections 7 and 7b): which headers are
+ *     AI scores, evaluator ratings or extras, the unrecorded pair moving whole;
+ *  7. matchScoreTable matches a score file ONE idea per row (Idea ID, then
+ *     title) and aiPanelCoverage says whether every idea had the same models;
+ *  8. the page is wired to all of it.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -26,11 +30,12 @@ import { dirname, join } from 'node:path'
 import {
   UNRECORDED, modelSlug, aiFieldsFor, aiNovKey, aiUseKey, parseAiHeader, aiModelName,
   aiColumnLabel, aiModelSlugs, labelUnrecordedScores, aiKpiDefs, shortModelName,
+  isBareAiScoreHeader, rememberModelName, aiPanelCoverage,
 } from '../src/utils/aiScoreColumns.js'
 import {
   normalizeImportedRows, recomputeOverall, presentKpis, exportKpiColumns, stripAllKpis,
   canonicalKpiField, analysisColumns, buildRowsForSession, KPI_DEFS,
-  DEFAULT_NEED_SET, DEFAULT_TECH_SET,
+  DEFAULT_NEED_SET, DEFAULT_TECH_SET, matchScoreTable, parseEvalHeader, evaluatorMean,
 } from '../src/utils/analyticsData.js'
 import { scoreGaps, mergeAiScoresIntoRows, pickScoredSheet } from '../src/utils/scoreGaps.js'
 import { usefulnessKpisFromText, percentileRanks } from '../src/utils/usefulnessKpis.js'
@@ -45,6 +50,8 @@ function check(name, cond, detail) {
   failures++
   console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`)
 }
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
 const ASTRA = aiFieldsFor('gpt-6-astra')
 const GEM = aiFieldsFor('gemini-3.1-pro-preview')
@@ -66,7 +73,9 @@ check('the unrecorded name', aiModelName(UNRECORDED) === 'model not recorded' &&
 const heads = {
   'AI Novelty (GPT-6 Astra)': ['novelty', 'gpt_6_astra', false],
   'ai usefulness (gpt-6-astra)': ['usefulness', 'gpt_6_astra', false],
-  'AI Novelty (Claude Sonnet 5 — best speed/cost balance (Jun 2026))': null,   // handled below
+  // A catalogue model's full dropdown label, brackets inside brackets: the slug
+  // comes from the catalogue, not a new model named after the whole label.
+  'AI Novelty (Claude Sonnet 5 — best speed/cost balance (Jun 2026))': ['novelty', 'claude_sonnet_5', false],
   'AI Novelty (mean across models)': ['novelty', null, true],
   'AI Quality (GPT-6 Astra)': ['quality', null, true],
   'ai_use__gemini_3_8_flash': ['usefulness', 'gemini_3_8_flash', false],
@@ -75,7 +84,6 @@ const heads = {
   'AI Novelty (model not recorded)': ['novelty', UNRECORDED, false],
 }
 for (const [h, want] of Object.entries(heads)) {
-  if (!want) continue
   const a = parseAiHeader(h)
   check(`parseAiHeader("${h}")`, a && a.kind === want[0] && a.slug === want[1] && a.derived === want[2], JSON.stringify(a))
 }
@@ -192,8 +200,13 @@ console.log('coverage and labelling')
   check('aiModelSlugs lists the models with data, unrecorded last', JSON.stringify(aiModelSlugs(rows)) === JSON.stringify(['gpt_6_astra', UNRECORDED]))
   const lab = labelUnrecordedScores(rows, 'gpt-6-astra')
   check('labelling moves the unrecorded scores onto the chosen model', lab.moved === 1 && lab.rows[2][ASTRA.novelty] === 2 && !(REC.novelty in lab.rows[2]))
+  // The pair moves whole or not at all: here the model already holds a Novelty, so
+  // neither half moves (moving only the Usefulness would pair Astra's own Novelty
+  // with another file's Usefulness).
   const clash = labelUnrecordedScores([{ [ASTRA.novelty]: 4, [REC.novelty]: 2, [REC.usefulness]: 3 }], 'gpt-6-astra')
-  check('an existing score is never overwritten by labelling', clash.rows[0][ASTRA.novelty] === 4 && clash.rows[0][REC.novelty] === 2 && clash.rows[0][ASTRA.usefulness] === 3 && clash.conflicts === 1)
+  check('an existing score is never overwritten by labelling, and the pair is not split',
+    clash.rows[0][ASTRA.novelty] === 4 && clash.rows[0][REC.novelty] === 2 && clash.rows[0][REC.usefulness] === 3
+      && clash.rows[0][ASTRA.usefulness] === undefined && clash.conflicts === 1 && clash.moved === 0, JSON.stringify(clash))
   check('aiKpiDefs marks each model\'s own columns editable (slug) and the means derived',
     aiKpiDefs(recomputeOverall([{ [ASTRA.novelty]: 3, [ASTRA.usefulness]: 3, [GEM.novelty]: 4, [GEM.usefulness]: 4 }]))
       .every(d => (d.slug ? !d.derived : d.derived)))
@@ -273,6 +286,272 @@ console.log('review findings')
   check('12: the Rankings hint lists exactly what the tab writes', /const labels = exportKpiColumns\(rows, \{ allEmpirical: true, evaluatorColumns: true \}\)/.test(page))
   const pr = src('src/utils/providerRequest.js')
   check('13: the "exhausted" message names no fixed token count', /spent its whole token ceiling on/.test(pr) && !/\$\{SCORING_MAX_TOKENS\}-token ceiling/.test(pr))
+}
+
+// ── 7b. The second review's findings (2026-09-24), each pinned ─────────────────
+console.log('second review: headers, import rules, labelling')
+{
+  const rt = raw => recomputeOverall(normalizeImportedRows(raw))
+  const base = { 'Idea ID': 'a', Condition: 'None', Title: 't' }
+
+  // P9. A bracket that is a scale or a statistic is not a model name.
+  const note = h => { const a = parseAiHeader(h); return a && [a.kind, a.slug, a.derived] }
+  check('P9: "AI Novelty (1-5)" is a score with no model name, not a model called "1-5"', same(note('AI Novelty (1-5)'), ['novelty', UNRECORDED, false]), JSON.stringify(note('AI Novelty (1-5)')))
+  check('P9: so are (0-10 scale), (avg), (average), (score), (Final Ideas)',
+    ['AI Novelty (0-10 scale)', 'AI Novelty (avg)', 'AI Novelty (average)', 'AI Usefulness (score)', 'AI Usefulness (Final Ideas)', 'AI Novelty (1–5)']
+      .every(h => { const a = parseAiHeader(h); return a && a.slug === UNRECORDED && !a.derived }))
+  check('P9: "(mean)" is the derived mean, "(sd)" / "(rank)" are not scores at all',
+    parseAiHeader('AI Novelty (mean)')?.derived === true && parseAiHeader('AI Novelty (sd)') === null && parseAiHeader('AI Usefulness (rank)') === null)
+  {
+    const [r] = rt([{ ...base, 'AI Novelty (1-5)': 4, 'AI Usefulness (1-5)': 3 }])
+    check('P9: imported under "model not recorded", and no model "1-5" appears',
+      r[REC.novelty] === 4 && r[REC.usefulness] === 3 && same(aiModelSlugs([r]), [UNRECORDED]) && !Object.keys(r).some(k => /1_5/.test(k)), JSON.stringify(aiModelSlugs([r])))
+  }
+
+  // P10. A model outside the catalogue keeps the capitals the file gave it.
+  {
+    const [r] = normalizeImportedRows([{ ...base, 'AI Novelty (Qwen3 Max Thinking)': 3, 'AI Usefulness (Qwen3 Max Thinking)': 4 }])
+    check('P10: normalizeImportedRows keeps "Qwen3 Max Thinking" (not lower-cased)',
+      r.ai_nov__qwen3_max_thinking === 3 && aiModelName('qwen3_max_thinking') === 'Qwen3 Max Thinking', aiModelName('qwen3_max_thinking'))
+    check('P10: so does the 3.1 upload path (canonicalKpiField)',
+      canonicalKpiField('AI Usefulness (Zeta Nine Pro)') === 'ai_use__zeta_nine_pro' && aiModelName('zeta_nine_pro') === 'Zeta Nine Pro', aiModelName('zeta_nine_pro'))
+    rememberModelName('omega_seven', 'omega seven')
+    rememberModelName('omega_seven', 'Omega Seven')
+    rememberModelName('omega_seven', 'OMEGA-seven')
+    check('P10: a name with capitals replaces an all-lower-case one, and then stays', aiModelName('omega_seven') === 'Omega Seven', aiModelName('omega_seven'))
+  }
+
+  // P11. The analysis CSV's bare column is the derived mean only on a row that has a per-model value.
+  {
+    const [r1, r2] = normalizeImportedRows([
+      { idea_id: 'x1', condition: 'None', text: 't', ai_nov__unrecorded: 3, novelty: 3 },
+      { idea_id: 'x2', condition: 'None', text: 't', ai_nov__unrecorded: '', novelty: 4 },
+    ])
+    check('P11: a row with no per-model value keeps its bare score (it is not a mean of nothing)', r2[REC.novelty] === 4, JSON.stringify(r2[REC.novelty]))
+    check('P11: a row with one still skips its bare (derived) column', r1[REC.novelty] === 3)
+  }
+
+  // P14. A standalone quality is not credited to a model, and it survives the page's own download.
+  {
+    const rows = recomputeOverall([
+      { idea_id: 'L', condition: 'None', text: 'Legacy idea', novelty: '', usefulness: '', overall_quality: 4.5 },
+      { idea_id: 'A', condition: 'None', text: 'Astra idea', [ASTRA.novelty]: 3, [ASTRA.usefulness]: 4 },
+    ])
+    const q = exportKpiColumns(rows).find(d => d.key === 'overall_quality')
+    check('P14: a mix of standalone and model qualities is labelled plain "AI Quality"', q && q.label === 'AI Quality', q && q.label)
+    const cols = exportKpiColumns(rows)
+    const back = rt(rows.map(r => Object.fromEntries([['Idea ID', r.idea_id], ['Condition', r.condition], ['Title', r.text], ...cols.map(c => [c.label, r[c.key]])])))
+    check('P14: the legacy quality comes back through the download, the model row stays derived',
+      back[0].overall_quality === 4.5 && back[1].overall_quality === 3.5 && back[1][ASTRA.novelty] === 3, JSON.stringify(back.map(r => r.overall_quality)))
+    const [old] = rt([{ ...base, 'AI Novelty (GPT-6 Astra)': '', 'AI Quality (GPT-6 Astra)': 4.5 }])
+    check('P14: a file saved with the old "AI Quality (GPT-6 Astra)" label reloads that standalone value', old.overall_quality === 4.5, String(old.overall_quality))
+    const only = presentKpis(recomputeOverall([{ [ASTRA.novelty]: 3, [ASTRA.usefulness]: 4 }])).find(d => d.key === 'overall_quality')
+    check('P14: a quality that IS the model\'s own still names it', only.label === 'AI Quality (GPT-6 Astra)', only.label)
+  }
+
+  // P15 + P42. Evaluator columns: exact headers, several averaged; "Eval. Quality" is derived.
+  {
+    check('P15: parseEvalHeader knows the page\'s labels and one rater\'s columns',
+      same(parseEvalHeader('Eval. Novelty'), { kind: 'novelty', rater: false }) && same(parseEvalHeader('ext_usefulness'), { kind: 'usefulness', rater: false })
+      && same(parseEvalHeader('Novelty (rater 2)'), { kind: 'novelty', rater: true }) && same(parseEvalHeader('novelty_rater1'), { kind: 'novelty', rater: true })
+      && same(parseEvalHeader('Usefulness (evaluator 1)'), { kind: 'usefulness', rater: true }) && same(parseEvalHeader('Eval. Quality'), { kind: 'quality', rater: false }))
+    check('P15: and nothing that merely mentions an evaluator',
+      ['Eval. Novelty SD', 'Eval. Novelty rank', 'Novelty (rater 1) SD', 'Evaluator agreement', 'Novelty'].every(h => parseEvalHeader(h) === null))
+    const [a] = rt([{ ...base, 'Novelty (evaluator 1)': 1, 'Novelty (evaluator 2)': 5 }])
+    check('P15a: two evaluators are averaged, not "the first"', a.ext_novelty === 3, String(a.ext_novelty))
+    const [b] = rt([{ ...base, 'Eval. Novelty SD': 0.71, 'Eval. Novelty': 3, 'Eval. Usefulness': 4 }])
+    check('P15b: an SD column is not the rating (it stays an extra)', b.ext_novelty === 3 && b.ext_quality === 3.5 && b.x_eval_novelty_sd === 0.71, JSON.stringify({ n: b.ext_novelty, q: b.ext_quality, sd: b.x_eval_novelty_sd }))
+    const [c] = rt([{ ...base, 'Eval. Novelty rank': 312 }])
+    check('P15c: a rank column is not the rating', c.ext_novelty === '', String(c.ext_novelty))
+    const [d] = rt([{ ...base, 'Eval. Novelty': 2, ext_novelty: 4 }])
+    check('P15: two evaluator-labelled columns are averaged', d.ext_novelty === 3, String(d.ext_novelty))
+    check('P15: evaluatorMean prefers the raters, then the labels', evaluatorMean({ 'Novelty (rater 1)': 2, 'Novelty (rater 2)': 4, 'Eval. Novelty': 5 }, 'novelty') === 3
+      && evaluatorMean({ 'Eval. Novelty': 5 }, 'novelty') === 5 && evaluatorMean({ 'Eval. Novelty': '' }, 'novelty') === '')
+    const [e] = rt([{ ...base, 'Eval. Novelty': 2, 'Eval. Usefulness': 4, 'Eval. Quality': 5 }])
+    check('P42: with both parts, Eval. Quality is their mean (it is derived)', e.ext_quality === 3, String(e.ext_quality))
+    const [f] = rt([{ ...base, 'Eval. Quality': 4 }])
+    check('P42: a file with ONLY "Eval. Quality" keeps it as the evaluator quality (not dropped, not an extra)',
+      f.ext_quality === 4 && !Object.keys(f).some(k => k.startsWith('x_')) && f.overall_quality === '', JSON.stringify({ q: f.ext_quality, o: f.overall_quality }))
+    check('P42: the 3.1 upload files "Eval. Quality" as the evaluator quality, never an AI one',
+      canonicalKpiField('Eval. Quality') === 'ext_quality' && canonicalKpiField('Quality (rater 1)') === 'ext_quality')
+  }
+
+  // P33. Only a real AI score header routes to an AI field; the rest are extras.
+  {
+    const notKpi = ['Embedding novelty', 'Quality index', 'Novelty SD', 'Novelty rank', 'Eval. Novelty SD', 'Eval. Novelty rank', 'AI Novelty (sd)', 'Usefulness score', 'Novelty index']
+    const got = notKpi.map(h => canonicalKpiField(h))
+    check('P33: a header that only mentions novelty / usefulness / quality is no KPI of the app', got.every(k => k === null), JSON.stringify(got))
+    const want = { 'Novelty': REC.novelty, 'AI Novelty': REC.novelty, 'Novelty Rating': REC.novelty, 'Avg Novelty': REC.novelty, 'Novelty (1-5)': REC.novelty,
+      'Usefulness Rating': REC.usefulness, 'Average usefulness': REC.usefulness, 'AI Novelty (GPT-6 Astra)': ASTRA.novelty, 'Novelty (GPT-6 Astra)': ASTRA.novelty,
+      ai_use__gpt_6_astra: ASTRA.usefulness, Overall: 'overall_quality', 'AI Quality': 'overall_quality' }
+    const bad = Object.entries(want).filter(([h, k]) => canonicalKpiField(h) !== k)
+    check('P33: the AI score headers still route to their fields', !bad.length, JSON.stringify(bad.map(([h]) => [h, canonicalKpiField(h)])))
+    const [r] = rt([{ ...base, 'AI Novelty (GPT-6 Astra)': 5, 'AI Usefulness (GPT-6 Astra)': 5, 'Embedding novelty': 0.3005, 'Quality index': 0.42, 'Novelty SD': 0.71 }])
+    check('P33: the Step-1 import keeps them as extras and leaves the AI mean alone',
+      r.x_embedding_novelty === 0.3005 && r.x_quality_index === 0.42 && r.x_novelty_sd === 0.71 && r[REC.novelty] === undefined && r.novelty === 5 && r.overall_quality === 5,
+      JSON.stringify({ x: [r.x_embedding_novelty, r.x_quality_index, r.x_novelty_sd], rec: r[REC.novelty], n: r.novelty }))
+  }
+
+  // isBareAiScoreHeader: the scores with no model name, decorated or not (for the 3.2 upload).
+  {
+    const yes = { Novelty: 'novelty', 'AI Novelty': 'novelty', nov: 'novelty', 'Novelty Rating': 'novelty', 'Novelty Ratings': 'novelty', 'Avg Novelty': 'novelty',
+      'Avg. Novelty': 'novelty', 'Average Novelty': 'novelty', 'Mean Novelty': 'novelty', 'Novelty (1-5)': 'novelty', 'Novelty (0-10 scale)': 'novelty',
+      'AI Novelty (avg)': 'novelty', 'Novelty avg': 'novelty', Usefulness: 'usefulness', 'Usefulness Rating': 'usefulness', 'Useful': 'usefulness',
+      'Usefulness (1–5)': 'usefulness', 'AI Usefulness Rating (1-5)': 'usefulness' }
+    const no = ['AI Novelty (GPT-6 Astra)', 'Novelty (GPT-6 Astra)', 'AI Novelty (model not recorded)', 'ai_nov__unrecorded', 'ai_nov__gpt_6_astra',
+      'AI Novelty (mean across models)', 'Novelty (mean)', 'Novelty (empirical)', 'Novelty (objective)', 'Eval. Novelty', 'Novelty (rater 1)',
+      'Novelty (expert 2)', 'NoveltyScore', 'Novelty Score', 'Novelty rank', 'Novelty SD', 'Novelty (sd)', 'Embedding novelty', 'AI Quality', 'Quality',
+      'Novelty (TF-IDF)', 'Usefulness score (empirical)', 'Need fit (empirical)']
+    const wrongYes = Object.entries(yes).filter(([h, k]) => isBareAiScoreHeader(h) !== k)
+    const wrongNo = no.filter(h => isBareAiScoreHeader(h) !== null)
+    check('isBareAiScoreHeader reads the bare and decorated forms', !wrongYes.length, JSON.stringify(wrongYes.map(([h]) => [h, isBareAiScoreHeader(h)])))
+    check('isBareAiScoreHeader refuses named, explicit, derived, empirical, evaluator, rank, SD and embedding columns', !wrongNo.length, JSON.stringify(wrongNo))
+    const [r] = normalizeImportedRows([{ ...base, 'Novelty Rating': 4, 'Usefulness (1-5)': 2 }])
+    check('a decorated bare column imports as "model not recorded"', r[REC.novelty] === 4 && r[REC.usefulness] === 2)
+  }
+
+  // P40. The unrecorded pair moves whole.
+  {
+    const rows = recomputeOverall([{ idea_id: 'I1', [REC.novelty]: 3, [REC.usefulness]: 4, [ASTRA.novelty]: 5, [ASTRA.usefulness]: '' }])
+    const res = labelUnrecordedScores(rows, 'gpt-6-astra')
+    const r = recomputeOverall(res.rows)[0]
+    check('P40: an idea whose model cell is half full is left whole (a conflict)',
+      res.moved === 0 && res.conflicts === 1 && r[ASTRA.novelty] === 5 && r[ASTRA.usefulness] === '' && r[REC.novelty] === 3 && r[REC.usefulness] === 4,
+      JSON.stringify({ moved: res.moved, conflicts: res.conflicts, row: r }))
+    const both = labelUnrecordedScores([{ [REC.novelty]: 3, [REC.usefulness]: 4 }, { [REC.novelty]: 2 }, { [ASTRA.usefulness]: 1, [REC.novelty]: 2 }], 'gpt-6-astra')
+    check('P40: both cells empty: the pair moves; a lone half moves too; counts add up to the ideas',
+      both.moved === 2 && both.conflicts === 1 && both.rows[0][ASTRA.novelty] === 3 && both.rows[0][ASTRA.usefulness] === 4 && both.rows[1][ASTRA.novelty] === 2
+        && both.rows[2][REC.novelty] === 2 && both.rows[2][ASTRA.novelty] === undefined, JSON.stringify(both))
+  }
+}
+
+// ── 7c. matchScoreTable: one idea per file row, every field to that idea ──────────
+console.log('matchScoreTable (the 3.2 / 3.3 score-file match)')
+{
+  const CL = aiFieldsFor('claude-sonnet-5')
+  const idea = (id, title, extra = {}) => ({ idea_id: id, session: 'S1', idea_title: title, text: title, ...extra })
+  {
+    // P36: two ideas share a title; the file (with Idea IDs) has Claude only on the Final one.
+    const rows = [idea('I1', 'Sports headband'), idea('I2', 'Sports headband'), idea('I3', 'Fever sock')]
+    const res = matchScoreTable(rows, [
+      { id: 'I1', session: '', title: 'Sports headband', values: { [ASTRA.novelty]: 2, [ASTRA.usefulness]: 2, [CL.novelty]: '', [CL.usefulness]: '' } },
+      { id: 'I2', session: '', title: 'Sports headband', values: { [ASTRA.novelty]: 5, [ASTRA.usefulness]: 5, [CL.novelty]: 4, [CL.usefulness]: 4 } },
+      { id: 'I3', session: '', title: 'Fever sock', values: { [ASTRA.novelty]: 3, [ASTRA.usefulness]: 3, [CL.novelty]: 1, [CL.usefulness]: 2 } },
+    ])
+    const [a, b] = res.rows
+    check('by Idea ID: both models of a file row land on the SAME idea (P36)',
+      a[ASTRA.novelty] === 2 && a[CL.novelty] === undefined && b[ASTRA.novelty] === 5 && b[CL.novelty] === 4, JSON.stringify([a, b]))
+    check('by Idea ID: counts', res.matched === 3 && res.filled === 3 && res.kept === 0 && res.unmatched === 0 && res.matchedIdx.size === 3)
+  }
+  {
+    // The id wins over a changed title; an id this dataset does not have falls through to the title.
+    const rows = [idea('I1', 'Old title'), idea('I2', 'Fever sock')]
+    const res = matchScoreTable(rows, [
+      { id: 'I1', session: '', title: 'New title', values: { [ASTRA.novelty]: 4 } },
+      { id: 'ZZZ', session: '', title: 'Fever sock', values: { [ASTRA.novelty]: 2 } },
+    ])
+    check('the id beats a changed title; an unknown id falls through to the title', res.rows[0][ASTRA.novelty] === 4 && res.rows[1][ASTRA.novelty] === 2 && res.unmatched === 0)
+  }
+  {
+    // P35(b): two sessions number their ideas 1, 2 — the session decides.
+    const rows = [
+      { idea_id: '1', session: 'S1', idea_title: 'Fever sock' }, { idea_id: '2', session: 'S1', idea_title: 'Cool cap' },
+      { idea_id: '1', session: 'S2', idea_title: 'Mood scarf' }, { idea_id: '2', session: 'S2', idea_title: 'Warm glove' },
+    ]
+    const res = matchScoreTable(rows, [{ id: '1', session: 'S2', title: 'Mood scarf', values: { [CL.novelty]: 5 } }])
+    check('session narrows the id: S2\'s idea 1, not S1\'s', res.rows[2][CL.novelty] === 5 && res.rows[0][CL.novelty] === undefined)
+    const noSess = matchScoreTable(rows, [{ id: '1', session: '', title: 'Mood scarf', values: { [CL.novelty]: 5 } }])
+    check('no session in the file: the title picks between the two idea 1s', noSess.rows[2][CL.novelty] === 5 && noSess.rows[0][CL.novelty] === undefined)
+    const amb = matchScoreTable(rows, [{ id: '1', session: '', title: 'Something else', values: { [CL.novelty]: 5 } }])
+    check('...and when the title does not decide, nothing is guessed', amb.unmatched === 1 && amb.filled === 0 && !amb.rows.some(r => r[CL.novelty] !== undefined))
+    // Same id AND same title in two sessions: only the session can tell them apart.
+    const twins = [{ idea_id: '1', session: 'S1', idea_title: 'Fever sock' }, { idea_id: '1', session: 'S2', idea_title: 'Fever sock' }]
+    const tw = matchScoreTable(twins, [{ id: '1', session: 'S2', title: 'Fever sock', values: { [CL.novelty]: 5 } }])
+    check('...and where the titles agree too, the session alone decides', tw.rows[1][CL.novelty] === 5 && tw.rows[0][CL.novelty] === undefined && tw.filled === 1)
+  }
+  {
+    // The same idea loaded twice (a session and its export): both copies are filled.
+    const rows = [idea('I1', 'Fever sock'), idea('I2', 'Cool cap'), idea('I1', 'Fever sock')]
+    const res = matchScoreTable(rows, [{ id: 'I1', session: 'S1', title: 'Fever sock', values: { [ASTRA.novelty]: 4 } }])
+    check('duplicate copies of one idea are all filled', res.rows[0][ASTRA.novelty] === 4 && res.rows[2][ASTRA.novelty] === 4 && res.filled === 2 && res.matched === 1)
+  }
+  {
+    // Title only: two file rows with one title go to two different ideas, and never to one an id already placed.
+    const rows = [idea('I1', 'Sports headband'), idea('I2', 'Sports headband'), idea('I3', 'Sports headband')]
+    const res = matchScoreTable(rows, [
+      { id: '', session: '', title: 'Sports headband', values: { [ASTRA.novelty]: 1 } },
+      { id: 'I1', session: '', title: 'Sports headband', values: { [ASTRA.novelty]: 3 } },
+      { id: '', session: '', title: 'Sports headband', values: { [ASTRA.novelty]: 2 } },
+    ])
+    check('same-title rows spread over different ideas, the id-placed one excluded',
+      same(res.rows.map(r => r[ASTRA.novelty]), [3, 1, 2]), JSON.stringify(res.rows.map(r => r[ASTRA.novelty])))
+  }
+  {
+    // Fill blanks only; a blank or unusable file value never blanks; values are kept as given.
+    const rows = [idea('I1', 'Kept', { [ASTRA.novelty]: 4, [ASTRA.usefulness]: '' })]
+    const res = matchScoreTable(rows, [{ id: 'I1', session: '', title: 'Kept', values: { [ASTRA.novelty]: 1, [ASTRA.usefulness]: 7, [GEM.novelty]: '', [GEM.usefulness]: 'n/a' } }])
+    const r = res.rows[0]
+    check('fill-blank: a held score is kept, an empty one filled (7 kept as given), a blank never written',
+      r[ASTRA.novelty] === 4 && r[ASTRA.usefulness] === 7 && !(GEM.novelty in r) && !(GEM.usefulness in r) && res.filled === 1 && res.kept === 0, JSON.stringify(r))
+    const again = matchScoreTable(res.rows, [{ id: 'I1', session: '', title: 'Kept', values: { [ASTRA.novelty]: 2, [ASTRA.usefulness]: 2 } }])
+    check('fill-blank: a fully scored idea is kept, the same row object returned', again.filled === 0 && again.kept === 1 && again.rows[0] === res.rows[0])
+    check('the input rows are not changed', rows[0][ASTRA.usefulness] === '')
+    // Two file rows for one idea (a file split by model): the first fills, the
+    // second finds its value already there. The idea gained, so it is filled, not kept.
+    const split = matchScoreTable([idea('I9', 'Split')], [
+      { id: 'I9', session: '', title: 'Split', values: { [ASTRA.novelty]: 3 } },
+      { id: 'I9', session: '', title: 'Split', values: { [ASTRA.novelty]: 5, [GEM.novelty]: 2 } },
+      { id: 'I9', session: '', title: 'Split', values: { [ASTRA.novelty]: 1 } },
+    ])
+    check('an idea counts once: filled if it gained anything, never also kept',
+      split.filled === 1 && split.kept === 0 && split.matched === 3 && split.rows[0][ASTRA.novelty] === 3 && split.rows[0][GEM.novelty] === 2,
+      JSON.stringify({ f: split.filled, k: split.kept, m: split.matched, r: split.rows[0] }))
+  }
+  {
+    // P19's file: two models covering different ideas.
+    const rows = []
+    for (let i = 0; i < 20; i++) rows.push(idea(`A${i}`, `Astra rated idea number ${i}`, { [ASTRA.novelty]: 3, [ASTRA.usefulness]: 3 }))
+    for (let i = 0; i < 10; i++) rows.push(idea(`C${i}`, `Claude only idea number ${i}`))
+    const file = [
+      ...rows.slice(0, 20).map(r => ({ id: '', session: '', title: r.idea_title, values: { [ASTRA.novelty]: 4, [ASTRA.usefulness]: 4, [CL.novelty]: '', [CL.usefulness]: '' } })),
+      ...rows.slice(20).map(r => ({ id: '', session: '', title: r.idea_title, values: { [ASTRA.novelty]: '', [ASTRA.usefulness]: '', [CL.novelty]: 2, [CL.usefulness]: 2 } })),
+      ...[1, 2, 3].map(i => ({ id: '', session: '', title: `Unknown astra ${i}`, values: { [ASTRA.novelty]: 4 } })),
+      ...[1, 2, 3, 4].map(i => ({ id: '', session: '', title: `Unknown claude ${i}`, values: { [CL.novelty]: 4 } })),
+      { id: '', session: '', title: 'Unrated template row', values: { [ASTRA.novelty]: '' } },
+    ]
+    const res = matchScoreTable(rows, file)
+    check('P19: counts per idea and per file row: filled 10, kept 20, unmatched 7',
+      res.filled === 10 && res.kept === 20 && res.unmatched === 7 && res.matched === 30, JSON.stringify({ f: res.filled, k: res.kept, u: res.unmatched, m: res.matched }))
+  }
+  {
+    // isEligible, the English title (Step 1b) and a positional import_<n> id.
+    const rows = [idea('I1', 'Fièvre chaussette'), idea('I2', 'Removed idea'), idea('import_3', 'Cool cap')]
+    const res = matchScoreTable(rows, [
+      { id: '', session: '', title: 'Fever sock', values: { [ASTRA.novelty]: 4 } },
+      { id: 'I2', session: '', title: 'Removed idea', values: { [ASTRA.novelty]: 4 } },
+      { id: 'import_3', session: '', title: 'Another file\'s third row', values: { [ASTRA.novelty]: 4 } },
+    ], { isEligible: r => r.idea_id !== 'I2', altTitle: (r, i) => (i === 0 ? 'Fever sock' : '') })
+    check('the English title matches, a removed idea is never filled, an import_<n> id needs its title',
+      res.rows[0][ASTRA.novelty] === 4 && res.rows[1][ASTRA.novelty] === undefined && res.rows[2][ASTRA.novelty] === undefined && res.unmatched === 2,
+      JSON.stringify(res.rows.map(r => r[ASTRA.novelty])))
+  }
+}
+
+// ── 7d. aiPanelCoverage: were the ideas rated by the same models? ────────────────
+console.log('aiPanelCoverage')
+{
+  const CL = aiFieldsFor('claude-sonnet-5')
+  const even = aiPanelCoverage([{ [ASTRA.novelty]: 3, [ASTRA.usefulness]: 3 }, { [ASTRA.usefulness]: 4 }, { novelty: 3 }])
+  check('one model on every rated idea: even', !even.uneven && even.rated === 2 && even.unrated === 1 && same(even.groups, [{ slugs: ['gpt_6_astra'], n: 2 }]) && same(even.models, ['gpt_6_astra']), JSON.stringify(even))
+  const rows = []
+  for (let i = 0; i < 10; i++) rows.push({ [ASTRA.novelty]: 3, [ASTRA.usefulness]: 3, ...(i < 4 ? { [CL.novelty]: 4, [CL.usefulness]: '' } : { [CL.novelty]: '', [CL.usefulness]: '' }) })
+  rows.push({ [REC.novelty]: 2 }, { [ASTRA.novelty]: '' })
+  const cov = aiPanelCoverage(rows)
+  check('a second model on 4 of 10 ideas: uneven, most common panel first, models in catalogue order, "not recorded" last',
+    cov.uneven && cov.rated === 11 && cov.unrated === 1
+      && same(cov.groups, [{ slugs: ['gpt_6_astra'], n: 6 }, { slugs: ['claude_sonnet_5', 'gpt_6_astra'], n: 4 }, { slugs: [UNRECORDED], n: 1 }])
+      && same(cov.models, ['claude_sonnet_5', 'gpt_6_astra', UNRECORDED]), JSON.stringify(cov))
+  check('no rows: nothing rated, not uneven', (() => { const z = aiPanelCoverage([]); return !z.uneven && z.rated === 0 && z.groups.length === 0 })())
 }
 
 // ── 8. The page is wired to it ───────────────────────────────────────────────

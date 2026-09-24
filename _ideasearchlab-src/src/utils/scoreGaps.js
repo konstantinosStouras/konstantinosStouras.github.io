@@ -34,7 +34,7 @@
  * `tools/score-gaps-guard.mjs` reproduces each case offline.
  */
 import { normTitle, rowTitle, isNoveltyScoreHeader } from './analyticsData.js'
-import { isAiModelKey, aiNovKey, aiUseKey, UNRECORDED } from './aiScoreColumns.js'
+import { isAiModelKey, aiNovKey, aiUseKey, UNRECORDED, parseAiHeader } from './aiScoreColumns.js'
 
 /** The two AI columns this step fills. Quality is derived from them, never filled.
  *  Since 2026-09-24 every model has its OWN pair (aiScoreColumns.js: the caller
@@ -250,16 +250,18 @@ export function pickScoredSheet(sheets) {
 const ID_COLUMNS = ['idea id', 'idea_id', 'id', 'ideaid', 'idea title', 'title']
 
 /** An AI Novelty / AI Usefulness column — not a blind rater's, not an empirical KPI,
- *  not the derived mean of several models. */
+ *  not the derived mean of several models, and not a column that only mentions
+ *  the word ("Embedding novelty", "Novelty SD"). The same test the importer
+ *  (normalizeImportedRows) reads the columns by, parseAiHeader, so the sheet
+ *  chosen here is one whose scores the import will actually find. */
 function isAiScoreColumn(col) {
   const c = String(col).toLowerCase()
   if (isAiModelKey(c)) return true                      // the analysis CSV's per-model keys
-  if (!/novelty|usefulness/.test(c)) return false
   if (/rater|\(rater|\beval|evaluator/.test(c)) return false  // human evaluators (3.3)
   if (/objective|empirical|obj\.|distinctiveness|need fit/.test(c)) return false  // the 3.1 KPIs
-  if (/\(mean\b/.test(c)) return false                   // derived, never imported
   if (isNoveltyScoreHeader(c)) return false                    // 3.1 NoveltyScore
-  return true
+  const a = parseAiHeader(col)
+  return !!a && !a.derived && a.kind !== 'quality'       // derived means are never imported
 }
 
 /**
