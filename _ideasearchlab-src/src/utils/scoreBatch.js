@@ -122,7 +122,11 @@ export function assignScores(parsed, count) {
 export function isFatalApiError(err) {
   const s = err?.status
   if (s === 401 || s === 403 || s === 404) return true
-  if (s === 400) return true
+  // 400, and 422 (DeepSeek's "Invalid Parameters", Mistral's request
+  // validation): the request itself is wrong, so it fails the same way every
+  // time. Retrying only made the admin wait and then read "check the key and
+  // quota", which is not the cause.
+  if (s === 400 || s === 422) return true
   // 402 Payment Required: DeepSeek / OpenRouter with no credit left. Retrying
   // cannot top the balance up, so say so at once instead of backing off.
   if (s === 402) return true

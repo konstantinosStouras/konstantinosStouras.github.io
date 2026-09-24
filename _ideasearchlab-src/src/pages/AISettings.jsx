@@ -7,6 +7,7 @@ import { db, auth, functions } from '../firebase'
 import { useTheme } from '../context/ThemeContext'
 import { PROVIDERS, ASSISTANT_PROVIDERS, CATALOGUE_AS_OF, modelOptionLabel } from '../data/aiModels'
 import { MODEL_PRICES } from '../data/aiPricing'
+import { trimApiKeys } from '../utils/providerRequest'
 import styles from './AISettings.module.css'
 
 // The same three default-management buttons used across the admin panel,
@@ -142,7 +143,9 @@ export default function AISettings() {
       const save = httpsCallable(functions, 'saveAISettings')
       await save({
         provider,
-        apiKeys,
+        // Trimmed: a key pasted with a trailing space would otherwise be saved
+        // with it (the rater trims it again when reading, for keys saved before).
+        apiKeys: trimApiKeys(apiKeys),
         model: model || null,
         temperature,
         maxTokens,
@@ -252,8 +255,8 @@ export default function AISettings() {
             </div>
           ))}
           <DefaultActions
-            onSave={() => saveSection('keys', { apiKeys }, 'Keys saved.')}
-            onMakeDefault={() => saveSection('keys', { apiKeys }, 'Keys saved — now the default for all sessions.')}
+            onSave={() => saveSection('keys', { apiKeys: trimApiKeys(apiKeys) }, 'Keys saved.')}
+            onMakeDefault={() => saveSection('keys', { apiKeys: trimApiKeys(apiKeys) }, 'Keys saved — now the default for all sessions.')}
             onRestore={() => {
               if (!window.confirm('Remove all saved API keys and go back to no keys (the built-in default)?')) return
               const cleared = Object.fromEntries(PROVIDERS.map(p => [p.id, '']))
