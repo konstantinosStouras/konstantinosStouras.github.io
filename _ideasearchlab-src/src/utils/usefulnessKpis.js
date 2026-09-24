@@ -263,81 +263,211 @@ export function compileTerms(terms) {
 
 // A mention that is negated does not count: the worked example participants saw
 // says "no electronics needed", and "battery-free" / "without an app" say the idea
-// needs LESS technology, not more. Negated = a negator within the few words before
-// the term ("no", "not", "without", "never", "zero", "free of", "instead of",
-// "rather than", "doesn't need"), or "-free"/" free" straight after it.
-const NEGATED_BEFORE = /\b(?:no|not|without|never|zero|nor|free of|instead of|rather than|(?:does|do|did)(?:n'?t| not) (?:need|require|use))\b(?:[\s,/&-]+(?:and|or|any|an|a|the|extra|other|external|[a-z-]+s)){0,3}[\s,/&-]*$/i
-// ...and the LATER items of a negated list (owner's data, 2026-09-24: "it removes
-// the battery or Bluetooth wearable device" was scored as needing both). The rule
-// above reaches only the first item unless the words before the term end in "s",
-// so "no battery or Bluetooth needed" still counted Bluetooth and "without a
-// battery or an app" still counted the app. This second rule lets the negator run
-// over a LIST, and it is deliberately NARROW, because a negation that leaks past
-// its clause hides real technology ("It is not expensive because the app is free"
-// needs an app; review finding, same day):
-//   negator ("no", "without", "removes", "replaces", "eliminates", "no need for" …)
-//   → optionally ONE -ing verb right after it, maybe after an -ly adverb
-//     ("without USING …", "without CONSTANTLY CHECKING …")
-//   → articles ("a", "an", "the", "any", "extra" …)
-//   → list items joined by "or" / "nor" / "/", or by a comma when the item before
-//     the comma is itself on the technology list T
-//   → at most TWO describing words ("no ELECTRONIC sensors")
-//   → the term.
-// A describing word is never a joining word, a preposition, a subordinator, a verb
-// form or "only / just / even" — so "because", "by", "via", "through", "using",
-// "since", "longer" … end the reach ("replaces manual checks using an app" keeps
-// the app). A COMMA list must close with "or" / "nor", before the term or right
-// after it ("without batteries, electronics, or a phone"); otherwise "no app, a
-// sensor measures it" would pass the negation on to the sensor. "and" never
-// carries it ("no delay and the app alerts parents" keeps the app).
-const NEG_WORDS = String.raw`(?:no|not|without|never|zero|nor|free of|instead of|rather than|(?:does|do|did)(?:n'?t| not) (?:need|require|use)|remov(?:e|es|ed|ing)|eliminat(?:e|es|ed|ing)|replac(?:e|es|ed|ing)|get(?:s|ting)? rid of|ditch(?:es|ed|ing)?)`
-// One verb in -ing right after the negator, optionally after an -ly adverb:
-// "without USING an electronic sensor", "without CONSTANTLY CHECKING an electronic
-// device". It is the negator's own object, so it is the one place a verb form may
-// sit between the negator and the term.
-const NEG_GERUND = String.raw`(?:(?:\s+[a-z]+ly)?\s+[a-z]+ing)?`
-const NEG_NEED = String.raw`(?:\s+(?:the\s+)?(?:need|needs)\s+(?:for|of))?`
-const NEG_ARTICLES = String.raw`(?:[\s/&-]+(?:any|an|a|the|extra|other|external|separate|additional)){0,2}`
-// A describing word: not a joining word, preposition, subordinator, auxiliary or
-// negator, not "only/just/even/merely/longer/more", and not an -ing / -ed verb form.
-const NEG_NOT_A_MODIFIER = 'and|or|nor|but|with|while|which|that|who|so|then|than|plus|also|yet|only|just|even|merely|because|since|as|by|via|through|for|to|in|on|at|of|from|into|onto|over|under|after|before|until|unless|when|where|whether|if|longer|more|less|is|are|was|were|be|been|being|it|its|they|them|their|this|these|those|will|can|could|would|should|may|might|must|do|does|did|has|have|had|not|no|never'
-const NEG_MOD = String.raw`(?:[\s-]+(?!(?:${NEG_NOT_A_MODIFIER})\b)(?![a-z0-9-]*(?:ing|ed)\b)[a-z0-9-]+)`
-const negatedListCache = new WeakMap()
-function negatedListRes(compiled) {
-  let res = negatedListCache.get(compiled)
-  if (res) return res
-  const techAlt = compiled.length ? `(?:${compiled.map(c => c.re.source).join('|')})` : '(?!)'
-  const orItem = String.raw`(?:${NEG_MOD}{1,2}\s*(?:\bor\b|\bnor\b|/)` + NEG_ARTICLES + ')'
-  // "…, " after a technology item, with the Oxford comma's "or" / "nor" allowed
-  // straight after it ("without an app, battery, or electronic sensor").
-  const commaTechItem = String.raw`(?:${NEG_MOD}{0,2}[\s-]+${techAlt}\s*,(?:\s*(?:or|nor)\b)?` + NEG_ARTICLES + ')'
-  const build = items => new RegExp(
-    String.raw`\b${NEG_WORDS}\b${NEG_NEED}${NEG_GERUND}` + NEG_ARTICLES
-    + `(?:${items})*` + NEG_MOD + '{0,2}' + NEG_ARTICLES + String.raw`[\s/&-]*$`, 'i')
-  res = { plain: build(orItem), comma: build(`${orItem}|${commaTechItem}`) }
-  negatedListCache.set(compiled, res)
-  return res
+// needs LESS technology, not more. The negation also reaches the later items of a
+// negated LIST (owner's data, 2026-09-24: "it removes the battery or Bluetooth
+// wearable device" was scored as needing both).
+//
+// The rule is written for PRECISION first. Hiding a technology the idea really uses
+// inflates its Workability, and the review of 2026-09-24 found the first list rule
+// doing exactly that in ordinary sentences: "washed without damaging the sensor",
+// "Parents replace the coin battery", "a no-contact sensor", "Do not iron or the
+// LEDs will melt", "No app, the sensor turns the patch red or green". So a mention
+// is negated only when EVERY word from a negator up to the term fits this small
+// grammar, with nothing left over:
+//
+//   negator  [lead-in]  { [articles] item joiner }  [articles]  [<= 2 describing words]  TERM
+//
+//   negator      a closed list, each a whole word followed by a space (so "no-contact"
+//                and "zero-waste" are adjectives, not negators): no, without, zero,
+//                nor, neither, free of / from, instead of, rather than, "does not
+//                need / require / have / rely on …", "never needs", "no longer
+//                need(s)", "removes the need for", "unlike … that rely on / use /
+//                need / require", and the verbs that take something AWAY: "it / this
+//                / which / that removes / eliminates / replaces", "eliminates", "gets
+//                rid of", "ditches". A maintenance verb with a person or an order as
+//                its subject ("Parents replace the battery", "Remove the sensor
+//                before washing") is not a negator.
+//   lead-in      "the need for", "the help of", "the use of", "need to use", and one
+//                verb from a CLOSED list that means using or needing (using, needing,
+//                requiring, relying on, adding, having, having to use, wearing,
+//                carrying, checking …), maybe after an -ly adverb. Any other -ing
+//                verb ends the reach ("without draining the battery" keeps the
+//                battery). After "without", "<-ing verb> [two words] or <closed
+//                verb>" is allowed too: "without waking them or using a sensor".
+//   articles     a, an, any, extra, external, separate, additional. "the" only
+//                after a verb that takes something away ("removes the battery"), and
+//                after "or" only when the item before it had "the" too: "without the
+//                app" / "no battery or the sensor would overheat" name a thing the
+//                idea HAS.
+//   item         at most two describing words + a HEAD: a term of T, or one of a few
+//                general kit nouns (device, screen, thermometer, phone, wire …), so
+//                "no change or the app alarm" keeps the app ("change" is not kit).
+//   joiner       "or", "nor", "/", or a comma (", or" too). Never "and", and never
+//                " - " or a dash, which end the clause like ".;:!?".
+//   describing   any word except a joining word, preposition, pronoun, auxiliary,
+//     word       article, negator, "only / just / even / longer / matter / doubt …",
+//                a number, or a word ending in -ing / -ed / -ly / -s (a verb such as
+//                "means" or "sends", or a plural noun, is never a describing word).
+//
+// With no list at all it is the plain case: "no battery", "without any extra
+// electronics", "does not need a sensor", "no electronic sensors".
+//
+// "not" and "never" alone reach only "a / an / any" and the term ("it's not a
+// notification"): they usually govern a verb ("Do not tumble dry or the battery …").
+// "no-app" / "zero-battery" (fused by a hyphen) negate the term they are fused to,
+// and "-free" / " free" straight after the term negates it ("battery-free").
+//
+// A list with a COMMA is where a negation most often leaks, because the comma can
+// just as well close the negated phrase: "Without a battery, the sensor or the app
+// alerts parents". So a comma list negates only when (1) it closes with "or" /
+// "nor" INSIDE the list itself (after its last comma before the term, or in the
+// next items straight after the term), and (2) its last item is followed by an
+// end: ".", ";", ",", ")", a dash, "needed", "required", "inside", or "and" + a
+// word that is not an article. So "no battery or app, a sensor measures it" and
+// "No app, a sensor or an LED shows the warning" keep the sensor and the LED. A
+// later item of an "or" list without a comma must not run straight into a verb
+// either ("It needs no battery or an LED would dim" keeps the LED).
+//
+// Everything is read from a 60-character window on each side of the term, and the
+// grammar has one way to split any text (single spaces between words, a hyphen only
+// inside a word), so matching stays fast whatever is pasted in.
+const NEG_WINDOW = 60
+// A negator must start a word: not the end of "piano" or "casino", not "-no".
+const NEG_START = String.raw`(?:^|[^a-z0-9'-])`
+// Not "the", and not "other": "no other sensor like it" is said of a sensor.
+const NEG_ART = 'any|an|a|extra|external|separate|additional'
+const NEG_ARTS = String.raw`(?:(?:${NEG_ART}) ){0,2}`
+const NEG_THE = String.raw`the (?:(?:${NEG_ART}) )?`
+// Before matching, the window is reduced to its grammar: every HEAD (a term of T,
+// or a general kit noun) becomes one mark, and every describing word another, so
+// the matchers below are small and do not depend on the list T.
+const NEG_HEAD = '\uE000'
+const NEG_DESC = '\uE001'
+const NEG_KIT = compileTerms([
+  'device', 'gadget', 'technology', 'tech', 'equipment', 'hardware', 'software', 'electricity', 'power',
+  'wire', 'wiring', 'cable', 'cord', 'plug', 'screen', 'display', 'monitor', 'thermometer', 'phone',
+  'smartphone', 'watch', 'tracker', 'wearable', 'component', 'part', 'reader', 'probe', 'connectivity', 'connection',
+])
+// Verbs that start a new clause after a plural subject ("or sensors STAY hidden");
+// never a describing word either.
+const NEG_BASE_VERBS = 'get|keep|stay|start|stop|turn|change|blink|glow|flash|beep|buzz|vibrate|send|read|show|alert|warn|tell|measure|detect|sense|track|log|record|store|save|monitor|check|work|run|last|die|fail|break|overheat|go'
+// Words that are never a describing word (the grammar's own words among them).
+const NEG_NOT_A_MODIFIER = new Set([
+  NEG_BASE_VERBS,
+  `the|other|${NEG_ART}`,
+  'and|or|nor|but|plus|also|yet|so|then|than|only|just|even|ever|merely|still|already|all|some|every|each|such|like|unlike',
+  'because|since|as|by|via|through|for|to|in|on|at|of|from|into|onto|over|under|with|within|about|after|before|until|unless|when|where|whether|while|if|though|although',
+  'which|that|who|whom|whose|what|whatever|how|why|this|these|those|it|its|they|them|their|he|she|his|her|we|our|you|your|i|my|me',
+  'one|two|three|four|five|six|seven|eight|nine|ten|dozen|hundred|several',
+  'is|are|was|were|be|been|being|am|will|shall|can|cannot|could|would|should|may|might|must|do|does|did|has|have|had|get',
+  'need|use|wear|carry|buy|install|check|rely|depend|require|contain|include|involve|help|rid',
+  'no|not|never|without|zero|neither|free|instead|rather|none|nothing',
+  'longer|more|less|most|least|much|many|few|matter|doubt|wonder|way|sooner|question|fail|exception|up|out|off|down|here|there',
+  'necessary|inside|anywhere|whatsoever',
+].join('|').split('|'))
+/**
+ * A describing word: a plain word, not on the list above (nor starting with one:
+ * "no-contact"), not a number, not a contraction, and not ending in -ing / -ed /
+ * -ly / -s (a verb such as "means" or "sends", or a plural noun).
+ */
+const isDescribingWord = w => /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(w)
+  && !NEG_NOT_A_MODIFIER.has(w.split('-')[0]) && !w.split('-').some(p => /(?:ing|ed|ly|[^su]s)$/.test(p))
+// The verbs that carry "without / no / instead of" on to what is used or needed.
+const NEG_GERUND = String.raw`(?:(?:[a-z]+ly|ever|even) )?(?:using|needing|requiring|relying on|depending on|adding|having to (?:use|wear|carry|buy|install|check|rely on|depend on)|having|wearing|carrying|checking|installing|buying)`
+const NEG_LEAD = String.raw`(?:(?:the )?(?:need|help|use) (?:for|of) |(?:the )?need to (?:use|wear|carry|buy|install) )?(?:${NEG_GERUND} )?`
+// One word of the "unlike …" / "without waking …" phrases.
+const negToken = stop => String.raw`(?!(?:${stop})\b)[^\s,/.;:!?()]+`
+// The verbs that take something away: the only negators "the" may follow.
+const NEG_TAKE_AWAY = String.raw`(?:it|this|which|that) (?:removes|eliminates|replaces)|eliminat(?:es|ing)|gets rid of|getting rid of|ditch(?:es|ing)`
+const NEG_OTHER = [
+  'no|zero|nor|neither|free of|free from|instead of|rather than',
+  // "without waking them or using …": the negation skips one other -ing phrase to
+  // reach a closed verb that means using.
+  String.raw`without(?: [a-z]+ing(?: ${negToken('and|or|nor|but|because|since|so|while|when|if|then|which|that')}){0,2} or(?= ${NEG_GERUND} ))?`,
+  String.raw`(?:do|does|did|will|would)(?: not|n't)(?: even)? (?:need|require|have|contain|include|involve|rely on|depend on)`,
+  String.raw`(?:does|did)(?: not|n't)(?: even)? use|won't(?: even)? (?:need|require|use|have|rely on)`,
+  String.raw`(?:never|no longer) (?:needs?|requires?|uses?|relies on|rely on|depends on|depend on)`,
+  String.raw`(?:remov|replac|eliminat|avoid)(?:es|ing) the need (?:for|of)`,
+  String.raw`unlike(?: ${negToken('and|or|nor|but|because|since|so|while|when|if|that|which|who')}){1,4} (?:that|which|who) (?:rely on|relies on|depend on|depends on|need|needs|require|requires|use|uses)`,
+].join('|')
+// What may follow the LAST item of a comma list for the list to count as closed.
+const NEG_END = String.raw`(?:$| ?[.;:!?)]| ,| -| ?[—–]| and (?!(?:the|${NEG_ART}|some|its|their|his|her|our|your)\b)| (?:(?:is|are) )?(?:needed|required|necessary|involved|included)\b| (?:is|are) inside\b| (?:at all|inside|anywhere|whatsoever)\b)`
+const NEG_ITEM_MOD = `[${NEG_HEAD}${NEG_DESC}]`             // a head can describe another: "watch sensor"
+const NEG_ITEM = `(?:${NEG_ITEM_MOD} ){0,2}${NEG_HEAD}`
+// Text before the term (reduced, see reduceWindow), ending where the term starts.
+const negBefore = joiner => {
+  const noThe = `${NEG_ARTS}(?:${NEG_ITEM} ${joiner}(?:${NEG_GERUND} )?${NEG_ARTS})*(?:${NEG_ITEM_MOD} ){0,2}$`
+  const the = `(?:${NEG_THE}${NEG_ITEM} ${joiner}(?:${NEG_GERUND} )?)*(?:${NEG_THE}(?:${NEG_ITEM_MOD} ){0,2}$|${noThe})`
+  return new RegExp(`${NEG_START}(?:(?:${NEG_TAKE_AWAY}) ${the}|(?:${NEG_OTHER}) ${NEG_LEAD}${noThe})`)
 }
-/** Is the term negated as part of a list? `before`/`after` = the text around it. */
-function negatedInList(before, after, res) {
-  if (res.plain.test(before)) return true
-  const m = before.match(res.comma)
+const NEG_LIST_PLAIN = negBefore('(?:or |nor |/ )')
+const NEG_LIST_COMMA = negBefore('(?:, (?:or |nor )?|or |nor |/ )')
+// Text after the term: the rest of the term's own item ("electronic TEMPERATURE
+// SENSOR"), then either the end of the list, or more items that close with or/nor.
+const NEG_REST = String.raw`(?:(?: ${NEG_ITEM_MOD}){0,2} ${NEG_HEAD})?`
+const NEG_NEXT_ITEM = String.raw`(?: (?:the|${NEG_ART})){0,2}(?: ${NEG_ITEM_MOD}){0,2} ${NEG_HEAD}`
+const NEG_LIST_ENDS_HERE = new RegExp(`^${NEG_REST}${NEG_END}`)
+// A later item of an "or" list followed by a verb (maybe after two more words of the
+// item) starts a new clause ("It needs no battery or an LED would dim", "No wires or
+// sensors stay hidden", "or an electronic tag logs it"): that item keeps its technology.
+const NEG_LIST_THEN_VERB = new RegExp(`^${NEG_REST}(?: ${NEG_DESC}){0,2} (?:(?:is|are)(?! (?:needed|required|necessary|involved|included|used|inside)\\b)|${[
+  'would|could|should|will|can|may|might|must|shall|cannot|won\'t|can\'t|wouldn\'t|couldn\'t|does|did|has|had|was|were',
+  'gets|keeps|stays|starts|stops|turns|changes|blinks|glows|lights|flashes|beeps|buzzes|vibrates|sends|reads|shows',
+  'alerts|warns|tells|measures|detects|senses|tracks|logs|records|stores|saves|monitors|checks|works|runs|lasts|dies|fails|breaks|overheats|goes',
+  NEG_BASE_VERBS,     // the same verbs after a plural ("or sensors stay hidden")
+].join('|')})\\b`)
+const NEG_LIST_CLOSES_AFTER = new RegExp(
+  `^${NEG_REST}(?: ,${NEG_NEXT_ITEM})*(?: ,)? (?:or|nor)(?: ${NEG_GERUND})?${NEG_NEXT_ITEM}${NEG_END}`)
+// "not" / "never" reach only "a / an / any"; "no-app", "zero-battery" negate the term
+// they are fused to; "battery-free" / "sensor free" (but not "an app free to download",
+// "an app free of ads").
+const NEGATED_SHORT = new RegExp(String.raw`${NEG_START}(?:(?:not|never) ${NEG_ARTS}|(?:no|zero)-)$`)
+const NEGATED_AFTER = /^(?:-| )free\b(?! (?:to|of|from|for)\b)/
+
+const headMarkCache = new WeakMap()
+/** One regex that finds every head of T + the kit nouns (built once per list T). */
+function headMarker(compiled) {
+  let re = headMarkCache.get(compiled)
+  if (!re) {
+    re = new RegExp([...compiled, ...NEG_KIT].map(c => c.re.source).join('|'), 'gi')
+    headMarkCache.set(compiled, re)
+  }
+  return re
+}
+/**
+ * The window as the grammar reads it: lower case, one word per space, "," and "/"
+ * as words of their own, every head replaced by NEG_HEAD and every describing
+ * word by NEG_DESC.
+ */
+const reduceWindow = (s, heads) => s.replace(heads, NEG_HEAD).toLowerCase()
+  .replace(/\s*([,/])\s*/g, ' $1 ').split(' ').map(w => (isDescribingWord(w) ? NEG_DESC : w)).join(' ')
+
+/** Is the mention at [start, end) negated? */
+function isNegated(text, start, end, heads) {
+  let before = text.slice(Math.max(0, start - NEG_WINDOW), start)
+  // A window that starts inside a word drops that part word ("…casi|no app").
+  if (start > NEG_WINDOW && /[a-z0-9'-]/i.test(text[start - NEG_WINDOW - 1])) before = before.replace(/^[a-z0-9'-]+/i, '')
+  // A window cut short is marked with "…", so the cut is never read as the end of a list.
+  const after = text.slice(end, end + NEG_WINDOW) + (end + NEG_WINDOW < text.length ? '…' : '')
+  if (NEGATED_SHORT.test(before.toLowerCase()) || NEGATED_AFTER.test(after.toLowerCase())) return true
+  const b = reduceWindow(before, heads)
+  const p = b.match(NEG_LIST_PLAIN)
+  // With an "or" / "nor" / "/" in it, the list must not run into a new clause.
+  if (p) return !/ (?:or|nor|\/) /.test(p[0]) || !NEG_LIST_THEN_VERB.test(reduceWindow(after, heads))
+  const m = b.match(NEG_LIST_COMMA)
   if (!m) return false
-  // A comma list counts only once it closes with "or" / "nor": before the term,
-  // or straight after it in the same clause.
-  return /\b(?:or|nor)\b/i.test(m[0]) || /^[^.;:!?]{0,30}?\b(?:or|nor)\b/i.test(after)
+  const a = reduceWindow(after, heads)
+  // Closed before the term when an or/nor sits after the list's last comma.
+  const tail = m[0].slice(m[0].lastIndexOf(',') + 1)
+  return /(?:^| )(?:or|nor) /.test(tail) ? NEG_LIST_ENDS_HERE.test(a) : NEG_LIST_CLOSES_AFTER.test(a)
 }
-const NEGATED_AFTER = /^[\s-]*free\b/i
 
 /** Does `text` name this entry at least once without negating it? */
-function namesTerm(text, re, listRes) {
+function namesTerm(text, re, heads) {
   const g = new RegExp(re.source, 'gi')
   let m
   while ((m = g.exec(text))) {
-    const before = text.slice(Math.max(0, m.index - 60), m.index)
-    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 40)
-    const negated = NEGATED_BEFORE.test(before.slice(-40)) || (listRes && negatedInList(before, after, listRes)) || NEGATED_AFTER.test(after.slice(0, 8))
-    if (!negated) return true
+    if (!isNegated(text, m.index, m.index + m[0].length, heads)) return true
   }
   return false
 }
@@ -345,8 +475,8 @@ function namesTerm(text, re, listRes) {
 /** The list entries an idea names, not negated (distinct, in list order). */
 export function techTermsIn(text, compiled) {
   const t = String(text || '').replace(/[’‘]/g, "'").replace(/\s+/g, ' ')
-  const listRes = negatedListRes(compiled)
-  return compiled.filter(c => namesTerm(t, c.re, listRes)).map(c => c.term)
+  const heads = headMarker(compiled)
+  return compiled.filter(c => namesTerm(t, c.re, heads)).map(c => c.term)
 }
 
 /** Workability = 1 / (1 + number of extra technologies named); null for no text. */
