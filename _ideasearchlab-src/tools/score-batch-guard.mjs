@@ -280,6 +280,39 @@ console.log('runScoring — a long run keeps every score it can get')
     rr.unscored === 16 && rr.failedBatches === 0 && rr.aborted === false && rr.lastError?.replyProblem === 'refusal' && rr.lastError?.retryable === false)
 }
 
+// ── A model that answers every call without a rating stops early ────────────
+// Review, 2026-09-24: a model that always spent its ceiling on thinking was sent
+// every idea of the run, each call retried: ~2,500 paid calls for 741 ideas. Two
+// batches in a row that come back with nothing but such answers now stop the run.
+console.log('answered without a rating, batch after batch')
+{
+  const exhausted = () => Object.assign(new Error('spent its whole token ceiling on thinking and returned no text'), { replyProblem: 'exhausted', retryable: true })
+  let calls = 0
+  const r = await runScoring({ texts: texts(741), call: async () => { calls++; throw exhausted() }, batchSize: 8, sleep: nosleep, isFatal: isFatalApiError })
+  check('741 ideas, every call exhausted: the run stops after two such batches', r.stoppedOnReply === true && calls <= 54, `calls=${calls}`)
+  check('…reported honestly: nothing scored, no failed batch, not "aborted"', r.unscored === 741 && r.failedBatches === 0 && r.aborted === false)
+  // A batch whose batch call is refused but whose ideas score one by one is not
+  // "nothing but refusals": it resets the count.
+  let n = 0
+  const r2 = await runScoring({
+    texts: texts(40), batchSize: 8, sleep: nosleep, isFatal: isFatalApiError,
+    call: async ts => { n++; if (ts.length > 1) throw Object.assign(new Error('declined'), { replyProblem: 'refusal', retryable: false }); return reply(1) },
+  })
+  check('batch calls refused but singles scoring: never stops, every idea scored', r2.stoppedOnReply === false && r2.scores.every(isScoredEntry), `calls=${n}`)
+  // Reply-only, good, reply-only: not two IN A ROW.
+  let b = 0
+  const r3 = await runScoring({
+    texts: texts(24), batchSize: 8, sleep: nosleep, isFatal: isFatalApiError,
+    call: async ts => {
+      const batch = Math.floor(Number(ts[0].match(/\d+/)[0]) / 8)
+      b++
+      if (batch !== 1) throw exhausted()
+      return reply(ts.length)
+    },
+  })
+  check('reply-only, good, reply-only batches: the run goes to the end', r3.stoppedOnReply === false && r3.scores.slice(8, 16).every(isScoredEntry) && r3.unscored === 16, `unscored=${r3.unscored}`)
+}
+
 console.log(failures
   ? `\n${failures} check(s) FAILED`
   : '\nSCORE-BATCH GUARD OK — truncated, short, duplicate-indexed and rate-limited replies all still score every idea.')

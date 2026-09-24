@@ -1087,6 +1087,7 @@ export default function DataAnalytics() {
     let pass = 0
     let recoveries = 0
     let aborted = false
+    let stoppedOnReply = false   // the rater stopped: batches in a row answered without a rating
     let lastError = null
     let targets = []
     const startedWith = scopeUnscored
@@ -1142,6 +1143,7 @@ export default function DataAnalytics() {
         // `aborted` false. Either way the ideas got no real answer, and that is
         // what the recovery rule is deciding about.
         aborted = !!report?.aborted || threw
+        stoppedOnReply = stoppedOnReply || !!report?.stoppedOnReply
         if (!threw) lastError = report?.lastError || null
 
         const byRid = new Map(targets.map((t, k) => [t.rid, scores[k]]))
@@ -1200,6 +1202,7 @@ export default function DataAnalytics() {
         const problem = lastError?.replyProblem
         bits.push(problem
           ? `${still}: ${runModelName} answered without a rating (${lastError.message || lastError}). `
+            + (stoppedOnReply ? 'It stopped after two batches in a row came back like that, so the other ideas were not sent (every call is billed). ' : '')
             + (problem === 'exhausted'
               ? 'Pick a model that reasons less (or one without reasoning) and press the button again.'
               : 'Pressing the button again sends the same text and will likely get the same answer.')

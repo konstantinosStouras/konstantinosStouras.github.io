@@ -185,18 +185,21 @@ export async function withRetry(fn, opts = {}) {
  * @param batchSize  ideas per call (default 8)
  * @param onProgress ({done, total}) => void
  * @param isFatal    (err) => true to abort the whole run (e.g. a bad key)
- * @returns { scores, unscored, blank, failedBatches, aborted, lastError } —
+ * @returns { scores, unscored, blank, failedBatches, aborted, stoppedOnReply, lastError } —
  *          `scores` is the same length/order as `texts`, holding
  *          {novelty,usefulness}|null. `aborted` is true when the run stopped
  *          early because the provider kept failing. An error carrying
  *          `replyProblem` (the provider answered but gave no rating — a
  *          refusal, or a ceiling spent on thinking) is recorded in
  *          `lastError` without counting as a failed batch; `retryable === false`
- *          on any error skips the transport retries.
+ *          on any error skips the transport retries. `stoppedOnReply` is true
+ *          when the run stopped because `maxReplyOnlyBatches` batches in a row
+ *          came back with nothing but such answers (every call answered, none
+ *          with a rating): the ideas after that point were not sent.
  */
 export async function runScoring({
   texts, call, batchSize = 8, onProgress, sleep, isFatal, retryAttempts = 3, singleTries = 2,
-  maxConsecutiveFailures = 3,
+  maxConsecutiveFailures = 3, maxReplyOnlyBatches = 2,
 }) {
   const scores = new Array(texts.length).fill(null)
   const blankIdx = new Set()
@@ -205,6 +208,13 @@ export async function runScoring({
   let done = 0
   let failedBatches = 0
   let consecutiveFailures = 0
+  // Batches in a row whose every call ANSWERED without a rating (a refusal, or a
+  // ceiling spent on thinking). A model that always does this used to be sent
+  // every idea of the run, each call retried: about 2,500 paid calls for 741
+  // ideas (review, 2026-09-24). Two such batches in a row stop the run; one
+  // refused batch among good ones never does (its ideas' single calls score).
+  let replyOnlyBatches = 0
+  let stoppedOnReply = false
   let lastError = null
   const attempt = fn => withRetry(fn, { attempts: retryAttempts, sleep, isFatal })
 
@@ -217,6 +227,8 @@ export async function runScoring({
     if (idx.length) {
       // Round 1 — the whole batch in one call.
       let batchThrew = false
+      let batchReply = false     // round 1 answered without a rating
+      let singleOther = false    // some single call got a reply, or failed otherwise
       try {
         const raw = await attempt(() => call(idx.map(i => texts[i]), idx))
         assignScores(extractScoreObjects(raw), idx.length)
@@ -226,6 +238,7 @@ export async function runScoring({
         if (isFatal && isFatal(err)) throw err
         lastError = err
         if (err?.replyProblem) {
+          batchReply = true
           // The provider ANSWERED — it declined this batch's content, or spent
           // its ceiling on hidden thinking and returned no text
           // (`replyProblem` from providerRequest.js). That is not a transport
@@ -258,14 +271,21 @@ export async function runScoring({
         for (let t = 0; t < singleTries && !isScoredEntry(scores[i]); t++) {
           try {
             const raw = await attempt(() => call([texts[i]], [i]))
+            singleOther = true
             const [s] = assignScores(extractScoreObjects(raw), 1)
             if (isScoredEntry(s)) scores[i] = s
           } catch (err) {
             if (isFatal && isFatal(err)) throw err
             lastError = err
+            if (!err?.replyProblem) singleOther = true
             break   // the transport already retried; don't hammer it further
           }
         }
+      }
+      if (batchReply && !singleOther && !idx.some(i => isScoredEntry(scores[i]))) {
+        if (++replyOnlyBatches >= maxReplyOnlyBatches) { stoppedOnReply = true; break }
+      } else if (!batchThrew) {
+        replyOnlyBatches = 0
       }
     }
 
@@ -275,5 +295,5 @@ export async function runScoring({
 
   const unscored = scores.filter((s, i) => !isScoredEntry(s) && !blankIdx.has(i)).length
   const aborted = consecutiveFailures >= maxConsecutiveFailures
-  return { scores, unscored, blank: blankIdx.size, failedBatches, aborted, lastError }
+  return { scores, unscored, blank: blankIdx.size, failedBatches, aborted, stoppedOnReply, lastError }
 }

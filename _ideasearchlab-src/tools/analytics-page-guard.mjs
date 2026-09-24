@@ -23,7 +23,8 @@
  *   6. "Upload additional KPIs" averages the raters' columns.
  *   7. Steps 4–5 say when the ideas were not all rated by the same models.
  *   8. A run whose every answer came back without a rating stops after one pass
- *      and says why (not "check the API key").
+ *      and says why (not "check the API key"); after two such batches in a row
+ *      it stops sending.
  */
 const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs'
 const { chromium } = await import(PW)
@@ -309,14 +310,36 @@ try {
   await p.getByText(/Claude Opus 5\.5 scored \d+ of the/).first().waitFor({ timeout: 60000 })
   const took = Date.now() - t0
   const t8 = await bodyText()
+  const err8 = (await p.locator('p.error-msg').allInnerTexts()).join(' | ')
   check('one pass only (no "(2 passes)")', !/\(\d+ passes\)/.test(t8), (t8.match(/Claude Opus 5\.5 scored[^\n]*/) || [''])[0])
-  check('…and no 10-second recovery wait', took < 9000, `${took} ms`)
+  // 6 ideas: one batch call and one single call per idea, each tried 3 times, is
+  // 21. A recovery pass would double that, and wait 10 s before it.
+  check('…at most 21 calls, no recovery pass', apiCalls.length <= 21, `${apiCalls.length} calls in ${took} ms`)
   check('the message says the model answered without a rating, and why',
-    /answered without a rating \([^)]*token ceiling/.test(t8), (t8.match(/[^\n]*empty cell[^\n]*/) || ['(none)'])[0])
-  check('…and does not send the admin to the API key', !/Check the API key/.test(t8))
-  anthropicReply = null
+    /answered without a rating \(.*token ceiling/.test(err8), err8)
+  check('…and does not send the admin to the API key', !/Check the API key/.test(err8))
   await p.close()
   await ctx3.close()
+
+  // 24 final ideas = 3 batches: the rater stops after two batches in a row came
+  // back without a rating, instead of sending the third.
+  const ctx4 = await newContext()
+  await openPage(ctx4, 'exhausted-24')
+  const many = Array.from({ length: 24 }, (_, k) => ({ id: String(k + 1), s: 'S9', cond: 'Both', stage: 'group', final: 'Yes', t: `Colour idea ${k + 1}` }))
+  await importFile(ideasBook(many), 'many.xlsx')
+  await p.locator('select[title="Which provider\'s API key to use"]').selectOption('claude')
+  await p.locator('select[title="Which of that provider\'s models rates the ideas"]').selectOption('claude-opus-5-5')
+  apiCalls.length = 0
+  await btn(/^Fill the \d+ missing/).click()
+  await p.getByText(/Claude Opus 5\.5 scored \d+ of the/).first().waitFor({ timeout: 90000 })
+  const err8b = (await p.locator('p.error-msg').allInnerTexts()).join(' | ')
+  // A batch is 27 calls (the batch call and 8 single calls, each tried 3 times):
+  // two batches are 54, a third would make 81.
+  check('24 ideas that all come back without a rating: two batches sent, not three (54 calls)', apiCalls.length === 54, `${apiCalls.length} calls`)
+  check('…and the message says the run stopped and why', /It stopped after two batches in a row came back like that/.test(err8b), err8b)
+  anthropicReply = null
+  await p.close()
+  await ctx4.close()
 } catch (e) {
   check('the page sections ran to the end', false, e.stack || e.message)
 }

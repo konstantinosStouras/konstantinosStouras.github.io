@@ -127,14 +127,14 @@ export async function scoreIdeas(ideas, opts = {}) {
     err.fatal = true
     throw err
   }
-  const { scores, unscored, blank, failedBatches, aborted, lastError } = await runScoring({
+  const { scores, unscored, blank, failedBatches, aborted, stoppedOnReply, lastError } = await runScoring({
     texts: ideas,
     batchSize: opts.batchSize || 8,
     onProgress: opts.onProgress,
     isFatal: isFatalApiError,
     call: batch => callProvider(resolved, RATER_SYSTEM_PROMPT, buildBatchPrompt(batch, opts.brief)),
   })
-  if (opts.onReport) opts.onReport({ unscored, blank, failedBatches, aborted, lastError })
+  if (opts.onReport) opts.onReport({ unscored, blank, failedBatches, aborted, stoppedOnReply, lastError })
   // Nothing at all came back and we know why: surface it instead of returning a
   // silent array of nulls (the run looked like it "worked" and scored nothing).
   if (lastError && unscored === scores.length) throw lastError
