@@ -168,21 +168,13 @@ export const PROVIDERS = [
 /** Providers the participants' AI assistant can use (functions/ai.js speaks these). */
 export const ASSISTANT_PROVIDERS = PROVIDERS.filter(p => !p.raterOnly)
 
-// Defaults for the Data Analytics idea-scoring rater. Scoring runs over every
-// idea (hundreds of calls), so the default is the cheapest of each provider's
-// five — each is still a current-generation model.
+// Defaults for the Data Analytics idea-scoring rater: each provider's TOP model,
+// the first of its list (owner, 2026-09-24: "for every provider/lab should be
+// choosing the top/frontier model as default choice"). It used to be the
+// cheapest of the five, since bulk scoring is hundreds of calls; the price is
+// printed on every option, so the choice is visible where it is made.
 export const DEFAULT_SCORING_PROVIDER = 'claude'
-export const SCORING_DEFAULT_MODEL = {
-  claude: 'claude-sonnet-5',
-  openai: 'gpt-6-luna',
-  gemini: 'gemini-3.8-flash',
-  // The four rater-only providers: a cheap model that still rates sensibly (not
-  // the tiniest — Ministral 8B is cheaper than Small 4 but a much weaker judge).
-  mistral: 'mistral-small-2603',
-  openrouter: 'meta-llama/llama-4-maverick',
-  deepseek: 'deepseek-flash',
-  qwen: 'qwen3.8-flash',
-}
+export const SCORING_DEFAULT_MODEL = Object.fromEntries(PROVIDERS.map(p => [p.id, p.models[0].id]))
 
 export function providerById(id) {
   return PROVIDERS.find(p => p.id === id) || PROVIDERS[0]

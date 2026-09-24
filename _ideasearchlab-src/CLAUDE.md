@@ -595,8 +595,10 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    results map back by index. The **API provider + specific model** are chosen on-page via two
    dropdowns (catalogue in `src/data/aiModels.js`, now shared with AI Settings — five models of each
    provider's newest generation, most capable first, every option printing its price per 1M tokens); the
-   pre-selected rater is the cheapest current model of the chosen provider — **Claude Sonnet 5 /
-   GPT-6 Luna / Gemini 3.8 Flash** (`SCORING_DEFAULT_MODEL`; bulk scoring is hundreds of calls) —
+   pre-selected rater is the chosen provider's TOP model, the first of its list — **Claude Fable 5.1 /
+   GPT-6 Astra / Gemini 3.1 Pro** and the four rater-only flagships (`SCORING_DEFAULT_MODEL`, derived
+   from each list's first entry; owner 2026-09-24 — it used to be the cheapest, bulk scoring being
+   hundreds of calls, and every option still prints its price) —
    and the matching key is read from `settings/ai` (a "no key saved" hint shows if the selected
    provider has none). Scores are also **hand-editable** in the data table; nothing is
    written back to Firestore (admin lacks idea-write permission, and keeping it in-memory
@@ -758,9 +760,10 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      every error path against a fake fetch, and — read from `lab/ideasearchlab/index.html`'s own main
      chunk — that the SHIPPED bundle carries the provider calls and no bare `callProvider`, so a
      stale rebuild fails the guard rather than the classroom). **The scoring defaults moved with the
-     catalogue:** Claude Sonnet 5, GPT-6 Luna, Gemini 3.8 Flash — the cheapest current model of each
-     provider (`SCORING_DEFAULT_MODEL`; Haiku 4.5 and GPT-5.4 mini left the list, Gemini 3.5 Flash
-     stays listed but is no longer the scoring default). **Three things the adversarial review of
+     catalogue:** at first Claude Sonnet 5, GPT-6 Luna, Gemini 3.8 Flash — the cheapest current
+     model of each provider (Haiku 4.5 and GPT-5.4 mini left the list, Gemini 3.5 Flash stays
+     listed); since 2026-09-24 `SCORING_DEFAULT_MODEL` is each provider's FIRST model, the
+     flagship (owner: "the top/frontier model as default choice"). **Three things the adversarial review of
      that change caught, all fixed in it:** (a) the assistant's own `callClaude` in functions/ai.js
      would have sent the newly-listed thinking-by-default models (Opus 5/5.5, Sonnet 5, Fable) a
      1000-token `max_tokens` with no effort control — thinking counts toward it, so a chat turn
@@ -1166,9 +1169,10 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      These ids were taken from the providers' pages as indexed on 2026-09-24 and
      could not be called from the build environment: a wrong id shows as a 400/404
      naming the model on the first batch.
-   - **Score scope toggle (`scoreOnlyFinal`, default ON):** a checkbox **"Only score the Final
+   - **Score scope toggle (`scoreOnlyFinal`, default OFF since 2026-09-24 — owner: "the default
+     option should have that box unticked"; it was ON):** a checkbox **"Only score the Final
      Ideas"** scopes the AI scoring to the group-selected ideas (`final_pick == 1`) — the set
-     Step 5 analyses — or, unticked, to every idea. The button label + count adapt
+     Step 5 analyses — or, unticked (the default), to every idea. The button label + count adapt
      (`scopeUnscored`). The data table now also shows a **Final** column (Final Group Pick Yes/No)
      and the *Quality* header (= `overall_quality`), so it reads as the Rankings view. Scores set
      here feed the Step-2 aggregate Rankings tab and the Step-5 regressions.

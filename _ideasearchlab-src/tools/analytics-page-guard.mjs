@@ -179,9 +179,12 @@ try {
   await importFile(ideasBook(), 'ideas.xlsx')
   check('the dataset loads without a dialog', dialogs.length === 0, dialogs.join(' | '))
 
-  // Rate with Claude Sonnet 5, the model that has one idea's pair in the data.
+  // Rate with Claude Sonnet 5, the model that has one idea's pair in the data
+  // (the default is the provider's top model, Fable 5.1, so it is chosen here).
   await p.locator('select[title="Which provider\'s API key to use"]').selectOption('claude')
   await p.locator('select[title="Which of that provider\'s models rates the ideas"]').selectOption('claude-sonnet-5')
+  check('the Final-Ideas box starts unticked (every idea is in scope by default)',
+    !(await p.locator('label', { hasText: 'Only score the' }).locator('input[type="checkbox"]').isChecked()))
 
   // ── 1. Hand edits ──────────────────────────────────────────────────────────
   head('1. a blank model cell is not typed into; a score it gave can be corrected')
@@ -303,6 +306,8 @@ try {
   await importFile(ideasBook(), 'ideas.xlsx')
   await p.locator('select[title="Which provider\'s API key to use"]').selectOption('claude')
   await p.locator('select[title="Which of that provider\'s models rates the ideas"]').selectOption('claude-opus-5-5')
+  // Scope to the 6 final ideas (the box is unticked by default) for the call arithmetic below.
+  await p.locator('label', { hasText: 'Only score the' }).locator('input[type="checkbox"]').check()
   anthropicReply = { id: 'msg_stub', type: 'message', role: 'assistant', stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '…' }] }
   dialogs = []
   const t0 = Date.now()

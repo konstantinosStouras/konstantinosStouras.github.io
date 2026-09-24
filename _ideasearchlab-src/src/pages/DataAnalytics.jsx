@@ -126,7 +126,7 @@ export default function DataAnalytics() {
   const [scoring, setScoring] = useState(null) // { done, total } | null
   const [scoreErr, setScoreErr] = useState('')
   // Score only the group-selected ideas (Final Group Pick = 1) vs every idea.
-  const [scoreOnlyFinal, setScoreOnlyFinal] = useState(true)
+  const [scoreOnlyFinal, setScoreOnlyFinal] = useState(false)   // owner 2026-09-24: unticked by default, every idea is scored
   // Step 1b "Translate everything to English" (translation.js): the translation
   // memory (original text → { en, lang, by }), kept in this browser and written into
   // every download as a "Translations" sheet; the last scan of the loaded data; the

@@ -101,17 +101,16 @@ for (const p of PROVIDERS) {
   const outs = prices.map(x => x?.out ?? -1)
   const def = SCORING_DEFAULT_MODEL[p.id]
   check(p.models.some(m => m.id === def), `${p.id}: scoring default ${def} is in its list`)
-  const defPrice = MODEL_PRICES[def]?.out ?? Infinity
+  // The scoring default is the provider's TOP model, the first of its list
+  // (owner 2026-09-24); it used to be the cheapest.
+  check(def === p.models[0].id, `${p.id}: scoring default ${def} is the flagship, first of its list`)
   if (p.raterOnly) {
     // Most capable first (the OWNER_LINEUP table pins the order); Qwen3.7-Max's
     // list price is above the Qwen3.8-Max flagship's, so the price rule is not
-    // applied here. The default is a cheap model, never the flagship, whenever
-    // there is anything else to pick (DeepSeek, with two, included).
-    check(p.models.length < 2 || def !== p.models[0].id, `${p.id}: scoring default ${def} is not the flagship`)
+    // applied here.
     check(typeof p.note === 'string' && p.note.length > 40, `${p.id}: carries a note on the key and where the ideas go`)
   } else {
     check(outs[0] === Math.max(...outs), `${p.id}: the first model is the most expensive (${p.models[0].id})`)
-    check(defPrice === Math.min(...outs), `${p.id}: scoring default ${def} is the cheapest of the five`)
   }
   check(!!MODEL_PRICES[p.defaultModel], `${p.id}: assistant default ${p.defaultModel} is priced`)
   // The scoring default is a current-generation id, never a retired one.
