@@ -959,6 +959,36 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        scale WITHOUT rounding it (they used to round to one decimal), and the mean
        across models and AI Quality are exact means. Pinned by `score-batch-guard`
        (a batch answering 3.5 / 0 / 7) and section 9 of `ai-columns-guard`;
+     - **the API is called at a pace it will not block** (owner, 2026-09-24).
+       `runScoring` makes one call at a time and never starts two closer together
+       than the provider's pace (`PROVIDER_PACE_MS` in scoreBatch.js: Gemini
+       1.5 s, Mistral 1.1 s, OpenRouter / Qwen 0.5 s, the rest 0.3 s — the small
+       plans' per-second and per-minute limits; a rating call takes a model a few
+       seconds anyway, so this only bites when a provider answers fast), and
+       `withRetry` treats a 429 as "not yet": six tries 2 / 4 / 8 / 16 / 30 s
+       apart, never sooner than the `Retry-After` the provider named
+       (`retryAfterMs` in providerRequest.js reads seconds or a date, capped at ten
+       minutes). Before, a 429 got three tries 0.7 / 1.4 / 2.8 s apart, so a
+       per-minute limit failed a batch within five seconds and three such batches
+       ended the run. Other errors keep their three tries. The page says "Rate
+       limited — retrying in N s…" while it waits (`onRetry`). Pinned by
+       `score-batch-guard` (a fake clock) and `rater-flow-guard`;
+     - **`tools/rater-flow-guard.mjs` drives the whole flow in a browser**
+       (owner, 2026-09-24: keys of different providers, a fresh upload, the
+       empirical measures, all the AI measures at the right pace, the download): a
+       320-idea set with no KPI column (80 final; an Ideas workbook of the owner's
+       shape via `RATER_FLOW_IDEAS`), "Compute empirical KPIs", one key per provider
+       in AI Settings and all seven providers filling their own columns for the
+       final ideas — each call carrying that provider's key in its own header
+       (`x-api-key` / `x-goog-api-key` / `Authorization`) and the chosen model, the
+       stubs answering in each provider's reply shape, one fractional rating asked
+       again, scripted refusals (429 with and without Retry-After, a 500, a 503,
+       Google's error shape) waited out; the pace and the Retry-After wait measured
+       from the call timestamps; then "Download all idea data" (Excel + CSV) with
+       every empirical column, every provider's pair as whole numbers, exact means,
+       the check sheet; the file re-uploaded as a top-up changing nothing; and a
+       provider with no key refused before any call. Steps 4–5 (the Python / R
+       analysis) are out of its scope. Firebase stubbed, no live key, no network.
      - AI Quality is named after a model (or "mean across models") only when every
        quality value came from the per-model columns; with any standalone quality it
        is plain "AI Quality", which reads back.
