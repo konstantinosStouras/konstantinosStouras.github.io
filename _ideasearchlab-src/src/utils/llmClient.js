@@ -21,7 +21,7 @@
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { runScoring, extractScoreObjects, clamp1to5, isFatalApiError } from './scoreBatch'
-import { callProvider } from './providerRequest'
+import { callProvider, cleanApiKey } from './providerRequest'
 import { runTranslation, TRANSLATOR_SYSTEM_PROMPT, buildTranslatePrompt, TRANSLATION_PROVIDER, TRANSLATION_MODEL, TRANSLATION_MAX_TOKENS } from './translation'
 import { PROVIDERS } from '../data/aiModels'
 
@@ -38,7 +38,10 @@ export async function fetchAISettings() {
 /** Resolve the effective provider / key / model from saved settings. */
 export function resolveProvider(settings, providerOverride, modelOverride) {
   const provider = providerOverride || settings?.provider || 'claude'
-  const apiKey = settings?.apiKeys?.[provider] || null
+  // Trimmed: a key saved with a stray space reaches the provider without it
+  // (fetch strips it from the header), and the error scrubbing must look for
+  // the key the provider actually saw and may echo back.
+  const apiKey = cleanApiKey(settings?.apiKeys?.[provider])
   const model = modelOverride || settings?.model || PROVIDER_DEFAULTS[provider] || PROVIDER_DEFAULTS.claude
   return { provider, apiKey, model }
 }

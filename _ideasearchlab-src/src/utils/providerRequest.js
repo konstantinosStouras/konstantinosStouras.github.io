@@ -57,15 +57,27 @@
  *    ARRAY of chunks (a thinking chunk, then text) — its text chunks are joined.
  *
  * Errors carry the HTTP `status` (scoreBatch's `isFatalApiError` reads it: a
- * 401/403/400/404 aborts the run at once, a 429/5xx is retried), and the
+ * 400/401/402/403/404/422 aborts the run at once, a 429/5xx is retried), and the
  * message can never contain the API key — a provider that echoes the key in
- * its error body has it scrubbed before the message is built.
+ * its error body has it scrubbed before the message is built, as saved AND as
+ * trimmed (fetch strips a header value's surrounding spaces, so a key pasted
+ * with a trailing space reaches the provider, and is echoed, without it).
+ *
+ * A 2xx that is really a FAILED request throws exactly like a non-2xx
+ * (`replyFailure`, 2026-09-24): an `error` object in the body (OpenRouter
+ * sends an upstream failure that happens after generation started as HTTP
+ * 200 + `{error: {code, message}}`), or an EMPTY reply whose finish reason
+ * says the provider broke off (`error`, or DeepSeek's overload signal
+ * `insufficient_system_resource`). Returned as '' they read as an unreadable
+ * reply: no backoff, no circuit breaker, every idea re-sent one by one, and
+ * no cause on the page.
  *
  * A 200 that carries NO rating is an error too, not an empty string: a
  * safety refusal (Claude `stop_reason: "refusal"`, an OpenAI `message.refusal`,
  * a Gemini `blockReason` / SAFETY finish) or a reply whose whole token
  * ceiling went on hidden thinking (`max_tokens` / `length` / `MAX_TOKENS` with
- * no text). Returned as '' they were indistinguishable from an unreadable
+ * no text; Mistral's `model_length`, its context limit, is read the same way).
+ * Returned as '' they were indistinguishable from an unreadable
  * reply — scoreBatch re-sent every idea of the batch one by one (1 + 16 calls
  * for a deterministic refusal) and the run ended "N unscored" with nothing in
  * `lastError`. Thrown with `replyProblem` set (no HTTP status; a refusal is
@@ -268,11 +280,35 @@ export function parseReplyText(provider, data) {
   }
 }
 
-/** Remove the key from any text that is about to become an error message. */
+/**
+ * A saved key as the provider will see it. fetch strips a header value's
+ * leading and trailing whitespace, so a key pasted with a stray space or line
+ * break authenticates as the bare key; trimming it here keeps every later step
+ * (the request, and `scrubKey` on the error text) working on that same string.
+ * null when nothing is left, so a key that is only spaces reads as "no key".
+ */
+export function cleanApiKey(key) {
+  if (typeof key !== 'string') return null
+  return key.trim() || null
+}
+
+/** Every saved key trimmed (AI Settings writes them through this), blanks kept as ''. */
+export function trimApiKeys(keys) {
+  return Object.fromEntries(Object.entries(keys || {}).map(([id, k]) => [id, typeof k === 'string' ? k.trim() : k]))
+}
+
+/**
+ * Remove the key from any text that is about to become an error message. Both
+ * spellings are scrubbed, the longer first: the key as the caller holds it, and
+ * the key trimmed, which is what the provider received and may echo back.
+ */
 export function scrubKey(text, apiKey) {
-  const s = String(text ?? '')
-  if (!apiKey || apiKey.length < 6) return s
-  return s.split(apiKey).join('[api key]')
+  let s = String(text ?? '')
+  if (typeof apiKey !== 'string') return s
+  for (const k of [apiKey, apiKey.trim()]) {
+    if (k.length >= 6) s = s.split(k).join('[api key]')
+  }
+  return s
 }
 
 /**
@@ -283,8 +319,10 @@ export function scrubKey(text, apiKey) {
  * @param user     the batch prompt
  * @param opts     { fetch? } — injected for the offline guard
  * @returns the model's reply as a string ('' when it returned no text)
- * @throws Error with `.status` = HTTP status on a non-2xx reply; without a
- *         status on a network failure (so scoreBatch retries it)
+ * @throws Error with `.status` = HTTP status on a non-2xx reply, and on a 2xx
+ *         that is a failed request (`replyFailure`); without a status on a
+ *         network failure or an unreadable body (so scoreBatch retries it);
+ *         with `.replyProblem` on a 2xx that carries no rating (`replyProblem`)
  */
 export async function callProvider(resolved, system, user, opts = {}) {
   const fetchFn = opts.fetch || globalThis.fetch
@@ -312,8 +350,25 @@ export async function callProvider(resolved, system, user, opts = {}) {
     throw err
   }
 
-  const data = await res.json()
+  let data
+  try {
+    data = await res.json()
+  } catch (e) {
+    // No status, like a dropped connection: worth another go. The parser's own
+    // message can quote the start of the body, so it is scrubbed too.
+    const err = new Error(`${name}: the reply could not be read as JSON (${scrubKey(e?.message || e, apiKey).slice(0, 300)})`)
+    err.cause = e
+    throw err
+  }
   const text = parseReplyText(provider, data)
+  const failure = replyFailure(provider, data, text)
+  if (failure) {
+    // Thrown like a non-2xx reply, so a 429 or 5xx backs off and counts toward
+    // the circuit breaker, and a 401/402/403 stops the run at once.
+    const err = new Error(`${name} API error ${failure.status} for model "${model}": ${scrubKey(failure.why, apiKey).slice(0, 500)}`)
+    err.status = failure.status
+    throw err
+  }
   const problem = replyProblem(provider, data, text)
   if (problem) {
     const err = new Error(`${name} (${model}) ${scrubKey(problem.why, apiKey)}`)
@@ -322,6 +377,45 @@ export async function callProvider(resolved, system, user, opts = {}) {
     throw err
   }
   return text
+}
+
+/** Chat-completions finish reasons that mean the PROVIDER broke off, not the model. */
+const BROKE_OFF_FINISH = new Set(['error', 'insufficient_system_resource'])
+
+/**
+ * Is this 2xx reply really a failed request? null when it is not, else
+ * `{ status, why }`, which callProvider throws exactly like a non-2xx reply.
+ * Pure, so the guard drives every shape.
+ *
+ *  - An `error` in the body, at the top level or on the first choice
+ *    (OpenRouter's documented shape for an upstream failure after generation
+ *    started: HTTP 200, `{error: {code, message}}`, no text). The status is
+ *    `error.code` when that is an HTTP error code (OpenRouter sends 429, 502,
+ *    503, …), else 502: the request failed and the reply does not say how.
+ *  - An EMPTY reply whose finish reason says the provider broke off: `error`
+ *    (OpenRouter, Mistral) or `insufficient_system_resource` (DeepSeek, out of
+ *    capacity). 503 and no `replyProblem`: it is the provider failing, not an
+ *    answer about the ideas, so it is retried with backoff and counts toward
+ *    the circuit breaker. A reply that broke off AFTER some text is handed back
+ *    for the parser to salvage, as a `length` cut is.
+ */
+export function replyFailure(provider, data, text) {
+  const bodyError = data?.error || data?.choices?.[0]?.error
+  if (bodyError) {
+    const code = bodyError?.code
+    const n = typeof code === 'number' ? code : (typeof code === 'string' && /^\d{3}$/.test(code) ? Number(code) : NaN)
+    const status = Number.isInteger(n) && n >= 400 && n <= 599 ? n : 502
+    const msg = typeof bodyError === 'string' ? bodyError
+      : typeof bodyError?.message === 'string' ? bodyError.message
+      : JSON.stringify(bodyError)
+    return { status, why: `the reply carried an error: ${msg}` }
+  }
+  const chat = provider === 'openai' || isOpenAICompat(provider)
+  const fin = data?.choices?.[0]?.finish_reason
+  if (chat && !String(text || '').trim() && BROKE_OFF_FINISH.has(fin)) {
+    return { status: 503, why: `the reply stopped with no text (finish reason "${fin}"), a failure on the provider's side` }
+  }
+  return null
 }
 
 /**
@@ -354,6 +448,14 @@ export function replyProblem(provider, data, text) {
       const choice = data?.choices?.[0]
       if (choice?.message?.refusal) return refusal(`declined to rate this batch (refusal: ${String(choice.message.refusal).slice(0, 200)})`)
       if (empty && choice?.finish_reason === 'length') return exhausted('reasoning')
+      // Mistral's `model_length`: the model's own context limit rather than
+      // our max_tokens. Still a token limit reached with nothing to show (its
+      // thinking chunks are not the reply), so it is the same kind: not the
+      // provider failing, worth another go, and the per-idea round sends a far
+      // shorter prompt.
+      if (empty && choice?.finish_reason === 'model_length') {
+        return { kind: 'exhausted', why: 'reached the model\'s context length (finish reason "model_length") and returned no text' }
+      }
       if (empty && choice?.finish_reason === 'content_filter') return refusal('declined to rate this batch (content filter)')
       return null
     }
