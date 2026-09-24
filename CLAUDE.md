@@ -3043,6 +3043,15 @@ per-condition novelty × usefulness cross-check shows how the two relate. Pure m
 `_ideasearchlab-src/src/utils/usefulnessKpis.js` (`usefulnessKpisFromText`); full
 reasoning in `_ideasearchlab-src/CLAUDE.md`; offline test
 `node _ideasearchlab-src/tools/usefulness-kpis-guard.mjs`.
+**Every 3.1 result table is in the Excel files** (owner, 2026-09-24). The "Check
+against the ratings" correlations (each empirical KPI's r with every AI model's and
+the evaluators' ratings) had never reached a file: all three Excel downloads (ideas +
+KPIs, all idea data, the aggregate) now carry an **Empirical KPIs vs ratings** tab (r,
+then the number of ideas behind each r), beside **Pool KPIs by condition**, which
+gained the two medians that define "novel" and "useful". One builder writes both
+(`detResultSheets`), and both names sit in `REBUILT_SHEETS` in `sessionExport.js`, so
+a re-imported download never stacks a second copy into the aggregate. Pinned by
+section 9 of `node _ideasearchlab-src/tools/analytics-page-guard.mjs`.
 
 **Section 3.1's objective KPIs leave an idea that cannot be scored blank.** An
 idea needs at least two meaningful words (two different words not on NLTK's
