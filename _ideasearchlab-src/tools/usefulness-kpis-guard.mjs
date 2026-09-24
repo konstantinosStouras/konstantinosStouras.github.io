@@ -9,6 +9,11 @@
  * novelty KPIs' anchor (the reference set R) or from their similarities. Checks:
  *   - each measure's arithmetic (Need fit, Specificity, Workability, the composite,
  *     the novelty × usefulness cross-check helpers),
+ *   - Workability's negation rule, both directions: a technology the idea really
+ *     uses is never hidden (every sentence the 2026-09-24 review found hidden,
+ *     plus fever-garment sentences of the same shapes, each guard also alone),
+ *     a negated list is read ("no batteries, charging, or apps"), a negator more
+ *     than 60 characters back does not count, and pasted hyphen runs stay fast,
  *   - that the composite does not move when only novelty moves,
  *   - the "idea with no words" rule the novelty side follows (objectiveKpis.js):
  *     such an idea is left blank on every usefulness KPI and kept out of the corpus,
@@ -145,18 +150,259 @@ console.log('Workability — 1 / (1 + extra technologies named)')
     ['no wires, just an app', ['app']],
     ['without waiting, the sensor reads the heat', ['sensor']],
   ]
-  for (const [t, want] of lists) {
-    // Compared on the terms that are on the default list T (e.g. "heater" is).
-    const w = want.filter(x => T.some(c => c.term === x)).sort()
-    const got = techTermsIn(t, T).slice().sort()
-    check(`negated list: "${t}" → [${w.join(', ')}]`, got.join() === w.join(), got.join())
+  // Compared on the terms that are on the default list T (e.g. "heater" is).
+  const expectTerms = (label, rows) => {
+    for (const [t, want] of rows) {
+      const w = want.filter(x => T.some(c => c.term === x)).sort()
+      const got = techTermsIn(t, T).slice().sort()
+      check(`${label}: "${t}" → [${w.join(', ')}]`, got.join() === w.join(), got.join())
+    }
   }
-  // Bounded: the look-behind window is 60 characters, so no input can make the
-  // matcher backtrack for long.
+  expectTerms('negated list', lists)
+
+  // PRECISION FIRST (review of 2026-09-24, findings P1–P5, P21, P41): each sentence
+  // below names technology the idea really uses, and the first list rule hid it,
+  // lifting the idea's Workability to 1. A real technology must never be hidden.
+  expectTerms('must count (P1: only a closed list of -ing verbs carries "without")', [
+    ['The shirt can be washed without damaging the sensor.', ['sensor']],
+    ['It lasts all night without draining the battery.', ['battery']],
+    ['The child can move freely without disturbing the sensor under the arm.', ['sensor']],
+    ['Kids can play without breaking the LED strip in the sleeve.', ['led']],
+    ['It runs for months without recharging the battery.', ['battery']],
+  ])
+  expectTerms('must count (P2, P21, P41: a comma closes the negated phrase)', [
+    ['Instead of an app, the LED turns red or amber when the baby passes 37°C.', ['led']],
+    ['Rather than an app, the LED blinks red or orange at 37°C.', ['led']],
+    ['No Bluetooth, the LED blinks red or blue when the fabric reaches 37°C.', ['led']],
+    ['No app, the sensor turns the patch red or green.', ['sensor']],
+    ['Without WiFi, the app still works offline or syncs later.', ['app', 'syncs']],
+    ['Without Wi-Fi or Bluetooth, the sensor stores readings locally.', ['sensor']],
+    ['no battery or app, a sensor measures it', ['sensor']],
+    ['without a battery or sensor, the app alerts parents', ['app']],
+    ['No wires or batteries, the app shows the temperature', ['app']],
+    ['It needs no battery or charging, an app sends the alert', ['app']],
+    ['No app, a sensor or an LED shows the warning', ['sensor', 'led']],
+    ['Without a battery, the sensor or the app alerts parents', ['sensor', 'app']],
+    ['without batteries or charging, a Bluetooth chip sends data to the app', ['app', 'bluetooth', 'chip', 'data']],
+    ['No need for batteries or charging, the app shows the temperature history.', ['app']],
+    ['No battery or charger, an app sends a notification to parents.', ['app', 'notification']],
+    ['Without charging, the LED or the app alerts the nurse.', ['app', 'led']],
+    ['No battery or sensor, an app does the work instead.', ['app']],
+    ['Without batteries or wires, the app alerts the parent.', ['app']],
+    ['There is no wifi or bluetooth, so the app syncs later.', ['app', 'syncs']],
+    ['No wires or batteries, an app with a camera reads the shirt colour.', ['app', 'camera']],
+    ['It has no battery or chip; the app reads the colour from a photo.', ['app']],
+  ])
+  expectTerms('must count (P3: "or" meaning "or else", "no matter", "no wire means")', [
+    ['Do not tumble dry or the battery inside the collar may be damaged.', ['battery']],
+    ['Do not tumble dry the shirt or the battery inside the collar may be damaged.', ['battery']],
+    ['Do not machine wash or the sensor in the cuff will stop working.', ['sensor']],
+    ['Do not iron or the LEDs along the hem will melt.', ['led']],
+    ['Never tumble dry or the chip in the label will break.', ['chip']],
+    ['If the shirt shows no change or the app alarm stays silent, the child is fine.', ['app']],
+    ['No wire means the sensor stays hidden in the seam.', ['sensor']],
+    ['No matter what the sensor reads, the fabric changes colour at 37°C.', ['sensor']],
+    ['No matter how the app is set up, the shirt changes colour at 37°C.', ['app']],
+  ])
+  expectTerms('must count (P4: "replace" / "remove" as upkeep, by a person or an order)', [
+    ['Parents replace the coin battery once a year.', ['battery']],
+    ['Remove the sensor before washing the shirt at 30 degrees.', ['sensor']],
+    ['Simply remove the battery pack and throw the shirt in the wash.', ['battery']],
+    ['Just replace the battery when the LED starts to dim.', ['battery', 'led']],
+  ])
+  expectTerms('must count (P5: "no-" / "zero-" compounds and a spaced dash)', [
+    ["A no-contact sensor in the collar reads the child's temperature.", ['sensor']],
+    ['No-touch sensors in the cuffs track the fever all night.', ['sensor']],
+    ['A no-sew sensor pocket keeps the chip in place.', ['sensor', 'chip']],
+    ['A no-hassle app shows parents the temperature history.', ['app']],
+    ['Zero-waste LED strips line the hem and glow at 37°C.', ['led']],
+    ['No thermometer - the sensor in the fabric does the work.', ['sensor']],
+    ['No guessing - the app shows the exact temperature.', ['app']],
+    ['No fuss: the app pings you at 37°C.', ['app']],
+    ['No batteries are needed; the sensor harvests body heat.', ['sensor']],
+    ['It is not bulky or heavy, and the app is free to download.', ['app']],
+    ['Not only the fabric but also the LED changes colour.', ['led']],
+    ['The dye has no toxic chemicals and the sensor is sealed.', ['sensor']],
+    ['It replaces manual checks using an app that reads the sensor.', ['app', 'sensor']],
+    ['The shirt never overheats since the sensor cuts power early.', ['sensor']],
+  ])
+  // More of the same, written for this study's brief (a garment or patch that
+  // changes colour at 37°C): every one names technology the idea keeps.
+  expectTerms('must count (fever garment)', [
+    ['The patch has no battery or the sensor would overheat against the skin.', ['sensor']],
+    ['It also works without the app, which keeps a fever log for the doctor.', ['app']],
+    ['Without the app, parents still see the collar turn red at 37°C.', ['app']],
+    ['It is not the app that warns parents but the red sleeve.', ['app']],
+    ['Without a fever, the patch stays white, but the LED blinks once an hour.', ['led']],
+    ['With no delay, the app pings parents when the patch turns red.', ['app']],
+    ['No batteries to replace: the patch uses an NFC chip read by a phone.', ['nfc', 'chip']],
+    ['No wires, the patch talks to the app over Bluetooth.', ['app', 'bluetooth']],
+    ['There is no screen; the app shows the reading.', ['app']],
+    ['The collar has no buttons or switches, and the sensor turns on by itself.', ['sensor']],
+    ['It has no cables or plugs and the battery charges wirelessly.', ['battery']],
+    ['It never needs charging, but the LED indicator runs on a coin battery.', ['led', 'battery']],
+    ['Instead of guessing, parents see the LED glow red at 37°C.', ['led']],
+    ['Rather than waking the baby, parents check the app.', ['app']],
+    ['Without waking the baby, the app shows the temperature.', ['app']],
+    ['Without waking the baby or using a thermometer, parents see the LED turn red.', ['led']],
+    ['It replaces the old battery with a solar panel sewn into the hem.', ['solar panel']],
+    ['It removes the guesswork: the LED glows red above 37°C.', ['led']],
+    ['It eliminates false alarms because the sensor checks twice.', ['sensor']],
+    ["Kids won't notice the sensor sewn into the cuff.", ['sensor']],
+    ["Parents don't have to guess: the app shows the fever.", ['app']],
+    ['No one has to check the app; it buzzes at 37°C.', ['app']],
+    ['Neither parent has to wake up because the app alerts them.', ['app']],
+    ['Zero false alarms thanks to the sensor in the armpit seam.', ['sensor']],
+    ['Free of charge, the app lets parents track the fever.', ['app']],
+    ['Instead of a thermometer, the shirt uses a sensor in the collar.', ['sensor']],
+    ['Rather than an app or a screen, the patch has an LED that turns red.', ['led']],
+    ['Instead of an app, an LED or a buzzer warns parents at 37°C.', ['led', 'buzzer']],
+    ['No app or LED is needed, since the dye turns red; a sensor tag is optional.', ['sensor']],
+    ['It works without batteries or apps, but a sensor tag can be added.', ['sensor']],
+    ['With no app, a Bluetooth chip or an NFC tag does the job.', ['bluetooth', 'chip', 'nfc']],
+    ['Do not remove the battery or the LED will stop blinking.', ['battery', 'led']],
+    ['Never iron the patch or the sensor will crack.', ['sensor']],
+    ['The no-battery claim is false: a tiny coin battery powers the LED.', ['battery', 'led']],
+    ['A no-app design still needs a sensor to trigger the dye.', ['sensor']],
+    ['It needs no app, yet a sensor inside checks the skin every minute.', ['sensor']],
+    ['Unlike the old sensor, this one is washable and syncs to the app.', ['sensor', 'syncs', 'app']],
+    ['Unlike other patches, it uses a Bluetooth chip to alert the app.', ['bluetooth', 'chip', 'app']],
+    ['An app free of ads shows the fever curve.', ['app']],
+    ['No two sensors read the same, so the app averages them.', ['sensor', 'app']],
+    ['There is no other sensor like it on the market.', ['sensor']],
+    ['It works with or without the app, and the LED blinks at 37°C.', ['app', 'led']],
+    ['Parents need not open an app because the LED turns red.', ['app', 'led']],
+    ['There is no doubt sensors will make it more accurate.', ['sensor']],
+    ['No matter which sensor you pick, the dye turns red at 37°C.', ['sensor']],
+    ['No parent needs an app to read the patch.', ['app']],
+    ['No false alarm - the sensor double-checks at 37°C.', ['sensor']],
+    ['No thermometer—the sensor in the seam does the work.', ['sensor']],
+    ['No thermometer (the sensor in the seam does the work).', ['sensor']],
+    ['No battery, but an app and a sensor.', ['app', 'sensor']],
+    ['No battery means sensors stay light and thin.', ['sensor']],
+  ])
+
+  // The same guards one at a time: in most sentences above two of them stand in the
+  // way, so each of these fails if just ONE guard is taken out.
+  expectTerms('must count (one guard at a time)', [
+    // an -ing verb that is not "using / needing / …" ends the reach
+    ['It glows all night without draining a coin battery.', ['battery']],
+    ['Children can run around without dislodging any sensor.', ['sensor']],
+    // an "or" before the list's last comma does not close it
+    ['Without Wi-Fi or Bluetooth, a sensor, a dye patch and a strap do the work.', ['sensor']],
+    // "not" / "never" do not start a list
+    ['Do not remove batteries or chips will reset.', ['battery', 'chip']],
+    ['Never tug cables or sensors may come loose.', ['sensor']],
+    // an item must end in a term of T or a kit noun ("change" is neither)
+    ['If the patch shows no change or app alerts stay quiet, the baby is fine.', ['app']],
+    ['If the sleeve shows no rash or app alarm, the child is fine.', ['app']],
+    // a later "or" item that runs straight into a verb starts a new clause
+    ['It needs no battery or an LED would dim.', ['led']],
+    ['The patch has no battery or a sensor could overheat.', ['sensor']],
+    ['No wires or sensors stay hidden in the seam.', ['sensor']],
+    ['It has no screen or an electronic tag logs the fever.', ['electronic']],
+    // a window cut short (here exactly 60 characters after "sensor") is not an end
+    ['No app, a sensor or an ultra-mega-bright-orange super-high-contrast-mini LED shows the warning.', ['sensor', 'led']],
+  ])
+
+  // The other direction (P6): phrasings that DO say the idea needs none of it,
+  // read through closed phrases ("having to use", "relying on", "the help of",
+  // "no longer need", "neither … nor") rather than open word classes.
+  expectTerms('must negate (P6)', [
+    ['Without having to use an app, parents can see the fever.', []],
+    ['It works without the help of any sensor.', []],
+    ['It does not rely on an app or Bluetooth.', []],
+    ['Parents no longer need a thermometer or an app.', []],
+    ['The design has no electronic parts, sensors or apps.', []],
+    ['It needs neither an app nor a battery.', []],
+    ['It works without batteries or using an app.', []],
+    ['It needs no battery or app to work.', []],
+    ['No batteries or sensors are required.', []],
+    ['No wire, chip or battery is needed.', []],
+    ["Parents won't need an app or a thermometer.", []],
+    ["You don't need any app or battery.", []],
+    ['No app, no battery, no sensor.', []],
+    ['It works with no app, battery, or charger.', []],
+    ['It works without an app, a battery or an electronic sensor.', []],
+    ['It needs no Wi-Fi, no app and no battery.', []],
+    ['No wires or LEDs are used anywhere in the shirt.', []],
+    ['It does not use any LED, sensor or chip.', []],
+    ['It works without using any app or wireless connection.', []],
+    ['There are no sensors, chips, or batteries inside.', []],
+  ])
+  expectTerms('must negate (fever garment)', [
+    ['The patch needs no battery, no app and no Bluetooth.', []],
+    ['It works without batteries, wires or a phone.', []],
+    ['No electronics needed: the dye turns red at 37°C.', []],
+    ['A battery-free patch that turns red at 37°C.', []],
+    ['Parents do not need an app or a thermometer to spot a fever.', []],
+    ["It doesn't use any sensors or LEDs; the fabric does the work.", []],
+    ['Unlike smart patches that rely on Bluetooth, it just changes colour.', []],
+    ['Unlike thermometers that need batteries, the sleeve changes colour at 37°C.', []],
+    ['It needs neither an app nor a charger.', []],
+    ['There is no need for an app, a battery or a sensor.', []],
+    ['The sleeve works without using any electronic sensor.', []],
+    ['It works without the help of any app.', []],
+    ['Without having to wear a smartwatch, athletes see their heat map.', []],
+    ['It removes the need for a thermometer or an app.', []],
+    ['Zero batteries, zero apps, zero charging.', []],
+    ['No wires/batteries needed.', []],
+    ['Instead of using an app, parents glance at the collar.', []],
+    ['Rather than relying on Bluetooth, the patch simply turns red at 37°C.', []],
+    ['It works with no charging, no pairing and no app.', []],
+    ['No sensors, chips, or batteries are inside the patch.', []],
+    ['The patch contains no electronic parts, sensors or batteries.', []],
+    ['It never needs a battery or a charger.', []],
+    ['It does not rely on Wi-Fi or Bluetooth.', []],
+    ['Without waking the child or using a thermometer or an app, parents see the fever.', []],
+    ['It is not an app but a sleeve that turns red at 37°C.', []],
+    ['A no-app, no-battery fever patch.', []],
+    ['It gets rid of the battery and turns red on its own.', []],
+    ['It replaces the electronic thermometer with dyed fabric.', []],
+    ['Free from batteries: the dye does the work.', []],
+  ])
+  // A real idea from the owner's 741 (PnSzJyM52e07j6TyswqO): it says four times that
+  // it needs no electronics, and the first list rule still counted three terms.
   {
-    const long = ('no battery or sensor, app, electronic, charging, ').repeat(120)
-    const t0 = performance.now(); techTermsIn(long, T); const ms = performance.now() - t0
-    check(`a 6,000-character list is matched quickly (${ms.toFixed(1)} ms)`, ms < 500)
+    const idea = "Fever Guard Sleepwear: A set of pajamas that changes color in areas where the wearer's skin temperature reaches or exceeds 37°C. During sleep, caregivers or parents can quickly identify if someone may have a fever without waking them or using electronic sensors. The fabric uses thermochromic dye, requiring no batteries, charging, or apps. Unlike smart wearables that rely on electronics, it offers a simple, affordable, and washable first-level health indicator.\nWhy it's unique:\nIt provides passive fever monitoring without electronics, making it ideal for children, elderly people, and hospitals"
+    const got = techTermsIn(idea, T)
+    check('the owner\'s "Fever Guard Sleepwear" idea needs no extra technology (Workability 1)',
+      got.length === 0 && workability(idea, T) === 1, got.join())
+  }
+  // The 60-character window (P27): a negator further back than that does not reach
+  // the term, even at the end of a list that would otherwise carry it.
+  {
+    const near = 'It works without app, app, app, or sensor.'
+    const far = 'It works without app, app, app, app, app, app, app, app, app, app, or sensor.'
+    const dist = far.indexOf('sensor') - far.indexOf('without')
+    check('a list within the window negates its last item', techTermsIn(near, T).length === 0, techTermsIn(near, T).join())
+    check(`a negator ${dist} characters back (> 60) does not negate the term`,
+      dist > 60 && techTermsIn(far, T).join() === 'sensor', techTermsIn(far, T).join())
+  }
+  // Bounded (P7): the grammar splits any text one way only, so pasted separator
+  // lines and hyphen runs cannot make it backtrack. The first version took 68–355 ms
+  // on ONE such window and about 1 s per 700 characters of them (10 s for 10,350).
+  {
+    const hy = n => '-'.repeat(n)
+    techTermsIn('no battery or sensor, app, electronic, charging, or LED.', T)   // compile once first
+    const inputs = [
+      ['one hyphen-run window', 'no ' + hy(56) + ',app'],
+      ['hyphen runs, 690 characters', ('no ' + hy(56) + ',app-free ').repeat(10)],
+      ['hyphen runs, 10,350 characters', ('no ' + hy(56) + ',app-free ').repeat(150)],
+      ['hyphenated words', 'without ' + 'a-'.repeat(26) + ',app'],
+      ['"or" chains', ('no ' + 'x-a-a or '.repeat(6) + ',app ').repeat(200)],
+      ['a 6,000-character list', 'no battery or sensor, app, electronic, charging, '.repeat(120)],
+      ['a pasted separator line', 'Unique feature: no app ' + hy(45) + ' Idea 2: a sensor patch'],
+    ]
+    let worst = 0
+    for (const [label, text] of inputs) {
+      let ms = Infinity
+      for (let k = 0; k < 3; k++) { const t0 = performance.now(); techTermsIn(text, T); ms = Math.min(ms, performance.now() - t0) }
+      worst = Math.max(worst, ms)
+      check(`fast on ${label} (${ms.toFixed(1)} ms)`, ms < 25)
+    }
+    check(`the dashed separator ends the clause ("no app ---- Idea 2: a sensor patch" keeps the sensor)`,
+      techTermsIn(inputs[6][1], T).join() === 'sensor', techTermsIn(inputs[6][1], T).join())
   }
 }
 
