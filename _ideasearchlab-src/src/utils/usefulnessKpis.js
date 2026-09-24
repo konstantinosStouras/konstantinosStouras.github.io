@@ -272,42 +272,71 @@ const NEGATED_BEFORE = /\b(?:no|not|without|never|zero|nor|free of|instead of|ra
 // above reaches only the first item unless the words before the term end in "s",
 // so "no battery or Bluetooth needed" still counted Bluetooth and "without a
 // battery or an app" still counted the app. This second rule lets the negator run
-// over a LIST: items joined by "or" / "nor" / "/", and items joined by a comma when
-// the item before the comma is itself on the technology list ("without batteries,
-// electronics or apps"). A comma after anything else, and "and", do NOT carry the
-// negation: in "no delay, the app alerts parents" or "no wires and an app" the app
-// is not negated. Up to three describing words may sit right before the term ("no
-// ELECTRONIC sensors", "without USING AN electronic sensor"), never a joining word
-// or "only / just / even" ("not only the app" keeps the app). It also knows the
-// verbs that take technology AWAY (removes, eliminates, replaces, gets rid of,
-// ditches) and "no need for". Built per technology list, since the comma rule
-// needs the list's own terms.
+// over a LIST, and it is deliberately NARROW, because a negation that leaks past
+// its clause hides real technology ("It is not expensive because the app is free"
+// needs an app; review finding, same day):
+//   negator ("no", "without", "removes", "replaces", "eliminates", "no need for" …)
+//   → optionally ONE -ing verb right after it, maybe after an -ly adverb
+//     ("without USING …", "without CONSTANTLY CHECKING …")
+//   → articles ("a", "an", "the", "any", "extra" …)
+//   → list items joined by "or" / "nor" / "/", or by a comma when the item before
+//     the comma is itself on the technology list T
+//   → at most TWO describing words ("no ELECTRONIC sensors")
+//   → the term.
+// A describing word is never a joining word, a preposition, a subordinator, a verb
+// form or "only / just / even" — so "because", "by", "via", "through", "using",
+// "since", "longer" … end the reach ("replaces manual checks using an app" keeps
+// the app). A COMMA list must close with "or" / "nor", before the term or right
+// after it ("without batteries, electronics, or a phone"); otherwise "no app, a
+// sensor measures it" would pass the negation on to the sensor. "and" never
+// carries it ("no delay and the app alerts parents" keeps the app).
 const NEG_WORDS = String.raw`(?:no|not|without|never|zero|nor|free of|instead of|rather than|(?:does|do|did)(?:n'?t| not) (?:need|require|use)|remov(?:e|es|ed|ing)|eliminat(?:e|es|ed|ing)|replac(?:e|es|ed|ing)|get(?:s|ting)? rid of|ditch(?:es|ed|ing)?)`
+// One verb in -ing right after the negator, optionally after an -ly adverb:
+// "without USING an electronic sensor", "without CONSTANTLY CHECKING an electronic
+// device". It is the negator's own object, so it is the one place a verb form may
+// sit between the negator and the term.
+const NEG_GERUND = String.raw`(?:(?:\s+[a-z]+ly)?\s+[a-z]+ing)?`
+const NEG_NEED = String.raw`(?:\s+(?:the\s+)?(?:need|needs)\s+(?:for|of))?`
 const NEG_ARTICLES = String.raw`(?:[\s/&-]+(?:any|an|a|the|extra|other|external|separate|additional)){0,2}`
-const NEG_MOD = String.raw`(?:[\s-]+(?!(?:and|but|with|while|which|that|so|then|than|plus|also|yet|only|just|even|merely)\b)[a-z0-9-]+)`
+// A describing word: not a joining word, preposition, subordinator, auxiliary or
+// negator, not "only/just/even/merely/longer/more", and not an -ing / -ed verb form.
+const NEG_NOT_A_MODIFIER = 'and|or|nor|but|with|while|which|that|who|so|then|than|plus|also|yet|only|just|even|merely|because|since|as|by|via|through|for|to|in|on|at|of|from|into|onto|over|under|after|before|until|unless|when|where|whether|if|longer|more|less|is|are|was|were|be|been|being|it|its|they|them|their|this|these|those|will|can|could|would|should|may|might|must|do|does|did|has|have|had|not|no|never'
+const NEG_MOD = String.raw`(?:[\s-]+(?!(?:${NEG_NOT_A_MODIFIER})\b)(?![a-z0-9-]*(?:ing|ed)\b)[a-z0-9-]+)`
 const negatedListCache = new WeakMap()
-function negatedListRe(compiled) {
-  let re = negatedListCache.get(compiled)
-  if (re) return re
+function negatedListRes(compiled) {
+  let res = negatedListCache.get(compiled)
+  if (res) return res
   const techAlt = compiled.length ? `(?:${compiled.map(c => c.re.source).join('|')})` : '(?!)'
-  const orItem = String.raw`(?:[\s-]+[a-z0-9-]+(?:[\s-]+[a-z0-9-]+)?\s*(?:\bor\b|\bnor\b|/)` + NEG_ARTICLES + ')'
-  const commaTechItem = String.raw`(?:${NEG_MOD}{0,2}[\s-]+${techAlt}\s*,` + NEG_ARTICLES + ')'
-  re = new RegExp(
-    String.raw`\b${NEG_WORDS}\b(?:\s+(?:the\s+)?(?:need|needs)\s+(?:for|of))?` + NEG_ARTICLES
-    + `(?:${orItem}|${commaTechItem})*` + NEG_MOD + '{0,3}' + NEG_ARTICLES + String.raw`[\s/&-]*$`, 'i')
-  negatedListCache.set(compiled, re)
-  return re
+  const orItem = String.raw`(?:${NEG_MOD}{1,2}\s*(?:\bor\b|\bnor\b|/)` + NEG_ARTICLES + ')'
+  // "…, " after a technology item, with the Oxford comma's "or" / "nor" allowed
+  // straight after it ("without an app, battery, or electronic sensor").
+  const commaTechItem = String.raw`(?:${NEG_MOD}{0,2}[\s-]+${techAlt}\s*,(?:\s*(?:or|nor)\b)?` + NEG_ARTICLES + ')'
+  const build = items => new RegExp(
+    String.raw`\b${NEG_WORDS}\b${NEG_NEED}${NEG_GERUND}` + NEG_ARTICLES
+    + `(?:${items})*` + NEG_MOD + '{0,2}' + NEG_ARTICLES + String.raw`[\s/&-]*$`, 'i')
+  res = { plain: build(orItem), comma: build(`${orItem}|${commaTechItem}`) }
+  negatedListCache.set(compiled, res)
+  return res
+}
+/** Is the term negated as part of a list? `before`/`after` = the text around it. */
+function negatedInList(before, after, res) {
+  if (res.plain.test(before)) return true
+  const m = before.match(res.comma)
+  if (!m) return false
+  // A comma list counts only once it closes with "or" / "nor": before the term,
+  // or straight after it in the same clause.
+  return /\b(?:or|nor)\b/i.test(m[0]) || /^[^.;:!?]{0,30}?\b(?:or|nor)\b/i.test(after)
 }
 const NEGATED_AFTER = /^[\s-]*free\b/i
 
 /** Does `text` name this entry at least once without negating it? */
-function namesTerm(text, re, listRe) {
+function namesTerm(text, re, listRes) {
   const g = new RegExp(re.source, 'gi')
   let m
   while ((m = g.exec(text))) {
     const before = text.slice(Math.max(0, m.index - 60), m.index)
-    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 8)
-    const negated = NEGATED_BEFORE.test(before.slice(-40)) || (listRe && listRe.test(before)) || NEGATED_AFTER.test(after)
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 40)
+    const negated = NEGATED_BEFORE.test(before.slice(-40)) || (listRes && negatedInList(before, after, listRes)) || NEGATED_AFTER.test(after.slice(0, 8))
     if (!negated) return true
   }
   return false
@@ -316,8 +345,8 @@ function namesTerm(text, re, listRe) {
 /** The list entries an idea names, not negated (distinct, in list order). */
 export function techTermsIn(text, compiled) {
   const t = String(text || '').replace(/[’‘]/g, "'").replace(/\s+/g, ' ')
-  const listRe = negatedListRe(compiled)
-  return compiled.filter(c => namesTerm(t, c.re, listRe)).map(c => c.term)
+  const listRes = negatedListRes(compiled)
+  return compiled.filter(c => namesTerm(t, c.re, listRes)).map(c => c.term)
 }
 
 /** Workability = 1 / (1 + number of extra technologies named); null for no text. */

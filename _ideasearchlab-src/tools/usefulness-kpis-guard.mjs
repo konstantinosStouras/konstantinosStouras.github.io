@@ -120,7 +120,11 @@ console.log('Workability — 1 / (1 + extra technologies named)')
     ['without electronic sensors, apps or charging', []],
     ['without adding sensors or electronics', []],
     ['works without batteries, screens or uncomfortable electronic sensors', []],
-    // must still count
+    ['without an app, battery, or electronic temperature sensor', []],        // Oxford comma
+    ['without constantly checking an electronic device', []],                // adverb + -ing
+    ['requiring no batteries, charging, or apps', []],
+    // must still count — including every case the 2026-09-24 review found the
+    // first version of this rule swallowing (a negation leaking past its clause)
     ['there is no delay and the app alerts parents', ['app']],
     ['no delay, the app alerts parents', ['app']],
     ['It does not look like a watch, and the app shows it', ['app']],
@@ -129,10 +133,30 @@ console.log('Workability — 1 / (1 + extra technologies named)')
     ['It is not expensive. The app shows data', ['app', 'data']],
     ['replaces a thermometer with an app', ['app']],
     ['A sensor with no app', ['sensor']],
+    ['It replaces manual checks using an app.', ['app']],
+    ['Eliminates guesswork through an app.', ['app']],
+    ['It is not expensive because the app is free.', ['app']],
+    ['Parents no longer worry because the app sends a notification.', ['app', 'notification']],
+    ['No false alarms because the algorithm filters noise.', ['algorithm']],
+    ['It never fails since the sensor is sewn in.', ['sensor']],
+    ['The baby is never cold or hot because a sensor adjusts the heater.', ['heater', 'sensor']],
+    ['no app, a sensor measures it', ['sensor']],
+    ['Replaces thermometers via a Bluetooth sensor.', ['bluetooth', 'sensor']],
+    ['no wires, just an app', ['app']],
+    ['without waiting, the sensor reads the heat', ['sensor']],
   ]
   for (const [t, want] of lists) {
+    // Compared on the terms that are on the default list T (e.g. "heater" is).
+    const w = want.filter(x => T.some(c => c.term === x)).sort()
     const got = techTermsIn(t, T).slice().sort()
-    check(`negated list: "${t}" → [${want.join(', ')}]`, got.join() === want.slice().sort().join(), got.join())
+    check(`negated list: "${t}" → [${w.join(', ')}]`, got.join() === w.join(), got.join())
+  }
+  // Bounded: the look-behind window is 60 characters, so no input can make the
+  // matcher backtrack for long.
+  {
+    const long = ('no battery or sensor, app, electronic, charging, ').repeat(120)
+    const t0 = performance.now(); techTermsIn(long, T); const ms = performance.now() - t0
+    check(`a 6,000-character list is matched quickly (${ms.toFixed(1)} ms)`, ms < 500)
   }
 }
 

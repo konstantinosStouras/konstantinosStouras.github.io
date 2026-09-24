@@ -153,10 +153,10 @@ const hasValue = v => v !== '' && v != null && Number.isFinite(Number(v))
  * catalogue order (provider by provider, most capable first), then any other
  * model by name, then "model not recorded" last.
  */
-export function aiModelSlugs(rows) {
+export function aiModelSlugs(rows, { includeBlank = false } = {}) {
   const found = new Set()
   for (const r of rows || []) {
-    for (const k of Object.keys(r || {})) if (isAiModelKey(k) && hasValue(r[k])) found.add(slugOfKey(k))
+    for (const k of Object.keys(r || {})) if (isAiModelKey(k) && (includeBlank || hasValue(r[k]))) found.add(slugOfKey(k))
   }
   return sortModelSlugs([...found])
 }

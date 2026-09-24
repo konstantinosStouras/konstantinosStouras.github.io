@@ -115,8 +115,13 @@ console.log('derived means and import')
   check('no derived or model column comes back as an x_ extra', !Object.keys(imp).some(k => k.startsWith('x_')))
   const [old] = normalizeImportedRows([{ 'Idea ID': 'i2', Condition: 'Solo', Title: 't', Novelty: 2, Usefulness: 3, 'Novelty (objective)': 0.4 }])
   check('an older file with plain Novelty / Usefulness: "model not recorded"', old[REC.novelty] === 2 && old[REC.usefulness] === 3 && old.det_novelty === 0.4)
+  // A plain column is a score with no model name — unless the file is the page's
+  // analysis CSV, where it is the derived mean beside the ai_nov__ keys (decided
+  // per FILE; see section 7).
   const [mixed] = normalizeImportedRows([{ 'Idea ID': 'i3', Condition: 'Solo', Title: 't', 'AI Novelty (GPT-6 Astra)': 3, Novelty: 5 }])
-  check('a plain column beside a model\'s is NOT read as another rater', mixed[ASTRA.novelty] === 3 && mixed[REC.novelty] === undefined)
+  check('a plain column beside a named one is "model not recorded"', mixed[ASTRA.novelty] === 3 && mixed[REC.novelty] === 5)
+  const [analysis] = normalizeImportedRows([{ idea_id: 'i4', condition: 'Solo', text: 't', ai_nov__gpt_6_astra: 3, novelty: 3 }])
+  check('the analysis CSV\'s bare novelty is the derived mean, never imported', analysis[ASTRA.novelty] === 3 && analysis[REC.novelty] === undefined)
   const blank = buildRowsForSession({ code: 'S' }, [{ id: 'i', title: 't' }], [], [])[0]
   check('a Firestore-built row carries no AI field at all', !Object.keys(blank).some(k => k.startsWith('ai_')) && blank.novelty === '')
   check('stripAllKpis drops every model\'s fields', !Object.keys(stripAllKpis([{ [ASTRA.novelty]: 3, [GEM.usefulness]: 2, novelty: 3 }])[0]).some(k => k.startsWith('ai_')))
@@ -220,7 +225,47 @@ console.log('usefulness check sheet')
   check('"A hat." is left blank', res.perIdea[5].usefulness == null)
 }
 
-// ── 7. The page is wired to it ───────────────────────────────────────────────
+// ── 7. The 2026-09-24 review's findings, each pinned ────────────────────────
+console.log('review findings')
+{
+  const rt = raw => recomputeOverall(normalizeImportedRows(raw))[0]
+  // 1. "model not recorded" survives every re-import the page offers.
+  const u = rt([{ 'Idea ID': 'a', Condition: 'None', Title: 't', 'AI Novelty (model not recorded)': 2, 'AI Usefulness (model not recorded)': 3, 'AI Quality (model not recorded)': 2.5 }])
+  check('1: "AI Novelty (model not recorded)" imports (it used to vanish)', u[REC.novelty] === 2 && u[REC.usefulness] === 3 && u.overall_quality === 2.5)
+  const three = rt([{ 'Idea ID': 'a', Condition: 'None', Title: 't', 'AI Novelty (GPT-6 Astra)': 3, 'AI Usefulness (GPT-6 Astra)': 4,
+    'AI Novelty (Gemini 3.1 Pro Preview)': 5, 'AI Usefulness (Gemini 3.1 Pro Preview)': 2, 'AI Novelty (model not recorded)': 1, 'AI Usefulness (model not recorded)': 1 }])
+  check('1: beside named models too, so the mean keeps all three', three[REC.novelty] === 1 && three.novelty === 3, JSON.stringify({ rec: three[REC.novelty], mean: three.novelty }))
+  const csv = rt([{ idea_id: 'a', condition: 'None', text: 't', novelty: 9, usefulness: 9, ai_nov__gpt_6_astra: 3, ai_use__gpt_6_astra: 4, ai_nov__unrecorded: 1, ai_use__unrecorded: 2 }])
+  check('1: the analysis CSV: its ai_nov__unrecorded is kept, its bare (derived) novelty is not', csv[REC.novelty] === 1 && csv.novelty === 2 && csv.usefulness === 3)
+  const hand = normalizeImportedRows([{ 'Idea ID': 'a', Condition: 'None', Title: 't', 'AI Novelty (GPT-6 Astra)': 3, Novelty: 5 }])[0]
+  check('1: a hand-combined file keeps its plain column beside a named one (decided per file)', hand[ASTRA.novelty] === 3 && hand[REC.novelty] === 5)
+  const top = mergeAiScoresIntoRows([{ rid: 'r', idea_id: 'a', text: 't' }], normalizeImportedRows([{ 'Idea ID': 'a', Condition: 'None', Title: 't', 'AI Novelty (model not recorded)': 2, 'AI Usefulness (model not recorded)': 2 }]))
+  check('1: so "Upload full dataset" fills them instead of reporting "filled 0"', top.filled === 1 && top.rows[0][REC.novelty] === 2)
+  // 5. Evaluator columns reload.
+  const ev = rt([{ 'Idea ID': 'a', Condition: 'None', Title: 't', 'Eval. Novelty': 4, 'Eval. Usefulness': 2 }])
+  check('5: "Eval. Novelty / Usefulness" reload into the evaluator fields', ev.ext_novelty === 4 && ev.ext_usefulness === 2 && ev.ext_quality === 3)
+  const rat = rt([{ 'Idea ID': 'a', Condition: 'None', Title: 't', 'Novelty (rater 1)': 4, 'Novelty (rater 2)': 2, 'Eval. Novelty': 5 }])
+  check('5: blind-rater columns still win when present (their mean)', rat.ext_novelty === 3)
+  // 7. Imported values are kept as the file has them.
+  check('7: an imported 0 stays 0 (it is not turned into a 1)', normalizeImportedRows([{ 'Idea ID': 'a', Condition: 'None', Title: 't', Novelty: 0 }])[0][REC.novelty] === 0)
+  // 9. A per-model row's quality is always derived: clearing one component clears it.
+  const q = recomputeOverall([{ [ASTRA.novelty]: 3, [ASTRA.usefulness]: '', overall_quality: 3.5 }])[0]
+  check('9: clearing one AI component clears the stale quality', q.overall_quality === '', String(q.overall_quality))
+  // 10. A model whose last value was cleared keeps its columns in the table.
+  check('10: aiModelSlugs can count a model with only blank cells (the table keeps its columns)',
+    JSON.stringify(aiModelSlugs([{ [GEM.novelty]: '' }], { includeBlank: true })) === JSON.stringify(['gemini_3_1_pro_preview']) && aiModelSlugs([{ [GEM.novelty]: '' }]).length === 0)
+  const page = src('src/pages/DataAnalytics.jsx')
+  check('3: a run asks first when ideas carry unlabelled scores', /unrecInScope && !confirm\(/.test(page) && /use "Label them"/.test(page))
+  check('4: the chosen model\'s placeholder pair is not editable', /placeholder: true/.test(page) && /d\.source === 'ai' && d\.slug && !d\.placeholder/.test(page))
+  check('6: the Rankings tab merges duplicate idea ids per column', /first non-blank\s*\n\s*\/\/ value wins/.test(page) || /blankV\(prev\[c\.key\]\) && !blankV\(r\[c\.key\]\)/.test(page))
+  check('8: the CSV never prefixes a number', /typeof v !== 'number' && \/\^\[=\+\\-@/.test(page))
+  check('11: the 3.2 upload counts ideas, not model pairs', /filledIdeas = res\.rows\.filter/.test(page))
+  check('12: the Rankings hint lists exactly what the tab writes', /const labels = exportKpiColumns\(rows, \{ allEmpirical: true, evaluatorColumns: true \}\)/.test(page))
+  const pr = src('src/utils/providerRequest.js')
+  check('13: the "exhausted" message names no fixed token count', /spent its whole token ceiling on/.test(pr) && !/\$\{SCORING_MAX_TOKENS\}-token ceiling/.test(pr))
+}
+
+// ── 8. The page is wired to it ───────────────────────────────────────────────
 console.log('page wiring')
 {
   const page = src('src/pages/DataAnalytics.jsx')

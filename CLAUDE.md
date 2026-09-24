@@ -3098,8 +3098,10 @@ Analytics page and documented in `_ideasearchlab-src/CLAUDE.md`:
   showing each idea's three parts, their ranks and the mean, so the empirical score
   can be checked by hand.
 - **Workability now reads a negated list.** "removes the battery or Bluetooth",
-  "no battery or Bluetooth needed" used to count the later items as needed. In the
-  owner's 741 ideas it moved 36 ideas, 29 of them in the Both condition.
+  "no battery or Bluetooth needed" used to count the later items as needed. The
+  rule is narrow on purpose (a negation must not leak past its clause: "not
+  expensive because the app is free" still needs the app). In the owner's 741
+  ideas it moved 35 ideas, 29 of them in the Both condition.
 - **Four more rater providers.** Mistral, Meta (Muse and Llama, through OpenRouter,
   since Meta closed its own Llama API on 2026-07-06), DeepSeek (stores data in
   China, which the page says) and Qwen (International endpoint). They serve the

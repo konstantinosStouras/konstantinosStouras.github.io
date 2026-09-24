@@ -451,24 +451,26 @@ export default function DataAnalytics() {
         // Column pairs to read: [novIndex, useIndex, targetFields].
         const pairs = []
         if (fields === 'ai') {
-          // Every model named in the file gets its own pair …
+          // Every model named in the file gets its own pair, and so does "model
+          // not recorded": its explicit column ("AI Novelty (model not recorded)")
+          // first, else a bare "Novelty" — the same rule as normalizeImportedRows,
+          // decided once for the file (bare columns are derived means only beside
+          // the analysis CSV's ai_nov__ keys).
+          const bareIsDerived = header.some(c => /^ai_(nov|use)__/.test(c))
+          const explicitUnrec = c => /\(model not recorded\)|^ai_(nov|use)__unrecorded$/.test(c)
           const bySlug = new Map()
           header.forEach((c, i) => {
             if (isEvalish(c) || !notEmpirical(c)) return
             const a = parseAiHeader(c)
-            if (!a || a.derived || a.slug === UNRECORDED) return
-            if (!bySlug.has(a.slug)) bySlug.set(a.slug, { nov: -1, use: -1 })
-            bySlug.get(a.slug)[a.kind === 'novelty' ? 'nov' : 'use'] = i
+            if (!a || a.derived) return
+            if (a.slug === UNRECORDED && !explicitUnrec(c) && bareIsDerived) return
+            if (!bySlug.has(a.slug)) bySlug.set(a.slug, { nov: -1, use: -1, novExplicit: false, useExplicit: false })
+            const ix = bySlug.get(a.slug)
+            const side = a.kind === 'novelty' ? 'nov' : 'use'
+            // An explicit column beats a bare one for the same model.
+            if (ix[side] < 0 || (explicitUnrec(c) && !ix[`${side}Explicit`])) { ix[side] = i; ix[`${side}Explicit`] = explicitUnrec(c) }
           })
           for (const [slug, ix] of bySlug) pairs.push([ix.nov, ix.use, { novelty: `ai_nov__${slug}`, usefulness: `ai_use__${slug}` }])
-          // … and a file with no model name fills "model not recorded".
-          if (!pairs.length) {
-            pairs.push([
-              find(c => c.includes('novelty') && notEmpirical(c) && !isEvalish(c)),
-              find(c => (c.includes('usefulness') || c.includes('useful')) && notEmpirical(c) && !isEvalish(c)),
-              aiFieldsFor(UNRECORDED),
-            ])
-          }
         } else {
           // Evaluator ratings: an evaluator-labelled column first ("Eval. Novelty"
           // in the Rankings tab), then a plain "Novelty"; never an AI model's.
@@ -483,6 +485,7 @@ export default function DataAnalytics() {
         const isExcludedRow = r => excludedUsers.has(userKey(r.session, r.author_id))
         let res = { rows, matched: 0, unmatched: 0, filled: 0, kept: 0 }
         let anyEntries = false
+        const targetKeys = pairs.flatMap(([, , t]) => [t.novelty, t.usefulness])
         for (const [ciNov, ciUse, target] of pairs) {
           const entries = []
           for (let i = h + 1; i < aoa.length; i++) {
@@ -501,6 +504,12 @@ export default function DataAnalytics() {
           res = { rows: one.rows, matched: Math.max(res.matched, one.matched), unmatched: Math.max(res.unmatched, one.unmatched), filled: res.filled + one.filled, kept: res.kept + one.kept }
         }
         if (!anyEntries) { alert(`This scores file does not match the expected format and was not imported.\n\nNo scored idea rows (with a Novelty/Usefulness value) were found under "${sheetName}".`); return }
+        // Per IDEA, not per model pair: an idea that gained two models' scores is one
+        // idea filled (the per-pair sums double-counted it).
+        if (pairs.length > 1) {
+          const filledIdeas = res.rows.filter((r, i) => targetKeys.some(k => r[k] !== rows[i][k])).length
+          res = { ...res, filled: filledIdeas, kept: Math.max(0, res.matched - filledIdeas) }
+        }
         setRows(recomputeOverall(res.rows))
         // Say what was ADDED and what was left alone: the upload only fills ideas
         // with no score yet, so a file re-imported over already-scored ideas must
@@ -796,10 +805,24 @@ export default function DataAnalytics() {
   // where a run will write.
   const tableKpiCols = useMemo(() => {
     const cols = exportKpiColumns(effectiveRows)
+    // A model whose last value was just cleared in this table keeps its columns
+    // (its fields are still on the rows, blank): a column must not vanish under
+    // the cell being edited. Exports list only models with values.
+    const present = new Set(cols.filter(d => d.slug).map(d => d.slug))
+    const cleared = aiModelSlugs(effectiveRows, { includeBlank: true }).filter(sl => !present.has(sl) && sl !== scoreSlug)
+    if (cleared.length) {
+      let at = cols.length
+      for (let i = 0; i < cols.length; i++) if (cols[i].source === 'ai' && cols[i].slug) at = i + 1
+      if (!present.size) { const j = cols.findIndex(d => d.source === 'ai' || d.source === 'ext'); if (j >= 0) at = j }
+      cols.splice(at, 0, ...cleared.flatMap(sl => [
+        { key: `ai_nov__${sl}`, label: aiColumnLabel('novelty', sl), source: 'ai', slug: sl, kind: 'novelty' },
+        { key: `ai_use__${sl}`, label: aiColumnLabel('usefulness', sl), source: 'ai', slug: sl, kind: 'usefulness' },
+      ]))
+    }
     if (cols.some(d => d.key === scoreFields.novelty)) return cols
     const mine = [
-      { key: scoreFields.novelty, label: aiColumnLabel('novelty', scoreSlug), source: 'ai', slug: scoreSlug, kind: 'novelty' },
-      { key: scoreFields.usefulness, label: aiColumnLabel('usefulness', scoreSlug), source: 'ai', slug: scoreSlug, kind: 'usefulness' },
+      { key: scoreFields.novelty, label: aiColumnLabel('novelty', scoreSlug), source: 'ai', slug: scoreSlug, kind: 'novelty', placeholder: true },
+      { key: scoreFields.usefulness, label: aiColumnLabel('usefulness', scoreSlug), source: 'ai', slug: scoreSlug, kind: 'usefulness', placeholder: true },
     ]
     // After the last model's own pair, before the derived AI columns and the evaluators.
     let at = cols.length
@@ -880,6 +903,18 @@ export default function DataAnalytics() {
     // disabled while it runs, but the columns must not move under it regardless.
     const fields = scoreFields
     const runModelName = scoreModelName
+    // Ideas whose only AI scores carry no model name (an older file) would all be
+    // rated again — paid for, and then averaged with scores that may well be this
+    // same model's (review finding, 2026-09-24). Ask first; "Label them" is the fix
+    // when the old scores are this model's.
+    const unrecInScope = effectiveRows.filter(r =>
+      (!scoreOnlyFinal || isFinal(r)) &&
+      [`ai_nov__${UNRECORDED}`, `ai_use__${UNRECORDED}`].some(k => r[k] !== '' && r[k] != null) &&
+      ['missing', 'partial'].includes(ideaScoreState(r, fields))).length
+    if (unrecInScope && !confirm(
+      `${unrecInScope.toLocaleString()} of these ideas already have an AI score with no model name (from an older file).\n\n`
+      + `If those scores came from ${runModelName}, press Cancel and use "Label them" in the coverage panel, so they are not rated (and paid for) again.\n\n`
+      + `Press OK to rate them with ${runModelName} anyway, as a separate column.`)) return
     // Always use the API keys CURRENTLY saved in AI Settings (settings/ai), even if
     // they were added/changed after this page was opened — re-read them at score
     // time and refresh the on-page "no key" hint. Falls back to the loaded copy.
@@ -1213,7 +1248,9 @@ export default function DataAnalytics() {
     const cols = Object.keys(objs[0] || {})
     const esc = v => {
       let t = v == null ? '' : String(v)
-      if (/^[=+\-@\t\r]/.test(t)) t = "'" + t   // no formula injection when opened in Excel
+      // No formula injection when opened in Excel — for TEXT only: a number such as
+      // -0.25 must stay a number for R / Stata and for re-import.
+      if (typeof v !== 'number' && /^[=+\-@\t\r]/.test(t)) t = "'" + t
       return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t
     }
     const csv = [cols.map(esc).join(','), ...objs.map(o => cols.map(c => esc(o[c])).join(','))].join('\n')
@@ -1274,7 +1311,19 @@ export default function DataAnalytics() {
         // are computed) and the uploaded extras, then each AI model's pair, then the
         // evaluator columns (kept, empty, for blind expert raters).
         const cols = exportKpiColumns(rows, { allEmpirical: true, evaluatorColumns: true })
-        const valuesById = new Map(rows.map(r => [String(r.idea_id), r]))
+        // One entry per Idea ID. The same idea can be loaded twice (a session from
+        // Firestore AND its own export); merge them per column, first non-blank
+        // value wins, so an unscored copy never blanks a scored one.
+        const blankV = v => v === '' || v == null
+        const valuesById = new Map()
+        for (const r of rows) {
+          const id = String(r.idea_id)
+          const prev = valuesById.get(id)
+          if (!prev) { valuesById.set(id, r); continue }
+          const fill = {}
+          for (const c of cols) if (blankV(prev[c.key]) && !blankV(r[c.key])) fill[c.key] = r[c.key]
+          if (Object.keys(fill).length) valuesById.set(id, { ...prev, ...fill })
+        }
         merged.push(rankingsSheetFromIdeas(ideasSheet.rows, valuesById, cols))
       }
       // The per-pool deterministic KPIs (Unique fraction / Productivity) are batch-
@@ -2190,7 +2239,10 @@ export default function DataAnalytics() {
                           const v = r[d.key]
                           // A model's own AI score is editable (1–5); every other
                           // column — empirical, derived means, evaluators — is read-only.
-                          if (d.source === 'ai' && d.slug) {
+                          // (The chosen model's placeholder pair, before it has rated
+                          // anything, is NOT editable: a hand rating typed there would be
+                          // exported as that model's — review finding, 2026-09-24.)
+                          if (d.source === 'ai' && d.slug && !d.placeholder) {
                             return (
                               <td key={d.key} className="num">
                                 <input className={styles.scoreInput} type="number" min="1" max="5" step="0.5"
@@ -2250,7 +2302,7 @@ export default function DataAnalytics() {
                 // — AI, empirical and any uploaded extra like Prototypicality — is included.
                 // Exactly the columns downloadAggregate writes, in its order: the
                 // empirical KPIs first, then each AI model, then the evaluators.
-                const labels = presentKpis(rows).map(k => k.label)
+                const labels = exportKpiColumns(rows, { allEmpirical: true, evaluatorColumns: true }).map(k => k.label)
                 return (
                   <p className={styles.hint} style={{ marginTop: 8, marginBottom: 0 }}>
                     {labels.length

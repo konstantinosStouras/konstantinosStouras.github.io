@@ -333,7 +333,8 @@ export async function callProvider(resolved, system, user, opts = {}) {
 export function replyProblem(provider, data, text) {
   const empty = !String(text || '').trim()
   const refusal = why => ({ kind: 'refusal', why })
-  const exhausted = what => ({ kind: 'exhausted', why: `spent its whole ${SCORING_MAX_TOKENS}-token ceiling on ${what} and returned no text` })
+  // No number: the ceiling is 8000 on the thinking models and 4000 elsewhere.
+  const exhausted = what => ({ kind: 'exhausted', why: `spent its whole token ceiling on ${what} and returned no text` })
   switch (provider) {
     case 'claude': {
       if (data?.stop_reason === 'refusal') {

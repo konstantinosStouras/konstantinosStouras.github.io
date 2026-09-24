@@ -604,13 +604,15 @@ export function recomputeOverall(rows) {
     }
     const oq = overallQuality(novelty, usefulness)
     const eq = overallQuality(r.ext_novelty, r.ext_usefulness)
-    // Every AI component gone (a hand-cleared model): the quality goes with it.
-    const aiCleared = hasAiModelFields(r) && novelty === '' && usefulness === ''
+    // A row with per-model fields has its quality DERIVED from them, always: with
+    // either AI component missing it is blank (a stale mean must not survive a
+    // cleared cell). Only a row with no per-model fields keeps a standalone value.
+    const derivedQuality = hasAiModelFields(r)
     return {
       ...r,
       novelty,
       usefulness,
-      overall_quality: oq != null ? numOrBlank(Math.round(oq * 1e4) / 1e4) : aiCleared ? '' : numOrBlank(r.overall_quality),
+      overall_quality: oq != null ? numOrBlank(Math.round(oq * 1e4) / 1e4) : derivedQuality ? '' : numOrBlank(r.overall_quality),
       ext_quality: eq != null ? numOrBlank(eq) : numOrBlank(r.ext_quality),
     }
   })
@@ -678,6 +680,14 @@ export function csvToRows(text) {
  */
 export function normalizeImportedRows(rawRows) {
   const out = []
+  // Decided ONCE per file (review finding, 2026-09-24): a bare "Novelty" /
+  // "Usefulness" column is a score with no model name, EXCEPT in the page's own
+  // analysis CSV, whose bare novelty / usefulness are the derived means beside the
+  // ai_nov__ / ai_use__ keys. Deciding per row dropped a hand-combined file's plain
+  // column wherever a named model also scored that row.
+  const fileHeads = new Set()
+  for (const raw of rawRows || []) for (const k of Object.keys(raw || {})) fileHeads.add(String(k).toLowerCase().trim())
+  const bareIsDerived = [...fileHeads].some(isAiModelKey)
   ;(rawRows || []).forEach((raw, i) => {
     const lower = {}
     for (const [k, v] of Object.entries(raw)) lower[String(k).toLowerCase().trim()] = v
@@ -706,28 +716,40 @@ export function normalizeImportedRows(rawRows) {
     //  • External evaluators (3.3): the blind-rater columns "Novelty (rater n)" etc.
     //    of the admin Excel export are human evaluators → averaged into ext_*.
     // AI scores, per model (aiScoreColumns.js): "AI Novelty (GPT-6 Astra)" lands in
-    // that model's own column; a plain "Novelty" / "AI Novelty" (a file saved
-    // before scores were labelled by model) under "model not recorded" — but only
-    // when the row carries no per-model column, since in a newer file the plain
-    // column would be the derived mean. Derived columns (the mean of several
-    // models, AI Quality) are never read: they are recomputed.
+    // that model's own column; "AI Novelty (model not recorded)" / ai_nov__unrecorded
+    // — and a bare "Novelty" / "AI Novelty", a file saved before scores were
+    // labelled by model — under "model not recorded". Derived columns (the mean
+    // across models, AI Quality, and the bare columns of the analysis CSV) are never
+    // read: they are recomputed. Values are kept as the file has them (a 0 or a 7
+    // is the file's own business; only the 3.2 merges clamp to the rating scale).
     const aiScores = {}
-    for (const [k, v] of Object.entries(lower)) {
+    const explicitUnrecorded = k => /\(model not recorded\)|^ai_(nov|use)__unrecorded$/.test(k)
+    // Explicitly named columns first, so a bare column never shadows one.
+    const heads = Object.keys(lower).sort((x, y) => Number(!!parseAiHeader(y) && parseAiHeader(y).slug !== UNRECORDED) - Number(!!parseAiHeader(x) && parseAiHeader(x).slug !== UNRECORDED)
+      || Number(explicitUnrecorded(y)) - Number(explicitUnrecorded(x)))
+    for (const k of heads) {
       const a = parseAiHeader(k)
-      if (!a || a.derived || a.slug === UNRECORDED) continue
+      if (!a || a.derived) continue
       if (/rater|expert|\beval|evaluator|external|objective|empirical/.test(k) || isNoveltyScoreHeader(k)) continue
-      const val = clampScore(v)
-      if (val !== '') aiScores[(a.kind === 'novelty' ? aiNovKey : aiUseKey)(a.slug)] = val
-    }
-    if (!Object.keys(aiScores).length) {
-      const nov = clampScore(pick('novelty', 'ai novelty', 'nov', aiNovKey(UNRECORDED)))
-      const use = clampScore(pick('usefulness', 'ai usefulness', 'useful', aiUseKey(UNRECORDED)))
-      if (nov !== '') aiScores[aiNovKey(UNRECORDED)] = nov
-      if (use !== '') aiScores[aiUseKey(UNRECORDED)] = use
+      if (a.slug === UNRECORDED && !explicitUnrecorded(k) && bareIsDerived) continue
+      const key = (a.kind === 'novelty' ? aiNovKey : aiUseKey)(a.slug)
+      const val = numOrBlank(lower[k])
+      if (val !== '' && aiScores[key] === undefined) aiScores[key] = val
     }
     const overall = Object.keys(aiScores).length ? '' : pick('overall_quality', 'overall quality', 'overall', 'quality', 'ai quality')
-    const extNovelty = meanRaterCols(lower, 'novelty')        // blind-rater averages
-    const extUsefulness = meanRaterCols(lower, 'usefulness')
+    // Evaluator ratings: the blind-rater columns ("Novelty (rater 1)" …) averaged;
+    // failing those, an evaluator-labelled column ("Eval. Novelty", ext_novelty) —
+    // what the Rankings tab and "Download all data" write, so a download reloads
+    // with its evaluator ratings (review finding, 2026-09-24).
+    const extCol = field => {
+      for (const [k, v] of Object.entries(lower)) {
+        if (/\brater\b|\(rater|\bexpert\b/.test(k)) continue
+        if (canonicalKpiField(k) === field && numOrBlank(v) !== '') return numOrBlank(v)
+      }
+      return ''
+    }
+    const extNovelty = meanRaterCols(lower, 'novelty') !== '' ? meanRaterCols(lower, 'novelty') : extCol('ext_novelty')
+    const extUsefulness = meanRaterCols(lower, 'usefulness') !== '' ? meanRaterCols(lower, 'usefulness') : extCol('ext_usefulness')
     const extOverall = overallQuality(extNovelty, extUsefulness)
 
     // Stage / phase → canonical 'individual' | 'group'.

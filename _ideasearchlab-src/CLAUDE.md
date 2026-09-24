@@ -803,7 +803,20 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      then offers "Which model rated them? … Label them" (`labelUnrecordedScores`,
      fill-blank, conflicts left where they were and reported). A blind rater's
      column ("Novelty (rater 1)", "expert") routes to the evaluator fields, never
-     an AI model's. Offline test: **`node _ideasearchlab-src/tools/ai-columns-guard.mjs`**.
+     an AI model's. **Import rules** (`normalizeImportedRows`, and the same in the
+     3.2 title-matched upload): an explicit "AI Novelty (model not recorded)" /
+     `ai_nov__unrecorded` always imports; a BARE "Novelty" / "AI Novelty" is a
+     score with no model name — except in the page's analysis CSV, where it is the
+     derived mean beside the `ai_nov__` keys — decided once per FILE, not per row;
+     values are kept as the file has them (no clamping on import); evaluator
+     ratings come from the blind-rater columns, else from "Eval. Novelty /
+     Usefulness", so every download reloads whole. **Two guards on attribution:**
+     the chosen model's empty placeholder pair in the table is read-only (a hand
+     rating typed there would have been exported as that model's), and a run asks
+     first when ideas in scope carry unlabelled scores (they would all be rated,
+     and paid for, again — "Label them" is the fix when they are this model's
+     scores). Offline test: **`node _ideasearchlab-src/tools/ai-columns-guard.mjs`**
+     (its "review findings" section pins each fix from the 2026-09-24 review).
    - **Column ORDER, everywhere** (owner, same day: "first, the empirical proxies
      for novelty and usefulness … Second, the AI estimated novelty and usefulness
      by mentioning each model used"): `exportKpiColumns(rows, opts)` in
@@ -835,18 +848,26 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    - **Workability now reads a NEGATED LIST** (found in the owner's own data,
      2026-09-24: "it removes the battery or Bluetooth wearable device" scored as
      needing both). The negation reached only the first item of "no battery or
-     Bluetooth needed" / "without a battery or an app". `negatedListRe` in
-     usefulnessKpis.js (built per list T) lets a negator — also "removes /
-     eliminates / replaces / gets rid of / ditches" and "no need for" — run over
-     items joined by "or" / "nor" / "/", and by a comma when the item before it is
-     itself on T, with up to three describing words before the term; "and", a
-     comma after anything else, and "only / just / even" do not carry it ("no delay
-     and the app alerts parents" keeps the app). In the owner's 741 ideas it
-     changed 36 ideas' Workability, every one checked by hand as a real negation —
-     29 of them in the **Both** condition (AI-assisted text tends to spell out "no
-     battery, no app"), whose mean Usefulness score moves 0.544 → 0.564; the other
-     conditions move under 0.01. Pinned by the usefulness guard's "negated list"
-     cases, both directions.
+     Bluetooth needed" / "without a battery or an app". `negatedListRes` /
+     `negatedInList` in usefulnessKpis.js (built per list T) let a negator — also
+     "removes / eliminates / replaces / gets rid of / ditches" and "no need for" —
+     run over a LIST, and deliberately narrowly, because the first version leaked
+     past its clause and hid real technology ("It is not expensive because the app
+     is free", "replaces manual checks using an app" — the review of 2026-09-24
+     found ten such): negator → at most one -ing verb (maybe after an -ly adverb:
+     "without constantly checking") → articles → items joined by "or" / "nor" /
+     "/", or by a comma when the item before it is itself on T (Oxford "…, or"
+     allowed) → at most TWO describing words → the term. A describing word is never
+     a joining word, preposition, subordinator, auxiliary, "only / just / even /
+     longer", or an -ing / -ed form, so "because", "by", "via", "since", "using" end
+     the reach; a comma list must close with "or" / "nor" (before the term, or
+     within 30 characters after it), so "no app, a sensor measures it" keeps the
+     sensor; "and" never carries it. In the owner's 741 ideas it changes 35 ideas'
+     Workability, every one checked by hand as a real negation — 29 of them in the
+     **Both** condition (AI-assisted text tends to spell out "no battery, no app"),
+     whose mean Usefulness score rises by about 0.02; the other conditions move
+     under 0.01. Pinned by the usefulness guard's "negated list" cases, both
+     directions, and a timing check (the 60-character window bounds it).
    - **Four more rater providers** (owner: "Add Mistral, Meta's Llama, DeepSeek and
      Qwen's top models available"), all OpenAI-compatible
      (`buildOpenAICompatRequest` in providerRequest.js), sending ONLY
