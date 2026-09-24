@@ -11,12 +11,15 @@
  * the file's, and blanked a score outright wherever the file's cell was empty.
  *
  * Covers both upload paths into the canonical KPI columns —
- * `matchScoresIntoRows` (3.2 "Load AI scores file" / 3.3 evaluator ratings) and
- * `matchUploadedKpisIntoRows` (3.1 "Upload additional KPIs") — plus the
- * deliberate exception: an `x_…` column is the file's own, so it is replaced.
+ * `matchScoresIntoRows` / `matchScoreTable` (3.2 "Load AI scores file" / 3.3
+ * evaluator ratings) and `matchUploadedKpisIntoRows` (3.1 "Upload additional
+ * KPIs") — plus the deliberate exception: an `x_…` column is the file's own, so
+ * it is replaced. And the CSV round trip the uploads read through: a value
+ * leaves and comes back as it was.
  */
 import {
-  matchScoresIntoRows, matchUploadedKpisIntoRows, UPLOADED_KPI_PREFIX,
+  matchScoresIntoRows, matchScoreTable, matchUploadedKpisIntoRows, UPLOADED_KPI_PREFIX,
+  rowsToCsv, csvToRows,
 } from '../src/utils/analyticsData.js'
 import { aiFieldsFor, UNRECORDED } from '../src/utils/aiScoreColumns.js'
 const { novelty: N, usefulness: U } = aiFieldsFor('gpt-6-astra')
@@ -93,6 +96,22 @@ console.log('matchScoresIntoRows — the evaluator upload (3.3) obeys the same r
     res.rows[0].novelty === 4, `got ${res.rows[0].novelty}`)
 }
 
+console.log('matchScoreTable — the per-row score-file match obeys the same rule')
+{
+  const rows = [
+    { rid: 'a', idea_id: 'i1', idea_title: 'Scored', [N]: 4, [U]: 3 },
+    { rid: 'b', idea_id: 'i2', idea_title: 'Half', [N]: 5, [U]: '' },
+  ]
+  const res = matchScoreTable(rows, [
+    { id: 'i1', session: '', title: 'Scored', values: { [N]: 1, [U]: 1 } },
+    { id: 'i2', session: '', title: 'Half', values: { [N]: '', [U]: 2 } },
+  ])
+  check('a scored idea keeps both scores; a half-scored one gains only the missing one; a blank never blanks',
+    res.rows[0][N] === 4 && res.rows[0][U] === 3 && res.rows[1][N] === 5 && res.rows[1][U] === 2,
+    JSON.stringify(res.rows))
+  check('counts: filled=1, kept=1', res.filled === 1 && res.kept === 1, `filled=${res.filled} kept=${res.kept}`)
+}
+
 // ── 3.1: "Upload additional KPIs" ──────────────────────────────────────────
 console.log('matchUploadedKpisIntoRows — recognised KPI columns fill only blanks')
 {
@@ -136,6 +155,33 @@ console.log('matchUploadedKpisIntoRows — a fully-scored idea is left entirely 
     `got ${a.novelty}/${a.usefulness}/${a.overall_quality}`)
   check('it is reported as kept, not filled',
     res.filled === 0 && res.kept === 1, `filled=${res.filled} kept=${res.kept}`)
+}
+
+// ── The CSV round trip ─────────────────────────────────────────────────────
+console.log('CSV — values leave and come back as they were')
+{
+  // The Step-5 regression CSV is read by Python and R: a negative KPI must reach
+  // them as a number, not as the text "'-0.25" (which both read as missing).
+  const csv = rowsToCsv([{ idea_id: 'a', x_ks: -0.25, text: '- A bullet idea', det_novelty: 0.4 }], ['idea_id', 'x_ks', 'text', 'det_novelty'])
+  const line = csv.split('\n')[1]
+  check('rowsToCsv never puts a "\'" in front of a number (or of the text)', line === 'a,-0.25,- A bullet idea,0.4', line)
+  const back = csvToRows(csv)[0]
+  check('...and reads back whole', back.x_ks === '-0.25' && Number(back.x_ks) === -0.25 && back.text === '- A bullet idea', JSON.stringify(back))
+
+  // The page's "Download all data" CSV guards TEXT that opens with = + - @ (Excel
+  // would run it as a formula) with one "'". Importing that file must drop it
+  // again, or "- Personalizable phone case" comes back as "'- Personalizable …".
+  const pageEsc = v => {   // the writer in DataAnalytics.jsx downloadAllDataCsv
+    let t = v == null ? '' : String(v)
+    if (typeof v !== 'number' && /^[=+\-@\t\r]/.test(t)) t = "'" + t
+    return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t
+  }
+  const texts = ['- Personalizable phone case', '=SUM(A1)', '+ plus idea', '@home', '\tTabbed', "'Quoted' title", "It's fine", 'Plain, with comma']
+  const file = ['Idea ID,Title,Novelty', ...texts.map((t, i) => [pageEsc(`i${i}`), pageEsc(t), pageEsc(-1.5)].join(','))].join('\n')
+  const read = csvToRows('\ufeff' + file)
+  check('csvToRows removes exactly the one "\'" the page\'s CSV writer added', JSON.stringify(read.map(r => r.Title)) === JSON.stringify(texts), JSON.stringify(read.map(r => r.Title)))
+  check('...and a number stays a number', read.every(r => r.Novelty === '-1.5') && read[0]['Idea ID'] === 'i0', JSON.stringify(read[0]))
+  check('a text that itself starts with "\'" and a letter is left alone', csvToRows("t\n'Quoted'")[0].t === "'Quoted'")
 }
 
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed.')

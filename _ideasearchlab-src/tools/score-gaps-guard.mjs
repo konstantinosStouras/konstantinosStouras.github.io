@@ -561,6 +561,19 @@ console.log('pickScoredSheet — the scores are not always on the sheet called I
     ]).scored === 0)
   check('an empty workbook returns null, it does not throw',
     pickScoredSheet([]) === null && pickScoredSheet(null) === null)
+  // A column that only MENTIONS novelty is not an AI score (review finding,
+  // 2026-09-24): the importer keeps "Embedding novelty" as an extra KPI, so a
+  // sheet of them must not win the pick over the sheet with the AI scores, or
+  // the top-up reads a sheet whose scores it will never find.
+  const embed = [
+    { name: 'Rankings', rows: [{ 'Idea ID': 'i1', Title: 'One', 'AI Novelty (GPT-6 Astra)': 4 }] },
+    { name: 'Embeddings', rows: [{ 'Idea ID': 'i1', 'Embedding novelty': 0.3, 'Novelty SD': 0.7, 'Novelty rank': 3 }, { 'Idea ID': 'i2', 'Embedding novelty': 0.5 }] },
+  ]
+  check('"Embedding novelty", "Novelty SD", "Novelty rank" are not AI scores',
+    pickScoredSheet(embed).name === 'Rankings' && pickScoredSheet([embed[1]]).scored === 0, JSON.stringify(pickScoredSheet(embed)?.name))
+  // ...while a decorated score with no model name is one, as the importer reads it.
+  check('"Novelty Rating" / "Usefulness (1-5)" are AI scores (no model name)',
+    pickScoredSheet([{ name: 'Scores', rows: [{ 'Idea ID': 'i1', 'Novelty Rating': 4, 'Usefulness (1-5)': 3 }] }]).scored === 2)
 }
 
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed.')

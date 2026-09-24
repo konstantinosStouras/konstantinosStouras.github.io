@@ -28,9 +28,11 @@
 // Python and R templates. Each maps to a paper name + where AI is present.
 // Per-model AI score columns ("AI Novelty (GPT-6 Astra)" …): see aiScoreColumns.js.
 import {
-  UNRECORDED, aiNovKey, aiUseKey, isAiModelKey, parseAiHeader,
+  UNRECORDED, aiNovKey, aiUseKey, isAiModelKey, parseAiHeader, isBareAiScoreHeader,
   aiKpiDefs, aiModelSlugs, hasAiModelFields, panelMean,
 } from './aiScoreColumns.js'
+// The page reads AI headers through this file too.
+export { isBareAiScoreHeader }
 
 export const CONDITIONS = ['None', 'Solo', 'Group', 'Both']
 
@@ -293,10 +295,16 @@ export function isNoveltyScoreHeader(header) {
  * x_ extras — and so its scores feed Steps 4–5. Tolerant of label drift across
  * versions ("Obj. Novelty" vs "Novelty (objective)", "AI Novelty" vs "Novelty").
  * Returns null for anything that isn't a recognised KPI (e.g. "prototypicality",
- * "ks"), which then stays an uploaded extra (x_ column).
+ * "ks"), which then stays an uploaded extra (x_ column). So does a header that
+ * only MENTIONS a KPI word (review finding, 2026-09-24): "Embedding novelty",
+ * "Novelty SD", "Quality index", "Eval. Novelty rank" are measures of their own,
+ * and routing them by substring put a 0–1 embedding score into the 1–5 AI
+ * Novelty mean of every idea. Pass the header as the file wrote it, so a model
+ * outside the catalogue keeps its capitals.
  */
 export function canonicalKpiField(header) {
-  const h = String(header || '').toLowerCase().trim()
+  const orig = String(header || '').trim()
+  const h = orig.toLowerCase()
   // A column already named by its row key (the analysis CSV: det_score,
   // det_need_fit, …) is that KPI. Without this, keys like det_distinctiveness
   // matched nothing below and came back in as a duplicate x_det_… extra. The AI
@@ -324,26 +332,69 @@ export function canonicalKpiField(header) {
   }
   if (has('pool distinctiveness')) return 'det_distinctiveness'
   if (h === 'combined score') return 'det_score'
-  if (isEval) {
-    if (has('novelty')) return 'ext_novelty'
-    if (has('useful')) return 'ext_usefulness'
-    if (has('quality')) return 'ext_quality'
-    return null
-  }
+  // An evaluator's column (3.3): the exact headers parseEvalHeader knows, one
+  // rater's column included. Anything else evaluator-flavoured is not a rating.
+  const ev = parseEvalHeader(h)
+  if (ev) return `ext_${ev.kind}`
+  if (isEval) return null
   // An AI score column. A model's own column ("AI Novelty (GPT-6 Astra)", or the
   // analysis CSV's ai_nov__gpt_6_astra) goes to that model; a column with no model
-  // name ("Novelty", "AI Novelty") to "model not recorded"; a DERIVED column (the
-  // mean of several models, AI Quality) to the derived key, which every importer
-  // then skips — it is recomputed from the per-model columns, never imported.
-  const ai = parseAiHeader(h)
+  // name ("Novelty", "AI Novelty", "Novelty Rating", "Novelty (1-5)") to "model
+  // not recorded"; a DERIVED column (the mean of several models, AI Quality) to
+  // the derived key, which every importer then skips — it is recomputed from the
+  // per-model columns, never imported. Nothing else: see the note above.
+  const ai = parseAiHeader(orig)
   if (ai) {
     if (ai.derived) return ai.kind === 'novelty' ? 'novelty' : ai.kind === 'usefulness' ? 'usefulness' : 'overall_quality'
     return ai.kind === 'novelty' ? aiNovKey(ai.slug) : aiUseKey(ai.slug)
   }
-  if (has('novelty')) return aiNovKey(UNRECORDED)
-  if (has('useful')) return aiUseKey(UNRECORDED)
-  if (has('quality')) return 'overall_quality'
   return null
+}
+
+/**
+ * Read an EXTERNAL-EVALUATOR (3.3) column header: { kind, rater } or null, where
+ * kind is 'novelty' | 'usefulness' | 'quality' and `rater` says it is ONE
+ * rater's column (to be averaged with the others).
+ *   "Eval. Novelty", "Eval. Usefulness", "Eval. Quality"  — the page's own labels
+ *   "ext_novelty" … (the analysis CSV), "Evaluator Novelty", "Evaluators Novelty",
+ *   "External Novelty", "External evaluator Novelty", "Expert Novelty",
+ *   "Novelty (eval.)", "Novelty (evaluators)", "Novelty (external)", "Novelty (experts)"
+ *                                                         — rater: false
+ *   "Novelty (rater 1)", "Novelty rater 2", "novelty_rater3", "Novelty (expert 1)",
+ *   "Novelty (expert)", "Novelty (evaluator 2)", "Novelty (judge 1)"
+ *                                                         — rater: true
+ * Exact forms only (review finding, 2026-09-24): "Eval. Novelty SD" or "Eval.
+ * Novelty rank" merely mention an evaluator and were read as the rating itself.
+ */
+export function parseEvalHeader(header) {
+  const h = String(header ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
+  const KIND = '(novelty|usefulness|useful|quality)'
+  const LABEL = '(?:eval\\.?|evaluators?|external(?: evaluators?)?|experts?|ext\\.?)'
+  let m = h.match(new RegExp(`^${KIND}[ _]*\\(? ?(?:rater|expert|evaluator|judge)(?:[ _#.-]*\\d{1,3}|[ _#.-]+[a-z])? ?\\)?$`))
+  if (m && (h.includes('(') === h.endsWith(')'))) return { kind: kindOfWord(m[1]), rater: true }
+  m = h.match(new RegExp(`^${LABEL}[ _]*${KIND}$`)) || h.match(new RegExp(`^${KIND} ?\\(${LABEL}\\)$`))
+  if (m) return { kind: kindOfWord(m[1]), rater: false }
+  return null
+}
+const kindOfWord = w => (w === 'novelty' ? 'novelty' : w === 'quality' ? 'quality' : 'usefulness')
+
+/**
+ * One idea's evaluator rating of one kind, from a row keyed by the file's own
+ * headers (any case): the mean of the rater columns ("Novelty (rater 1..n)"),
+ * or, when no rater column has a value, the mean of the evaluator-labelled
+ * columns ("Eval. Novelty", ext_novelty). '' when the row has neither, so an
+ * un-rated idea stays un-rated. Several columns are averaged, never "the first".
+ */
+export function evaluatorMean(row, kind) {
+  const raters = [], labelled = []
+  for (const [k, v] of Object.entries(row || {})) {
+    const e = parseEvalHeader(k)
+    if (!e || e.kind !== kind) continue
+    const n = numOrNull(v)
+    if (n != null) (e.rater ? raters : labelled).push(n)
+  }
+  const vals = raters.length ? raters : labelled
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : ''
 }
 
 /** Is this a DERIVED AI column (the canonical mean fields), never to be imported? */
@@ -621,16 +672,17 @@ export function recomputeOverall(rows) {
 // ── CSV (de)serialisation ───────────────────────────────────────────────────
 
 function csvEscape(value) {
-  let s = value == null ? '' : String(value)
-  // Excel and LibreOffice evaluate a cell that opens with = + - @ even inside
-  // quotes, so an idea described as "- A fabric that changes colour" opened as
-  // #NAME? and its text was gone from the analysed dataset.
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+  // Values go through as they are: no "'" in front of "=", "+", "-" or "@". That
+  // guard is for a file a person opens in Excel (the page's "Download all data"
+  // CSV has its own), and here it turned every negative KPI into the text
+  // "'-0.25", which Python and R read as missing (review finding, 2026-09-24).
+  const s = value == null ? '' : String(value)
   if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"'
   return s
 }
 
-/** Serialise rows to a CSV string using COLUMNS order. */
+/** Serialise rows to a CSV string using COLUMNS order. For MACHINE reading only
+ *  (the Step-5 Python / R run): it carries no spreadsheet formula guard. */
 export function rowsToCsv(rows, columns = COLUMNS) {
   const header = columns.join(',')
   const body = (rows || []).map(r => columns.map(c => csvEscape(r[c])).join(',')).join('\n')
@@ -665,7 +717,17 @@ export function csvToRows(text) {
   const header = records[0].map(h => h.trim())
   return records.slice(1)
     .filter(r => r.some(c => c !== ''))
-    .map(r => Object.fromEntries(header.map((h, i) => [h, r[i] ?? ''])))
+    .map(r => Object.fromEntries(header.map((h, i) => [h, unguardCell(r[i] ?? '')])))
+}
+
+// The page's CSV downloads put one "'" in front of a cell that opens with = + -
+// @ tab or CR, so Excel shows it as text instead of running it as a formula.
+// Reading such a file back, that "'" is not part of the idea: "- Personalizable
+// phone case" came back as "'- Personalizable phone case" (review finding,
+// 2026-09-24). Exactly one is removed. A CR has become LF by now (the parser
+// normalises line ends), so a guarded CR arrives as "'\n".
+function unguardCell(s) {
+  return /^'[=+\-@\t\r\n]/.test(s) ? s.slice(1) : s
 }
 
 /**
@@ -680,17 +742,26 @@ export function csvToRows(text) {
  */
 export function normalizeImportedRows(rawRows) {
   const out = []
-  // Decided ONCE per file (review finding, 2026-09-24): a bare "Novelty" /
-  // "Usefulness" column is a score with no model name, EXCEPT in the page's own
-  // analysis CSV, whose bare novelty / usefulness are the derived means beside the
-  // ai_nov__ / ai_use__ keys. Deciding per row dropped a hand-combined file's plain
-  // column wherever a named model also scored that row.
+  // A bare "Novelty" / "Usefulness" column is a score with no model name, EXCEPT
+  // in the page's own analysis CSV, whose bare novelty / usefulness are the
+  // derived means beside the ai_nov__ / ai_use__ keys. Two conditions, both
+  // needed (review findings, 2026-09-24): the FILE has those keys (deciding by
+  // the row alone dropped a hand-combined file's plain column wherever a named
+  // model also scored that row), and THIS ROW has a per-model value (the CSV's
+  // bare cell is blank exactly when it has none, so a value there on a row with
+  // no per-model value is a score of its own, not a mean).
   const fileHeads = new Set()
   for (const raw of rawRows || []) for (const k of Object.keys(raw || {})) fileHeads.add(String(k).toLowerCase().trim())
-  const bareIsDerived = [...fileHeads].some(isAiModelKey)
+  const fileHasModelKeys = [...fileHeads].some(isAiModelKey)
   ;(rawRows || []).forEach((raw, i) => {
-    const lower = {}
-    for (const [k, v] of Object.entries(raw)) lower[String(k).toLowerCase().trim()] = v
+    // `lower` for lookups; `orig` keeps each header as the file wrote it, so an
+    // imported model name keeps its capitals ("Qwen3 Max Thinking").
+    const lower = {}, orig = {}
+    for (const [k, v] of Object.entries(raw)) {
+      const lk = String(k).toLowerCase().trim()
+      lower[lk] = v
+      orig[lk] = String(k).trim()
+    }
     const pick = (...keys) => {
       for (const k of keys) {
         const v = lower[k]
@@ -717,40 +788,50 @@ export function normalizeImportedRows(rawRows) {
     //    of the admin Excel export are human evaluators → averaged into ext_*.
     // AI scores, per model (aiScoreColumns.js): "AI Novelty (GPT-6 Astra)" lands in
     // that model's own column; "AI Novelty (model not recorded)" / ai_nov__unrecorded
-    // — and a bare "Novelty" / "AI Novelty", a file saved before scores were
-    // labelled by model — under "model not recorded". Derived columns (the mean
-    // across models, AI Quality, and the bare columns of the analysis CSV) are never
-    // read: they are recomputed. Values are kept as the file has them (a 0 or a 7
-    // is the file's own business; only the 3.2 merges clamp to the rating scale).
+    // — and a bare "Novelty" / "AI Novelty" / "Novelty Rating" / "Novelty (1-5)",
+    // a file saved before scores were labelled by model — under "model not
+    // recorded". Derived columns (the mean across models, AI Quality, and the bare
+    // columns of the analysis CSV) are never read: they are recomputed. Values are
+    // kept as the file has them (a 0 or a 7 is the file's own business).
     const aiScores = {}
-    const explicitUnrecorded = k => /\(model not recorded\)|^ai_(nov|use)__unrecorded$/.test(k)
-    // Explicitly named columns first, so a bare column never shadows one.
-    const heads = Object.keys(lower).sort((x, y) => Number(!!parseAiHeader(y) && parseAiHeader(y).slug !== UNRECORDED) - Number(!!parseAiHeader(x) && parseAiHeader(x).slug !== UNRECORDED)
-      || Number(explicitUnrecorded(y)) - Number(explicitUnrecorded(x)))
-    for (const k of heads) {
-      const a = parseAiHeader(k)
-      if (!a || a.derived) continue
+    const found = []
+    for (const k of Object.keys(lower)) {
       if (/rater|expert|\beval|evaluator|external|objective|empirical/.test(k) || isNoveltyScoreHeader(k)) continue
-      if (a.slug === UNRECORDED && !explicitUnrecorded(k) && bareIsDerived) continue
+      const a = parseAiHeader(orig[k])
+      if (!a || a.derived || a.kind === 'quality') continue
+      const bare = !!isBareAiScoreHeader(orig[k])
+      // Explicitly named columns first, then "(model not recorded)", then a bare
+      // one, so a bare column never shadows an explicit one.
+      found.push({ k, a, bare, rank: bare ? 2 : a.slug === UNRECORDED ? 1 : 0 })
+    }
+    found.sort((x, y) => x.rank - y.rank)
+    const rowHasModelValue = found.some(f => !f.bare && numOrBlank(lower[f.k]) !== '')
+    const bareIsDerived = fileHasModelKeys && rowHasModelValue
+    for (const { k, a, bare } of found) {
+      if (bare && bareIsDerived) continue
       const key = (a.kind === 'novelty' ? aiNovKey : aiUseKey)(a.slug)
       const val = numOrBlank(lower[k])
       if (val !== '' && aiScores[key] === undefined) aiScores[key] = val
     }
-    const overall = Object.keys(aiScores).length ? '' : pick('overall_quality', 'overall quality', 'overall', 'quality', 'ai quality')
-    // Evaluator ratings: the blind-rater columns ("Novelty (rater 1)" …) averaged;
-    // failing those, an evaluator-labelled column ("Eval. Novelty", ext_novelty) —
-    // what the Rankings tab and "Download all data" write, so a download reloads
-    // with its evaluator ratings (review finding, 2026-09-24).
-    const extCol = field => {
-      for (const [k, v] of Object.entries(lower)) {
-        if (/\brater\b|\(rater|\bexpert\b/.test(k)) continue
-        if (canonicalKpiField(k) === field && numOrBlank(v) !== '') return numOrBlank(v)
-      }
-      return ''
-    }
-    const extNovelty = meanRaterCols(lower, 'novelty') !== '' ? meanRaterCols(lower, 'novelty') : extCol('ext_novelty')
-    const extUsefulness = meanRaterCols(lower, 'usefulness') !== '' ? meanRaterCols(lower, 'usefulness') : extCol('ext_usefulness')
-    const extOverall = overallQuality(extNovelty, extUsefulness)
+    // A standalone AI quality (an older file's plain "Quality") only on a row with
+    // no per-model score; otherwise it is recomputed. Any AI quality header counts,
+    // "AI Quality (GPT-6 Astra)" included: a file saved before that column was
+    // renamed "AI Quality" on such rows carried the standalone value under it.
+    const qualityHeads = Object.keys(lower).filter(k => parseAiHeader(orig[k])?.kind === 'quality')
+    const overall = Object.keys(aiScores).length ? ''
+      : pick('overall_quality', 'overall quality', 'overall', 'quality', 'ai quality', ...qualityHeads)
+    // Evaluator ratings (3.3): the blind-rater columns ("Novelty (rater 1)" …)
+    // averaged; failing those, the evaluator-labelled columns ("Eval. Novelty",
+    // ext_novelty) averaged — what the Rankings tab and "Download all data" write,
+    // so a download reloads with its evaluator ratings. Exact headers only
+    // (parseEvalHeader): "Eval. Novelty SD" is not a rating.
+    const extNovelty = evaluatorMean(lower, 'novelty')
+    const extUsefulness = evaluatorMean(lower, 'usefulness')
+    // "Eval. Quality" is DERIVED, the mean of the two, like AI Quality. A file
+    // that carries it WITHOUT both parts (a holistic rating on its own) keeps it
+    // as the evaluator quality, which recomputeOverall then leaves alone, so the
+    // column is neither dropped nor filed as something else.
+    const extOverall = overallQuality(extNovelty, extUsefulness) ?? numOrNull(evaluatorMean(lower, 'quality'))
 
     // Stage / phase → canonical 'individual' | 'group'.
     let phase = String(pick('stage', 'phase')).toLowerCase()
@@ -803,10 +884,12 @@ export function normalizeImportedRows(rawRows) {
     // extra (x_*), matched onto this idea by Idea ID downstream. Built-in KPIs (AI /
     // objective / evaluator) are already mapped above via canonicalKpiField, so they
     // are skipped here; integer-count diagnostics (n_nodes, n_edges), 0/1 dummies,
-    // vote counts and blind-rater columns are skipped too.
+    // vote counts and blind-rater columns are skipped too. A column that only
+    // mentions a KPI word ("Embedding novelty", "Quality index") is not a built-in
+    // KPI (canonicalKpiField gives null), so it comes through here.
     for (const [k, v] of Object.entries(lower)) {
       if (STD_IMPORT_COLS.has(k)) continue
-      if (canonicalKpiField(k) || isAiModelKey(k)) continue
+      if (canonicalKpiField(orig[k]) || isAiModelKey(k)) continue
       if (/\brater\b|\(rater/.test(k)) continue
       if (v === '' || v == null || typeof v === 'boolean') continue
       const n = Number(v)
@@ -856,26 +939,6 @@ function conditionFromFlags(solo, group) {
   if (solo && !group) return 'Solo'  // AI in solo stage    (Individual + AI)
   if (!solo && group) return 'Group' // AI in group stage   (Group + AI)
   return 'None'                       // no AI               (Human-Only Hybrid)
-}
-
-/**
- * Mean of every filled per-rater column for a KPI — "<kpi> (rater N)" /
- * "<kpi> rater N" / "<kpi>_rater N" / "<kpi> (expert N)". These are the blind
- * expert/evaluator columns of the admin Excel export, so they feed the external
- * KPIs (3.3). Returns '' when none are filled — so an un-rated row stays un-rated.
- */
-function meanRaterCols(lowerMap, kpiPrefix) {
-  const vals = []
-  for (const [k, v] of Object.entries(lowerMap)) {
-    const isRater = k.startsWith(`${kpiPrefix} (rater`) || k.startsWith(`${kpiPrefix} rater`) ||
-                    k.startsWith(`${kpiPrefix}_rater`) || k.startsWith(`${kpiPrefix} (expert`)
-    if (isRater && v != null && String(v).trim() !== '') {
-      const n = Number(v)
-      if (Number.isFinite(n)) vals.push(n)
-    }
-  }
-  if (!vals.length) return ''
-  return vals.reduce((a, b) => a + b, 0) / vals.length
 }
 
 /**
@@ -967,20 +1030,7 @@ function clampScore(v) {
  */
 export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelty: aiNovKey(UNRECORDED), usefulness: aiUseKey(UNRECORDED) }, altTitle = null) {
   const eligible = typeof isEligible === 'function' ? isEligible : () => true
-  const byTitle = new Map()
-  const index = (key, i) => {
-    if (!key) return
-    if (!byTitle.has(key)) byTitle.set(key, [])
-    if (!byTitle.get(key).includes(i)) byTitle.get(key).push(i)
-  }
-  rows.forEach((r, i) => {
-    if (!eligible(r)) return // e.g. skip removed participants' ideas
-    index(normTitle(rowTitle(r)), i)
-    // `altTitle(r, i)`: a second title the file may carry for the same idea — its
-    // English version (Data Analytics Step 1b), since the downloads the raters fill
-    // in carry the English title, while the loaded idea keeps its original.
-    if (altTitle) index(normTitle(altTitle(r, i) || ''), i)
-  })
+  const byTitle = titleIndex(rows, eligible, altTitle)
 
   const next = rows.slice()
   const used = new Set()
@@ -990,25 +1040,7 @@ export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelt
   let kept = 0
 
   for (const e of entries || []) {
-    const key = normTitle(e.title)
-    if (!key) { unmatched++; continue }
-    let candidates = byTitle.get(key)
-    if (!candidates) {
-      // Conservative contains-fallback: both titles reasonably long, of similar
-      // length (so a short title can't match inside a much longer one), AND a
-      // single candidate idea — otherwise leave it unmatched rather than guess.
-      const acc = new Set()
-      if (key.length >= 10) {
-        for (const [k, list] of byTitle) {
-          if (k.length < 10) continue
-          if (!(k.includes(key) || key.includes(k))) continue
-          const ratio = Math.min(k.length, key.length) / Math.max(k.length, key.length)
-          if (ratio < 0.6) continue
-          list.forEach(i => acc.add(i))
-        }
-      }
-      candidates = acc.size === 1 ? [...acc] : null
-    }
+    const candidates = titleCandidates(byTitle, normTitle(e.title))
     const idx = candidates && candidates.find(i => !used.has(i))
     if (idx == null) { unmatched++; continue }
     used.add(idx)
@@ -1025,6 +1057,178 @@ export function matchScoresIntoRows(rows, entries, isEligible, fields = { novelt
     else kept++
   }
   return { rows: next, matched, unmatched, filled, kept }
+}
+
+// The title rules every title-matched score upload shares. Rows are indexed by
+// their normalised title and, when `altTitle` gives one, by a second title the
+// file may carry for the same idea: its English version (Data Analytics Step
+// 1b), since the downloads the raters fill in carry the English title while the
+// loaded idea keeps its original.
+function titleIndex(rows, eligible, altTitle) {
+  const byTitle = new Map()
+  const index = (key, i) => {
+    if (!key) return
+    if (!byTitle.has(key)) byTitle.set(key, [])
+    if (!byTitle.get(key).includes(i)) byTitle.get(key).push(i)
+  }
+  ;(rows || []).forEach((r, i) => {
+    if (!eligible(r, i)) return // e.g. skip removed participants' ideas
+    index(normTitle(rowTitle(r)), i)
+    if (altTitle) index(normTitle(altTitle(r, i) || ''), i)
+  })
+  return byTitle
+}
+
+// The ideas a (normalised) file title may be: exact first, else a conservative
+// contains-fallback — both titles reasonably long, of similar length (so a short
+// title can't match inside a much longer one), AND a single candidate idea —
+// otherwise none rather than a guess.
+function titleCandidates(byTitle, key) {
+  if (!key) return null
+  const exact = byTitle.get(key)
+  if (exact) return exact
+  const acc = new Set()
+  if (key.length >= 10) {
+    for (const [k, list] of byTitle) {
+      if (k.length < 10) continue
+      if (!(k.includes(key) || key.includes(k))) continue
+      const ratio = Math.min(k.length, key.length) / Math.max(k.length, key.length)
+      if (ratio < 0.6) continue
+      list.forEach(i => acc.add(i))
+    }
+  }
+  return acc.size === 1 ? [...acc] : null
+}
+
+// `normalizeImportedRows` invents `import_<n>` for a file with no Idea ID: a
+// POSITION, not an identity (two unrelated files both start at import_1).
+const POSITIONAL_ID = /^import_\d+$/i
+
+/**
+ * Match an uploaded score table onto the loaded ideas, ONE idea per file row,
+ * and fill every field that row carries into that same idea (review findings,
+ * 2026-09-24). The 3.2 upload used to run one title match per model pair, each
+ * with its own list and its own "already used" set, so two models' ratings on
+ * one file row could land on two different ideas that share a title; and it
+ * never used the Idea ID the page's own Rankings tab carries.
+ *
+ * @param rows      the loaded dataset
+ * @param fileRows  [{ id, session, title, values: { [field]: number | string | '' } }]
+ *                  — `id` / `session` '' when the file has no such column; a field
+ *                  is any row key (ai_nov__<model>, ai_use__<model>, ext_novelty, …)
+ * @param opts      { isEligible(r, i) (default: every row), altTitle(r, i) (an
+ *                  English title, Step 1b) }
+ *
+ * Matching, per file row:
+ *  1. By Idea ID when it has one: the eligible ideas with that id, narrowed to
+ *     its session when it has one. One → it. Several → narrowed to the ones
+ *     whose title (or English title) is the file's; if what is left is one idea
+ *     loaded more than once (same session and id) every copy is filled, else if
+ *     exactly one is left it is that one, else the row is left unmatched — it is
+ *     ambiguous, and nothing is guessed. None → the id is not this dataset's, so
+ *     the title decides. An `import_<n>` id counts only where the title agrees.
+ *  2. By title (the same rules as matchScoresIntoRows): each idea at most once,
+ *     and never one an Idea ID already placed.
+ * Fill blanks only: a field is written only where the idea's cell is empty and
+ * the file's value is a number. Values are kept as given (not clamped).
+ *
+ * Returns { rows (a new array; untouched rows are the same objects),
+ *           matched:   file rows with a value that found an idea,
+ *           unmatched: file rows with a value that found none,
+ *           filled:    ideas (row indices) that gained at least one value,
+ *           kept:      matched ideas that gained nothing although the file had a
+ *                      value for them (they were already scored),
+ *           matchedIdx: Set of the row indices matched }
+ * A file row with no value still takes part in the matching (so an unrated row
+ * keeps the ideas in step with the file) but is counted in neither.
+ */
+export function matchScoreTable(rows, fileRows, opts = {}) {
+  const list = rows || []
+  const eligible = typeof opts.isEligible === 'function' ? opts.isEligible : () => true
+  const altTitle = typeof opts.altTitle === 'function' ? opts.altTitle : null
+  const titlesOf = i => {
+    const t = [normTitle(rowTitle(list[i]))]
+    if (altTitle) t.push(normTitle(altTitle(list[i], i) || ''))
+    return t.filter(Boolean)
+  }
+  const ideaKey = i => `${String(list[i].session ?? '').trim()}\u0000${String(list[i].idea_id ?? '').trim()}`
+
+  const byId = new Map()
+  list.forEach((r, i) => {
+    if (!eligible(r, i)) return
+    const id = String(r.idea_id ?? '').trim()
+    if (!id) return
+    if (!byId.has(id)) byId.set(id, [])
+    byId.get(id).push(i)
+  })
+
+  const file = (fileRows || []).map(f => {
+    const values = {}
+    for (const [k, v] of Object.entries(f?.values || {})) {
+      const n = numOrNull(v)
+      if (n != null) values[k] = n
+    }
+    return {
+      id: String(f?.id ?? '').trim(),
+      session: String(f?.session ?? '').trim(),
+      title: normTitle(f?.title),
+      values,
+      hasValue: Object.keys(values).length > 0,
+    }
+  })
+
+  // target[j]: the row indices file row j fills, or 'ambiguous', or null (no match yet).
+  const target = file.map(() => null)
+  const used = new Set()
+
+  // 1. By Idea ID.
+  file.forEach((f, j) => {
+    if (!f.id) return
+    let cands = byId.get(f.id) || []
+    if (f.session) cands = cands.filter(i => String(list[i].session ?? '').trim() === f.session)
+    if (POSITIONAL_ID.test(f.id)) cands = f.title ? cands.filter(i => titlesOf(i).includes(f.title)) : []
+    if (!cands.length) return
+    let pick = cands
+    if (cands.length > 1) {
+      const byTitle = f.title ? cands.filter(i => titlesOf(i).includes(f.title)) : []
+      const pool = byTitle.length ? byTitle : cands
+      pick = new Set(pool.map(ideaKey)).size === 1 ? pool : null
+    }
+    if (!pick) { target[j] = 'ambiguous'; return }
+    target[j] = pick
+    pick.forEach(i => used.add(i))
+  })
+
+  // 2. By title, for the rows the id did not place.
+  const byTitle = titleIndex(list, eligible, altTitle)
+  file.forEach((f, j) => {
+    if (target[j]) return
+    const cands = titleCandidates(byTitle, f.title)
+    const idx = cands && cands.find(i => !used.has(i))
+    if (idx == null) return
+    used.add(idx)
+    target[j] = [idx]
+  })
+
+  // 3. Fill blanks; count ideas, not fields or model pairs.
+  const next = list.slice()
+  const gained = new Set(), held = new Set(), matchedIdx = new Set()
+  let matched = 0, unmatched = 0
+  file.forEach((f, j) => {
+    const into = Array.isArray(target[j]) ? target[j] : null
+    if (!into) { if (f.hasValue) unmatched++; return }
+    into.forEach(i => matchedIdx.add(i))
+    if (!f.hasValue) return
+    matched++
+    for (const i of into) {
+      const patch = {}
+      for (const [k, v] of Object.entries(f.values)) if (isBlankScore(next[i][k])) patch[k] = v
+      if (Object.keys(patch).length) { next[i] = { ...next[i], ...patch }; gained.add(i) }
+      else held.add(i)
+    }
+  })
+  const kept = [...held].filter(i => !gained.has(i)).length
+  return { rows: next, matched, unmatched, filled: gained.size, kept, matchedIdx }
 }
 
 /**
