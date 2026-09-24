@@ -17,7 +17,7 @@ import { scoreIdeas, fetchAISettings, translateTexts } from '../utils/llmClient'
 import {
   measureText, untranslatedRows, languageSummary, applyTranslationMemory, collectTexts, translateSheets, withMeasuredText,
   tmGet, tmSet, tmMerge, tmToJson, tmFromJson, tmFromTranslationsRows, estimateTranslationCost,
-  detectLanguage, carryTranslationsSheet, TRANSLATIONS_SHEET, TRANSLATION_MODEL,
+  detectLanguage, carryTranslationsSheet, hasEnglishVersion, TRANSLATIONS_SHEET, TRANSLATION_MODEL,
 } from '../utils/translation'
 // From scoreBatch, not llmClient: that module owns what is worth retrying and
 // carries no Firebase import, so the offline guard can pin this rule.
@@ -121,7 +121,6 @@ export default function DataAnalytics() {
   // every download as a "Translations" sheet; the last scan of the loaded data; the
   // run's progress, report and error; and hand-typed edits (original → draft).
   const [tm, setTm] = useState(() => { try { return tmFromJson(localStorage.getItem(LS.translations) || '') } catch (_) { return {} } })
-  useEffect(() => { try { localStorage.setItem(LS.translations, tmToJson(tm)) } catch (_) { /* storage full or blocked */ } }, [tm])
   const [trScan, setTrScan] = useState(null)
   const [scanning, setScanning] = useState(false)
   const [translating, setTranslating] = useState(null)
@@ -129,6 +128,13 @@ export default function DataAnalytics() {
   const [trErr, setTrErr] = useState('')
   const [trDraft, setTrDraft] = useState({})
   const [trReviewOpen, setTrReviewOpen] = useState(false)
+  // A browser that cannot store the memory (full or blocked) must say so: the
+  // translations were paid for, and a reload would drop them without a word.
+  useEffect(() => {
+    try { localStorage.setItem(LS.translations, tmToJson(tm)) } catch (_) {
+      setTrErr('This browser could not save the translations (its storage is full or blocked). They are kept until you leave the page: download the data in English to keep them, since importing that file brings them back.')
+    }
+  }, [tm])
   // Summary Statistics: restrict to ideas scored on all three KPIs (default on).
   const [statsOnlyScored, setStatsOnlyScored] = useState(true)
   // Regression scope: 'final' = group-voted Final Ideas (default); 'group' = all
@@ -457,8 +463,17 @@ export default function DataAnalytics() {
           entries.push({ title, novelty: nov, usefulness: use })
         }
         if (!entries.length) { alert(`This scores file does not match the expected format and was not imported.\n\nNo scored idea rows (with a Novelty/Usefulness value) were found under "${sheetName}".`); return }
+        // Step 1b: the downloads raters fill in carry each idea's ENGLISH title, while
+        // the loaded idea keeps its original, so the English title matches too — from
+        // this browser's translations plus the file's own Translations sheet (which
+        // is also kept, like any import's).
+        const trName = wb.SheetNames.find(n => n === TRANSLATIONS_SHEET)
+        const fileTm = trName ? tmFromTranslationsRows(XLSX.utils.sheet_to_json(wb.Sheets[trName], { defval: '' })) : {}
+        if (Object.keys(fileTm).length) setTm(prev => tmMerge(prev, fileTm).tm)
+        const withEn = applyTranslationMemory(rows, tmMerge(tm, fileTm).tm)
         // Don't let a removed participant's idea absorb a title match meant for a visible one.
-        const res = matchScoresIntoRows(rows, entries, r => !excludedUsers.has(userKey(r.session, r.author_id)), fields)
+        const res = matchScoresIntoRows(rows, entries, r => !excludedUsers.has(userKey(r.session, r.author_id)), fields,
+          (_r, i) => withEn[i]?.title_en)
         setRows(recomputeOverall(res.rows))
         // Say what was ADDED and what was left alone: the upload only fills ideas
         // with no score yet, so a file re-imported over already-scored ideas must
@@ -757,22 +772,32 @@ export default function DataAnalytics() {
     setDetErr(e => (e && e.includes('Step 1b') ? '' : e))
     setScoreErr(e => (e && e.includes('Step 1b') ? '' : e))
   }, [ideasNotEnglish.length])
-  // When an idea's measured text changes after measures exist (a translation added,
-  // edited or removed in Step 1b), what was computed from the old text no longer
-  // describes it: its AI ratings are cleared (the Fill button re-rates just those),
-  // and the objective KPIs are cleared for every idea, since Distinctiveness and the
-  // pool KPIs depend on the whole pool (Compute again). Nothing else is touched.
+  // When an idea's ENGLISH VERSION is edited or removed in Step 1b after measures
+  // exist, what was computed from the old English no longer describes it: its AI
+  // ratings are cleared (the Fill button re-rates just those), and the objective
+  // KPIs are cleared for every idea, since Distinctiveness and the pool KPIs depend
+  // on the whole pool (Compute again). An idea getting its FIRST English version is
+  // not a change of that kind: while it had none, nothing on this page could
+  // measure it (3.1 and 3.2 refuse), so any score it carries came in with a file —
+  // above all the 3.2 top-up upload, whose Translations sheet and scores land in
+  // the same render (review of 2026-09-24: clearing there blanked exactly the
+  // scores the upload had just filled). Only an idea in the 3.1 pool (not a
+  // removed participant's) clears the objective KPIs. Nothing else is touched.
   const measuredTextRef = useRef(new Map())
   useEffect(() => {
     const prev = measuredTextRef.current
-    const next = new Map(rowsEn.map(r => [r.rid, measureText(r)]))
+    const next = new Map(rowsEn.map(r => [r.rid, { t: measureText(r), en: hasEnglishVersion(r) }]))
     measuredTextRef.current = next
     const changed = new Set()
-    for (const [rid, t] of next) if (prev.has(rid) && prev.get(rid) !== t) changed.add(rid)
+    for (const [rid, v] of next) {
+      const p = prev.get(rid)
+      if (p && p.en && p.t !== v.t) changed.add(rid)
+    }
     if (!changed.size) return
     const has = v => v !== '' && v != null
     const detKeys = KPI_DEFS.filter(d => d.source === 'det').map(d => d.key)
-    const anyDet = rowsEn.some(r => detKeys.some(k => has(r[k])))
+    const inPool = rowsEn.some(r => changed.has(r.rid) && !isExcluded(r))
+    const anyDet = inPool && rowsEn.some(r => detKeys.some(k => has(r[k])))
     const aiChanged = rowsEn.filter(r => changed.has(r.rid) && (has(r.novelty) || has(r.usefulness))).length
     if (!anyDet && !aiChanged) return
     setRows(prevRows => recomputeOverall(prevRows.map(r => {
@@ -1050,6 +1075,7 @@ export default function DataAnalytics() {
         // deferred-import bookkeeping Step 1 uses, so it shows as its own source
         // row and can be removed again — rather than becoming untracked rows.
         if (!rows.length) {
+          restoreTranslationsFrom(bookSheets)
           const bookId = `book_${bookSeq.current++}`
           const bookRows = tagRows(incoming).map(r => ({ ...r, _book: bookId }))
           setImportedBooks(prev => [...prev, {
@@ -1283,7 +1309,7 @@ export default function DataAnalytics() {
       const left = items.length - n
       setTrMsg(`Translated ${n} of ${items.length} text${items.length === 1 ? '' : 's'} with Claude Fable 5.1.`
         + (left
-          ? ` ${left} could not be translated this run${report.lastError ? ` (${report.lastError.message || report.lastError})` : ''}: press Translate again, or type the English below.`
+          ? ` ${left} could not be translated this run${report.lastError ? ` (${report.lastError.message || report.lastError})` : ''}: press Translate again, type the English below, or press It is English where a text already is.`
           : ' Check them below, then download the data in English.'))
     } catch (err) {
       // A rejected key mid-run still hands back what was already translated (and paid for).

@@ -38,6 +38,9 @@
  *   8. A reload keeps the translations (no new request); importing the English
  *      download into an empty browser brings them back.
  *   9. No Claude key: Translate refuses with a clear message and sends nothing.
+ *  9b. In a browser that knows no translation, a scored English file still works:
+ *      the full-dataset top-up keeps the scores it fills, and a scores file with
+ *      English titles matches the Chinese originals.
  *
  * Plus: no page error or console error, nothing leaves the machine except the
  * stubbed Anthropic call, Firebase only read, and at 1280px no sideways scroll
@@ -241,7 +244,7 @@ const layout = () => p.evaluate(async () => {
   }
 })
 
-let english = null
+let english = null, ideasFile = null
 try {
   const ctx = await newContext()
   await openPage(ctx, 'main', WITH_KEY)
@@ -346,7 +349,7 @@ try {
     log.some(l => l.Original === CHAT && /chat/i.test(l.Sheet) && l['Translated from'] === 'Chinese' && l['Translated by'] === 'Claude Fable 5.1')
     && log.some(l => l.Original === ZH_A.title && l['Translated by'] === 'by hand'))
 
-  const ideasFile = await captureDownload(() => btn('Download ideas + KPIs (Excel)').click())
+  ideasFile = await captureDownload(() => btn('Download ideas + KPIs (Excel)').click())
   const ideasSheet = XLSX.utils.sheet_to_json(ideasFile.wb.Sheets.ideas || {}, { defval: '' })
   const zb = ideasSheet.find(r => r['Idea ID'] === ZH_B.id)
   check('"Download ideas + KPIs" carries the ideas in English with their NoveltyScore',
@@ -419,6 +422,59 @@ try {
   await ctx.close()
 } catch (e) {
   check('section 8b ran to the end', false, e.stack || e.message)
+}
+
+// ── 9b. A scored file into a browser with no translations (review of 2026-09-24) ──
+// Both uploads carry the ENGLISH titles and a Translations sheet; the loaded ideas
+// are the Chinese originals and this browser has never seen a translation.
+function withSheets(sheets) {
+  const wb = XLSX.utils.book_new()
+  for (const [name, rows] of sheets) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name)
+  return Buffer.from(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }))
+}
+try {
+  head('9b. uploading a scored English file where no translation is known yet')
+  if (!ideasFile || !english) throw new Error('no downloads from section 6')
+  const log = XLSX.utils.sheet_to_json(ideasFile.wb.Sheets[TRANSLATIONS_SHEET], { defval: '' })
+  const ideasRows = XLSX.utils.sheet_to_json(ideasFile.wb.Sheets.ideas, { defval: '' })
+
+  // (1) "Upload full dataset (top up AI scores)": its scores and its translations
+  // arrive in the same render, and the scores must survive it.
+  let ctx = await newContext()
+  await openPage(ctx, 'top-up', WITH_KEY)
+  await importFile(ideasWorkbook(), 'ideas_zh_fr.xlsx')
+  const topUp = withSheets([['ideas', ideasRows.map(r => ({ ...r, 'AI Novelty': 4, 'AI Usefulness': 3 }))], [TRANSLATIONS_SHEET, log]])
+  await p.locator('button:has-text("Upload full dataset") + input[type=file]').setInputFiles({ name: 'scored.xlsx', mimeType: XLSX_MIME, buffer: topUp })
+  await p.getByText(/^Merged “scored\.xlsx”/).waitFor({ timeout: 5000 })
+  await p.waitForTimeout(500)
+  const merged = await p.getByText(/^Merged “scored\.xlsx”/).innerText()
+  check('the top-up fills all six ideas', /filled 6 that had no AI score yet/.test(merged), merged.slice(0, 160))
+  check('the file\'s translations come back, so Step 3 unlocks', /✓ Every loaded idea can be measured in English/.test(await bodyText()))
+  check('…and the scores it filled are still there (not cleared as "changed text")',
+    await btn(/^All (final )?ideas have AI scores$/).count() === 1,
+    await p.locator('button', { hasText: /AI scores?/ }).first().innerText())
+  await closePage()
+  await ctx.close()
+
+  // (2) "Load AI scores file" with raters' Rankings carrying the English titles.
+  ctx = await newContext()
+  await openPage(ctx, 'scores-file', WITH_KEY)
+  await importFile(ideasWorkbook(), 'ideas_zh_fr.xlsx')
+  const english6 = {
+    [ZH_A.id]: HAND, [ZH_B.id]: MODEL[ZH_B.title][1], [FR.id]: MODEL[FR.title][1],
+  }
+  const ranking = IDEAS.map(i => ({ 'Idea ID': i.id, Title: english6[i.id] || i.title, Novelty: 5, Usefulness: 4 }))
+  const aggLog = XLSX.utils.sheet_to_json(english.wb.Sheets[TRANSLATIONS_SHEET], { defval: '' })
+  const scores = withSheets([['Rankings', ranking], [TRANSLATIONS_SHEET, aggLog]])
+  await p.locator('button:has-text("Load AI scores file") + input[type=file]').setInputFiles({ name: 'rankings.xlsx', mimeType: XLSX_MIME, buffer: scores })
+  await p.getByText(/^Loaded scores from/).waitFor({ timeout: 5000 })
+  const loaded = await p.getByText(/^Loaded scores from/).innerText()
+  check('every English title in the file finds its idea (6 scored, 0 unmatched)',
+    /scored 6 ideas that had no score yet/.test(loaded) && /; 0 file rows had no match/.test(loaded), loaded)
+  await closePage()
+  await ctx.close()
+} catch (e) {
+  check('section 9b ran to the end', false, e.stack || e.message)
 }
 
 // ── 9. No Claude key ─────────────────────────────────────────────────────────

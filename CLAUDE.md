@@ -3021,7 +3021,9 @@ or still in Chinese is refused, never filed). The English lives in one translati
 memory kept in the browser and written as a **Translations** sheet (each original
 beside its English) into every download, which an import reads back. Every Section 3
 measure reads the English; 3.1 and 3.2 refuse to run while an idea still needs it,
-and changing a translation clears what was computed from the old text. "Download all
+and editing or removing a translation clears what was computed from the old English
+(a first translation clears nothing, so an uploaded file's scores survive). Score
+files the raters fill carry English titles and still match the original ideas. "Download all
 data in English (Excel)" is the file the owner asked for. Pure module
 `_ideasearchlab-src/src/utils/translation.js`; full reasoning in
 `_ideasearchlab-src/CLAUDE.md`; tests `node _ideasearchlab-src/tools/translate-guard.mjs`

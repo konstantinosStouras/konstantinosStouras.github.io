@@ -30,6 +30,7 @@ import {
 } from '../src/utils/translation.js'
 import { objectiveKpisFromText } from '../src/utils/objectiveKpis.js'
 import { scorableText } from '../src/utils/scoreGaps.js'
+import { matchScoresIntoRows } from '../src/utils/analyticsData.js'
 import { MODEL_PRICES } from '../src/data/aiPricing.js'
 import { buildClaudeRequest, SCORING_MAX_TOKENS } from '../src/utils/providerRequest.js'
 
@@ -195,6 +196,21 @@ check('a short title of a flagged idea goes too, even alone it would not be flag
   collectTexts({ rows: [{ idea_title: 'Chic', idea_description: 'Chaussettes thermochromiques : des chaussettes qui changent de couleur quand la température est trop élevée' }] })
     .items.some(i => i.text === 'Chic'))
 
+head('a scores file with English titles still matches the loaded (original) ideas')
+{
+  const loaded = [
+    { rid: 'z', idea_title: '智能袜子', idea_description: '体温升高时袜子会变色', text: '智能袜子: 体温升高时袜子会变色', novelty: '', usefulness: '' },
+    { rid: 'e', idea_title: 'Mood mug', idea_description: 'A mug', text: 'Mood mug: A mug', novelty: '', usefulness: '' },
+  ]
+  const entries = [{ title: 'Smart socks', novelty: 4, usefulness: 3 }, { title: 'Mood mug', novelty: 2, usefulness: 5 }]
+  const plain = matchScoresIntoRows(loaded, entries)
+  check('without the English titles, the translated idea matches nothing', plain.matched === 1 && plain.rows[0].novelty === '')
+  const withEn = applyTranslationMemory(loaded, tm)
+  const res = matchScoresIntoRows(loaded, entries, null, undefined, (_r, i) => withEn[i]?.title_en)
+  check('with them, both match and the rows keep their original fields (no English written into them)',
+    res.matched === 2 && res.rows[0].novelty === 4 && res.rows[1].usefulness === 5 && !('title_en' in res.rows[0]) && res.rows[0].idea_title === '智能袜子')
+}
+
 head('translateSheets: the English goes into every cell, the original onto the log')
 {
   let m = tm
@@ -236,7 +252,11 @@ head('translateSheets: the English goes into every cell, the original onto the l
   const keptText = 'Chaussettes thermochromiques : des chaussettes qui changent de couleur quand la température est trop élevée'
   const kept = translateSheets([{ name: 'Survey', kind: 'json', rows: [{ Answer: keptText }] }],
     tmSet({}, keptText, { en: keptText, lang: 'English (checked by hand)', by: 'kept as written' }))
-  check('a text kept as written ("It is English") is not logged as a translation', kept.log.length === 0 && kept.sheets[0].rows[0].Answer === keptText)
+  check('a text kept as written ("It is English") keeps its cell, and the decision is logged',
+    kept.sheets[0].rows[0].Answer === keptText && kept.log.length === 1 && kept.log[0].by === 'kept as written')
+  const keptBack = tmFromTranslationsRows(translationsSheet(kept.log).rows)
+  check('…so importing the file into a fresh browser unlocks that idea again',
+    !needsTranslation(applyTranslationMemory([{ rid: 'k', text: keptText }], keptBack)[0]))
   // sessionExport.js imports Firebase, so its merge rule is pinned by source.
   const exp = readFileSync(join(HERE, '../src/utils/sessionExport.js'), 'utf8')
   check('mergeSessionSheets drops a source\'s Translations sheet (it is rebuilt, never duplicated)',
@@ -260,6 +280,8 @@ check('the model is Fable 5.1 on the Claude provider, and it has a price',
 head('what counts as a translation')
 check('isTranslation needs a non-empty text string', isTranslation({ i: 0, text: 'x' }) && !isTranslation({ i: 0, text: ' ' }) && !isTranslation({ i: 0 }) && !isTranslation(null))
 check('an echo of the source is not a translation', !looksTranslated('智能袜子', '智能袜子'))
+check('…unless the source is English already (a product-name title beside a Chinese description)',
+  looksTranslated('ThermoShirt', 'ThermoShirt') && looksTranslated('Smart socks for runners', 'Smart socks for runners'))
 check('a reply still in Chinese is not a translation', !looksTranslated('智能袜子', '智能的袜子'))
 check('a reply still in French is not a translation',
   !looksTranslated('Chaussettes thermochromiques', 'Les chaussettes qui changent de couleur quand la température du corps est trop élevée'))
@@ -277,7 +299,10 @@ head('assignByIndex: strict, so no text gets another text\'s words')
   const oob = assignByIndex([{ i: 5, text: 'x' }, { i: 0, text: 'a' }], 2)
   check('an out-of-range index is dropped', oob[0].text === 'a' && oob[1] === null)
   check('a one-text call takes its one object whatever its index', assignByIndex([{ i: 7, text: 'x' }], 1)[0].text === 'x')
-  check('a partial 1-based reply is NOT shifted (it could misplace)', assignByIndex([{ i: 1, text: 'b' }], 2)[1].text === 'b')
+  check('an incomplete reply with no index 0 fills nothing (0-based missing the first, or 1-based missing the last?)',
+    assignByIndex([{ i: 1, text: 'b' }], 2).every(x => x === null)
+    && assignByIndex([{ i: 1, text: 'a' }, { i: 2, text: 'b' }], 3).every(x => x === null))
+  check('an incomplete reply that HAS index 0 still fills what it can', assignByIndex([{ i: 0, text: 'a' }, { i: 2, text: 'c' }], 3).map(x => x && x.text).join() === 'a,,c')
 }
 
 head('makeBatches and the cost estimate')
@@ -299,6 +324,24 @@ const reply = (batch, f = (o) => o) =>
   JSON.stringify(batch.map((it, i) => f({ i, lang: 'Chinese', text: DICT[it.text] }, i)).filter(Boolean))
 
 head('runTranslation against a fake Claude')
+{
+  // The model numbers from 1 and drops the last text: nothing may be misfiled.
+  const r = await runTranslation({ items: itemsOf(3), sleep: noSleep,
+    call: async b => (b.length > 1 ? JSON.stringify(b.slice(0, 2).map((it, i) => ({ i: i + 1, lang: 'Chinese', text: DICT[it.text] }))) : reply(b)) })
+  check('a 1-based reply that drops a text is not misfiled: each text asked again alone',
+    r.untranslated === 0 && r.results.every((x, i) => x.text === `Text ${i}`), JSON.stringify(r.results))
+}
+{
+  const idea = { rid: 'm', idea_title: 'ThermoShirt', idea_description: '体温升高时衬衫会变色', text: 'ThermoShirt: 体温升高时衬衫会变色' }
+  const items = collectTexts({ rows: [idea] }).items
+  const r = await runTranslation({ items, sleep: noSleep,
+    call: async b => JSON.stringify(b.map((it, i) => ({ i, lang: 'Chinese', text: it.text === 'ThermoShirt' ? 'ThermoShirt' : 'The shirt changes colour when body temperature rises' }))) })
+  let m = {}
+  items.forEach((it, k) => { if (r.results[k]) m = tmSet(m, it.text, { en: r.results[k].text, lang: r.results[k].lang, by: 'Claude Fable 5.1' }) })
+  const out = applyTranslationMemory([idea], m)[0]
+  check('an idea with an English title and a Chinese description is fully translated and unlocked',
+    r.untranslated === 0 && !needsTranslation(out) && out.text_en === 'ThermoShirt: The shirt changes colour when body temperature rises', JSON.stringify(out.text_en))
+}
 {
   const calls = []
   const r = await runTranslation({ items: itemsOf(23), sleep: noSleep, call: async b => { calls.push(b.length); return reply(b) } })
@@ -381,9 +424,15 @@ check('the aggregate is translated and carries the originals on a Translations s
   /const tr = translateSheets\(merged, tm\)/.test(page) && /carryTranslationsSheet\(tr\.log, sources/.test(page))
 check('the ideas + KPIs download is translated as well, carrying a loaded file\'s originals',
   /translateSheets\(\[\{ name: 'ideas'/.test(page) && (page.match(/carryTranslationsSheet\(tr\.log,/g) || []).length === 2)
-check('both imports read a Translations sheet back', (page.match(/restoreTranslationsFrom\(bookSheets\)/g) || []).length === 2)
 check('the memory is kept in this browser', /translations: 'da:translations'/.test(page))
 check('changing an English version clears the measures computed from the old text', /measuredTextRef/.test(page) && /setDetResult\(null\)/.test(page))
+check('…but an idea getting its FIRST English version clears nothing (an upload\'s own scores survive)',
+  /if \(p && p\.en && p\.t !== v\.t\) changed\.add\(rid\)/.test(page))
+check('…and a removed participant\'s idea never clears the 3.1 pool\'s KPIs', /const inPool = rowsEn\.some\(r => changed\.has\(r\.rid\) && !isExcluded\(r\)\)/.test(page))
+check('the scores-file upload matches English titles too (this browser\'s memory + the file\'s own)',
+  /\(_r, i\) => withEn\[i\]\?\.title_en\)/.test(page) && /tmMerge\(tm, fileTm\)\.tm/.test(page))
+check('a browser that cannot save the translations says so', /could not save the translations/.test(page))
+check('both branches of the full-dataset upload read a Translations sheet back', (page.match(/restoreTranslationsFrom\(bookSheets\)/g) || []).length === 3)
 check('translateTexts calls Claude Fable 5.1 through the shared provider call',
   /resolveProvider\(settings, TRANSLATION_PROVIDER, TRANSLATION_MODEL\)/.test(client)
   && /callProvider\(resolved, TRANSLATOR_SYSTEM_PROMPT, buildTranslatePrompt\(batch\), \{ maxTokens: TRANSLATION_MAX_TOKENS \}\)/.test(client))

@@ -489,16 +489,22 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      a rejected key fatal but handing back what was already translated (`err.partial`).
      It is STRICTER than scoring in two ways, because a translation in the wrong slot puts
      another text's words in its place: `assignByIndex` voids duplicate / out-of-range
-     indices (only a whole 1-based reply is shifted back), and `looksTranslated` rejects
-     an echo or a reply still in another language. Its output ceiling is
+     indices (only a whole 1-based reply is shifted back; an incomplete reply with no
+     index 0 is ambiguous and fills nothing), and `looksTranslated` rejects a reply
+     still in another language and an echo, unless the source is English already (a
+     flagged idea sends ALL its parts, so a product-name title "ThermoShirt" beside a
+     Chinese description comes back unchanged and must be accepted, or the idea stays
+     locked for ever). Its output ceiling is
      `TRANSLATION_MAX_TOKENS` 16000 (ratings keep 8000): one long AI reply travels alone
      and its English plus thinking can pass 8000.
    - **One translation memory** (`tm`: original text → `{ en, lang, by }`), kept in this
      browser (`da:translations`). The review table lists every found text with its
      English in an editable box: **Save** (typed by hand, `by: 'by hand'`; warns when the
      text does not read as English), **Remove**, and **It is English** for a false alarm
-     (the text stands as its own English, `by: 'kept as written'`, never logged as a
-     translation).
+     (the text stands as its own English, `by: 'kept as written'`; its cell is left as
+     it is but the decision IS logged on the Translations sheet, or a fresh browser
+     importing the file would flag and lock that idea again). A browser that cannot
+     store the memory says so rather than dropping paid translations on reload.
    - **The measures read the English.** `applyTranslationMemory` gives each idea row
      `title_en` / `description_en` / `text_en` / `translated_from` / `translated_by` (only
      when EVERY part is translated; the original fields are never changed);
@@ -508,10 +514,14 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      Chinese has none: untranslated, a whole idea counted as ONE word). **3.1 and 3.2 refuse to run
      while an idea in their scope still needs an English version** (`untranslatedRows`),
      naming Step 1b; the message clears once everything is translated. When an idea's
-     measured text changes afterwards (a translation edited, removed or added), the
-     measures computed from the old text are cleared: all objective KPIs (Distinctiveness
-     depends on the whole pool) and that idea's AI ratings, with a message saying which
-     button re-computes them.
+     ENGLISH VERSION is edited or removed afterwards, the measures computed from the old
+     English are cleared: all objective KPIs (Distinctiveness depends on the whole pool;
+     only when the idea is in the 3.1 pool, not a removed participant's) and that idea's
+     AI ratings, with a message saying which button re-computes them. An idea getting
+     its FIRST English version clears nothing: while it had none nothing here could
+     measure it, so any score it carries came with a file — above all the 3.2 top-up,
+     whose Translations sheet and scores land in the same render (review of 2026-09-24:
+     clearing there blanked exactly the scores the upload had just filled).
    - **The files.** "Download all data in English (Excel)" (in 1b, and Step 2's own
      button) writes the English into every translated cell (`translateSheets`, a joined
      "Title: Description" resolved from its parts by `tmLookup`) and adds a
@@ -523,14 +533,20 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      download CARRIES a loaded file's Translations rows forward (`carryTranslationsSheet`;
      the ideas file keeps only its idea sheets' rows), since a re-imported English file
      has nothing left to replace. `mergeSessionSheets` drops a source's Translations sheet
-     so the aggregate never holds two.
-   - Tests: `node tools/translate-guard.mjs` (133 offline checks: detection, the memory,
+     so the aggregate never holds two. The raters' files carry the ENGLISH titles while
+     the loaded idea keeps its original, so "Load AI scores file" / the 3.3 evaluator
+     upload (matched by title) also match each idea's English title
+     (`matchScoresIntoRows`'s `altTitle`), from this browser's memory plus the file's
+     own Translations sheet.
+   - Tests: `node tools/translate-guard.mjs` (144 offline checks: detection, the memory,
      sheets, the fake-Claude run, the page wiring, the shipped bundle) and
      `node tools/translate-page-guard.mjs` (Playwright over `tools/translate-page/`, the
      page on its own with Firebase stubbed and api.anthropic.com faked: import → locked →
      find → one typed, six translated in ONE request carrying only those six → 3.1 scores
      the Chinese ideas → both downloads in English with their originals → edit / remove /
-     translate again → reload and round trip → no key).
+     translate again → reload and round trip → no key → a scored English file uploaded
+     into a browser that knows no translation: the top-up keeps its scores and the
+     scores file matches all six; both fail on the pre-review code).
 2. **Aggregate Data.** A single **Download aggregate Excel** button (`downloadAggregate`
    in `DataAnalytics.jsx`) consolidates **every loaded source into ONE workbook with the exact
    same multi-tab structure and format as the per-session research export** — *About,

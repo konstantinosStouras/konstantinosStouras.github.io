@@ -426,7 +426,10 @@ export function collectTexts({ rows = [], sheets = [], tm = {} } = {}) {
 /**
  * Write the memory's English into every translatable cell of every sheet. Returns
  * new sheets (the originals are not mutated) and a log of every replaced cell, which
- * becomes the "Translations" sheet so the original is never lost.
+ * becomes the "Translations" sheet so the original is never lost. A text marked
+ * "It is English" (kept as written) is logged too, with its cell unchanged: the
+ * decision must reach a fresh browser through an import, or the idea is flagged
+ * and locked again there.
  */
 export function translateSheets(sheets, tm) {
   const log = []
@@ -435,7 +438,7 @@ export function translateSheets(sheets, tm) {
     if (s.kind === 'aoa') {
       const aoa = (s.aoa || []).map((line, ri) => (line || []).map((v, ci) => {
         const e = typeof v === 'string' ? tmLookup(tm, v) : null
-        if (!e || e.en === key(v)) return v            // none, or kept as written
+        if (!e) return v
         log.push({ sheet: s.name, row: ri + 1, column: String(ci + 1), lang: e.lang, original: v, english: e.en, by: e.by })
         return e.en
       }))
@@ -446,7 +449,7 @@ export function translateSheets(sheets, tm) {
       for (const [col, v] of Object.entries(obj || {})) {
         if (typeof v !== 'string' || SKIP_COLUMN.test(col)) continue
         const e = tmLookup(tm, v)
-        if (!e || e.en === key(v)) continue          // none, or kept as written
+        if (!e) continue
         if (!changed) changed = { ...obj }
         changed[col] = e.en
         log.push({ sheet: s.name, row: ri + 2, column: col, lang: e.lang, original: v, english: e.en, by: e.by })
@@ -553,12 +556,18 @@ export function isTranslation(e) {
  * in the source's language, would otherwise unlock the measures on text that is
  * not English. Accepted: text the detector reads as English, or text that is
  * mostly Latin letters with a few quoted foreign words (a reply explaining Chinese
- * terms keeps them, by the prompt's own rule). Rejected: the source itself, and
- * text still in another Latin-script language or mostly in another script.
+ * terms keeps them, by the prompt's own rule). Rejected: the source itself (unless
+ * the source is English already), and text still in another Latin-script language
+ * or mostly in another script.
  */
 export function looksTranslated(src, out) {
   const o = key(out)
-  if (!o || o === key(src)) return false
+  if (!o) return false
+  // An echo is refused unless the source reads as English already: a flagged idea
+  // sends ALL its parts, so an English title ("ThermoShirt") beside a Chinese
+  // description comes back unchanged, and refusing that would leave the idea
+  // locked for ever (review of 2026-09-24).
+  if (o === key(src)) return detectLanguage(o).english
   const d = detectLanguage(o)
   if (d.english) return true
   const letters = [...o.normalize('NFC')].filter(c => /\p{L}/u.test(c))
@@ -574,7 +583,8 @@ export function looksTranslated(src, out) {
  * place. So an out-of-range, missing or duplicate index leaves that slot empty (it
  * is retried on its own), with two exceptions that cannot misplace anything: a
  * reply numbered 1..count instead of 0..count-1 is shifted back as a whole, and a
- * one-text call takes its one object whatever index it carries.
+ * one-text call takes its one object whatever index it carries. An incomplete
+ * reply with no index 0 is ambiguous (see below) and fills nothing.
  */
 export function assignByIndex(parsed, count) {
   const out = new Array(count).fill(null)
@@ -583,6 +593,10 @@ export function assignByIndex(parsed, count) {
   const idx = objs.map(o => Number(o.i))
   const oneBased = count > 0 && idx.length === count && !idx.includes(0)
     && [...new Set(idx)].length === count && idx.every(n => Number.isInteger(n) && n >= 1 && n <= count)
+  // An INCOMPLETE reply with no index 0 cannot be read safely: numbered from 0 with
+  // the first text left out, or from 1 with a later one left out, the same objects
+  // land in different slots. Trust none of them; each text is asked again alone.
+  if (!oneBased && count > 1 && objs.length && !idx.includes(0)) return out
   const seen = new Set()
   objs.forEach((o, k) => {
     const n = oneBased ? idx[k] - 1 : idx[k]
