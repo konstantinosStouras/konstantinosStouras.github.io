@@ -215,6 +215,11 @@ check('the seven empirical columns are in the table', EMP.every(c => heads.inclu
 head('2. each provider, with its own key, fills its own columns for the final ideas')
 const providerSel = p.locator('select[title="Which provider\'s API key to use"]')
 const modelSel = p.locator('select[title="Which of that provider\'s models rates the ideas"]')
+// The Final-Ideas box starts UNTICKED (owner 2026-09-24: every idea is scored by
+// default); the guard ticks it so each provider rates the FINALS final ideas.
+const onlyFinal = p.locator('label', { hasText: 'Only score the' }).locator('input[type="checkbox"]')
+check('"Only score the Final Ideas" starts unticked', !(await onlyFinal.isChecked()))
+await onlyFinal.check()
 for (const pid of ORDER) {
   const name = modelName(pid)
   await providerSel.selectOption(pid)
