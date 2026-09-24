@@ -46,8 +46,9 @@
  *    2026-09-24): one OpenAI-compatible `chat/completions` shape each
  *    (`buildOpenAICompatRequest`), sending ONLY `Authorization` and
  *    `Content-Type` — DeepSeek's and Qwen's CORS preflights allow nothing else —
- *    and no `response_format` (the rater asks for a JSON ARRAY; the providers'
- *    JSON mode forces an OBJECT). Thinking is switched OFF where the provider
+ *    and — Mistral aside — no `response_format`: OpenRouter, DeepSeek and Qwen
+ *    have no schema mode the rater can rely on, and their plain JSON mode pins
+ *    no values (see `RATING_SCHEMA`). Thinking is switched OFF where the provider
  *    allows it, for a cheap and repeatable 1–5 rating: Mistral Medium 3.5 /
  *    Small 4 `reasoning_effort: "none"`, DeepSeek V4 `thinking: {type:
  *    "disabled"}` (it thinks by default), Qwen `enable_thinking: false`
@@ -135,7 +136,64 @@ export function geminiTakesThinkingLevel(model) {
   return /^gemini-3/.test(model || '')
 }
 
-export function buildClaudeRequest({ model, apiKey, system, user, maxTokens }) {
+/**
+ * The rating reply's schema — `{ratings: [{i, novelty, usefulness}]}` with each
+ * rating an ENUM of 1, 2, 3, 4, 5 (owner, 2026-09-24: the API itself must be
+ * unable to answer 3.5). Sent as a HARD output constraint wherever the provider
+ * takes one, when a call is built with `ratings: true` (the rater; Step 1b's
+ * translations never carry it): Claude `output_config.format` (its structured
+ * outputs support `enum`, not `minimum`/`maximum`; forced tool use is NOT used —
+ * Fable 5.1 and Opus 5.5 400 on it), OpenAI and Mistral `response_format:
+ * json_schema` (strict), Gemini `responseSchema` (`GEMINI_RATING_SCHEMA`, its
+ * OpenAPI dialect: `enum` is string-only there, so the range is
+ * `minimum`/`maximum`). OpenRouter, DeepSeek and Qwen have no schema mode the
+ * rater can rely on, so they get the prompt's rule alone. Every provider keeps
+ * the parse-side gate (`wholeRating` in scoreBatch.js) as the last line: a
+ * value outside the scale is dropped, never rounded.
+ */
+const RATING_VALUES = [1, 2, 3, 4, 5]
+export const RATING_SCHEMA = {
+  type: 'object',
+  properties: {
+    ratings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          i: { type: 'integer', description: 'The index of the idea, as listed' },
+          novelty: { type: 'integer', enum: RATING_VALUES },
+          usefulness: { type: 'integer', enum: RATING_VALUES },
+        },
+        required: ['i', 'novelty', 'usefulness'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['ratings'],
+  additionalProperties: false,
+}
+export const GEMINI_RATING_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    ratings: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          i: { type: 'INTEGER' },
+          novelty: { type: 'INTEGER', minimum: 1, maximum: 5 },
+          usefulness: { type: 'INTEGER', minimum: 1, maximum: 5 },
+        },
+        required: ['i', 'novelty', 'usefulness'],
+        propertyOrdering: ['i', 'novelty', 'usefulness'],
+      },
+    },
+  },
+  required: ['ratings'],
+}
+const ratingResponseFormat = () => ({ type: 'json_schema', json_schema: { name: 'idea_ratings', strict: true, schema: RATING_SCHEMA } })
+
+export function buildClaudeRequest({ model, apiKey, system, user, maxTokens, ratings }) {
   const body = {
     model,
     // A caller may raise the ceiling (Step 1b's translations: a long AI reply in
@@ -145,6 +203,7 @@ export function buildClaudeRequest({ model, apiKey, system, user, maxTokens }) {
     messages: [{ role: 'user', content: user }],
   }
   if (claudeSupportsEffort(model)) body.output_config = { effort: SCORING_EFFORT }
+  if (ratings) body.output_config = { ...(body.output_config || {}), format: { type: 'json_schema', schema: RATING_SCHEMA } }
   return {
     url: 'https://api.anthropic.com/v1/messages',
     headers: {
@@ -157,7 +216,7 @@ export function buildClaudeRequest({ model, apiKey, system, user, maxTokens }) {
   }
 }
 
-export function buildOpenAIRequest({ model, apiKey, system, user }) {
+export function buildOpenAIRequest({ model, apiKey, system, user, ratings }) {
   const body = {
     model,
     messages: [
@@ -165,6 +224,7 @@ export function buildOpenAIRequest({ model, apiKey, system, user }) {
       { role: 'user', content: user },
     ],
   }
+  if (ratings) body.response_format = ratingResponseFormat()
   if (openaiIsReasoning(model)) {
     body.max_completion_tokens = SCORING_MAX_TOKENS
     body.reasoning_effort = SCORING_EFFORT
@@ -181,11 +241,12 @@ export function buildOpenAIRequest({ model, apiKey, system, user }) {
   }
 }
 
-export function buildGeminiRequest({ model, apiKey, system, user }) {
+export function buildGeminiRequest({ model, apiKey, system, user, ratings }) {
   const generationConfig = {
     maxOutputTokens: SCORING_MAX_TOKENS,
     responseMimeType: 'application/json',
   }
+  if (ratings) generationConfig.responseSchema = GEMINI_RATING_SCHEMA
   if (geminiTakesThinkingLevel(model)) generationConfig.thinkingConfig = { thinkingLevel: SCORING_EFFORT }
   return {
     url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -201,7 +262,7 @@ export function buildGeminiRequest({ model, apiKey, system, user }) {
   }
 }
 
-export function buildOpenAICompatRequest(provider, { model, apiKey, system, user }) {
+export function buildOpenAICompatRequest(provider, { model, apiKey, system, user, ratings }) {
   const body = {
     model,
     messages: [
@@ -210,6 +271,7 @@ export function buildOpenAICompatRequest(provider, { model, apiKey, system, user
     ],
     max_tokens: LEGACY_CHAT_MAX_TOKENS,
   }
+  if (ratings && provider === 'mistral') body.response_format = ratingResponseFormat()
   if (provider === 'mistral' && mistralTakesReasoningEffort(model)) body.reasoning_effort = 'none'
   if (provider === 'deepseek') body.thinking = { type: 'disabled' }
   if (provider === 'qwen') body.enable_thinking = false
@@ -337,7 +399,8 @@ export function scrubKey(text, apiKey) {
  * @param resolved { provider, apiKey, model } from llmClient's resolveProvider
  * @param system   the rater system prompt
  * @param user     the batch prompt
- * @param opts     { fetch? } — injected for the offline guard
+ * @param opts     { fetch?, maxTokens?, ratings? } — fetch injected for the
+ *                 offline guard; `ratings: true` adds the 1–5 rating schema
  * @returns the model's reply as a string ('' when it returned no text)
  * @throws Error with `.status` = HTTP status on a non-2xx reply, and on a 2xx
  *         that is a failed request (`replyFailure`); without a status on a
@@ -348,7 +411,7 @@ export async function callProvider(resolved, system, user, opts = {}) {
   const fetchFn = opts.fetch || globalThis.fetch
   const { provider, apiKey, model } = resolved
   const name = PROVIDER_NAMES[provider] || provider
-  const req = buildRequest(provider, { model, apiKey, system, user, maxTokens: opts.maxTokens })
+  const req = buildRequest(provider, { model, apiKey, system, user, maxTokens: opts.maxTokens, ratings: opts.ratings === true })
 
   let res
   try {

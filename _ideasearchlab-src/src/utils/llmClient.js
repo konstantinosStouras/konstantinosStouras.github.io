@@ -63,7 +63,8 @@ fraction such as 3.5. Each point means:
 
 Rate each idea on its own merits. You are blind to which experimental condition
 produced it. Use the full range of the scale and be discriminating. Return ONLY
-valid JSON — an array with one object per idea, in the same order given, each
+valid JSON — an object {"ratings": [...]} whose array holds one object per idea,
+in the same order given, each
 {"i": <index>, "novelty": <integer 1-5>, "usefulness": <integer 1-5>}. No prose, no markdown.`
 
 /** Build the user message listing a batch of ideas to rate. */
@@ -71,8 +72,8 @@ function buildBatchPrompt(ideas, brief) {
   const lines = ideas.map((t, i) => `${i}. ${oneLine(t)}`).join('\n')
   return (
     (brief ? `Design brief / context: ${brief}\n\n` : '') +
-    `Rate the following ${ideas.length} idea(s). Return a JSON array of ` +
-    `{"i","novelty","usefulness"} with one entry per idea, indices 0..${ideas.length - 1}, ` +
+    `Rate the following ${ideas.length} idea(s). Return JSON {"ratings": [...]} with ` +
+    `one {"i","novelty","usefulness"} entry per idea, indices 0..${ideas.length - 1}, ` +
     `each rating a whole number from 1 to 5.\n\n` +
     lines
   )
@@ -136,7 +137,7 @@ export async function scoreIdeas(ideas, opts = {}) {
     onRetry: opts.onRetry,
     paceMs: opts.paceMs ?? PROVIDER_PACE_MS[resolved.provider] ?? DEFAULT_PACE_MS,
     isFatal: isFatalApiError,
-    call: batch => callProvider(resolved, RATER_SYSTEM_PROMPT, buildBatchPrompt(batch, opts.brief)),
+    call: batch => callProvider(resolved, RATER_SYSTEM_PROMPT, buildBatchPrompt(batch, opts.brief), { ratings: true }),
   })
   if (opts.onReport) opts.onReport({ unscored, blank, failedBatches, aborted, stoppedOnReply, lastError })
   // Nothing at all came back and we know why: surface it instead of returning a

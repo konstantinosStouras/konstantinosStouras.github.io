@@ -947,18 +947,31 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        columns (`evaluatorMean`), in the Step-1 import, the 3.1 KPI upload and the 3.3
        upload alike. **Eval. Quality is DERIVED** (their mean): it is kept as the
        evaluator quality only on a row without the Novelty/Usefulness pair;
-     - **no AI score is ever rounded; the API's ratings are whole numbers** (owner,
-       2026-09-24: "you should not round any AI score. rather the kpis the any AI
-       computes from the api should be integers in 1-5"). The rater's prompt asks
-       every model for a whole number 1, 2, 3, 4 or 5, and `wholeRating` in
-       scoreBatch.js keeps a reply only when it IS one ("4" and 4.0 are 4): a 3.5,
-       0 or 7 is not a rating, so the idea counts as unscored and runScoring asks
-       for it again, one at a time; a model that keeps answering 3.5 leaves it
-       unscored, never rounded. Nothing downstream rounds either: the Step-1 import
+     - **every AI rating is one of 1, 2, 3, 4, 5, constrained in the REQUEST; no AI
+       score is ever rounded** (owner, 2026-09-24: "you should not round any AI
+       score. rather the kpis the any AI computes from the api should be integers
+       in 1-5", then "constrain scores from AIs to be integers in 1, 2, 3, 4, 5
+       only"). Every rating call is built with `ratings: true`, which sends
+       `RATING_SCHEMA` (providerRequest.js: `{ratings:[{i, novelty, usefulness}]}`,
+       each rating an `enum` of 1..5) as a hard answer schema wherever the
+       provider takes one — Claude `output_config.format` (its structured outputs
+       support `enum`, not `minimum`/`maximum`; NOT forced tool use, which Fable
+       5.1 / Opus 5.5 400 on), OpenAI and Mistral strict `response_format:
+       json_schema`, Gemini `responseSchema` (`GEMINI_RATING_SCHEMA`: its `enum` is
+       string-only, so INTEGER 1..5 by `minimum`/`maximum`). OpenRouter, DeepSeek
+       and Qwen have no schema mode the rater can rely on and get the prompt's
+       rule alone; Step 1b's translation calls carry no schema. Behind it, for
+       those three and for a reply that slips a schema, `wholeRating` in
+       scoreBatch.js keeps a value only when it IS 1, 2, 3, 4 or 5 ("4" and 4.0
+       are 4) and drops anything else, never rounding it. Nothing downstream
+       rounds either: the Step-1 import
        keeps values as the file has them, both 3.2 uploads hold a rating to the 1–5
        scale WITHOUT rounding it (they used to round to one decimal), and the mean
-       across models and AI Quality are exact means. Pinned by `score-batch-guard`
-       (a batch answering 3.5 / 0 / 7) and section 9 of `ai-columns-guard`;
+       across models and AI Quality are exact means. Pinned by `ai-models-guard`
+       (the schema on each provider's request, none on a translation),
+       `rater-flow-guard` (every live rating call carries it), `score-batch-guard`
+       (the gate over a batch answering 3.5 / 0 / 7) and section 9 of
+       `ai-columns-guard`;
      - **the API is called at a pace it will not block** (owner, 2026-09-24).
        `runScoring` makes one call at a time and never starts two closer together
        than the provider's pace (`PROVIDER_PACE_MS` in scoreBatch.js: Gemini

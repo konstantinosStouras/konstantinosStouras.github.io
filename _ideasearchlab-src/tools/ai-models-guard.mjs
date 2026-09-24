@@ -253,8 +253,8 @@ for (const id of ['gemini-3.1-pro-preview', 'gemini-3.7-flash', 'gemini-3.6-flas
 const g25 = buildRequest('gemini', { ...args, model: 'gemini-2.5-flash' })
 check(!('thinkingConfig' in g25.body.generationConfig), 'gemini: 2.5 gets no thinkingLevel (it rejects the field)')
 // The four rater-only providers: OpenAI-compatible, two headers only (DeepSeek's
-// and Qwen's CORS preflights refuse any other), no JSON mode (it forces an
-// object; the rater asks for an array), thinking off where it can be.
+// and Qwen's CORS preflights refuse any other), no JSON mode on a call without
+// the rating schema, thinking off where it can be.
 const COMPAT = {
   mistral: 'https://api.mistral.ai/v1/chat/completions',
   openrouter: 'https://openrouter.ai/api/v1/chat/completions',
@@ -270,6 +270,30 @@ for (const [pid, url] of Object.entries(COMPAT)) {
     check(r.body.model === m.id && r.body.messages[0].content === 'SYS' && r.body.messages[1].content === 'USER' && r.body.max_tokens > 0, `${pid}: ${m.id} model, system + user, a token ceiling`)
   }
 }
+// The rating schema: a HARD 1..5 constraint on every provider that takes one
+// (owner 2026-09-24: "constrain scores from AIs to be integers in 1, 2, 3, 4, 5 only").
+const R = { ...args, ratings: true }
+const enum5 = s => JSON.stringify(s?.properties?.ratings?.items?.properties?.novelty?.enum) === '[1,2,3,4,5]'
+  && JSON.stringify(s?.properties?.ratings?.items?.properties?.usefulness?.enum) === '[1,2,3,4,5]'
+  && s.additionalProperties === false && s.properties.ratings.items.additionalProperties === false
+  && JSON.stringify(s.properties.ratings.items.required) === '["i","novelty","usefulness"]'
+const cr = buildRequest('claude', { ...R, model: 'claude-fable-5-1' })
+check(cr.body.output_config?.format?.type === 'json_schema' && cr.body.output_config.effort === SCORING_EFFORT && !('tools' in cr.body) && !('tool_choice' in cr.body),
+  'claude: rating schema via output_config.format beside the effort, never forced tool use (Fable 5.1 400s on it)')
+check(enum5(cr.body.output_config.format.schema), 'claude: novelty and usefulness are an enum of 1..5, additionalProperties false (no minimum/maximum: unsupported there)')
+check(!/minimum|maximum/.test(JSON.stringify(cr.body.output_config.format.schema)), 'claude: the schema carries no numeric range keywords')
+const orq = buildRequest('openai', { ...R, model: 'gpt-6-astra' })
+check(orq.body.response_format?.type === 'json_schema' && orq.body.response_format.json_schema.strict === true && enum5(orq.body.response_format.json_schema.schema), 'openai: strict json_schema with the 1..5 enum')
+const grq = buildRequest('gemini', { ...R, model: 'gemini-3.8-flash' })
+const gi = grq.body.generationConfig.responseSchema?.properties?.ratings?.items?.properties
+check(gi?.novelty?.type === 'INTEGER' && gi.novelty.minimum === 1 && gi.novelty.maximum === 5 && gi.usefulness.type === 'INTEGER' && gi.usefulness.minimum === 1 && gi.usefulness.maximum === 5
+  && grq.body.generationConfig.responseMimeType === 'application/json', 'gemini: responseSchema INTEGER 1..5 (its enum is string-only) under JSON mode')
+const mrq = buildRequest('mistral', { ...R, model: 'mistral-medium-2604' })
+check(mrq.body.response_format?.type === 'json_schema' && mrq.body.response_format.json_schema.strict === true && enum5(mrq.body.response_format.json_schema.schema), 'mistral: strict json_schema with the 1..5 enum')
+for (const pid of ['openrouter', 'deepseek', 'qwen']) check(!('response_format' in buildRequest(pid, { ...R, model: providerById(pid).models[0].id }).body), `${pid}: no schema mode to rely on — the prompt rule and the wholeRating gate`)
+check(!('response_format' in buildRequest('openai', { ...args, model: 'gpt-6-astra' }).body) && !('format' in (buildRequest('claude', { ...args, model: 'claude-fable-5-1' }).body.output_config || {}))
+  && !('responseSchema' in buildRequest('gemini', { ...args, model: 'gemini-3.8-flash' }).body.generationConfig) && !('response_format' in buildRequest('mistral', { ...args, model: 'mistral-medium-2604' }).body),
+  'a call built without ratings:true (Step 1b translations) carries no rating schema')
 check(buildRequest('mistral', { ...args, model: 'mistral-medium-2604' }).body.reasoning_effort === 'none' && buildRequest('mistral', { ...args, model: 'mistral-small-2603' }).body.reasoning_effort === 'none', 'mistral: thinking off on Medium 3.5 and Small 4')
 check(!('reasoning_effort' in buildRequest('mistral', { ...args, model: 'mistral-large-2512' }).body) && !mistralTakesReasoningEffort('ministral-8b-2512'), 'mistral: no reasoning_effort on the models without a reasoning mode')
 check(buildRequest('deepseek', { ...args, model: 'deepseek-v4-pro' }).body.thinking?.type === 'disabled', 'deepseek: thinking disabled (V4 thinks by default)')

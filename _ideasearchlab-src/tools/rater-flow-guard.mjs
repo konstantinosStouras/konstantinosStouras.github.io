@@ -144,7 +144,8 @@ async function newContext() {
     try { body = JSON.parse(req.postData() || '{}') } catch { /* not JSON */ }
     const n = ideaLines(body)
     const i = perProvider(pid).length + 1
-    const rec = { provider: pid, n, i, t0, t1: 0, status: 200, headers: req.headers(), model: body.model || '', url: req.url() }
+    const schema = body.output_config?.format?.schema || body.response_format?.json_schema?.schema || body.generationConfig?.responseSchema || null
+    const rec = { provider: pid, n, i, t0, t1: 0, status: 200, headers: req.headers(), model: body.model || '', url: req.url(), schema, tools: 'tools' in body || 'tool_choice' in body }
     calls.push(rec)
     await new Promise(r => setTimeout(r, 25))             // a call takes a moment
     const act = SCRIPT[pid]?.[i]
@@ -160,7 +161,8 @@ async function newContext() {
     }
     const arr = ratings(n)
     if (act?.fraction && arr.length > 2) arr[2].novelty = 3.5     // not a rating: the page must ask again
-    return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(replyFor(pid, JSON.stringify(arr))) })
+    // The shape the schema-bound providers really return: {"ratings": [...]}.
+    return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(replyFor(pid, JSON.stringify({ ratings: arr }))) })
   })
   return ctx
 }
@@ -229,6 +231,13 @@ for (const pid of ORDER) {
   check(`${pid}: every one of the ${mine.length} calls went to ${pid} (${secs} s)`, mine.length > 0 && mine.every(c => c.provider === pid), JSON.stringify(mine.map(c => c.provider)))
   check(`${pid}: every call carried THIS provider's key in its header`, mine.every(c => keyHeaderOf(pid, c.headers) === KEYS[pid]), JSON.stringify(mine[0] && Object.keys(mine[0].headers)))
   check(`${pid}: every call named the chosen model`, mine.every(c => (pid === 'gemini' ? decodeURIComponent(c.url).includes(SCORING_DEFAULT_MODEL[pid]) : c.model === SCORING_DEFAULT_MODEL[pid])), mine[0] && (mine[0].model || mine[0].url))
+  if (['claude', 'openai', 'gemini', 'mistral'].includes(pid)) {
+    const r = s => s?.properties?.ratings?.items?.properties || {}
+    check(`${pid}: every call carried the 1..5 answer schema`, mine.every(c => c.schema && (pid === 'gemini'
+      ? r(c.schema).novelty?.minimum === 1 && r(c.schema).novelty?.maximum === 5 && r(c.schema).usefulness?.maximum === 5
+      : JSON.stringify(r(c.schema).novelty?.enum) === '[1,2,3,4,5]' && JSON.stringify(r(c.schema).usefulness?.enum) === '[1,2,3,4,5]')) && !mine.some(c => c.tools),
+      JSON.stringify(mine[0]?.schema))
+  } else check(`${pid}: no schema mode to rely on, so none is sent`, mine.every(c => !c.schema))
   check(`${pid}: batches of at most 8 ideas, ${FINALS} ideas sent in the first pass`, mine.every(c => c.n >= 1 && c.n <= 8) && mine.filter(c => c.n > 1 && c.status === 200).reduce((s, c) => s + c.n, 0) >= FINALS, JSON.stringify(mine.map(c => c.n)))
   check(`${pid}: no error shown after the run`, (await p.locator('p.error-msg').count()) === 0, await p.locator('p.error-msg').first().textContent().catch(() => ''))
   // Pace: one call at a time, never closer than the provider's pace. Measured at the

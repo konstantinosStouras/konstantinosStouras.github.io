@@ -792,7 +792,9 @@ console.log('no AI score is rounded; the rater asks for whole numbers')
   check('the rater asks every model for whole numbers from 1 to 5', /Every rating is a WHOLE NUMBER: 1, 2, 3, 4 or 5/.test(llm)
     && /"novelty": <integer 1-5>, "usefulness": <integer 1-5>/.test(llm) && /each rating a whole number from 1 to 5/.test(llm))
   check('...and keeps only whole-number replies (wholeRating), which the page says', /novelty: wholeRating\(item\.novelty\), usefulness: wholeRating\(item\.usefulness\)/.test(src('src/utils/scoreBatch.js'))
-    && /The rater only accepts whole numbers/.test(page))
+    && /Every AI rating is one of 1, 2, 3, 4 or 5/.test(page))
+  check('...and every rating call carries the 1..5 answer schema (ratings: true → RATING_SCHEMA)', /buildBatchPrompt\(batch, opts\.brief\), \{ ratings: true \}\)/.test(llm)
+    && /ratings: opts\.ratings === true/.test(src('src/utils/providerRequest.js')))
 }
 
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll AI-column checks passed.')

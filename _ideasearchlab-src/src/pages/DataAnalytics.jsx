@@ -2454,9 +2454,10 @@ export default function DataAnalytics() {
               <h3 className={styles.subTitle} style={{ marginTop: 22 }}><span className={styles.subBadge}>3.2</span>AI-generated KPIs</h3>
               <div className={styles.banner}>
                 <strong>Score each idea with an LLM, or upload an offline AI-scoring file.</strong> The AI rater scores each
-                idea on novelty and usefulness (1–5); quality is their mean. <strong>The rater only accepts whole numbers
-                from 1 to 5</strong>: a model that answers 3.5 (or 0, or 7) for an idea is asked again for that idea, and no
-                AI score is ever rounded. <strong>Every model gets its own two
+                idea on novelty and usefulness (1–5); quality is their mean. <strong>Every AI rating is one of 1, 2, 3, 4 or 5</strong>:
+                the request itself allows the model no other answer (a fixed answer schema on Claude, OpenAI, Gemini and
+                Mistral), a value outside the scale from any provider is dropped rather than rounded, and no AI score is
+                ever rounded afterwards. <strong>Every model gets its own two
                 columns</strong>, named after it: <em>AI&nbsp;Novelty&nbsp;(GPT-6&nbsp;Astra)</em> and
                 {' '}<em>AI&nbsp;Usefulness&nbsp;(GPT-6&nbsp;Astra)</em>, and beside them the next model's pair. When two or
                 more models rated an idea, <em>AI&nbsp;Novelty&nbsp;(mean across models)</em> and <em>AI&nbsp;Usefulness&nbsp;(mean
