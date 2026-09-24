@@ -44,6 +44,7 @@ import { createRequire } from 'node:module'
 import { buildHarness } from './translate-page/build.mjs'
 import { ideaValueLookup, ideaKey } from '../src/utils/rankingsMerge.js'
 import { buildSummaryTable, summaryTableSheetRows } from '../src/utils/analyticsData.js'
+import { detResultSheets, POOL_KPI_SHEET, RATING_CHECK_SHEET } from '../src/utils/kpiResultSheets.js'
 
 const require = createRequire(import.meta.url)
 const XLSX = require('xlsx-js-style')
@@ -110,6 +111,33 @@ head('10a. the Table 1 sheet (analyticsData.js summaryTableSheetRows)')
   check('the notes say which ideas the table covers', sheet.some(r => /Ideas analysed in Section 4: 5 \(every loaded idea\)\. N = 4 ideas/.test(r.Variable || '')),
     sheet.map(r => r.Variable).filter(Boolean).slice(-3).join(' | '))
   check('no Table 1 (and no sheet) when no idea carries a KPI', summaryTableSheetRows(buildSummaryTable([{ condition: 'None', text: 'x' }])) === null)
+}
+
+// ── 9a. The 3.1 result tabs, in Node ─────────────────────────────────────────
+head('9a. the 3.1 result tabs (kpiResultSheets.js detResultSheets)')
+{
+  const validation = {
+    cols: ['AI Novelty (GPT-6 Astra)', 'Eval. Novelty'],
+    rows: [{ label: 'Novelty (empirical)', side: 'novelty', cells: [{ r: 0.41234, n: 12 }, { r: null, n: 2 }] }],
+  }
+  const overall = { r: 0.2, rLen: 0.1, q: { n: 4, both: 1, novelOnly: 1, usefulOnly: 1, neither: 1 }, facets: {} }
+  const cond = { condition: 'Solo', n: 4, uf80: 0.5, productivity: 3, ...overall }
+  const full = detResultSheets({ perCond: [cond], overall, ideas: 4, novCut: 0.3, useCut: 0.6, validation })
+  check('both tabs from a result with ratings', full.map(x => x.name).join('|') === `${POOL_KPI_SHEET}|${RATING_CHECK_SHEET}`, full.map(x => x.name).join('|'))
+  const pool = full[0].rows, chk = full[1].rows
+  check('the pool tab: one row per condition + "All ideas", each with the two medians',
+    pool.length === 2 && pool[1].Condition === 'All ideas' && pool.every(r => r['Novel = NoveltyScore above (median of all ideas)'] === 0.3 && r['Useful = Usefulness score above (median of all ideas)'] === 0.6),
+    JSON.stringify(pool))
+  check('the ratings tab: r to 3 decimals, blank where r is not defined, then the n grid under its heading',
+    chk[0]['AI Novelty (GPT-6 Astra)'] === 0.412 && chk[0]['Eval. Novelty'] === '' && /^Ideas with both values/.test(chk[2]['Empirical KPI'])
+      && chk[3]['AI Novelty (GPT-6 Astra)'] === 12 && chk[3]['Eval. Novelty'] === 2, JSON.stringify(chk))
+  // No idea with a recognised condition (labels "A" / "B"): the page still draws the
+  // "All ideas" rows and the check, so the files must carry them too (review, 2026-09-24).
+  const noCond = detResultSheets({ perCond: [], overall, ideas: 4, novCut: 0.3, useCut: 0.6, validation })
+  check('no per-condition row: both tabs are still written, the pool tab with its "All ideas" row',
+    noCond.length === 2 && noCond[0].rows.length === 1 && noCond[0].rows[0].Condition === 'All ideas', JSON.stringify(noCond.map(x => [x.name, x.rows.length])))
+  check('no ratings loaded: only the pool tab', detResultSheets({ perCond: [cond], overall, validation: null }).map(x => x.name).join('|') === POOL_KPI_SHEET)
+  check('no Compute result: no tab', detResultSheets(null).length === 0)
 }
 
 // ── Build + serve the harness ────────────────────────────────────────────────
@@ -478,7 +506,9 @@ try {
     const novCol = 'Novel = NoveltyScore above (median of all ideas)', useCol = 'Useful = Usefulness score above (median of all ideas)'
     const allRow = pool.find(r => r.Condition === 'All ideas')
     check(`${what}: "Pool KPIs by condition" carries the two medians the page prints`,
-      pool.length > 1 && pool.every(r => f2(r[novCol]) === shown.novCut && f2(r[useCol]) === shown.useCut),
+      // Within the page's own rounding: the file keeps 3 decimals, the page prints 2
+      // of the unrounded median (0.3846 prints 0.38; the file's 0.385 would re-round to 0.39).
+      pool.length > 1 && pool.every(r => Math.abs(Number(r[novCol]) - Number(shown.novCut)) <= 0.0051 && Math.abs(Number(r[useCol]) - Number(shown.useCut)) <= 0.0051),
       JSON.stringify({ page: [shown.novCut, shown.useCut], file: pool.map(r => [r[novCol], r[useCol]]) }))
     check(`${what}: …and still the cross-check r and the specificity shares`,
       !!allRow && 'Novelty x usefulness r' in allRow && Object.keys(allRow).some(k => /^States: /.test(k)), JSON.stringify(allRow))
@@ -494,6 +524,22 @@ try {
   checkTable1(allBook, 'all idea data')
   checkTable1(aggBook, 'aggregate')
   check('no dialog while computing and downloading', dialogs.length === 0, dialogs.join(' | '))
+
+  // Scores added to the SAME ideas keep the 3.1 results (the pool is unchanged)…
+  const moreScores = book([['All Ideas Ranked', [{ 'Idea Title': 'Night light bib', 'Novelty Rating': 3, 'Usefulness Rating': 4 }]]])
+  await p.locator('button:has-text("Load AI scores file") + input[type=file]').setInputFiles({ name: 'more.xlsx', mimeType: XLSX_MIME, buffer: moreScores })
+  await p.getByText(/^Loaded scores from/).first().waitFor({ timeout: 5000 })
+  check('scores loaded onto the same ideas keep the 3.1 results', await p.getByText(/Check against the ratings\./).count() > 0)
+  // …but a different set of ideas clears them, on the page and in every download.
+  dialogs = []
+  await btn(/^Clear$/).click()
+  await importFile(ideasBook(IDEAS.slice(0, 5)), 'fewer.xlsx')
+  const t9 = await bodyText()
+  check('new ideas loaded: the old 3.1 tables are gone and the page says why',
+    !/Check against the ratings\./.test(t9) && /The loaded ideas changed since the last Compute/.test(t9), (t9.match(/The loaded ideas changed[^\n]*/) || ['(no note)'])[0])
+  const stale = await captureDownload(() => btn('Download all idea data (Excel)').click())
+  check('…and no download carries them any more', !stale.SheetNames.includes('Pool KPIs by condition') && !stale.SheetNames.includes('Empirical KPIs vs ratings'),
+    stale.SheetNames.join(' | '))
   await p.close()
   await ctx5.close()
 

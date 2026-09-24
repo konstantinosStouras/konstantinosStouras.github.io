@@ -1253,16 +1253,29 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      "Pool KPIs by condition" also gained the two whole-pool medians that define
      "novel" and "useful" (the cut behind the four shares, printed in the note under
      the table and in no file until now). Both tabs come from ONE builder,
-     `detResultSheets(detResult)`, written by all three Excel downloads (ideas + KPIs,
-     all idea data, the aggregate), so they cannot drift apart; both names live in
-     `sessionExport.js` (`POOL_KPI_SHEET`, `RATING_CHECK_SHEET`) inside
-     `REBUILT_SHEETS`, the set `mergeSessionSheets` drops from an imported workbook —
+     `detResultSheets(detResult)` in **`src/utils/kpiResultSheets.js`** (pure, no
+     Firebase, so the guards import it; the sheet names `POOL_KPI_SHEET`,
+     `RATING_CHECK_SHEET`, `TABLE1_SHEET` live there too), written by all three Excel
+     downloads (ideas + KPIs, all idea data, the aggregate), so they cannot drift
+     apart. Each tab is written exactly when the page draws its table: the pool tab
+     whenever there is a result (its "All ideas" row exists even when no idea carries
+     a recognised condition, e.g. labels "A"/"B", and `perCond` is empty; the first
+     version gated on `perCond` and so wrote NEITHER tab there while the page showed
+     both, review 2026-09-24), the ratings tab whenever the check was drawn. The names
+     sit inside `REBUILT_SHEETS` (sessionExport.js), the set `mergeSessionSheets`
+     drops from an imported workbook —
      without it, re-importing a downloaded file and building the aggregate would
      stack the old tab beside the new one and `book_append_sheet` would throw on the
      duplicate name (no file at all). The tabs are a snapshot of the last Compute
      press, exactly as the page is; the note under the tables says so and names the
-     sheets. Pinned by section 9 of `tools/analytics-page-guard.mjs` (the downloaded
-     tabs match the page's own r and n, and a re-imported file still builds).
+     sheets. **A result describes one pool of ideas** (`detResult.poolKey`, the sorted
+     rids): when the loaded ideas change (Section 1 Clear, a file loaded or removed, a
+     participant removed) an effect clears it and says why (`detNote`), so neither the
+     page nor any download carries tables computed on other ideas. Scores or
+     translations added to the same ideas keep the rids and keep the result.
+     Pinned by sections 9a (Node, the builders) and 9 of
+     `tools/analytics-page-guard.mjs` (the downloaded tabs match the page's own r and
+     n, a re-imported file still builds, new scores keep the result, new ideas clear it).
      R, U and T are three side-by-side editors (saved to `da:refset`/`da:needset`/
      `da:techset`). Registered everywhere a KPI must be (KPI_DEFS, COLUMNS, row builders,
      importer, `canonicalKpiField` (usefulness checks run BEFORE "score", and a bare key

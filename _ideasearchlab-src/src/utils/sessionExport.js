@@ -20,6 +20,7 @@ import { getRegistration, getSurveyQuestions } from '../data/formDefaults'
 import { displayName, displayEmail } from './participantIdentity'
 import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/aiPricing'
 import * as XLSX from 'xlsx-js-style'
+import { POOL_KPI_SHEET, RATING_CHECK_SHEET, TABLE1_SHEET } from './kpiResultSheets.js'
 
 // Canonical tab order, used when merging several sessions into one workbook.
 export const SHEET_ORDER = [
@@ -690,11 +691,6 @@ export async function exportSessionWorkbook(session) {
 
 // ── Aggregation across several sessions / imported workbooks ───────────────────
 
-// The two Section 3.1 result tabs every Data Analytics Excel download carries.
-export const POOL_KPI_SHEET = 'Pool KPIs by condition'
-export const RATING_CHECK_SHEET = 'Empirical KPIs vs ratings'
-// Section 4's Table 1 (summary statistics + correlations), in the same downloads.
-export const TABLE1_SHEET = 'Table 1 summary + correlations'
 // The tabs the aggregate download writes afresh (Rankings from the scored rows, the
 // two 3.1 result tabs from the last Compute run, Table 1 from the Section 4 data,
 // Translations from the memory), so an imported copy of any of them is dropped
