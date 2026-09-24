@@ -1384,10 +1384,56 @@ export function buildSummaryTable(rows) {
     }
   })
   const corr = series.map((a, i) => series.map((b, j) => (i === j ? 1 : corrOf(a, b))))
+  // The ideas behind each correlation (pairwise-complete: both values present);
+  // the page does not print it, the Excel "Table 1" sheet does.
+  const pairN = series.map(a => series.map(b => a.filter((v, k) => v != null && b[k] != null).length))
   // N = ideas with at least one KPI value (the correlations are pairwise within this).
   const kpiKeys = presentKpis(data).map(d => d.key)
   const n = data.filter(r => kpiKeys.some(k => num(r[k]) != null)).length
-  return { n, variables, corr }
+  return { n, variables, corr, pairN }
+}
+
+/**
+ * Table 1 of Section 4 as the rows of an Excel sheet (owner, 2026-09-24: "add
+ * Table 1 to the Excel files too"): one row per variable, numbered as on the page
+ * ("1. Novelty (empirical)"), with its n, Mean, Median, SD, Min and Max, then one
+ * column per variable holding the lower-triangular Pearson correlations (1 on the
+ * diagonal, the upper triangle blank as on the page). Below it, under a heading
+ * row, the same grid with the number of ideas behind each correlation, then notes
+ * saying which ideas the table covers. Numbers to 3 decimals, blank where a value
+ * is not defined. `opts.ideas` is the number of ideas Section 4 analyses and
+ * `opts.onlyScored` whether it keeps only ideas that carry a KPI. Null when the
+ * page shows no Table 1 either (no variables, or no idea with a KPI).
+ *
+ * The correlation columns are keyed on the numbered label, never on a bare
+ * number: a key like "1" is an integer index, which JavaScript orders BEFORE every
+ * other key of an object, so it would land left of the Variable column.
+ */
+export function summaryTableSheetRows(summary, { ideas = null, onlyScored = true } = {}) {
+  if (!summary || !summary.variables || !summary.variables.length || !summary.n) return null
+  const r3 = x => (x == null || !Number.isFinite(x) ? '' : Number(x.toFixed(3)))
+  const names = summary.variables.map((v, i) => `${i + 1}. ${v.label}`)
+  const grid = (i, cell) => Object.fromEntries(names.map((nm, j) => [nm, j <= i ? cell(j) : '']))
+  const stats = summary.variables.map((v, i) => ({
+    Variable: names[i], n: v.n,
+    Mean: r3(v.mean), Median: r3(v.median), SD: r3(v.sd), Min: r3(v.min), Max: r3(v.max),
+    ...grid(i, j => r3(summary.corr?.[i]?.[j])),
+  }))
+  const counts = summary.variables.map((v, i) => ({
+    Variable: names[i],
+    ...grid(i, j => { const c = summary.pairN?.[i]?.[j]; return c == null ? '' : c }),
+  }))
+  const scope = onlyScored ? 'only the ideas that carry at least one KPI' : 'every loaded idea'
+  return [
+    ...stats,
+    {},
+    { Variable: 'Ideas with both values (n behind each correlation above)' },
+    ...counts,
+    {},
+    { Variable: `Ideas analysed in Section 4: ${ideas == null ? summary.n : ideas} (${scope}). N = ${summary.n} ideas with at least one KPI value.` },
+    { Variable: 'Each correlation is Pearson r over the ideas that have both values (pairwise), so the n differs from pair to pair; the upper triangle mirrors the lower one and is left blank.' },
+    { Variable: 'AI (any), Solo, Group and Both are 1/0 dummies against the None baseline. Word count is the number of words in the idea (its English version where Step 1b translated it).' },
+  ]
 }
 
 /** Quick per-condition / per-KPI summary used for the on-page preview table.

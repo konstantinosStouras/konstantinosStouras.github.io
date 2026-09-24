@@ -353,7 +353,7 @@ function summaryTableToHtml(summary) {
   return `<section class="reg-tables"><h2>Table 1. Summary statistics and correlations</h2>
     <figure class="rt-fig avoid-break">
       <table class="rt-table"><thead>${head}</thead><tbody>${body}</tbody></table>
-      <p class="rt-note">N = ${esc(String(summary.n ?? '—'))} fully-scored ideas. Cells are Pearson correlations (lower triangle). Dummies: AI / Solo / Group / Both vs None.</p>
+      <p class="rt-note">N = ${esc(String(summary.n ?? '—'))} ideas with at least one KPI value. Cells are Pearson correlations (lower triangle), each over the ideas that have both values. Dummies: AI / Solo / Group / Both vs None.</p>
     </figure></section>`
 }
 

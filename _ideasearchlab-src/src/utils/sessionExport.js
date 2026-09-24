@@ -20,6 +20,7 @@ import { getRegistration, getSurveyQuestions } from '../data/formDefaults'
 import { displayName, displayEmail } from './participantIdentity'
 import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/aiPricing'
 import * as XLSX from 'xlsx-js-style'
+import { POOL_KPI_SHEET, RATING_CHECK_SHEET, TABLE1_SHEET } from './kpiResultSheets.js'
 
 // Canonical tab order, used when merging several sessions into one workbook.
 export const SHEET_ORDER = [
@@ -690,6 +691,12 @@ export async function exportSessionWorkbook(session) {
 
 // ── Aggregation across several sessions / imported workbooks ───────────────────
 
+// The tabs the aggregate download writes afresh (Rankings from the scored rows, the
+// two 3.1 result tabs from the last Compute run, Table 1 from the Section 4 data,
+// Translations from the memory), so an imported copy of any of them is dropped
+// rather than stacked beside the new one.
+export const REBUILT_SHEETS = new Set(['Rankings', POOL_KPI_SHEET, RATING_CHECK_SHEET, TABLE1_SHEET, 'Translations'])
+
 /**
  * Merge several sessions' sheet lists into ONE ordered list, stacking rows of the
  * same tab. About is replaced by a single aggregate guide; AI Pricing is kept
@@ -697,14 +704,6 @@ export async function exportSessionWorkbook(session) {
  * `{ label, sheets }` where sheets is the array from buildSessionSheets() (or
  * sheets read from an imported workbook, same shape with kind:'json').
  */
-// The two Section 3.1 result tabs every Data Analytics Excel download carries.
-export const POOL_KPI_SHEET = 'Pool KPIs by condition'
-export const RATING_CHECK_SHEET = 'Empirical KPIs vs ratings'
-// The tabs the aggregate download writes afresh (Rankings from the scored rows, the
-// two 3.1 result tabs from the last Compute run, Translations from the memory), so
-// an imported copy of any of them is dropped rather than stacked beside the new one.
-export const REBUILT_SHEETS = new Set(['Rankings', POOL_KPI_SHEET, RATING_CHECK_SHEET, 'Translations'])
-
 export function mergeSessionSheets(sources, aboutMeta = []) {
   const byName = new Map()     // name -> concatenated json rows
   let pricing = null           // first AI Pricing seen (kept once)
@@ -768,7 +767,7 @@ function buildAggregateAbout(entries) {
     ['Clustering unit (triad)', 'use Group UID (= "SessionCode:groupId"), NOT the bare Group ID — g0/g1… repeat across sessions.'],
     [],
     ['WHERE EACH MEASURE LIVES'],
-    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea). Rankings columns, in order: first the EMPIRICAL KPIs computed in Section 3.1 (novelty side: Novelty (empirical) / Pool distinctiveness / NoveltyScore; usefulness side: Need fit / Specificity / Workability / Usefulness score (empirical)); then the AI ratings, one pair per model, e.g. AI Novelty (GPT-6 Astra) / AI Usefulness (GPT-6 Astra), with the mean over the models when several rated the ideas; then Eval. Novelty / Eval. Usefulness / Eval. Quality, left empty for blind expert raters until their ratings are loaded (raters fill Eval. Novelty and Eval. Usefulness; Eval. Quality is always computed as their mean, so a value typed there is not read back). Each row also carries its Session Code: ideas are numbered per session, so Session Code + Idea ID is what names one idea. The "Pool KPIs by condition" sheet, when present, adds the Section 3.1 results per condition: the pool KPIs (Unique fraction, Productivity), the novelty x usefulness cross-check (r, r with length held fixed, the shares of novel/useful ideas and the medians that define them) and the share of ideas stating each part of an idea. The "Empirical KPIs vs ratings" sheet, when present, holds the check of each empirical KPI against the AI and evaluator ratings (Pearson r, then the number of ideas behind each r).'],
+    ['Dependent variables', '"Ideas" sheet (one row per idea) + the "Rankings" sheet (one row per idea). Rankings columns, in order: first the EMPIRICAL KPIs computed in Section 3.1 (novelty side: Novelty (empirical) / Pool distinctiveness / NoveltyScore; usefulness side: Need fit / Specificity / Workability / Usefulness score (empirical)); then the AI ratings, one pair per model, e.g. AI Novelty (GPT-6 Astra) / AI Usefulness (GPT-6 Astra), with the mean over the models when several rated the ideas; then Eval. Novelty / Eval. Usefulness / Eval. Quality, left empty for blind expert raters until their ratings are loaded (raters fill Eval. Novelty and Eval. Usefulness; Eval. Quality is always computed as their mean, so a value typed there is not read back). Each row also carries its Session Code: ideas are numbered per session, so Session Code + Idea ID is what names one idea. The "Pool KPIs by condition" sheet, when present, adds the Section 3.1 results per condition: the pool KPIs (Unique fraction, Productivity), the novelty x usefulness cross-check (r, r with length held fixed, the shares of novel/useful ideas and the medians that define them) and the share of ideas stating each part of an idea. The "Empirical KPIs vs ratings" sheet, when present, holds the check of each empirical KPI against the AI and evaluator ratings (Pearson r, then the number of ideas behind each r). The "Table 1 summary + correlations" sheet, when present, is Table 1 of Section 4: the n / mean / median / SD / min / max of each variable and the lower-triangular Pearson correlations, then the number of ideas behind each correlation.'],
     ['Selected ideas (group level)', '"Ideas" sheet → Final Group Pick = Yes; "Groups" sheet lists them as titles.'],
     ['Vote completeness', '"Participants" sheet → Ballot Status + Votes Cast (a submitted ballot can hold zero votes).'],
     ['Who voted for which idea', '"Votes" sheet: one row per cast vote (voter x idea), stacked across every session.'],

@@ -1066,7 +1066,7 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      whose stored value predates the current rule or lists (press Compute again);
      then Summary by condition / by session (every KPI, in order), Pool KPIs,
      Empirical KPIs vs ratings (the 3.1 check, when ratings were loaded),
-     Removed participants. The old unwired `downloadExcel` / `downloadCsv` and the
+     Table 1 summary + correlations (Step 4's Table 1), Removed participants. The old unwired `downloadExcel` / `downloadCsv` and the
      unused `ideaSheetRows` are gone. **With Step 1b** (translation, merged the same
      day): the idea sheet of every idea download goes through `translatedIdeaSheet`
      (`translateSheets` + `carryTranslationsSheet`, as Step 2 does), so the ideas are
@@ -1253,16 +1253,29 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      "Pool KPIs by condition" also gained the two whole-pool medians that define
      "novel" and "useful" (the cut behind the four shares, printed in the note under
      the table and in no file until now). Both tabs come from ONE builder,
-     `detResultSheets(detResult)`, written by all three Excel downloads (ideas + KPIs,
-     all idea data, the aggregate), so they cannot drift apart; both names live in
-     `sessionExport.js` (`POOL_KPI_SHEET`, `RATING_CHECK_SHEET`) inside
-     `REBUILT_SHEETS`, the set `mergeSessionSheets` drops from an imported workbook —
+     `detResultSheets(detResult)` in **`src/utils/kpiResultSheets.js`** (pure, no
+     Firebase, so the guards import it; the sheet names `POOL_KPI_SHEET`,
+     `RATING_CHECK_SHEET`, `TABLE1_SHEET` live there too), written by all three Excel
+     downloads (ideas + KPIs, all idea data, the aggregate), so they cannot drift
+     apart. Each tab is written exactly when the page draws its table: the pool tab
+     whenever there is a result (its "All ideas" row exists even when no idea carries
+     a recognised condition, e.g. labels "A"/"B", and `perCond` is empty; the first
+     version gated on `perCond` and so wrote NEITHER tab there while the page showed
+     both, review 2026-09-24), the ratings tab whenever the check was drawn. The names
+     sit inside `REBUILT_SHEETS` (sessionExport.js), the set `mergeSessionSheets`
+     drops from an imported workbook —
      without it, re-importing a downloaded file and building the aggregate would
      stack the old tab beside the new one and `book_append_sheet` would throw on the
      duplicate name (no file at all). The tabs are a snapshot of the last Compute
      press, exactly as the page is; the note under the tables says so and names the
-     sheets. Pinned by section 9 of `tools/analytics-page-guard.mjs` (the downloaded
-     tabs match the page's own r and n, and a re-imported file still builds).
+     sheets. **A result describes one pool of ideas** (`detResult.poolKey`, the sorted
+     rids): when the loaded ideas change (Section 1 Clear, a file loaded or removed, a
+     participant removed) an effect clears it and says why (`detNote`), so neither the
+     page nor any download carries tables computed on other ideas. Scores or
+     translations added to the same ideas keep the rids and keep the result.
+     Pinned by sections 9a (Node, the builders) and 9 of
+     `tools/analytics-page-guard.mjs` (the downloaded tabs match the page's own r and
+     n, a re-imported file still builds, new scores keep the result, new ideas clear it).
      R, U and T are three side-by-side editors (saved to `da:refset`/`da:needset`/
      `da:techset`). Registered everywhere a KPI must be (KPI_DEFS, COLUMNS, row builders,
      importer, `canonicalKpiField` (usefulness checks run BEFORE "score", and a bare key
@@ -1278,6 +1291,28 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
    a stage breakdown (individual vs group, final-pick rate). A checkbox **"Only include ideas
    scored on all 3 KPIs"** (`statsOnlyScored`, **default on**) restricts every figure to
    fully-scored ideas.
+   **Table 1 (summary statistics + correlations) is in the Excel files** (owner,
+   2026-09-24: "add Table 1 to the Excel files too"; it used to reach only the PDF and
+   LaTeX reports). `summaryTableSheetRows` in analyticsData.js turns the SAME
+   `summaryTable` memo the page renders into the **"Table 1 summary + correlations"**
+   tab of all three Excel downloads (ideas + KPIs, all idea data, the aggregate):
+   one row per numbered variable with its n / Mean / Median / SD / Min / Max and the
+   lower-triangular Pearson correlations (3 decimals, upper triangle blank), then,
+   under a heading row, the number of ideas behind each correlation
+   (`buildSummaryTable` now returns `pairN`: the correlations are pairwise-complete,
+   so each pair has its own n), then notes naming the scope (how many ideas Section 4
+   analyses and whether it keeps only ideas with a KPI) and the dummy coding. The
+   correlation columns are keyed on the numbered LABEL ("1. Novelty (empirical)"),
+   never a bare "1": an integer-like key is ordered before every other key of a JS
+   object, so the matrix would land left of the Variable column. `TABLE1_SHEET` sits
+   in `REBUILT_SHEETS` with the 3.1 tabs, so a re-imported download never stacks a
+   second copy into the aggregate (mutation-checked: without it the aggregate throws
+   "Worksheet … already exists!" and builds no file). The page and PDF footnotes said
+   "N = … fully-scored ideas", which was never what N counts (ideas with at least
+   one KPI value, as the checkbox says); both now say so, as the LaTeX note already
+   did. Pinned by sections 10a (Node, the sheet builder) and 10b (every statistic,
+   correlation and count in the three downloads against the page) of
+   `tools/analytics-page-guard.mjs`.
 5. **Regressions — edit & compile online.** Runs on the **group-selected Final Ideas only**
    (`effectiveRows.filter(final_pick == 1)` → `dataCsv`; the guard needs ≥2 scored final ideas) —
    "currently we compare conditions for the ideas the group selected after the group phase; other

@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext'
 import {
   CONDITIONS, CONDITION_INFO, KPIS, conditionForSession, buildRowsForSession,
   recomputeOverall, rowsToCsv, csvToRows, normalizeImportedRows, summarize,
-  buildSummaryTable, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
+  buildSummaryTable, summaryTableSheetRows, DEFAULT_REFERENCE_SET, DEFAULT_NEED_SET, DEFAULT_TECH_SET, presentKpis, isNoveltyScoreHeader,
   uploadedKpiKeys, uploadedKpiDefs, uploadedKpiLabel, analysisColumns,
   matchUploadedKpisIntoRows, clearUploadedKpis, stripAllKpis, UPLOADED_KPI_PREFIX,
   enteredGroupPhase, canonicalKpiField, KPI_DEFS, canonicalCondition, scriptKpiKeys,
@@ -48,8 +48,9 @@ import { parseRunOutput, buildInsightsPrintHtml, kpiLabel, tableCell } from '../
 import { buildLatexSource } from '../utils/latexReport'
 import {
   fetchSessionExportData, buildSessionSheets, mergeSessionSheets,
-  appendSheetsToWorkbook, rankingsSheetFromIdeas, conditionOf, POOL_KPI_SHEET, RATING_CHECK_SHEET,
+  appendSheetsToWorkbook, rankingsSheetFromIdeas, conditionOf,
 } from '../utils/sessionExport'
+import { POOL_KPI_SHEET, RATING_CHECK_SHEET, TABLE1_SHEET, detResultSheets } from '../utils/kpiResultSheets'
 import styles from './DataAnalytics.module.css'
 
 // The study task: rate ideas against THIS design brief (the smart-materials /
@@ -163,6 +164,7 @@ export default function DataAnalytics() {
   const [techSet, setTechSet] = useState(() => DEFAULT_TECH_SET.join('\n'))
   const [detComputing, setDetComputing] = useState(null) // { phase, done, total } | null
   const [detErr, setDetErr] = useState('')
+  const [detNote, setDetNote] = useState('')             // why the last 3.1 results were cleared
   const [detResult, setDetResult] = useState(null)       // per-condition pool KPIs
   // 3.1 — admin-uploaded extra KPIs (e.g. externally-computed Prototypicality/KS)
   const [kpiUploadMsg, setKpiUploadMsg] = useState('')
@@ -611,7 +613,7 @@ export default function DataAnalytics() {
   // Then a pool-level cross-check: how the novelty and usefulness scores relate, and
   // how many ideas are novel AND useful, per condition.
   async function computeDeterministic() {
-    setDetErr(''); setDetResult(null)
+    setDetErr(''); setDetNote(''); setDetResult(null)
     const pool = effectiveRows                         // distinctiveness pool = all loaded ideas
     if (pool.length < 2) { setDetErr('Load at least two ideas first.'); return }
     // Step 1b first: every measure reads the English version of an idea.
@@ -733,6 +735,7 @@ export default function DataAnalytics() {
         })),
       } : null
       setDetResult({
+        poolKey: ridKey(pool),   // which ideas these numbers describe (see the effect below)
         validation,
         perCond, refCount: refs.length, needCount: needs.length, ideas: pool.length - unmeasured, unmeasured,
         overall: { ...cross(all), facets: facetShare(all) }, novCut, useCut,
@@ -895,6 +898,17 @@ export default function DataAnalytics() {
   // everything downstream — the measures, the tables, the downloads — reads this.
   const rowsEn = useMemo(() => applyTranslationMemory(rows, tm), [rows, tm])
   const effectiveRows = useMemo(() => rowsEn.filter(r => !isExcluded(r)), [rowsEn, excludedUsers])
+  // The 3.1 result tables describe the pool they were computed on. When the loaded
+  // ideas change (Section 1 Clear, another file loaded or removed, a participant
+  // removed), those tables would be drawn, and written into every Excel download,
+  // for ideas that are no longer the ones loaded: clear them and say why. A score
+  // or a translation added to the same ideas keeps the pool (and is handled by the
+  // translation effect, which clears what it invalidates).
+  useEffect(() => {
+    if (!detResult || detResult.poolKey === ridKey(effectiveRows)) return
+    setDetResult(null)
+    setDetNote('The loaded ideas changed since the last Compute, so its result tables were cleared (here and in the downloads). Press Compute again to measure the ideas loaded now.')
+  }, [effectiveRows, detResult])
   // Step 1b: what the last scan found, what is still untranslated, what that would
   // cost with Fable 5.1, and the ideas the Step 3 measures are still waiting on.
   const trItems = trScan?.items || []
@@ -1445,6 +1459,9 @@ export default function DataAnalytics() {
     }
     addSheet(wb, 'Summary by condition', summaryByConditionRows(data))
     addSheet(wb, 'Summary by session', summaryBySessionRows(data))
+    // Section 4's Table 1 (summary statistics + correlations), as the page shows it.
+    const t1 = table1Sheet()
+    if (t1) addSheet(wb, t1.name, t1.rows)
     // The 3.1 results: the pool KPIs + novelty × usefulness + specificity tables,
     // and the check of the empirical KPIs against the ratings.
     for (const sh of detResultSheets(detResult)) addSheet(wb, sh.name, sh.rows)
@@ -1491,6 +1508,9 @@ export default function DataAnalytics() {
     // check against the ratings is per KPI, so each lives on its own tab when a
     // compute run produced it.
     for (const sh of detResultSheets(detResult)) addSheet(wb, sh.name, sh.rows)
+    // …and Section 4's Table 1 (summary statistics + correlations).
+    const t1 = table1Sheet()
+    if (t1) addSheet(wb, t1.name, t1.rows)
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
     saveBlob(out, 'ideas_with_kpis.xlsx', 'application/octet-stream')
   }
@@ -1654,6 +1674,9 @@ export default function DataAnalytics() {
       // carries them on their own tabs (the per-idea KPIs already sit as columns in
       // Rankings).
       for (const sh of detResultSheets(detResult)) merged.push({ name: sh.name, kind: 'json', rows: sh.rows })
+      // Section 4's Table 1 (summary statistics + correlations), as the page shows it.
+      const t1 = table1Sheet()
+      if (t1) merged.push({ name: t1.name, kind: 'json', rows: t1.rows })
       // Step 1b: every text in English (owner, 2026-09-23: "show me updated file with
       // all data collected in English"); the original of each replaced cell is kept
       // on the "Translations" sheet, which an import of this file reads back.
@@ -1684,7 +1707,7 @@ export default function DataAnalytics() {
     if ((scoredCount > 0 || extScoredCount > 0 || detScoredCount > 0 || hasUploaded) &&
         !confirm('Clear the KPIs added in this step — every model\'s AI scores, the empirical KPIs, evaluator scores and any uploaded extra KPIs (e.g. Prototypicality)? Your loaded ideas in Sections 1–2 stay.')) return
     setRows(prev => stripAllKpis(prev))
-    setDetResult(null); setDetErr('')
+    setDetResult(null); setDetErr(''); setDetNote('')
     setScoreErr(''); setScoreLoadMsg(''); setEvalLoadMsg(''); setKpiUploadMsg('')
   }
 
@@ -1921,8 +1944,16 @@ export default function DataAnalytics() {
     return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : '—'
   }, [statRows])
   // Table 1 (summary statistics + correlation matrix), in the style of the paper's
-  // Table 1 — computed over the fully-scored ideas in the Section-4 dataset.
+  // Table 1 — computed over the Section-4 dataset (by default, the ideas that carry
+  // at least one KPI; each correlation over the ideas that have both values).
   const summaryTable = useMemo(() => buildSummaryTable(statRows), [statRows])
+  // The same Table 1 as a sheet, for every Excel download on the page (owner,
+  // 2026-09-24: "add Table 1 to the Excel files too"): built from the memo the page
+  // renders, so the file holds exactly the table on screen, with its scope stated.
+  function table1Sheet() {
+    const rows = summaryTableSheetRows(summaryTable, { ideas: statRows.length, onlyScored: statsOnlyScored })
+    return rows ? { name: TABLE1_SHEET, rows } : null
+  }
 
   const code = tab === 'python' ? pyCode : rCode
   const setCode = tab === 'python' ? setPyCode : setRCode
@@ -2229,7 +2260,7 @@ export default function DataAnalytics() {
             <strong> single Excel file with the same structure and format as the per-session data
             export</strong> — all the same tabs (<em>About, Participants, Ideas, Survey, Timing,
             Group&nbsp;Chat, AI&nbsp;Chat, AI&nbsp;Usage, AI&nbsp;Pricing, Groups, Conditions</em>),
-            with every session's rows stacked together and condition-stamped. It adds one extra tab,
+            with every session's rows stacked together and condition-stamped. It adds the tab
             <strong> Rankings</strong> — one row per idea with <em>Idea&nbsp;ID, Session&nbsp;Code, Condition, Stage,
             Final&nbsp;Group&nbsp;Pick, Title, Description</em>, then first the Section&nbsp;3.1
             <strong>empirical</strong> KPIs (novelty side and usefulness side), then the <strong>AI
@@ -2237,6 +2268,9 @@ export default function DataAnalytics() {
             {' '}<em>AI&nbsp;Usefulness&nbsp;(GPT-6&nbsp;Astra)</em>, then the next model's pair), and the
             {' '}<em>Eval.&nbsp;Novelty / Eval.&nbsp;Usefulness / Eval.&nbsp;Quality</em> columns, empty and ready
             for blind expert rating (raters fill the first two; Eval.&nbsp;Quality is always their mean).
+            It also adds the result tables of the page: <em>Table&nbsp;1 summary + correlations</em> (Step&nbsp;4, once
+            {' '}ideas carry a KPI) and, after a Compute in 3.1, <em>Pool KPIs by condition</em> and <em>Empirical KPIs vs
+            {' '}ratings</em> (the second when ratings were loaded).
             You can also <strong>Import Excel / CSV</strong>
             here (same importer as Step&nbsp;1): the file is added to the source list above <strong>and
             loaded right away</strong>, so the aggregate, the stats below and Steps&nbsp;3–6 fill in
@@ -2454,7 +2488,7 @@ export default function DataAnalytics() {
                 </button>
                 <button className={`btn-ghost ${styles.miniBtn}`} onClick={downloadIdeasWithKpis}
                   disabled={!!detComputing || !effectiveRows.some(r => r.det_score !== '' && r.det_score != null)}
-                  title='Download the input "ideas" file with a column added per idea for each computed KPI, plus the result tables below (Pool KPIs by condition, Empirical KPIs vs ratings)'>
+                  title='Download the input "ideas" file with a column added per idea for each computed KPI, plus the result tables below (Pool KPIs by condition, Empirical KPIs vs ratings) and Table 1 of Step 4'>
                   Download ideas + KPIs (Excel)
                 </button>
                 {detComputing && <span className={styles.statusLine}><span className={styles.spinner} /> computing TF-IDF in your browser…</span>}
@@ -2465,6 +2499,7 @@ export default function DataAnalytics() {
                 </div>
               )}
               {detErr && <p className="error-msg">{detErr}</p>}
+              {detNote && !detResult && <p className={styles.loadMsg}>{detNote}</p>}
               {detResult && <ObjectiveKpiResults res={detResult} />}
 
               {/* Upload additional, externally-computed KPIs (matched by Idea ID). */}
@@ -2704,7 +2739,8 @@ export default function DataAnalytics() {
                   the idea counts), a <em>Usefulness score check</em> sheet (each idea&apos;s three
                   parts, their ranks and the mean), summaries by condition and by session, and the 3.1 results: a
                   {' '}<em>Pool KPIs by condition</em> sheet (the pool KPIs, novelty × usefulness and specificity tables) and an
-                  {' '}<em>Empirical KPIs vs ratings</em> sheet (each empirical KPI&apos;s r with the ratings, and the idea counts). For the
+                  {' '}<em>Empirical KPIs vs ratings</em> sheet (each empirical KPI&apos;s r with the ratings, and the idea counts),
+                  and Table&nbsp;1 of Step&nbsp;4 (summary statistics and correlations). For the
                   whole study (surveys, chats, every tab) use <strong>Download all data in English</strong> in Step&nbsp;1b.
                 </span>
               </div>
@@ -2807,7 +2843,8 @@ export default function DataAnalytics() {
                 </button>
                 <span className={styles.hint} style={{ margin: 0 }}>
                   Downloads the updated <strong>idea_analytics_aggregate.xlsx</strong> — every tab from Step&nbsp;2
-                  plus the KPIs added here, merged into the <em>Rankings</em> tab by Idea&nbsp;ID.
+                  plus the KPIs added here, merged into the <em>Rankings</em> tab by Idea&nbsp;ID, and the result tables
+                  (the 3.1 tables after a Compute, and Table&nbsp;1 of Step&nbsp;4).
                 </span>
               </div>
               {(() => {
@@ -3347,8 +3384,10 @@ function SummaryStatsTable({ summary }) {
         </table>
       </div>
       <p className={styles.regNote}>
-        N = {summary.n} fully-scored ideas. Cells are Pearson correlations (lower triangle).
-        Dummies: AI (any) / Solo / Group / Both are coded vs the None baseline.
+        N = {summary.n} ideas with at least one KPI value. Cells are Pearson correlations (lower triangle), each over
+        {' '}the ideas that have both values. Dummies: AI (any) / Solo / Group / Both are coded vs the None baseline.
+        {' '}This table is also in every Excel download on this page (Download ideas + KPIs, Download all idea data,
+        {' '}the aggregate Excel), on the <em>{TABLE1_SHEET}</em> sheet, with the number of ideas behind each correlation.
       </p>
     </div>
   )
@@ -3496,78 +3535,12 @@ function saveBlob(content, filename, type) {
 }
 
 const round3 = x => (x == null || !Number.isFinite(x)) ? '' : Number(x.toFixed(3))
+// The set of ideas a 3.1 result was computed on, as one comparable string.
+const ridKey = rs => (rs || []).map(r => r.rid).sort().join('|')
 
-// The two 3.1 result tabs (POOL_KPI_SHEET, RATING_CHECK_SHEET) go into every Excel
-// download: all data, ideas + KPIs, and the aggregate. Both are REBUILT from the
-// last Compute run, so the aggregate drops an imported copy of either
-// (REBUILT_SHEETS in sessionExport.js, where the two names live).
-//
-// Rows for the "Pool KPIs by condition" tab — the per-pool deterministic KPIs
-// (Unique fraction at three thresholds + Productivity) the spec reports separately
-// from the per-idea columns, then the novelty × usefulness cross-check and the
-// specificity facet shares: the three tables of the 3.1 results, one row per
-// condition plus one "All ideas" row carrying the pooled cross-check. The medians
-// that split "novel" from "not novel" and "useful" from "not useful" are the same
-// for every row (the WHOLE pool's, so every condition is judged against one line);
-// they sit beside the shares they define.
-const withOverall = res => [
-  ...(res?.perCond || []),
-  ...(res?.overall ? [{ condition: 'All ideas', n: res.ideas, ...res.overall }] : []),
-]
-const poolKpiRows = res => withOverall(res).map(c => {
-  const q = c.q || { n: 0 }
-  const share = k => (q.n ? round3(k / q.n) : '')
-  const row = {
-    Condition: c.condition,
-    Ideas: c.n,
-    'Unique fraction (τ=.80)': round3(c.uf80),
-    'Unique fraction (τ=.75)': round3(c.uf75),
-    'Unique fraction (τ=.85)': round3(c.uf85),
-    'Productivity (KPI 2)': c.productivity,
-    'Novelty x usefulness r': round3(c.r),
-    'Novelty x usefulness r (same length)': round3(c.rLen),
-    'Share novel and useful': share(q.both),
-    'Share novel only': share(q.novelOnly),
-    'Share useful only': share(q.usefulOnly),
-    'Share neither': share(q.neither),
-    'Novel = NoveltyScore above (median of all ideas)': round3(res?.novCut),
-    'Useful = Usefulness score above (median of all ideas)': round3(res?.useCut),
-  }
-  for (const f of FACETS) row[`States: ${f.label}`] = round3(c.facets?.[f.key])
-  row['Needs no extra technology'] = round3(c.facets?.notech)
-  return row
-})
-
-// Rows for the "Empirical KPIs vs ratings" tab — the 3.1 "Check against the
-// ratings" table: Pearson's r of each empirical KPI with each rating loaded when
-// Compute was pressed (every AI model's own columns, the mean across models when
-// several, the evaluators), then, under a heading row, the number of ideas behind
-// each r (the page shows it on hover). Blank where r is not defined: fewer than
-// three ideas carry both values, or one side is constant. Null when no rating was
-// loaded, as the page then shows no table either.
-const ratingCheckRows = validation => {
-  if (!validation?.rows?.length || !validation.cols?.length) return null
-  const table = pick => validation.rows.map(row => {
-    const out = { 'Empirical KPI': row.label, Side: row.side }
-    validation.cols.forEach((col, i) => { out[col] = pick(row.cells[i] || {}) })
-    return out
-  })
-  return [
-    ...table(c => round3(c.r)),
-    {},
-    { 'Empirical KPI': 'Ideas with both values (n behind each r above)' },
-    ...table(c => (c.n == null ? '' : c.n)),
-  ]
-}
-// Both 3.1 result tabs, as { name, rows }, for whichever download is being built.
-const detResultSheets = res => {
-  if (!res?.perCond?.length) return []
-  const check = ratingCheckRows(res.validation)
-  return [
-    { name: POOL_KPI_SHEET, rows: poolKpiRows(res) },
-    ...(check ? [{ name: RATING_CHECK_SHEET, rows: check }] : []),
-  ]
-}
+// The 3.1 result tabs (pool KPIs, the check against the ratings) and their names
+// live in utils/kpiResultSheets.js, where the offline guards can import them; the
+// aggregate drops an imported copy of either (REBUILT_SHEETS in sessionExport.js).
 
 // Step-3 table columns: header label + how to read/sort each one. `condition`
 // sorts by the canonical None<Solo<Group<Both order, scores numerically (blanks
