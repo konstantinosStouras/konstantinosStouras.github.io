@@ -13,7 +13,7 @@
  * say so and the user can press Score again.
  */
 import {
-  runScoring, extractScoreObjects, assignScores, withRetry, clamp1to5, isScoredEntry, isFatalApiError,
+  runScoring, extractScoreObjects, assignScores, withRetry, wholeRating, isScoredEntry, isFatalApiError,
 } from '../src/utils/scoreBatch.js'
 
 let failures = 0
@@ -71,7 +71,12 @@ console.log('assignScores — one score per idea, whatever indices come back')
   const partial = assignScores([{ i: 0, novelty: 'n/a', usefulness: 4 }], 1)
   check('a non-numeric rating is null, and the entry counts as UNSCORED (so it retries)',
     partial[0].novelty === null && !isScoredEntry(partial[0]))
-  check('clamp1to5 keeps ratings on the scale', clamp1to5(9) === 5 && clamp1to5(0) === 1 && clamp1to5('x') === null)
+  // The API's ratings must be whole numbers from 1 to 5; nothing is rounded or held
+  // to the scale (owner, 2026-09-24).
+  check('wholeRating accepts a whole number from 1 to 5 and nothing else',
+    wholeRating(1) === 1 && wholeRating(5) === 5 && wholeRating('4') === 4 && wholeRating(4.0) === 4 && wholeRating(' 3 ') === 3
+    && wholeRating(3.5) === null && wholeRating('2.5') === null && wholeRating(0) === null && wholeRating(6) === null && wholeRating(9) === null
+    && wholeRating(-1) === null && wholeRating('x') === null && wholeRating('') === null && wholeRating(null) === null && wholeRating(true) === null)
 }
 
 // ── Retry ──────────────────────────────────────────────────────────────────
@@ -87,6 +92,81 @@ console.log('withRetry — transient failures are retried, fatal ones are not')
   await withRetry(badKey, { attempts: 3, sleep: nosleep, isFatal: e => e.status === 401 }).catch(() => {})
   check('a FATAL error is not retried (a rejected key fails the same way every time)',
     fatalCalls === 1, `calls=${fatalCalls}`)
+}
+
+// ── A rating that is not a whole number from 1 to 5 ───────────────────────────
+console.log('runScoring — only whole-number ratings from 1 to 5 are kept, none is rounded')
+{
+  // The batch answers 3.5 / 0 / 7 for three ideas; asked again one at a time, the
+  // model answers whole numbers. Those are what is kept, exactly as given.
+  const asked = []
+  const call = async ts => {
+    asked.push(ts.length)
+    if (ts.length > 1) return JSON.stringify(ts.map((_, i) => ({ i, novelty: i === 1 ? 3.5 : i === 2 ? 0 : 2, usefulness: i === 3 ? 7 : 4 })))
+    return JSON.stringify([{ i: 0, novelty: 5, usefulness: 1 }])
+  }
+  const r = await runScoring({ texts: texts(6), call, batchSize: 6, sleep: nosleep })
+  check('the three ideas with a fractional or off-scale rating are asked again, one at a time',
+    asked[0] === 6 && asked.slice(1).length === 3 && asked.slice(1).every(n => n === 1), JSON.stringify(asked))
+  check('every kept rating is exactly what the model said, a whole number from 1 to 5 (nothing rounded)',
+    r.unscored === 0 && r.scores.every(e => [e.novelty, e.usefulness].every(v => Number.isInteger(v) && v >= 1 && v <= 5))
+    && r.scores[0].novelty === 2 && r.scores[0].usefulness === 4 && [1, 2, 3].every(i => r.scores[i].novelty === 5 && r.scores[i].usefulness === 1),
+    JSON.stringify(r.scores))
+  // A model that keeps answering 3.5 leaves the idea unscored rather than rounded.
+  const stubborn = async ts => JSON.stringify(ts.map((_, i) => ({ i, novelty: 3.5, usefulness: 4 })))
+  const s2 = await runScoring({ texts: texts(2), call: stubborn, batchSize: 2, sleep: nosleep })
+  check('a model that only answers 3.5 leaves the idea unscored, never rounded to 4',
+    s2.unscored === 2 && s2.scores.every(e => e == null || e.novelty == null), JSON.stringify(s2.scores))
+}
+
+// ── Pace and rate limits ───────────────────────────────────────────────────────
+console.log('runScoring — calls are paced, and a 429 is waited out, never hammered')
+{
+  // A fake clock: `now` advances only through `sleep`, so every wait is exact.
+  let clock = 0
+  const waits = []
+  const tick = async ms => { waits.push(ms); clock += ms }
+  const starts = []
+  const paced = async ts => { starts.push(clock); clock += 40; return reply(ts.length) }   // each call "takes" 40 ms
+  const r = await runScoring({ texts: texts(24), call: paced, batchSize: 8, sleep: tick, now: () => clock, paceMs: 500 })
+  check('every idea is scored', r.unscored === 0)
+  check('consecutive calls start at least paceMs apart (500 ms), the first at once',
+    starts.length === 3 && starts[0] === 0 && starts.every((t, i) => i === 0 || t - starts[i - 1] >= 500), JSON.stringify(starts))
+  check('a 40 ms call is followed by a 460 ms pause, not a full 500', waits.every(w => w === 460), JSON.stringify(waits))
+
+  // No pace by default: the old timing is unchanged.
+  let n = 0
+  const r0 = await runScoring({ texts: texts(16), call: async ts => { n++; return reply(ts.length) }, batchSize: 8, sleep: nosleep })
+  check('paceMs defaults to 0 (no pause between calls)', r0.unscored === 0 && n === 2)
+
+  // A 429 with Retry-After: the wait is at least what the provider asked, and the
+  // batch is retried until it answers — six goes, not three.
+  const seen = []
+  let calls429 = 0
+  const limited = async ts => {
+    calls429++
+    if (calls429 <= 5) { const e = new Error('429'); e.status = 429; if (calls429 === 1) e.retryAfterMs = 9000; throw e }
+    return reply(ts.length)
+  }
+  const w2 = []
+  const r2 = await runScoring({ texts: texts(8), call: limited, batchSize: 8, sleep: async ms => { w2.push(ms) }, onRetry: e => seen.push(e) })
+  check('five 429s in a row are waited out and the sixth try scores the batch', r2.unscored === 0 && r2.failedBatches === 0 && calls429 === 6, `calls=${calls429} unscored=${r2.unscored}`)
+  check('the waits grow 2 → 4 → 8 → 16 s, and the first is at least the 9 s Retry-After asked for',
+    w2.length === 5 && w2[0] === 9000 && w2[1] === 4000 && w2[2] === 8000 && w2[3] === 16000 && w2[4] === 30000, JSON.stringify(w2))
+  check('onRetry reports each wait with the status', seen.length === 5 && seen.every(e => e.error.status === 429 && e.waitMs === w2[seen.indexOf(e)]), JSON.stringify(seen.map(e => e.waitMs)))
+  // Six 429s: the batch fails, the breaker counts it.
+  let c6 = 0
+  const always429 = async () => { c6++; const e = new Error('429'); e.status = 429; throw e }
+  const r6 = await runScoring({ texts: texts(8), call: always429, batchSize: 8, sleep: nosleep })
+  check('a batch refused six times is given up (and singles are not tried on a thrown batch)', r6.unscored === 8 && r6.failedBatches === 1 && c6 === 6, `calls=${c6}`)
+  // Other transient errors keep three tries at 0.7 / 1.4 s.
+  const w5 = []
+  let c5 = 0
+  const r5 = await runScoring({ texts: texts(8), call: async () => { c5++; const e = new Error('503'); e.status = 503; throw e }, batchSize: 8, sleep: async ms => { w5.push(ms) } })
+  check('a 503 keeps the old three tries, 0.7 then 1.4 s apart', r5.failedBatches === 1 && c5 === 3 && w5.join() === '700,1400', JSON.stringify(w5))
+  const w7 = []
+  await runScoring({ texts: texts(8), call: async () => { const e = new Error('503'); e.status = 503; e.retryAfterMs = 5000; throw e }, batchSize: 8, sleep: async ms => { w7.push(ms) } })
+  check('…but a 503 with Retry-After waits at least that long', w7.join() === '5000,5000', JSON.stringify(w7))
 }
 
 // ── The whole run ──────────────────────────────────────────────────────────

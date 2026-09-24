@@ -552,10 +552,9 @@ export default function DataAnalytics() {
           for (const x of reads) {
             let v = x.evalKind ? evaluatorMean(byHeader, x.evalKind) : mean(x.cols.map(c => r[c]).filter(numeric).map(Number))
             if (v === '' && x.fallback >= 0 && numeric(r[x.fallback])) v = Number(r[x.fallback])
-            // Both 3.2 uploads keep a rating on the 1–5 scale, as they always have
-            // (an AI score to one decimal, like "Upload full dataset"); an
-            // evaluator mean is clamped, not rounded.
-            if (v !== '') values[x.field] = x.evalKind ? Math.max(1, Math.min(5, v)) : Math.max(1, Math.min(5, Math.round(v * 10) / 10))
+            // Both 3.2 uploads keep a rating on the 1–5 scale, and neither rounds
+            // it (owner, 2026-09-24: "you should not round any AI score").
+            if (v !== '') values[x.field] = Math.max(1, Math.min(5, v))
           }
           // The bare mean beside per-model columns belongs to a row with none.
           if (perModelFields.some(f => f in values)) for (const x of reads) if (x.bare) delete values[x.field]
@@ -1129,6 +1128,9 @@ export default function DataAnalytics() {
             provider: scoreProvider,
             model: scoreModel,
             onProgress: ({ done, total }) => setScoring({ done, total, pass }),
+            // A refused call being retried: say so, with the wait, instead of a
+            // progress bar that stands still (a rate limit can mean half a minute).
+            onRetry: ({ error, waitMs }) => setScoring(s => ({ ...(s || { done: 0, total: targets.length, pass }), retry: { status: error?.status, waitMs } })),
             onReport: r => { report = r },
           })
         } catch (err) {
@@ -2452,7 +2454,9 @@ export default function DataAnalytics() {
               <h3 className={styles.subTitle} style={{ marginTop: 22 }}><span className={styles.subBadge}>3.2</span>AI-generated KPIs</h3>
               <div className={styles.banner}>
                 <strong>Score each idea with an LLM, or upload an offline AI-scoring file.</strong> The AI rater scores each
-                idea on novelty and usefulness (1–5); quality is their mean. <strong>Every model gets its own two
+                idea on novelty and usefulness (1–5); quality is their mean. <strong>The rater only accepts whole numbers
+                from 1 to 5</strong>: a model that answers 3.5 (or 0, or 7) for an idea is asked again for that idea, and no
+                AI score is ever rounded. <strong>Every model gets its own two
                 columns</strong>, named after it: <em>AI&nbsp;Novelty&nbsp;(GPT-6&nbsp;Astra)</em> and
                 {' '}<em>AI&nbsp;Usefulness&nbsp;(GPT-6&nbsp;Astra)</em>, and beside them the next model's pair. When two or
                 more models rated an idea, <em>AI&nbsp;Novelty&nbsp;(mean across models)</em> and <em>AI&nbsp;Usefulness&nbsp;(mean
@@ -2561,7 +2565,9 @@ export default function DataAnalytics() {
                   {scoring
                     ? scoring.waiting
                       ? `Waiting for ${scoreProvider} to recover…`
-                      : `Scoring ${scoring.done}/${scoring.total}…${scoring.pass > 1 ? ` (pass ${scoring.pass})` : ''}`
+                      : scoring.retry
+                        ? `${scoring.retry.status === 429 ? 'Rate limited' : `Error ${scoring.retry.status || ''}`.trim()} — retrying in ${Math.ceil((scoring.retry.waitMs || 0) / 1000)} s…`
+                        : `Scoring ${scoring.done}/${scoring.total}…${scoring.pass > 1 ? ` (pass ${scoring.pass})` : ''}`
                     : scopeUnscored === 0
                       ? `${scoreModelName} has rated all ${scoreOnlyFinal ? 'final ' : ''}ideas`
                       : `Fill the ${scopeUnscored.toLocaleString()} missing ${scoreModelName} score${scopeUnscored === 1 ? '' : 's'}`}
@@ -2579,7 +2585,9 @@ export default function DataAnalytics() {
                     <span className={styles.spinner} />
                     {scoring.waiting
                       ? ` ${scoreProvider} stopped answering — pausing before the next attempt…`
-                      : ` contacting ${scoreProvider}…`}
+                      : scoring.retry
+                        ? ` ${scoreProvider} ${scoring.retry.status === 429 ? 'asked us to slow down (429)' : `answered ${scoring.retry.status || 'with an error'}`} — waiting before the next try…`
+                        : ` contacting ${scoreProvider}…`}
                   </span>
                 )}
               </div>

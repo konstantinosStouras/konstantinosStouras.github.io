@@ -20,7 +20,7 @@
  */
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
-import { runScoring, extractScoreObjects, clamp1to5, isFatalApiError } from './scoreBatch'
+import { runScoring, extractScoreObjects, isFatalApiError, PROVIDER_PACE_MS, DEFAULT_PACE_MS } from './scoreBatch'
 import { callProvider, cleanApiKey } from './providerRequest'
 import { runTranslation, TRANSLATOR_SYSTEM_PROMPT, buildTranslatePrompt, TRANSLATION_PROVIDER, TRANSLATION_MODEL, TRANSLATION_MAX_TOKENS } from './translation'
 import { PROVIDERS } from '../data/aiModels'
@@ -48,7 +48,8 @@ export function resolveProvider(settings, providerOverride, modelOverride) {
 
 const RATER_SYSTEM_PROMPT = `You are one of several independent expert evaluators rating ideas produced in a
 product-design brainstorming study. You rate each idea on two dimensions using a
-1 to 5 Likert scale, where each point means:
+1 to 5 Likert scale. Every rating is a WHOLE NUMBER: 1, 2, 3, 4 or 5, never a
+fraction such as 3.5. Each point means:
   1 = Poor
   2 = Below average
   3 = Average
@@ -63,7 +64,7 @@ product-design brainstorming study. You rate each idea on two dimensions using a
 Rate each idea on its own merits. You are blind to which experimental condition
 produced it. Use the full range of the scale and be discriminating. Return ONLY
 valid JSON — an array with one object per idea, in the same order given, each
-{"i": <index>, "novelty": <1-5>, "usefulness": <1-5>}. No prose, no markdown.`
+{"i": <index>, "novelty": <integer 1-5>, "usefulness": <integer 1-5>}. No prose, no markdown.`
 
 /** Build the user message listing a batch of ideas to rate. */
 function buildBatchPrompt(ideas, brief) {
@@ -71,7 +72,8 @@ function buildBatchPrompt(ideas, brief) {
   return (
     (brief ? `Design brief / context: ${brief}\n\n` : '') +
     `Rate the following ${ideas.length} idea(s). Return a JSON array of ` +
-    `{"i","novelty","usefulness"} with one entry per idea, indices 0..${ideas.length - 1}.\n\n` +
+    `{"i","novelty","usefulness"} with one entry per idea, indices 0..${ideas.length - 1}, ` +
+    `each rating a whole number from 1 to 5.\n\n` +
     lines
   )
 }
@@ -111,7 +113,7 @@ export function extractJsonArray(text) {
  * pass is worth making.
  *
  * @param ideas   array of idea text strings (caller maps rows → text first)
- * @param opts    { provider?, model?, brief?, batchSize?, onProgress?, onReport?, settings? }
+ * @param opts    { provider?, model?, brief?, batchSize?, onProgress?, onReport?, onRetry?, paceMs?, settings? }
  * @returns array (same length/order as ideas) of { novelty, usefulness } | null
  */
 export async function scoreIdeas(ideas, opts = {}) {
@@ -131,6 +133,8 @@ export async function scoreIdeas(ideas, opts = {}) {
     texts: ideas,
     batchSize: opts.batchSize || 8,
     onProgress: opts.onProgress,
+    onRetry: opts.onRetry,
+    paceMs: opts.paceMs ?? PROVIDER_PACE_MS[resolved.provider] ?? DEFAULT_PACE_MS,
     isFatal: isFatalApiError,
     call: batch => callProvider(resolved, RATER_SYSTEM_PROMPT, buildBatchPrompt(batch, opts.brief)),
   })

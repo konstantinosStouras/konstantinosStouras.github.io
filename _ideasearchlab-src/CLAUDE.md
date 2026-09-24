@@ -947,8 +947,48 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
        columns (`evaluatorMean`), in the Step-1 import, the 3.1 KPI upload and the 3.3
        upload alike. **Eval. Quality is DERIVED** (their mean): it is kept as the
        evaluator quality only on a row without the Novelty/Usefulness pair;
-     - the Step-1 import keeps values as the file has them (no clamping); both 3.2
-       uploads keep a rating on the 1–5 scale, to one decimal, as they always have;
+     - **no AI score is ever rounded; the API's ratings are whole numbers** (owner,
+       2026-09-24: "you should not round any AI score. rather the kpis the any AI
+       computes from the api should be integers in 1-5"). The rater's prompt asks
+       every model for a whole number 1, 2, 3, 4 or 5, and `wholeRating` in
+       scoreBatch.js keeps a reply only when it IS one ("4" and 4.0 are 4): a 3.5,
+       0 or 7 is not a rating, so the idea counts as unscored and runScoring asks
+       for it again, one at a time; a model that keeps answering 3.5 leaves it
+       unscored, never rounded. Nothing downstream rounds either: the Step-1 import
+       keeps values as the file has them, both 3.2 uploads hold a rating to the 1–5
+       scale WITHOUT rounding it (they used to round to one decimal), and the mean
+       across models and AI Quality are exact means. Pinned by `score-batch-guard`
+       (a batch answering 3.5 / 0 / 7) and section 9 of `ai-columns-guard`;
+     - **the API is called at a pace it will not block** (owner, 2026-09-24).
+       `runScoring` makes one call at a time and never starts two closer together
+       than the provider's pace (`PROVIDER_PACE_MS` in scoreBatch.js: Gemini
+       1.5 s, Mistral 1.1 s, OpenRouter / Qwen 0.5 s, the rest 0.3 s — the small
+       plans' per-second and per-minute limits; a rating call takes a model a few
+       seconds anyway, so this only bites when a provider answers fast), and
+       `withRetry` treats a 429 as "not yet": six tries 2 / 4 / 8 / 16 / 30 s
+       apart, never sooner than the `Retry-After` the provider named
+       (`retryAfterMs` in providerRequest.js reads seconds or a date, capped at ten
+       minutes). Before, a 429 got three tries 0.7 / 1.4 / 2.8 s apart, so a
+       per-minute limit failed a batch within five seconds and three such batches
+       ended the run. Other errors keep their three tries. The page says "Rate
+       limited — retrying in N s…" while it waits (`onRetry`). Pinned by
+       `score-batch-guard` (a fake clock) and `rater-flow-guard`;
+     - **`tools/rater-flow-guard.mjs` drives the whole flow in a browser**
+       (owner, 2026-09-24: keys of different providers, a fresh upload, the
+       empirical measures, all the AI measures at the right pace, the download): a
+       320-idea set with no KPI column (80 final; an Ideas workbook of the owner's
+       shape via `RATER_FLOW_IDEAS`), "Compute empirical KPIs", one key per provider
+       in AI Settings and all seven providers filling their own columns for the
+       final ideas — each call carrying that provider's key in its own header
+       (`x-api-key` / `x-goog-api-key` / `Authorization`) and the chosen model, the
+       stubs answering in each provider's reply shape, one fractional rating asked
+       again, scripted refusals (429 with and without Retry-After, a 500, a 503,
+       Google's error shape) waited out; the pace and the Retry-After wait measured
+       from the call timestamps; then "Download all idea data" (Excel + CSV) with
+       every empirical column, every provider's pair as whole numbers, exact means,
+       the check sheet; the file re-uploaded as a top-up changing nothing; and a
+       provider with no key refused before any call. Steps 4–5 (the Python / R
+       analysis) are out of its scope. Firebase stubbed, no live key, no network.
      - AI Quality is named after a model (or "mean across models") only when every
        quality value came from the per-model columns; with any standalone quality it
        is plain "AI Quality", which reads back.
@@ -1074,7 +1114,16 @@ Six-step flow on the page (`src/pages/DataAnalytics.jsx` + `.module.css`):
      negator that opens its clause. Same 39 ideas on the owner's data; the guard pins
      one row per rule (each rule taken back fails it) and that the cost grows
      linearly with an idea's length (8 times the text, timed in turns so a busy
-     machine cannot fail it).
+     machine cannot fail it). **The two known misses closed (2026-09-24):** a spaced
+     "free" after a getting / giving verb is at no cost ("Kids get LEDs free with
+     every shirt" counts the LEDs; "battery free" still negates), and an upkeep
+     noun only a thing the idea HAS can take — changes, replacement, swaps,
+     calibration, updates — keeps the term after any negator ("with no battery
+     changes needed" has a battery). That mention is WEAK: it names the term only
+     when the idea does not also say plainly it has none ("It needs no battery, so
+     no battery changes" counts nothing). "Battery life" is not among those nouns:
+     "zero battery life to manage" (the owner's data) still means no battery. The
+     owner's 741 ideas are unchanged.
    - **Four more rater providers** (owner: "Add Mistral, Meta's Llama, DeepSeek and
      Qwen's top models available"), all OpenAI-compatible
      (`buildOpenAICompatRequest` in providerRequest.js), sending ONLY

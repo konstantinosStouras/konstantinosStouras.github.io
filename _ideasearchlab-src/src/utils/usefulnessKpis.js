@@ -333,7 +333,8 @@ export function compileTerms(terms) {
 // and "whether or not Bluetooth is on" negates nothing. "no-app" / "zero-battery"
 // (fused by a hyphen) negate the term they are fused to, and "-free" / " free"
 // straight after the term negates it ("battery-free", "it is battery free"), but
-// not after "the / a / your …": "Parents download the app free" is at no cost.
+// not after "the / a / your …" or a getting / giving verb: "Parents download the
+// app free" and "Kids get LEDs free with every shirt" are at no cost.
 //
 // A list with a COMMA is where a negation most often leaks, because the comma can
 // just as well close the negated phrase: "Without a battery, the sensor or the app
@@ -518,14 +519,25 @@ const NEG_LIST_THEN_VERB_PREP = negThenVerb(true)
 // Straight after the term: an upkeep noun ("battery CHANGES"), or "from" after a
 // verb that takes away ("removes the sensor FROM the skin").
 const NEG_UPKEEP = /^[ -](?:change|changes|changing|replacement|replacements|replacing|swap|swaps|swapping|life|lifetime|recharge|recharges|recharging|calibration|maintenance|update|updates|updating|upgrade|upgrades)\b/
+// The upkeep nouns that can only be about a thing the idea HAS keep the term after
+// any negator, a bare "no" included: "with no battery changes needed" has a
+// battery that is never changed. "Life", "recharging" and "maintenance" are not
+// among them: "zero battery life to manage" (the owner's data) means no battery.
+// Such a mention is WEAK (see namesTerm): it names the term only when the idea
+// does not also say plainly that it has none ("It needs no battery, so no battery
+// changes").
+const NEG_UPKEEP_HAS = /^[ -](?:change|changes|changing|replacement|replacements|replacing|swap|swaps|swapping|calibration|update|updates|updating|upgrade|upgrades)\b/
 const NEG_TAKEN_FROM = new RegExp(`^${NEG_REST}(?: ${NEG_DESC}){0,2} from\\b`)
 const NEG_VIA_GERUND = / (?:using|needing|requiring|relying|depending|adding|having|wearing|carrying|checking|installing|buying) /
 // "not" / "never" reach only "a / an / any" (not after "whether or"); "no-app",
 // "zero-battery" negate the term they are fused to; "battery-free" / "sensor free"
 // (but not "an app free to download", "an app free of ads").
 const NEGATED_SHORT = new RegExp(String.raw`(?:(?<!\bor)${NEG_START}(?:not|never) ${NEG_ARTS}|${NEG_START}(?:no|zero)-)$`)
-const NEGATED_AFTER = /^(?:-| )free\b(?! (?:to|of|from|for)\b)/
+const NEGATED_AFTER = /^(?:-| )free\b(?! (?:to|of|from|for)\b| with (?:every|each|any)\b)/
 const NEG_DETERMINER = /(?:^|[^a-z])(?:the|an?|your|my|our|their|its|this|that|his|her) $/
+// "Kids GET LEDs free", "buyers RECEIVE two sensors free": after a getting or
+// giving verb (and up to two words), a spaced "free" is at no cost, not "-free".
+const NEG_GIVEN = /(?:^|[^a-z])(?:get|gets|got|getting|receive|receives|received|receiving|give|gives|gave|given|giving|offer|offers|offered|offering|include|includes|included|including|download|downloads|downloaded|grab|grabs|win|wins|won|claim|claims) (?:[a-z0-9]+ ){0,2}$/
 // Some negator is in the window at all (a cheap test before the full grammar).
 const NEG_HINT = /(?:^|[^a-z])(?:no|zero|nor|neither|never|not|without|free|instead|rather|unlike|remov|replac|eliminat|avoid|gets rid|getting rid|ditch)|n't\b/
 
@@ -547,7 +559,11 @@ function headMarker(compiled) {
 const reduceWindow = (s, heads) => s.replace(heads, NEG_HEAD).toLowerCase()
   .replace(/\s*([,/])\s*/g, ' $1 ').split(' ').map(w => (isDescribingWord(w) ? NEG_DESC : w)).join(' ')
 
-/** Is the mention at [start, end) negated? */
+const WEAK = 'weak'
+/**
+ * Is the mention at [start, end) negated? true / false, or WEAK for a thing the
+ * idea has only by implication ("no battery changes"), which namesTerm weighs.
+ */
 function isNegated(text, start, end, heads) {
   let beforeRaw = text.slice(Math.max(0, start - NEG_WINDOW), start)
   // A window that starts inside a word drops that part word ("…casi|no app").
@@ -556,7 +572,7 @@ function isNegated(text, start, end, heads) {
   // A window cut short is marked with "…", so the cut is never read as the end of a list.
   const afterRaw = text.slice(end, end + NEG_WINDOW).toLowerCase() + (end + NEG_WINDOW < text.length ? '…' : '')
   if (NEGATED_SHORT.test(before)) return true
-  if (NEGATED_AFTER.test(afterRaw) && (afterRaw[0] === '-' || !NEG_DETERMINER.test(before))) return true
+  if (NEGATED_AFTER.test(afterRaw) && (afterRaw[0] === '-' || (!NEG_DETERMINER.test(before) && !NEG_GIVEN.test(before)))) return true
   if (!NEG_HINT.test(before)) return false
   const b = reduceWindow(before, heads)
   const m = b.match(NEG_LIST_PLAIN) || b.match(NEG_LIST_COMMA)
@@ -565,6 +581,7 @@ function isNegated(text, start, end, heads) {
   const kind = negKind(g)
   let a = null
   const after = () => (a ??= reduceWindow(afterRaw, heads))
+  if (NEG_UPKEEP_HAS.test(afterRaw)) return WEAK
   if ((kind === 'away' || kind === 'verb' || g.lead || NEG_VIA_GERUND.test(m[0])) && NEG_UPKEEP.test(afterRaw)) return false
   if (kind === 'away' && NEG_TAKEN_FROM.test(after())) return false
   // No comma: with an "or" / "nor" / "/" in it, the list must not run into a new clause.
@@ -597,11 +614,15 @@ function isNegated(text, start, end, heads) {
 /** Does `text` name this entry at least once without negating it? */
 function namesTerm(text, re, heads) {
   const g = new RegExp(re.source, 'gi')
-  let m
+  let m, weak = false, negated = false
   while ((m = g.exec(text))) {
-    if (!isNegated(text, m.index, m.index + m[0].length, heads)) return true
+    const n = isNegated(text, m.index, m.index + m[0].length, heads)
+    if (n === WEAK) weak = true
+    else if (n) negated = true
+    else return true
   }
-  return false
+  // Only implied ("no battery changes"): named, unless the idea also says it has none.
+  return weak && !negated
 }
 
 /** The list entries an idea names, not negated (distinct, in list order). */

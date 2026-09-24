@@ -1053,11 +1053,13 @@ function isBlankScore(v) {
   return v == null || String(v).trim() === ''
 }
 
+// A file's rating held to the 1–5 scale; never rounded ("you should not round any
+// AI score", owner, 2026-09-24).
 function clampScore(v) {
   if (v == null || String(v).trim() === '') return ''
   const n = Number(v)
   if (!Number.isFinite(n)) return ''
-  return Math.max(1, Math.min(5, Math.round(n * 10) / 10))
+  return Math.max(1, Math.min(5, n))
 }
 
 /**
