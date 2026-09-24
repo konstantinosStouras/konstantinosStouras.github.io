@@ -457,7 +457,7 @@ console.log('a pass that scored nothing is recovered, not thrown away')
   check('an undefined error does not crash the test', isFatalScoringError(undefined) === false)
 
   check('the fill loop CATCHES around scoreIdeas rather than letting a pass throw out',
-    /scores = await scoreIdeas\([\s\S]{0,600}?\} catch \(err\) \{[\s\S]{0,600}?isFatalScoringError\(err\)/.test(page),
+    /scores = await scoreIdeas\([\s\S]{0,1000}?\} catch \(err\) \{[\s\S]{0,600}?isFatalScoringError\(err\)/.test(page),
     'scoreIdeas is not wrapped, so a scored-nothing pass aborts the whole run')
   check('a fatal error still stops the run at once',
     /if \(isFatalScoringError\(err\)\) throw err/.test(page))

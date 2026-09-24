@@ -20,7 +20,7 @@
  */
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
-import { runScoring, extractScoreObjects, isFatalApiError } from './scoreBatch'
+import { runScoring, extractScoreObjects, isFatalApiError, PROVIDER_PACE_MS, DEFAULT_PACE_MS } from './scoreBatch'
 import { callProvider, cleanApiKey } from './providerRequest'
 import { runTranslation, TRANSLATOR_SYSTEM_PROMPT, buildTranslatePrompt, TRANSLATION_PROVIDER, TRANSLATION_MODEL, TRANSLATION_MAX_TOKENS } from './translation'
 import { PROVIDERS } from '../data/aiModels'
@@ -113,7 +113,7 @@ export function extractJsonArray(text) {
  * pass is worth making.
  *
  * @param ideas   array of idea text strings (caller maps rows → text first)
- * @param opts    { provider?, model?, brief?, batchSize?, onProgress?, onReport?, settings? }
+ * @param opts    { provider?, model?, brief?, batchSize?, onProgress?, onReport?, onRetry?, paceMs?, settings? }
  * @returns array (same length/order as ideas) of { novelty, usefulness } | null
  */
 export async function scoreIdeas(ideas, opts = {}) {
@@ -133,6 +133,8 @@ export async function scoreIdeas(ideas, opts = {}) {
     texts: ideas,
     batchSize: opts.batchSize || 8,
     onProgress: opts.onProgress,
+    onRetry: opts.onRetry,
+    paceMs: opts.paceMs ?? PROVIDER_PACE_MS[resolved.provider] ?? DEFAULT_PACE_MS,
     isFatal: isFatalApiError,
     call: batch => callProvider(resolved, RATER_SYSTEM_PROMPT, buildBatchPrompt(batch, opts.brief)),
   })

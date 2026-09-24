@@ -32,6 +32,19 @@
  */
 
 /**
+ * The least time between two rater calls to one provider, in ms (the start of
+ * one call to the start of the next; the calls themselves never overlap). A
+ * rating call takes a model a few seconds anyway, so this only matters when a
+ * provider answers fast: it keeps a run under the per-second and per-minute
+ * limits of the small plans (Mistral's free plan allows one request a second,
+ * Gemini's free tier a handful a minute) instead of finding them and waiting
+ * out a 429. Overridden per run with scoreIdeas' `opts.paceMs`. Kept here, not
+ * in llmClient.js, so the offline guards (which cannot load Firebase) read it.
+ */
+export const PROVIDER_PACE_MS = { claude: 300, openai: 300, gemini: 1500, mistral: 1100, openrouter: 500, deepseek: 300, qwen: 500 }
+export const DEFAULT_PACE_MS = 500
+
+/**
  * A model's rating when it is a WHOLE number from 1 to 5, else null (owner,
  * 2026-09-24: "you should not round any AI score. rather the kpis the any AI
  * computes from the api should be integers in 1-5"). Nothing is rounded or held
@@ -166,22 +179,34 @@ export function isFatalScoringError(err) {
  */
 export async function withRetry(fn, opts = {}) {
   const attempts = opts.attempts ?? 3
+  // A rate limit (429) is the provider saying "not yet", not "no": it gets more
+  // goes, spaced further apart, and never fewer than the wait the provider named
+  // in Retry-After (owner, 2026-09-24: the API must be "called at the right pace
+  // so that it's not blocked"). Before, three tries 0.7 / 1.4 / 2.8 s apart gave
+  // up on a per-minute limit within five seconds, and three such batches in a
+  // row ended the whole run.
+  const attempts429 = opts.attempts429 ?? 6
   const sleep = opts.sleep || (ms => new Promise(r => setTimeout(r, ms)))
   const isFatal = opts.isFatal || (() => false)
   let last
-  for (let i = 0; i < attempts; i++) {
+  let rateLimited = 0
+  for (let i = 0; ; i++) {
     try {
       return await fn()
     } catch (err) {
       last = err
+      const limited = err?.status === 429
+      if (limited) rateLimited++
+      const tries = limited ? Math.max(attempts, attempts429) : attempts
       // `retryable === false` is an answer the provider GAVE (a refusal about
       // this content) — repeating the request repeats the answer.
-      if (isFatal(err) || err?.retryable === false || i === attempts - 1) throw err
-      if (opts.onRetry) opts.onRetry({ attempt: i + 1, error: err })
-      await sleep(opts.backoffMs ? opts.backoffMs(i) : 700 * 2 ** i)
+      if (isFatal(err) || err?.retryable === false || i >= tries - 1) throw err
+      let ms = opts.backoffMs ? opts.backoffMs(i) : limited ? Math.min(30000, 2000 * 2 ** (rateLimited - 1)) : 700 * 2 ** i
+      if (Number.isFinite(err?.retryAfterMs)) ms = Math.max(ms, err.retryAfterMs)
+      if (opts.onRetry) opts.onRetry({ attempt: i + 1, error: err, waitMs: ms })
+      await sleep(ms)
     }
   }
-  throw last
 }
 
 /**
@@ -192,6 +217,8 @@ export async function withRetry(fn, opts = {}) {
  * @param batchSize  ideas per call (default 8)
  * @param onProgress ({done, total}) => void
  * @param isFatal    (err) => true to abort the whole run (e.g. a bad key)
+ * @param paceMs     the least time between the starts of two calls (0 = none)
+ * @param onRetry    ({attempt, error, waitMs}) => void, before each wait to retry
  * @returns { scores, unscored, blank, failedBatches, aborted, stoppedOnReply, lastError } —
  *          `scores` is the same length/order as `texts`, holding
  *          {novelty,usefulness}|null. `aborted` is true when the run stopped
@@ -206,7 +233,7 @@ export async function withRetry(fn, opts = {}) {
  */
 export async function runScoring({
   texts, call, batchSize = 8, onProgress, sleep, isFatal, retryAttempts = 3, singleTries = 2,
-  maxConsecutiveFailures = 3, maxReplyOnlyBatches = 2,
+  maxConsecutiveFailures = 3, maxReplyOnlyBatches = 2, paceMs = 0, onRetry, now = () => Date.now(),
 }) {
   const scores = new Array(texts.length).fill(null)
   const blankIdx = new Set()
@@ -223,7 +250,18 @@ export async function runScoring({
   let replyOnlyBatches = 0
   let stoppedOnReply = false
   let lastError = null
-  const attempt = fn => withRetry(fn, { attempts: retryAttempts, sleep, isFatal })
+  // Calls go one at a time, and never closer together than `paceMs` (measured
+  // from the START of one call to the start of the next, retries included), so
+  // a provider that answers quickly is not hit in a burst.
+  const pause = sleep || (ms => new Promise(r => setTimeout(r, ms)))
+  let lastStart = -Infinity
+  const paced = async fn => {
+    const wait = lastStart + paceMs - now()
+    if (wait > 0) await pause(wait)
+    lastStart = now()
+    return fn()
+  }
+  const attempt = fn => withRetry(() => paced(fn), { attempts: retryAttempts, sleep, isFatal, onRetry })
 
   for (let start = 0; start < texts.length; start += batchSize) {
     const idx = []

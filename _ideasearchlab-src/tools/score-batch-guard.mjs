@@ -119,6 +119,56 @@ console.log('runScoring — only whole-number ratings from 1 to 5 are kept, none
     s2.unscored === 2 && s2.scores.every(e => e == null || e.novelty == null), JSON.stringify(s2.scores))
 }
 
+// ── Pace and rate limits ───────────────────────────────────────────────────────
+console.log('runScoring — calls are paced, and a 429 is waited out, never hammered')
+{
+  // A fake clock: `now` advances only through `sleep`, so every wait is exact.
+  let clock = 0
+  const waits = []
+  const tick = async ms => { waits.push(ms); clock += ms }
+  const starts = []
+  const paced = async ts => { starts.push(clock); clock += 40; return reply(ts.length) }   // each call "takes" 40 ms
+  const r = await runScoring({ texts: texts(24), call: paced, batchSize: 8, sleep: tick, now: () => clock, paceMs: 500 })
+  check('every idea is scored', r.unscored === 0)
+  check('consecutive calls start at least paceMs apart (500 ms), the first at once',
+    starts.length === 3 && starts[0] === 0 && starts.every((t, i) => i === 0 || t - starts[i - 1] >= 500), JSON.stringify(starts))
+  check('a 40 ms call is followed by a 460 ms pause, not a full 500', waits.every(w => w === 460), JSON.stringify(waits))
+
+  // No pace by default: the old timing is unchanged.
+  let n = 0
+  const r0 = await runScoring({ texts: texts(16), call: async ts => { n++; return reply(ts.length) }, batchSize: 8, sleep: nosleep })
+  check('paceMs defaults to 0 (no pause between calls)', r0.unscored === 0 && n === 2)
+
+  // A 429 with Retry-After: the wait is at least what the provider asked, and the
+  // batch is retried until it answers — six goes, not three.
+  const seen = []
+  let calls429 = 0
+  const limited = async ts => {
+    calls429++
+    if (calls429 <= 5) { const e = new Error('429'); e.status = 429; if (calls429 === 1) e.retryAfterMs = 9000; throw e }
+    return reply(ts.length)
+  }
+  const w2 = []
+  const r2 = await runScoring({ texts: texts(8), call: limited, batchSize: 8, sleep: async ms => { w2.push(ms) }, onRetry: e => seen.push(e) })
+  check('five 429s in a row are waited out and the sixth try scores the batch', r2.unscored === 0 && r2.failedBatches === 0 && calls429 === 6, `calls=${calls429} unscored=${r2.unscored}`)
+  check('the waits grow 2 → 4 → 8 → 16 s, and the first is at least the 9 s Retry-After asked for',
+    w2.length === 5 && w2[0] === 9000 && w2[1] === 4000 && w2[2] === 8000 && w2[3] === 16000 && w2[4] === 30000, JSON.stringify(w2))
+  check('onRetry reports each wait with the status', seen.length === 5 && seen.every(e => e.error.status === 429 && e.waitMs === w2[seen.indexOf(e)]), JSON.stringify(seen.map(e => e.waitMs)))
+  // Six 429s: the batch fails, the breaker counts it.
+  let c6 = 0
+  const always429 = async () => { c6++; const e = new Error('429'); e.status = 429; throw e }
+  const r6 = await runScoring({ texts: texts(8), call: always429, batchSize: 8, sleep: nosleep })
+  check('a batch refused six times is given up (and singles are not tried on a thrown batch)', r6.unscored === 8 && r6.failedBatches === 1 && c6 === 6, `calls=${c6}`)
+  // Other transient errors keep three tries at 0.7 / 1.4 s.
+  const w5 = []
+  let c5 = 0
+  const r5 = await runScoring({ texts: texts(8), call: async () => { c5++; const e = new Error('503'); e.status = 503; throw e }, batchSize: 8, sleep: async ms => { w5.push(ms) } })
+  check('a 503 keeps the old three tries, 0.7 then 1.4 s apart', r5.failedBatches === 1 && c5 === 3 && w5.join() === '700,1400', JSON.stringify(w5))
+  const w7 = []
+  await runScoring({ texts: texts(8), call: async () => { const e = new Error('503'); e.status = 503; e.retryAfterMs = 5000; throw e }, batchSize: 8, sleep: async ms => { w7.push(ms) } })
+  check('…but a 503 with Retry-After waits at least that long', w7.join() === '5000,5000', JSON.stringify(w7))
+}
+
 // ── The whole run ──────────────────────────────────────────────────────────
 console.log('runScoring — a long run keeps every score it can get')
 {

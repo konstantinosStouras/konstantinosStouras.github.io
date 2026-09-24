@@ -3162,7 +3162,12 @@ Analytics page and documented in `_ideasearchlab-src/CLAUDE.md`:
   2026-09-24). The rater asks every model for a whole number from 1 to 5 and keeps
   nothing else (`wholeRating`): an idea answered with 3.5 is asked again. The
   uploads hold a rating to 1–5 without rounding it, and the mean across models
-  and AI Quality stay exact means.
+  and AI Quality stay exact means. The API is called at a pace it will not
+  block: one call at a time, a per-provider gap between calls, and a 429 waited
+  out (six tries, never sooner than the provider's Retry-After) instead of
+  failing the batch in five seconds. `tools/rater-flow-guard.mjs` drives the
+  whole flow in a browser: a fresh upload, the empirical KPIs, all seven
+  providers with their own keys (APIs stubbed, refusals scripted), the download.
 - **Four more rater providers.** Mistral, Meta (Muse and Llama, through OpenRouter,
   since Meta closed its own Llama API on 2026-07-06), DeepSeek (stores data in
   China, which the page says) and Qwen (International endpoint). They serve the

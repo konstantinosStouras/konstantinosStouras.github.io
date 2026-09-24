@@ -43,7 +43,7 @@ import {
 } from '../src/data/aiModels.js'
 import { MODEL_PRICES, PRICES_AS_OF, replyCostUSD, priceAt, dayOf } from '../src/data/aiPricing.js'
 import {
-  buildRequest, parseReplyText, callProvider, scrubKey, replyProblem, replyFailure,
+  buildRequest, parseReplyText, callProvider, scrubKey, replyProblem, replyFailure, retryAfterMs,
   cleanApiKey, trimApiKeys,
   claudeSupportsEffort, openaiIsReasoning, geminiTakesThinkingLevel,
   SCORING_MAX_TOKENS, LEGACY_CHAT_MAX_TOKENS, SCORING_EFFORT,
@@ -423,7 +423,9 @@ console.log('a 2xx that is a failed request')
     texts: Array.from({ length: 186 }, (_, i) => `idea ${i}`), isFatal: isFatalApiError, sleep: async ms => { slept += ms },
     call: async () => { calls++; return callProvider(orr, 'S', 'U', { fetch: fakeFetch(200, { error: { code: 429, message: 'rate-limited upstream' } }) }) },
   })
-  check(r.aborted === true && r.failedBatches === 3 && calls === 9 && slept > 0, `runScoring: a 200 + {error:429} backs off and trips the breaker (calls=${calls}, aborted=${r.aborted}, failedBatches=${r.failedBatches}, slept=${slept} ms)`)
+  // A 429 gets six patient tries per batch (2, 4, 8, 16, 30 s), so three batches
+  // in a row cost 18 calls and a three-minute wait before the breaker trips.
+  check(r.aborted === true && r.failedBatches === 3 && calls === 18 && slept === 3 * (2000 + 4000 + 8000 + 16000 + 30000), `runScoring: a 200 + {error:429} backs off and trips the breaker (calls=${calls}, aborted=${r.aborted}, failedBatches=${r.failedBatches}, slept=${slept} ms)`)
   check(r.lastError?.status === 429 && /rate-limited upstream/.test(r.lastError.message), 'runScoring: the cause reaches lastError')
   let dsCalls = 0
   const ds = await runScoring({
@@ -437,6 +439,18 @@ console.log('a 2xx that is a failed request')
     call: async () => { fatalCalls++; return callProvider(compat('deepseek', 'deepseek-v4-pro'), 'S', 'U', { fetch: fakeFetch(422, { error: { message: 'Invalid Parameters' } }) }) },
   }).then(() => null, e => e)
   check(fatal && fatal.status === 422 && fatalCalls === 1, `runScoring: a 422 stops the run on its first call (calls=${fatalCalls})`)
+
+  // Retry-After: seconds or an HTTP date, capped at ten minutes, null otherwise.
+  const hdr = v => ({ get: n => (n === 'retry-after' ? v : null) })
+  const t0 = Date.parse('2026-09-24T10:00:00Z')
+  check(retryAfterMs(hdr('7')) === 7000 && retryAfterMs(hdr(' 2.5 ')) === 2500 && retryAfterMs(hdr('0')) === 0
+    && retryAfterMs(hdr('Thu, 24 Sep 2026 10:00:20 GMT'), t0) === 20000 && retryAfterMs(hdr('Thu, 24 Sep 2026 09:59:00 GMT'), t0) === 0
+    && retryAfterMs(hdr('99999')) === 600000 && retryAfterMs(hdr('soon')) === null && retryAfterMs(hdr(null)) === null && retryAfterMs(undefined) === null,
+    'retryAfterMs reads seconds and dates, caps at ten minutes, ignores junk')
+  const e429 = await errorOf(async () => ({ ok: false, status: 429, statusText: 'Too Many Requests', headers: hdr('12'), text: async () => 'slow down' }))
+  check(e429 && e429.status === 429 && e429.retryAfterMs === 12000, 'a 429 carries the provider\'s Retry-After as retryAfterMs')
+  const e503 = await errorOf(async () => ({ ok: false, status: 503, statusText: '', headers: hdr(null), text: async () => 'overloaded' }))
+  check(e503 && e503.status === 503 && e503.retryAfterMs === undefined, 'a refusal without Retry-After carries none')
 
   // A 2xx whose body is not JSON: a status-less (retried) error, the parser's
   // own message scrubbed (it can quote the start of the body).

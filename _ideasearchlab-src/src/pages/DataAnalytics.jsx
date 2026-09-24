@@ -1128,6 +1128,9 @@ export default function DataAnalytics() {
             provider: scoreProvider,
             model: scoreModel,
             onProgress: ({ done, total }) => setScoring({ done, total, pass }),
+            // A refused call being retried: say so, with the wait, instead of a
+            // progress bar that stands still (a rate limit can mean half a minute).
+            onRetry: ({ error, waitMs }) => setScoring(s => ({ ...(s || { done: 0, total: targets.length, pass }), retry: { status: error?.status, waitMs } })),
             onReport: r => { report = r },
           })
         } catch (err) {
@@ -2562,7 +2565,9 @@ export default function DataAnalytics() {
                   {scoring
                     ? scoring.waiting
                       ? `Waiting for ${scoreProvider} to recover…`
-                      : `Scoring ${scoring.done}/${scoring.total}…${scoring.pass > 1 ? ` (pass ${scoring.pass})` : ''}`
+                      : scoring.retry
+                        ? `${scoring.retry.status === 429 ? 'Rate limited' : `Error ${scoring.retry.status || ''}`.trim()} — retrying in ${Math.ceil((scoring.retry.waitMs || 0) / 1000)} s…`
+                        : `Scoring ${scoring.done}/${scoring.total}…${scoring.pass > 1 ? ` (pass ${scoring.pass})` : ''}`
                     : scopeUnscored === 0
                       ? `${scoreModelName} has rated all ${scoreOnlyFinal ? 'final ' : ''}ideas`
                       : `Fill the ${scopeUnscored.toLocaleString()} missing ${scoreModelName} score${scopeUnscored === 1 ? '' : 's'}`}
@@ -2580,7 +2585,9 @@ export default function DataAnalytics() {
                     <span className={styles.spinner} />
                     {scoring.waiting
                       ? ` ${scoreProvider} stopped answering — pausing before the next attempt…`
-                      : ` contacting ${scoreProvider}…`}
+                      : scoring.retry
+                        ? ` ${scoreProvider} ${scoring.retry.status === 429 ? 'asked us to slow down (429)' : `answered ${scoring.retry.status || 'with an error'}`} — waiting before the next try…`
+                        : ` contacting ${scoreProvider}…`}
                   </span>
                 )}
               </div>

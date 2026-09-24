@@ -253,6 +253,26 @@ function chatContentText(content) {
   return ''
 }
 
+/**
+ * The wait a provider asks for in its `Retry-After` header (seconds, or an HTTP
+ * date), in ms; null when there is none or it cannot be read. Held to ten
+ * minutes: a misread date must not park a run for a day.
+ */
+export function retryAfterMs(headers, now = Date.now()) {
+  const raw = headers && typeof headers.get === 'function' ? headers.get('retry-after') : null
+  if (raw == null || String(raw).trim() === '') return null
+  const s = String(raw).trim()
+  let ms
+  if (/^\d+(?:\.\d+)?$/.test(s)) ms = Number(s) * 1000
+  else {
+    const at = Date.parse(s)
+    if (!Number.isFinite(at)) return null
+    ms = at - now
+  }
+  if (!Number.isFinite(ms)) return null
+  return Math.max(0, Math.min(ms, 10 * 60 * 1000))
+}
+
 /** The reply's text, by provider — '' when the model returned none. */
 export function parseReplyText(provider, data) {
   switch (provider) {
@@ -347,6 +367,10 @@ export async function callProvider(resolved, system, user, opts = {}) {
       `${name} API error ${res.status} for model "${model}": ${scrubKey(detail, apiKey).slice(0, 500) || res.statusText || 'request refused'}`
     )
     err.status = res.status
+    // How long the provider asked us to wait (a 429, or a 503 while overloaded):
+    // scoreBatch's retry waits at least that long instead of its own backoff.
+    const after = retryAfterMs(res.headers)
+    if (after != null) err.retryAfterMs = after
     throw err
   }
 
