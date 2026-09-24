@@ -89,6 +89,8 @@
  * salvages the complete objects out of a truncated array.
  */
 
+import { PROVIDERS } from '../data/aiModels.js'
+
 export const SCORING_MAX_TOKENS = 8000
 export const LEGACY_CHAT_MAX_TOKENS = 4000
 export const SCORING_EFFORT = 'low'
@@ -111,6 +113,28 @@ export const OPENAI_COMPAT_URLS = {
   qwen: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
 }
 export const isOpenAICompat = provider => Object.prototype.hasOwnProperty.call(OPENAI_COMPAT_URLS, provider)
+
+/**
+ * A provider's own endpoint from the saved settings, '' when there is none:
+ * Qwen's per-workspace "Pay-as-you-go Base URL" (owner, 2026-09-24 — the shared
+ * dashscope-intl domain answered 403 AccessDenied.Unpurchased for Qwen3.8-Max
+ * while Model Studio's API Key page names a workspace domain for pay-as-you-go
+ * calls). It is kept in the apiKeys map under the provider's `endpointField.key`.
+ */
+export function providerBaseUrl(settings, provider) {
+  const field = PROVIDERS.find(p => p.id === provider)?.endpointField
+  const v = field ? settings?.apiKeys?.[field.key] : ''
+  return typeof v === 'string' ? v.trim() : ''
+}
+
+/** The chat-completions URL: the provider's shared endpoint, or the base URL the
+ *  admin saved (with or without a trailing slash, or already ending in
+ *  /chat/completions). */
+export function compatUrl(provider, baseUrl) {
+  const b = String(baseUrl || '').trim().replace(/\/+$/, '')
+  if (!b) return OPENAI_COMPAT_URLS[provider]
+  return /\/chat\/completions$/.test(b) ? b : `${b}/chat/completions`
+}
 
 /** Mistral's hybrid models, which take `reasoning_effort` ("none" switches thinking off). */
 export function mistralTakesReasoningEffort(model) {
@@ -262,7 +286,7 @@ export function buildGeminiRequest({ model, apiKey, system, user, ratings }) {
   }
 }
 
-export function buildOpenAICompatRequest(provider, { model, apiKey, system, user, ratings }) {
+export function buildOpenAICompatRequest(provider, { model, apiKey, system, user, ratings, baseUrl }) {
   const body = {
     model,
     messages: [
@@ -280,7 +304,7 @@ export function buildOpenAICompatRequest(provider, { model, apiKey, system, user
     body.max_tokens = SCORING_MAX_TOKENS          // thinking counts toward the ceiling
   }
   return {
-    url: OPENAI_COMPAT_URLS[provider],
+    url: compatUrl(provider, baseUrl),
     // Only these two: DeepSeek's and Qwen's CORS preflights refuse any other header.
     headers: {
       'Content-Type': 'application/json',
@@ -406,7 +430,7 @@ export function scrubKey(text, apiKey) {
 export function refusalHint(provider, status, detail) {
   const d = String(detail || '')
   if (provider === 'qwen' && /AccessDenied\.Unpurchased|Access to model denied/i.test(d)) {
-    return 'Your Alibaba Cloud account has not activated this model: open Model Studio (International), Model Gallery, find the model and press Activate (some flagships need a purchase there), then press the button again.'
+    return 'Alibaba Cloud will not bill this model on the shared endpoint: in Model Studio (International) open API Key, copy the "Pay-as-you-go Base URL" of your workspace and paste it into the Qwen endpoint field under AI Settings; if it still says Unpurchased, add a payment method or a Token Plan there, then press the button again.'
   }
   if (provider === 'openrouter' && /age_18plus|18\+ age confirmation|missing_attestation/i.test(d)) {
     return 'Meta\'s models on OpenRouter need a one-time 18+ confirmation on YOUR OpenRouter account: sign in at openrouter.ai, open Settings, Preferences, confirm, then press the button again.'
@@ -433,9 +457,9 @@ export function refusalHint(provider, status, detail) {
  */
 export async function callProvider(resolved, system, user, opts = {}) {
   const fetchFn = opts.fetch || globalThis.fetch
-  const { provider, apiKey, model } = resolved
+  const { provider, apiKey, model, baseUrl } = resolved
   const name = PROVIDER_NAMES[provider] || provider
-  const req = buildRequest(provider, { model, apiKey, system, user, maxTokens: opts.maxTokens, ratings: opts.ratings === true })
+  const req = buildRequest(provider, { model, apiKey, system, user, maxTokens: opts.maxTokens, ratings: opts.ratings === true, baseUrl })
 
   let res
   try {
