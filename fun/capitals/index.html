@@ -268,6 +268,28 @@
   .answer-banner .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .answer-banner .cap { font-family: var(--font-display); font-size: clamp(22px, 5vw, 30px); font-weight: 800; letter-spacing: -0.3px; color: var(--text); }
   .answer-banner .cap .of { color: var(--muted); font-weight: 600; font-size: 16px; }
+  /* Shown only when the accepted answer was an ALTERNATIVE (La Paz for Bolivia,
+     Peking for Beijing…) rather than the capital printed above it, so a player
+     is never left wondering why "Sucre" is announced after they typed "La Paz". */
+  .answer-banner .cap-alt { margin-top: 4px; font-size: 14px; color: var(--muted); }
+  .answer-banner .cap-alt b { color: var(--text); }
+  .answer-banner .cap-alt:empty { display: none; }
+  .answer-banner .cap-alt .typo { color: var(--warn); }
+  .answer-banner .cap-alt .typo b { color: #fde68a; }
+
+  /* ---------- Country profile (lazy-loaded per language: profiles.<lang>.js) ---------- */
+  .profile { margin-top: 18px; }
+  .profile h3 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--accent); margin: 0 0 8px;
+  }
+  .profile dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; }
+  .profile dt { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding-top: 3px; white-space: nowrap; }
+  .profile dd { margin: 0; font-size: 15px; line-height: 1.55; color: #d7e6f1; }
+  @media (max-width: 560px) {
+    .profile dl { grid-template-columns: 1fr; gap: 2px; }
+    .profile dd { margin-bottom: 10px; }
+  }
   .award { margin-left: auto; text-align: right; }
   .award .pts { font-size: 22px; font-weight: 800; color: var(--good); }
   .award .pts.zero { color: var(--warn); }
@@ -531,6 +553,7 @@
           <div>
             <div class="lbl" id="bannerLbl">Correct</div>
             <div class="cap" id="capLine"></div>
+            <div class="cap-alt" id="capAlt"></div>
           </div>
           <div class="award" id="award">
             <div class="pts" id="awardPts">+0</div>
@@ -550,6 +573,11 @@
           <h3 data-i18n="didYouKnow">Did you know?</h3>
           <p id="fact1"></p>
           <p id="fact2"></p>
+        </div>
+
+        <div class="profile hidden" id="profile">
+          <h3 data-i18n="profileTitle">Country profile</h3>
+          <dl id="profileList"></dl>
         </div>
 
         <div class="next-row">
@@ -805,6 +833,10 @@
         qText: function (c) { return "What is the capital of <span class=\"country\">" + c + "</span>?"; },
         capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">is the capital of " + c + "</span>"; },
         correctNoHint: "Correct — no hints!", correctOneHint: "Correct — with one hint", correctHints: "Correct — with hints",
+        altAccepted: function (ans, yours) { return yours ? "Your answer <b>" + ans + "</b> is also accepted." : "<b>" + ans + "</b> is also accepted."; },
+        typoNote: function (typed, right) { return "Small misspelling: you typed <b>" + typed + "</b>, the correct spelling is <b>" + right + "</b>."; },
+        profileTitle: "Country profile",
+        pfKnown: "Known for", pfEconomy: "Economy", pfBusiness: "Business and trade", pfTourism: "Tourism", pfHistory: "History",
         learned: "Here is the answer — now you know it",
         fbType: "Type a city name, or use a hint.",
         fbWrong: "Not quite — try again, or tap a hint.",
@@ -862,6 +894,10 @@
         qText: function (c) { return "Ποια είναι η πρωτεύουσα της χώρας <span class=\"country\">" + c + "</span>;"; },
         capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">— η πρωτεύουσα της χώρας " + c + "</span>"; },
         correctNoHint: "Σωστά — χωρίς βοήθεια!", correctOneHint: "Σωστά — με μία βοήθεια", correctHints: "Σωστά — με βοήθειες",
+        altAccepted: function (ans, yours) { return yours ? "Η απάντησή σου <b>" + ans + "</b> γίνεται επίσης δεκτή." : "Γίνεται επίσης δεκτή η απάντηση <b>" + ans + "</b>."; },
+        typoNote: function (typed, right) { return "Μικρό ορθογραφικό λάθος: έγραψες <b>" + typed + "</b>, η σωστή γραφή είναι <b>" + right + "</b>."; },
+        profileTitle: "Προφίλ χώρας",
+        pfKnown: "Γνωστή για", pfEconomy: "Οικονομία", pfBusiness: "Επιχειρήσεις και εμπόριο", pfTourism: "Τουρισμός", pfHistory: "Ιστορία",
         learned: "Να η απάντηση — τώρα τη γνωρίζεις",
         fbType: "Γράψε μια πόλη ή χρησιμοποίησε βοήθεια.",
         fbWrong: "Όχι ακριβώς. Δοκίμασε ξανά ή πάρε μια βοήθεια.",
@@ -944,6 +980,10 @@
       var base = (s || "")
         .normalize("NFD").replace(/[̀-ͯ]/g, "") // strip Latin and Greek diacritics
         .toLowerCase()
+        // letters NFD cannot decompose would otherwise be DELETED by the strip
+        // below, so "København" was rejected for Denmark
+        .replace(/ø/g, "o").replace(/æ/g, "ae").replace(/œ/g, "oe").replace(/ł/g, "l")
+        .replace(/[đð]/g, "d").replace(/þ/g, "th").replace(/ß/g, "ss").replace(/ı/g, "i")
         .replace(/['’`ʻ]/g, "")                  // drop apostrophes
         .replace(/[.·,]/g, "")                        // drop dots and commas
         .replace(/[-–—]/g, " ")                  // hyphens to spaces
@@ -955,12 +995,138 @@
       return foldGreek(base);
     }
     // Accept every known spelling in either language so answers are forgiving
-    // regardless of the interface language.
+    // regardless of the interface language. Returns a map normalised form ->
+    // the display form it came from (the capital first, so a duplicate spelling
+    // reports as the capital). The map has NO prototype: with a plain {} the
+    // lookup forms[norm(raw)] found Object.prototype.constructor, so typing
+    // "constructor" was a correct answer for every country.
     function acceptedForms(entry) {
       var forms = [entry.cap].concat(entry.alt || [], [entry.cap_el], entry.alt_el || []);
-      var set = {};
-      forms.forEach(function (f) { if (f) set[norm(f)] = true; });
-      return set;
+      var map = Object.create(null);
+      forms.forEach(function (f) {
+        if (!f) return;
+        var k = norm(f);
+        if (k && !(k in map)) map[k] = f;
+      });
+      return map;
+    }
+    // ---------- typo tolerance ----------
+    // Edit distance with adjacent transpositions (optimal string alignment), so
+    // "Pairs" for "Paris" is one slip, not two.
+    function editDistance(a, b) {
+      if (a === b) return 0;
+      var la = a.length, lb = b.length, i, j;
+      var prev2 = null, prev = [], cur;
+      for (j = 0; j <= lb; j++) prev[j] = j;
+      for (i = 1; i <= la; i++) {
+        cur = [i];
+        for (j = 1; j <= lb; j++) {
+          var cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+          var v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+          if (i > 1 && j > 1 && a.charAt(i - 1) === b.charAt(j - 2) && a.charAt(i - 2) === b.charAt(j - 1)) {
+            v = Math.min(v, prev2[j - 2] + 1);
+          }
+          cur[j] = v;
+        }
+        prev2 = prev; prev = cur;
+      }
+      return prev[lb];
+    }
+    // How many letters a misspelling may be off by: at most 2, and less for
+    // short names, where 2 changes turn one real place into another (Bern and
+    // Bonn, Kyiv and Lviv, Paris and Parma are all 2 apart).
+    function typoAllowance(key) {
+      var n = key.replace(/ /g, "").length;
+      return n <= 3 ? 0 : (n <= 5 ? 1 : 2);
+    }
+    // Real places that are NOT a capital, in the forms players actually type.
+    // They are never a misspelling of anything: an answer that is one of them,
+    // or closer to one of them than to the capital, is wrong. (Other countries'
+    // capitals and every country name are in that pool too.)
+    var DECOY_CITIES = [
+      "Sydney", "Melbourne", "Brisbane", "Perth", "Auckland", "Toronto", "Montreal", "Vancouver", "New York", "Los Angeles",
+      "Chicago", "Houston", "San Francisco", "Philadelphia", "Miami", "San Juan", "San Diego", "Rio de Janeiro", "Sao Paulo", "Salvador", "Recife",
+      "Cordoba", "Rosario", "Valparaiso", "Guayaquil", "Medellin", "Cali", "Cartagena", "Santa Cruz",
+      "Cochabamba", "Arequipa", "Cusco", "Maracaibo", "Monterrey", "Guadalajara", "Cancun", "Acapulco", 
+      "Istanbul", "Izmir", "Antalya", "Smyrna", "Constantinople", "Thessaloniki", "Patras", "Heraklion", "Limassol", "Larnaca",
+      "Milan", "Naples", "Turin", "Florence", "Venice", "Genoa", "Palermo", "Bologna", "Parma", "Verona",
+      "Barcelona", "Seville", "Valencia", "Malaga", "Bilbao", "Porto", "Coimbra", "Marseille", "Lyon", "Nice", "Toulouse",
+      "Bordeaux", "Strasbourg", "Vienne", "Munich", "Hamburg", "Frankfurt", "Cologne", "Bonn", "Stuttgart", "Dresden",
+      "Leipzig", "Salzburg", "Graz", "Innsbruck", "Zurich", "Geneva", "Basel", "Lausanne", "Antwerp", "Ghent", "Bruges",
+      "Rotterdam", "Utrecht", "Manchester", "Birmingham", "Liverpool", "Glasgow", "Edinburgh", "Cardiff", "Belfast", "Cork",
+      "Galway", "Gothenburg", "Malmo", "Bergen", "Aarhus", "Tampere", "Turku", "Krakow", "Gdansk", "Wroclaw", "Brno",
+      "Kosice", "Debrecen", "Cluj", "Timisoara", "Plovdiv", "Varna", "Split", "Dubrovnik", "Novi Sad", "Nis", "Mostar",
+      "Lviv", "Kharkiv", "Odesa", "Odessa", "Dnipro", "Saint Petersburg", "Novosibirsk", "Pinsk", "Brest", "Kaunas", "Tartu",
+      "Almaty", "Samarkand", "Bukhara", "Osh", "Batumi", "Kutaisi", "Gyumri", "Ganja", "Tel Aviv", "Haifa", "Eilat",
+      "Alexandria", "Giza", "Luxor", "Aswan", "Casablanca", "Marrakesh", "Fez", "Tangier", "Oran", "Constantine", "Sfax",
+      "Benghazi", "Misrata", "Aden", "Jeddah", "Mecca", "Medina", "Dammam", "Dubai", "Sharjah", "Basra", "Mosul", "Erbil",
+      "Isfahan", "Shiraz", "Tabriz", "Mashhad", "Herat", "Kandahar", "Karachi", "Lahore", "Peshawar", "Mumbai", "Bombay",
+      "Kolkata", "Calcutta", "Chennai", "Madras", "Bangalore", "Bengaluru", "Hyderabad", "Kandy", "Chittagong", "Pokhara",
+      "Mandalay", "Yangon", "Rangoon", "Chiang Mai", "Phuket", "Pattaya", "Siem Reap", "Ho Chi Minh City", "Saigon",
+      "Da Nang", "Hue", "Cebu", "Davao", "Surabaya", "Bandung", "Bali", "Denpasar", "Penang", "Johor Bahru", "Kuching",
+      "Kaohsiung", "Taichung", "Hong Kong", "Macau", "Shanghai", "Guangzhou", "Shenzhen", "Chongqing", "Wuhan", "Xian",
+      "Osaka", "Kyoto", "Yokohama", "Nagoya", "Sapporo", "Hiroshima", "Busan", "Pusan", "Incheon", "Lagos", "Kano",
+      "Ibadan", "Port Harcourt", "Kumasi", "Douala", "Bouake", "Mombasa", "Kisumu", "Arusha", "Zanzibar",
+      "Dar es Salaam", "Mwanza", "Lubumbashi", "Goma", "Pointe Noire", "Beira", "Bulawayo", "Johannesburg",
+      "Durban", "Port Elizabeth", "Soweto", "Walvis Bay", "Toamasina", "Monte Carlo", "Marbella", "Ibiza", "Mykonos",
+      "Θεσσαλονίκη", "Κωνσταντινούπολη", "Σμύρνη", "Πάτρα", "Ηράκλειο", "Λεμεσός", "Λάρνακα", "Μιλάνο", "Νάπολη",
+      "Βενετία", "Φλωρεντία", "Βαρκελώνη", "Μόναχο", "Βόννη", "Φρανκφούρτη", "Ζυρίχη", "Γενεύη", "Σίδνεϊ", "Μελβούρνη",
+      "Τορόντο", "Νέα Υόρκη", "Ρίο ντε Τζανέιρο", "Σάο Πάολο", "Σαγκάη", "Χονγκ Κονγκ", "Οσάκα", "Κιότο", "Βομβάη",
+      "Καράτσι", "Λάγος", "Τελ Αβίβ", "Χάιφα", "Αλεξάνδρεια", "Καζαμπλάνκα", "Ντουμπάι", "Τζέντα", "Μέκκα", "Γιοχάνεσμπουργκ",
+      "Γιανγκόν", "Ρανγκούν", "Μόντε Κάρλο", "Αγία Πετρούπολη", "Οδησσός", "Λβιβ", "Αλμάτι", "Νταρ ες Σαλάμ"
+    ];
+    // Every place-like string the game knows that could be typed, keyed by its
+    // normalised form: every country's accepted capitals, every country name in
+    // both languages, and the decoys above. Built once per data set.
+    var placeIndex = null, placeIndexFor = null;
+    function buildPlaceIndex(all) {
+      var keys = [];
+      function add(f) { var k = norm(f); if (k) keys.push(k); }
+      (all || []).forEach(function (e) {
+        [e.cap].concat(e.alt || [], [e.cap_el], e.alt_el || [], [e.c, e.c_el]).forEach(function (f) { if (f) add(f); });
+      });
+      DECOY_CITIES.forEach(add);
+      var seen = Object.create(null), out = [];
+      keys.forEach(function (k) { if (!(k in seen)) { seen[k] = true; out.push(k); } });
+      return out;
+    }
+    // The one place an answer is judged. Pure (no DOM), so the offline selftest
+    // runs exactly this code over both datasets.
+    //   exact spelling (accents, case, punctuation, Greek vowel spellings aside)
+    //     -> { form, exact: true }
+    //   a slip of at most typoAllowance() letters from one of this country's
+    //   accepted forms -> { form, exact: false, typed, dist }, BUT only when the
+    //   answer is not closer to (or as close to) any other real place the game
+    //   knows: another capital, a country name, a decoy city. "Rome" for Togo is
+    //   Italy's capital, not a slip for Lomé; "Tunisia" is the country, not a
+    //   slip for Tunis.
+    //   otherwise -> null.
+    function matchAnswer(entry, raw, all) {
+      var k = norm(raw);
+      if (!k) return null;
+      var forms = acceptedForms(entry);
+      if (k in forms) return { form: forms[k], exact: true };
+      var best = null, bestD = Infinity;
+      Object.keys(forms).forEach(function (f) {
+        var allow = typoAllowance(f);
+        if (!allow || Math.abs(f.length - k.length) > allow) return;
+        var d = editDistance(k, f);
+        if (d <= allow && d < bestD) { bestD = d; best = f; }
+      });
+      if (best === null) return null;
+      if (placeIndexFor !== all) { placeIndex = buildPlaceIndex(all); placeIndexFor = all; }
+      for (var i = 0; i < placeIndex.length; i++) {
+        var o = placeIndex[i];
+        if (o in forms || Math.abs(o.length - k.length) > bestD) continue;
+        if (editDistance(k, o) <= bestD) return null;   // it is, or is nearer to, some other real place
+      }
+      return { form: forms[best], exact: false, typed: String(raw).trim(), dist: bestD };
+    }
+    // True when an accepted form is an ALTERNATIVE answer rather than the capital
+    // itself in either language (La Paz for Bolivia; Peking for Beijing).
+    function isAltForm(entry, form) {
+      var k = norm(form);
+      return k !== norm(entry.cap) && k !== norm(entry.cap_el);
     }
 
     // ---------- language-aware display helpers ----------
@@ -1014,10 +1180,10 @@
       hintBtn: $("hintBtn"), revealBtn: $("revealBtn"), feedback: $("feedback"),
       mask: $("mask"), maskNote: $("maskNote"),
       reveal: $("reveal"), answerBanner: $("answerBanner"), bannerLbl: $("bannerLbl"),
-      capLine: $("capLine"),
+      capLine: $("capLine"), capAlt: $("capAlt"),
       award: $("award"), awardPts: $("awardPts"), awardStars: $("awardStars"),
       locator: $("locator"), mapBox: $("mapBox"), mapNote: $("mapNote"),
-      fact1: $("fact1"), fact2: $("fact2"),
+      fact1: $("fact1"), fact2: $("fact2"), profile: $("profile"), profileList: $("profileList"),
       nextBtn: $("nextBtn"), seenNote: $("seenNote"), footTotal: $("footTotal"),
       // nick modal
       nickOverlay: $("nickOverlay"), nickInput: $("nickInput"), nickErr: $("nickErr"),
@@ -1064,6 +1230,7 @@
     var hintLevel = 0;      // 0..3
     var solved = false;     // answered correctly or revealed
     var revCorrect = false; // last reveal was a correct answer (vs given up)
+    var matchInfo = null;   // what the player's answer matched: {form, exact, typed} (null after a reveal)
     var lastCountry = null; // avoid immediate repeat
 
     function pool() {
@@ -1268,6 +1435,7 @@
       lastCountry = current.c;
       hintLevel = 0;
       solved = false;
+      matchInfo = null;
       renderFlag(current.flag);
       els.qRegion.textContent = regionLabel(current.region);
       els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
@@ -1320,8 +1488,9 @@
       }
     }
 
-    function handleCorrect() {
+    function handleCorrect(match) {
       solved = true;
+      matchInfo = match || null;
       var rec = recordCountry(current.c);
       rec.seen += 1;
       rec.correct += 1;
@@ -1348,6 +1517,7 @@
       if (solved) return;
       solved = true;
       hintLevel = 3;
+      matchInfo = null;
       var rec = recordCountry(current.c);
       rec.seen += 1;
       rec.reveals += 1;
@@ -1365,14 +1535,71 @@
       updateStreakDisplay();
     }
 
+    // ---------- country profile (lazy: one data file per language) ----------
+    // profiles.en.js / profiles.el.js set window.CAPITALS_PROFILES_EN / _EL:
+    // { "<English country name>": { known, economy, business, tourism, history } }.
+    // Loaded after the first question is on screen, so they never slow the start.
+    var PROFILE_FIELDS = [["known", "pfKnown", "🌟"], ["economy", "pfEconomy", "📈"], ["business", "pfBusiness", "💼"],
+                          ["tourism", "pfTourism", "🧳"], ["history", "pfHistory", "🏛️"]];
+    var profileLoad = { en: null, el: null };   // null | "loading" | "ready" | "failed"
+    function profileData(l) { return l === "el" ? window.CAPITALS_PROFILES_EL : window.CAPITALS_PROFILES_EN; }
+    function ensureProfiles(l) {
+      if (profileData(l)) { profileLoad[l] = "ready"; return; }
+      if (profileLoad[l]) return;
+      profileLoad[l] = "loading";
+      var sc = document.createElement("script");
+      sc.src = "profiles." + l + ".js";
+      sc.async = true;
+      sc.onload = function () { profileLoad[l] = profileData(l) ? "ready" : "failed"; if (solved && current && lang === l) renderProfile(); };
+      sc.onerror = function () { profileLoad[l] = "failed"; };
+      document.head.appendChild(sc);
+    }
+    function renderProfile() {
+      var data = profileData(lang), p = current && data && data[current.c];
+      if (!p) {
+        els.profile.classList.add("hidden");
+        els.profileList.innerHTML = "";
+        ensureProfiles(lang);   // draws itself when it arrives, if the answer is still on screen
+        return;
+      }
+      var frag = document.createDocumentFragment();
+      PROFILE_FIELDS.forEach(function (f) {
+        if (!p[f[0]]) return;
+        var dt = document.createElement("dt"); dt.textContent = f[2] + " " + t(f[1]);
+        var dd = document.createElement("dd"); dd.textContent = p[f[0]];
+        frag.appendChild(dt); frag.appendChild(dd);
+      });
+      els.profileList.innerHTML = "";
+      els.profileList.appendChild(frag);
+      els.profile.classList.remove("hidden");
+    }
+
+    // The lines under the capital in the answer banner:
+    //   a misspelling  -> "Small misspelling: you typed Bogata, the correct spelling is Bogota."
+    //   an alternative -> "Your answer La Paz is also accepted." (La Paz for Bolivia, Peking for Beijing)
+    // Neither for the capital itself spelled right, nor after "Show the answer".
+    function renderAnswerNotes() {
+      var lines = [];
+      if (revCorrect && matchInfo) {
+        if (!matchInfo.exact) {
+          lines.push('<div class="typo">' + t("typoNote")(escapeHtml(matchInfo.typed), escapeHtml(matchInfo.form)) + "</div>");
+        }
+        if (isAltForm(current, matchInfo.form)) {
+          lines.push("<div>" + t("altAccepted")(escapeHtml(matchInfo.form), matchInfo.exact) + "</div>");
+        }
+      }
+      els.capAlt.innerHTML = lines.join("");
+    }
     function showReveal(correct, pts, stars) {
       revCorrect = correct;
       els.askBlock.style.display = "none";
       els.reveal.classList.remove("hidden");
       els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
+      renderAnswerNotes();
       var f = factsOf(current);
       els.fact1.textContent = f[0];
       els.fact2.textContent = f[1];
+      renderProfile();
       if (correct) {
         els.answerBanner.className = "answer-banner";
         els.bannerLbl.textContent = (hintLevel <= 0) ? t("correctNoHint") :
@@ -1405,9 +1632,9 @@
         flashInfo(t("fbType"));
         return;
       }
-      var forms = acceptedForms(current);
-      if (forms[norm(raw)]) {
-        handleCorrect();
+      var match = matchAnswer(current, raw, ALL);
+      if (match) {
+        handleCorrect(match);
       } else {
         profile.wrongGuesses += 1;
         recordCountry(current.c); // ensure a record exists; "seen" is only counted on a correct answer or reveal, not on wrong guesses
@@ -1491,9 +1718,11 @@
     }
     function renderRevealText() {
       els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
+      renderAnswerNotes();
       var f = factsOf(current);
       els.fact1.textContent = f[0];
       els.fact2.textContent = f[1];
+      renderProfile();
       els.bannerLbl.textContent = revCorrect
         ? ((hintLevel <= 0) ? t("correctNoHint") : (hintLevel === 1 ? t("correctOneHint") : t("correctHints")))
         : t("learned");
@@ -1797,7 +2026,18 @@
         else if (!els.nickOverlay.classList.contains("hidden") && els.nickClose.style.display !== "none") closeNick();
         return;
       }
-      if (e.key === "Enter" && solved && !anyModalOpen()) { newQuestion(); }
+      // Enter anywhere on the page moves on once the answer is on screen — but
+      // NOT the Enter that submitted it: that keystroke starts in the answer
+      // box, checkAnswer() flips `solved` synchronously, and the same event
+      // then reaches this listener, which used to advance straight past the
+      // reveal (a correct answer typed + Enter never showed its facts). A
+      // control handles its own Enter (the input submits, the focused Next
+      // button clicks), so only a keystroke from outside a control counts.
+      if (e.key === "Enter" && solved && !anyModalOpen()) {
+        var tag = (e.target && e.target.tagName) || "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
+        newQuestion();
+      }
     });
     els.regionSel.addEventListener("change", function () {
       if (profile) { newQuestion(); }
@@ -1886,6 +2126,8 @@
       // 'account-changed' event, which then activates a ranked profile.
       activateGuest();
     }
+    // Fetch the country profiles for the current language once the page is idle.
+    setTimeout(function () { ensureProfiles(lang); }, 1200);
   })();
   </script>
 <script>window.AUTHCORE_NO_BAR=true;</script>

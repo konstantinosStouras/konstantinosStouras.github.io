@@ -57,12 +57,12 @@ window.COUNTRIES = [
       "Croatia's Adriatic coast has more than a thousand islands, and the walled city of Dubrovnik served as a backdrop for the fictional King's Landing on screen.",
       "Zagreb, the inland capital, is known for its red-roofed Upper Town, lively cafe culture and the quirky Museum of Broken Relationships."
     ] },
-  { c: "Czechia", cap: "Prague", region: "Europe", flag: "🇨🇿", alt: ["Praha", "Czech Republic"],
+  { c: "Czechia", cap: "Prague", region: "Europe", flag: "🇨🇿", alt: ["Praha"],
     facts: [
       "Czechia consumes more beer per person than any other country on Earth, and the original Pilsner lager was brewed in the city of Plzen.",
       "Prague's medieval astronomical clock, mounted on the Old Town Hall, has been keeping time since 1410 and is one of the oldest still working in the world."
     ] },
-  { c: "Denmark", cap: "Copenhagen", region: "Europe", flag: "🇩🇰", alt: ["Kobenhavn"],
+  { c: "Denmark", cap: "Copenhagen", region: "Europe", flag: "🇩🇰", alt: ["København"],
     facts: [
       "Denmark gave the world the writer Hans Christian Andersen and the toy bricks of LEGO, whose name comes from the Danish for 'play well'.",
       "Copenhagen is one of the most bicycle-friendly cities anywhere, with more bikes than cars and a famous Little Mermaid statue by the harbour."
@@ -147,7 +147,7 @@ window.COUNTRIES = [
       "Moldova is one of Europe's great wine countries, and the Milestii Mici cellars hold a labyrinth of underground tunnels storing millions of bottles.",
       "Chisinau is a green capital of leafy parks and Soviet-era boulevards, set among the rolling vineyards of one of the continent's least visited nations."
     ] },
-  { c: "Monaco", cap: "Monaco", region: "Europe", flag: "🇲🇨", alt: ["Monaco-Ville", "Monte Carlo"],
+  { c: "Monaco", cap: "Monaco", region: "Europe", flag: "🇲🇨", alt: ["Monaco-Ville"],
     facts: [
       "Monaco is the second smallest country in the world, a glamorous city-state on the French Riviera famous for its casino and its Formula One street race.",
       "The principality has one of the highest densities of millionaires anywhere, and it has been ruled by the Grimaldi family for more than seven centuries."
@@ -157,12 +157,12 @@ window.COUNTRIES = [
       "Montenegro means 'black mountain', and its dramatic peaks plunge straight into the deep blue fjord-like Bay of Kotor on the Adriatic.",
       "Podgorica is the modern administrative capital, while the old royal capital of Cetinje still holds the country's historic and cultural heart."
     ] },
-  { c: "Netherlands", cap: "Amsterdam", region: "Europe", flag: "🇳🇱", alt: [],
+  { c: "Netherlands", cap: "Amsterdam", region: "Europe", flag: "🇳🇱", alt: ["The Hague", "Den Haag"],
     facts: [
       "The Netherlands has reclaimed much of its land from the sea, and roughly a quarter of the country lies below sea level, protected by dikes and pumps.",
       "Amsterdam is laced with concentric canals lined by tall merchant houses, and although it is the capital, the government actually sits in The Hague."
     ] },
-  { c: "North Macedonia", cap: "Skopje", region: "Europe", flag: "🇲🇰", alt: ["Macedonia"],
+  { c: "North Macedonia", cap: "Skopje", region: "Europe", flag: "🇲🇰", alt: [],
     facts: [
       "North Macedonia is a landlocked Balkan country whose Lake Ohrid is one of the oldest and deepest lakes in Europe.",
       "Skopje, the birthplace of Mother Teresa, reinvented its centre with a striking and much debated array of grand statues and neoclassical buildings."
@@ -232,7 +232,7 @@ window.COUNTRIES = [
       "Ukraine is the largest country lying entirely within Europe and its fertile black soil long made it a breadbasket for the continent.",
       "Kyiv is one of the oldest cities in Eastern Europe and the historic cradle of the medieval state of Kievan Rus, with gold-domed monasteries above the Dnipro river."
     ] },
-  { c: "United Kingdom", cap: "London", region: "Europe", flag: "🇬🇧", alt: ["Britain", "Great Britain"],
+  { c: "United Kingdom", cap: "London", region: "Europe", flag: "🇬🇧", alt: [],
     facts: [
       "The United Kingdom unites England, Scotland, Wales and Northern Ireland, and once governed the largest empire in history.",
       "London has been a major settlement for some two thousand years since the Romans founded Londinium, and its Underground is the oldest metro system in the world."
@@ -319,7 +319,7 @@ window.COUNTRIES = [
       "Iraq covers ancient Mesopotamia, the land between the Tigris and Euphrates often called the cradle of civilisation, where writing was invented.",
       "Baghdad was once the dazzling capital of the Islamic Golden Age, a world centre of science, mathematics and learning."
     ] },
-  { c: "Israel", cap: "Jerusalem", region: "Asia", flag: "🇮🇱", alt: ["Tel Aviv"],
+  { c: "Israel", cap: "Jerusalem", region: "Asia", flag: "🇮🇱", alt: [],
     facts: [
       "Israel is a centre of high technology and innovation, sometimes nicknamed the start-up nation for its dense cluster of tech companies.",
       "Jerusalem is one of the oldest cities in the world and a holy place for Judaism, Christianity and Islam alike, with its ancient walled Old City at its heart."
@@ -359,7 +359,7 @@ window.COUNTRIES = [
       "Lebanon was home to the ancient Phoenicians, the seafaring traders credited with spreading the alphabet around the Mediterranean.",
       "Beirut has been destroyed and rebuilt many times over its long history, earning a reputation for resilience and a vibrant cultural life."
     ] },
-  { c: "Malaysia", cap: "Kuala Lumpur", region: "Asia", flag: "🇲🇾", alt: [],
+  { c: "Malaysia", cap: "Kuala Lumpur", region: "Asia", flag: "🇲🇾", alt: ["Putrajaya"],
     facts: [
       "Malaysia is split between the Malay Peninsula and the island of Borneo, with rainforests among the oldest on Earth.",
       "Kuala Lumpur's twin Petronas Towers were the tallest buildings in the world when completed and remain the tallest twin towers."
@@ -374,7 +374,7 @@ window.COUNTRIES = [
       "Mongolia is the most sparsely populated sovereign country in the world, a vast land of grassy steppe, desert and nomadic herders on horseback.",
       "Ulaanbaatar is the coldest capital city on Earth, where winter temperatures can plunge far below freezing for months."
     ] },
-  { c: "Myanmar", cap: "Naypyidaw", region: "Asia", flag: "🇲🇲", alt: ["Nay Pyi Taw", "Yangon", "Rangoon"],
+  { c: "Myanmar", cap: "Naypyidaw", region: "Asia", flag: "🇲🇲", alt: ["Nay Pyi Taw", "Naypyitaw"],
     facts: [
       "Myanmar, formerly known as Burma, is covered with gilded Buddhist pagodas, including the towering golden Shwedagon in its largest city, Yangon.",
       "Naypyidaw is a purpose-built capital opened in 2005, famous for its enormous and often empty multi-lane highways."
@@ -424,7 +424,7 @@ window.COUNTRIES = [
       "South Korea turned itself into a high-tech powerhouse and a cultural giant, exporting K-pop, cinema and electronics around the world.",
       "Seoul is a hyper-connected megacity straddling the Han river, blending ancient royal palaces with glowing skyscrapers."
     ] },
-  { c: "Sri Lanka", cap: "Colombo", region: "Asia", flag: "🇱🇰", alt: ["Sri Jayawardenepura Kotte", "Kotte"],
+  { c: "Sri Lanka", cap: "Colombo", region: "Asia", flag: "🇱🇰", alt: ["Sri Jayawardenepura Kotte", "Sri Jayewardenepura Kotte", "Kotte"],
     facts: [
       "Sri Lanka is a teardrop-shaped island known for its cinnamon and Ceylon tea, with a recorded history stretching back well over two thousand years.",
       "Colombo is the largest city and commercial heart, while the official seat of parliament lies just outside it at Sri Jayawardenepura Kotte."
@@ -449,12 +449,12 @@ window.COUNTRIES = [
       "Thailand is the only Southeast Asian country never colonised by a European power, and its name means 'land of the free'.",
       "Bangkok holds the record for the longest official city name in the world, a ceremonial title dozens of words long that locals shorten to Krung Thep."
     ] },
-  { c: "Timor-Leste", cap: "Dili", region: "Asia", flag: "🇹🇱", alt: ["East Timor"],
+  { c: "Timor-Leste", cap: "Dili", region: "Asia", flag: "🇹🇱", alt: [],
     facts: [
       "Timor-Leste, or East Timor, was one of the first new sovereign states of the 21st century, gaining full independence in 2002.",
       "Dili lies on the north coast of the island of Timor, overlooked by a towering statue of Christ on a headland above the sea."
     ] },
-  { c: "Turkey", cap: "Ankara", region: "Asia", flag: "🇹🇷", alt: ["Turkiye"],
+  { c: "Turkey", cap: "Ankara", region: "Asia", flag: "🇹🇷", alt: [],
     facts: [
       "Turkey straddles two continents, with part in Europe and part in Asia, divided by the strait that runs through its largest city, Istanbul.",
       "Ankara, not Istanbul, is the capital, chosen by Ataturk as the centre of the new republic he founded in 1923."
@@ -464,7 +464,7 @@ window.COUNTRIES = [
       "Turkmenistan is mostly covered by the Karakum desert, where a collapsed gas crater nicknamed the Gates of Hell has been burning for decades.",
       "Ashgabat holds a world record for the highest concentration of white marble buildings, giving the capital a gleaming, uniform appearance."
     ] },
-  { c: "United Arab Emirates", cap: "Abu Dhabi", region: "Asia", flag: "🇦🇪", alt: ["UAE"],
+  { c: "United Arab Emirates", cap: "Abu Dhabi", region: "Asia", flag: "🇦🇪", alt: [],
     facts: [
       "The United Arab Emirates is a federation of seven emirates that rose from desert and pearl diving to dazzling modern wealth.",
       "Abu Dhabi is the capital, while neighbouring Dubai is home to the Burj Khalifa, the tallest building in the world."
@@ -521,7 +521,7 @@ window.COUNTRIES = [
       "Burundi is a small, mountainous country whose drummers perform a thunderous traditional ritual recognised by UNESCO.",
       "Gitega became the political capital in 2019, taking over that role from the lakeside city of Bujumbura."
     ] },
-  { c: "Cabo Verde", cap: "Praia", region: "Africa", flag: "🇨🇻", alt: ["Cape Verde"],
+  { c: "Cabo Verde", cap: "Praia", region: "Africa", flag: "🇨🇻", alt: [],
     facts: [
       "Cabo Verde is a volcanic archipelago in the Atlantic that gave the world the soulful music style known as morna.",
       "Praia, on the island of Santiago, is the capital and main port of this island nation off the West African coast."
@@ -546,17 +546,17 @@ window.COUNTRIES = [
       "The Comoros is a small volcanic archipelago in the Indian Ocean and a leading producer of the fragrant ylang-ylang used in perfumes.",
       "Moroni sits at the foot of an active volcano, Mount Karthala, on the island of Grande Comore."
     ] },
-  { c: "Congo (Republic)", cap: "Brazzaville", region: "Africa", flag: "🇨🇬", alt: ["Republic of the Congo"],
+  { c: "Congo (Republic)", cap: "Brazzaville", region: "Africa", flag: "🇨🇬", alt: [],
     facts: [
       "The Republic of the Congo is covered by vast rainforests that are a stronghold for lowland gorillas and forest elephants.",
       "Brazzaville faces Kinshasa across the Congo river, making the two cities the closest pair of capitals in the world that belong to different countries."
     ] },
-  { c: "Congo (DR)", cap: "Kinshasa", region: "Africa", flag: "🇨🇩", alt: ["Democratic Republic of the Congo", "DRC"],
+  { c: "Congo (DR)", cap: "Kinshasa", region: "Africa", flag: "🇨🇩", alt: [],
     facts: [
       "The Democratic Republic of the Congo is the largest country in sub-Saharan Africa and holds enormous reserves of cobalt and copper.",
       "Kinshasa is one of the largest French-speaking cities in the world, growing into a sprawling megacity on the Congo river."
     ] },
-  { c: "Cote d'Ivoire", cap: "Yamoussoukro", region: "Africa", flag: "🇨🇮", alt: ["Ivory Coast", "Abidjan"],
+  { c: "Cote d'Ivoire", cap: "Yamoussoukro", region: "Africa", flag: "🇨🇮", alt: ["Abidjan"],
     facts: [
       "Cote d'Ivoire, or Ivory Coast, is the world's largest producer of cocoa, the raw ingredient of chocolate.",
       "Yamoussoukro is the official capital and home to one of the largest churches in the world, though Abidjan remains the economic powerhouse."
@@ -581,7 +581,7 @@ window.COUNTRIES = [
       "Eritrea lies along the Red Sea and won its independence from Ethiopia in 1993 after a long struggle.",
       "Asmara is celebrated for its remarkable collection of Italian Art Deco and modernist architecture, earning it a place on the World Heritage list."
     ] },
-  { c: "Eswatini", cap: "Mbabane", region: "Africa", flag: "🇸🇿", alt: ["Swaziland", "Lobamba"],
+  { c: "Eswatini", cap: "Mbabane", region: "Africa", flag: "🇸🇿", alt: ["Lobamba"],
     facts: [
       "Eswatini, formerly Swaziland, is one of the world's last absolute monarchies and one of the smallest countries in Africa.",
       "Mbabane is the administrative capital, while the royal and legislative capital lies nearby at Lobamba in a scenic valley."
@@ -666,7 +666,7 @@ window.COUNTRIES = [
       "Morocco is famed for its labyrinthine medinas, the blue city of Chefchaouen and the gateway to the Sahara desert.",
       "Rabat is the capital, although the maze-like markets of Marrakesh and the great mosque of Casablanca are often more famous abroad."
     ] },
-  { c: "Mozambique", cap: "Maputo", region: "Africa", flag: "🇲🇿", alt: [],
+  { c: "Mozambique", cap: "Maputo", region: "Africa", flag: "🇲🇿", alt: ["Lourenço Marques"],
     facts: [
       "Mozambique has a long Indian Ocean coastline of coral reefs and palm-fringed beaches, and Portuguese is its official language.",
       "Maputo, formerly Lourenco Marques, is known for its wide jacaranda-lined avenues and Mediterranean-style architecture."
@@ -681,7 +681,7 @@ window.COUNTRIES = [
       "Niger is named after the great river that runs through it, and its northern reaches hold some of the richest dinosaur fossil beds in Africa.",
       "Niamey sits on the banks of the Niger river in the far southwest, one of the hottest major cities in the world."
     ] },
-  { c: "Nigeria", cap: "Abuja", region: "Africa", flag: "🇳🇬", alt: ["Lagos"],
+  { c: "Nigeria", cap: "Abuja", region: "Africa", flag: "🇳🇬", alt: [],
     facts: [
       "Nigeria is the most populous country in Africa and home to Nollywood, one of the most prolific film industries in the world.",
       "Abuja is a planned city that replaced Lagos as the capital in 1991, chosen for its central and neutral location."
@@ -731,7 +731,7 @@ window.COUNTRIES = [
       "Sudan has more ancient pyramids than Egypt, built by the kingdom of Kush at the desert site of Meroe.",
       "Khartoum stands at the meeting of the Blue Nile and the White Nile, where the two great rivers join to flow north as one."
     ] },
-  { c: "Tanzania", cap: "Dodoma", region: "Africa", flag: "🇹🇿", alt: ["Dar es Salaam"],
+  { c: "Tanzania", cap: "Dodoma", region: "Africa", flag: "🇹🇿", alt: [],
     facts: [
       "Tanzania is home to Mount Kilimanjaro, the highest peak in Africa, and the wildlife-filled plains of the Serengeti.",
       "Dodoma was made the official capital for its central location, although the coastal city of Dar es Salaam remains the largest and busiest."
@@ -853,17 +853,17 @@ window.COUNTRIES = [
       "Panama is famous for its canal, an engineering marvel that links the Atlantic and Pacific oceans and reshaped global trade.",
       "Panama City is the only world capital with a tropical rainforest within its city limits, and its skyline bristles with shining towers."
     ] },
-  { c: "Saint Kitts and Nevis", cap: "Basseterre", region: "North America", flag: "🇰🇳", alt: ["St. Kitts and Nevis"],
+  { c: "Saint Kitts and Nevis", cap: "Basseterre", region: "North America", flag: "🇰🇳", alt: [],
     facts: [
       "Saint Kitts and Nevis is the smallest country in the Americas by both area and population, made up of two volcanic islands.",
       "Basseterre, on the island of Saint Kitts, is guarded by the historic Brimstone Hill Fortress, once nicknamed the Gibraltar of the Caribbean."
     ] },
-  { c: "Saint Lucia", cap: "Castries", region: "North America", flag: "🇱🇨", alt: ["St. Lucia"],
+  { c: "Saint Lucia", cap: "Castries", region: "North America", flag: "🇱🇨", alt: [],
     facts: [
       "Saint Lucia is famous for the Pitons, two dramatic volcanic peaks that rise straight from the sea and feature on its flag's reputation as a postcard isle.",
       "Castries sits on a sheltered harbour and is the birthplace of two Nobel laureates, a remarkable feat for such a small island."
     ] },
-  { c: "Saint Vincent and the Grenadines", cap: "Kingstown", region: "North America", flag: "🇻🇨", alt: ["St. Vincent and the Grenadines"],
+  { c: "Saint Vincent and the Grenadines", cap: "Kingstown", region: "North America", flag: "🇻🇨", alt: [],
     facts: [
       "Saint Vincent and the Grenadines is a chain of lush islands whose scenery has served as a film backdrop for swashbuckling pirate movies.",
       "Kingstown, on the main island of Saint Vincent, is known as the City of Arches for its many covered stone walkways."
@@ -873,7 +873,7 @@ window.COUNTRIES = [
       "Trinidad and Tobago is the birthplace of the steel drum and of calypso music, and it hosts one of the world's great carnivals.",
       "Port of Spain, on the island of Trinidad, comes alive each year with the colour and rhythm of its famous pre-Lenten carnival."
     ] },
-  { c: "United States", cap: "Washington, D.C.", region: "North America", flag: "🇺🇸", alt: ["Washington", "Washington DC", "USA"],
+  { c: "United States", cap: "Washington, D.C.", region: "North America", flag: "🇺🇸", alt: ["Washington", "Washington DC"],
     facts: [
       "The United States is the world's largest economy and spans a huge variety of landscapes, from the Grand Canyon to the Rocky Mountains.",
       "Washington, D.C. was purpose-built as a capital on land carved out between Maryland and Virginia, and it belongs to no state."
@@ -962,7 +962,7 @@ window.COUNTRIES = [
       "The Marshall Islands are made up of coral atolls and were once the site of major nuclear weapons tests at Bikini Atoll.",
       "Majuro is both a town and a long, narrow atoll, where the road runs along a strip of land barely above the waves."
     ] },
-  { c: "Micronesia", cap: "Palikir", region: "Oceania", flag: "🇫🇲", alt: ["Federated States of Micronesia"],
+  { c: "Micronesia", cap: "Palikir", region: "Oceania", flag: "🇫🇲", alt: [],
     facts: [
       "Micronesia includes the mysterious ruins of Nan Madol, an ancient stone city built on a series of artificial islands.",
       "Palikir, on the island of Pohnpei, is a quiet capital tucked among lush tropical hills."
