@@ -304,6 +304,68 @@ section('11. No real non-capital place is accepted anywhere (the places fixture)
   ok(leaked === 0, 'none of ' + (PLACES_LATIN.length + PLACES_GREEK.length) + ' real places is accepted for a country it is not the capital of (' + tried + ' pairs)');
 }
 
+section('12. The final play-test: natural spellings, Greek articles and variants');
+{
+  const V = (c, raw) => verdict(byName[c], raw);
+  const exactIs = (c, raw) => { const v = V(c, raw); return !!v && v.exact; };
+  const slipIs = (c, raw, right) => { const v = V(c, raw); return !!v && !v.exact && (right === undefined || v.form === right) && v.typed === raw; };
+  // One letter off the capital and exactly as close to an obscure town: a doubled
+  // letter written once is still the capital (Siena, Agra and Sanya never are).
+  for (const [c, typed, right] of [['Austria', 'Viena', 'Vienna'], ['Ghana', 'Acra', 'Accra'], ['Estonia', 'Talin', 'Tallinn'], ['Malta', 'Valeta', 'Valletta'], ['Australia', 'Canbera', 'Canberra']]) {
+    ok(slipIs(c, typed, right), c + ': "' + typed + '" is a small misspelling of ' + right);
+  }
+  ok(exactIs('Yemen', 'Sana'), 'Yemen: "Sana" is a recognised spelling of Sana\'a');
+  ok(slipIs('Slovenia', 'Lubliana', 'Ljubljana') && slipIs('Slovenia', 'Liubliana', 'Ljubljana'), 'Slovenia: Lubliana and Liubliana are read as slips of Ljubljana');
+  ok(slipIs('Azerbaijan', 'Bakou', 'Baku'), 'Azerbaijan: the French Bakou is read as a slip of Baku');
+  for (const [c, typed] of [['Italy', 'Siena'], ['India', 'Agra'], ['China', 'Sanya'], ['Italy', 'Viena'], ['Austria', 'Siena'], ['Austria', 'Vienne'], ['Poland', 'Lublin'], ['Gambia', 'Bakau']]) {
+    ok(V(c, typed) === null, c + ': "' + typed + '" is still refused');
+  }
+  ok(slipIs('Grenada', 'SaintGeorges') && slipIs('Grenada', "SaintGeorge's") && slipIs('Antigua and Barbuda', 'SaintJohns'), 'SaintGeorges and SaintJohns (no space) are one slip, like StGeorges');
+  ok(exactIs('Grenada', 'Saint Georges') && exactIs('Grenada', 'St Georges'), 'the spaced forms stay exact');
+  // Greek names a city with its article.
+  for (const [c, typed] of [['Egypt', 'το Κάιρο'], ['Albania', 'τα Τίρανα'], ['Belgium', 'οι Βρυξέλλες'], ['Greece', 'η Αθήνα'], ['Germany', 'το Βερολίνο'],
+    ['Italy', 'η Ρώμη'], ['North Macedonia', 'τα Σκόπια'], ['Netherlands', 'η Χάγη'], ['Peru', 'η Λίμα'], ['Russia', 'η Μόσχα'], ['Lebanon', 'η Βηρυτός'], ['Cyprus', 'η Λευκωσία'],
+    ['Greece', 'Η ΑΘΗΝΑ'], ['Greece', 'την Αθήνα']]) {
+    ok(exactIs(c, typed), c + ': "' + typed + '" is exact (the article is ignored)');
+  }
+  ok(slipIs('Egypt', 'το Καιρό') || exactIs('Egypt', 'το Καιρό'), 'an article before a slip still reads as the slip');
+  ok(V('Egypt', 'το') === null && V('Greece', 'η') === null, 'an article on its own is not an answer');
+  ok(V('Italy', 'η Αθήνα') === null && V('Egypt', 'τα Τίρανα') === null, 'an article does not make another capital right');
+  // The two ways Greek writes a foreign b, d and g.
+  for (const [c, typed] of [['Azerbaijan', 'Βακού'], ['Qatar', 'Δόχα'], ['Senegal', 'Δακάρ'], ['Bangladesh', 'Δάκκα'], ['Bangladesh', 'Δάκα'], ['Tanzania', 'Δοδόμα'],
+    ['Tajikistan', 'Δουσάνμπε'], ['Chile', 'Σαντιάγο'], ['Thailand', 'Μπαγκόκ'], ['Colombia', 'Μπογοτά'], ['Australia', 'Κανμπέρα'], ['Singapore', 'Σινγκαπούρη'],
+    ['Singapore', 'Σιγγαπούρη'], ['North Korea', 'Πιονγιάνγκ'], ['Croatia', 'Ζάγκρεβ'], ['Jamaica', 'Κίγκστον'], ['Gambia', 'Μπαντζούλ']]) {
+    ok(exactIs(c, typed), c + ': "' + typed + '" is exact, not a misspelling');
+  }
+  ok(V('Brazil', 'Βραζιλία') === null, 'Βραζιλία (the country) is still not Μπραζίλια (its capital)');
+}
+
+section('13. Greek proofreading (countries.el.js and profiles.el.js)');
+{
+  const texts = [];
+  for (const [k, g] of Object.entries(EL)) { texts.push([k + ' name', g.c], [k + ' capital', g.cap]); (g.alt || []).forEach((a) => texts.push([k + ' alt', a])); (g.facts || []).forEach((f, i) => texts.push([k + ' fact ' + (i + 1), f])); }
+  const PEL = window.CAPITALS_PROFILES_EL || {};
+  for (const [k, p] of Object.entries(PEL)) for (const [f, v] of Object.entries(p)) texts.push([k + ' ' + f, v]);
+  ok(texts.length > 1500, 'Greek texts collected (' + texts.length + ')');
+  const ACC = /[άέήίόύώΆΈΉΊΌΎΏΐΰ]/g;
+  const ENCLITIC = new Set(['μου', 'σου', 'του', 'της', 'μας', 'σας', 'τους', 'τον', 'την', 'το', 'τα', 'τη', 'τις', 'των']);
+  let bad = 0;
+  const flag = (where, why, w) => { bad++; if (bad <= 12) ok(false, where + ': ' + why + ' "' + w + '"'); };
+  for (const [where, t] of texts) {
+    const words = t.split(/[^Ͱ-Ͽἀ-῿A-Za-z]+/);
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]; if (!w) continue;
+      // two accents only before an enclitic (το όνομά του), never otherwise (Πρέικεστόλεν)
+      if ((w.match(ACC) || []).length > 1 && !ENCLITIC.has(words[i + 1])) flag(where, 'two accents in one word', w);
+      if (/σ$/.test(w)) flag(where, 'a word ending in medial σ', w);
+      if (/ς./.test(w)) flag(where, 'final ς inside a word', w);
+      if (/[A-Za-z]/.test(w) && /[Ͱ-Ͽ]/.test(w)) flag(where, 'Latin and Greek letters in one word', w);
+    }
+    if (/(^|[\s(«])[ΑΒΓΔΕΖΗΘ]'(?=\s)/.test(t)) flag(where, 'an ASCII apostrophe as the numeral sign (use ΄)', t.match(/[ΑΒΓΔΕΖΗΘ]'/)[0]);
+  }
+  ok(bad === 0, 'no accent, sigma, script or numeral-sign slips in the Greek text (' + bad + ' found)');
+}
+
 section('7. The page wiring');
 const game = html.slice(html.indexOf('(function () {\n    "use strict";'), html.indexOf('window.AUTHCORE_NO_BAR'));
 ok(game.length > 40000, 'game script sliced (' + game.length + ' chars)');

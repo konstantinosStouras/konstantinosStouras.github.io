@@ -355,6 +355,44 @@ either language, or a city in `DECOY_CITIES` (well-known non-capitals). So
 exhaustively that no capital, country name or decoy is ever accepted for a
 different country; when you add a capital or an alternative, run it.
 
+**What a final play-test on a phone and a desktop added (2026-09-26)**, each
+pinned by the selftest (sections 12 and 13) or the state guard (sections 25-36):
+
+* **Natural spellings that tie with an obscure town.** "Viena", "Acra" and
+  "Talin" are one letter from the capital and exactly as close to Siena, Agra
+  and a place like Sanya, so the tie rule refuses them. They are read with
+  doubled Latin letters collapsed, as Greek already is (`collapseDoubles`),
+  which no other place matches. `KNOWN_SLIPS` holds the few foreign spellings
+  no rule covers (Lubliana, Bakou), accepted as slips. "SaintGeorges" (no
+  space) is one slip, like "StGeorges".
+* **Greek.** A leading article is ignored when what follows is the answer
+  (τα Τίρανα, οι Βρυξέλλες, η Αθήνα: `GREEK_ARTICLE`). γγ, νγκ and γκ fold
+  together (Σιγγαπούρη, Σινγκαπούρη). The older β/δ for a foreign b/d (Βακού,
+  Δακάρ) is **not** folded, because Βραζιλία the country and Μπραζίλια the
+  capital would become one word and Basel would pass for Brasília: those
+  spellings are listed as alternatives in `countries.el.js` instead. The
+  selftest also proofreads every Greek text (two accents outside an enclitic,
+  a final σ, Latin letters inside a Greek word, an ASCII numeral sign).
+* **English sentences say "the Netherlands"** (`EN_NAME`, display only; the
+  stored key stays `Netherlands`). The question carries the stored name as
+  `data-c`, which is what the browser tests read.
+* **Two tabs cannot score one question twice.** A tab whose question was
+  answered, shown or replaced elsewhere follows the stored one
+  (`followOtherTab`, re-checked at scoring time by `catchUpWithOtherTabs`). It
+  never writes when it follows, so two tabs cannot bounce questions back and
+  forth, and Next joins a question another tab already has open.
+* **Registering keeps the guest's progress** when the account is new on this
+  device and the guest played in this tab's session (`GUEST_PLAYED_KEY` in
+  sessionStorage); the guest then starts afresh. An account already on the
+  device is never overwritten. The leaderboard tells a guest they are not
+  ranked, with Log in and Register buttons.
+* **Phones.** Panels fit the screen (the overlay grid column is
+  `minmax(0, 1fr)`; a wide table scrolls inside `.board-scroll`) and scroll
+  when taller than it; a hint scrolls its result into view and does not reopen
+  the keyboard on a touch screen; dialogs take focus, keep Tab inside and never
+  stack. The map marker is moved inside thin or crescent-shaped countries
+  (`insidePoint`), and the Region choice survives a reload.
+
 **Country profiles**: after each answer a "Country profile" section shows
 known for / economy / business and trade / tourism / history, from
 `profiles.<lang>.js`, loaded lazily for the language on screen
@@ -391,6 +429,11 @@ Google → Enable**, and **Authentication → Settings → Authorized domains**
 must list `stouras.com` and `www.stouras.com`. Until then the button says
 "Google sign-in isn't switched on for this site yet" and email/password keeps
 working.
+
+The box is usable from the keyboard: its "Log in" / "Register" switch links
+carry `href="#"` (without one a link cannot be reached by Tab), Tab stays
+inside the open box, and closing it returns focus to what opened it. All of
+it is in the one script the eight copies share, pinned by the guard.
 
 ## `/fun/ft50` — RETIRED (redirect stub only)
 The standalone FT50 research paper browser was removed: `/lit/` is a

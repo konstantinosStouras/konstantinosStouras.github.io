@@ -89,7 +89,7 @@ window.COUNTRIES = [
     ] },
   { c: "Greece", cap: "Athens", region: "Europe", flag: "🇬🇷", alt: ["Athina"],
     facts: [
-      "Did you know that Greece is widely regarded as the birthplace of democracy, philosophy, theatre and the Olympic Games? Thinkers like Socrates, Plato and Aristotle laid foundations still studied today.",
+      "Greece is widely regarded as the birthplace of democracy, philosophy, theatre and the Olympic Games, and thinkers like Socrates, Plato and Aristotle laid foundations still studied today.",
       "Athens is one of the oldest continuously inhabited cities in the world, with a history of more than 3,000 years, crowned by the marble temples of the Acropolis."
     ] },
   { c: "Hungary", cap: "Budapest", region: "Europe", flag: "🇭🇺", alt: [],
@@ -479,7 +479,7 @@ window.COUNTRIES = [
       "Vietnam is one of the world's largest exporters of coffee and rice, with emerald rice terraces climbing its northern hills.",
       "Hanoi is the ancient capital, with a maze-like Old Quarter of narrow streets, while the larger Ho Chi Minh City lies in the south."
     ] },
-  { c: "Yemen", cap: "Sana'a", region: "Asia", flag: "🇾🇪", alt: ["Sanaa"],
+  { c: "Yemen", cap: "Sana'a", region: "Asia", flag: "🇾🇪", alt: ["Sanaa", "Sana"],
     facts: [
       "Yemen was known in antiquity as Arabia Felix, or Happy Arabia, a green and prosperous land at the southern tip of the Arabian Peninsula.",
       "Sana'a is one of the oldest continuously inhabited cities on Earth, famous for tower houses of brown brick decorated with white geometric patterns."

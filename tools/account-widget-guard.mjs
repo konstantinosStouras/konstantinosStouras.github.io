@@ -52,6 +52,8 @@ for (const p of PAGES) {
   ok(m[0].includes('fns.signInWithPopup(auth, provider)') && m[0].includes('new fns.GoogleAuthProvider()'), p + ': signs in with the Google provider');
   ok(blk.includes('.acct-lbl[hidden]{ display:none; }'), p + ': the hidden Nickname field is really hidden (the <style> copy is not covered by the script comparison)');
   ok(!/inNick\.value\.trim\(\) \|\| email\.split/.test(m[0]), p + ': a blank nickname never falls back to the e-mail address');
+  ok(m[0].includes('<a href="#" data-act="to-login">') && m[0].includes('<a href="#" data-act="to-register">') && /act==="to-register"\) e\.preventDefault\(\)/.test(m[0]), p + ': the Log in / Register switch links are reachable by Tab (href) and do not navigate');
+  ok(/modal\.addEventListener\("keydown"[\s\S]{0,80}e\.key !== "Tab"/.test(m[0]) && /opener = document\.activeElement/.test(m[0]), p + ': Tab stays inside the open box, and focus returns to what opened it');
   let parses = true; try { new Function(m[0].replace(/^<script type="module">/, '').replace(/<\/script>$/, '')); } catch { parses = false; }
   ok(parses, p + ': widget script parses');
 }

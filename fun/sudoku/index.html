@@ -1490,12 +1490,29 @@
     inPass.setAttribute("autocomplete", reg ? "new-password" : "current-password");
     elErr.hidden = true; elErr.textContent = "";
     elSwitch.innerHTML = reg
-      ? 'Already have an account? <a data-act="to-login">Log in</a>'
-      : 'New here? <a data-act="to-register">Register</a>';
+      ? 'Already have an account? <a href="#" data-act="to-login">Log in</a>'
+      : 'New here? <a href="#" data-act="to-register">Register</a>';
+    if(modal.hidden) opener = document.activeElement;   // focus goes back there on close
     modal.hidden = false;
     setTimeout(()=>{ (reg?inNick:inEmail).focus(); }, 60);
   }
-  function closeModal(){ modal.hidden = true; }
+  function closeModal(){
+    if(modal.hidden) return;
+    modal.hidden = true;
+    const o = opener; opener = null;
+    if(o && o.focus && document.contains(o)){ try{ o.focus({ preventScroll:true }); }catch(_){} }
+  }
+  let opener = null;
+  // Tab stays inside the open box, so the page behind it cannot be reached.
+  modal.addEventListener("keydown", (e)=>{
+    if(e.key !== "Tab" || modal.hidden) return;
+    const items = [...modal.querySelectorAll(".acct-card button, .acct-card input, .acct-card a[href]")]
+      .filter((el)=>!el.disabled && el.offsetParent !== null);
+    if(!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  });
 
   function friendly(code, msg){
     const m = {
@@ -1533,6 +1550,7 @@
   root.addEventListener("click", (e)=>{
     const act = e.target.closest("[data-act]")?.getAttribute("data-act");
     if(!act) return;
+    if(act==="to-login" || act==="to-register") e.preventDefault();   // href="#" only makes the link reachable by Tab
     if(act==="login") openModal("login");
     else if(act==="register") openModal("register");
     else if(act==="close") closeModal();

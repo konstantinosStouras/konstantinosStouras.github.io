@@ -47,7 +47,8 @@ const errors = [];
 pg.on('pageerror', (e) => errors.push(String(e)));
 
 const entryOf = (name) => pg.evaluate((n) => { const e = window.COUNTRIES.find((x) => x.c === n); const g = (window.COUNTRIES_EL || {})[n] || {}; return { c: e.c, cap: e.cap, alt: e.alt, cap_el: g.cap, region: e.region }; }, name);
-const country = () => pg.locator('#qText .country').innerText();
+// the stored (English) name of the country asked, whatever the sentence on screen says
+const country = () => pg.evaluate(() => document.getElementById('qText').getAttribute('data-c'));
 const answer = async (text, viaEnter) => {
   await pg.fill('#answerInput', text);
   if (viaEnter) await pg.press('#answerInput', 'Enter'); else await pg.click('#submitBtn');
@@ -166,7 +167,7 @@ if (haveProfiles) {
   await pg.waitForTimeout(200);
   const elLabels = await pg.$$eval('#profileList dt', (d) => d.map((x) => x.textContent).join(' | '));
   const ddEl = await pg.$$eval('#profileList dd', (d) => d.map((x) => x.textContent));
-  ok(/Γνωστή για/.test(elLabels) && ddEl.length === 5 && ddEl.every((t) => /[\u0370-\u03FF]{4}/.test(t)), 'switching to Greek loads and shows the Greek profile (' + elLabels + ')');
+  ok(/Φημίζεται για/.test(elLabels) && ddEl.length === 5 && ddEl.every((t) => /[\u0370-\u03FF]{4}/.test(t)), 'switching to Greek loads and shows the Greek profile (' + elLabels + ')');
   await pg.click('#langEn');
 } else {
   ok(await pg.evaluate(() => getComputedStyle(document.getElementById('profile')).display === 'none'), 'no profile data: section not displayed (computed style, not just the class)');

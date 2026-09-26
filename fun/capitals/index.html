@@ -268,7 +268,7 @@
   }
   .answer-banner .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .answer-banner .cap { font-family: var(--font-display); font-size: clamp(22px, 5vw, 30px); font-weight: 800; letter-spacing: -0.3px; color: var(--text); }
-  .answer-banner .cap .of { color: var(--muted); font-weight: 600; font-size: 16px; }
+  .answer-banner .cap .of { display: block; margin-top: 2px; color: var(--muted); font-weight: 600; font-size: 16px; line-height: 1.35; letter-spacing: 0; }
   /* Shown only when the accepted answer was an ALTERNATIVE (La Paz for Bolivia,
      Peking for Beijing…) rather than the capital printed above it, so a player
      is never left wondering why "Sucre" is announced after they typed "La Paz". */
@@ -346,11 +346,16 @@
   .next-row .seen { font-size: 13px; color: var(--muted); margin-left: auto; }
 
   /* ---------- Modal ---------- */
+  /* A panel taller than the screen scrolls inside the overlay (small phones and
+     landscape), and the grid column is minmax(0,1fr) so a wide table can never
+     widen the panel past the screen: it scrolls sideways inside .board-scroll. */
   .overlay {
     position: fixed; inset: 0; z-index: 50;
     background: rgba(3,10,18,0.72); backdrop-filter: blur(5px);
-    display: grid; place-items: center; padding: 20px;
+    display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; align-items: center; padding: 20px;
+    overflow-y: auto; overscroll-behavior: contain;
   }
+  .overlay > .modal { min-width: 0; margin: auto 0; }
   .overlay.hidden { display: none; }
   .modal {
     width: 100%; max-width: 460px;
@@ -382,13 +387,20 @@
   .chip:hover { border-color: var(--accent); }
   .modal-close { position: relative; }
   .x-btn {
-    position: absolute; top: -8px; right: -6px;
+    position: absolute; top: 10px; right: 10px;
+    width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px;
     background: transparent; border: none; color: var(--muted);
     font-size: 22px; cursor: pointer; line-height: 1;
   }
+  .x-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .modal-close > h2 { padding-right: 34px; }
   .x-btn:hover { color: var(--text); }
 
   /* ---------- Leaderboard ---------- */
+  .board-guest { margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(56,189,248,0.07); font-size: 14px; }
+  .board-guest p { margin: 0; color: var(--text); line-height: 1.45; }
+  .board-guest .row { margin-top: 10px; }
+  .board-guest.hidden { display: none; }
   .board-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 14px; }
   .board-tools .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
   .sortbtn { background: var(--tile); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; cursor: pointer; font-weight: 600; }
@@ -401,7 +413,9 @@
   table.board tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
   table.board tbody tr.me { background: rgba(56,189,248,0.10); }
   table.board td.rank { font-variant-numeric: tabular-nums; color: var(--muted); width: 34px; }
-  table.board td.name { font-weight: 700; color: var(--text); max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+  /* The nickname is truncated on its own, so the "you" tag after it stays visible. */
+  table.board td.name { font-weight: 700; color: var(--text); }
+  table.board td.name .nm { display: inline-block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
   table.board td.name .youtag { font-size: 10px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
   table.board td.pts { font-weight: 800; color: var(--good); font-variant-numeric: tabular-nums; }
   table.board td.num { font-variant-numeric: tabular-nums; color: #cfe1ee; }
@@ -467,7 +481,10 @@
   /* Smallest phones: the language flags take their own row too, so "My progress"
      and "Leaderboard" share one row in both languages (English is wider at ~330px). */
   @media (max-width: 360px) {
-    .who .lang-switch { flex: 1 1 100%; }
+    /* A zero-height full-width spacer breaks the row after the flags, so the flag
+       capsule keeps its natural width instead of stretching into an empty bar. */
+    .who::before { content: ""; order: 1; flex: 0 0 100%; height: 0; }
+    .who > :not(.lang-switch) { order: 2; }
   }
   @media (max-width: 480px) {
     .card { padding: 18px; }
@@ -492,7 +509,7 @@
         </div>
       </div>
       <div class="who">
-        <span class="lang-switch" role="group" aria-label="Language">
+        <span class="lang-switch" role="group" aria-label="Language" data-i18n-aria="langGroup">
           <button class="flag-btn" id="langEn" data-lang="en" title="English" aria-label="English">
             <svg viewBox="0 0 60 30" aria-hidden="true">
               <clipPath id="ukA"><path d="M0,0 v30 h60 v-30 z"/></clipPath>
@@ -524,7 +541,7 @@
         <div class="account" id="account">
           <button class="pill loginpill" id="capLogin" data-i18n="login">Log in</button>
           <button class="pill loginpill primary" id="capRegister" data-i18n="register">Register</button>
-          <button class="pill" id="whoPill" aria-haspopup="true" aria-expanded="false" title="Account" style="display:none">👤 <b id="whoName">—</b> <span class="caret" aria-hidden="true">▾</span></button>
+          <button class="pill" id="whoPill" aria-haspopup="true" aria-expanded="false" title="Account" data-i18n-title="accountTitle" style="display:none">👤 <b id="whoName">—</b> <span class="caret" aria-hidden="true">▾</span></button>
           <div class="account-menu hidden" id="accountMenu" role="menu">
             <div class="menu-head"><span id="menuHeadLabel" data-i18n="signedInAs">Signed in as</span> <b id="menuNick">—</b></div>
             <button class="menu-item" id="menuSwitch" role="menuitem" data-i18n="switchUser">Switch user</button>
@@ -540,7 +557,7 @@
         <select id="regionSel"></select>
       </div>
       <div class="spacer"></div>
-      <span class="pill" id="streakPill" title="Correct answers in a row" style="background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;">🔥 <span data-i18n="streak">Streak</span> <b style="color:var(--warn)" id="streakVal">0</b></span>
+      <span class="pill" id="streakPill" title="Correct answers in a row" data-i18n-title="streakTitle" style="background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;">🔥 <span data-i18n="streak">Streak</span> <b style="color:var(--warn)" id="streakVal">0</b></span>
     </div>
 
     <main class="card" id="quizCard">
@@ -614,7 +631,7 @@
   <!-- Nickname overlay -->
   <div class="overlay hidden" id="nickOverlay">
     <div class="modal modal-close">
-      <button class="x-btn" id="nickClose" title="Close" style="display:none">×</button>
+      <button class="x-btn" id="nickClose" title="Close" aria-label="Close" data-i18n-title="close" data-i18n-aria="close" style="display:none">×</button>
       <h2 data-i18n="welcome">Welcome to Capitals</h2>
       <p class="sub" data-i18n="welcomeSub">Pick a nickname so your progress is saved and tracked over time. Use the same nickname next time to keep building your streak.</p>
       <input type="text" id="nickInput" placeholder="Your nickname" data-i18n-ph="nickPh" maxlength="24" autocomplete="off" spellcheck="false" enterkeyhint="go">
@@ -634,7 +651,7 @@
   <!-- Stats overlay -->
   <div class="overlay hidden" id="statsOverlay">
     <div class="modal wide modal-close">
-      <button class="x-btn" id="statsClose" title="Close">×</button>
+      <button class="x-btn" id="statsClose" title="Close" aria-label="Close" data-i18n-title="close" data-i18n-aria="close">×</button>
       <h2><span data-i18n="progressFor">Progress for</span> <span id="statsNick" style="color:var(--accent)"></span></h2>
       <p class="sub" id="statsSince"></p>
 
@@ -666,10 +683,17 @@
   <!-- Leaderboard overlay -->
   <div class="overlay hidden" id="boardOverlay">
     <div class="modal wide modal-close">
-      <button class="x-btn" id="boardClose" title="Close">×</button>
+      <button class="x-btn" id="boardClose" title="Close" aria-label="Close" data-i18n-title="close" data-i18n-aria="close">×</button>
       <h2 data-i18n="leaderboard">Leaderboard</h2>
       <div id="boardScope" class="board-scope"></div>
       <p class="sub" id="boardSub">Everyone who has played on this device, ranked.</p>
+      <div class="board-guest hidden" id="boardGuest">
+        <p id="boardGuestText">You are playing as a guest, and guests are not ranked. Log in or register to appear on the leaderboard.</p>
+        <div class="row">
+          <button class="btn small" id="boardGuestLogin" data-i18n="login">Log in</button>
+          <button class="btn small primary" id="boardGuestRegister" data-i18n="register">Register</button>
+        </div>
+      </div>
 
       <div class="board-tools">
         <span class="lbl" data-i18n="rankBy">Rank by</span>
@@ -795,7 +819,9 @@
     var STORE_KEY = "capitals:v1:profiles";
     var LAST_KEY  = "capitals:v1:lastNick";
     var LANG_KEY  = "capitals:v1:lang";
+    var REGION_KEY = "capitals:v1:region";   // the Region choice survives a reload, like the language
     var GUEST_KEY = "__guest__";   // reserved profile key — never ranked
+    var GUEST_PLAYED_KEY = "capitals:v1:guestPlayed";   // sessionStorage: this tab played as a guest
     var HISTORY_CAP = 20000;
 
     // ---------- merge the Greek layer onto the base dataset ----------
@@ -820,7 +846,7 @@
         hint1: "Hint 1: how many letters", hint2: "Hint 2: reveal some letters", hint3: "Hint 3: show the answer",
         answerShown: "Answer shown",
         didYouKnow: "Did you know?", nextCountry: "Next country →",
-        whereIs: "Where in the world", notOnMap: "Too small to show on the map.", notDrawn: "Not shown separately on this map.",
+        whereIs: "Where in the world", notOnMap: "Too small to show on the map.", notDrawn: "Not shown separately on this map.", notDrawnAtAll: "This map does not show it.",
         mapCredit: "Map: Al MacDonald / F. Lekschas · CC BY-SA 3.0",
         byline: "A fun project by", moreProjects: "more fun projects",
         welcome: "Welcome to Capitals",
@@ -847,6 +873,9 @@
         playersGlobalN: function (n) { return n + " player" + (n === 1 ? "" : "s") + " worldwide."; },
         playersGlobalEmpty: "No one has played yet. Answer a few questions to be the first on the board.",
         you: "you",
+        guestBoard: "You are playing as a guest, and guests are not ranked. Log in or register to appear on the leaderboard.",
+        boardEmptyGuest: "No one is on the board yet.",
+        langGroup: "Language", accountTitle: "Account", streakTitle: "Correct answers in a row", close: "Close",
         // dynamic
         qText: function (c) { return "What is the capital of <span class=\"country\">" + c + "</span>?"; },
         capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">is the capital of " + c + "</span>"; },
@@ -861,6 +890,7 @@
         fbWrong: "Not quite — try again, or tap a hint.",
         fbLen: "Hint: the length is shown below.",
         fbPartial: "Hint: some letters are filled in below.",
+        fbElsewhere: "That question was settled in another tab, so here is the next one.",
         noCountries: "No countries in this region.",
         maskLen: function (n, w) { return "The capital has " + n + " letter" + (n === 1 ? "" : "s") + (w > 1 ? " across " + w + " words." : "."); },
         maskPartial: "Some letters are filled in to help you.",
@@ -885,7 +915,7 @@
         hint1: "Βοήθεια 1: πόσα γράμματα", hint2: "Βοήθεια 2: μερικά γράμματα", hint3: "Βοήθεια 3: δείξε την απάντηση",
         answerShown: "Η απάντηση φάνηκε",
         didYouKnow: "Το ήξερες;", nextCountry: "Επόμενη χώρα →",
-        whereIs: "Πού βρίσκεται στον κόσμο", notOnMap: "Πολύ μικρή για να φανεί στον χάρτη.", notDrawn: "Δεν εμφανίζεται χωριστά σε αυτόν τον χάρτη.",
+        whereIs: "Πού βρίσκεται στον κόσμο", notOnMap: "Πολύ μικρή για να φανεί στον χάρτη.", notDrawn: "Δεν εμφανίζεται χωριστά σε αυτόν τον χάρτη.", notDrawnAtAll: "Δεν εμφανίζεται σε αυτόν τον χάρτη.",
         mapCredit: "Χάρτης: Al MacDonald / F. Lekschas · CC BY-SA 3.0",
         byline: "Ένα διασκεδαστικό έργο του", moreProjects: "περισσότερα έργα",
         welcome: "Καλώς ήρθες στο Capitals",
@@ -906,31 +936,35 @@
         rankBy: "Ταξινόμηση κατά", masteredShort: "Κατακτήσεις", player: "Παίκτης",
         accShort: "Ακρ.", answeredShort: "Απαντ.",
         boardEmpty: "Κανείς δεν έχει παίξει ακόμη. Απάντησε μερικές ερωτήσεις για να μπεις στην κατάταξη.",
-        boardNote: "Οι βαθμοί αποθηκεύονται σε αυτό το πρόγραμμα περιήγησης, ώστε η κατάταξη δείχνει κάθε ψευδώνυμο που έχει παίξει εδώ.",
+        boardNote: "Οι βαθμοί αποθηκεύονται σε αυτό το πρόγραμμα περιήγησης, ώστε η κατάταξη δείχνει κάθε ψευδώνυμο που έχει παίξει εδώ. Οι κατακτήσεις μετρούν τις πρωτεύουσες που βρήκες χωρίς βοήθεια.",
         boardNoteGlobal: "Αυτή η κατάταξη είναι κοινή για όλο τον κόσμο. Οι κατακτήσεις μετρούν τις πρωτεύουσες που βρήκες χωρίς βοήθεια.",
         scopeGlobal: "🌐 Παγκόσμια κατάταξη", scopeLocal: "📱 Μόνο σε αυτή τη συσκευή",
         playersGlobalN: function (n) { return n === 1 ? "1 παίκτης παγκοσμίως." : n + " παίκτες παγκοσμίως."; },
         playersGlobalEmpty: "Κανείς δεν έχει παίξει ακόμη. Απάντησε μερικές ερωτήσεις για να είσαι πρώτος στην κατάταξη.",
         you: "εσύ",
+        guestBoard: "Παίζεις ως επισκέπτης και οι επισκέπτες δεν μπαίνουν στην κατάταξη. Κάνε Σύνδεση ή Εγγραφή για να εμφανιστείς.",
+        boardEmptyGuest: "Κανείς δεν είναι ακόμη στην κατάταξη.",
+        langGroup: "Γλώσσα", accountTitle: "Λογαριασμός", streakTitle: "Σωστές απαντήσεις στη σειρά", close: "Κλείσιμο",
         qText: function (c) { return "Ποια είναι η πρωτεύουσα της χώρας <span class=\"country\">" + c + "</span>;"; },
-        capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">— η πρωτεύουσα της χώρας " + c + "</span>"; },
+        capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">η πρωτεύουσα της χώρας " + c + "</span>"; },
         correctNoHint: "Σωστά — χωρίς βοήθεια!", correctOneHint: "Σωστά — με μία βοήθεια", correctHints: "Σωστά — με βοήθειες",
         altAccepted: function (ans, yours) { return yours ? "Η απάντησή σου <b>" + ans + "</b> γίνεται επίσης δεκτή." : "Γίνεται επίσης δεκτή η απάντηση <b>" + ans + "</b>."; },
         typoNote: function (typed, right) { return "Μικρό ορθογραφικό λάθος: έγραψες <b>" + typed + "</b>, η σωστή γραφή είναι <b>" + right + "</b>."; },
         typoAltNote: function (typed, form) { return "Σχεδόν σωστά: έγραψες <b>" + typed + "</b>, που το διαβάζουμε ως <b>" + form + "</b>, που επίσης γίνεται δεκτό."; },
         profileTitle: "Προφίλ χώρας",
-        pfKnown: "Γνωστή για", pfEconomy: "Οικονομία", pfBusiness: "Επιχειρήσεις και εμπόριο", pfTourism: "Τουρισμός", pfHistory: "Ιστορία",
+        pfKnown: "Φημίζεται για", pfEconomy: "Οικονομία", pfBusiness: "Επιχειρήσεις και εμπόριο", pfTourism: "Τουρισμός", pfHistory: "Ιστορία",
         learned: "Να η απάντηση — τώρα τη γνωρίζεις",
         fbType: "Γράψε μια πόλη ή χρησιμοποίησε βοήθεια.",
         fbWrong: "Όχι ακριβώς. Δοκίμασε ξανά ή πάρε μια βοήθεια.",
         fbLen: "Βοήθεια: το μήκος φαίνεται πιο κάτω.",
         fbPartial: "Βοήθεια: μερικά γράμματα συμπληρώθηκαν πιο κάτω.",
+        fbElsewhere: "Αυτή η ερώτηση απαντήθηκε σε άλλη καρτέλα, οπότε ορίστε η επόμενη.",
         noCountries: "Δεν υπάρχουν χώρες σε αυτή την περιοχή.",
         maskLen: function (n, w) { return "Η πρωτεύουσα έχει " + n + " γράμματα" + (w > 1 ? " σε " + w + " λέξεις." : "."); },
         maskPartial: "Μερικά γράμματα έχουν συμπληρωθεί για βοήθεια.",
         seenN: function (c, n, ok) { return "Έχεις δει αυτή τη χώρα " + (n === 1 ? "1 φορά" : n + " φορές") + (ok ? ", σωστά " + ok + "." : "."); },
         seenFirst: function (c) { return "Πρώτη φορά που βλέπεις αυτή τη χώρα."; },
-        since: function (d) { return "Μαθαίνεις από " + d; },
+        since: function (d) { return "Μαθαίνεις από τις " + d; },
         playersN: function (n) { return n === 1 ? "1 παίκτης έχει παίξει σε αυτή τη συσκευή." : n + " παίκτες έχουν παίξει σε αυτή τη συσκευή."; },
         playersEmpty: "Όποιος παίζει σε αυτή τη συσκευή εμφανίζεται εδώ.",
         recentN: function (n) { return n + (n === 1 ? " ερώτηση" : " ερωτήσεις") + " τις τελευταίες 14 ημέρες."; },
@@ -1015,7 +1049,7 @@
       if (pKey && profiles[pKey]) {
         profile = profiles[pKey];
         updateStreakDisplay();
-        if (current) refreshSeenNote();
+        if (current) { refreshSeenNote(); followOtherTab(); }
       }
     });
 
@@ -1040,6 +1074,11 @@
           return "ι";                                           // η υ ει οι υι → /i/
         });
       }
+      // γγ, νγκ and γκ all spell the same "ng-g" sound: Σιγγαπούρη, Σινγκαπούρη
+      // and Σιγκαπούρη are one name. (The older β/δ for a foreign b/d, as in Βακού
+      // and Δακάρ, is NOT folded: Βραζιλία the country and Μπραζίλια the capital
+      // would become one word. Those spellings are listed as alternatives instead.)
+      s = s.replace(/νγκ|γγ/g, "γκ");
       return s.replace(/([α-ω])\1+/g, "$1"); // collapse doubled letters (Λισσαβόνα → Λισαβόνα)
     }
     // Letters that look alike in two alphabets. When one answer mixes scripts
@@ -1087,6 +1126,7 @@
         .replace(/['’`ʻ]/g, "")                  // drop apostrophes
         .replace(/[.·,]/g, "")                        // drop dots and commas
         .replace(/[\s\u2010-\u2015\u2212-]/g, " ")   // every space-like character (tab, NBSP…) and every hyphen or dash is a word break
+        .replace(/\bsaint(?=[a-z])/g, "st")                // "SaintGeorges" reads as "StGeorges": the missing space is one slip
         .replace(/\bsaint\b/g, "st")                       // saint -> st
         .replace(/ς/g, "σ")            // final sigma -> sigma
         .replace(/[^a-z0-9α-ω ]/g, "") // keep Latin + Greek letters
@@ -1224,6 +1264,35 @@
       if (!k) return null;
       var forms = acceptedForms(entry);
       if (k in forms) return { form: forms[k], exact: true };
+      var typed = String(raw).trim();
+      // Greek names a city with its article (τα Τίρανα, οι Βρυξέλλες, η Αθήνα): one
+      // leading article is ignored, but only when what follows is this answer.
+      var bare = k.replace(GREEK_ARTICLE, "");
+      if (bare !== k && bare in forms) return { form: forms[bare], exact: true };
+      if (placeIndexFor !== all) { placeIndex = buildPlaceIndex(all); placeIndexFor = all; }
+      var m = slipOf(k, forms, typed) || (bare !== k ? slipOf(bare, forms, typed) : null);
+      if (m) return m;
+      // Doubled letters, as Greek already folds them: "Viena", "Acra" and "Talin"
+      // are one letter from the capital but exactly as close to a real town (Siena,
+      // Agra), so the tie rule above refuses them. Read with the doubles collapsed
+      // they ARE the capital, which no other place is.
+      var kc = collapseDoubles(k);
+      var hit = Object.keys(forms).filter(function (f) { return /[a-z]/.test(f) && collapseDoubles(f) === kc; })[0];
+      if (hit && placeIndex.indexOf(k) < 0) return { form: forms[hit], exact: false, typed: typed, dist: editDistance(k, hit) };
+      // Spellings from another language that no rule above covers.
+      var slips = KNOWN_SLIPS[entry.c];
+      if (slips && slips.some(function (x) { return norm(x) === k; })) return { form: entry.cap, exact: false, typed: typed, dist: editDistance(k, norm(entry.cap)) };
+      return null;
+    }
+    var GREEK_ARTICLE = /^(?:ο|ι|το|τα|τον|τιν|τι|του|τισ) (?=\S)/;   // ο η το οι τα τον την τη του της, after folding
+    function collapseDoubles(s) { return s.replace(/([a-z])\1+/g, "$1"); }
+    var KNOWN_SLIPS = Object.assign(Object.create(null), {
+      "Slovenia": ["Lubliana", "Liubliana"],   // the Italian and Spanish spellings
+      "Azerbaijan": ["Bakou"]                    // the French spelling
+    });
+    // A slip of at most typoAllowance() letters from one accepted form, unless the
+    // answer is (or is as close to) another real place the game knows.
+    function slipOf(k, forms, typed) {
       var best = null, bestD = Infinity;
       Object.keys(forms).forEach(function (f) {
         var allow = typoAllowance(f);
@@ -1232,7 +1301,6 @@
         if (d <= allow && d < bestD) { bestD = d; best = f; }
       });
       if (best === null) return null;
-      if (placeIndexFor !== all) { placeIndex = buildPlaceIndex(all); placeIndexFor = all; }
       for (var i = 0; i < placeIndex.length; i++) {
         var o = placeIndex[i];
         if (o in forms || Math.abs(o.length - k.length) > bestD) continue;
@@ -1242,7 +1310,7 @@
         // is 2 from Malta, but Malta allows 1, so it stays a slip of Valletta.)
         if (editDistance(k, o) <= Math.min(bestD, typoAllowance(o))) return null;
       }
-      return { form: forms[best], exact: false, typed: String(raw).trim(), dist: bestD };
+      return { form: forms[best], exact: false, typed: typed, dist: bestD };
     }
     // True when an accepted form is an ALTERNATIVE answer rather than the capital
     // itself in either language (La Paz for Bolivia; Peking for Beijing).
@@ -1252,7 +1320,22 @@
     }
 
     // ---------- language-aware display helpers ----------
-    function cName(e) { return lang === "el" ? e.c_el : e.c; }       // country, display
+    // How an English sentence names the country ("the capital of the Netherlands").
+    // e.c stays the storage key; only the sentences read these.
+    var EN_NAME = Object.assign(Object.create(null), {
+      "Netherlands": "the Netherlands", "United Kingdom": "the United Kingdom", "United States": "the United States",
+      "Philippines": "the Philippines", "Bahamas": "the Bahamas", "Gambia": "the Gambia", "Maldives": "the Maldives",
+      "Comoros": "the Comoros", "Seychelles": "the Seychelles", "Marshall Islands": "the Marshall Islands",
+      "Solomon Islands": "the Solomon Islands", "Central African Republic": "the Central African Republic",
+      "Dominican Republic": "the Dominican Republic", "United Arab Emirates": "the United Arab Emirates",
+      "Congo (DR)": "the Democratic Republic of the Congo", "Congo (Republic)": "the Republic of the Congo",
+      "Cote d'Ivoire": "Côte d'Ivoire", "Sao Tome and Principe": "São Tomé and Príncipe"
+    });
+    function setQText() {
+      els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
+      els.qText.setAttribute("data-c", current.c);   // the stored name, whatever the sentence says
+    }
+    function cName(e) { return lang === "el" ? e.c_el : (EN_NAME[e.c] || e.c); }       // country, as a sentence names it
     function capDisp(e) { return lang === "el" ? e.cap_el : e.cap; } // capital, display
     function factsOf(e) { return lang === "el" ? e.facts_el : e.facts; }
 
@@ -1321,7 +1404,8 @@
       // leaderboard modal
       boardOverlay: $("boardOverlay"), boardClose: $("boardClose"), boardSub: $("boardSub"),
       boardBody: $("boardBody"), boardEmpty: $("boardEmpty"), thPoints: $("thPoints"),
-      boardScope: $("boardScope"), boardNote: $("boardNote")
+      boardScope: $("boardScope"), boardNote: $("boardNote"),
+      boardGuest: $("boardGuest"), boardGuestText: $("boardGuestText")
     };
 
     // ---------- region filter ----------
@@ -1337,7 +1421,9 @@
     };
     function regionLabel(r) { return lang === "el" ? (REGION_EL[r] || r) : r; }
     function buildRegionSelect() {
-      var prev = els.regionSel.value || "all";
+      var prev = els.regionSel.value;
+      if (!prev) { try { prev = localStorage.getItem(REGION_KEY) || ""; } catch (e) { prev = ""; } }
+      if (prev !== "all" && regions().indexOf(prev) < 0) prev = "all";
       var opts = ['<option value="all">' + t("allRegions") + ' (' + ALL.length + ')</option>'];
       regions().forEach(function (r) {
         var n = ALL.filter(function (e) { return e.region === r; }).length;
@@ -1356,6 +1442,7 @@
     var fbKey = null;       // the i18n key of the feedback line on screen, so a language switch re-translates it
     var pendingResume = true; // the first question of a session re-asks one left unanswered by a reload
     var lastCountry = null; // avoid immediate repeat
+    var forcedEntry = null; // the next newQuestion() shows this one (the question another tab moved to)
 
     function pool() {
       var r = els.regionSel.value;
@@ -1508,7 +1595,40 @@
         paintCountry(svg, cc);
       });
     }
-    var NOT_DRAWN = { xk: 1, ps: 1, tl: 1, fj: 1 };
+    // Kosovo, Palestine and Timor-Leste are drawn inside a neighbour; Fiji is not
+    // drawn at all (it straddles the 180th meridian the map is cut at).
+    var NOT_DRAWN = { xk: "notDrawn", ps: "notDrawn", tl: "notDrawn", fj: "notDrawnAtAll" };
+    // The centre of a thin or crescent-shaped country's box can fall outside it
+    // (Norway's lands in Sweden, Chile's in Argentina, Greece's in the sea). Keep the
+    // centre when it is on land; otherwise sample the box and take the point deepest
+    // inside the shape, closest to the centre on a tie.
+    function insidePoint(svg, leaf, box, cx, cy) {
+      if (!leaf || !box || typeof leaf.isPointInFill !== "function" || !svg.createSVGPoint) return null;
+      var pt = svg.createSVGPoint();
+      var inFill = function (x, y) { pt.x = x; pt.y = y; try { return leaf.isPointInFill(pt); } catch (e) { return false; } };
+      if (inFill(cx, cy)) return null;
+      var N = 28, cells = [], i, j;
+      for (j = 0; j < N; j++) {
+        for (i = 0; i < N; i++) {
+          var x = box.x + (i + 0.5) * box.width / N, y = box.y + (j + 0.5) * box.height / N;
+          cells.push({ i: i, j: j, x: x, y: y, inside: inFill(x, y) });
+        }
+      }
+      var outs = cells.filter(function (c) { return !c.inside; });
+      var best = null, bestDepth = -1, bestD2 = Infinity;
+      cells.forEach(function (c) {
+        if (!c.inside) return;
+        // depth: grid distance to the nearest outside sample or to the box edge
+        var depth = Math.min(c.i + 1, c.j + 1, N - c.i, N - c.j);
+        outs.forEach(function (o) {
+          var d = Math.max(Math.abs(o.i - c.i), Math.abs(o.j - c.j));
+          if (d < depth) depth = d;
+        });
+        var d2 = (c.x - cx) * (c.x - cx) + (c.y - cy) * (c.y - cy);
+        if (depth > bestDepth || (depth === bestDepth && d2 < bestD2)) { best = c; bestDepth = depth; bestD2 = d2; }
+      });
+      return best ? { x: best.x, y: best.y } : null;
+    }
     function paintCountry(svg, cc) {
       var SVGNS = "http://www.w3.org/2000/svg";
       Array.prototype.forEach.call(svg.querySelectorAll(".hl"), function (e) { e.classList.remove("hl"); });
@@ -1517,7 +1637,7 @@
       var nodes = svg.querySelectorAll(cc === "so" ? '[id="so"],[id="_somaliland"]' : '[id="' + cc + '"]');
       // Kosovo, Palestine, Timor-Leste and Fiji are not small: this map simply does
       // not draw them apart (Kosovo is inside Serbia, the West Bank inside Israel).
-      if (!nodes.length) { els.mapNote.textContent = t(NOT_DRAWN[cc] ? "notDrawn" : "notOnMap"); return; }
+      if (!nodes.length) { els.mapNote.textContent = t(NOT_DRAWN[cc] || "notOnMap"); return; }
       els.mapNote.textContent = "";
       // Highlight the matched country (and only it).
       Array.prototype.forEach.call(nodes, function (n) { n.classList.add("hl"); });
@@ -1532,15 +1652,17 @@
         if (n.querySelectorAll) Array.prototype.forEach.call(n.querySelectorAll("path"), function (p) { leaves.push(p); });
       });
       if (!leaves.length) leaves = Array.prototype.slice.call(nodes);
-      var cx, cy, bestArea = -1;
+      var cx, cy, bestArea = -1, bestLeaf = null, bestBox = null;
       leaves.forEach(function (p) {
         try {
           var b = p.getBBox();
           var area = b.width * b.height;
-          if (area > bestArea) { bestArea = area; cx = b.x + b.width / 2; cy = b.y + b.height / 2; }
+          if (area > bestArea) { bestArea = area; cx = b.x + b.width / 2; cy = b.y + b.height / 2; bestLeaf = p; bestBox = b; }
         } catch (e) {}
       });
       if (bestArea < 0) { els.mapNote.textContent = t("notOnMap"); return; }
+      var inside = insidePoint(svg, bestLeaf, bestBox, cx, cy);
+      if (inside) { cx = inside.x; cy = inside.y; }
       var g = document.createElementNS(SVGNS, "g");
       g.setAttribute("class", "map-marker");
       var ring = document.createElementNS(SVGNS, "circle");
@@ -1561,7 +1683,10 @@
       return pool().filter(function (e) { return e.c === c; })[0] || null;
     }
     function newQuestion() {
-      var resumed = pendingResume && pendingEntry();
+      // After an answer, a question still open on the profile was drawn by another
+      // tab: join it rather than draw one more and replace it there.
+      var resumed = forcedEntry || ((pendingResume || solved) && pendingEntry());
+      forcedEntry = null;
       current = resumed || pickNext();
       pendingResume = false;
       if (!current) {
@@ -1577,13 +1702,14 @@
       if (profile.pending !== current.c || profile.pendingHints !== hintLevel) { profile.pending = current.c; profile.pendingHints = hintLevel; persist(); }
       renderFlag(current.flag);
       els.qRegion.textContent = regionLabel(current.region);
-      els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
+      setQText();
       els.answerInput.value = "";
       els.answerInput.disabled = false;
       els.submitBtn.disabled = false;
       els.revealBtn.disabled = false;
       els.feedback.textContent = "";
       els.feedback.className = "feedback info";
+      els.answerInput.classList.remove("shake");
       renderMask();
       els.reveal.classList.add("hidden");
       els.askBlock.style.display = "";
@@ -1621,6 +1747,7 @@
     }
     function pushHistory(country, result, hints) {
       profile.history.push({ t: Date.now(), c: country, r: result, h: hints });
+      if (profile.guest) { try { sessionStorage.setItem(GUEST_PLAYED_KEY, "1"); } catch (e) {} }
       // The history only feeds the 14-day activity chart, so trim it by AGE: a
       // count cap (600) silently emptied the oldest days for anyone answering
       // more than ~43 a day. HISTORY_CAP stays as a far-off safety limit.
@@ -1661,6 +1788,7 @@
 
     function handleReveal() {
       if (solved) return;
+      if (catchUpWithOtherTabs()) return;
       solved = true;
       hintLevel = 3;
       matchInfo = null;
@@ -1778,8 +1906,40 @@
       els.nextBtn.focus({ preventScroll: true });
     }
 
+    // Two tabs share one profile, and a reload re-asks the stored question, so two
+    // tabs can show the same one. Once it is answered, shown or replaced in one tab
+    // it cannot be scored again in the other: that tab follows the stored question
+    // instead. Following never writes (it adopts what is stored), so two tabs can
+    // never bounce questions back and forth; only a question settled with nothing
+    // after it (the other tab sits on its answer screen) draws a fresh one here.
+    function followOtherTab() {
+      if (!current || solved || !profile) return false;
+      if (profile.pending === current.c) {
+        var h = Math.min(2, profile.pendingHints || 0);   // a hint taken in the other tab counts here too
+        if (h > hintLevel) { hintLevel = h; renderMask(); updateHintButton(); }
+        return false;
+      }
+      forcedEntry = profile.pending ? (ALL.filter(function (e) { return e.c === profile.pending; })[0] || null) : null;
+      newQuestion();
+      fbKey = "fbElsewhere";
+      els.feedback.className = "feedback info";
+      els.feedback.textContent = t("fbElsewhere");
+      return true;
+    }
+    // The same check at the moment of scoring, in case a save from another tab has
+    // not been announced here yet. The stored copy is adopted only when it is newer,
+    // so a save this tab could not make (storage full or blocked) is never lost.
+    function catchUpWithOtherTabs() {
+      if (!pKey || !current || solved) return false;
+      var stored = loadProfiles()[pKey];
+      if (stored && (stored.lastSeen || 0) > (profile.lastSeen || 0)) {
+        profiles[pKey] = stored; profile = stored; updateStreakDisplay();
+      }
+      return followOtherTab();
+    }
     function checkAnswer() {
       if (solved || !current) return;
+      if (catchUpWithOtherTabs()) return;
       var raw = els.answerInput.value;
       if (!norm(raw)) {
         fbKey = "fbType"; flashInfo(t("fbType"));
@@ -1807,6 +1967,7 @@
 
     function advanceHint() {
       if (solved) return;
+      if (catchUpWithOtherTabs()) return;
       if (hintLevel >= 2) { handleReveal(); return; } // 3rd hint reveals
       hintLevel += 1;
       if (profile.pending === current.c) { profile.pendingHints = hintLevel; persist(); }
@@ -1815,7 +1976,21 @@
       els.feedback.className = "feedback info";
       fbKey = (hintLevel === 1) ? "fbLen" : "fbPartial";
       els.feedback.textContent = t(fbKey);
-      els.answerInput.focus();
+      // On a small phone (or in landscape) the tiles land below the screen, and a
+      // player who sees nothing happen taps again and loses a second hint. Bring the
+      // result into view, and on a touch screen do not re-open the keyboard over it.
+      showHintResult();
+      if (finePointer()) els.answerInput.focus({ preventScroll: true });
+    }
+    function finePointer() {
+      try { return !window.matchMedia || window.matchMedia("(pointer: fine)").matches; } catch (e) { return true; }
+    }
+    function showHintResult() {
+      var target = els.maskNote.textContent ? els.maskNote : els.mask;
+      try {
+        var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        target.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+      } catch (e) { try { target.scrollIntoView(false); } catch (e2) {} }
     }
 
     // ---------- displays ----------
@@ -1863,11 +2038,19 @@
         var v = t(el.getAttribute("data-i18n-ph"));
         if (typeof v === "string") el.setAttribute("placeholder", v);
       });
+      Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-title]"), function (el) {
+        var v = t(el.getAttribute("data-i18n-title"));
+        if (typeof v === "string") el.setAttribute("title", v);
+      });
+      Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-aria]"), function (el) {
+        var v = t(el.getAttribute("data-i18n-aria"));
+        if (typeof v === "string") el.setAttribute("aria-label", v);
+      });
     }
     function renderQuestionView() {
       if (fbKey) els.feedback.textContent = t(fbKey);
       els.qRegion.textContent = regionLabel(current.region);
-      els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
+      setQText();
       updateHintButton();
       renderMask();        // reflects current language and hint level
       refreshSeenNote();
@@ -1897,7 +2080,7 @@
         // Always re-translate the question header (region + country) so it never
         // stays in the previous language — including while an answer is revealed.
         els.qRegion.textContent = regionLabel(current.region);
-        els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
+        setQText();
         if (solved) renderRevealText(); else renderQuestionView();
       }
       if (!els.statsOverlay.classList.contains("hidden")) openStats();
@@ -1941,9 +2124,25 @@
       if (nick.length > 24) nick = nick.slice(0, 24);
       var fromKey = pKey, from = profile;
       pKey = profileKey(nick);
-      profile = profiles[pKey] || newProfile(nick);
+      // "Register … and keep your progress": an account new to this device starts
+      // with what the player just did as a guest, and the guest starts afresh, so the
+      // same answers are not counted twice. Only progress made in THIS tab's session
+      // moves, so a guest record left by someone else on a shared computer stays put.
+      var carry = !profiles[pKey] && from && from.guest && (from.answered || 0) > 0 && guestPlayedHere();
+      profile = profiles[pKey] || (carry ? normalizeProfile(JSON.parse(JSON.stringify(from)), pKey) : newProfile(nick));
       profile.nick = nick; // keep latest casing
+      profile.guest = false;
       profiles[pKey] = profile;
+      if (carry) {
+        var freshGuest = newProfile(t("guest"));
+        freshGuest.guest = true;
+        var stored = loadProfiles();
+        stored[GUEST_KEY] = freshGuest;
+        saveProfiles(stored);
+        profiles[GUEST_KEY] = freshGuest;
+        from = freshGuest;   // the question moves with the progress: nothing is owed back
+        try { sessionStorage.removeItem(GUEST_PLAYED_KEY); } catch (e) {}
+      }
       try { localStorage.setItem(LAST_KEY, pKey); } catch (e) {}
       persist();
       pushGlobal(); // publish existing stats for returning players
@@ -1974,6 +2173,9 @@
       if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
     }
 
+    function guestPlayedHere() {
+      try { return sessionStorage.getItem(GUEST_PLAYED_KEY) === "1"; } catch (e) { return false; }
+    }
     function tryStart() {
       var v = els.nickInput.value;
       if (!v.trim()) { els.nickErr.textContent = t("errNickContinue"); return; }
@@ -2005,7 +2207,24 @@
       return n;
     }
     function accuracyOf(p) { return p.answered ? Math.round(100 * p.correct / p.answered) : 0; }
+    // A dialog takes focus when it opens and refuses to open on top of another one:
+    // with focus left on the header button behind the backdrop, Tab + Enter used to
+    // stack the leaderboard over "My progress", and Escape then closed the hidden one.
+    function canOpenOverlay(ov) { return !ov.classList.contains("hidden") || !anyModalOpen(); }
+    function showOverlay(ov, closeBtn) {
+      if (!ov.classList.contains("hidden")) return;   // already open: this was a re-render
+      ov.classList.remove("hidden");
+      ov.scrollTop = 0;
+      try { closeBtn.focus({ preventScroll: true }); } catch (e) { closeBtn.focus(); }
+    }
+    function openOverlayEl() {
+      if (!els.statsOverlay.classList.contains("hidden")) return els.statsOverlay;
+      if (!els.boardOverlay.classList.contains("hidden")) return els.boardOverlay;
+      if (!els.nickOverlay.classList.contains("hidden")) return els.nickOverlay;
+      return null;
+    }
     function openStats() {
+      if (!canOpenOverlay(els.statsOverlay)) return;
       els.statsNick.textContent = profile.guest ? t("guest") : profile.nick;
       var created = new Date(profile.createdAt);
       els.statsSince.textContent = t("since")(
@@ -2050,7 +2269,7 @@
       var totalRecent = days.reduce(function (a, d) { return a + d.count; }, 0);
       els.barsLegend.textContent = totalRecent ? t("recentN")(totalRecent) : t("recentNone");
 
-      els.statsOverlay.classList.remove("hidden");
+      showOverlay(els.statsOverlay, els.statsClose);
     }
     function closeStats() { els.statsOverlay.classList.add("hidden"); refocus(); }
 
@@ -2130,6 +2349,14 @@
         b.classList.toggle("active", b.getAttribute("data-sort") === boardSort);
       });
 
+      // A guest is never on the board (boardRows and pushGlobal both skip guests),
+      // so telling one to "answer a few questions to get on the board" was a promise
+      // that could not come true. Say why, and offer the way on.
+      var isGuest = !!(profile && profile.guest);
+      els.boardGuest.classList.toggle("hidden", !isGuest);
+      els.boardGuestText.textContent = t("guestBoard");
+      els.boardEmpty.textContent = isGuest ? t("boardEmptyGuest") : t("boardEmpty");
+
       if (rows.length === 0) {
         els.boardBody.innerHTML = "";
         els.boardEmpty.classList.remove("hidden");
@@ -2151,7 +2378,7 @@
         var you = isMe ? ' <span class="youtag">' + t("you") + '</span>' : "";
         return '<tr class="' + (isMe ? "me" : "") + '">' +
           '<td class="l rank">' + rankCell + "</td>" +
-          '<td class="l name">' + escapeHtml(r.nick) + you + "</td>" +
+          '<td class="l name"><span class="nm" title="' + escapeHtml(r.nick) + '">' + escapeHtml(r.nick) + "</span>" + you + "</td>" +
           '<td class="pts">' + r.points.toLocaleString() + "</td>" +
           '<td class="num">' + r.accuracy + "%</td>" +
           '<td class="num">' + r.answered + "</td>" +
@@ -2161,7 +2388,11 @@
       }).join("");
       els.boardBody.innerHTML = html;
     }
-    function openBoard() { renderBoard(); els.boardOverlay.classList.remove("hidden"); }
+    function openBoard() {
+      if (!canOpenOverlay(els.boardOverlay)) return;
+      renderBoard();
+      showOverlay(els.boardOverlay, els.boardClose);
+    }
     function closeBoard() { els.boardOverlay.classList.add("hidden"); refocus(); }
 
     // ---------- global leaderboard (Firebase, optional) ----------
@@ -2194,6 +2425,9 @@
 
     // ---------- events ----------
     els.submitBtn.addEventListener("click", checkAnswer);
+    // The shake (and its red border) belongs to the one wrong answer that caused it:
+    // left on, it replayed every time the answer box came back into view.
+    els.answerInput.addEventListener("animationend", function () { els.answerInput.classList.remove("shake"); });
     els.answerInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); checkAnswer(); }
     });
@@ -2208,6 +2442,20 @@
              !els.boardOverlay.classList.contains("hidden");
     }
     document.addEventListener("keydown", function (e) {
+      // Keep Tab inside an open dialog, so the page behind it cannot be reached.
+      if (e.key === "Tab") {
+        var ov = openOverlayEl();
+        if (!ov) return;
+        var items = Array.prototype.filter.call(
+          ov.querySelectorAll("button, a[href], input, select, textarea, [tabindex]:not([tabindex='-1'])"),
+          function (el) { return !el.disabled && el.offsetParent !== null; });
+        if (!items.length) return;
+        var first = items[0], last = items[items.length - 1];
+        var inside = ov.contains(document.activeElement);
+        if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+        return;
+      }
       if (e.key === "Escape") {
         if (!els.accountMenu.classList.contains("hidden")) closeAccountMenu();
         else if (!els.statsOverlay.classList.contains("hidden")) closeStats();
@@ -2228,6 +2476,7 @@
       }
     });
     els.regionSel.addEventListener("change", function () {
+      try { localStorage.setItem(REGION_KEY, els.regionSel.value); } catch (e) {}
       if (!profile) return;
       // Leaving a question you have not answered is giving it up: it ends the
       // streak, as "Show the answer" does, or skipping would be free.
@@ -2272,6 +2521,9 @@
       }
       if (capLogin) capLogin.addEventListener("click", function () { if (window.Account) window.Account.openLogin(); });
       if (capRegister) capRegister.addEventListener("click", function () { if (window.Account) window.Account.openRegister(); });
+      // The guest note on the leaderboard offers the same two ways in.
+      document.getElementById("boardGuestLogin").addEventListener("click", function () { closeBoard(); if (window.Account) window.Account.openLogin(); });
+      document.getElementById("boardGuestRegister").addEventListener("click", function () { closeBoard(); if (window.Account) window.Account.openRegister(); });
       updateAccountUI(null);
       // Account widget is a deferred module (loads after this script): react to its event.
       window.addEventListener("account-changed", function (e) { applyAccount(e.detail); });
@@ -2544,12 +2796,29 @@
     inPass.setAttribute("autocomplete", reg ? "new-password" : "current-password");
     elErr.hidden = true; elErr.textContent = "";
     elSwitch.innerHTML = reg
-      ? 'Already have an account? <a data-act="to-login">Log in</a>'
-      : 'New here? <a data-act="to-register">Register</a>';
+      ? 'Already have an account? <a href="#" data-act="to-login">Log in</a>'
+      : 'New here? <a href="#" data-act="to-register">Register</a>';
+    if(modal.hidden) opener = document.activeElement;   // focus goes back there on close
     modal.hidden = false;
     setTimeout(()=>{ (reg?inNick:inEmail).focus(); }, 60);
   }
-  function closeModal(){ modal.hidden = true; }
+  function closeModal(){
+    if(modal.hidden) return;
+    modal.hidden = true;
+    const o = opener; opener = null;
+    if(o && o.focus && document.contains(o)){ try{ o.focus({ preventScroll:true }); }catch(_){} }
+  }
+  let opener = null;
+  // Tab stays inside the open box, so the page behind it cannot be reached.
+  modal.addEventListener("keydown", (e)=>{
+    if(e.key !== "Tab" || modal.hidden) return;
+    const items = [...modal.querySelectorAll(".acct-card button, .acct-card input, .acct-card a[href]")]
+      .filter((el)=>!el.disabled && el.offsetParent !== null);
+    if(!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  });
 
   function friendly(code, msg){
     const m = {
@@ -2587,6 +2856,7 @@
   root.addEventListener("click", (e)=>{
     const act = e.target.closest("[data-act]")?.getAttribute("data-act");
     if(!act) return;
+    if(act==="to-login" || act==="to-register") e.preventDefault();   // href="#" only makes the link reachable by Tab
     if(act==="login") openModal("login");
     else if(act==="register") openModal("register");
     else if(act==="close") closeModal();
