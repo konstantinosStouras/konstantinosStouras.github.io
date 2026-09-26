@@ -43,6 +43,9 @@ on:
       - 'sustainable-supply-chains/og-image.jpg'
       - 'sustainable-supply-chains/share-square.jpg'
       - 'robots.txt'
+      # the Capitals quiz: its answer check is run over both data files
+      - 'fun/capitals/**'
+      - 'tools/account-widget-guard.mjs'
       - '.github/workflows/site-checks.yml'
   pull_request:
     paths:
@@ -56,6 +59,7 @@ on:
       - 'lit/lit-acct-nav.js'
       - 'images/**'
       - 'robots.txt'
+      - 'fun/capitals/**'
       - '.github/workflows/site-checks.yml'
   workflow_dispatch:
 
@@ -108,3 +112,19 @@ jobs:
       # and over the committed papers-ms.json.
       - name: No card shows the INFORMS acceptance sentence as abstract
         run: node lit/_scraper/abstract-display-selftest.mjs
+
+      # The Capitals quiz (/fun/capitals): no wrong answer is ever accepted.
+      # The accepted alternatives once carried country names ("Czech Republic",
+      # "USA", "ΗΠΑ") and non-capitals (Tel Aviv, Lagos), and "constructor" was
+      # a correct answer for every country. This runs the page's own matcher,
+      # typo tolerance included, over both data files and the country profiles.
+      - name: The Capitals quiz accepts only real capitals
+        run: node fun/capitals/tools/selftest.mjs
+
+      # The Login / Register widget is copied into eight pages that share one
+      # Firebase project (snake, sudoku, rooks, nomoi, capitals, the PortfolioFit
+      # game and the two lab PortfolioFit pages): every copy must offer the same
+      # ways in (Google included), or an account made in one is locked out of
+      # another. Text checks only here; the browser half runs locally.
+      - name: The shared account widget is the same in every page
+        run: node tools/account-widget-guard.mjs --static

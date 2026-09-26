@@ -157,13 +157,16 @@ if (haveProfiles) {
   const rows = await pg.locator('#profileList dt').count();
   ok(rows === 5, `five profile rows (${rows})`);
   ok(await pg.evaluate(() => getComputedStyle(document.getElementById('profile')).display !== 'none'), 'profile section visible');
-  const text = await pg.locator('#profileList').innerText();
-  ok(/Known for/.test(text) && /History/.test(text), 'English labels');
+  const labels = await pg.$$eval('#profileList dt', (d) => d.map((x) => x.textContent).join(' | '));
+  ok(/Known for/.test(labels) && /History/.test(labels), 'English labels (' + labels + ')');
+  const ddEn = await pg.$$eval('#profileList dd', (d) => d.map((x) => x.textContent));
+  ok(ddEn.length === 5 && ddEn.every((t) => t.split(/\s+/).length >= 12 && !/[\u0370-\u03FF]/.test(t)), 'five English paragraphs');
   await pg.click('#langEl');
   await pg.waitForFunction(() => !!window.CAPITALS_PROFILES_EL, null, { timeout: 5000 }).catch(() => {});
   await pg.waitForTimeout(200);
-  const el = await pg.locator('#profileList').innerText();
-  ok(/Γνωστή για/.test(el) && /[α-ω]{4}/.test(el.split('\n')[1] || ''), 'switching to Greek loads and shows the Greek profile');
+  const elLabels = await pg.$$eval('#profileList dt', (d) => d.map((x) => x.textContent).join(' | '));
+  const ddEl = await pg.$$eval('#profileList dd', (d) => d.map((x) => x.textContent));
+  ok(/Γνωστή για/.test(elLabels) && ddEl.length === 5 && ddEl.every((t) => /[\u0370-\u03FF]{4}/.test(t)), 'switching to Greek loads and shows the Greek profile (' + elLabels + ')');
   await pg.click('#langEn');
 } else {
   ok(await pg.evaluate(() => getComputedStyle(document.getElementById('profile')).display === 'none'), 'no profile data: section not displayed (computed style, not just the class)');
