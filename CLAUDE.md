@@ -380,11 +380,16 @@ pinned by the selftest (sections 12 and 13) or the state guard (sections 25-36):
   answered, shown or replaced elsewhere follows the stored one
   (`followOtherTab`, re-checked at scoring time by `catchUpWithOtherTabs`). It
   never writes when it follows, so two tabs cannot bounce questions back and
-  forth, and Next joins a question another tab already has open.
+  forth, and Next joins a question another tab already has open (never the one
+  just answered). The Region choice is shared between tabs too, and a question
+  changed from another tab never pulls focus out of an open dialog.
 * **Registering keeps the guest's progress** when the account is new on this
-  device and the guest played in this tab's session (`GUEST_PLAYED_KEY` in
-  sessionStorage); the guest then starts afresh. An account already on the
-  device is never overwritten. The leaderboard tells a guest they are not
+  device and this tab's session started the guest record from empty
+  (`GUEST_PLAYED_KEY` in sessionStorage); the guest then starts afresh. Play
+  someone else left under Guest on a shared computer stays there, and an
+  account already on the device is never overwritten. With a Greek article in
+  front, only what follows it is judged, so "τη Λίμα" is never a slip of
+  another capital. The leaderboard tells a guest they are not
   ranked, with Log in and Register buttons.
 * **Phones.** Panels fit the screen (the overlay grid column is
   `minmax(0, 1fr)`; a wide table scrolls inside `.board-scroll`) and scroll

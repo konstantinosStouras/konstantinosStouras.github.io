@@ -567,7 +567,7 @@ console.log('\n31. Two tabs: one question cannot be scored twice');
   ok(qa === qb, 'both tabs ask the same stored question (' + qa + ')');
   await b.click('#revealBtn');
   await a.waitForTimeout(150);
-  ok((await country(a)) !== qa && /another tab/.test(await a.textContent('#feedback')), 'tab A moves on and says why (' + (await a.textContent('#feedback')) + ')');
+  ok((await country(a)) !== qa && /other tab/.test(await a.textContent('#feedback')), 'tab A moves on and says why (' + (await a.textContent('#feedback')) + ')');
   const cap = await capOf(a, qa);
   await a.fill('#answerInput', cap); await a.press('#answerInput', 'Enter');
   let s = await stored(a);
@@ -584,6 +584,51 @@ console.log('\n31. Two tabs: one question cannot be scored twice');
   s = await stored(a);
   ok(s.__guest__.answered === before + 1 && s.__guest__.byCountry[q].correct === 1, 'answered right in both tabs, it counts once (' + (s.__guest__.answered - before) + ')');
   ok(a.errors.length + b.errors.length === 0, 'no page errors');
+  await ctx.close();
+}
+
+console.log('\n31b. Two tabs: an open dialog keeps its focus; the Region follows');
+{
+  const ctx = await context();
+  const a = await open(ctx), b = await open(ctx);
+  await b.click('#statsBtn');
+  const q = await country(a);
+  await a.fill('#answerInput', await capOf(a, q)); await a.press('#answerInput', 'Enter'); await a.click('#nextBtn');
+  await b.waitForTimeout(200);
+  ok(await b.evaluate(() => document.getElementById('statsOverlay').contains(document.activeElement)), 'the other tab moved on, and focus stayed in the open "My progress" panel');
+  await b.keyboard.press('Escape');
+  await a.selectOption('#regionSel', 'Asia');
+  await b.waitForTimeout(200);
+  ok((await b.inputValue('#regionSel')) === 'Asia', 'a Region chosen in one tab shows in the other');
+  const rb = await b.evaluate((n) => window.COUNTRIES.find((x) => x.c === n).region, await country(b));
+  ok(rb === 'Asia', 'and the other tab now asks from that Region (' + rb + ')');
+  ok(a.errors.length + b.errors.length === 0, 'no page errors');
+  await ctx.close();
+}
+
+console.log('\n31c. Logging out and back in never re-asks the country just answered');
+{
+  const ctx = await context();
+  const pg = await open(ctx);
+  await pg.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: { uid: 'x', email: 'a@x', nickname: 'Alex' } })));
+  const x = await country(pg);
+  await pg.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: null })));
+  await pg.fill('#answerInput', await capOf(pg, x)); await pg.press('#answerInput', 'Enter');
+  await pg.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: { uid: 'x', email: 'a@x', nickname: 'Alex' } })));
+  await pg.click('#nextBtn');
+  ok((await country(pg)) !== x, 'Next asks a new country, not ' + x + ' again');
+  await ctx.close();
+}
+
+console.log('\n30b. A guest record someone else left on this device is not taken by a new account');
+{
+  const ctx = await context();
+  const pg = await open(ctx, seed(guest({ answered: 50, correct: 40, points: 4200, bestStreak: 20 })));
+  await answerRight(pg);
+  await pg.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: { uid: 'x', email: 'z@x', nickname: 'Zoe' } })));
+  const s = await stored(pg);
+  ok(s.zoe && s.zoe.answered === 0 && s.zoe.points === 0, 'the new account Zoe starts at 0, not with the 51 answers already there (' + (s.zoe && s.zoe.answered) + ')');
+  ok(s.__guest__.answered === 51, 'and the guest record keeps them (' + s.__guest__.answered + ')');
   await ctx.close();
 }
 

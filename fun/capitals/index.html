@@ -485,6 +485,10 @@
        capsule keeps its natural width instead of stretching into an empty bar. */
     .who::before { content: ""; order: 1; flex: 0 0 100%; height: 0; }
     .who > :not(.lang-switch) { order: 2; }
+    /* the spacer's own row would add a second 6px gap: row gaps become margins */
+    .who { row-gap: 0; }
+    .who .lang-switch { margin-bottom: 6px; }
+    .who .account { margin-top: 6px; }
   }
   @media (max-width: 480px) {
     .card { padding: 18px; }
@@ -890,7 +894,7 @@
         fbWrong: "Not quite — try again, or tap a hint.",
         fbLen: "Hint: the length is shown below.",
         fbPartial: "Hint: some letters are filled in below.",
-        fbElsewhere: "That question was settled in another tab, so here is the next one.",
+        fbElsewhere: "Your other tab moved on to a new question, so this one did too.",
         noCountries: "No countries in this region.",
         maskLen: function (n, w) { return "The capital has " + n + " letter" + (n === 1 ? "" : "s") + (w > 1 ? " across " + w + " words." : "."); },
         maskPartial: "Some letters are filled in to help you.",
@@ -958,7 +962,7 @@
         fbWrong: "Όχι ακριβώς. Δοκίμασε ξανά ή πάρε μια βοήθεια.",
         fbLen: "Βοήθεια: το μήκος φαίνεται πιο κάτω.",
         fbPartial: "Βοήθεια: μερικά γράμματα συμπληρώθηκαν πιο κάτω.",
-        fbElsewhere: "Αυτή η ερώτηση απαντήθηκε σε άλλη καρτέλα, οπότε ορίστε η επόμενη.",
+        fbElsewhere: "Η άλλη σου καρτέλα πέρασε σε νέα ερώτηση, οπότε το ίδιο έγινε και εδώ.",
         noCountries: "Δεν υπάρχουν χώρες σε αυτή την περιοχή.",
         maskLen: function (n, w) { return "Η πρωτεύουσα έχει " + n + " γράμματα" + (w > 1 ? " σε " + w + " λέξεις." : "."); },
         maskPartial: "Μερικά γράμματα έχουν συμπληρωθεί για βοήθεια.",
@@ -1044,6 +1048,13 @@
     }
     // ...and follow the other tab's saves of the profile on screen here.
     window.addEventListener("storage", function (e) {
+      // The Region choice is shared too, or two tabs on different regions keep
+      // handing each other questions from outside their own region.
+      if (e.key === REGION_KEY) {
+        var r = e.newValue;
+        if (r && r !== els.regionSel.value && (r === "all" || regions().indexOf(r) >= 0)) els.regionSel.value = r;
+        return;
+      }
       if (e.key !== STORE_KEY) return;
       profiles = loadProfiles();
       if (pKey && profiles[pKey]) {
@@ -1270,7 +1281,9 @@
       var bare = k.replace(GREEK_ARTICLE, "");
       if (bare !== k && bare in forms) return { form: forms[bare], exact: true };
       if (placeIndexFor !== all) { placeIndex = buildPlaceIndex(all); placeIndexFor = all; }
-      var m = slipOf(k, forms, typed) || (bare !== k ? slipOf(bare, forms, typed) : null);
+      // With an article in front, only what follows it is judged: "τη Λίμα" is Lima
+      // with an article, never a slip of Tbilisi's name with the article counted in.
+      var m = slipOf(bare !== k ? bare : k, forms, typed);
       if (m) return m;
       // Doubled letters, as Greek already folds them: "Viena", "Acra" and "Talin"
       // are one letter from the capital but exactly as close to a real town (Siena,
@@ -1685,7 +1698,7 @@
     function newQuestion() {
       // After an answer, a question still open on the profile was drawn by another
       // tab: join it rather than draw one more and replace it there.
-      var resumed = forcedEntry || ((pendingResume || solved) && pendingEntry());
+      var resumed = forcedEntry || ((pendingResume || (solved && current && profile.pending !== current.c)) && pendingEntry());
       forcedEntry = null;
       current = resumed || pickNext();
       pendingResume = false;
@@ -1715,7 +1728,9 @@
       els.askBlock.style.display = "";
       updateHintButton();
       refreshSeenNote();
-      els.answerInput.focus();
+      // A question changed by another tab must not pull focus out of an open dialog
+      // here: typing (a password, say) would land in the answer box behind it.
+      if (!anyModalOpen()) els.answerInput.focus();
     }
 
     function refreshSeenNote() {
@@ -1747,7 +1762,12 @@
     }
     function pushHistory(country, result, hints) {
       profile.history.push({ t: Date.now(), c: country, r: result, h: hints });
-      if (profile.guest) { try { sessionStorage.setItem(GUEST_PLAYED_KEY, "1"); } catch (e) {} }
+      // The first guest answer of this tab's session records whether the guest record
+      // was empty before it ("1") or already held someone's play ("0"). Only a record
+      // this session started from empty moves into a new account.
+      if (profile.guest) {
+        try { if (!sessionStorage.getItem(GUEST_PLAYED_KEY)) sessionStorage.setItem(GUEST_PLAYED_KEY, profile.answered === 1 ? "1" : "0"); } catch (e) {}
+      }
       // The history only feeds the 14-day activity chart, so trim it by AGE: a
       // count cap (600) silently emptied the oldest days for anyone answering
       // more than ~43 a day. HISTORY_CAP stays as a far-off safety limit.
@@ -1919,7 +1939,8 @@
         if (h > hintLevel) { hintLevel = h; renderMask(); updateHintButton(); }
         return false;
       }
-      forcedEntry = profile.pending ? (ALL.filter(function (e) { return e.c === profile.pending; })[0] || null) : null;
+      var pc = profile.pending, byC = function (e) { return e.c === pc; };
+      forcedEntry = pc ? (pool().filter(byC)[0] || ALL.filter(byC)[0] || null) : null;
       newQuestion();
       fbKey = "fbElsewhere";
       els.feedback.className = "feedback info";
@@ -2126,8 +2147,9 @@
       pKey = profileKey(nick);
       // "Register … and keep your progress": an account new to this device starts
       // with what the player just did as a guest, and the guest starts afresh, so the
-      // same answers are not counted twice. Only progress made in THIS tab's session
-      // moves, so a guest record left by someone else on a shared computer stays put.
+      // same answers are not counted twice. Only a guest record THIS tab's session
+      // started from empty moves, so play left by someone else on a shared computer
+      // stays with Guest (guestPlayedHere).
       var carry = !profiles[pKey] && from && from.guest && (from.answered || 0) > 0 && guestPlayedHere();
       profile = profiles[pKey] || (carry ? normalizeProfile(JSON.parse(JSON.stringify(from)), pKey) : newProfile(nick));
       profile.nick = nick; // keep latest casing
@@ -2184,6 +2206,7 @@
     // Guests can play and keep local progress, but are never published to the
     // global board nor listed on the local one (see pushGlobal / boardRows).
     function activateGuest() {
+      var fromKey = pKey, from = profile;   // the account the question moves away from no longer owes it
       pKey = GUEST_KEY;
       profile = profiles[GUEST_KEY] || newProfile(t("guest"));
       profile.guest = true;
@@ -2193,7 +2216,7 @@
       closeNick();
       updateWho();
       updateStreakDisplay();
-      keepOrNewQuestion();
+      keepOrNewQuestion(fromKey, from);
     }
 
     // ---------- stats modal ----------

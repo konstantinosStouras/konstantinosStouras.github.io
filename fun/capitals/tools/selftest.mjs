@@ -338,6 +338,22 @@ section('12. The final play-test: natural spellings, Greek articles and variants
     ok(exactIs(c, typed), c + ': "' + typed + '" is exact, not a misspelling');
   }
   ok(V('Brazil', 'Βραζιλία') === null, 'Βραζιλία (the country) is still not Μπραζίλια (its capital)');
+  // An article in front of ANOTHER capital is that capital, never a slip of this one
+  // with the article counted in (the review found "τη Λίμα" accepted for Georgia).
+  ok(V('Albania', 'τη Ανόι') === null && V('Georgia', 'τη Λίμα') === null && V('Rwanda', 'η Κάλι') === null, '"τη Ανόι", "τη Λίμα", "η Κάλι" are refused for Albania, Georgia, Rwanda');
+  let artLeaks = 0, artTried = 0;
+  for (const src of ALL) {
+    for (const a of ['ο', 'η', 'το', 'τα', 'οι', 'τη', 'την', 'της']) {
+      const typed = a + ' ' + src.cap_el;
+      for (const e of ALL) {
+        if (e === src || norm(src.cap_el) in acceptedForms(e)) continue;
+        artTried++;
+        const v = verdict(e, typed);
+        if (v) { artLeaks++; if (artLeaks <= 8) ok(false, '"' + typed + '" (' + src.c + ') is accepted for ' + e.c + ' as ' + v.form); }
+      }
+    }
+  }
+  ok(artLeaks === 0, 'no Greek capital with an article in front is accepted for another country (' + artTried + ' pairs)');
 }
 
 section('13. Greek proofreading (countries.el.js and profiles.el.js)');
