@@ -318,6 +318,128 @@ links keep working (like `fun/ms2/`/`fun/ft50/`). It is still featured on the Fu
 landing page — its `fun/index.html` card links to `/lit/` — so it is the one card
 whose target lives outside `/fun/`; keep that card's link pointing to `/lit/`.
 
+## `/fun/capitals` — what counts as a right answer
+
+`fun/capitals/` is a bilingual (EN/EL) world-capitals quiz: `index.html` (the
+game), `countries.js` (`window.COUNTRIES`: `c, cap, region, flag, alt, facts`),
+`countries.el.js` (the Greek layer keyed by the English name) and the country
+profiles `profiles.en.js` / `profiles.el.js`. Owner report 2026-09-26: "for some
+countries I was entering a wrong answer and it was considering it correct"
+(Bolivia). Three causes, all fixed and pinned by
+**`node fun/capitals/tools/selftest.mjs`** (run by `site-checks.yml`), which
+extracts the page's own matcher and runs it over both data files:
+
+* **An accepted alternative must be a CAPITAL**: a current legal capital in any
+  role (constitutional, seat of government, legislative, judicial, royal), a
+  former NAME of that same city, an endonym or a transliteration. Never the
+  country's own name or alias (the lists carried "Czech Republic", "USA",
+  "Ivory Coast", "Swaziland", "ΗΠΑ", "Κάτω Χώρες"…) and never a city that is
+  not a capital (Tel Aviv, Monte Carlo, Lagos, Yangon, Dar es Salaam). Both
+  languages' alternatives are accepted in both interfaces, so a bad Greek alt
+  is a bad English answer too.
+* **`acceptedForms` is a null-prototype map**: with a plain `{}`, typing
+  "constructor" was a correct answer for every country.
+* **An alternative is SAID to be one**: typing "La Paz" for Bolivia shows
+  "Your answer La Paz is also accepted." under "Sucre is the capital of
+  Bolivia", which otherwise reads exactly like a wrong answer marked correct.
+
+**Typo tolerance (owner request, same day):** a misspelling of at most 2
+letters counts as correct, and the banner says "Small misspelling: you typed X,
+the correct spelling is Y". The slack is 2 from 6 letters up, 1 for 4-5 letters
+and none for 3 or fewer (`typoAllowance`), because 2 changes turn one real place
+into another on short names (Bern/Bonn, Kyiv/Lviv, Paris/Parma). And a slip is
+refused whenever the answer is, or is at least as close to, another real place
+the game knows (`buildPlaceIndex`): any country's capital, any country name in
+either language, or a city in `DECOY_CITIES` (well-known non-capitals). So
+"Rome" for Togo (Lomé) and "Tunisia" for Tunis stay wrong. The selftest proves
+exhaustively that no capital, country name or decoy is ever accepted for a
+different country; when you add a capital or an alternative, run it.
+
+**What a final play-test on a phone and a desktop added (2026-09-26)**, each
+pinned by the selftest (sections 12 and 13) or the state guard (sections 25-36):
+
+* **Natural spellings that tie with an obscure town.** "Viena", "Acra" and
+  "Talin" are one letter from the capital and exactly as close to Siena, Agra
+  and a place like Sanya, so the tie rule refuses them. They are read with
+  doubled Latin letters collapsed, as Greek already is (`collapseDoubles`),
+  which no other place matches. `KNOWN_SLIPS` holds the few foreign spellings
+  no rule covers (Lubliana, Bakou), accepted as slips. "SaintGeorges" (no
+  space) is one slip, like "StGeorges".
+* **Greek.** A leading article is ignored when what follows is the answer
+  (τα Τίρανα, οι Βρυξέλλες, η Αθήνα: `GREEK_ARTICLE`). γγ, νγκ and γκ fold
+  together (Σιγγαπούρη, Σινγκαπούρη). The older β/δ for a foreign b/d (Βακού,
+  Δακάρ) is **not** folded, because Βραζιλία the country and Μπραζίλια the
+  capital would become one word and Basel would pass for Brasília: those
+  spellings are listed as alternatives in `countries.el.js` instead. The
+  selftest also proofreads every Greek text (two accents outside an enclitic,
+  a final σ, Latin letters inside a Greek word, an ASCII numeral sign).
+* **English sentences say "the Netherlands"** (`EN_NAME`, display only; the
+  stored key stays `Netherlands`). The question carries the stored name as
+  `data-c`, which is what the browser tests read.
+* **Two tabs cannot score one question twice.** A tab whose question was
+  answered, shown or replaced elsewhere follows the stored one
+  (`followOtherTab`, re-checked at scoring time by `catchUpWithOtherTabs`). It
+  never writes when it follows, so two tabs cannot bounce questions back and
+  forth, and Next joins a question another tab already has open (never the one
+  just answered). The Region choice is shared between tabs too, and a question
+  changed from another tab never pulls focus out of an open dialog.
+* **Registering keeps the guest's progress** when the account is new on this
+  device and this tab's session started the guest record from empty
+  (`GUEST_PLAYED_KEY` in sessionStorage); the guest then starts afresh. Play
+  someone else left under Guest on a shared computer stays there, and an
+  account already on the device is never overwritten. With a Greek article in
+  front, only what follows it is judged, so "τη Λίμα" is never a slip of
+  another capital. The leaderboard tells a guest they are not
+  ranked, with Log in and Register buttons.
+* **Phones.** Panels fit the screen (the overlay grid column is
+  `minmax(0, 1fr)`; a wide table scrolls inside `.board-scroll`) and scroll
+  when taller than it; a hint scrolls its result into view and does not reopen
+  the keyboard on a touch screen; dialogs take focus, keep Tab inside and never
+  stack. The map marker is moved inside thin or crescent-shaped countries
+  (`insidePoint`), and the Region choice survives a reload.
+
+**Country profiles**: after each answer a "Country profile" section shows
+known for / economy / business and trade / tourism / history, from
+`profiles.<lang>.js`, loaded lazily for the language on screen
+(`ensureProfiles`). Keyed by the English country name; plain text only (the
+page inserts it with `textContent`); keep it timeless (no living
+office-holders, no figures that go stale). A new country needs an entry in all
+four data files. Browser test: `node fun/capitals/tools/smoke.mjs`.
+
+## The shared account widget — Google or email, identical in eight pages
+
+`/fun/snake`, `/fun/sudoku`, `/fun/rooks`, `/fun/nomoi`, `/fun/capitals`,
+`/fun/portfoliofitgame`, `/lab/portfoliofit` and `/lab/portfoliofit-testing`
+each carry a COPY of the same Login / Register widget (between the
+`Account widget` comment and `end Account widget`), and all eight sign in to
+ONE Firebase project, `stouras-snake`. An account made in one page works in
+all of them, so every copy must offer the same ways in: a player who
+registered with Google on Capitals and then meets an email-only box on Snake
+is locked out. **Edit all eight together**; `node tools/account-widget-guard.mjs`
+fails when the widget scripts differ (the chip CSS of snake/sudoku is allowed
+to differ) and drives the Google flow in Chromium against a stubbed Firebase
+(`--static` for the text checks only, which `site-checks.yml` runs).
+
+**Continue with Google** (owner request 2026-09-26) uses `signInWithPopup`;
+Firebase creates the account on first use, so one button both registers and
+logs in. A NEW Google account's nickname is the one typed in the register
+form, or else the first name only: nicknames are shown on public
+leaderboards and the Google profile name is usually a person's full name.
+`onAuthStateChanged` is held back while that runs, so the app hears ONE
+`account-changed` event, with the final nickname.
+
+It needs two switches in the Firebase console of `stouras-snake`, which
+nothing in this repository can flip: **Authentication → Sign-in method →
+Google → Enable**, and **Authentication → Settings → Authorized domains**
+must list `stouras.com` and `www.stouras.com`. Until then the button says
+"Google sign-in isn't switched on for this site yet" and email/password keeps
+working.
+
+The box is usable from the keyboard: its "Log in" / "Register" switch links
+carry `href="#"` (without one a link cannot be reached by Tab), Tab stays
+inside the open box, and closing it returns focus to what opened it. All of
+it is in the one script the eight copies share, pinned by the guard.
+
 ## `/fun/ft50` — RETIRED (redirect stub only)
 The standalone FT50 research paper browser was removed: `/lit/` is a
 superset (its "Journal types" filter covers all 50 FT50 journals from lit's
