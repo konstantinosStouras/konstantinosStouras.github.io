@@ -320,6 +320,8 @@ ok(/dd\.textContent = p\[f\[0\]\]/.test(game) && !/profileList\.innerHTML = [^"]
 ok(html.includes('<div class="cap-alt" id="capAlt"></div>') && game.includes('capAlt: $("capAlt")'), 'the #capAlt element exists and is registered');
 ok((game.match(/altAccepted: function \(ans, yours\)/g) || []).length === 2, 'altAccepted is translated in both languages');
 ok(html.includes('.answer-banner .cap-alt:empty { display: none; }'), 'an empty note takes no space');
+ok(/img\.onerror = function \(\) \{ if \(img\.parentNode === els\.qFlag\)/.test(game), 'a late flag error cannot overwrite the next question\'s flag');
+ok(/els\.nextBtn\.focus\(\{ preventScroll: true \}\)/.test(game), 'focusing Next does not scroll the verdict away');
 
 console.log('\n' + (fails ? 'FAILED — ' + fails + ' of ' + checks + ' checks failed' : 'OK — all ' + checks + ' checks passed'));
 process.exit(fails ? 1 : 0);

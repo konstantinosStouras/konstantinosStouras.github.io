@@ -1142,6 +1142,7 @@
     color:#111827; background:#fff; width:100%; min-height:46px;
   }
   .acct-lbl input:focus{ border-color:var(--acct-accent); box-shadow:0 0 0 3px rgba(37,99,235,.16); }
+  .acct-lbl[hidden]{ display:none; }   /* .acct-lbl's display:flex beat the hidden attribute: Log in showed an unused Nickname field */
   .acct-err{ margin:2px 0 0; font-size:13px; color:#dc2626; background:#fef2f2; border:1px solid #fde2e2; padding:9px 11px; border-radius:9px; }
   .acct-submit{
     margin-top:4px; appearance:none; border:0; cursor:pointer; border-radius:12px; min-height:48px;
@@ -1297,7 +1298,8 @@
       "auth/popup-blocked":"Your browser blocked the Google window. Allow pop-ups for this site and try again.",
       "auth/account-exists-with-different-credential":"That email already has an account here. Log in with your email and password instead.",
       "google/not-enabled":"Google sign-in isn’t switched on for this site yet. Please use your email for now.",
-      "google/unavailable":"Google sign-in isn’t available right now. Please use your email, or try again later."
+      "google/unavailable":"Google sign-in isn’t available right now. Please use your email, or try again later.",
+      "auth/unavailable":"Sign-in isn’t available right now. Please check your connection and try again."
     };
     return m[code] || msg || "Something went wrong. Please try again.";
   }
@@ -1362,9 +1364,11 @@
 
   form.addEventListener("submit", async (e)=>{
     e.preventDefault();
-    if(!auth || !fns){ showErr(friendly("auth/operation-not-allowed")); return; }
+    if(!auth || !fns){ showErr(friendly("auth/unavailable")); return; }   // Firebase did not load (offline, blocked)
     const email = inEmail.value.trim(), pass = inPass.value;
-    const nick = (inNick.value.trim() || email.split("@")[0] || "Player").slice(0,16);
+    // A blank nickname must not publish the e-mail's first part (often a full name)
+    // on public leaderboards: it becomes Player1234 instead.
+    const nick = (inNick.value.trim() || ("Player" + Math.floor(1000 + Math.random() * 9000))).slice(0,16);
     if(!email){ showErr("Please enter your email."); return; }
     if(pass.length < 6){ showErr("Password must be at least 6 characters."); return; }
     elErr.hidden = true; elSubmit.disabled = true;

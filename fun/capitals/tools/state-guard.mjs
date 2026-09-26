@@ -14,7 +14,17 @@
      9. the letter-count hint does not count punctuation;
     10. the 14-day chart keeps the day the clocks go forward (Europe/Dublin);
     11. a guest never sees a real player called "Guest" marked as "you";
-    12. the leaderboard's streak column is labelled as the BEST streak.
+    12. the leaderboard's streak column is labelled as the BEST streak;
+    13. "hidden" really hides (profile block, "No players yet", nickname wall);
+    14. after a correct answer the verdict stays on screen, even with a long
+        country profile below it;
+    15. worldwide rows cannot inject markup; ties share a rank;
+    16. the verdict reaches screen readers;
+    17. long one-word capitals do not push the page sideways on a 320px phone;
+    18. Enter behind the Log in dialog does nothing; the map says when it does
+        not draw a country (Kosovo) rather than calling it too small;
+    19. Greek plurals and tooltips;
+    20. the header keeps one row count across languages at every width.
    ========================================================================== */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -51,7 +61,8 @@ async function open(ctx, init) {
   return pg;
 }
 const country = (pg) => pg.locator('#qText .country').innerText();
-const capOf = (pg, c) => pg.evaluate((n) => window.COUNTRIES.find((x) => x.c === n).cap, c);
+// the question shows the English OR the Greek country name, depending on the language on screen
+const capOf = (pg, c) => pg.evaluate((n) => { const G = window.COUNTRIES_EL || {}; const k = window.COUNTRIES.find((x) => x.c === n) ? n : Object.keys(G).find((e) => G[e].c === n); return window.COUNTRIES.find((x) => x.c === k).cap; }, c);
 async function answerRight(pg) { const c = await country(pg); await pg.fill('#answerInput', await capOf(pg, c)); await pg.press('#answerInput', 'Enter'); await pg.click('#nextBtn'); }
 const stored = (pg) => pg.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), KEY);
 const seed = (profiles) => `localStorage.setItem(${JSON.stringify(KEY)}, ${JSON.stringify(JSON.stringify(profiles))});`;
@@ -228,6 +239,133 @@ console.log('\n12. Labels');
   const pg = await open(ctx);
   ok((await pg.$$eval('table.board th', (xs) => xs.map((x) => x.textContent).join('|'))).includes('Best streak'), 'the board column reads "Best streak"');
   ok(pg.errors.length === 0, 'no page errors');
+  await ctx.close();
+}
+
+console.log('\n13. Hidden really means hidden');
+{
+  const ctx = await context();
+  const pg = await open(ctx);
+  ok(await pg.evaluate(() => getComputedStyle(document.getElementById('nickOverlay')).display === 'none'), 'the retired nickname wall is not shown on load');
+  await pg.click('#revealBtn');
+  const prof = await pg.evaluate(() => ({ d: getComputedStyle(document.getElementById('profile')).display, rows: document.querySelectorAll('#profileList dt').length }));
+  ok(prof.rows > 0 ? prof.d !== 'none' : prof.d === 'none', 'the Country profile block shows only with content (rows ' + prof.rows + ', display ' + prof.d + ')');
+  await pg.click('#nextBtn');
+  await answerRight(pg);
+  await pg.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: { uid: 'x', email: 'a@x', nickname: 'Ana' } })));
+  await answerRight(pg);
+  await pg.click('#boardBtn');
+  ok(await pg.evaluate(() => getComputedStyle(document.getElementById('boardEmpty')).display === 'none' && document.querySelectorAll('#boardBody tr').length > 0), '"No players yet" is hidden under a board with players');
+  await ctx.close();
+}
+
+console.log('\n14. The verdict stays in view after a correct answer (long country profile)');
+for (const [w, h] of [[1100, 900], [375, 667]]) {
+  const ctx = await context({ viewport: { width: w, height: h } });
+  const long = 'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. '.repeat(4);
+  const pg = await open(ctx, `window.CAPITALS_PROFILES_EN = new Proxy({}, { get: function () { return { known: ${JSON.stringify(long)}, economy: ${JSON.stringify(long)}, business: ${JSON.stringify(long)}, tourism: ${JSON.stringify(long)}, history: ${JSON.stringify(long)} }; } });`);
+  await answerRight(pg);
+  const c = await country(pg);
+  await pg.fill('#answerInput', (await capOf(pg, c)).replace(/.(.)$/, 'x$1'));
+  await pg.press('#answerInput', 'Enter');
+  const box = await pg.evaluate(() => { const r = document.getElementById('answerBanner').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, vh: innerHeight, active: document.activeElement.id }; });
+  ok(box.top >= 0 && box.bottom <= box.vh && box.active === 'nextBtn', w + 'px: the banner is on screen (top ' + Math.round(box.top) + ', bottom ' + Math.round(box.bottom) + ' of ' + box.vh + ') and Next has focus');
+  await pg.keyboard.press('Enter');
+  ok((await country(pg)) !== c, w + 'px: Enter still moves on');
+  await ctx.close();
+}
+
+console.log('\n15. Worldwide rows cannot inject markup; ties share a rank; the empty board says so');
+{
+  const ctx = await context();
+  const rows = [
+    { key: 'eve', name: '<img src=x onerror="window.__xssName=1">', points: 10, accuracy: '<img src=x onerror="window.__xssAcc=1">', answered: '<b id=injected>boom</b>', mastered: 1, streak: 1 },
+    { key: 'tiea', name: 'TieA', points: 500, accuracy: 90, answered: 10, mastered: 3, streak: 4 },
+    { key: 'tieb', name: 'TieB', points: 500, accuracy: 90, answered: 10, mastered: 3, streak: 4 },
+    { key: 'top', name: 'Top', points: 900, accuracy: 95, answered: 12, mastered: 5, streak: 6 },
+  ];
+  const pg = await open(ctx, `window.CapitalsLeaderboard = { scope: 'global', submit() {}, subscribe(cb) { cb(${JSON.stringify(rows)}); } };`);
+  await pg.click('#boardBtn');
+  await pg.waitForTimeout(200);
+  const r = await pg.evaluate(() => ({ acc: !!window.__xssAcc, name: !!window.__xssName, inj: !!document.getElementById('injected'),
+    ranks: Array.from(document.querySelectorAll('#boardBody tr')).map((tr) => tr.querySelector('td').textContent + ':' + tr.querySelector('td.name').textContent) }));
+  ok(!r.acc && !r.name && !r.inj, 'no markup from a worldwide row runs or renders');
+  ok(r.ranks.join(',') === '1:Top,2:TieA,2:TieB,4:<img src=x onerror="window.__xssName=1">', 'tied players share rank 2, the next is 4 (' + r.ranks.join(', ') + ')');
+  await ctx.close();
+  const ctx2 = await context();
+  const pg2 = await open(ctx2, `window.CapitalsLeaderboard = { scope: 'global', submit() {}, subscribe(cb) { cb([]); } };`);
+  await pg2.click('#boardBtn');
+  ok(/No one has played yet/.test(await pg2.textContent('#boardSub')), 'an empty worldwide board does not say "on this device"');
+  await ctx2.close();
+}
+
+console.log('\n16. Accessibility');
+{
+  const ctx = await context();
+  const pg = await open(ctx);
+  const a = await pg.evaluate(() => ({ fb: document.getElementById('feedback').getAttribute('aria-live'), fbRole: document.getElementById('feedback').getAttribute('role'),
+    input: document.getElementById('answerInput').getAttribute('aria-describedby'), next: document.getElementById('nextBtn').getAttribute('aria-describedby') }));
+  ok(a.fb === 'polite' && a.fbRole === 'status', 'the feedback line is a polite live region');
+  ok(a.input === 'qText', 'the answer box is described by the question');
+  ok(a.next === 'bannerLbl capLine capAlt', 'Next reads out the verdict and the notes');
+  await ctx.close();
+}
+
+console.log('\n17. Long one-word capitals do not push the page sideways on phones');
+for (const c of ['Haiti', 'Madagascar', 'Burkina Faso', 'Honduras']) {
+  for (const l of ['en', 'el']) {
+    const ctx = await context({ viewport: { width: 320, height: 640 }, isMobile: true });
+    const pg = await open(ctx, seed(guest({ pending: c })) + ` localStorage.setItem('capitals:v1:lang', '${l}');`);
+    await pg.click('#hintBtn');
+    const sw = await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+    ok(sw, c + ' (' + l + ') at 320px: the hint tiles stay inside the page');
+    await ctx.close();
+  }
+}
+
+console.log('\n18. The account dialog blocks Enter; the map explains countries it does not draw');
+{
+  const ctx = await context();
+  const pg = await open(ctx, seed(guest({ pending: 'Kosovo' })));
+  await pg.waitForFunction(() => window.Account && window.Account.ready, null, { timeout: 8000 });
+  await pg.click('#revealBtn');
+  await pg.waitForFunction(() => document.getElementById('mapNote').textContent.trim().length > 0, null, { timeout: 8000 }).catch(() => {});
+  ok(/Not shown separately/.test(await pg.textContent('#mapNote')), 'Kosovo: "Not shown separately on this map", not "too small" (' + (await pg.textContent('#mapNote')) + ')');
+  const c = await country(pg);
+  await pg.evaluate(() => window.Account.openLogin());
+  await pg.click('#acctRoot .acct-sub');
+  await pg.keyboard.press('Enter');
+  ok((await country(pg)) === c, 'Enter while the Log in dialog is open does not move the quiz on');
+  await ctx.close();
+}
+
+console.log('\n19. Greek plurals');
+{
+  const ctx = await context();
+  const pg = await open(ctx, `localStorage.setItem('capitals:v1:lang', 'el');`);
+  await answerRight(pg);
+  await pg.click('#revealBtn');
+  await pg.click('#nextBtn');
+  await pg.click('#statsBtn');
+  ok(/^2 ερωτήσεις/.test(await pg.textContent('#barsLegend')), 'plural legend in Greek');
+  const tip = await pg.$$eval('#bars .bar', (b) => b.map((x) => x.title).filter((t) => /απαντ/.test(t)));
+  ok(tip.length === 14 && tip.some((t) => /2 απαντήσεις/.test(t)), 'the chart tooltips are in Greek (' + tip.filter((t) => !/^0/.test(t)).join(', ') + ')');
+  await ctx.close();
+}
+
+console.log('\n20. Header: same number of rows in both languages (formerly broken widths)');
+{
+  const ctx = await context();
+  const pg = await open(ctx);
+  const bad = [];
+  for (const w of [320, 329, 330, 340, 360, 361, 400, 475, 480, 485, 491, 492, 493, 600, 720, 721, 730, 743, 744, 745, 800, 1100]) {
+    await pg.setViewportSize({ width: w, height: 800 });
+    await pg.click('#langEn'); const en = await pg.evaluate(() => Math.round(document.querySelector('header.app').getBoundingClientRect().height));
+    await pg.click('#langEl'); const el = await pg.evaluate(() => Math.round(document.querySelector('header.app').getBoundingClientRect().height));
+    const sw = await pg.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+    if (en !== el || sw) bad.push(w + ':' + en + '/' + el + (sw ? ' hscroll' : ''));
+  }
+  ok(bad.length === 0, 'header height equal in English and Greek, no sideways scroll' + (bad.length ? ' — differs at ' + bad.join(' ') : ''));
   await ctx.close();
 }
 

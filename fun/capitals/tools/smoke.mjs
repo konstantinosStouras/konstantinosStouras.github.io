@@ -156,7 +156,7 @@ await pg.click('#revealBtn');
 if (haveProfiles) {
   const rows = await pg.locator('#profileList dt').count();
   ok(rows === 5, `five profile rows (${rows})`);
-  ok(await pg.evaluate(() => !document.getElementById('profile').classList.contains('hidden')), 'profile section visible');
+  ok(await pg.evaluate(() => getComputedStyle(document.getElementById('profile')).display !== 'none'), 'profile section visible');
   const text = await pg.locator('#profileList').innerText();
   ok(/Known for/.test(text) && /History/.test(text), 'English labels');
   await pg.click('#langEl');
@@ -166,7 +166,7 @@ if (haveProfiles) {
   ok(/Γνωστή για/.test(el) && /[α-ω]{4}/.test(el.split('\n')[1] || ''), 'switching to Greek loads and shows the Greek profile');
   await pg.click('#langEn');
 } else {
-  ok(await pg.evaluate(() => document.getElementById('profile').classList.contains('hidden')), 'no profile data: section hidden');
+  ok(await pg.evaluate(() => getComputedStyle(document.getElementById('profile')).display === 'none'), 'no profile data: section not displayed (computed style, not just the class)');
 }
 await pg.click('#nextBtn');
 

@@ -240,7 +240,7 @@
 
   /* masked letters */
   .mask { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; }
-  .mask .word { display: flex; gap: 6px; }
+  .mask .word { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; } /* a 14-letter word (Port-au-Prince, Ουαγκαντούγκου) wraps instead of pushing the page sideways */
   .tile {
     width: 26px; height: 34px; border-radius: 7px;
     background: var(--tile); border: 1px solid var(--line);
@@ -279,6 +279,11 @@
 
   /* ---------- Country profile (lazy-loaded per language: profiles.<lang>.js) ---------- */
   .profile { margin-top: 18px; }
+  /* Only some blocks had a rule for their "hidden" class, so an empty "Country
+     profile" heading showed under every answer while the data loaded (or for a
+     country without an entry), "No players yet" under a full leaderboard, and
+     an empty "Continue as" row in the nickname box. */
+  .profile.hidden, .board-empty.hidden, .known.hidden { display: none; }
   .profile h3 {
     font-size: 13px; text-transform: uppercase; letter-spacing: .12em;
     color: var(--accent); margin: 0 0 8px;
@@ -448,9 +453,19 @@
      onto their own full-width row. Above this the brand + controls always share
      one row in BOTH languages, so switching language never changes the row count
      (the earlier bug); below it they consistently stack. */
-  @media (max-width: 720px) {
+  @media (max-width: 744px) {   /* was 720: at 721-743px the Greek labels wrapped where the English did not */
     .who { flex: 1 1 100%; margin-left: 0; justify-content: flex-start; }
     .brand h1 { white-space: normal; }
+  }
+  /* Narrow phones: Log in / Register take their own line in BOTH languages, so the
+     longer Greek labels (at 475-491px) cannot add a row that English does not. */
+  @media (max-width: 492px) {
+    .who .account { flex: 1 1 100%; margin-left: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  }
+  /* Smallest phones: the language flags take their own row too, so "My progress"
+     and "Leaderboard" share one row in both languages (English is wider at ~330px). */
+  @media (max-width: 360px) {
+    .who .lang-switch { flex: 1 1 100%; }
   }
   @media (max-width: 480px) {
     .card { padding: 18px; }
@@ -533,7 +548,7 @@
 
       <div id="askBlock">
         <div class="answer-row">
-          <input type="text" id="answerInput" placeholder="Type the capital city…" data-i18n-ph="answerPh" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
+          <input type="text" id="answerInput" aria-describedby="qText" placeholder="Type the capital city…" data-i18n-ph="answerPh" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
           <button class="btn primary" id="submitBtn" data-i18n="check">Check</button>
         </div>
 
@@ -542,7 +557,7 @@
           <button class="btn ghost small" id="revealBtn" data-i18n="showAnswer">Show the answer</button>
         </div>
 
-        <div class="feedback info" id="feedback"></div>
+        <div class="feedback info" id="feedback" role="status" aria-live="polite"></div>
 
         <div class="mask" id="mask"></div>
         <div class="mask-note" id="maskNote"></div>
@@ -581,7 +596,7 @@
         </div>
 
         <div class="next-row">
-          <button class="btn good" id="nextBtn" data-i18n="nextCountry">Next country →</button>
+          <button class="btn good" id="nextBtn" aria-describedby="bannerLbl capLine capAlt" data-i18n="nextCountry">Next country →</button>
           <span class="seen" id="seenNote"></span>
         </div>
       </div>
@@ -595,7 +610,7 @@
   </div>
 
   <!-- Nickname overlay -->
-  <div class="overlay" id="nickOverlay">
+  <div class="overlay hidden" id="nickOverlay">
     <div class="modal modal-close">
       <button class="x-btn" id="nickClose" title="Close" style="display:none">×</button>
       <h2 data-i18n="welcome">Welcome to Capitals</h2>
@@ -803,7 +818,7 @@
         hint1: "Hint 1: how many letters", hint2: "Hint 2: reveal some letters", hint3: "Hint 3: show the answer",
         answerShown: "Answer shown",
         didYouKnow: "Did you know?", nextCountry: "Next country →",
-        whereIs: "Where in the world", notOnMap: "Too small to show on the map.",
+        whereIs: "Where in the world", notOnMap: "Too small to show on the map.", notDrawn: "Not shown separately on this map.",
         mapCredit: "Map: Al MacDonald / F. Lekschas · CC BY-SA 3.0",
         byline: "A fun project by", moreProjects: "more fun projects",
         welcome: "Welcome to Capitals",
@@ -828,6 +843,7 @@
         boardNoteGlobal: "This leaderboard is shared worldwide. Mastered counts the capitals named with no hints.",
         scopeGlobal: "🌐 Global leaderboard", scopeLocal: "📱 This device only",
         playersGlobalN: function (n) { return n + " player" + (n === 1 ? "" : "s") + " worldwide."; },
+        playersGlobalEmpty: "No one has played yet. Answer a few questions to be the first on the board.",
         you: "you",
         // dynamic
         qText: function (c) { return "What is the capital of <span class=\"country\">" + c + "</span>?"; },
@@ -851,7 +867,8 @@
         since: function (d) { return "Learning since " + d; },
         playersN: function (n) { return n + (n === 1 ? " player has" : " players have") + " played on this device."; },
         playersEmpty: "Everyone who plays on this device appears here.",
-        recentN: function (n) { return n + " questions answered in the last 14 days."; },
+        recentN: function (n) { return n + (n === 1 ? " question" : " questions") + " answered in the last 14 days."; },
+        barTip: function (n, ok) { return n + " answered" + (n ? ", " + ok + " correct" : ""); },
         recentNone: "No activity yet in the last 14 days — answer a few to see your chart.",
         confirmReset: function (nick, ranked) { return "Reset all progress for \"" + nick + "\"? This cannot be undone." + (ranked ? " Your best score on the worldwide leaderboard is kept." : ""); },
         errNick: "Please enter a nickname.", errNickContinue: "Please enter a nickname to continue.",
@@ -866,7 +883,7 @@
         hint1: "Βοήθεια 1: πόσα γράμματα", hint2: "Βοήθεια 2: μερικά γράμματα", hint3: "Βοήθεια 3: δείξε την απάντηση",
         answerShown: "Η απάντηση φάνηκε",
         didYouKnow: "Το ήξερες;", nextCountry: "Επόμενη χώρα →",
-        whereIs: "Πού βρίσκεται στον κόσμο", notOnMap: "Πολύ μικρή για να φανεί στον χάρτη.",
+        whereIs: "Πού βρίσκεται στον κόσμο", notOnMap: "Πολύ μικρή για να φανεί στον χάρτη.", notDrawn: "Δεν εμφανίζεται χωριστά σε αυτόν τον χάρτη.",
         mapCredit: "Χάρτης: Al MacDonald / F. Lekschas · CC BY-SA 3.0",
         byline: "Ένα διασκεδαστικό έργο του", moreProjects: "περισσότερα έργα",
         welcome: "Καλώς ήρθες στο Capitals",
@@ -891,6 +908,7 @@
         boardNoteGlobal: "Αυτή η κατάταξη είναι κοινή για όλο τον κόσμο. Οι κατακτήσεις μετρούν τις πρωτεύουσες που βρήκες χωρίς βοήθεια.",
         scopeGlobal: "🌐 Παγκόσμια κατάταξη", scopeLocal: "📱 Μόνο σε αυτή τη συσκευή",
         playersGlobalN: function (n) { return n === 1 ? "1 παίκτης παγκοσμίως." : n + " παίκτες παγκοσμίως."; },
+        playersGlobalEmpty: "Κανείς δεν έχει παίξει ακόμη. Απάντησε μερικές ερωτήσεις για να είσαι πρώτος στην κατάταξη.",
         you: "εσύ",
         qText: function (c) { return "Ποια είναι η πρωτεύουσα της χώρας <span class=\"country\">" + c + "</span>;"; },
         capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">— η πρωτεύουσα της χώρας " + c + "</span>"; },
@@ -908,12 +926,13 @@
         noCountries: "Δεν υπάρχουν χώρες σε αυτή την περιοχή.",
         maskLen: function (n, w) { return "Η πρωτεύουσα έχει " + n + " γράμματα" + (w > 1 ? " σε " + w + " λέξεις." : "."); },
         maskPartial: "Μερικά γράμματα έχουν συμπληρωθεί για βοήθεια.",
-        seenN: function (c, n, ok) { return "Έχεις δει αυτή τη χώρα " + n + " φορές" + (ok ? ", σωστά " + ok + "." : "."); },
+        seenN: function (c, n, ok) { return "Έχεις δει αυτή τη χώρα " + (n === 1 ? "1 φορά" : n + " φορές") + (ok ? ", σωστά " + ok + "." : "."); },
         seenFirst: function (c) { return "Πρώτη φορά που βλέπεις αυτή τη χώρα."; },
         since: function (d) { return "Μαθαίνεις από " + d; },
         playersN: function (n) { return n === 1 ? "1 παίκτης έχει παίξει σε αυτή τη συσκευή." : n + " παίκτες έχουν παίξει σε αυτή τη συσκευή."; },
         playersEmpty: "Όποιος παίζει σε αυτή τη συσκευή εμφανίζεται εδώ.",
-        recentN: function (n) { return n + " ερωτήσεις τις τελευταίες 14 ημέρες."; },
+        recentN: function (n) { return n + (n === 1 ? " ερώτηση" : " ερωτήσεις") + " τις τελευταίες 14 ημέρες."; },
+        barTip: function (n, ok) { return n + (n === 1 ? " απάντηση" : " απαντήσεις") + (n ? ", " + ok + " σωστ" + (ok === 1 ? "ή" : "ές") : ""); },
         recentNone: "Καμία δραστηριότητα ακόμη — απάντησε μερικές για να δεις το γράφημά σου.",
         confirmReset: function (nick, ranked) { return "Μηδενισμός όλης της προόδου για «" + nick + "»; Αυτό δεν αναιρείται." + (ranked ? " Η καλύτερη βαθμολογία σου στην παγκόσμια κατάταξη διατηρείται." : ""); },
         errNick: "Γράψε ένα ψευδώνυμο.", errNickContinue: "Γράψε ένα ψευδώνυμο για να συνεχίσεις.",
@@ -1427,7 +1446,7 @@
         img.alt = "";
         img.loading = "lazy";
         img.src = "https://flagcdn.com/" + cc + ".svg";
-        img.onerror = function () { els.qFlag.textContent = emoji || "🏳️"; };
+        img.onerror = function () { if (img.parentNode === els.qFlag) els.qFlag.textContent = emoji || "🏳️"; }; // not if we have moved on
         els.qFlag.appendChild(img);
       } else {
         els.qFlag.textContent = emoji || "🏳️";
@@ -1476,12 +1495,16 @@
         paintCountry(svg, cc);
       });
     }
+    var NOT_DRAWN = { xk: 1, ps: 1, tl: 1, fj: 1 };
     function paintCountry(svg, cc) {
       var SVGNS = "http://www.w3.org/2000/svg";
       Array.prototype.forEach.call(svg.querySelectorAll(".hl"), function (e) { e.classList.remove("hl"); });
       var old = svg.querySelector(".map-marker"); if (old) old.parentNode.removeChild(old);
-      var nodes = svg.querySelectorAll('[id="' + cc + '"]');
-      if (!nodes.length) { els.mapNote.textContent = t("notOnMap"); return; }
+      // Somalia's north is drawn as its own path, _somaliland.
+      var nodes = svg.querySelectorAll(cc === "so" ? '[id="so"],[id="_somaliland"]' : '[id="' + cc + '"]');
+      // Kosovo, Palestine, Timor-Leste and Fiji are not small: this map simply does
+      // not draw them apart (Kosovo is inside Serbia, the West Bank inside Israel).
+      if (!nodes.length) { els.mapNote.textContent = t(NOT_DRAWN[cc] ? "notDrawn" : "notOnMap"); return; }
       els.mapNote.textContent = "";
       // Highlight the matched country (and only it).
       Array.prototype.forEach.call(nodes, function (n) { n.classList.add("hl"); });
@@ -1737,7 +1760,9 @@
       }
       highlightOnMap(current.flag);   // show where this country is, on the world map
       refreshSeenNote();
-      els.nextBtn.focus();
+      // preventScroll: Next sits under the map, the facts and the country profile,
+      // and scrolling to it pushed the verdict (and the misspelling note) off-screen
+      els.nextBtn.focus({ preventScroll: true });
     }
 
     function checkAnswer() {
@@ -1994,7 +2019,7 @@
         var bar = document.createElement("div");
         bar.className = "bar" + (d.count === 0 ? " empty" : "");
         bar.style.height = (d.count === 0 ? 2 : Math.max(6, Math.round(86 * d.count / max))) + "px";
-        bar.title = d.count + " answered" + (d.count ? ", " + d.correct + " correct" : "");
+        bar.title = t("barTip")(d.count, d.correct);
         var tip = document.createElement("div"); tip.className = "tip"; tip.textContent = d.label;
         col.appendChild(bar); col.appendChild(tip);
         els.bars.appendChild(col);
@@ -2021,6 +2046,7 @@
 
     // ---------- leaderboard modal ----------
     var boardSort = "points";
+    var GLOBAL_LIMIT = 200;    // the worldwide query returns the top 200 (limitToLast in the leaderboard script)
     var globalRows = null;     // set to an array once the global board is live
     var globalAttached = false;
     function escapeHtml(s) {
@@ -2035,11 +2061,15 @@
     // nicknames stored locally in this browser.
     function boardRows() {
       if (globalRows) {
+        // Any visitor can write a worldwide row, so every number is forced to a
+        // number here: renderBoard puts these straight into innerHTML, and a string
+        // there would run as markup for everyone who opens the board.
+        var num = function (x) { x = +x; return isFinite(x) ? Math.max(0, Math.round(x)) : 0; };
         return globalRows.map(function (r) {
           return {
-            key: r.key, nick: r.name || r.key,
-            points: r.points || 0, accuracy: r.accuracy || 0,
-            answered: r.answered || 0, mastered: r.mastered || 0, bestStreak: r.streak || 0
+            key: String(r.key), nick: String(r.name || r.key),
+            points: num(r.points), accuracy: Math.min(100, num(r.accuracy)),
+            answered: num(r.answered), mastered: num(r.mastered), bestStreak: num(r.streak)
           };
         });
       }
@@ -2069,8 +2099,8 @@
       els.boardScope.className = "board-scope" + (isGlobal ? " global" : "");
       els.boardNote.textContent = isGlobal ? t("boardNoteGlobal") : t("boardNote");
       els.boardSub.textContent = rows.length
-        ? (isGlobal ? t("playersGlobalN")(rows.length) : t("playersN")(rows.length))
-        : t("playersEmpty");
+        ? (isGlobal ? t("playersGlobalN")(rows.length >= GLOBAL_LIMIT ? GLOBAL_LIMIT + "+" : rows.length) : t("playersN")(rows.length))
+        : (isGlobal ? t("playersGlobalEmpty") : t("playersEmpty"));
 
       // header highlight for active sort
       Array.prototype.forEach.call(document.querySelectorAll(".sortbtn"), function (b) {
@@ -2086,10 +2116,14 @@
 
       var meId = (profile && profile.guest) ? null : (isGlobal ? sanitizeNick(profile && profile.nick) : pKey); // a guest is never on the board
       var medal = ["g", "s", "b"];
+      // Competition ranking: players tied on every sort key share a rank and a medal.
+      var same = function (a, b) { return a[boardSort] === b[boardSort] && a.points === b.points && a.accuracy === b.accuracy && a.answered === b.answered; };
+      var rank = 0;
       var html = rows.map(function (r, i) {
-        var rankCell = (i < 3)
-          ? '<span class="medal ' + medal[i] + '">' + (i + 1) + "</span>"
-          : (i + 1);
+        if (i === 0 || !same(r, rows[i - 1])) rank = i + 1;
+        var rankCell = (rank <= 3)
+          ? '<span class="medal ' + medal[rank - 1] + '">' + rank + "</span>"
+          : rank;
         var isMe = (r.key === meId);
         var you = isMe ? ' <span class="youtag">' + t("you") + '</span>' : "";
         return '<tr class="' + (isMe ? "me" : "") + '">' +
@@ -2144,6 +2178,8 @@
     els.revealBtn.addEventListener("click", handleReveal);
     els.nextBtn.addEventListener("click", newQuestion);
     function anyModalOpen() {
+      var am = document.querySelector("#acctRoot [data-modal]");
+      if (am && !am.hidden) return true;   // the Log in / Register dialog
       return !els.statsOverlay.classList.contains("hidden") ||
              !els.nickOverlay.classList.contains("hidden") ||
              !els.boardOverlay.classList.contains("hidden");
@@ -2236,7 +2272,7 @@
 
     // Focus back on the game after a language flag or a closed panel, so Enter
     // moves on (or checks) instead of pressing the header button again.
-    function refocus() { if (current && profile) (solved ? els.nextBtn : els.answerInput).focus(); }
+    function refocus() { if (current && profile) (solved ? els.nextBtn : els.answerInput).focus({ preventScroll: true }); }
     els.langEn.addEventListener("click", function () { setLang("en"); refocus(); });
     els.langEl.addEventListener("click", function () { setLang("el"); refocus(); });
 
@@ -2346,6 +2382,7 @@
     color:#111827; background:#fff; width:100%; min-height:46px;
   }
   .acct-lbl input:focus{ border-color:var(--acct-accent); box-shadow:0 0 0 3px rgba(37,99,235,.16); }
+  .acct-lbl[hidden]{ display:none; }   /* .acct-lbl's display:flex beat the hidden attribute: Log in showed an unused Nickname field */
   .acct-err{ margin:2px 0 0; font-size:13px; color:#dc2626; background:#fef2f2; border:1px solid #fde2e2; padding:9px 11px; border-radius:9px; }
   .acct-submit{
     margin-top:4px; appearance:none; border:0; cursor:pointer; border-radius:12px; min-height:48px;
@@ -2501,7 +2538,8 @@
       "auth/popup-blocked":"Your browser blocked the Google window. Allow pop-ups for this site and try again.",
       "auth/account-exists-with-different-credential":"That email already has an account here. Log in with your email and password instead.",
       "google/not-enabled":"Google sign-in isn’t switched on for this site yet. Please use your email for now.",
-      "google/unavailable":"Google sign-in isn’t available right now. Please use your email, or try again later."
+      "google/unavailable":"Google sign-in isn’t available right now. Please use your email, or try again later.",
+      "auth/unavailable":"Sign-in isn’t available right now. Please check your connection and try again."
     };
     return m[code] || msg || "Something went wrong. Please try again.";
   }
@@ -2566,9 +2604,11 @@
 
   form.addEventListener("submit", async (e)=>{
     e.preventDefault();
-    if(!auth || !fns){ showErr(friendly("auth/operation-not-allowed")); return; }
+    if(!auth || !fns){ showErr(friendly("auth/unavailable")); return; }   // Firebase did not load (offline, blocked)
     const email = inEmail.value.trim(), pass = inPass.value;
-    const nick = (inNick.value.trim() || email.split("@")[0] || "Player").slice(0,16);
+    // A blank nickname must not publish the e-mail's first part (often a full name)
+    // on public leaderboards: it becomes Player1234 instead.
+    const nick = (inNick.value.trim() || ("Player" + Math.floor(1000 + Math.random() * 9000))).slice(0,16);
     if(!email){ showErr("Please enter your email."); return; }
     if(pass.length < 6){ showErr("Password must be at least 6 characters."); return; }
     elErr.hidden = true; elSubmit.disabled = true;

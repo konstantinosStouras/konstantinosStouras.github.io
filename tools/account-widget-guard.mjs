@@ -49,6 +49,8 @@ for (const p of PAGES) {
   ok(blk.includes('data-act="google"') && blk.includes('Continue with Google'), p + ': shows "Continue with Google"');
   ok(/if\(holdAuth\)\{ heldUser = u \|\| null; return; \}/.test(m[0]), p + ': holds the auth event while a sign-in is still naming the account');
   ok(m[0].includes('fns.signInWithPopup(auth, provider)') && m[0].includes('new fns.GoogleAuthProvider()'), p + ': signs in with the Google provider');
+  ok(blk.includes('.acct-lbl[hidden]{ display:none; }'), p + ': the hidden Nickname field is really hidden (the <style> copy is not covered by the script comparison)');
+  ok(!/inNick\.value\.trim\(\) \|\| email\.split/.test(m[0]), p + ': a blank nickname never falls back to the e-mail address');
   let parses = true; try { new Function(m[0].replace(/^<script type="module">/, '').replace(/<\/script>$/, '')); } catch { parses = false; }
   ok(parses, p + ': widget script parses');
 }
@@ -179,6 +181,22 @@ async function browserChecks(chromium) {
     ev = await pg.evaluate(() => window.__events.slice());
     ok(JSON.stringify(ev) === '["Jane"]', 'e-mail registration: one account-changed, with the chosen nickname, never the e-mail\'s local part (' + JSON.stringify(ev) + ')');
     await pg.keyboard.press('Escape');
+    // a blank nickname at registration: never the e-mail's first part
+    await reset();
+    await pg.evaluate(() => { window.__fb.next = {}; window.Account.openRegister(); });
+    await pg.fill('#acctRoot .f-email', 'k.stouras.private@example.com');
+    await pg.fill('#acctRoot .f-pass', 'secret123');
+    await pg.click('#acctRoot .acct-submit');
+    await pg.waitForFunction(() => window.__events.length > 0);
+    ev = await pg.evaluate(() => window.__events.slice());
+    ok(ev.length === 1 && /^Player\d{4}$/.test(ev[0]), 'blank nickname: Player + 4 digits, not the e-mail (' + JSON.stringify(ev) + ')');
+    await reset();
+    // Log in shows no Nickname field
+    await pg.evaluate(() => window.Account.openLogin());
+    ok(!(await pg.isVisible('#acctRoot .acct-nick-field')), 'the Log in box shows no Nickname field');
+    await pg.evaluate(() => window.Account.openRegister());
+    ok(await pg.isVisible('#acctRoot .acct-nick-field'), 'the Register box does');
+    await pg.keyboard.press('Escape');
     ok(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
     await br.close();
   }
@@ -197,6 +215,10 @@ async function browserChecks(chromium) {
     await pg.waitForTimeout(100);
     const e = await pg.evaluate(() => document.querySelector('#acctRoot .acct-err').textContent);
     ok(/isn.t available right now/.test(e), 'the button says Google is unavailable ("' + e + '")');
+    await pg.fill('#acctRoot .f-email', 'a@b.co'); await pg.fill('#acctRoot .f-pass', 'secret123');
+    await pg.click('#acctRoot .acct-submit');
+    const e2 = await pg.evaluate(() => document.querySelector('#acctRoot .acct-err').textContent);
+    ok(/check your connection/.test(e2), 'the email form says sign-in is unavailable, not "not enabled" ("' + e2 + '")');
     ok(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
     await br.close();
   }
