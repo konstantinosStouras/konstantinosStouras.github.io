@@ -2292,15 +2292,15 @@
   // else just the first name: nicknames appear on public leaderboards, and the
   // Google profile name is usually a person's full name. onAuthStateChanged is
   // held back while this runs, so apps only ever see the final nickname.
-  let googleBusy = false, heldUser;
+  let holdAuth = false, heldUser;   // holdAuth: a sign-in is still naming its account
   function publicUser(u, nick){
     return u ? { uid:u.uid, email:u.email || "", nickname:(nick || u.displayName || (u.email||"").split("@")[0] || "Player") } : null;
   }
   async function googleSignIn(){
-    if(googleBusy) return;
+    if(holdAuth) return;
     if(!auth || !fns){ showErr(friendly("google/unavailable")); return; }
     const typedNick = (mode==="register" ? inNick.value.trim() : "").slice(0,16);
-    elErr.hidden = true; elGoogle.disabled = true; googleBusy = true; heldUser = undefined;
+    elErr.hidden = true; elGoogle.disabled = true; holdAuth = true; heldUser = undefined;
     let signedIn = null, finalNick = "";
     try{
       const provider = new fns.GoogleAuthProvider();
@@ -2321,7 +2321,7 @@
       else if(code==="auth/operation-not-allowed" || code==="auth/unauthorized-domain" || code==="auth/configuration-not-found" || code==="auth/invalid-api-key"){ showErr(friendly("google/not-enabled")); }
       else { showErr(friendly(code, err && err.message)); }
     }finally{
-      googleBusy = false; elGoogle.disabled = false;
+      holdAuth = false; elGoogle.disabled = false;
       const u = signedIn || (heldUser === undefined ? undefined : heldUser);
       heldUser = undefined;
       if(u !== undefined) emit(publicUser(u, finalNick));
@@ -2341,8 +2341,19 @@
     const original = elSubmit.textContent; elSubmit.textContent = "Please wait…";
     try{
       if(mode==="register"){
-        const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
-        try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+        // Creating the account signs it in, and the auth observer fires BEFORE the
+        // nickname is saved, so apps heard the e-mail's local part as the player's
+        // name (and published it). Hold the observer until the nickname is set.
+        holdAuth = true; heldUser = undefined;
+        try{
+          const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
+          try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+          heldUser = undefined;
+          emit(publicUser(cred.user, nick));
+        } finally {
+          holdAuth = false;
+          if(heldUser !== undefined){ const u = heldUser; heldUser = undefined; emit(publicUser(u)); }
+        }
       } else {
         await fns.signInWithEmailAndPassword(auth, email, pass);
       }
@@ -2364,7 +2375,7 @@
       auth = authMod.getAuth(app);
       fns = authMod;
       authMod.onAuthStateChanged(auth, (u)=>{
-        if(googleBusy){ heldUser = u || null; return; }   // googleSignIn() emits once it has set the nickname
+        if(holdAuth){ heldUser = u || null; return; }     // the sign-in in progress emits once it has set the nickname
         emit(publicUser(u));
       });
     }catch(e){

@@ -308,7 +308,7 @@ ok(/var match = matchAnswer\(current, raw, ALL\);\s*if \(match\) \{\s*handleCorr
 ok(!/if \(forms\[norm\(raw\)\]\)/.test(game), 'the old if (forms[norm(raw)]) lookup is gone');
 ok(/function handleCorrect\(match\) \{\s*solved = true;\s*matchInfo = match \|\| null;/.test(game), 'handleCorrect remembers the verdict');
 ok(/function handleReveal\(\) \{[\s\S]{0,120}matchInfo = null;/.test(game), 'a reveal clears it');
-ok(/matchInfo = null;\s*renderFlag/.test(game), 'a new question clears it');
+ok(/solved = false;\s*matchInfo = null;[\s\S]{0,200}renderFlag/.test(game), 'a new question clears it');
 ok((game.match(/renderAnswerNotes\(\);/g) || []).length === 2, 'renderAnswerNotes runs in showReveal AND on a language switch (renderRevealText)');
 ok(/if \(revCorrect && matchInfo\) \{\s*var alt = isAltForm\(current, matchInfo\.form\);\s*if \(!matchInfo\.exact && alt\)/.test(game), 'notes only for a correct answer; a slip of an alternative gets its own single line');
 ok(/t\("typoNote"\)\(escapeHtml\(matchInfo\.typed\), escapeHtml\(matchInfo\.form\)\)/.test(game), 'what the player typed and the right spelling are both HTML-escaped');

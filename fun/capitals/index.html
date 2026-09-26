@@ -672,7 +672,7 @@
               <th data-i18n="accShort">Acc.</th>
               <th data-i18n="answeredShort">Answered</th>
               <th data-i18n="masteredShort">Mastered</th>
-              <th data-i18n="streak">Streak</th>
+              <th data-i18n="bestStreak">Best streak</th>
             </tr>
           </thead>
           <tbody id="boardBody"></tbody>
@@ -779,7 +779,7 @@
     var LAST_KEY  = "capitals:v1:lastNick";
     var LANG_KEY  = "capitals:v1:lang";
     var GUEST_KEY = "__guest__";   // reserved profile key — never ranked
-    var HISTORY_CAP = 600;
+    var HISTORY_CAP = 20000;
 
     // ---------- merge the Greek layer onto the base dataset ----------
     var EL_DATA = window.COUNTRIES_EL || {};
@@ -853,7 +853,7 @@
         playersEmpty: "Everyone who plays on this device appears here.",
         recentN: function (n) { return n + " questions answered in the last 14 days."; },
         recentNone: "No activity yet in the last 14 days — answer a few to see your chart.",
-        confirmReset: function (nick) { return "Reset all progress for \"" + nick + "\"? This cannot be undone."; },
+        confirmReset: function (nick, ranked) { return "Reset all progress for \"" + nick + "\"? This cannot be undone." + (ranked ? " Your best score on the worldwide leaderboard is kept." : ""); },
         errNick: "Please enter a nickname.", errNickContinue: "Please enter a nickname to continue.",
         footTotal: function (n) { return "Teaching the capitals of " + n + " countries and territories"; },
         locale: undefined
@@ -915,7 +915,7 @@
         playersEmpty: "Όποιος παίζει σε αυτή τη συσκευή εμφανίζεται εδώ.",
         recentN: function (n) { return n + " ερωτήσεις τις τελευταίες 14 ημέρες."; },
         recentNone: "Καμία δραστηριότητα ακόμη — απάντησε μερικές για να δεις το γράφημά σου.",
-        confirmReset: function (nick) { return "Μηδενισμός όλης της προόδου για «" + nick + "»; Αυτό δεν αναιρείται."; },
+        confirmReset: function (nick, ranked) { return "Μηδενισμός όλης της προόδου για «" + nick + "»; Αυτό δεν αναιρείται." + (ranked ? " Η καλύτερη βαθμολογία σου στην παγκόσμια κατάταξη διατηρείται." : ""); },
         errNick: "Γράψε ένα ψευδώνυμο.", errNickContinue: "Γράψε ένα ψευδώνυμο για να συνεχίσεις.",
         footTotal: function (n) { return "Διδάσκει τις πρωτεύουσες " + n + " χωρών και περιοχών"; },
         locale: "el"
@@ -924,9 +924,31 @@
     function t(key) { var d = I18N[lang]; var v = (d && d[key] != null) ? d[key] : I18N.en[key]; return v; }
 
     // ---------- storage helpers ----------
+    // The map has no prototype: with a plain {} a nickname such as
+    // "constructor" or "__proto__" resolved to Object's own members, crashed the
+    // game on every load and polluted every object. Each stored profile is also
+    // filled out to today's shape, so one saved by an older version (or cut
+    // short) can never throw on the next answer.
     function loadProfiles() {
-      try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
-      catch (e) { return {}; }
+      var out = Object.create(null), raw = null;
+      try { raw = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) {}
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        Object.keys(raw).forEach(function (k) {
+          var p = raw[k];
+          if (p && typeof p === "object" && !Array.isArray(p)) out[k] = normalizeProfile(p, k);
+        });
+      }
+      return out;
+    }
+    function normalizeProfile(p, k) {
+      var d = newProfile((typeof p.nick === "string" && p.nick.trim()) || (k === GUEST_KEY ? "Guest" : k));
+      Object.keys(d).forEach(function (f) {
+        var v = p[f], dv = d[f];
+        if (f === "pending") { if (typeof v !== "string") p[f] = null; return; }   // a country name, or none
+        if (typeof v !== typeof dv || (typeof dv === "number" && !isFinite(v)) ||
+            Array.isArray(dv) !== Array.isArray(v) || (dv && typeof dv === "object" && !v)) p[f] = dv;
+      });
+      return p;
     }
     function saveProfiles(p) {
       try { localStorage.setItem(STORE_KEY, JSON.stringify(p)); } catch (e) {}
@@ -943,7 +965,8 @@
         wrongGuesses: 0, points: 0,
         currentStreak: 0, bestStreak: 0,
         byCountry: {},
-        history: []
+        history: [],
+        pending: null
       };
     }
 
@@ -951,12 +974,27 @@
     var profile = null;     // active profile object
     var pKey = null;        // active profile key
 
+    // Re-read before writing: another tab of the game may have saved since this
+    // one loaded, and writing this tab's old copy of the whole map erased it (and
+    // any profile it had created, a signed-in account's included). Only the
+    // active profile is written from memory.
     function persist() {
       if (!profile || !pKey) return;
       profile.lastSeen = Date.now();
+      profiles = loadProfiles();
       profiles[pKey] = profile;
       saveProfiles(profiles);
     }
+    // ...and follow the other tab's saves of the profile on screen here.
+    window.addEventListener("storage", function (e) {
+      if (e.key !== STORE_KEY) return;
+      profiles = loadProfiles();
+      if (pKey && profiles[pKey]) {
+        profile = profiles[pKey];
+        updateStreakDisplay();
+        if (current) refreshSeenNote();
+      }
+    });
 
     // ---------- text normalisation for answer matching ----------
     // Greek is highly forgiving: vowels and digraphs that sound identical are
@@ -1211,7 +1249,7 @@
     }
 
     function letterCount(answer) {
-      var m = answer.match(/\S/g);
+      var m = answer.match(/[\p{L}\p{N}]/gu); // letters and digits only, as the tiles draw punctuation apart
       return m ? m.length : 0;
     }
     function wordCount(answer) {
@@ -1283,6 +1321,8 @@
     var solved = false;     // answered correctly or revealed
     var revCorrect = false; // last reveal was a correct answer (vs given up)
     var matchInfo = null;   // what the player's answer matched: {form, exact, typed} (null after a reveal)
+    var fbKey = null;       // the i18n key of the feedback line on screen, so a language switch re-translates it
+    var pendingResume = true; // the first question of a session re-asks one left unanswered by a reload
     var lastCountry = null; // avoid immediate repeat
 
     function pool() {
@@ -1477,8 +1517,16 @@
       svg.appendChild(g);
     }
 
+    // The question on screen is remembered on the profile until it is answered or
+    // shown, so a reload asks it again instead of skipping it for free.
+    function pendingEntry() {
+      var c = profile && profile.pending;
+      if (!c) return null;
+      return pool().filter(function (e) { return e.c === c; })[0] || null;
+    }
     function newQuestion() {
-      current = pickNext();
+      current = (pendingResume && pendingEntry()) || pickNext();
+      pendingResume = false;
       if (!current) {
         els.qText.textContent = t("noCountries");
         els.feedback.textContent = "";
@@ -1488,6 +1536,8 @@
       hintLevel = 0;
       solved = false;
       matchInfo = null;
+      fbKey = null;
+      if (profile.pending !== current.c) { profile.pending = current.c; persist(); }
       renderFlag(current.flag);
       els.qRegion.textContent = regionLabel(current.region);
       els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
@@ -1535,6 +1585,13 @@
     }
     function pushHistory(country, result, hints) {
       profile.history.push({ t: Date.now(), c: country, r: result, h: hints });
+      // The history only feeds the 14-day activity chart, so trim it by AGE: a
+      // count cap (600) silently emptied the oldest days for anyone answering
+      // more than ~43 a day. HISTORY_CAP stays as a far-off safety limit.
+      var cutoff = Date.now() - 15 * 86400000;
+      if (profile.history.length && profile.history[0].t < cutoff) {
+        profile.history = profile.history.filter(function (h) { return h.t >= cutoff; });
+      }
       if (profile.history.length > HISTORY_CAP) {
         profile.history = profile.history.slice(profile.history.length - HISTORY_CAP);
       }
@@ -1543,6 +1600,7 @@
     function handleCorrect(match) {
       solved = true;
       matchInfo = match || null;
+      profile.pending = null;
       var rec = recordCountry(current.c);
       rec.seen += 1;
       rec.correct += 1;
@@ -1570,6 +1628,7 @@
       solved = true;
       hintLevel = 3;
       matchInfo = null;
+      profile.pending = null;
       var rec = recordCountry(current.c);
       rec.seen += 1;
       rec.reveals += 1;
@@ -1685,7 +1744,7 @@
       if (solved || !current) return;
       var raw = els.answerInput.value;
       if (!norm(raw)) {
-        flashInfo(t("fbType"));
+        fbKey = "fbType"; flashInfo(t("fbType"));
         return;
       }
       var match = matchAnswer(current, raw, ALL);
@@ -1699,7 +1758,7 @@
         void els.answerInput.offsetWidth;
         els.answerInput.classList.add("shake");
         els.feedback.className = "feedback no";
-        els.feedback.textContent = t("fbWrong");
+        fbKey = "fbWrong"; els.feedback.textContent = t("fbWrong");
         els.answerInput.select();
       }
     }
@@ -1715,7 +1774,8 @@
       renderMask();
       updateHintButton();
       els.feedback.className = "feedback info";
-      els.feedback.textContent = (hintLevel === 1) ? t("fbLen") : t("fbPartial");
+      fbKey = (hintLevel === 1) ? "fbLen" : "fbPartial";
+      els.feedback.textContent = t(fbKey);
       els.answerInput.focus();
     }
 
@@ -1766,6 +1826,7 @@
       });
     }
     function renderQuestionView() {
+      if (fbKey) els.feedback.textContent = t(fbKey);
       els.qRegion.textContent = regionLabel(current.region);
       els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
       updateHintButton();
@@ -1849,7 +1910,20 @@
       closeNick();
       updateWho();
       updateStreakDisplay();
-      newQuestion();
+      keepOrNewQuestion();
+    }
+    // Signing in arrives after the page has already asked a guest question: keep
+    // it (what was typed, the hints, an answer on screen) instead of throwing it
+    // away, and bring any open panel up to date with the profile now active.
+    function keepOrNewQuestion() {
+      if (!current) newQuestion();
+      else if (solved) renderRevealText();
+      else {
+        renderQuestionView();
+        if (profile.pending !== current.c) { profile.pending = current.c; persist(); }
+      }
+      if (!els.statsOverlay.classList.contains("hidden")) openStats();
+      if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
     }
 
     function tryStart() {
@@ -1869,7 +1943,7 @@
       closeNick();
       updateWho();
       updateStreakDisplay();
-      newQuestion();
+      keepOrNewQuestion();
     }
 
     // ---------- stats modal ----------
@@ -1904,7 +1978,7 @@
       var days = [];
       var today = new Date(); today.setHours(0, 0, 0, 0);
       for (var i = 13; i >= 0; i--) {
-        var d = new Date(today.getTime() - i * 86400000);
+        var d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i); // calendar days: 24 h steps lose the day the clocks go forward
         days.push({ key: d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(), label: d.getDate(), count: 0, correct: 0 });
       }
       var idx = {};
@@ -1930,11 +2004,11 @@
 
       els.statsOverlay.classList.remove("hidden");
     }
-    function closeStats() { els.statsOverlay.classList.add("hidden"); }
+    function closeStats() { els.statsOverlay.classList.add("hidden"); refocus(); }
 
     function resetProgress() {
       var wasGuest = !!(profile && profile.guest);
-      if (!confirm(t("confirmReset")(wasGuest ? t("guest") : profile.nick))) return;
+      if (!confirm(t("confirmReset")(wasGuest ? t("guest") : profile.nick, !wasGuest && globalRows !== null))) return;
       profiles[pKey] = newProfile(profile.nick);
       profiles[pKey].guest = wasGuest;   // a reset guest stays a guest (still unranked)
       profile = profiles[pKey];
@@ -2010,7 +2084,7 @@
       }
       els.boardEmpty.classList.add("hidden");
 
-      var meId = isGlobal ? sanitizeNick(profile && profile.nick) : pKey;
+      var meId = (profile && profile.guest) ? null : (isGlobal ? sanitizeNick(profile && profile.nick) : pKey); // a guest is never on the board
       var medal = ["g", "s", "b"];
       var html = rows.map(function (r, i) {
         var rankCell = (i < 3)
@@ -2031,7 +2105,7 @@
       els.boardBody.innerHTML = html;
     }
     function openBoard() { renderBoard(); els.boardOverlay.classList.remove("hidden"); }
-    function closeBoard() { els.boardOverlay.classList.add("hidden"); }
+    function closeBoard() { els.boardOverlay.classList.add("hidden"); refocus(); }
 
     // ---------- global leaderboard (Firebase, optional) ----------
     // Publishes this profile's summary and, when the worldwide board is live,
@@ -2090,13 +2164,20 @@
       // control handles its own Enter (the input submits, the focused Next
       // button clicks), so only a keystroke from outside a control counts.
       if (e.key === "Enter" && solved && !anyModalOpen()) {
-        var tag = (e.target && e.target.tagName) || "";
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
+        if (e.target && e.target.closest && e.target.closest("a[href], button, input, select, textarea")) return;
         newQuestion();
       }
     });
     els.regionSel.addEventListener("change", function () {
-      if (profile) { newQuestion(); }
+      if (!profile) return;
+      // Leaving a question you have not answered is giving it up: it ends the
+      // streak, as "Show the answer" does, or skipping would be free.
+      if (current && !solved && profile.currentStreak) {
+        profile.currentStreak = 0;
+        persist();
+        updateStreakDisplay();
+      }
+      newQuestion();
     });
 
     els.statsBtn.addEventListener("click", openStats);
@@ -2153,8 +2234,11 @@
       b.addEventListener("click", function () { boardSort = b.getAttribute("data-sort"); renderBoard(); });
     });
 
-    els.langEn.addEventListener("click", function () { setLang("en"); });
-    els.langEl.addEventListener("click", function () { setLang("el"); });
+    // Focus back on the game after a language flag or a closed panel, so Enter
+    // moves on (or checks) instead of pressing the header button again.
+    function refocus() { if (current && profile) (solved ? els.nextBtn : els.answerInput).focus(); }
+    els.langEn.addEventListener("click", function () { setLang("en"); refocus(); });
+    els.langEl.addEventListener("click", function () { setLang("el"); refocus(); });
 
     els.nickStart.addEventListener("click", tryStart);
     els.nickGuest.addEventListener("click", activateGuest);
@@ -2442,15 +2526,15 @@
   // else just the first name: nicknames appear on public leaderboards, and the
   // Google profile name is usually a person's full name. onAuthStateChanged is
   // held back while this runs, so apps only ever see the final nickname.
-  let googleBusy = false, heldUser;
+  let holdAuth = false, heldUser;   // holdAuth: a sign-in is still naming its account
   function publicUser(u, nick){
     return u ? { uid:u.uid, email:u.email || "", nickname:(nick || u.displayName || (u.email||"").split("@")[0] || "Player") } : null;
   }
   async function googleSignIn(){
-    if(googleBusy) return;
+    if(holdAuth) return;
     if(!auth || !fns){ showErr(friendly("google/unavailable")); return; }
     const typedNick = (mode==="register" ? inNick.value.trim() : "").slice(0,16);
-    elErr.hidden = true; elGoogle.disabled = true; googleBusy = true; heldUser = undefined;
+    elErr.hidden = true; elGoogle.disabled = true; holdAuth = true; heldUser = undefined;
     let signedIn = null, finalNick = "";
     try{
       const provider = new fns.GoogleAuthProvider();
@@ -2471,7 +2555,7 @@
       else if(code==="auth/operation-not-allowed" || code==="auth/unauthorized-domain" || code==="auth/configuration-not-found" || code==="auth/invalid-api-key"){ showErr(friendly("google/not-enabled")); }
       else { showErr(friendly(code, err && err.message)); }
     }finally{
-      googleBusy = false; elGoogle.disabled = false;
+      holdAuth = false; elGoogle.disabled = false;
       const u = signedIn || (heldUser === undefined ? undefined : heldUser);
       heldUser = undefined;
       if(u !== undefined) emit(publicUser(u, finalNick));
@@ -2491,8 +2575,19 @@
     const original = elSubmit.textContent; elSubmit.textContent = "Please wait…";
     try{
       if(mode==="register"){
-        const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
-        try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+        // Creating the account signs it in, and the auth observer fires BEFORE the
+        // nickname is saved, so apps heard the e-mail's local part as the player's
+        // name (and published it). Hold the observer until the nickname is set.
+        holdAuth = true; heldUser = undefined;
+        try{
+          const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
+          try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+          heldUser = undefined;
+          emit(publicUser(cred.user, nick));
+        } finally {
+          holdAuth = false;
+          if(heldUser !== undefined){ const u = heldUser; heldUser = undefined; emit(publicUser(u)); }
+        }
       } else {
         await fns.signInWithEmailAndPassword(auth, email, pass);
       }
@@ -2514,7 +2609,7 @@
       auth = authMod.getAuth(app);
       fns = authMod;
       authMod.onAuthStateChanged(auth, (u)=>{
-        if(googleBusy){ heldUser = u || null; return; }   // googleSignIn() emits once it has set the nickname
+        if(holdAuth){ heldUser = u || null; return; }     // the sign-in in progress emits once it has set the nickname
         emit(publicUser(u));
       });
     }catch(e){

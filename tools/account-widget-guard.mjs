@@ -47,7 +47,7 @@ for (const p of PAGES) {
   if (!m) continue;
   scripts.push([p, m[0]]);
   ok(blk.includes('data-act="google"') && blk.includes('Continue with Google'), p + ': shows "Continue with Google"');
-  ok(/if\(googleBusy\)\{ heldUser = u \|\| null; return; \}/.test(m[0]), p + ': holds the auth event while the Google sign-in finishes');
+  ok(/if\(holdAuth\)\{ heldUser = u \|\| null; return; \}/.test(m[0]), p + ': holds the auth event while a sign-in is still naming the account');
   ok(m[0].includes('fns.signInWithPopup(auth, provider)') && m[0].includes('new fns.GoogleAuthProvider()'), p + ': signs in with the Google provider');
   let parses = true; try { new Function(m[0].replace(/^<script type="module">/, '').replace(/<\/script>$/, '')); } catch { parses = false; }
   ok(parses, p + ': widget script parses');
@@ -93,7 +93,12 @@ async function browserChecks(chromium) {
     export function getAdditionalUserInfo(c){ return { isNewUser: !!c._new }; }
     export async function updateProfile(u, p){ ctl.updates.push(p.displayName); u.displayName = p.displayName; }
     export async function signOut(){ current = null; ls.forEach((cb) => cb(null)); }
-    export async function createUserWithEmailAndPassword(){ throw Object.assign(new Error('x'), { code: 'auth/operation-not-allowed' }); }
+    export async function createUserWithEmailAndPassword(a, email){
+      if (ctl.next && ctl.next.error) { const e = new Error(ctl.next.error); e.code = ctl.next.error; throw e; }
+      current = { uid: 'u2', email, displayName: null };   // like Firebase: signed in, observer fired, no name yet
+      ls.forEach((cb) => cb(current));
+      return { user: current };
+    }
     export async function signInWithEmailAndPassword(){ throw Object.assign(new Error('x'), { code: 'auth/invalid-credential' }); }`;
 
   for (const page of ['fun/capitals/', 'fun/snake/']) {
@@ -162,6 +167,18 @@ async function browserChecks(chromium) {
       ok(await pg.isEnabled('#acctRoot .acct-google'), '  …and the button is usable again');
       await pg.keyboard.press('Escape');
     }
+    // e-mail registration: the observer fires before the nickname is saved
+    await reset();
+    await pg.evaluate(() => { window.__fb.next = {}; window.Account.openRegister(); });
+    await pg.fill('#acctRoot .f-nick', 'Jane');
+    await pg.fill('#acctRoot .f-email', 'jane.doe.1984@example.com');
+    await pg.fill('#acctRoot .f-pass', 'secret123');
+    await pg.click('#acctRoot .acct-submit');
+    await pg.waitForFunction(() => window.__events.length > 0);
+    await pg.waitForTimeout(100);
+    ev = await pg.evaluate(() => window.__events.slice());
+    ok(JSON.stringify(ev) === '["Jane"]', 'e-mail registration: one account-changed, with the chosen nickname, never the e-mail\'s local part (' + JSON.stringify(ev) + ')');
+    await pg.keyboard.press('Escape');
     ok(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
     await br.close();
   }
