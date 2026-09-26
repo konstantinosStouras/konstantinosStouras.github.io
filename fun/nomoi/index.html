@@ -1032,8 +1032,13 @@ if(!user){ setUser(GUEST); updateBadge(); }
 </script>
 <script>window.AUTHCORE_NO_BAR=true;</script>
 <!-- ============================================================
-     Account widget — Firebase email/password Login / Register
+     Account widget — Firebase Login / Register: Google or email/password
      Shared across stouras.com /fun/ apps. Backend project: stouras-snake.
+     Google needs the Google provider switched on in the Firebase console
+     (Authentication > Sign-in method) and stouras.com listed under
+     Authentication > Settings > Authorized domains; until then the button
+     explains that and email/password keeps working. The copies in every app
+     must stay identical: node tools/account-widget-guard.mjs.
      Exposes window.Account { user, isGuest(), onChange(cb),
      openLogin(), openRegister(), logout() } and dispatches the
      'account-changed' event. Set window.AUTHCORE_NO_BAR = true before
@@ -1101,6 +1106,7 @@ if(!user){ setUser(GUEST); updateBadge(); }
     color:#111827; background:#fff; width:100%; min-height:46px;
   }
   .acct-lbl input:focus{ border-color:var(--acct-accent); box-shadow:0 0 0 3px rgba(37,99,235,.16); }
+  .acct-lbl[hidden]{ display:none; }   /* .acct-lbl's display:flex beat the hidden attribute: Log in showed an unused Nickname field */
   .acct-err{ margin:2px 0 0; font-size:13px; color:#dc2626; background:#fef2f2; border:1px solid #fde2e2; padding:9px 11px; border-radius:9px; }
   .acct-submit{
     margin-top:4px; appearance:none; border:0; cursor:pointer; border-radius:12px; min-height:48px;
@@ -1109,6 +1115,16 @@ if(!user){ setUser(GUEST); updateBadge(); }
   }
   .acct-submit:hover{ filter:brightness(1.05); }
   .acct-submit:disabled{ opacity:.6; cursor:default; }
+  .acct-google{
+    display:flex; align-items:center; justify-content:center; gap:10px; width:100%; min-height:48px;
+    appearance:none; cursor:pointer; border:1px solid #dadce0; border-radius:12px; background:#fff; color:#1f1f1f;
+    font:600 15px/1 inherit; padding:12px 14px; transition:background .15s ease, box-shadow .15s ease;
+  }
+  .acct-google:hover{ background:#f8f9fa; box-shadow:0 1px 3px rgba(60,64,67,.22); }
+  .acct-google:disabled{ opacity:.6; cursor:default; }
+  .acct-google svg{ width:18px; height:18px; flex:none; }
+  .acct-or{ display:flex; align-items:center; gap:10px; margin:14px 0; font-size:12.5px; color:#9ca3af; }
+  .acct-or::before, .acct-or::after{ content:""; flex:1; height:1px; background:#e5e7eb; }
   .acct-switch{ margin:16px 0 0; font-size:13.5px; color:#6b7280; text-align:center; }
   .acct-switch a{ color:var(--acct-accent); font-weight:600; cursor:pointer; text-decoration:none; }
   .acct-switch a:hover{ text-decoration:underline; }
@@ -1171,6 +1187,10 @@ if(!user){ setUser(GUEST); updateBadge(); }
       + '<div class="acct-card" role="dialog" aria-modal="true">'
         + '<button class="acct-x" data-act="close" aria-label="Close">×</button>'
         + '<h2 class="acct-title"></h2><p class="acct-sub"></p>'
+        + '<button class="acct-google" type="button" data-act="google">'
+          + '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>'
+          + '<span>Continue with Google</span></button>'
+        + '<div class="acct-or"><span class="acct-or-txt">or use your email</span></div>'
         + '<form class="acct-form" novalidate>'
           + '<label class="acct-lbl acct-nick-field" hidden><span>Nickname</span>'
             + '<input class="f-nick" type="text" maxlength="16" autocomplete="nickname" placeholder="Shown on the leaderboard"></label>'
@@ -1190,7 +1210,8 @@ if(!user){ setUser(GUEST); updateBadge(); }
   const modal = $("[data-modal]"), form = $(".acct-form");
   const elTitle=$(".acct-title"), elSub=$(".acct-sub"), elSwitch=$(".acct-switch"),
         elErr=$(".acct-err"), elSubmit=$(".acct-submit"), nickField=$(".acct-nick-field"),
-        inNick=$(".f-nick"), inEmail=$(".f-email"), inPass=$(".f-pass");
+        inNick=$(".f-nick"), inEmail=$(".f-email"), inPass=$(".f-pass"),
+        elGoogle=$(".acct-google"), elOr=$(".acct-or-txt");
 
   function renderBar(){
     if(!bar) return;
@@ -1214,6 +1235,7 @@ if(!user){ setUser(GUEST); updateBadge(); }
       ? "Register to appear on the leaderboard and keep your progress."
       : "Log in to track your scores on the leaderboard.";
     elSubmit.textContent = reg ? "Create account" : "Log in";
+    elOr.textContent = reg ? "or register with your email" : "or log in with your email";
     nickField.hidden = !reg;
     inPass.setAttribute("autocomplete", reg ? "new-password" : "current-password");
     elErr.hidden = true; elErr.textContent = "";
@@ -1236,7 +1258,12 @@ if(!user){ setUser(GUEST); updateBadge(); }
       "auth/user-not-found":"No account found for that email.",
       "auth/too-many-requests":"Too many attempts. Please wait a moment and try again.",
       "auth/network-request-failed":"Network error — check your connection and try again.",
-      "auth/operation-not-allowed":"Email/password sign-in isn’t enabled for this site yet."
+      "auth/operation-not-allowed":"Email/password sign-in isn’t enabled for this site yet.",
+      "auth/popup-blocked":"Your browser blocked the Google window. Allow pop-ups for this site and try again.",
+      "auth/account-exists-with-different-credential":"That email already has an account here. Log in with your email and password instead.",
+      "google/not-enabled":"Google sign-in isn’t switched on for this site yet. Please use your email for now.",
+      "google/unavailable":"Google sign-in isn’t available right now. Please use your email, or try again later.",
+      "auth/unavailable":"Sign-in isn’t available right now. Please check your connection and try again."
     };
     return m[code] || msg || "Something went wrong. Please try again.";
   }
@@ -1253,23 +1280,78 @@ if(!user){ setUser(GUEST); updateBadge(); }
     else if(act==="to-register") openModal("register");
     else if(act==="menu"){ e.stopPropagation(); menu.hidden ? openMenu() : closeMenu(); }
     else if(act==="logout") Account.logout();
+    else if(act==="google") googleSignIn();
   });
+  // ---------- Google ----------
+  // Firebase creates the account on first use, so this one button both logs in
+  // and registers. A NEW Google account gets the nickname typed in the form or
+  // else just the first name: nicknames appear on public leaderboards, and the
+  // Google profile name is usually a person's full name. onAuthStateChanged is
+  // held back while this runs, so apps only ever see the final nickname.
+  let holdAuth = false, heldUser;   // holdAuth: a sign-in is still naming its account
+  function publicUser(u, nick){
+    return u ? { uid:u.uid, email:u.email || "", nickname:(nick || u.displayName || (u.email||"").split("@")[0] || "Player") } : null;
+  }
+  async function googleSignIn(){
+    if(holdAuth) return;
+    if(!auth || !fns){ showErr(friendly("google/unavailable")); return; }
+    const typedNick = (mode==="register" ? inNick.value.trim() : "").slice(0,16);
+    elErr.hidden = true; elGoogle.disabled = true; holdAuth = true; heldUser = undefined;
+    let signedIn = null, finalNick = "";
+    try{
+      const provider = new fns.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt:"select_account" });
+      const cred = await fns.signInWithPopup(auth, provider);
+      signedIn = cred.user;
+      let isNew = false;
+      try{ const info = fns.getAdditionalUserInfo(cred); isNew = !!(info && info.isNewUser); }catch(_){}
+      if(isNew || typedNick){
+        finalNick = (typedNick || String(signedIn.displayName || "").trim().split(/\s+/)[0]
+                     || (signedIn.email || "").split("@")[0] || "Player").slice(0,16);
+        try{ await fns.updateProfile(signedIn, { displayName: finalNick }); }catch(_){}
+      }
+      closeModal(); form.reset(); nickField.hidden = true;
+    }catch(err){
+      const code = err && err.code;
+      if(code==="auth/popup-closed-by-user" || code==="auth/cancelled-popup-request" || code==="auth/user-cancelled"){ /* the player closed the Google window */ }
+      else if(code==="auth/operation-not-allowed" || code==="auth/unauthorized-domain" || code==="auth/configuration-not-found" || code==="auth/invalid-api-key"){ showErr(friendly("google/not-enabled")); }
+      else { showErr(friendly(code, err && err.message)); }
+    }finally{
+      holdAuth = false; elGoogle.disabled = false;
+      const u = signedIn || (heldUser === undefined ? undefined : heldUser);
+      heldUser = undefined;
+      if(u !== undefined) emit(publicUser(u, finalNick));
+    }
+  }
   document.addEventListener("click", (e)=>{ if(accBox && !accBox.contains(e.target)) closeMenu(); });
   document.addEventListener("keydown", (e)=>{ if(e.key==="Escape"){ closeModal(); closeMenu(); } });
 
   form.addEventListener("submit", async (e)=>{
     e.preventDefault();
-    if(!auth || !fns){ showErr(friendly("auth/operation-not-allowed")); return; }
+    if(!auth || !fns){ showErr(friendly("auth/unavailable")); return; }   // Firebase did not load (offline, blocked)
     const email = inEmail.value.trim(), pass = inPass.value;
-    const nick = (inNick.value.trim() || email.split("@")[0] || "Player").slice(0,16);
+    // A blank nickname must not publish the e-mail's first part (often a full name)
+    // on public leaderboards: it becomes Player1234 instead.
+    const nick = (inNick.value.trim() || ("Player" + Math.floor(1000 + Math.random() * 9000))).slice(0,16);
     if(!email){ showErr("Please enter your email."); return; }
     if(pass.length < 6){ showErr("Password must be at least 6 characters."); return; }
     elErr.hidden = true; elSubmit.disabled = true;
     const original = elSubmit.textContent; elSubmit.textContent = "Please wait…";
     try{
       if(mode==="register"){
-        const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
-        try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+        // Creating the account signs it in, and the auth observer fires BEFORE the
+        // nickname is saved, so apps heard the e-mail's local part as the player's
+        // name (and published it). Hold the observer until the nickname is set.
+        holdAuth = true; heldUser = undefined;
+        try{
+          const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
+          try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+          heldUser = undefined;
+          emit(publicUser(cred.user, nick));
+        } finally {
+          holdAuth = false;
+          if(heldUser !== undefined){ const u = heldUser; heldUser = undefined; emit(publicUser(u)); }
+        }
       } else {
         await fns.signInWithEmailAndPassword(auth, email, pass);
       }
@@ -1291,9 +1373,8 @@ if(!user){ setUser(GUEST); updateBadge(); }
       auth = authMod.getAuth(app);
       fns = authMod;
       authMod.onAuthStateChanged(auth, (u)=>{
-        if(u){
-          emit({ uid:u.uid, email:u.email || "", nickname:(u.displayName || (u.email||"").split("@")[0] || "Player") });
-        } else { emit(null); }
+        if(holdAuth){ heldUser = u || null; return; }     // the sign-in in progress emits once it has set the nickname
+        emit(publicUser(u));
       });
     }catch(e){
       console.warn("Account auth init failed:", e);

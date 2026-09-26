@@ -240,7 +240,7 @@
 
   /* masked letters */
   .mask { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; }
-  .mask .word { display: flex; gap: 6px; }
+  .mask .word { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; } /* a 14-letter word (Port-au-Prince, Ουαγκαντούγκου) wraps instead of pushing the page sideways */
   .tile {
     width: 26px; height: 34px; border-radius: 7px;
     background: var(--tile); border: 1px solid var(--line);
@@ -268,6 +268,33 @@
   .answer-banner .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .answer-banner .cap { font-family: var(--font-display); font-size: clamp(22px, 5vw, 30px); font-weight: 800; letter-spacing: -0.3px; color: var(--text); }
   .answer-banner .cap .of { color: var(--muted); font-weight: 600; font-size: 16px; }
+  /* Shown only when the accepted answer was an ALTERNATIVE (La Paz for Bolivia,
+     Peking for Beijing…) rather than the capital printed above it, so a player
+     is never left wondering why "Sucre" is announced after they typed "La Paz". */
+  .answer-banner .cap-alt { margin-top: 4px; font-size: 14px; color: var(--muted); }
+  .answer-banner .cap-alt b { color: var(--text); }
+  .answer-banner .cap-alt:empty { display: none; }
+  .answer-banner .cap-alt .typo { color: var(--warn); }
+  .answer-banner .cap-alt .typo b { color: #fde68a; }
+
+  /* ---------- Country profile (lazy-loaded per language: profiles.<lang>.js) ---------- */
+  .profile { margin-top: 18px; }
+  /* Only some blocks had a rule for their "hidden" class, so an empty "Country
+     profile" heading showed under every answer while the data loaded (or for a
+     country without an entry), "No players yet" under a full leaderboard, and
+     an empty "Continue as" row in the nickname box. */
+  .profile.hidden, .board-empty.hidden, .known.hidden { display: none; }
+  .profile h3 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--accent); margin: 0 0 8px;
+  }
+  .profile dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; }
+  .profile dt { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding-top: 3px; white-space: nowrap; }
+  .profile dd { margin: 0; font-size: 15px; line-height: 1.55; color: #d7e6f1; }
+  @media (max-width: 560px) {
+    .profile dl { grid-template-columns: 1fr; gap: 2px; }
+    .profile dd { margin-bottom: 10px; }
+  }
   .award { margin-left: auto; text-align: right; }
   .award .pts { font-size: 22px; font-weight: 800; color: var(--good); }
   .award .pts.zero { color: var(--warn); }
@@ -426,9 +453,19 @@
      onto their own full-width row. Above this the brand + controls always share
      one row in BOTH languages, so switching language never changes the row count
      (the earlier bug); below it they consistently stack. */
-  @media (max-width: 720px) {
+  @media (max-width: 744px) {   /* was 720: at 721-743px the Greek labels wrapped where the English did not */
     .who { flex: 1 1 100%; margin-left: 0; justify-content: flex-start; }
     .brand h1 { white-space: normal; }
+  }
+  /* Narrow phones: Log in / Register take their own line in BOTH languages, so the
+     longer Greek labels (at 475-491px) cannot add a row that English does not. */
+  @media (max-width: 492px) {
+    .who .account { flex: 1 1 100%; margin-left: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  }
+  /* Smallest phones: the language flags take their own row too, so "My progress"
+     and "Leaderboard" share one row in both languages (English is wider at ~330px). */
+  @media (max-width: 360px) {
+    .who .lang-switch { flex: 1 1 100%; }
   }
   @media (max-width: 480px) {
     .card { padding: 18px; }
@@ -511,7 +548,7 @@
 
       <div id="askBlock">
         <div class="answer-row">
-          <input type="text" id="answerInput" placeholder="Type the capital city…" data-i18n-ph="answerPh" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
+          <input type="text" id="answerInput" aria-describedby="qText" placeholder="Type the capital city…" data-i18n-ph="answerPh" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
           <button class="btn primary" id="submitBtn" data-i18n="check">Check</button>
         </div>
 
@@ -520,7 +557,7 @@
           <button class="btn ghost small" id="revealBtn" data-i18n="showAnswer">Show the answer</button>
         </div>
 
-        <div class="feedback info" id="feedback"></div>
+        <div class="feedback info" id="feedback" role="status" aria-live="polite"></div>
 
         <div class="mask" id="mask"></div>
         <div class="mask-note" id="maskNote"></div>
@@ -531,6 +568,7 @@
           <div>
             <div class="lbl" id="bannerLbl">Correct</div>
             <div class="cap" id="capLine"></div>
+            <div class="cap-alt" id="capAlt"></div>
           </div>
           <div class="award" id="award">
             <div class="pts" id="awardPts">+0</div>
@@ -552,8 +590,13 @@
           <p id="fact2"></p>
         </div>
 
+        <div class="profile hidden" id="profile">
+          <h3 data-i18n="profileTitle">Country profile</h3>
+          <dl id="profileList"></dl>
+        </div>
+
         <div class="next-row">
-          <button class="btn good" id="nextBtn" data-i18n="nextCountry">Next country →</button>
+          <button class="btn good" id="nextBtn" aria-describedby="bannerLbl capLine capAlt" data-i18n="nextCountry">Next country →</button>
           <span class="seen" id="seenNote"></span>
         </div>
       </div>
@@ -567,7 +610,7 @@
   </div>
 
   <!-- Nickname overlay -->
-  <div class="overlay" id="nickOverlay">
+  <div class="overlay hidden" id="nickOverlay">
     <div class="modal modal-close">
       <button class="x-btn" id="nickClose" title="Close" style="display:none">×</button>
       <h2 data-i18n="welcome">Welcome to Capitals</h2>
@@ -644,7 +687,7 @@
               <th data-i18n="accShort">Acc.</th>
               <th data-i18n="answeredShort">Answered</th>
               <th data-i18n="masteredShort">Mastered</th>
-              <th data-i18n="streak">Streak</th>
+              <th data-i18n="bestStreak">Best streak</th>
             </tr>
           </thead>
           <tbody id="boardBody"></tbody>
@@ -751,7 +794,7 @@
     var LAST_KEY  = "capitals:v1:lastNick";
     var LANG_KEY  = "capitals:v1:lang";
     var GUEST_KEY = "__guest__";   // reserved profile key — never ranked
-    var HISTORY_CAP = 600;
+    var HISTORY_CAP = 20000;
 
     // ---------- merge the Greek layer onto the base dataset ----------
     var EL_DATA = window.COUNTRIES_EL || {};
@@ -775,7 +818,7 @@
         hint1: "Hint 1: how many letters", hint2: "Hint 2: reveal some letters", hint3: "Hint 3: show the answer",
         answerShown: "Answer shown",
         didYouKnow: "Did you know?", nextCountry: "Next country →",
-        whereIs: "Where in the world", notOnMap: "Too small to show on the map.",
+        whereIs: "Where in the world", notOnMap: "Too small to show on the map.", notDrawn: "Not shown separately on this map.",
         mapCredit: "Map: Al MacDonald / F. Lekschas · CC BY-SA 3.0",
         byline: "A fun project by", moreProjects: "more fun projects",
         welcome: "Welcome to Capitals",
@@ -800,11 +843,17 @@
         boardNoteGlobal: "This leaderboard is shared worldwide. Mastered counts the capitals named with no hints.",
         scopeGlobal: "🌐 Global leaderboard", scopeLocal: "📱 This device only",
         playersGlobalN: function (n) { return n + " player" + (n === 1 ? "" : "s") + " worldwide."; },
+        playersGlobalEmpty: "No one has played yet. Answer a few questions to be the first on the board.",
         you: "you",
         // dynamic
         qText: function (c) { return "What is the capital of <span class=\"country\">" + c + "</span>?"; },
         capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">is the capital of " + c + "</span>"; },
         correctNoHint: "Correct — no hints!", correctOneHint: "Correct — with one hint", correctHints: "Correct — with hints",
+        altAccepted: function (ans, yours) { return yours ? "Your answer <b>" + ans + "</b> is also accepted." : "<b>" + ans + "</b> is also accepted."; },
+        typoNote: function (typed, right) { return "Small misspelling: you typed <b>" + typed + "</b>, the correct spelling is <b>" + right + "</b>."; },
+        typoAltNote: function (typed, form) { return "Close enough: you typed <b>" + typed + "</b>, which we read as <b>" + form + "</b>, also accepted."; },
+        profileTitle: "Country profile",
+        pfKnown: "Known for", pfEconomy: "Economy", pfBusiness: "Business and trade", pfTourism: "Tourism", pfHistory: "History",
         learned: "Here is the answer — now you know it",
         fbType: "Type a city name, or use a hint.",
         fbWrong: "Not quite — try again, or tap a hint.",
@@ -818,9 +867,10 @@
         since: function (d) { return "Learning since " + d; },
         playersN: function (n) { return n + (n === 1 ? " player has" : " players have") + " played on this device."; },
         playersEmpty: "Everyone who plays on this device appears here.",
-        recentN: function (n) { return n + " questions answered in the last 14 days."; },
+        recentN: function (n) { return n + (n === 1 ? " question" : " questions") + " answered in the last 14 days."; },
+        barTip: function (n, ok) { return n + " answered" + (n ? ", " + ok + " correct" : ""); },
         recentNone: "No activity yet in the last 14 days — answer a few to see your chart.",
-        confirmReset: function (nick) { return "Reset all progress for \"" + nick + "\"? This cannot be undone."; },
+        confirmReset: function (nick, ranked) { return "Reset all progress for \"" + nick + "\"? This cannot be undone." + (ranked ? " Your best score on the worldwide leaderboard is kept." : ""); },
         errNick: "Please enter a nickname.", errNickContinue: "Please enter a nickname to continue.",
         footTotal: function (n) { return "Teaching the capitals of " + n + " countries and territories"; },
         locale: undefined
@@ -833,7 +883,7 @@
         hint1: "Βοήθεια 1: πόσα γράμματα", hint2: "Βοήθεια 2: μερικά γράμματα", hint3: "Βοήθεια 3: δείξε την απάντηση",
         answerShown: "Η απάντηση φάνηκε",
         didYouKnow: "Το ήξερες;", nextCountry: "Επόμενη χώρα →",
-        whereIs: "Πού βρίσκεται στον κόσμο", notOnMap: "Πολύ μικρή για να φανεί στον χάρτη.",
+        whereIs: "Πού βρίσκεται στον κόσμο", notOnMap: "Πολύ μικρή για να φανεί στον χάρτη.", notDrawn: "Δεν εμφανίζεται χωριστά σε αυτόν τον χάρτη.",
         mapCredit: "Χάρτης: Al MacDonald / F. Lekschas · CC BY-SA 3.0",
         byline: "Ένα διασκεδαστικό έργο του", moreProjects: "περισσότερα έργα",
         welcome: "Καλώς ήρθες στο Capitals",
@@ -858,10 +908,16 @@
         boardNoteGlobal: "Αυτή η κατάταξη είναι κοινή για όλο τον κόσμο. Οι κατακτήσεις μετρούν τις πρωτεύουσες που βρήκες χωρίς βοήθεια.",
         scopeGlobal: "🌐 Παγκόσμια κατάταξη", scopeLocal: "📱 Μόνο σε αυτή τη συσκευή",
         playersGlobalN: function (n) { return n === 1 ? "1 παίκτης παγκοσμίως." : n + " παίκτες παγκοσμίως."; },
+        playersGlobalEmpty: "Κανείς δεν έχει παίξει ακόμη. Απάντησε μερικές ερωτήσεις για να είσαι πρώτος στην κατάταξη.",
         you: "εσύ",
         qText: function (c) { return "Ποια είναι η πρωτεύουσα της χώρας <span class=\"country\">" + c + "</span>;"; },
         capLine: function (cap, c) { return "<b>" + cap + "</b> <span class=\"of\">— η πρωτεύουσα της χώρας " + c + "</span>"; },
         correctNoHint: "Σωστά — χωρίς βοήθεια!", correctOneHint: "Σωστά — με μία βοήθεια", correctHints: "Σωστά — με βοήθειες",
+        altAccepted: function (ans, yours) { return yours ? "Η απάντησή σου <b>" + ans + "</b> γίνεται επίσης δεκτή." : "Γίνεται επίσης δεκτή η απάντηση <b>" + ans + "</b>."; },
+        typoNote: function (typed, right) { return "Μικρό ορθογραφικό λάθος: έγραψες <b>" + typed + "</b>, η σωστή γραφή είναι <b>" + right + "</b>."; },
+        typoAltNote: function (typed, form) { return "Σχεδόν σωστά: έγραψες <b>" + typed + "</b>, που το διαβάζουμε ως <b>" + form + "</b>, που επίσης γίνεται δεκτό."; },
+        profileTitle: "Προφίλ χώρας",
+        pfKnown: "Γνωστή για", pfEconomy: "Οικονομία", pfBusiness: "Επιχειρήσεις και εμπόριο", pfTourism: "Τουρισμός", pfHistory: "Ιστορία",
         learned: "Να η απάντηση — τώρα τη γνωρίζεις",
         fbType: "Γράψε μια πόλη ή χρησιμοποίησε βοήθεια.",
         fbWrong: "Όχι ακριβώς. Δοκίμασε ξανά ή πάρε μια βοήθεια.",
@@ -870,14 +926,15 @@
         noCountries: "Δεν υπάρχουν χώρες σε αυτή την περιοχή.",
         maskLen: function (n, w) { return "Η πρωτεύουσα έχει " + n + " γράμματα" + (w > 1 ? " σε " + w + " λέξεις." : "."); },
         maskPartial: "Μερικά γράμματα έχουν συμπληρωθεί για βοήθεια.",
-        seenN: function (c, n, ok) { return "Έχεις δει αυτή τη χώρα " + n + " φορές" + (ok ? ", σωστά " + ok + "." : "."); },
+        seenN: function (c, n, ok) { return "Έχεις δει αυτή τη χώρα " + (n === 1 ? "1 φορά" : n + " φορές") + (ok ? ", σωστά " + ok + "." : "."); },
         seenFirst: function (c) { return "Πρώτη φορά που βλέπεις αυτή τη χώρα."; },
         since: function (d) { return "Μαθαίνεις από " + d; },
         playersN: function (n) { return n === 1 ? "1 παίκτης έχει παίξει σε αυτή τη συσκευή." : n + " παίκτες έχουν παίξει σε αυτή τη συσκευή."; },
         playersEmpty: "Όποιος παίζει σε αυτή τη συσκευή εμφανίζεται εδώ.",
-        recentN: function (n) { return n + " ερωτήσεις τις τελευταίες 14 ημέρες."; },
+        recentN: function (n) { return n + (n === 1 ? " ερώτηση" : " ερωτήσεις") + " τις τελευταίες 14 ημέρες."; },
+        barTip: function (n, ok) { return n + (n === 1 ? " απάντηση" : " απαντήσεις") + (n ? ", " + ok + " σωστ" + (ok === 1 ? "ή" : "ές") : ""); },
         recentNone: "Καμία δραστηριότητα ακόμη — απάντησε μερικές για να δεις το γράφημά σου.",
-        confirmReset: function (nick) { return "Μηδενισμός όλης της προόδου για «" + nick + "»; Αυτό δεν αναιρείται."; },
+        confirmReset: function (nick, ranked) { return "Μηδενισμός όλης της προόδου για «" + nick + "»; Αυτό δεν αναιρείται." + (ranked ? " Η καλύτερη βαθμολογία σου στην παγκόσμια κατάταξη διατηρείται." : ""); },
         errNick: "Γράψε ένα ψευδώνυμο.", errNickContinue: "Γράψε ένα ψευδώνυμο για να συνεχίσεις.",
         footTotal: function (n) { return "Διδάσκει τις πρωτεύουσες " + n + " χωρών και περιοχών"; },
         locale: "el"
@@ -886,9 +943,31 @@
     function t(key) { var d = I18N[lang]; var v = (d && d[key] != null) ? d[key] : I18N.en[key]; return v; }
 
     // ---------- storage helpers ----------
+    // The map has no prototype: with a plain {} a nickname such as
+    // "constructor" or "__proto__" resolved to Object's own members, crashed the
+    // game on every load and polluted every object. Each stored profile is also
+    // filled out to today's shape, so one saved by an older version (or cut
+    // short) can never throw on the next answer.
     function loadProfiles() {
-      try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
-      catch (e) { return {}; }
+      var out = Object.create(null), raw = null;
+      try { raw = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) {}
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        Object.keys(raw).forEach(function (k) {
+          var p = raw[k];
+          if (p && typeof p === "object" && !Array.isArray(p)) out[k] = normalizeProfile(p, k);
+        });
+      }
+      return out;
+    }
+    function normalizeProfile(p, k) {
+      var d = newProfile((typeof p.nick === "string" && p.nick.trim()) || (k === GUEST_KEY ? "Guest" : k));
+      Object.keys(d).forEach(function (f) {
+        var v = p[f], dv = d[f];
+        if (f === "pending") { if (typeof v !== "string") p[f] = null; return; }   // a country name, or none
+        if (typeof v !== typeof dv || (typeof dv === "number" && !isFinite(v)) ||
+            Array.isArray(dv) !== Array.isArray(v) || (dv && typeof dv === "object" && !v)) p[f] = dv;
+      });
+      return p;
     }
     function saveProfiles(p) {
       try { localStorage.setItem(STORE_KEY, JSON.stringify(p)); } catch (e) {}
@@ -905,7 +984,8 @@
         wrongGuesses: 0, points: 0,
         currentStreak: 0, bestStreak: 0,
         byCountry: {},
-        history: []
+        history: [],
+        pending: null
       };
     }
 
@@ -913,12 +993,27 @@
     var profile = null;     // active profile object
     var pKey = null;        // active profile key
 
+    // Re-read before writing: another tab of the game may have saved since this
+    // one loaded, and writing this tab's old copy of the whole map erased it (and
+    // any profile it had created, a signed-in account's included). Only the
+    // active profile is written from memory.
     function persist() {
       if (!profile || !pKey) return;
       profile.lastSeen = Date.now();
+      profiles = loadProfiles();
       profiles[pKey] = profile;
       saveProfiles(profiles);
     }
+    // ...and follow the other tab's saves of the profile on screen here.
+    window.addEventListener("storage", function (e) {
+      if (e.key !== STORE_KEY) return;
+      profiles = loadProfiles();
+      if (pKey && profiles[pKey]) {
+        profile = profiles[pKey];
+        updateStreakDisplay();
+        if (current) refreshSeenNote();
+      }
+    });
 
     // ---------- text normalisation for answer matching ----------
     // Greek is highly forgiving: vowels and digraphs that sound identical are
@@ -931,22 +1026,54 @@
       if (!/[α-ω]/.test(s)) return s;
       // Map homophonous vowels/digraphs to one form. The diphthongs ου/αυ/ευ
       // are matched as whole units (and kept) so their υ is never turned into ι.
-      s = s.replace(/ου|αυ|ευ|ει|οι|υι|[ηυω]/g, function (m) {
-        if (m === "ου" || m === "αυ" || m === "ευ") return m; // /u/ /av/ /ev/ kept
-        if (m === "ω") return "ο";                            // /o/
-        return "ι";                                           // η υ ει οι υι → /i/
-      });
+      // Repeated until nothing changes: one pass can CREATE a digraph (Ανώι -> ανοι),
+      // which a single pass would leave unfolded, so Ανώι and Ανόη did not match Ανόι.
+      for (var prev = null; prev !== s;) {
+        prev = s;
+        s = s.replace(/ου|αυ|ευ|ει|οι|υι|[ηυω]/g, function (m) {
+          if (m === "ου" || m === "αυ" || m === "ευ") return m; // /u/ /av/ /ev/ kept
+          if (m === "ω") return "ο";                            // /o/
+          return "ι";                                           // η υ ει οι υι → /i/
+        });
+      }
       return s.replace(/([α-ω])\1+/g, "$1"); // collapse doubled letters (Λισσαβόνα → Λισαβόνα)
+    }
+    // Letters that look alike in two alphabets. When one answer mixes scripts
+    // (the keyboard layout switched mid-word, or a lookalike pasted in), the
+    // minority script's lookalikes are read as the majority's: "Aθήνα" typed
+    // with a Latin A is Αθήνα, "Pаris" with a Cyrillic а is Paris. Without this
+    // the answer came back as a "misspelling" that looks identical to the capital.
+    var LAT_TO_GR = { a: "α", b: "β", e: "ε", h: "η", i: "ι", k: "κ", m: "μ", n: "ν", o: "ο", p: "ρ", t: "τ", u: "υ", v: "ν", x: "χ", y: "υ", z: "ζ" };
+    var GR_TO_LAT = { "α": "a", "β": "b", "ε": "e", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p", "τ": "t", "υ": "u", "χ": "x" };
+    var CYR_TO_LAT = { "а": "a", "е": "e", "ё": "e", "і": "i", "ј": "j", "к": "k", "м": "m", "о": "o", "р": "p", "с": "c", "т": "t", "у": "y", "х": "x", "ѕ": "s", "һ": "h" };
+    function unmixScripts(s) {
+      var count = function (re) { return (s.match(re) || []).length; };
+      if (count(/[\u0430-\u045f]/g) && count(/[a-z]/g)) s = s.replace(/[\u0430-\u045f]/g, function (c) { return CYR_TO_LAT[c] || c; });
+      var lat = count(/[a-z]/g), gr = count(/[α-ω]/g);
+      if (lat && gr) {
+        if (gr >= lat) s = s.replace(/[a-z]/g, function (c) { return LAT_TO_GR[c] || c; });
+        else s = s.replace(/[α-ω]/g, function (c) { return GR_TO_LAT[c] || c; });
+      }
+      return s;
     }
     // Handles Latin and Greek: strips accents/tonos, unifies final sigma,
     // and keeps both Latin (a-z) and Greek (alpha-omega) letters.
     function norm(s) {
       var base = (s || "")
-        .normalize("NFD").replace(/[̀-ͯ]/g, "") // strip Latin and Greek diacritics
+        // NFKD, not NFD: it also turns a non-breaking, thin or ideographic space
+        // into a plain one and full-width letters into ASCII, which the strip
+        // below would otherwise DELETE ("La Paz" with a non-breaking space
+        // became "lapaz" and was called a misspelling of La Paz)
+        .normalize("NFKD").replace(/[̀-ͯ]/g, "") // strip Latin and Greek diacritics
         .toLowerCase()
+        // letters NFD cannot decompose would otherwise be DELETED by the strip
+        // below, so "København" was rejected for Denmark
+        .replace(/ø/g, "o").replace(/æ/g, "ae").replace(/œ/g, "oe").replace(/ł/g, "l")
+        .replace(/[đð]/g, "d").replace(/þ/g, "th").replace(/ß/g, "ss").replace(/ı/g, "i");
+      base = unmixScripts(base)
         .replace(/['’`ʻ]/g, "")                  // drop apostrophes
         .replace(/[.·,]/g, "")                        // drop dots and commas
-        .replace(/[-–—]/g, " ")                  // hyphens to spaces
+        .replace(/[\s\u2010-\u2015\u2212-]/g, " ")   // every space-like character (tab, NBSP…) and every hyphen or dash is a word break
         .replace(/\bsaint\b/g, "st")                       // saint -> st
         .replace(/ς/g, "σ")            // final sigma -> sigma
         .replace(/[^a-z0-9α-ω ]/g, "") // keep Latin + Greek letters
@@ -955,12 +1082,160 @@
       return foldGreek(base);
     }
     // Accept every known spelling in either language so answers are forgiving
-    // regardless of the interface language.
+    // regardless of the interface language. Returns a map normalised form ->
+    // the display form it came from (the capital first, so a duplicate spelling
+    // reports as the capital). The map has NO prototype: with a plain {} the
+    // lookup forms[norm(raw)] found Object.prototype.constructor, so typing
+    // "constructor" was a correct answer for every country.
     function acceptedForms(entry) {
       var forms = [entry.cap].concat(entry.alt || [], [entry.cap_el], entry.alt_el || []);
-      var set = {};
-      forms.forEach(function (f) { if (f) set[norm(f)] = true; });
-      return set;
+      var map = Object.create(null);
+      forms.forEach(function (f) {
+        if (!f) return;
+        var k = norm(f);
+        if (k && !(k in map)) map[k] = f;
+      });
+      return map;
+    }
+    // ---------- typo tolerance ----------
+    // Edit distance with adjacent transpositions (optimal string alignment), so
+    // "Pairs" for "Paris" is one slip, not two.
+    function editDistance(a, b) {
+      if (a === b) return 0;
+      var la = a.length, lb = b.length, i, j;
+      var prev2 = null, prev = [], cur;
+      for (j = 0; j <= lb; j++) prev[j] = j;
+      for (i = 1; i <= la; i++) {
+        cur = [i];
+        for (j = 1; j <= lb; j++) {
+          var cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+          var v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+          if (i > 1 && j > 1 && a.charAt(i - 1) === b.charAt(j - 2) && a.charAt(i - 2) === b.charAt(j - 1)) {
+            v = Math.min(v, prev2[j - 2] + 1);
+          }
+          cur[j] = v;
+        }
+        prev2 = prev; prev = cur;
+      }
+      return prev[lb];
+    }
+    // How many letters a misspelling may be off by: at most 2, and less for
+    // short names, where 2 changes turn one real place into another (Bern and
+    // Bonn, Kyiv and Lviv, Paris and Parma are all 2 apart).
+    function typoAllowance(key) {
+      // Greek writes b, d, g, j and ts with two letters (μπ, ντ, γκ, τζ, τσ), so
+      // a Greek name is longer than the same name in Latin letters (Τζούμπα 7,
+      // Juba 4); each such pair counts as ONE letter, or the Greek spelling of a
+      // wrong place gets more slack than its Latin one (Αρούμπα for Τζούμπα).
+      var n = key.replace(/ /g, "").replace(/μπ|ντ|γκ|τζ|τσ/g, "b").length;
+      return n <= 3 ? 0 : (n <= 5 ? 1 : 2);
+    }
+    // Real places that are NOT a capital, in the forms players actually type.
+    // They are never a misspelling of anything: an answer that is one of them,
+    // or closer to one of them than to the capital, is wrong. (Other countries'
+    // capitals and every country name are in that pool too.)
+    var DECOY_CITIES = [
+      "Sydney", "Melbourne", "Brisbane", "Perth", "Auckland", "Toronto", "Montreal", "Vancouver", "New York", "Los Angeles",
+      "Chicago", "Houston", "San Francisco", "Philadelphia", "Miami", "San Juan", "San Diego", "Rio de Janeiro", "Sao Paulo", "Salvador", "Recife",
+      "Cordoba", "Rosario", "Valparaiso", "Guayaquil", "Medellin", "Cali", "Cartagena", "Santa Cruz",
+      "Cochabamba", "Arequipa", "Cusco", "Maracaibo", "Monterrey", "Guadalajara", "Cancun", "Acapulco", 
+      "Istanbul", "Izmir", "Antalya", "Smyrna", "Constantinople", "Thessaloniki", "Patras", "Heraklion", "Limassol", "Larnaca",
+      "Milan", "Naples", "Turin", "Florence", "Venice", "Genoa", "Palermo", "Bologna", "Parma", "Verona",
+      "Barcelona", "Seville", "Valencia", "Malaga", "Bilbao", "Porto", "Coimbra", "Marseille", "Lyon", "Nice", "Toulouse",
+      "Bordeaux", "Strasbourg", "Vienne", "Munich", "Hamburg", "Frankfurt", "Cologne", "Bonn", "Stuttgart", "Dresden",
+      "Leipzig", "Salzburg", "Graz", "Innsbruck", "Zurich", "Geneva", "Basel", "Lausanne", "Antwerp", "Ghent", "Bruges",
+      "Rotterdam", "Utrecht", "Manchester", "Birmingham", "Liverpool", "Glasgow", "Edinburgh", "Cardiff", "Belfast", "Cork",
+      "Galway", "Gothenburg", "Malmo", "Bergen", "Aarhus", "Tampere", "Turku", "Krakow", "Gdansk", "Wroclaw", "Brno",
+      "Kosice", "Debrecen", "Cluj", "Timisoara", "Plovdiv", "Varna", "Split", "Dubrovnik", "Novi Sad", "Nis", "Mostar",
+      "Lviv", "Kharkiv", "Odesa", "Odessa", "Dnipro", "Saint Petersburg", "Novosibirsk", "Pinsk", "Brest", "Kaunas", "Tartu",
+      "Almaty", "Samarkand", "Bukhara", "Osh", "Batumi", "Kutaisi", "Gyumri", "Ganja", "Tel Aviv", "Haifa", "Eilat",
+      "Alexandria", "Giza", "Luxor", "Aswan", "Casablanca", "Marrakesh", "Fez", "Tangier", "Oran", "Constantine", "Sfax",
+      "Benghazi", "Misrata", "Aden", "Jeddah", "Mecca", "Medina", "Dammam", "Dubai", "Sharjah", "Basra", "Mosul", "Erbil",
+      "Isfahan", "Shiraz", "Tabriz", "Mashhad", "Herat", "Kandahar", "Karachi", "Lahore", "Peshawar", "Mumbai", "Bombay",
+      "Kolkata", "Calcutta", "Chennai", "Madras", "Bangalore", "Bengaluru", "Hyderabad", "Kandy", "Chittagong", "Pokhara",
+      "Mandalay", "Yangon", "Rangoon", "Chiang Mai", "Phuket", "Pattaya", "Siem Reap", "Ho Chi Minh City", "Saigon",
+      "Da Nang", "Hue", "Cebu", "Davao", "Surabaya", "Bandung", "Bali", "Denpasar", "Penang", "Johor Bahru", "Kuching",
+      "Kaohsiung", "Taichung", "Hong Kong", "Macau", "Shanghai", "Guangzhou", "Shenzhen", "Chongqing", "Wuhan", "Xian",
+      "Osaka", "Kyoto", "Yokohama", "Nagoya", "Sapporo", "Hiroshima", "Busan", "Pusan", "Incheon", "Lagos", "Kano",
+      "Ibadan", "Port Harcourt", "Kumasi", "Douala", "Bouake", "Mombasa", "Kisumu", "Arusha", "Zanzibar",
+      "Dar es Salaam", "Mwanza", "Lubumbashi", "Goma", "Pointe Noire", "Beira", "Bulawayo", "Johannesburg",
+      "Durban", "Port Elizabeth", "Soweto", "Walvis Bay", "Toamasina", "Monte Carlo", "Marbella", "Ibiza", "Mykonos",
+      "Θεσσαλονίκη", "Κωνσταντινούπολη", "Σμύρνη", "Πάτρα", "Ηράκλειο", "Λεμεσός", "Λάρνακα", "Μιλάνο", "Νάπολη",
+      "Βενετία", "Φλωρεντία", "Βαρκελώνη", "Μόναχο", "Βόννη", "Φρανκφούρτη", "Ζυρίχη", "Γενεύη", "Σίδνεϊ", "Μελβούρνη",
+      "Τορόντο", "Νέα Υόρκη", "Ρίο ντε Τζανέιρο", "Σάο Πάολο", "Σαγκάη", "Χονγκ Κονγκ", "Οσάκα", "Κιότο", "Βομβάη",
+      "Καράτσι", "Λάγος", "Τελ Αβίβ", "Χάιφα", "Αλεξάνδρεια", "Καζαμπλάνκα", "Ντουμπάι", "Τζέντα", "Μέκκα", "Γιοχάνεσμπουργκ",
+      "Γιανγκόν", "Ρανγκούν", "Μόντε Κάρλο", "Αγία Πετρούπολη", "Οδησσός", "Λβιβ", "Αλμάτι", "Νταρ ες Σαλάμ",
+      // Found by testing 2,789 real places, in Latin and Greek script, against every
+      // capital (fun/capitals/tools/places-fixture.mjs): each of these was one or two
+      // letters from a capital and used to be accepted as a "misspelling" of it
+      // (Kiel for Kiev, Paros for Paris, Δελφοί for Δελχί, Asia for Apia).
+      "Agra", "Ajmer", "Amiens", "Annaba", "Barnaul", "Bogor", "Braga", "Catania", "Curacao", "Harar", "Havant",
+      "Karbala", "Kiel", "Lisburn", "Lublin", "Moravia", "Moron", "Nampula", "Oshawa", "Paros", "Samara", "Siena",
+      "Tijuana", "Vicenza", "Vitoria", "Bavaria", "Asia", "Sahara", "Lesbos", "Hagatna", "Stalingrad", "Nara", "Tourane",
+      "Samarra", "Fustat", "Katsina", "Gangtok", "Thane", "Meerut", "Mysuru", "Hubli", "Xiamen", "Guilin", "Sanya",
+      "Nimes", "Aurora", "Malibu", "Ibague", "Maracay", "Rancagua", "Tarija", "Riobamba", "Limon", "Solo", "Baguio",
+      "Daraa", "Mersin", "Ajman", "Sale", "Kassala", "Nyala", "Lira", "Mbale", "Kara", "Banfora", "Bakau", "Harper",
+      "Matola", "Toliara", "Assab", "Helsingborg", "Lund", "Kiruna", "Helsingor", "Avila", "Passau", "Λάρισα",
+      "Καστοριά", "Πάρος", "Τήνος", "Δελφοί", "Πάργα", "Μάλαγα", "Κοΐμπρα", "Μάλμε", "Τάμπερε", "Χιμάρα", "Βατούμ",
+      "Μαρακές", "Τάγγερη", "Μασχάντ", "Άγρα", "Κάντι", "Μακάο", "Χαράρ", "Μαϊάμι", "Ασία", "Σαχάρα", "Μεθώνη", "Κορώνη",
+      "Ερέτρια", "Κορωπί", "Ελούντα", "Περαία", "Άκκα", "Σούσα", "Βακτρία", "Τίγγις"
+    ];
+    // Every place-like string the game knows that could be typed, keyed by its
+    // normalised form: every country's accepted capitals, every country name in
+    // both languages, and the decoys above. Built once per data set.
+    var placeIndex = null, placeIndexFor = null;
+    function buildPlaceIndex(all) {
+      var keys = [];
+      function add(f) { var k = norm(f); if (k) keys.push(k); }
+      (all || []).forEach(function (e) {
+        [e.cap].concat(e.alt || [], [e.cap_el], e.alt_el || [], [e.c, e.c_el]).forEach(function (f) { if (f) add(f); });
+      });
+      DECOY_CITIES.forEach(add);
+      var seen = Object.create(null), out = [];
+      keys.forEach(function (k) { if (!(k in seen)) { seen[k] = true; out.push(k); } });
+      return out;
+    }
+    // The one place an answer is judged. Pure (no DOM), so the offline selftest
+    // runs exactly this code over both datasets.
+    //   exact spelling (accents, case, punctuation, Greek vowel spellings aside)
+    //     -> { form, exact: true }
+    //   a slip of at most typoAllowance() letters from one of this country's
+    //   accepted forms -> { form, exact: false, typed, dist }, BUT only when the
+    //   answer is not closer to (or as close to) any other real place the game
+    //   knows: another capital, a country name, a decoy city. "Rome" for Togo is
+    //   Italy's capital, not a slip for Lomé; "Tunisia" is the country, not a
+    //   slip for Tunis.
+    //   otherwise -> null.
+    function matchAnswer(entry, raw, all) {
+      var k = norm(raw);
+      if (!k) return null;
+      var forms = acceptedForms(entry);
+      if (k in forms) return { form: forms[k], exact: true };
+      var best = null, bestD = Infinity;
+      Object.keys(forms).forEach(function (f) {
+        var allow = typoAllowance(f);
+        if (!allow || Math.abs(f.length - k.length) > allow) return;
+        var d = editDistance(k, f);
+        if (d <= allow && d < bestD) { bestD = d; best = f; }
+      });
+      if (best === null) return null;
+      if (placeIndexFor !== all) { placeIndex = buildPlaceIndex(all); placeIndexFor = all; }
+      for (var i = 0; i < placeIndex.length; i++) {
+        var o = placeIndex[i];
+        if (o in forms || Math.abs(o.length - k.length) > bestD) continue;
+        // It IS another real place, or is at least as close to one as to the
+        // capital AND close enough to count as a slip of that place too. (A place
+        // that could not have been what the player meant does not block: "Valeta"
+        // is 2 from Malta, but Malta allows 1, so it stays a slip of Valletta.)
+        if (editDistance(k, o) <= Math.min(bestD, typoAllowance(o))) return null;
+      }
+      return { form: forms[best], exact: false, typed: String(raw).trim(), dist: bestD };
+    }
+    // True when an accepted form is an ALTERNATIVE answer rather than the capital
+    // itself in either language (La Paz for Bolivia; Peking for Beijing).
+    function isAltForm(entry, form) {
+      var k = norm(form);
+      return k !== norm(entry.cap) && k !== norm(entry.cap_el);
     }
 
     // ---------- language-aware display helpers ----------
@@ -993,7 +1268,7 @@
     }
 
     function letterCount(answer) {
-      var m = answer.match(/\S/g);
+      var m = answer.match(/[\p{L}\p{N}]/gu); // letters and digits only, as the tiles draw punctuation apart
       return m ? m.length : 0;
     }
     function wordCount(answer) {
@@ -1014,10 +1289,10 @@
       hintBtn: $("hintBtn"), revealBtn: $("revealBtn"), feedback: $("feedback"),
       mask: $("mask"), maskNote: $("maskNote"),
       reveal: $("reveal"), answerBanner: $("answerBanner"), bannerLbl: $("bannerLbl"),
-      capLine: $("capLine"),
+      capLine: $("capLine"), capAlt: $("capAlt"),
       award: $("award"), awardPts: $("awardPts"), awardStars: $("awardStars"),
       locator: $("locator"), mapBox: $("mapBox"), mapNote: $("mapNote"),
-      fact1: $("fact1"), fact2: $("fact2"),
+      fact1: $("fact1"), fact2: $("fact2"), profile: $("profile"), profileList: $("profileList"),
       nextBtn: $("nextBtn"), seenNote: $("seenNote"), footTotal: $("footTotal"),
       // nick modal
       nickOverlay: $("nickOverlay"), nickInput: $("nickInput"), nickErr: $("nickErr"),
@@ -1064,6 +1339,9 @@
     var hintLevel = 0;      // 0..3
     var solved = false;     // answered correctly or revealed
     var revCorrect = false; // last reveal was a correct answer (vs given up)
+    var matchInfo = null;   // what the player's answer matched: {form, exact, typed} (null after a reveal)
+    var fbKey = null;       // the i18n key of the feedback line on screen, so a language switch re-translates it
+    var pendingResume = true; // the first question of a session re-asks one left unanswered by a reload
     var lastCountry = null; // avoid immediate repeat
 
     function pool() {
@@ -1168,7 +1446,7 @@
         img.alt = "";
         img.loading = "lazy";
         img.src = "https://flagcdn.com/" + cc + ".svg";
-        img.onerror = function () { els.qFlag.textContent = emoji || "🏳️"; };
+        img.onerror = function () { if (img.parentNode === els.qFlag) els.qFlag.textContent = emoji || "🏳️"; }; // not if we have moved on
         els.qFlag.appendChild(img);
       } else {
         els.qFlag.textContent = emoji || "🏳️";
@@ -1217,12 +1495,16 @@
         paintCountry(svg, cc);
       });
     }
+    var NOT_DRAWN = { xk: 1, ps: 1, tl: 1, fj: 1 };
     function paintCountry(svg, cc) {
       var SVGNS = "http://www.w3.org/2000/svg";
       Array.prototype.forEach.call(svg.querySelectorAll(".hl"), function (e) { e.classList.remove("hl"); });
       var old = svg.querySelector(".map-marker"); if (old) old.parentNode.removeChild(old);
-      var nodes = svg.querySelectorAll('[id="' + cc + '"]');
-      if (!nodes.length) { els.mapNote.textContent = t("notOnMap"); return; }
+      // Somalia's north is drawn as its own path, _somaliland.
+      var nodes = svg.querySelectorAll(cc === "so" ? '[id="so"],[id="_somaliland"]' : '[id="' + cc + '"]');
+      // Kosovo, Palestine, Timor-Leste and Fiji are not small: this map simply does
+      // not draw them apart (Kosovo is inside Serbia, the West Bank inside Israel).
+      if (!nodes.length) { els.mapNote.textContent = t(NOT_DRAWN[cc] ? "notDrawn" : "notOnMap"); return; }
       els.mapNote.textContent = "";
       // Highlight the matched country (and only it).
       Array.prototype.forEach.call(nodes, function (n) { n.classList.add("hl"); });
@@ -1258,8 +1540,16 @@
       svg.appendChild(g);
     }
 
+    // The question on screen is remembered on the profile until it is answered or
+    // shown, so a reload asks it again instead of skipping it for free.
+    function pendingEntry() {
+      var c = profile && profile.pending;
+      if (!c) return null;
+      return pool().filter(function (e) { return e.c === c; })[0] || null;
+    }
     function newQuestion() {
-      current = pickNext();
+      current = (pendingResume && pendingEntry()) || pickNext();
+      pendingResume = false;
       if (!current) {
         els.qText.textContent = t("noCountries");
         els.feedback.textContent = "";
@@ -1268,6 +1558,9 @@
       lastCountry = current.c;
       hintLevel = 0;
       solved = false;
+      matchInfo = null;
+      fbKey = null;
+      if (profile.pending !== current.c) { profile.pending = current.c; persist(); }
       renderFlag(current.flag);
       els.qRegion.textContent = regionLabel(current.region);
       els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
@@ -1315,13 +1608,22 @@
     }
     function pushHistory(country, result, hints) {
       profile.history.push({ t: Date.now(), c: country, r: result, h: hints });
+      // The history only feeds the 14-day activity chart, so trim it by AGE: a
+      // count cap (600) silently emptied the oldest days for anyone answering
+      // more than ~43 a day. HISTORY_CAP stays as a far-off safety limit.
+      var cutoff = Date.now() - 15 * 86400000;
+      if (profile.history.length && profile.history[0].t < cutoff) {
+        profile.history = profile.history.filter(function (h) { return h.t >= cutoff; });
+      }
       if (profile.history.length > HISTORY_CAP) {
         profile.history = profile.history.slice(profile.history.length - HISTORY_CAP);
       }
     }
 
-    function handleCorrect() {
+    function handleCorrect(match) {
       solved = true;
+      matchInfo = match || null;
+      profile.pending = null;
       var rec = recordCountry(current.c);
       rec.seen += 1;
       rec.correct += 1;
@@ -1348,6 +1650,8 @@
       if (solved) return;
       solved = true;
       hintLevel = 3;
+      matchInfo = null;
+      profile.pending = null;
       var rec = recordCountry(current.c);
       rec.seen += 1;
       rec.reveals += 1;
@@ -1365,14 +1669,75 @@
       updateStreakDisplay();
     }
 
+    // ---------- country profile (lazy: one data file per language) ----------
+    // profiles.en.js / profiles.el.js set window.CAPITALS_PROFILES_EN / _EL:
+    // { "<English country name>": { known, economy, business, tourism, history } }.
+    // Loaded after the first question is on screen, so they never slow the start.
+    var PROFILE_FIELDS = [["known", "pfKnown", "🌟"], ["economy", "pfEconomy", "📈"], ["business", "pfBusiness", "💼"],
+                          ["tourism", "pfTourism", "🧳"], ["history", "pfHistory", "🏛️"]];
+    var profileLoad = { en: null, el: null };   // null | "loading" | "ready" | "failed"
+    function profileData(l) { return l === "el" ? window.CAPITALS_PROFILES_EL : window.CAPITALS_PROFILES_EN; }
+    function ensureProfiles(l) {
+      if (profileData(l)) { profileLoad[l] = "ready"; return; }
+      if (profileLoad[l]) return;
+      profileLoad[l] = "loading";
+      var sc = document.createElement("script");
+      sc.src = "profiles." + l + ".js";
+      sc.async = true;
+      sc.onload = function () { profileLoad[l] = profileData(l) ? "ready" : "failed"; if (solved && current && lang === l) renderProfile(); };
+      sc.onerror = function () { profileLoad[l] = "failed"; };
+      document.head.appendChild(sc);
+    }
+    function renderProfile() {
+      var data = profileData(lang), p = current && data && data[current.c];
+      if (!p) {
+        els.profile.classList.add("hidden");
+        els.profileList.innerHTML = "";
+        ensureProfiles(lang);   // draws itself when it arrives, if the answer is still on screen
+        return;
+      }
+      var frag = document.createDocumentFragment();
+      PROFILE_FIELDS.forEach(function (f) {
+        if (!p[f[0]]) return;
+        var dt = document.createElement("dt"); dt.textContent = f[2] + " " + t(f[1]);
+        var dd = document.createElement("dd"); dd.textContent = p[f[0]];
+        frag.appendChild(dt); frag.appendChild(dd);
+      });
+      els.profileList.innerHTML = "";
+      els.profileList.appendChild(frag);
+      els.profile.classList.remove("hidden");
+    }
+
+    // The lines under the capital in the answer banner:
+    //   a misspelling  -> "Small misspelling: you typed Bogata, the correct spelling is Bogota."
+    //   an alternative -> "Your answer La Paz is also accepted." (La Paz for Bolivia, Peking for Beijing)
+    // Neither for the capital itself spelled right, nor after "Show the answer".
+    function renderAnswerNotes() {
+      var lines = [];
+      if (revCorrect && matchInfo) {
+        var alt = isAltForm(current, matchInfo.form);
+        if (!matchInfo.exact && alt) {
+          // a slip of an alternative (Kiew for Kiev): never call an old or
+          // secondary name "the correct spelling" under a different capital
+          lines.push('<div class="typo">' + t("typoAltNote")(escapeHtml(matchInfo.typed), escapeHtml(matchInfo.form)) + "</div>");
+        } else if (!matchInfo.exact) {
+          lines.push('<div class="typo">' + t("typoNote")(escapeHtml(matchInfo.typed), escapeHtml(matchInfo.form)) + "</div>");
+        } else if (alt) {
+          lines.push("<div>" + t("altAccepted")(escapeHtml(matchInfo.form), true) + "</div>");
+        }
+      }
+      els.capAlt.innerHTML = lines.join("");
+    }
     function showReveal(correct, pts, stars) {
       revCorrect = correct;
       els.askBlock.style.display = "none";
       els.reveal.classList.remove("hidden");
       els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
+      renderAnswerNotes();
       var f = factsOf(current);
       els.fact1.textContent = f[0];
       els.fact2.textContent = f[1];
+      renderProfile();
       if (correct) {
         els.answerBanner.className = "answer-banner";
         els.bannerLbl.textContent = (hintLevel <= 0) ? t("correctNoHint") :
@@ -1395,19 +1760,21 @@
       }
       highlightOnMap(current.flag);   // show where this country is, on the world map
       refreshSeenNote();
-      els.nextBtn.focus();
+      // preventScroll: Next sits under the map, the facts and the country profile,
+      // and scrolling to it pushed the verdict (and the misspelling note) off-screen
+      els.nextBtn.focus({ preventScroll: true });
     }
 
     function checkAnswer() {
       if (solved || !current) return;
       var raw = els.answerInput.value;
       if (!norm(raw)) {
-        flashInfo(t("fbType"));
+        fbKey = "fbType"; flashInfo(t("fbType"));
         return;
       }
-      var forms = acceptedForms(current);
-      if (forms[norm(raw)]) {
-        handleCorrect();
+      var match = matchAnswer(current, raw, ALL);
+      if (match) {
+        handleCorrect(match);
       } else {
         profile.wrongGuesses += 1;
         recordCountry(current.c); // ensure a record exists; "seen" is only counted on a correct answer or reveal, not on wrong guesses
@@ -1416,7 +1783,7 @@
         void els.answerInput.offsetWidth;
         els.answerInput.classList.add("shake");
         els.feedback.className = "feedback no";
-        els.feedback.textContent = t("fbWrong");
+        fbKey = "fbWrong"; els.feedback.textContent = t("fbWrong");
         els.answerInput.select();
       }
     }
@@ -1432,7 +1799,8 @@
       renderMask();
       updateHintButton();
       els.feedback.className = "feedback info";
-      els.feedback.textContent = (hintLevel === 1) ? t("fbLen") : t("fbPartial");
+      fbKey = (hintLevel === 1) ? "fbLen" : "fbPartial";
+      els.feedback.textContent = t(fbKey);
       els.answerInput.focus();
     }
 
@@ -1483,6 +1851,7 @@
       });
     }
     function renderQuestionView() {
+      if (fbKey) els.feedback.textContent = t(fbKey);
       els.qRegion.textContent = regionLabel(current.region);
       els.qText.innerHTML = t("qText")(escapeHtml(cName(current)));
       updateHintButton();
@@ -1491,9 +1860,11 @@
     }
     function renderRevealText() {
       els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
+      renderAnswerNotes();
       var f = factsOf(current);
       els.fact1.textContent = f[0];
       els.fact2.textContent = f[1];
+      renderProfile();
       els.bannerLbl.textContent = revCorrect
         ? ((hintLevel <= 0) ? t("correctNoHint") : (hintLevel === 1 ? t("correctOneHint") : t("correctHints")))
         : t("learned");
@@ -1564,7 +1935,20 @@
       closeNick();
       updateWho();
       updateStreakDisplay();
-      newQuestion();
+      keepOrNewQuestion();
+    }
+    // Signing in arrives after the page has already asked a guest question: keep
+    // it (what was typed, the hints, an answer on screen) instead of throwing it
+    // away, and bring any open panel up to date with the profile now active.
+    function keepOrNewQuestion() {
+      if (!current) newQuestion();
+      else if (solved) renderRevealText();
+      else {
+        renderQuestionView();
+        if (profile.pending !== current.c) { profile.pending = current.c; persist(); }
+      }
+      if (!els.statsOverlay.classList.contains("hidden")) openStats();
+      if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
     }
 
     function tryStart() {
@@ -1584,7 +1968,7 @@
       closeNick();
       updateWho();
       updateStreakDisplay();
-      newQuestion();
+      keepOrNewQuestion();
     }
 
     // ---------- stats modal ----------
@@ -1619,7 +2003,7 @@
       var days = [];
       var today = new Date(); today.setHours(0, 0, 0, 0);
       for (var i = 13; i >= 0; i--) {
-        var d = new Date(today.getTime() - i * 86400000);
+        var d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i); // calendar days: 24 h steps lose the day the clocks go forward
         days.push({ key: d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(), label: d.getDate(), count: 0, correct: 0 });
       }
       var idx = {};
@@ -1635,7 +2019,7 @@
         var bar = document.createElement("div");
         bar.className = "bar" + (d.count === 0 ? " empty" : "");
         bar.style.height = (d.count === 0 ? 2 : Math.max(6, Math.round(86 * d.count / max))) + "px";
-        bar.title = d.count + " answered" + (d.count ? ", " + d.correct + " correct" : "");
+        bar.title = t("barTip")(d.count, d.correct);
         var tip = document.createElement("div"); tip.className = "tip"; tip.textContent = d.label;
         col.appendChild(bar); col.appendChild(tip);
         els.bars.appendChild(col);
@@ -1645,11 +2029,11 @@
 
       els.statsOverlay.classList.remove("hidden");
     }
-    function closeStats() { els.statsOverlay.classList.add("hidden"); }
+    function closeStats() { els.statsOverlay.classList.add("hidden"); refocus(); }
 
     function resetProgress() {
       var wasGuest = !!(profile && profile.guest);
-      if (!confirm(t("confirmReset")(wasGuest ? t("guest") : profile.nick))) return;
+      if (!confirm(t("confirmReset")(wasGuest ? t("guest") : profile.nick, !wasGuest && globalRows !== null))) return;
       profiles[pKey] = newProfile(profile.nick);
       profiles[pKey].guest = wasGuest;   // a reset guest stays a guest (still unranked)
       profile = profiles[pKey];
@@ -1662,6 +2046,7 @@
 
     // ---------- leaderboard modal ----------
     var boardSort = "points";
+    var GLOBAL_LIMIT = 200;    // the worldwide query returns the top 200 (limitToLast in the leaderboard script)
     var globalRows = null;     // set to an array once the global board is live
     var globalAttached = false;
     function escapeHtml(s) {
@@ -1676,11 +2061,15 @@
     // nicknames stored locally in this browser.
     function boardRows() {
       if (globalRows) {
+        // Any visitor can write a worldwide row, so every number is forced to a
+        // number here: renderBoard puts these straight into innerHTML, and a string
+        // there would run as markup for everyone who opens the board.
+        var num = function (x) { x = +x; return isFinite(x) ? Math.max(0, Math.round(x)) : 0; };
         return globalRows.map(function (r) {
           return {
-            key: r.key, nick: r.name || r.key,
-            points: r.points || 0, accuracy: r.accuracy || 0,
-            answered: r.answered || 0, mastered: r.mastered || 0, bestStreak: r.streak || 0
+            key: String(r.key), nick: String(r.name || r.key),
+            points: num(r.points), accuracy: Math.min(100, num(r.accuracy)),
+            answered: num(r.answered), mastered: num(r.mastered), bestStreak: num(r.streak)
           };
         });
       }
@@ -1710,8 +2099,8 @@
       els.boardScope.className = "board-scope" + (isGlobal ? " global" : "");
       els.boardNote.textContent = isGlobal ? t("boardNoteGlobal") : t("boardNote");
       els.boardSub.textContent = rows.length
-        ? (isGlobal ? t("playersGlobalN")(rows.length) : t("playersN")(rows.length))
-        : t("playersEmpty");
+        ? (isGlobal ? t("playersGlobalN")(rows.length >= GLOBAL_LIMIT ? GLOBAL_LIMIT + "+" : rows.length) : t("playersN")(rows.length))
+        : (isGlobal ? t("playersGlobalEmpty") : t("playersEmpty"));
 
       // header highlight for active sort
       Array.prototype.forEach.call(document.querySelectorAll(".sortbtn"), function (b) {
@@ -1725,12 +2114,16 @@
       }
       els.boardEmpty.classList.add("hidden");
 
-      var meId = isGlobal ? sanitizeNick(profile && profile.nick) : pKey;
+      var meId = (profile && profile.guest) ? null : (isGlobal ? sanitizeNick(profile && profile.nick) : pKey); // a guest is never on the board
       var medal = ["g", "s", "b"];
+      // Competition ranking: players tied on every sort key share a rank and a medal.
+      var same = function (a, b) { return a[boardSort] === b[boardSort] && a.points === b.points && a.accuracy === b.accuracy && a.answered === b.answered; };
+      var rank = 0;
       var html = rows.map(function (r, i) {
-        var rankCell = (i < 3)
-          ? '<span class="medal ' + medal[i] + '">' + (i + 1) + "</span>"
-          : (i + 1);
+        if (i === 0 || !same(r, rows[i - 1])) rank = i + 1;
+        var rankCell = (rank <= 3)
+          ? '<span class="medal ' + medal[rank - 1] + '">' + rank + "</span>"
+          : rank;
         var isMe = (r.key === meId);
         var you = isMe ? ' <span class="youtag">' + t("you") + '</span>' : "";
         return '<tr class="' + (isMe ? "me" : "") + '">' +
@@ -1746,7 +2139,7 @@
       els.boardBody.innerHTML = html;
     }
     function openBoard() { renderBoard(); els.boardOverlay.classList.remove("hidden"); }
-    function closeBoard() { els.boardOverlay.classList.add("hidden"); }
+    function closeBoard() { els.boardOverlay.classList.add("hidden"); refocus(); }
 
     // ---------- global leaderboard (Firebase, optional) ----------
     // Publishes this profile's summary and, when the worldwide board is live,
@@ -1785,6 +2178,8 @@
     els.revealBtn.addEventListener("click", handleReveal);
     els.nextBtn.addEventListener("click", newQuestion);
     function anyModalOpen() {
+      var am = document.querySelector("#acctRoot [data-modal]");
+      if (am && !am.hidden) return true;   // the Log in / Register dialog
       return !els.statsOverlay.classList.contains("hidden") ||
              !els.nickOverlay.classList.contains("hidden") ||
              !els.boardOverlay.classList.contains("hidden");
@@ -1797,10 +2192,28 @@
         else if (!els.nickOverlay.classList.contains("hidden") && els.nickClose.style.display !== "none") closeNick();
         return;
       }
-      if (e.key === "Enter" && solved && !anyModalOpen()) { newQuestion(); }
+      // Enter anywhere on the page moves on once the answer is on screen — but
+      // NOT the Enter that submitted it: that keystroke starts in the answer
+      // box, checkAnswer() flips `solved` synchronously, and the same event
+      // then reaches this listener, which used to advance straight past the
+      // reveal (a correct answer typed + Enter never showed its facts). A
+      // control handles its own Enter (the input submits, the focused Next
+      // button clicks), so only a keystroke from outside a control counts.
+      if (e.key === "Enter" && solved && !anyModalOpen()) {
+        if (e.target && e.target.closest && e.target.closest("a[href], button, input, select, textarea")) return;
+        newQuestion();
+      }
     });
     els.regionSel.addEventListener("change", function () {
-      if (profile) { newQuestion(); }
+      if (!profile) return;
+      // Leaving a question you have not answered is giving it up: it ends the
+      // streak, as "Show the answer" does, or skipping would be free.
+      if (current && !solved && profile.currentStreak) {
+        profile.currentStreak = 0;
+        persist();
+        updateStreakDisplay();
+      }
+      newQuestion();
     });
 
     els.statsBtn.addEventListener("click", openStats);
@@ -1857,8 +2270,11 @@
       b.addEventListener("click", function () { boardSort = b.getAttribute("data-sort"); renderBoard(); });
     });
 
-    els.langEn.addEventListener("click", function () { setLang("en"); });
-    els.langEl.addEventListener("click", function () { setLang("el"); });
+    // Focus back on the game after a language flag or a closed panel, so Enter
+    // moves on (or checks) instead of pressing the header button again.
+    function refocus() { if (current && profile) (solved ? els.nextBtn : els.answerInput).focus({ preventScroll: true }); }
+    els.langEn.addEventListener("click", function () { setLang("en"); refocus(); });
+    els.langEl.addEventListener("click", function () { setLang("el"); refocus(); });
 
     els.nickStart.addEventListener("click", tryStart);
     els.nickGuest.addEventListener("click", activateGuest);
@@ -1886,12 +2302,19 @@
       // 'account-changed' event, which then activates a ranked profile.
       activateGuest();
     }
+    // Fetch the country profiles for the current language once the page is idle.
+    setTimeout(function () { ensureProfiles(lang); }, 1200);
   })();
   </script>
 <script>window.AUTHCORE_NO_BAR=true;</script>
 <!-- ============================================================
-     Account widget — Firebase email/password Login / Register
+     Account widget — Firebase Login / Register: Google or email/password
      Shared across stouras.com /fun/ apps. Backend project: stouras-snake.
+     Google needs the Google provider switched on in the Firebase console
+     (Authentication > Sign-in method) and stouras.com listed under
+     Authentication > Settings > Authorized domains; until then the button
+     explains that and email/password keeps working. The copies in every app
+     must stay identical: node tools/account-widget-guard.mjs.
      Exposes window.Account { user, isGuest(), onChange(cb),
      openLogin(), openRegister(), logout() } and dispatches the
      'account-changed' event. Set window.AUTHCORE_NO_BAR = true before
@@ -1959,6 +2382,7 @@
     color:#111827; background:#fff; width:100%; min-height:46px;
   }
   .acct-lbl input:focus{ border-color:var(--acct-accent); box-shadow:0 0 0 3px rgba(37,99,235,.16); }
+  .acct-lbl[hidden]{ display:none; }   /* .acct-lbl's display:flex beat the hidden attribute: Log in showed an unused Nickname field */
   .acct-err{ margin:2px 0 0; font-size:13px; color:#dc2626; background:#fef2f2; border:1px solid #fde2e2; padding:9px 11px; border-radius:9px; }
   .acct-submit{
     margin-top:4px; appearance:none; border:0; cursor:pointer; border-radius:12px; min-height:48px;
@@ -1967,6 +2391,16 @@
   }
   .acct-submit:hover{ filter:brightness(1.05); }
   .acct-submit:disabled{ opacity:.6; cursor:default; }
+  .acct-google{
+    display:flex; align-items:center; justify-content:center; gap:10px; width:100%; min-height:48px;
+    appearance:none; cursor:pointer; border:1px solid #dadce0; border-radius:12px; background:#fff; color:#1f1f1f;
+    font:600 15px/1 inherit; padding:12px 14px; transition:background .15s ease, box-shadow .15s ease;
+  }
+  .acct-google:hover{ background:#f8f9fa; box-shadow:0 1px 3px rgba(60,64,67,.22); }
+  .acct-google:disabled{ opacity:.6; cursor:default; }
+  .acct-google svg{ width:18px; height:18px; flex:none; }
+  .acct-or{ display:flex; align-items:center; gap:10px; margin:14px 0; font-size:12.5px; color:#9ca3af; }
+  .acct-or::before, .acct-or::after{ content:""; flex:1; height:1px; background:#e5e7eb; }
   .acct-switch{ margin:16px 0 0; font-size:13.5px; color:#6b7280; text-align:center; }
   .acct-switch a{ color:var(--acct-accent); font-weight:600; cursor:pointer; text-decoration:none; }
   .acct-switch a:hover{ text-decoration:underline; }
@@ -2029,6 +2463,10 @@
       + '<div class="acct-card" role="dialog" aria-modal="true">'
         + '<button class="acct-x" data-act="close" aria-label="Close">×</button>'
         + '<h2 class="acct-title"></h2><p class="acct-sub"></p>'
+        + '<button class="acct-google" type="button" data-act="google">'
+          + '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>'
+          + '<span>Continue with Google</span></button>'
+        + '<div class="acct-or"><span class="acct-or-txt">or use your email</span></div>'
         + '<form class="acct-form" novalidate>'
           + '<label class="acct-lbl acct-nick-field" hidden><span>Nickname</span>'
             + '<input class="f-nick" type="text" maxlength="16" autocomplete="nickname" placeholder="Shown on the leaderboard"></label>'
@@ -2048,7 +2486,8 @@
   const modal = $("[data-modal]"), form = $(".acct-form");
   const elTitle=$(".acct-title"), elSub=$(".acct-sub"), elSwitch=$(".acct-switch"),
         elErr=$(".acct-err"), elSubmit=$(".acct-submit"), nickField=$(".acct-nick-field"),
-        inNick=$(".f-nick"), inEmail=$(".f-email"), inPass=$(".f-pass");
+        inNick=$(".f-nick"), inEmail=$(".f-email"), inPass=$(".f-pass"),
+        elGoogle=$(".acct-google"), elOr=$(".acct-or-txt");
 
   function renderBar(){
     if(!bar) return;
@@ -2072,6 +2511,7 @@
       ? "Register to appear on the leaderboard and keep your progress."
       : "Log in to track your scores on the leaderboard.";
     elSubmit.textContent = reg ? "Create account" : "Log in";
+    elOr.textContent = reg ? "or register with your email" : "or log in with your email";
     nickField.hidden = !reg;
     inPass.setAttribute("autocomplete", reg ? "new-password" : "current-password");
     elErr.hidden = true; elErr.textContent = "";
@@ -2094,7 +2534,12 @@
       "auth/user-not-found":"No account found for that email.",
       "auth/too-many-requests":"Too many attempts. Please wait a moment and try again.",
       "auth/network-request-failed":"Network error — check your connection and try again.",
-      "auth/operation-not-allowed":"Email/password sign-in isn’t enabled for this site yet."
+      "auth/operation-not-allowed":"Email/password sign-in isn’t enabled for this site yet.",
+      "auth/popup-blocked":"Your browser blocked the Google window. Allow pop-ups for this site and try again.",
+      "auth/account-exists-with-different-credential":"That email already has an account here. Log in with your email and password instead.",
+      "google/not-enabled":"Google sign-in isn’t switched on for this site yet. Please use your email for now.",
+      "google/unavailable":"Google sign-in isn’t available right now. Please use your email, or try again later.",
+      "auth/unavailable":"Sign-in isn’t available right now. Please check your connection and try again."
     };
     return m[code] || msg || "Something went wrong. Please try again.";
   }
@@ -2111,23 +2556,78 @@
     else if(act==="to-register") openModal("register");
     else if(act==="menu"){ e.stopPropagation(); menu.hidden ? openMenu() : closeMenu(); }
     else if(act==="logout") Account.logout();
+    else if(act==="google") googleSignIn();
   });
+  // ---------- Google ----------
+  // Firebase creates the account on first use, so this one button both logs in
+  // and registers. A NEW Google account gets the nickname typed in the form or
+  // else just the first name: nicknames appear on public leaderboards, and the
+  // Google profile name is usually a person's full name. onAuthStateChanged is
+  // held back while this runs, so apps only ever see the final nickname.
+  let holdAuth = false, heldUser;   // holdAuth: a sign-in is still naming its account
+  function publicUser(u, nick){
+    return u ? { uid:u.uid, email:u.email || "", nickname:(nick || u.displayName || (u.email||"").split("@")[0] || "Player") } : null;
+  }
+  async function googleSignIn(){
+    if(holdAuth) return;
+    if(!auth || !fns){ showErr(friendly("google/unavailable")); return; }
+    const typedNick = (mode==="register" ? inNick.value.trim() : "").slice(0,16);
+    elErr.hidden = true; elGoogle.disabled = true; holdAuth = true; heldUser = undefined;
+    let signedIn = null, finalNick = "";
+    try{
+      const provider = new fns.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt:"select_account" });
+      const cred = await fns.signInWithPopup(auth, provider);
+      signedIn = cred.user;
+      let isNew = false;
+      try{ const info = fns.getAdditionalUserInfo(cred); isNew = !!(info && info.isNewUser); }catch(_){}
+      if(isNew || typedNick){
+        finalNick = (typedNick || String(signedIn.displayName || "").trim().split(/\s+/)[0]
+                     || (signedIn.email || "").split("@")[0] || "Player").slice(0,16);
+        try{ await fns.updateProfile(signedIn, { displayName: finalNick }); }catch(_){}
+      }
+      closeModal(); form.reset(); nickField.hidden = true;
+    }catch(err){
+      const code = err && err.code;
+      if(code==="auth/popup-closed-by-user" || code==="auth/cancelled-popup-request" || code==="auth/user-cancelled"){ /* the player closed the Google window */ }
+      else if(code==="auth/operation-not-allowed" || code==="auth/unauthorized-domain" || code==="auth/configuration-not-found" || code==="auth/invalid-api-key"){ showErr(friendly("google/not-enabled")); }
+      else { showErr(friendly(code, err && err.message)); }
+    }finally{
+      holdAuth = false; elGoogle.disabled = false;
+      const u = signedIn || (heldUser === undefined ? undefined : heldUser);
+      heldUser = undefined;
+      if(u !== undefined) emit(publicUser(u, finalNick));
+    }
+  }
   document.addEventListener("click", (e)=>{ if(accBox && !accBox.contains(e.target)) closeMenu(); });
   document.addEventListener("keydown", (e)=>{ if(e.key==="Escape"){ closeModal(); closeMenu(); } });
 
   form.addEventListener("submit", async (e)=>{
     e.preventDefault();
-    if(!auth || !fns){ showErr(friendly("auth/operation-not-allowed")); return; }
+    if(!auth || !fns){ showErr(friendly("auth/unavailable")); return; }   // Firebase did not load (offline, blocked)
     const email = inEmail.value.trim(), pass = inPass.value;
-    const nick = (inNick.value.trim() || email.split("@")[0] || "Player").slice(0,16);
+    // A blank nickname must not publish the e-mail's first part (often a full name)
+    // on public leaderboards: it becomes Player1234 instead.
+    const nick = (inNick.value.trim() || ("Player" + Math.floor(1000 + Math.random() * 9000))).slice(0,16);
     if(!email){ showErr("Please enter your email."); return; }
     if(pass.length < 6){ showErr("Password must be at least 6 characters."); return; }
     elErr.hidden = true; elSubmit.disabled = true;
     const original = elSubmit.textContent; elSubmit.textContent = "Please wait…";
     try{
       if(mode==="register"){
-        const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
-        try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+        // Creating the account signs it in, and the auth observer fires BEFORE the
+        // nickname is saved, so apps heard the e-mail's local part as the player's
+        // name (and published it). Hold the observer until the nickname is set.
+        holdAuth = true; heldUser = undefined;
+        try{
+          const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
+          try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
+          heldUser = undefined;
+          emit(publicUser(cred.user, nick));
+        } finally {
+          holdAuth = false;
+          if(heldUser !== undefined){ const u = heldUser; heldUser = undefined; emit(publicUser(u)); }
+        }
       } else {
         await fns.signInWithEmailAndPassword(auth, email, pass);
       }
@@ -2149,9 +2649,8 @@
       auth = authMod.getAuth(app);
       fns = authMod;
       authMod.onAuthStateChanged(auth, (u)=>{
-        if(u){
-          emit({ uid:u.uid, email:u.email || "", nickname:(u.displayName || (u.email||"").split("@")[0] || "Player") });
-        } else { emit(null); }
+        if(holdAuth){ heldUser = u || null; return; }     // the sign-in in progress emits once it has set the nickname
+        emit(publicUser(u));
       });
     }catch(e){
       console.warn("Account auth init failed:", e);
