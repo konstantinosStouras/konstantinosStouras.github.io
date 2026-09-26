@@ -227,7 +227,7 @@ window.COUNTRIES = [
       "Switzerland is famous for its neutrality, its precision watches, its chocolate and its banks, and it sits among the peaks of the Alps.",
       "Bern, not the larger Zurich or Geneva, is the seat of government, and its arcaded old town curls inside a loop of the Aare river."
     ] },
-  { c: "Ukraine", cap: "Kyiv", region: "Europe", flag: "🇺🇦", alt: ["Kiev"],
+  { c: "Ukraine", cap: "Kyiv", region: "Europe", flag: "🇺🇦", alt: ["Kiev", "Kiew"],
     facts: [
       "Ukraine is the largest country lying entirely within Europe and its fertile black soil long made it a breadbasket for the continent.",
       "Kyiv is one of the oldest cities in Eastern Europe and the historic cradle of the medieval state of Kievan Rus, with gold-domed monasteries above the Dnipro river."

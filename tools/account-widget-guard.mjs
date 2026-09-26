@@ -47,7 +47,8 @@ for (const p of PAGES) {
   if (!m) continue;
   scripts.push([p, m[0]]);
   ok(blk.includes('data-act="google"') && blk.includes('Continue with Google'), p + ': shows "Continue with Google"');
-  ok(/if\(holdAuth\)\{ heldUser = u \|\| null; return; \}/.test(m[0]), p + ': holds the auth event while a sign-in is still naming the account');
+  ok(/if\(holdAuth && u\)\{ heldUser = u; return; \}/.test(m[0]), p + ': holds a signed-in auth event while a sign-in is still naming the account (never a sign-out)');
+  ok(/\(authMod\.onIdTokenChanged \|\| authMod\.onAuthStateChanged\)\(auth,/.test(m[0]), p + ': listens to token changes too, so a rename made in another tab arrives');
   ok(m[0].includes('fns.signInWithPopup(auth, provider)') && m[0].includes('new fns.GoogleAuthProvider()'), p + ': signs in with the Google provider');
   ok(blk.includes('.acct-lbl[hidden]{ display:none; }'), p + ': the hidden Nickname field is really hidden (the <style> copy is not covered by the script comparison)');
   ok(!/inNick\.value\.trim\(\) \|\| email\.split/.test(m[0]), p + ': a blank nickname never falls back to the e-mail address');
@@ -55,11 +56,22 @@ for (const p of PAGES) {
   ok(parses, p + ': widget script parses');
 }
 ok(scripts.length === PAGES.length && scripts.every(([, x]) => x === scripts[0][1]), 'all ' + PAGES.length + ' copies of the widget script are byte-identical');
+// The <style> copies too. Only the bar-chip look (.acct-chip / .acct-ghost / .acct-solid, and the
+// chip line of the phone media query) is allowed to differ: snake and sudoku restyle their bar.
+const styleOf = (p) => { const s = readFileSync(join(ROOT, p), 'utf8'); const blk = s.slice(s.indexOf('<!-- ============================================================\n     Account widget'), s.indexOf('<!-- ===== end Account widget ===== -->')); return (blk.match(/<style>[\s\S]*?<\/style>/) || [''])[0]; };
+const normCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map((r) => r.trim()).filter((r) => r && !/^\.acct-(chip|ghost|solid)\b/.test(r) && !/^@media[^{]*\{\s*\.acct-chip/.test(r)).join('}');
+const css0 = normCss(styleOf(PAGES[0]));
+for (const p of PAGES) {
+  const st = styleOf(p);
+  ok(normCss(st) === css0, p + ': widget CSS matches the other copies (chip styling aside)');
+  ok(!/font:[^;]*\binherit\b/.test(st), p + ': no invalid "font: … inherit" shorthand (the browser drops the whole rule)');
+  ok(st.includes('.acct-chip[hidden]{ display:none; }'), p + ': Log in / Register chips really hide after sign-in');
+}
 
 if (!process.argv.includes('--static')) {
   const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs';
   let chromium = null;
-  try { ({ chromium } = await import(PW)); } catch { console.log('\n(Playwright not found: browser checks skipped; run with --static to silence)'); }
+  try { ({ chromium } = await import(PW)); } catch { ok(false, 'Playwright not found: the browser half did not run (use --static for the text checks only)'); }
   if (chromium) await browserChecks(chromium);
 }
 console.log('\n' + (fails ? 'FAILED — ' + fails + ' of ' + checks + ' checks failed' : 'OK — all ' + checks + ' checks passed'));
@@ -80,28 +92,40 @@ async function browserChecks(chromium) {
   // the auth-state listener fires BEFORE signInWithPopup resolves.
   const AUTH_STUB = `
     const ctl = window.__fb = window.__fb || { next: null, updates: [], popups: 0 };
-    let current = null; const ls = [];
-    export function getAuth(){ return {}; }
+    let current = JSON.parse(sessionStorage.getItem('__fbUser') || 'null');   // Firebase keeps the session across a reload
+    const save = () => sessionStorage.setItem('__fbUser', JSON.stringify(current));
+    const ls = [];
+    const authObj = { get currentUser() { return current; } };
+    export function getAuth(){ return authObj; }
     export function onAuthStateChanged(a, cb){ ls.push(cb); setTimeout(() => cb(current), 0); return () => {}; }
+    export const onIdTokenChanged = onAuthStateChanged;
+    const fire = () => { save(); ls.forEach((cb) => cb(current)); };
     export class GoogleAuthProvider { setCustomParameters(p){ this.params = p; } }
     export async function signInWithPopup(a, prov){
       ctl.popups++; ctl.lastParams = prov.params;
       const n = ctl.next || {};
+      if (n.pending) return new Promise(() => {});                        // the Google window left open
+      const user = () => ({ uid: n.uid || 'u1', email: n.email || 'kostas@example.com', displayName: n.displayName ?? 'Konstantinos Stouras',
+        providerData: [{ providerId: 'google.com', displayName: n.googleName ?? 'Konstantinos Stouras' }] });
+      if (n.error && n.lateUser) { setTimeout(() => { current = user(); fire(); }, 60); }   // "closed" reported, sign-in finishes after
       if (n.error) { const e = new Error(n.error); e.code = n.error; throw e; }
-      current = { uid: n.uid || 'u1', email: n.email || 'kostas@example.com', displayName: n.displayName ?? 'Konstantinos Stouras' };
-      ls.forEach((cb) => cb(current));
+      current = user(); fire();
       return { user: current, _new: !!n.isNew };
     }
     export function getAdditionalUserInfo(c){ return { isNewUser: !!c._new }; }
-    export async function updateProfile(u, p){ ctl.updates.push(p.displayName); u.displayName = p.displayName; }
-    export async function signOut(){ current = null; ls.forEach((cb) => cb(null)); }
+    export async function updateProfile(u, p){ if (ctl.failUpdate) throw Object.assign(new Error('x'), { code: 'auth/network-request-failed' }); ctl.updates.push(p.displayName); u.displayName = p.displayName; save(); }
+    export async function signOut(){ current = null; fire(); }
     export async function createUserWithEmailAndPassword(a, email){
       if (ctl.next && ctl.next.error) { const e = new Error(ctl.next.error); e.code = ctl.next.error; throw e; }
-      current = { uid: 'u2', email, displayName: null };   // like Firebase: signed in, observer fired, no name yet
-      ls.forEach((cb) => cb(current));
+      current = { uid: 'u2', email, displayName: null, providerData: [{ providerId: 'password', displayName: null }] };
+      fire();
       return { user: current };
     }
-    export async function signInWithEmailAndPassword(){ throw Object.assign(new Error('x'), { code: 'auth/invalid-credential' }); }`;
+    export async function signInWithEmailAndPassword(a, email){
+      current = { uid: 'u3', email, displayName: 'Anna', providerData: [{ providerId: 'password', displayName: null }] };
+      fire();
+      return { user: current };
+    }`;
 
   for (const page of ['fun/capitals/', 'fun/snake/']) {
     console.log('\n2. Google sign-in on /' + page);
@@ -151,6 +175,44 @@ async function browserChecks(chromium) {
     ev = await pg.evaluate(() => window.__events.slice());
     ok(JSON.stringify(ev) === '["Kos"]' && (await pg.evaluate(() => window.__fb.updates.length)) === 0, 'existing account: stored nickname kept, nothing rewritten');
 
+    // Register box + typed nickname on an EXISTING Google account: not renamed
+    await reset();
+    await pg.evaluate(() => { window.__fb.next = { isNew: false, displayName: 'Kos' }; window.Account.openRegister(); });
+    await pg.fill('#acctRoot .f-nick', 'Kostas2');
+    await pg.click('#acctRoot .acct-google');
+    await pg.waitForFunction(() => window.__events.length > 0);
+    ev = await pg.evaluate(() => window.__events.slice());
+    ok(JSON.stringify(ev) === '["Kos"]' && (await pg.evaluate(() => window.__fb.updates.length)) === 0, 'an existing Google account is not renamed from the Register box (' + JSON.stringify(ev) + ')');
+
+    // "closed" reported before the sign-in finishes: the new account still never shows its full name
+    await reset();
+    await pg.evaluate(() => { window.__fb.next = { error: 'auth/popup-closed-by-user', lateUser: true, isNew: true }; window.Account.openLogin(); });
+    await pg.click('#acctRoot .acct-google');
+    await pg.waitForFunction(() => window.__events.length > 0, null, { timeout: 3000 }).catch(() => {});
+    ev = await pg.evaluate(() => window.__events.slice());
+    ok(ev.length >= 1 && !ev.includes('Konstantinos Stouras') && ev[ev.length - 1] === 'Konstantinos', 'a sign-in that finishes after "window closed" shows the first name only (' + JSON.stringify(ev) + ')');
+    await pg.keyboard.press('Escape');
+
+    // the nickname fails to save: the NEXT load still never shows the full name
+    await reset();
+    await pg.evaluate(() => { window.__fb.next = { isNew: true }; window.__fb.failUpdate = true; window.Account.openLogin(); });
+    await pg.click('#acctRoot .acct-google');
+    await pg.waitForFunction(() => window.__events.length > 0);
+    await pg.evaluate(() => { window.__fb.failUpdate = false; });
+    await pg.reload({ waitUntil: 'domcontentloaded' });
+    await pg.waitForFunction(() => window.Account && window.Account.ready, null, { timeout: 8000 });
+    await pg.waitForTimeout(150);
+    ok((await pg.evaluate(() => window.Account.user && window.Account.user.nickname)) === 'Konstantinos', 'after a failed rename and a reload, the first name, not the full Google name');
+    // Google window left open: the e-mail form waits instead of signing in behind the app's back
+    await reset();
+    await pg.evaluate(() => { window.__fb.next = { pending: true }; window.Account.openLogin(); });
+    await pg.click('#acctRoot .acct-google');
+    ok(await pg.evaluate(() => document.querySelector('#acctRoot .acct-submit').disabled), 'while the Google window is open the e-mail Log in button is disabled');
+    await pg.evaluate(() => document.querySelector('#acctRoot .acct-form').dispatchEvent(new Event('submit', { cancelable: true })));
+    ok(/Finish or close the Google window/.test(await err()), 'and a forced e-mail submit says to finish the Google window first');
+    await pg.reload({ waitUntil: 'domcontentloaded' });
+    await pg.waitForFunction(() => window.Account && window.Account.ready, null, { timeout: 8000 });
+
     // errors
     await reset();
     for (const [code, want, label] of [
@@ -197,7 +259,32 @@ async function browserChecks(chromium) {
     await pg.evaluate(() => window.Account.openRegister());
     ok(await pg.isVisible('#acctRoot .acct-nick-field'), 'the Register box does');
     await pg.keyboard.press('Escape');
+    if (page === 'fun/snake/') {
+      await reset();
+      await pg.evaluate(() => { window.__fb.next = { isNew: false, displayName: 'Kos' }; window.Account.openLogin(); });
+      await pg.click('#acctRoot .acct-google');
+      await pg.waitForFunction(() => window.__events.length > 0);
+      const chips = await pg.evaluate(() => ['login', 'register'].map((a) => { const b = document.querySelector('#acctRoot [data-act="' + a + '"]'); return b && getComputedStyle(b).display; }));
+      ok(chips.every((d) => d === 'none'), 'signed in: the bar no longer shows Log in / Register (' + chips.join(',') + ')');
+    }
     ok(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
+    await br.close();
+  }
+
+  console.log('\n2b. Firebase still loading');
+  {
+    const br = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' });
+    const ctx = await br.newContext();
+    await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+    await ctx.route(/firebasejs\/[\d.]+\/firebase-app\.js/, (r) => r.fulfill({ contentType: 'text/javascript', body: APP_STUB }));
+    await ctx.route(/firebasejs\/[\d.]+\/firebase-auth\.js/, async (r) => { await new Promise((res) => setTimeout(res, 1500)); r.fulfill({ contentType: 'text/javascript', body: AUTH_STUB }); });
+    const pg = await ctx.newPage();
+    await pg.goto(BASE + 'fun/capitals/', { waitUntil: 'domcontentloaded' });
+    await pg.waitForFunction(() => !!window.Account);
+    await pg.evaluate(() => window.Account.openLogin());
+    await pg.click('#acctRoot .acct-google');
+    const e = await pg.evaluate(() => document.querySelector('#acctRoot .acct-err').textContent);
+    ok(/still loading/.test(e), 'while Firebase loads, the button says so ("' + e + '"), rather than sending the player to e-mail');
     await br.close();
   }
 

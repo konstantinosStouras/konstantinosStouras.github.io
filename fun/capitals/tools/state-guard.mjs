@@ -369,6 +369,78 @@ console.log('\n20. Header: same number of rows in both languages (formerly broke
   await ctx.close();
 }
 
+console.log('\n21. A signed-in reload re-asks the ACCOUNT\'s own question, and cannot farm points');
+{
+  const ctx = await context();
+  const signIn = (pg) => pg.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: { uid: 'x', email: 'a@x', nickname: 'Alex' } })));
+  const pg = await open(ctx);
+  await signIn(pg);
+  await answerRight(pg); await answerRight(pg);
+  const left = await country(pg);                              // Alex leaves this one unanswered
+  const before = (await stored(pg)).alex.points;
+  await pg.reload({ waitUntil: 'domcontentloaded' }); await pg.waitForFunction(() => document.querySelector('#qText .country').textContent.trim());
+  await signIn(pg);
+  ok((await country(pg)) === left, 'after a reload the account is asked its own unanswered question (' + left + ')');
+  const seen = new Set();
+  for (let i = 0; i < 4; i++) {                                 // answer, reload, sign in: every visit a NEW question
+    const c = await country(pg); seen.add(c);
+    await pg.fill('#answerInput', await capOf(pg, c)); await pg.press('#answerInput', 'Enter');
+    await pg.reload({ waitUntil: 'domcontentloaded' }); await pg.waitForFunction(() => document.querySelector('#qText .country').textContent.trim());
+    await signIn(pg);
+  }
+  const after = (await stored(pg)).alex;
+  ok(seen.size === 4 && after.points === before + 400, 'four reload cycles asked four different countries, +100 each (' + [...seen].join(', ') + ')');
+  await ctx.close();
+}
+
+console.log('\n22. Hints taken stay taken after a reload');
+{
+  const ctx = await context();
+  const pg = await open(ctx);
+  const c = await country(pg);
+  await pg.click('#hintBtn'); await pg.click('#hintBtn');
+  await pg.reload({ waitUntil: 'domcontentloaded' }); await pg.waitForFunction(() => document.querySelector('#qText .country').textContent.trim());
+  ok((await country(pg)) === c && (await pg.locator('#mask .tile').count()) > 0 && /Hint 3/.test(await pg.textContent('#hintBtn')), 'same question, the letters still shown, the next hint is Hint 3');
+  await pg.fill('#answerInput', await capOf(pg, c)); await pg.press('#answerInput', 'Enter');
+  ok(/with hints/.test(await pg.textContent('#bannerLbl')) && (await pg.textContent('#awardPts')) === '+30', 'and it scores as answered with hints (+30), not a no-hint +100');
+  await ctx.close();
+}
+
+console.log('\n23. Blocked storage: progress is kept for the session across sign-in and sign-out');
+{
+  const ctx = await context();
+  const pg = await open(ctx, `Storage.prototype.setItem = function () { throw new Error('blocked'); };`);
+  await answerRight(pg); await answerRight(pg);
+  await pg.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: { uid: 'x', email: 'a@x', nickname: 'Alex' } })));
+  await pg.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: null })));
+  await pg.click('#statsBtn');
+  ok((await pg.textContent('#sAnswered')) === '2', 'the guest\'s 2 answers are still there (' + (await pg.textContent('#sAnswered')) + ')');
+  await ctx.close();
+}
+
+console.log('\n24. Phones: the account menu opens under its button; a long nickname does not change the header');
+{
+  const ctx = await context({ viewport: { width: 390, height: 800 } });
+  const pg = await open(ctx);
+  await pg.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: { uid: 'x', email: 'a@x', nickname: 'Maria' } })));
+  await pg.click('#whoPill');
+  const r = await pg.evaluate(() => { const a = document.getElementById('whoPill').getBoundingClientRect(), m = document.getElementById('accountMenu').getBoundingClientRect(); return { pl: a.left, pr: a.right, ml: m.left, mr: m.right }; });
+  ok(r.ml <= r.pl + 1 && r.mr >= r.pr - 1, 'at 390px the menu opens under the pill (pill ' + Math.round(r.pl) + '-' + Math.round(r.pr) + ', menu ' + Math.round(r.ml) + '-' + Math.round(r.mr) + ')');
+  await ctx.close();
+  const ctx2 = await context();
+  const pg2 = await open(ctx2);
+  await pg2.evaluate(() => window.dispatchEvent(new CustomEvent('account-changed', { detail: { uid: 'x', email: 'a@x', nickname: 'Konstantinos1234' } })));
+  const bad = [];
+  for (const w of [480, 497, 498, 556, 557, 600, 720, 745, 748, 800]) {
+    await pg2.setViewportSize({ width: w, height: 800 });
+    await pg2.click('#langEn'); const en = await pg2.evaluate(() => Math.round(document.querySelector('header.app').getBoundingClientRect().height));
+    await pg2.click('#langEl'); const el = await pg2.evaluate(() => Math.round(document.querySelector('header.app').getBoundingClientRect().height));
+    if (en !== el) bad.push(w + ':' + en + '/' + el);
+  }
+  ok(bad.length === 0, 'signed in as a 16-letter nickname: header rows equal in both languages' + (bad.length ? ' — differs at ' + bad.join(' ') : ''));
+  await ctx2.close();
+}
+
 await br.close(); srv.close();
 console.log('\n' + (fails ? `FAILED — ${fails} check(s)` : 'OK — state guard passed'));
 process.exit(fails ? 1 : 0);

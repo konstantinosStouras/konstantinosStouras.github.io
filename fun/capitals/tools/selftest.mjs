@@ -272,6 +272,9 @@ section('10. Input the matcher must read as the player meant it');
   ok(exactIs('France', 'P\u0430ris') && exactIs('Russia', 'M\u043eskva'), 'a Cyrillic lookalike inside a Latin word is read as Latin');
   ok(exactIs('France', 'Paris') && exactIs('Greece', 'Athens'), 'plain answers unaffected');
   ok(typoAllowance('τζουμπα') === 1 && typoAllowance('παρισι') === 2, 'Greek μπ/ντ/γκ/τζ/τσ count as one letter each for the slack');
+  ok(exactIs('Chad', 'N\u00b4Djamena') && exactIs('Tonga', 'Nuku\u00b4alofa') && exactIs('Greece', 'Α\u0384θήνα'), 'a spacing accent typed as an apostrophe (´) or a stray tonos (΄) does not split the word');
+  ok(exactIs('Finland', '\u0397elsinki') && exactIs('Kenya', '\u039dairobi') && exactIs('Spain', '\u039cadrid'), 'a Greek capital letter starting a Latin word (layout still on Greek) reads as the Latin one');
+  ok(exactIs('Ukraine', 'Kiew'), 'Kiew (German name of Kyiv) is accepted');
   ok(V('South Sudan', 'Αρούμπα') === null, 'Αρούμπα (Aruba) is not a slip of Τζούμπα');
   // A place blocks a slip only when the answer could be a slip of THAT place too.
   for (const [c, typed] of [['Malta', 'Valeta'], ['Estonia', 'Talin'], ['Czechia', 'Prag'], ['Saudi Arabia', 'Riad']]) {

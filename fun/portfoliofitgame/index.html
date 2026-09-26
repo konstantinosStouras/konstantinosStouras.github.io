@@ -2063,7 +2063,7 @@
   }
   .acct-chip{
     appearance:none; cursor:pointer; border:0; border-radius:999px;
-    font:600 14px/1 inherit; padding:10px 16px; min-height:40px;
+    font-family:inherit; font-weight:600; font-size:14px; line-height:1; padding:10px 16px; min-height:40px;
     display:inline-flex; align-items:center; gap:6px;
     box-shadow:0 2px 10px rgba(0,0,0,.18); transition:transform .06s ease, filter .15s ease, background .15s ease;
     white-space:nowrap; -webkit-tap-highlight-color:transparent; touch-action:manipulation;
@@ -2086,7 +2086,7 @@
   .acct-menu-head b{ color:#111827; word-break:break-all; }
   .acct-menu-item{
     display:block; width:100%; text-align:left; appearance:none; border:0; background:none;
-    cursor:pointer; font:600 14px/1 inherit; color:#dc2626; padding:11px 10px; border-radius:9px; min-height:44px;
+    cursor:pointer; font-family:inherit; font-weight:600; font-size:14px; line-height:1; color:#dc2626; padding:11px 10px; border-radius:9px; min-height:44px;
   }
   .acct-menu-item:hover{ background:#fef2f2; }
   /* modal */
@@ -2108,15 +2108,16 @@
   .acct-form{ display:flex; flex-direction:column; gap:12px; }
   .acct-lbl{ display:flex; flex-direction:column; gap:6px; font-size:12.5px; font-weight:600; color:#374151; }
   .acct-lbl input{
-    font:400 16px/1.3 inherit; padding:12px 13px; border:1px solid #d1d5db; border-radius:11px; outline:none;
+    font-family:inherit; font-weight:400; font-size:16px; line-height:1.3; padding:12px 13px; border:1px solid #d1d5db; border-radius:11px; outline:none;
     color:#111827; background:#fff; width:100%; min-height:46px;
   }
   .acct-lbl input:focus{ border-color:var(--acct-accent); box-shadow:0 0 0 3px rgba(37,99,235,.16); }
-  .acct-lbl[hidden]{ display:none; }   /* .acct-lbl's display:flex beat the hidden attribute: Log in showed an unused Nickname field */
+  .acct-lbl[hidden]{ display:none; }
+  .acct-chip[hidden]{ display:none; }  /* same cause: .acct-chip's display beat [hidden], so Log in / Register stayed beside a signed-in name */   /* .acct-lbl's display:flex beat the hidden attribute: Log in showed an unused Nickname field */
   .acct-err{ margin:2px 0 0; font-size:13px; color:#dc2626; background:#fef2f2; border:1px solid #fde2e2; padding:9px 11px; border-radius:9px; }
   .acct-submit{
     margin-top:4px; appearance:none; border:0; cursor:pointer; border-radius:12px; min-height:48px;
-    background:var(--acct-accent); color:var(--acct-accent-ink); font:700 15px/1 inherit; padding:14px;
+    background:var(--acct-accent); color:var(--acct-accent-ink); font-family:inherit; font-weight:700; font-size:15px; line-height:1; padding:14px;
     transition:filter .15s ease;
   }
   .acct-submit:hover{ filter:brightness(1.05); }
@@ -2124,7 +2125,7 @@
   .acct-google{
     display:flex; align-items:center; justify-content:center; gap:10px; width:100%; min-height:48px;
     appearance:none; cursor:pointer; border:1px solid #dadce0; border-radius:12px; background:#fff; color:#1f1f1f;
-    font:600 15px/1 inherit; padding:12px 14px; transition:background .15s ease, box-shadow .15s ease;
+    font-family:inherit; font-weight:600; font-size:15px; line-height:1; padding:12px 14px; transition:background .15s ease, box-shadow .15s ease;
   }
   .acct-google:hover{ background:#f8f9fa; box-shadow:0 1px 3px rgba(60,64,67,.22); }
   .acct-google:disabled{ opacity:.6; cursor:default; }
@@ -2167,7 +2168,11 @@
     openRegister(){ openModal("register"); },
     async logout(){ if(auth && fns){ try{ await fns.signOut(auth); }catch(e){} } closeMenu(); }
   };
+  let lastSig = null;
   function emit(u){
+    const sig = u ? u.uid + "\u0000" + u.nickname + "\u0000" + u.email : "";
+    if(ready && sig === lastSig) return;   // the same person under the same name: token refreshes and repeats stay silent
+    lastSig = sig;
     Account.user = u; ready = true; Account.ready = true;
     listeners.forEach(cb=>{ try{ cb(u); }catch(e){} });
     try{ window.dispatchEvent(new CustomEvent("account-changed",{detail:u})); }catch(e){}
@@ -2258,9 +2263,9 @@
       "auth/invalid-email":"That email address looks invalid.",
       "auth/missing-password":"Please enter a password.",
       "auth/weak-password":"Password must be at least 6 characters.",
-      "auth/email-already-in-use":"That email is already registered — try logging in instead.",
-      "auth/invalid-credential":"Wrong email or password.",
-      "auth/wrong-password":"Wrong email or password.",
+      "auth/email-already-in-use":"That email is already registered. Log in instead (with Continue with Google if that is how you signed up).",
+      "auth/invalid-credential":"Wrong email or password. If you signed up with Google, use Continue with Google.",
+      "auth/wrong-password":"Wrong email or password. If you signed up with Google, use Continue with Google.",
       "auth/user-not-found":"No account found for that email.",
       "auth/too-many-requests":"Too many attempts. Please wait a moment and try again.",
       "auth/network-request-failed":"Network error — check your connection and try again.",
@@ -2268,12 +2273,22 @@
       "auth/popup-blocked":"Your browser blocked the Google window. Allow pop-ups for this site and try again.",
       "auth/account-exists-with-different-credential":"That email already has an account here. Log in with your email and password instead.",
       "google/not-enabled":"Google sign-in isn’t switched on for this site yet. Please use your email for now.",
-      "google/unavailable":"Google sign-in isn’t available right now. Please use your email, or try again later.",
-      "auth/unavailable":"Sign-in isn’t available right now. Please check your connection and try again."
+      "google/busy":"Finish or close the Google window first.",
+      "auth/web-storage-unsupported":"Your browser is blocking the storage sign-in needs (often in a private window). Try a regular browser window.",
+      "auth/operation-not-supported-in-this-environment":"Google sign-in does not work inside this app’s browser. Open the page in your regular browser.",
+      "auth/loading":"Sign-in is still loading. Please try again in a moment.",
+      "auth/unavailable":"Sign-in isn’t available right now. Please check your connection and reload the page."
     };
     return m[code] || msg || "Something went wrong. Please try again.";
   }
-  function showErr(t){ elErr.textContent = t; elErr.hidden = false; }
+  function showErr(t){
+    elErr.textContent = t; elErr.hidden = false;
+    try{ elErr.scrollIntoView({ block:"nearest" }); }catch(_){}   // on a short landscape phone it sits below the fold
+  }
+  let initState = "loading";   // "loading" | "ready" | "failed": what the buttons say while Firebase is not there
+  function notReady(){ return friendly(initState === "loading" ? "auth/loading" : "auth/unavailable"); }
+  let busy = "";               // "google" | "email" while a sign-in is in flight: the two never run together
+  function setBusy(b){ busy = b; elGoogle.disabled = !!b; elSubmit.disabled = !!b; }
 
   // delegated clicks
   root.addEventListener("click", (e)=>{
@@ -2295,14 +2310,23 @@
   // Google profile name is usually a person's full name. onAuthStateChanged is
   // held back while this runs, so apps only ever see the final nickname.
   let holdAuth = false, heldUser;   // holdAuth: a sign-in is still naming its account
+  function stableNumber(s){ let h = 0; for(const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) % 9000; return 1000 + h; }
+  // The name apps show, on public leaderboards too. Never taken from the e-mail
+  // address, and never a Google account's full name left in place because the
+  // rename was lost (a closed tab, a failed save, a pop-up that reported
+  // "closed" before the sign-in finished): its first name instead.
   function publicUser(u, nick){
-    return u ? { uid:u.uid, email:u.email || "", nickname:(nick || u.displayName || (u.email||"").split("@")[0] || "Player") } : null;
+    if(!u) return null;
+    let name = String(nick || u.displayName || "").trim();
+    const g = (u.providerData || []).find((p)=>p && p.providerId === "google.com");
+    if(!nick && g && g.displayName && name === String(g.displayName).trim()) name = name.split(/\s+/)[0];
+    return { uid:u.uid, email:u.email || "", nickname:(name || ("Player" + stableNumber(u.uid))) };
   }
   async function googleSignIn(){
-    if(holdAuth) return;
-    if(!auth || !fns){ showErr(friendly("google/unavailable")); return; }
+    if(busy) return;
+    if(!auth || !fns){ showErr(notReady()); return; }
     const typedNick = (mode==="register" ? inNick.value.trim() : "").slice(0,16);
-    elErr.hidden = true; elGoogle.disabled = true; holdAuth = true; heldUser = undefined;
+    elErr.hidden = true; setBusy("google"); holdAuth = true; heldUser = undefined;
     let signedIn = null, finalNick = "";
     try{
       const provider = new fns.GoogleAuthProvider();
@@ -2311,9 +2335,9 @@
       signedIn = cred.user;
       let isNew = false;
       try{ const info = fns.getAdditionalUserInfo(cred); isNew = !!(info && info.isNewUser); }catch(_){}
-      if(isNew || typedNick){
+      if(isNew){   // only a NEW account is named here: an existing one keeps its nickname
         finalNick = (typedNick || String(signedIn.displayName || "").trim().split(/\s+/)[0]
-                     || (signedIn.email || "").split("@")[0] || "Player").slice(0,16);
+                     || ("Player" + stableNumber(signedIn.uid))).slice(0,16);
         try{ await fns.updateProfile(signedIn, { displayName: finalNick }); }catch(_){}
       }
       closeModal(); form.reset(); nickField.hidden = true;
@@ -2323,10 +2347,11 @@
       else if(code==="auth/operation-not-allowed" || code==="auth/unauthorized-domain" || code==="auth/configuration-not-found" || code==="auth/invalid-api-key"){ showErr(friendly("google/not-enabled")); }
       else { showErr(friendly(code, err && err.message)); }
     }finally{
-      holdAuth = false; elGoogle.disabled = false;
-      const u = signedIn || (heldUser === undefined ? undefined : heldUser);
-      heldUser = undefined;
-      if(u !== undefined) emit(publicUser(u, finalNick));
+      holdAuth = false; heldUser = undefined; setBusy("");
+      // Firebase's own current user is the truth (a sign-in may have finished
+      // after the pop-up reported closed); emit() drops it if nothing changed.
+      const cur = auth.currentUser || null;
+      emit(publicUser(cur, cur && signedIn && cur.uid === signedIn.uid ? finalNick : ""));
     }
   }
   document.addEventListener("click", (e)=>{ if(accBox && !accBox.contains(e.target)) closeMenu(); });
@@ -2334,14 +2359,15 @@
 
   form.addEventListener("submit", async (e)=>{
     e.preventDefault();
-    if(!auth || !fns){ showErr(friendly("auth/unavailable")); return; }   // Firebase did not load (offline, blocked)
+    if(busy){ if(busy==="google") showErr(friendly("google/busy")); return; }   // the Google window is still open
+    if(!auth || !fns){ showErr(notReady()); return; }   // Firebase still loading, or it did not load (offline, blocked)
     const email = inEmail.value.trim(), pass = inPass.value;
     // A blank nickname must not publish the e-mail's first part (often a full name)
     // on public leaderboards: it becomes Player1234 instead.
     const nick = (inNick.value.trim() || ("Player" + Math.floor(1000 + Math.random() * 9000))).slice(0,16);
     if(!email){ showErr("Please enter your email."); return; }
     if(pass.length < 6){ showErr("Password must be at least 6 characters."); return; }
-    elErr.hidden = true; elSubmit.disabled = true;
+    elErr.hidden = true; setBusy("email");
     const original = elSubmit.textContent; elSubmit.textContent = "Please wait…";
     try{
       if(mode==="register"){
@@ -2349,14 +2375,17 @@
         // nickname is saved, so apps heard the e-mail's local part as the player's
         // name (and published it). Hold the observer until the nickname is set.
         holdAuth = true; heldUser = undefined;
+        let created = null;
         try{
           const cred = await fns.createUserWithEmailAndPassword(auth, email, pass);
-          try{ await fns.updateProfile(cred.user, { displayName: nick }); }catch(_){}
-          heldUser = undefined;
-          emit(publicUser(cred.user, nick));
+          created = cred.user;
+          try{ await fns.updateProfile(created, { displayName: nick }); }catch(_){}
         } finally {
-          holdAuth = false;
-          if(heldUser !== undefined){ const u = heldUser; heldUser = undefined; emit(publicUser(u)); }
+          // one report, from Firebase's own current user, with the chosen nickname
+          // for the account just created (even if saving it failed this time)
+          holdAuth = false; heldUser = undefined;
+          const cur = auth.currentUser || null;
+          emit(publicUser(cur, cur && created && cur.uid === created.uid ? nick : ""));
         }
       } else {
         await fns.signInWithEmailAndPassword(auth, email, pass);
@@ -2366,7 +2395,7 @@
     }catch(err){
       showErr(friendly(err && err.code, err && err.message));
     }finally{
-      elSubmit.disabled = false; elSubmit.textContent = original;
+      setBusy(""); elSubmit.textContent = original;
     }
   });
 
@@ -2378,11 +2407,16 @@
       const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(FIREBASE_CONFIG);
       auth = authMod.getAuth(app);
       fns = authMod;
-      authMod.onAuthStateChanged(auth, (u)=>{
-        if(holdAuth){ heldUser = u || null; return; }     // the sign-in in progress emits once it has set the nickname
+      // onIdTokenChanged, not onAuthStateChanged: it also fires when ANOTHER tab
+      // of the site renames the account (the new name arrives as a token change),
+      // and emit() drops repeats, so the hourly token refresh stays silent.
+      (authMod.onIdTokenChanged || authMod.onAuthStateChanged)(auth, (u)=>{
+        if(holdAuth && u){ heldUser = u; return; }   // the sign-in in progress emits once it has set the nickname
         emit(publicUser(u));
       });
+      initState = "ready";
     }catch(e){
+      initState = "failed";
       console.warn("Account auth init failed:", e);
       emit(null); // fall back to guest
     }
