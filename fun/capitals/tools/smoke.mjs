@@ -176,6 +176,26 @@ ok(await revealVisible(), 'answer shown');
 ok((await pg.locator('#capAlt').innerText()).trim() === '', 'no note after a reveal');
 ok(await pg.evaluate(() => getComputedStyle(document.getElementById('capAlt')).display === 'none'), 'the empty note takes no space');
 
+console.log('\n6d. Greek on screen, the capital typed in English: correct, with no note');
+if (await revealVisible()) await pg.click('#nextBtn');
+await pg.click('#langEl');
+{
+  const g = await pg.evaluate(() => document.querySelector('#qText .country').textContent);
+  const e = await pg.evaluate((gname) => { const G = window.COUNTRIES_EL; const k = Object.keys(G).find((n) => G[n].c === gname); const en = window.COUNTRIES.find((x) => x.c === k); return { c: k, cap: en.cap, capEl: G[k].cap }; }, g);
+  await answer(e.cap, true);
+  ok(await revealVisible(), `Greek question "${g}", English answer "${e.cap}" is accepted`);
+  ok((await pg.locator('#capLine').innerText()).includes(e.capEl), `the banner names the capital in Greek (${e.capEl})`);
+  ok((await pg.locator('#capAlt').innerText()).trim() === '', 'no misspelling or "also accepted" note: it is simply right');
+  ok(/Σωστά/.test(await pg.locator('#bannerLbl').textContent()), 'the banner says Σωστά (correct)');
+  await pg.click('#nextBtn');
+  const g2 = await pg.evaluate(() => document.querySelector('#qText .country').textContent);
+  const e2 = await pg.evaluate((gname) => { const G = window.COUNTRIES_EL; const k = Object.keys(G).find((n) => G[n].c === gname); return { capEl: G[k].cap }; }, g2);
+  await answer(e2.capEl, true);
+  ok(await revealVisible(), `and the Greek answer "${e2.capEl}" is accepted too`);
+  await pg.click('#nextBtn');
+}
+await pg.click('#langEn');
+
 console.log('\n7. No page errors');
 ok(errors.length === 0, errors.length ? 'page errors: ' + errors.join(' | ') : 'none');
 

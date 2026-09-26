@@ -254,6 +254,53 @@ section('9. Country profiles (profiles.en.js / profiles.el.js)');
   ok(/sc\.src = "profiles\." \+ l \+ "\.js";/.test(html), 'the page loads exactly these two files');
 }
 
+section('10. Input the matcher must read as the player meant it');
+{
+  const V = (c, raw) => verdict(byName[c], raw);
+  const exactIs = (c, raw, want) => { const v = V(c, raw); return !!v && v.exact && (want === undefined || v.form === want); };
+  ok(exactIs('Bolivia', 'La\u00a0Paz'), 'a non-breaking space is a space (La Paz is exact, not a "misspelling")');
+  ok(exactIs('Bolivia', 'La\tPaz') && exactIs('Malaysia', 'Kuala\u3000Lumpur') && exactIs('Costa Rica', 'San\u2009José'), 'tab, ideographic and thin spaces are spaces');
+  ok(exactIs('Haiti', 'Port\u2011au\u2011Prince') && exactIs('Haiti', 'Port\u2010au\u2212Prince'), 'every hyphen or dash character is a word break');
+  ok(exactIs('United States', 'Washington,\u00a0D.C.'), 'Washington,&nbsp;D.C. pasted from a web page is exact');
+  ok(exactIs('Equatorial Guinea', 'Ciudad\u00a0de\u00a0la\u00a0Paz'), 'a three-word answer with non-breaking spaces is exact (it used to be refused)');
+  ok(exactIs('France', 'ＰＡＲＩＳ'), 'full-width letters read as ASCII');
+  ok(exactIs('Vietnam', 'Ανώι') && exactIs('Vietnam', 'Ανόη') && exactIs('Taiwan', 'Ταϊπέη') && exactIs('Niger', 'Νιαμέη'), 'Greek homophone spellings fold fully (Ανώι, Ανόη, Ταϊπέη, Νιαμέη are exact)');
+  for (const e of ALL) for (const f of forms(e)) { const k = norm(f); if (norm(k) !== k) ok(false, 'norm is idempotent for "' + f + '" (' + k + ' -> ' + norm(k) + ')'); }
+  ok(true, 'norm is idempotent over every accepted form');
+  ok(exactIs('Greece', 'Aθήνα') && exactIs('Greece', 'AΘΗΝA'), 'a Latin A inside a Greek word is read as Greek');
+  ok(exactIs('South Korea', 'Σεoύλ'), 'a Latin o inside a Greek word is read as Greek');
+  ok(exactIs('France', 'P\u0430ris') && exactIs('Russia', 'M\u043eskva'), 'a Cyrillic lookalike inside a Latin word is read as Latin');
+  ok(exactIs('France', 'Paris') && exactIs('Greece', 'Athens'), 'plain answers unaffected');
+  ok(typoAllowance('τζουμπα') === 1 && typoAllowance('παρισι') === 2, 'Greek μπ/ντ/γκ/τζ/τσ count as one letter each for the slack');
+  ok(V('South Sudan', 'Αρούμπα') === null, 'Αρούμπα (Aruba) is not a slip of Τζούμπα');
+  // A place blocks a slip only when the answer could be a slip of THAT place too.
+  for (const [c, typed] of [['Malta', 'Valeta'], ['Estonia', 'Talin'], ['Czechia', 'Prag'], ['Saudi Arabia', 'Riad']]) {
+    const v = V(c, typed); ok(v && !v.exact, c + ': "' + typed + '" is a tolerated slip now (was refused by an unrelated nearby place)');
+  }
+  // A slip of an alternative is not "the correct spelling"
+  const pekin = V('China', 'Pekin'); ok(pekin && !pekin.exact && pekin.form === 'Peking' && isAltForm(byName['China'], pekin.form), 'Pekin is read as the alternative Peking (the page words it "close enough", not "correct spelling")');
+}
+
+section('11. No real non-capital place is accepted anywhere (the places fixture)');
+{
+  const { PLACES_LATIN, PLACES_GREEK } = await import(new URL('./places-fixture.mjs', import.meta.url));
+  ok(PLACES_LATIN.length > 2000 && PLACES_GREEK.length > 600, 'fixture loaded (' + PLACES_LATIN.length + ' Latin + ' + PLACES_GREEK.length + ' Greek places)');
+  // Differ from a capital only by a space or a hyphen: the same answer typed differently, so a slip of it.
+  const SAME_BY_SEPARATOR = new Set(['basse terre', 'george town']);
+  let leaked = 0, tried = 0;
+  for (const p of PLACES_LATIN.concat(PLACES_GREEK)) {
+    const k = norm(p);
+    if (SAME_BY_SEPARATOR.has(k)) continue;
+    for (const e of ALL) {
+      if (k in acceptedForms(e)) continue;          // it IS a name of this capital (a former name, an endonym)
+      tried++;
+      const v = verdict(e, p);
+      if (v) { leaked++; if (leaked <= 12) ok(false, '"' + p + '" is accepted for ' + e.c + ' as ' + v.form + (v.exact ? '' : ' (a slip of ' + v.dist + ')')); }
+    }
+  }
+  ok(leaked === 0, 'none of ' + (PLACES_LATIN.length + PLACES_GREEK.length) + ' real places is accepted for a country it is not the capital of (' + tried + ' pairs)');
+}
+
 section('7. The page wiring');
 const game = html.slice(html.indexOf('(function () {\n    "use strict";'), html.indexOf('window.AUTHCORE_NO_BAR'));
 ok(game.length > 40000, 'game script sliced (' + game.length + ' chars)');
@@ -263,9 +310,10 @@ ok(/function handleCorrect\(match\) \{\s*solved = true;\s*matchInfo = match \|\|
 ok(/function handleReveal\(\) \{[\s\S]{0,120}matchInfo = null;/.test(game), 'a reveal clears it');
 ok(/matchInfo = null;\s*renderFlag/.test(game), 'a new question clears it');
 ok((game.match(/renderAnswerNotes\(\);/g) || []).length === 2, 'renderAnswerNotes runs in showReveal AND on a language switch (renderRevealText)');
-ok(/if \(revCorrect && matchInfo\) \{\s*if \(!matchInfo\.exact\)/.test(game), 'notes only for a correct answer; the misspelling line only for a non-exact match');
+ok(/if \(revCorrect && matchInfo\) \{\s*var alt = isAltForm\(current, matchInfo\.form\);\s*if \(!matchInfo\.exact && alt\)/.test(game), 'notes only for a correct answer; a slip of an alternative gets its own single line');
 ok(/t\("typoNote"\)\(escapeHtml\(matchInfo\.typed\), escapeHtml\(matchInfo\.form\)\)/.test(game), 'what the player typed and the right spelling are both HTML-escaped');
-ok(/t\("altAccepted"\)\(escapeHtml\(matchInfo\.form\), matchInfo\.exact\)/.test(game), 'the alternative is HTML-escaped before it is drawn');
+ok(/t\("altAccepted"\)\(escapeHtml\(matchInfo\.form\), true\)/.test(game) && /t\("typoAltNote"\)\(escapeHtml\(matchInfo\.typed\), escapeHtml\(matchInfo\.form\)\)/.test(game), 'the alternative and the typed text are HTML-escaped before they are drawn');
+ok((game.match(/typoAltNote: function \(typed, form\)/g) || []).length === 2, 'typoAltNote is translated in both languages');
 ok((game.match(/typoNote: function \(typed, right\)/g) || []).length === 2, 'typoNote is translated in both languages');
 ok((game.match(/renderProfile\(\);/g) || []).length >= 2, 'the country profile is drawn on the reveal and on a language switch');
 ok(/dd\.textContent = p\[f\[0\]\]/.test(game) && !/profileList\.innerHTML = [^"]/.test(game), 'profile text goes in via textContent, never innerHTML');
