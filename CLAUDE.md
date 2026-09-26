@@ -363,6 +363,35 @@ page inserts it with `textContent`); keep it timeless (no living
 office-holders, no figures that go stale). A new country needs an entry in all
 four data files. Browser test: `node fun/capitals/tools/smoke.mjs`.
 
+## The shared account widget — Google or email, identical in eight pages
+
+`/fun/snake`, `/fun/sudoku`, `/fun/rooks`, `/fun/nomoi`, `/fun/capitals`,
+`/fun/portfoliofitgame`, `/lab/portfoliofit` and `/lab/portfoliofit-testing`
+each carry a COPY of the same Login / Register widget (between the
+`Account widget` comment and `end Account widget`), and all eight sign in to
+ONE Firebase project, `stouras-snake`. An account made in one page works in
+all of them, so every copy must offer the same ways in: a player who
+registered with Google on Capitals and then meets an email-only box on Snake
+is locked out. **Edit all eight together**; `node tools/account-widget-guard.mjs`
+fails when the widget scripts differ (the chip CSS of snake/sudoku is allowed
+to differ) and drives the Google flow in Chromium against a stubbed Firebase
+(`--static` for the text checks only, which `site-checks.yml` runs).
+
+**Continue with Google** (owner request 2026-09-26) uses `signInWithPopup`;
+Firebase creates the account on first use, so one button both registers and
+logs in. A NEW Google account's nickname is the one typed in the register
+form, or else the first name only: nicknames are shown on public
+leaderboards and the Google profile name is usually a person's full name.
+`onAuthStateChanged` is held back while that runs, so the app hears ONE
+`account-changed` event, with the final nickname.
+
+It needs two switches in the Firebase console of `stouras-snake`, which
+nothing in this repository can flip: **Authentication → Sign-in method →
+Google → Enable**, and **Authentication → Settings → Authorized domains**
+must list `stouras.com` and `www.stouras.com`. Until then the button says
+"Google sign-in isn't switched on for this site yet" and email/password keeps
+working.
+
 ## `/fun/ft50` — RETIRED (redirect stub only)
 The standalone FT50 research paper browser was removed: `/lit/` is a
 superset (its "Journal types" filter covers all 50 FT50 journals from lit's
