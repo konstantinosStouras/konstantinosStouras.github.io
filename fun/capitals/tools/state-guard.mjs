@@ -37,7 +37,12 @@
     33. dialogs take focus, keep Tab inside and never stack;
     34. the map marker lands on the country (and Fiji says it is not drawn);
     35. English sentences say "the Netherlands"; Greek tooltips;
-    36. a long nickname keeps its "you" tag.
+    36. a long nickname keeps its "you" tag;
+    37. no country is asked twice in one visit until the Region's round is done;
+    38. Learn shows study cards that score nothing;
+    39. a test asks each learned country once and ends on a summary;
+    40. Learn and a test in progress survive a reload;
+    41. Learn, the test and its summary follow the language.
    ========================================================================== */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -717,6 +722,143 @@ console.log('\n36. A long nickname keeps its "you" tag on the leaderboard');
   await pg.click('#boardBtn');
   const r = await pg.evaluate(() => { const t = document.querySelector('#boardBody .youtag'), c = t && t.closest('td'); if (!t) return null; const a = t.getBoundingClientRect(), b = c.getBoundingClientRect(); return { tr: a.right, cr: b.right, w: a.width }; });
   ok(r && r.w > 10 && r.tr <= r.cr + 1, 'the tag is drawn inside its cell (' + JSON.stringify(r) + ')');
+  await ctx.close();
+}
+
+const REGION = (r) => `localStorage.setItem('capitals:v1:region', ${JSON.stringify(r)});`;
+async function reveal(pg) { await pg.click('#revealBtn'); await pg.click('#nextBtn'); }
+
+console.log('\n37. No country is asked twice in one visit (South America, 12 countries)');
+{
+  const ctx = await context();
+  const pg = await open(ctx, REGION('South America'));
+  const seen = [];
+  ok(/^Question 1 of 12 in this round$/.test(await pg.textContent('#qRound')), 'round line: ' + (await pg.textContent('#qRound')));
+  for (let i = 0; i < 5; i++) { seen.push(await country(pg)); await reveal(pg); }
+  await pg.reload({ waitUntil: 'domcontentloaded' });
+  await pg.waitForFunction(() => document.getElementById('qText').getAttribute('data-c'));
+  // the reload re-asks nothing already asked (the open question was drawn after the fifth)
+  for (let i = 5; i < 12; i++) { seen.push(await country(pg)); if (i === 11) ok((await pg.textContent('#qRound')) === 'Question 12 of 12 in this round', 'the last one: ' + (await pg.textContent('#qRound'))); await reveal(pg); }
+  ok(new Set(seen).size === 12, 'twelve questions, twelve different countries, a reload in between (' + seen.join(', ') + ')');
+  ok((await pg.textContent('#qRound')) === 'Question 1 of 12 in this round' && /new round/.test(await pg.textContent('#feedback')), 'then a new round starts, and says so: ' + (await pg.textContent('#feedback')));
+  ok(!seen.slice(-1).includes(await country(pg)), 'the new round does not open on the country just asked');
+  // the region "All" counts every country, and one asked already stays asked there
+  await pg.selectOption('#regionSel', 'all');
+  ok(/^Question \d+ of \d{3} in this round$/.test(await pg.textContent('#qRound')), 'All regions: ' + (await pg.textContent('#qRound')));
+  ok(pg.errors.length === 0, 'no page errors');
+  await ctx.close();
+}
+
+console.log('\n38. Learn: study cards, nothing scored');
+{
+  const ctx = await context();
+  const pg = await open(ctx, REGION('Europe'));
+  const before = (await stored(pg)).__guest__;
+  await pg.click('#modeLearn');
+  ok(await pg.evaluate(() => document.getElementById('quizCard').classList.contains('learn-on')), 'the card switches to study mode');
+  ok(await pg.isVisible('#capLine') && !(await pg.isVisible('#answerInput')) && !(await pg.isVisible('#nextBtn')), 'the capital is shown, with no answer box and no quiz Next button');
+  ok((await pg.textContent('#learnCount')) === 'Card 1 of 10', 'count: ' + (await pg.textContent('#learnCount')));
+  ok(await pg.isDisabled('#learnPrev'), 'Previous is off on the first card');
+  const cards = [await country(pg)];
+  for (let i = 1; i < 10; i++) { await pg.click('#learnNext'); cards.push(await country(pg)); }
+  ok(new Set(cards).size === 10, 'ten different countries');
+  ok(await pg.isDisabled('#learnNext'), 'Next is off on the last card');
+  const regionsOk = await pg.evaluate((cs) => cs.every((c) => window.COUNTRIES.find((e) => e.c === c).region === 'Europe'), cards);
+  ok(regionsOk, 'all from the Region chosen (Europe)');
+  await pg.click('#learnPrev');
+  await pg.keyboard.press('ArrowLeft');
+  ok((await country(pg)) === cards[7], 'Previous and the left arrow step back');
+  await pg.locator('body').click({ position: { x: 5, y: 5 } });
+  await pg.keyboard.press('ArrowRight');
+  ok((await country(pg)) === cards[8], 'the right arrow steps forward');
+  ok(await pg.isVisible('#fact1') && (await pg.textContent('#fact1')).length > 20, 'the facts are shown');
+  const after = (await stored(pg)).__guest__;
+  ok(after.answered === before.answered && after.points === before.points, 'learning scores nothing');
+  ok(/^The capital of /.test(await pg.textContent('#qText')), 'heading: ' + (await pg.textContent('#qText')));
+  await pg.click('#learnNew');
+  const fresh = await country(pg);
+  ok(!cards.includes(fresh) && (await pg.textContent('#learnCount')) === 'Card 1 of 10', 'Show me different ones: a new set of countries not studied yet (' + fresh + ')');
+  await pg.click('#modeQuiz');
+  ok(await pg.isVisible('#answerInput') && !(await pg.evaluate(() => document.getElementById('quizCard').classList.contains('learn-on'))), 'Quiz brings the question back');
+  ok(pg.errors.length === 0, 'no page errors');
+  await ctx.close();
+}
+
+console.log('\n39. A test on the learned set, then a summary');
+{
+  const ctx = await context();
+  const pg = await open(ctx, REGION('Oceania'));
+  await pg.click('#modeLearn');
+  const deck = await pg.evaluate(() => JSON.parse(sessionStorage.getItem('capitals:v1:mode')).deck);
+  ok(deck.length === 10, 'a set of ten');
+  await pg.click('#learnTest');
+  ok(await pg.isVisible('#answerInput'), 'the test asks with the answer box');
+  ok((await pg.textContent('#qRound')) === 'Test: question 1 of 10', 'line: ' + (await pg.textContent('#qRound')));
+  const asked = [];
+  for (let i = 0; i < 10; i++) {
+    const c = await country(pg); asked.push(c);
+    if (i === 0) { await pg.fill('#answerInput', 'Qwertyville'); await pg.press('#answerInput', 'Enter'); await pg.fill('#answerInput', await capOf(pg, c)); await pg.press('#answerInput', 'Enter'); await pg.click('#nextBtn'); }
+    else if (i === 1) await reveal(pg);
+    else await answerRight(pg);
+  }
+  ok(asked.length === 10 && new Set(asked).size === 10 && asked.every((c) => deck.includes(c)), 'each learned country asked once, and only those');
+  ok(await pg.isVisible('#testSummary') && !(await pg.isVisible('#answerInput')), 'the summary replaces the card');
+  ok((await pg.textContent('#testText')) === 'You got 8 of 10 right on the first try, without a hint.', 'summary: ' + (await pg.textContent('#testText')));
+  const res = await pg.evaluate(() => Object.fromEntries([...document.querySelectorAll('#testList li')].map((li) => [li.getAttribute('data-c'), li.querySelector('.tres').className.split(' ')[1]])));
+  ok(res[asked[0]] === 'help' && res[asked[1]] === 'shown' && res[asked[2]] === 'first', 'a wrong try counts as "with help", a shown answer as "shown"');
+  ok((await stored(pg)).__guest__.answered === 10, 'the test answers count on the profile like any answer');
+  await pg.keyboard.press('Enter');
+  ok(await pg.isVisible('#testSummary'), 'a stray Enter does not leave the summary');
+  await pg.click('#testRetry');
+  ok((await pg.textContent('#learnCount')) === 'Card 1 of 2', 'Study the ones I missed: the two missed ones (' + (await pg.textContent('#learnCount')) + ')');
+  const again = [await country(pg)]; await pg.click('#learnNext'); again.push(await country(pg));
+  ok(again.includes(asked[0]) && again.includes(asked[1]), 'they are the two missed');
+  await pg.click('#learnTest');
+  await answerRight(pg); await answerRight(pg);
+  ok((await pg.textContent('#testText')) === 'You got 2 of 2 right on the first try, without a hint.' && !(await pg.isVisible('#testRetry')), 'all right: no "missed" button');
+  await pg.click('#testToQuiz');
+  ok(await pg.isVisible('#answerInput') && /in this round$/.test(await pg.textContent('#qRound')), 'Back to the quiz');
+  const c = await country(pg);
+  ok(!asked.includes(c), 'the quiz does not ask again a country the test asked this visit (' + c + ')');
+  ok(pg.errors.length === 0, 'no page errors');
+  await ctx.close();
+}
+
+console.log('\n40. Learn and a test survive a reload');
+{
+  const ctx = await context();
+  const pg = await open(ctx, REGION('Asia'));
+  await pg.click('#modeLearn');
+  await pg.click('#learnNext'); await pg.click('#learnNext');
+  const c3 = await country(pg);
+  await pg.reload({ waitUntil: 'domcontentloaded' });
+  await pg.waitForFunction(() => document.getElementById('learnCount').textContent);
+  ok((await pg.textContent('#learnCount')) === 'Card 3 of 10' && (await country(pg)) === c3 && await pg.evaluate(() => document.getElementById('modeLearn').classList.contains('active')), 'Learn: the same card after a reload');
+  await pg.click('#learnTest');
+  await answerRight(pg); await answerRight(pg);
+  const open3 = await country(pg);
+  await pg.reload({ waitUntil: 'domcontentloaded' });
+  await pg.waitForFunction(() => document.getElementById('qRound').textContent);
+  ok((await pg.textContent('#qRound')) === 'Test: question 3 of 10' && (await country(pg)) === open3, 'test: the same question, still question 3 of 10');
+  ok(pg.errors.length === 0, 'no page errors');
+  await ctx.close();
+}
+
+console.log('\n41. Learn and the test in Greek');
+{
+  const ctx = await context();
+  const pg = await open(ctx, REGION('Europe'));
+  await pg.click('#modeLearn');
+  await pg.click('#langEl');
+  ok(/^Η πρωτεύουσα της χώρας /.test(await pg.textContent('#qText')) && /^Κάρτα 1 από 10$/.test(await pg.textContent('#learnCount')), 'study card: ' + (await pg.textContent('#qText')) + ' / ' + (await pg.textContent('#learnCount')));
+  ok((await pg.textContent('#modeLearn')).includes('Μάθηση') && (await pg.textContent('#learnTest')).includes('10'), 'buttons: ' + (await pg.textContent('#learnTest')));
+  await pg.click('#learnTest');
+  ok(/^Τεστ: ερώτηση 1 από 10$/.test(await pg.textContent('#qRound')), 'test line: ' + (await pg.textContent('#qRound')));
+  for (let i = 0; i < 10; i++) await reveal(pg);
+  ok(/^Βρήκες 0 από 10/.test(await pg.textContent('#testText')) && (await pg.textContent('#testList')).includes('Δόθηκε'), 'summary in Greek');
+  await pg.click('#langEn');
+  ok(/^You got 0 of 10/.test(await pg.textContent('#testText')) && (await pg.textContent('#testList')).includes('Shown'), 'and back in English');
+  ok(pg.errors.length === 0, 'no page errors');
   await ctx.close();
 }
 

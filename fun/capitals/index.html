@@ -199,6 +199,37 @@
     border-radius: 10px; padding: 8px 10px; font-size: 14px;
   }
   .spacer { flex: 1 1 auto; }
+  /* Learn / Quiz switch */
+  .mode-switch { display: inline-flex; gap: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .mode-btn { background: transparent; border: 0; color: var(--muted); font-weight: 700; font-size: 13.5px; padding: 7px 13px; border-radius: 999px; cursor: pointer; }
+  .mode-btn.active { background: var(--panel-2); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .mode-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .q-round { font-size: 12.5px; color: var(--muted-2); margin-top: 4px; }
+  .q-round:empty { display: none; }
+  /* learn mode shows the answer side of the card with its own navigation */
+  .learn-nav, .test-summary { display: none; }
+  #quizCard.learn-on .learn-nav { display: block; margin: 14px 0 4px; }
+  #quizCard.learn-on .next-row, #quizCard.learn-on #askBlock, #quizCard.learn-on .award { display: none !important; }
+  .answer-banner.study { border-color: rgba(56,189,248,0.45); background: linear-gradient(135deg, rgba(56,189,248,0.14), rgba(56,189,248,0.04)); }
+  .learn-steps { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .learn-count { font-size: 13.5px; color: var(--muted); font-weight: 600; min-width: 7em; text-align: center; }
+  .learn-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  /* the summary replaces the whole card at the end of a test */
+  #quizCard.summary-on > :not(.test-summary) { display: none !important; }
+  #quizCard.summary-on .test-summary { display: block; }
+  .test-summary h2:focus { outline: none; }
+  .test-summary h2 { margin: 0 0 6px; font-family: var(--font-display); font-size: 24px; font-weight: 800; }
+  .test-summary .sub { color: var(--muted); margin: 0 0 14px; }
+  .test-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 6px; }
+  .test-list li { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--tile); font-size: 14.5px; }
+  .test-list .tc { font-weight: 700; color: var(--text); }
+  .test-list .tcap { color: var(--muted); }
+  .test-list .tres { margin-left: auto; font-weight: 700; font-size: 13px; }
+  .test-list .tres.first { color: var(--good); }
+  .test-list .tres.help { color: var(--warn); }
+  .test-list .tres.shown { color: var(--bad); }
+  .test-summary .row { display: flex; gap: 10px; flex-wrap: wrap; }
 
   /* ---------- Card ---------- */
   .card {
@@ -556,6 +587,10 @@
     </header>
 
     <div class="toolbar">
+      <div class="mode-switch" role="group" aria-label="Mode" data-i18n-aria="modeGroup">
+        <button class="mode-btn" id="modeLearn" data-i18n="modeLearn">📖 Learn</button>
+        <button class="mode-btn active" id="modeQuiz" data-i18n="modeQuiz">✏️ Quiz</button>
+      </div>
       <div class="field">
         <label for="regionSel" data-i18n="region">Region</label>
         <select id="regionSel"></select>
@@ -567,6 +602,7 @@
     <main class="card" id="quizCard">
       <div class="q-flag" id="qFlag">🏳️</div>
       <div class="q-region" id="qRegion"></div>
+      <div class="q-round" id="qRound"></div>
       <h2 class="q-text" id="qText">What is the capital of <span class="country" id="qCountry">…</span>?</h2>
 
       <div id="askBlock">
@@ -599,6 +635,19 @@
           </div>
         </div>
 
+        <!-- Learn mode: step through a set of cards, then take a test on them -->
+        <div class="learn-nav" id="learnNav">
+          <div class="learn-steps">
+            <button class="btn small ghost" id="learnPrev" data-i18n="learnPrev">← Previous</button>
+            <span class="learn-count" id="learnCount"></span>
+            <button class="btn small" id="learnNext" data-i18n="learnNext">Next →</button>
+          </div>
+          <div class="learn-actions">
+            <button class="btn good" id="learnTest">Test me on these 10 →</button>
+            <button class="btn ghost small" id="learnNew" data-i18n="learnNew">Show me 10 different ones</button>
+          </div>
+        </div>
+
         <div class="locator" id="locator">
           <h3 data-i18n="whereIs">Where in the world</h3>
           <div class="map-box" id="mapBox"></div>
@@ -621,6 +670,19 @@
         <div class="next-row">
           <button class="btn good" id="nextBtn" aria-describedby="bannerLbl capLine capAlt" data-i18n="nextCountry">Next country →</button>
           <span class="seen" id="seenNote"></span>
+        </div>
+
+      </div>
+
+      <!-- The end of a test on a learned set -->
+      <div class="test-summary" id="testSummary">
+        <h2 id="testTitle" tabindex="-1">Test finished</h2>
+        <p class="sub" id="testText"></p>
+        <ul class="test-list" id="testList"></ul>
+        <div class="row">
+          <button class="btn good" id="testRetry" data-i18n="testRetry">Study the ones I missed</button>
+          <button class="btn" id="testNewSet" data-i18n="testNewSet">Learn 10 new capitals</button>
+          <button class="btn ghost" id="testToQuiz" data-i18n="testToQuiz">Back to the quiz</button>
         </div>
       </div>
     </main>
@@ -909,6 +971,21 @@
         confirmReset: function (nick, ranked) { return "Reset all progress for \"" + nick + "\"? This cannot be undone." + (ranked ? " Your best score on the worldwide leaderboard is kept." : ""); },
         errNick: "Please enter a nickname.", errNickContinue: "Please enter a nickname to continue.",
         footTotal: function (n) { return "Teaching the capitals of " + n + " countries and territories"; },
+        modeGroup: "Mode", modeLearn: "📖 Learn", modeQuiz: "✏️ Quiz",
+        learnQ: function (c) { return "The capital of " + c; },
+        learnLbl: "Study card",
+        learnAlt: function (list) { return "Also accepted: " + list; },
+        learnPrev: "← Previous", learnNext: "Next →",
+        learnCount: function (i, n) { return "Card " + i + " of " + n; },
+        learnTest: function (n) { return "I'm ready: test me on these " + n + " →"; },
+        learnNew: "Show me different ones",
+        roundN: function (i, n) { return "Question " + i + " of " + n + " in this round"; },
+        fbNewRound: "You have been asked every capital here once. A new round starts.",
+        testN: function (i, n) { return "Test: question " + i + " of " + n; },
+        testDoneTitle: "Test finished",
+        testDoneN: function (ok, n) { return "You got " + ok + " of " + n + " right on the first try, without a hint."; },
+        testFirst: "First try", testHelp: "With help", testShown: "Shown",
+        testRetry: "Study the ones I missed", testNewSet: "Learn new capitals", testToQuiz: "Back to the quiz",
         locale: undefined
       },
       el: {
@@ -977,6 +1054,21 @@
         confirmReset: function (nick, ranked) { return "Μηδενισμός όλης της προόδου για «" + nick + "»; Αυτό δεν αναιρείται." + (ranked ? " Η καλύτερη βαθμολογία σου στην παγκόσμια κατάταξη διατηρείται." : ""); },
         errNick: "Γράψε ένα ψευδώνυμο.", errNickContinue: "Γράψε ένα ψευδώνυμο για να συνεχίσεις.",
         footTotal: function (n) { return "Διδάσκει τις πρωτεύουσες " + n + " χωρών και περιοχών"; },
+        modeGroup: "Τρόπος", modeLearn: "📖 Μάθηση", modeQuiz: "✏️ Κουίζ",
+        learnQ: function (c) { return "Η πρωτεύουσα της χώρας " + c; },
+        learnLbl: "Κάρτα μελέτης",
+        learnAlt: function (list) { return "Γίνεται επίσης δεκτό: " + list; },
+        learnPrev: "← Προηγούμενη", learnNext: "Επόμενη →",
+        learnCount: function (i, n) { return "Κάρτα " + i + " από " + n; },
+        learnTest: function (n) { return "Εξέτασέ με σε αυτές τις " + n + " →"; },
+        learnNew: "Δείξε μου άλλες",
+        roundN: function (i, n) { return "Ερώτηση " + i + " από " + n + " σε αυτόν τον γύρο"; },
+        fbNewRound: "Σε ρωτήσαμε κάθε πρωτεύουσα εδώ μία φορά. Ξεκινά νέος γύρος.",
+        testN: function (i, n) { return "Τεστ: ερώτηση " + i + " από " + n; },
+        testDoneTitle: "Το τεστ τελείωσε",
+        testDoneN: function (ok, n) { return "Βρήκες " + ok + " από " + n + " με την πρώτη, χωρίς βοήθεια."; },
+        testFirst: "Με την πρώτη", testHelp: "Με βοήθεια", testShown: "Δόθηκε",
+        testRetry: "Μελέτησε όσες έχασα", testNewSet: "Μάθε νέες πρωτεύουσες", testToQuiz: "Πίσω στο κουίζ",
         locale: "el"
       }
     };
@@ -1403,6 +1495,11 @@
       locator: $("locator"), mapBox: $("mapBox"), mapNote: $("mapNote"),
       fact1: $("fact1"), fact2: $("fact2"), profile: $("profile"), profileList: $("profileList"),
       nextBtn: $("nextBtn"), seenNote: $("seenNote"), footTotal: $("footTotal"),
+      quizCard: $("quizCard"), qRound: $("qRound"), modeLearn: $("modeLearn"), modeQuiz: $("modeQuiz"),
+      learnPrev: $("learnPrev"), learnNext: $("learnNext"), learnCount: $("learnCount"),
+      learnTest: $("learnTest"), learnNew: $("learnNew"),
+      testTitle: $("testTitle"), testText: $("testText"), testList: $("testList"),
+      testRetry: $("testRetry"), testNewSet: $("testNewSet"), testToQuiz: $("testToQuiz"),
       // nick modal
       nickOverlay: $("nickOverlay"), nickInput: $("nickInput"), nickErr: $("nickErr"),
       nickStart: $("nickStart"), nickGuest: $("nickGuest"), nickClose: $("nickClose"),
@@ -1457,16 +1554,99 @@
     var lastCountry = null; // avoid immediate repeat
     var forcedEntry = null; // the next newQuestion() shows this one (the question another tab moved to)
 
-    function pool() {
+    // ---------- modes: Learn, Quiz, and a Test on a learned set ----------
+    // Learn shows a set of study cards (nothing is scored). "Test me" then asks
+    // exactly those countries once each and ends on a summary. Quiz is the open
+    // game. All of it lives in sessionStorage: it belongs to this visit.
+    var MODE_KEY = "capitals:v1:mode";
+    var ASKED_KEY = "capitals:v1:asked";   // {profileKey: [country, ...]} asked during this visit
+    var DECK_SIZE = 10;
+    var mode = "quiz";        // "quiz" | "learn" | "test"
+    var deck = [];            // the set being learned / tested (English country names)
+    var deckRegion = null;    // the Region the set was drawn from
+    var learnIdx = 0;         // the study card on screen
+    var testResults = {};     // country -> "first" | "help" | "shown"
+    var testWrong = {};       // country -> 1 once a wrong answer was typed in the test
+    var testDone = false;
+    var studied = {};         // countries shown as study cards this visit
+    var roundRestarted = false;
+
+    function saveModeState() {
+      try {
+        sessionStorage.setItem(MODE_KEY, JSON.stringify({ mode: mode, deck: deck, region: deckRegion, idx: learnIdx,
+          results: testResults, wrong: testWrong, done: testDone, studied: Object.keys(studied) }));
+      } catch (e) {}
+    }
+    function loadModeState() {
+      var st = null;
+      try { st = JSON.parse(sessionStorage.getItem(MODE_KEY) || "null"); } catch (e) { st = null; }
+      if (!st || typeof st !== "object") return;
+      var known = function (c) { return typeof c === "string" && byName(c); };
+      deck = Array.isArray(st.deck) ? st.deck.filter(known) : [];
+      deckRegion = typeof st.region === "string" ? st.region : null;
+      learnIdx = Math.max(0, Math.min(deck.length - 1, st.idx | 0));
+      testResults = Object.create(null); testWrong = Object.create(null); studied = Object.create(null);
+      if (st.results && typeof st.results === "object") Object.keys(st.results).forEach(function (c) {
+        if (deck.indexOf(c) >= 0 && /^(first|help|shown)$/.test(st.results[c])) testResults[c] = st.results[c];
+      });
+      if (st.wrong && typeof st.wrong === "object") Object.keys(st.wrong).forEach(function (c) { if (deck.indexOf(c) >= 0) testWrong[c] = 1; });
+      (Array.isArray(st.studied) ? st.studied : []).forEach(function (c) { if (known(c)) studied[c] = 1; });
+      testDone = !!st.done;
+      mode = (st.mode === "learn" || st.mode === "test") && deck.length ? st.mode : "quiz";
+    }
+    function byName(c) {
+      for (var i = 0; i < ALL.length; i++) if (ALL[i].c === c) return ALL[i];
+      return null;
+    }
+    function deckEntries() { return deck.map(byName).filter(Boolean); }
+
+    // The countries asked during this visit, per player: the quiz does not ask
+    // one again until every country of the Region has been asked once.
+    function askedMap() {
+      var m = null;
+      try { m = JSON.parse(sessionStorage.getItem(ASKED_KEY) || "null"); } catch (e) { m = null; }
+      return (m && typeof m === "object" && !Array.isArray(m)) ? m : {};
+    }
+    function askedList() {
+      var l = askedMap()[pKey || ""];
+      return Array.isArray(l) ? l : [];
+    }
+    function setAsked(list) {
+      var m = askedMap();
+      m[pKey || ""] = list;
+      try { sessionStorage.setItem(ASKED_KEY, JSON.stringify(m)); } catch (e) {}
+    }
+    function markAsked(c) {
+      var l = askedList();
+      if (l.indexOf(c) < 0) { l.push(c); setAsked(l); }
+    }
+
+    function regionPool() {
       var r = els.regionSel.value;
       var list = (r === "all") ? ALL : ALL.filter(function (e) { return e.region === r; });
       return list;
     }
+    function pool() { return mode === "test" ? deckEntries() : regionPool(); }
 
     // weighted pick that favours unseen / weak countries
     function pickNext() {
-      var list = pool();
-      if (list.length === 0) return null;
+      roundRestarted = false;
+      if (mode === "test") {
+        var left = deckEntries().filter(function (e) { return !testResults[e.c]; });
+        return left.length ? left[Math.floor(Math.random() * left.length)] : null;
+      }
+      var all = pool();
+      if (all.length === 0) return null;
+      var asked = askedList();
+      var list = all.filter(function (e) { return asked.indexOf(e.c) < 0; });
+      if (list.length === 0) {
+        // every country of this Region has been asked once: start a new round
+        var inPool = {};
+        all.forEach(function (e) { inPool[e.c] = 1; });
+        setAsked(asked.filter(function (c) { return !inPool[c]; }));
+        roundRestarted = true;
+        list = all;
+      }
       var candidates = list.filter(function (e) { return e.c !== lastCountry; });
       if (candidates.length === 0) candidates = list;
       var weights = candidates.map(function (e) {
@@ -1700,14 +1880,19 @@
       // tab: join it rather than draw one more and replace it there.
       var resumed = forcedEntry || ((pendingResume || (solved && current && profile.pending !== current.c)) && pendingEntry());
       forcedEntry = null;
+      if (mode === "learn") { renderLearnCard(); return; }
+      if (mode === "test" && (testDone || deckEntries().every(function (e) { return testResults[e.c]; }))) { showTestSummary(); return; }
+      els.quizCard.classList.remove("learn-on", "summary-on");
       current = resumed || pickNext();
       pendingResume = false;
       if (!current) {
         els.qText.textContent = t("noCountries");
         els.feedback.textContent = "";
+        els.qRound.textContent = "";
         return;
       }
       lastCountry = current.c;
+      markAsked(current.c);
       hintLevel = resumed ? Math.min(2, profile.pendingHints || 0) : 0;   // hints already taken on it stay taken
       solved = false;
       matchInfo = null;
@@ -1728,9 +1913,164 @@
       els.askBlock.style.display = "";
       updateHintButton();
       refreshSeenNote();
+      updateRoundLine();
+      if (roundRestarted) { roundRestarted = false; fbKey = "fbNewRound"; els.feedback.textContent = t("fbNewRound"); }
       // A question changed by another tab must not pull focus out of an open dialog
       // here: typing (a password, say) would land in the answer box behind it.
       if (!anyModalOpen()) els.answerInput.focus();
+    }
+
+    function updateRoundLine() {
+      if (!current || mode === "learn" || els.quizCard.classList.contains("summary-on")) { els.qRound.textContent = ""; return; }
+      if (mode === "test") {
+        var n = deckEntries().length, done = 0;
+        deck.forEach(function (c) { if (testResults[c] && c !== current.c) done += 1; });
+        els.qRound.textContent = t("testN")(Math.min(n, done + 1), n);
+        return;
+      }
+      var all = pool(), asked = askedList(), k = 0;
+      all.forEach(function (e) { if (asked.indexOf(e.c) >= 0) k += 1; });
+      els.qRound.textContent = all.length ? t("roundN")(Math.max(1, k), all.length) : "";
+    }
+    function updateModeButtons() {
+      els.modeLearn.classList.toggle("active", mode === "learn");
+      els.modeQuiz.classList.toggle("active", mode !== "learn");
+      els.modeLearn.setAttribute("aria-pressed", mode === "learn" ? "true" : "false");
+      els.modeQuiz.setAttribute("aria-pressed", mode !== "learn" ? "true" : "false");
+    }
+    function recordTest(res) {
+      if (mode !== "test" || !current || deck.indexOf(current.c) < 0 || testResults[current.c]) return;
+      testResults[current.c] = res;
+      saveModeState();
+      updateRoundLine();
+    }
+
+    // A new study set from the Region on screen: countries not studied yet this
+    // visit and not yet mastered come first, then the rest, each group shuffled.
+    function shuffle(a) {
+      for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var x = a[i]; a[i] = a[j]; a[j] = x; }
+      return a;
+    }
+    function buildDeck(only) {
+      var list = only ? only.map(byName).filter(Boolean) : regionPool().slice();
+      if (!only) {
+        var rank = function (e) {
+          var rec = profile && profile.byCountry[e.c];
+          return (studied[e.c] ? 2 : 0) + (rec && rec.bestNoHint ? 1 : 0);
+        };
+        var groups = [[], [], [], []];
+        list.forEach(function (e) { groups[rank(e)].push(e); });
+        list = [].concat(shuffle(groups[0]), shuffle(groups[1]), shuffle(groups[2]), shuffle(groups[3])).slice(0, DECK_SIZE);
+      }
+      deck = list.map(function (e) { return e.c; });
+      deckRegion = els.regionSel.value;
+      learnIdx = 0;
+      testResults = Object.create(null); testWrong = Object.create(null); testDone = false;
+      saveModeState();
+    }
+    function renderLearnCard() {
+      var entries = deckEntries();
+      if (!entries.length) {
+        buildDeck();
+        entries = deckEntries();
+        if (!entries.length) { els.qText.textContent = t("noCountries"); return; }
+      }
+      learnIdx = Math.max(0, Math.min(entries.length - 1, learnIdx));
+      current = entries[learnIdx];
+      solved = true; revCorrect = false; matchInfo = null; hintLevel = 0; fbKey = null;
+      if (!studied[current.c]) studied[current.c] = 1;
+      saveModeState();
+      els.quizCard.classList.remove("summary-on");
+      els.quizCard.classList.add("learn-on");
+      renderFlag(current.flag);
+      els.qRegion.textContent = regionLabel(current.region);
+      els.qText.textContent = t("learnQ")(cName(current));
+      els.qText.setAttribute("data-c", current.c);
+      els.qRound.textContent = "";
+      els.askBlock.style.display = "none";
+      els.reveal.classList.remove("hidden");
+      els.answerBanner.className = "answer-banner study";
+      els.bannerLbl.textContent = t("learnLbl");
+      els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
+      var alts = (lang === "el" ? current.alt_el : current.alt) || [];
+      alts = alts.filter(function (a) { return a && a !== capDisp(current); }).slice(0, 4);
+      els.capAlt.innerHTML = alts.length ? "<div>" + escapeHtml(t("learnAlt")(alts.join(", "))) + "</div>" : "";
+      var f = factsOf(current);
+      els.fact1.textContent = f[0];
+      els.fact2.textContent = f[1];
+      renderProfile();
+      highlightOnMap(current.flag);
+      els.learnCount.textContent = t("learnCount")(learnIdx + 1, entries.length);
+      els.learnPrev.disabled = learnIdx === 0;
+      els.learnNext.disabled = learnIdx >= entries.length - 1;
+      els.learnTest.textContent = t("learnTest")(entries.length);
+    }
+    function learnStep(d) {
+      var n = deckEntries().length;
+      var i = learnIdx + d;
+      if (i < 0 || i >= n) { if (d > 0) els.learnTest.focus({ preventScroll: true }); return; }
+      learnIdx = i;
+      renderLearnCard();
+    }
+    function setMode(m) {
+      if (m === mode && m !== "test") return;
+      if (m === "learn") {
+        if (!deck.length || deckRegion !== els.regionSel.value || testDone) buildDeck();
+        mode = "learn";
+        saveModeState();
+        updateModeButtons();
+        renderLearnCard();
+        return;
+      }
+      if (m === "test") {
+        // An open quiz question left for the test is given up, as a Region change
+        // gives it up: the test would replace it on the profile.
+        if (profile && profile.pending && deck.indexOf(profile.pending) < 0 && profile.currentStreak) {
+          profile.currentStreak = 0; persist(); updateStreakDisplay();
+        }
+        mode = "test";
+        testResults = Object.create(null); testWrong = Object.create(null); testDone = false;
+        saveModeState();
+        updateModeButtons();
+        pendingResume = false;
+        solved = true;   // nothing on screen to keep: draw from the set
+        newQuestion();
+        return;
+      }
+      // back to the quiz: the question left open there (if any) is asked again
+      mode = "quiz";
+      testDone = false;
+      saveModeState();
+      updateModeButtons();
+      pendingResume = true;
+      newQuestion();
+    }
+    function showTestSummary() {
+      testDone = true;
+      saveModeState();
+      els.quizCard.classList.remove("learn-on");
+      els.quizCard.classList.add("summary-on");
+      els.qRound.textContent = "";
+      var entries = deckEntries(), first = 0;
+      els.testTitle.textContent = t("testDoneTitle");
+      els.testList.innerHTML = "";
+      entries.forEach(function (e) {
+        var r = testResults[e.c] || "shown";
+        if (r === "first") first += 1;
+        var li = document.createElement("li");
+        li.setAttribute("data-c", e.c);
+        var a = document.createElement("span"); a.className = "tc"; a.textContent = cName(e);
+        var b = document.createElement("span"); b.className = "tcap"; b.textContent = capDisp(e);
+        var c = document.createElement("span"); c.className = "tres " + r;
+        c.textContent = t(r === "first" ? "testFirst" : r === "help" ? "testHelp" : "testShown");
+        li.appendChild(a); li.appendChild(b); li.appendChild(c);
+        els.testList.appendChild(li);
+      });
+      els.testText.textContent = t("testDoneN")(first, entries.length);
+      els.testRetry.style.display = first < entries.length ? "" : "none";
+      // focus the title, not a button: an extra Enter from the last answer must not
+      // press "Study the ones I missed" before the result has been read
+      if (!anyModalOpen()) els.testTitle.focus({ preventScroll: true });
     }
 
     function refreshSeenNote() {
@@ -1801,6 +2141,7 @@
       pushHistory(current.c, "correct", hintLevel);
       persist();
       pushGlobal();
+      recordTest(noHint && !testWrong[current.c] ? "first" : "help");
 
       showReveal(true, pts, starsForHint(hintLevel));
       updateStreakDisplay();
@@ -1824,6 +2165,7 @@
       pushHistory(current.c, "revealed", 3);
       persist();
       pushGlobal();
+      recordTest("shown");
 
       renderMask(); // fully revealed tiles
       showReveal(false, 0, "—");
@@ -1973,6 +2315,7 @@
         profile.wrongGuesses += 1;
         recordCountry(current.c); // ensure a record exists; "seen" is only counted on a correct answer or reveal, not on wrong guesses
         persist();
+        if (mode === "test" && deck.indexOf(current.c) >= 0) { testWrong[current.c] = 1; saveModeState(); }
         els.answerInput.classList.remove("shake");
         void els.answerInput.offsetWidth;
         els.answerInput.classList.add("shake");
@@ -2077,6 +2420,8 @@
       refreshSeenNote();
     }
     function renderRevealText() {
+      if (mode === "learn") { renderLearnCard(); return; }
+      if (els.quizCard.classList.contains("summary-on")) { showTestSummary(); return; }
       els.capLine.innerHTML = t("capLine")(escapeHtml(capDisp(current)), escapeHtml(cName(current)));
       renderAnswerNotes();
       var f = factsOf(current);
@@ -2104,6 +2449,8 @@
         setQText();
         if (solved) renderRevealText(); else renderQuestionView();
       }
+      updateRoundLine();
+      updateModeButtons();
       if (!els.statsOverlay.classList.contains("hidden")) openStats();
       if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
     }
@@ -2177,6 +2524,13 @@
     // it (what was typed, the hints, an answer on screen) instead of throwing it
     // away, and bring any open panel up to date with the profile now active.
     function keepOrNewQuestion(fromKey, from) {
+      if (mode === "learn" || (mode === "test" && testDone)) {
+        // a study card or a test summary does not depend on who is signed in
+        if (mode === "learn") renderLearnCard(); else showTestSummary();
+        if (!els.statsOverlay.classList.contains("hidden")) openStats();
+        if (!els.boardOverlay.classList.contains("hidden")) renderBoard();
+        return;
+      }
       var own = pendingEntry();
       var untouched = current && !solved && hintLevel === 0 && !els.answerInput.value.trim();
       if (!current || (untouched && own && own !== current)) { pendingResume = true; newQuestion(); }
@@ -2457,6 +2811,19 @@
     els.hintBtn.addEventListener("click", advanceHint);
     els.revealBtn.addEventListener("click", handleReveal);
     els.nextBtn.addEventListener("click", newQuestion);
+    els.modeLearn.addEventListener("click", function () { if (profile) setMode("learn"); });
+    els.modeQuiz.addEventListener("click", function () { if (profile) setMode("quiz"); });
+    els.learnPrev.addEventListener("click", function () { learnStep(-1); });
+    els.learnNext.addEventListener("click", function () { learnStep(1); });
+    els.learnTest.addEventListener("click", function () { setMode("test"); });
+    els.learnNew.addEventListener("click", function () { buildDeck(); renderLearnCard(); });
+    els.testRetry.addEventListener("click", function () {
+      var missed = deck.filter(function (c) { return testResults[c] !== "first"; });
+      buildDeck(missed.length ? missed : null);
+      setMode("learn");
+    });
+    els.testNewSet.addEventListener("click", function () { buildDeck(); setMode("learn"); });
+    els.testToQuiz.addEventListener("click", function () { setMode("quiz"); });
     function anyModalOpen() {
       var am = document.querySelector("#acctRoot [data-modal]");
       if (am && !am.hidden) return true;   // the Log in / Register dialog
@@ -2493,14 +2860,29 @@
       // reveal (a correct answer typed + Enter never showed its facts). A
       // control handles its own Enter (the input submits, the focused Next
       // button clicks), so only a keystroke from outside a control counts.
-      if (e.key === "Enter" && solved && !anyModalOpen()) {
-        if (e.target && e.target.closest && e.target.closest("a[href], button, input, select, textarea")) return;
+      if (anyModalOpen()) return;
+      var inControl = e.target && e.target.closest && e.target.closest("a[href], button, input, select, textarea");
+      if (mode === "learn") {
+        // study cards: the arrow keys (and Enter) move through the set
+        if (inControl && e.key === "Enter") return;
+        if (e.target && e.target.closest && e.target.closest("input, select, textarea")) return;
+        if (e.key === "ArrowRight" || e.key === "Enter") { e.preventDefault(); learnStep(1); }
+        else if (e.key === "ArrowLeft") { e.preventDefault(); learnStep(-1); }
+        return;
+      }
+      if (e.key === "Enter" && solved && !els.quizCard.classList.contains("summary-on")) {
+        if (inControl) return;
         newQuestion();
       }
     });
     els.regionSel.addEventListener("change", function () {
       try { localStorage.setItem(REGION_KEY, els.regionSel.value); } catch (e) {}
       if (!profile) return;
+      if (mode === "learn") { buildDeck(); renderLearnCard(); return; }
+      if (mode === "test") {
+        // a test is on the set learned from the old Region: go back to the quiz
+        mode = "quiz"; testDone = false; saveModeState(); updateModeButtons();
+      }
       // Leaving a question you have not answered is giving it up: it ends the
       // streak, as "Show the answer" does, or skipping would be free.
       if (current && !solved && profile.currentStreak) {
@@ -2570,7 +2952,11 @@
 
     // Focus back on the game after a language flag or a closed panel, so Enter
     // moves on (or checks) instead of pressing the header button again.
-    function refocus() { if (current && profile) (solved ? els.nextBtn : els.answerInput).focus({ preventScroll: true }); }
+    function refocus() {
+      if (!current || !profile) return;
+      var el = mode === "learn" ? els.learnNext : els.quizCard.classList.contains("summary-on") ? els.testTitle : solved ? els.nextBtn : els.answerInput;
+      el.focus({ preventScroll: true });
+    }
     els.langEn.addEventListener("click", function () { setLang("en"); refocus(); });
     els.langEl.addEventListener("click", function () { setLang("el"); refocus(); });
 
@@ -2595,6 +2981,8 @@
     if (ALL.length === 0) {
       els.qText.textContent = "(data failed to load)";
     } else {
+      loadModeState();
+      updateModeButtons();
       // Everyone starts immediately as Guest — no welcome wall. A signed-in
       // account (if any) is picked up by the Account widget via the
       // 'account-changed' event, which then activates a ranked profile.

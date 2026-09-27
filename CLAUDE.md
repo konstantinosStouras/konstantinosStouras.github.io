@@ -406,6 +406,23 @@ page inserts it with `textContent`); keep it timeless (no living
 office-holders, no figures that go stale). A new country needs an entry in all
 four data files. Browser test: `node fun/capitals/tools/smoke.mjs`.
 
+**Learn, then test; no repeats in a visit** (owner request 2026-09-27). A
+**Learn / Quiz** switch sits left of the Region. Learn shows a set of 10 study
+cards from the Region (capital, other accepted names, map, facts, profile;
+nothing is scored), drawn from countries not studied this visit and not yet
+mastered first; Previous / Next and the arrow keys step through them. "Test me
+on these 10" asks exactly those countries once each (scored like any answer)
+and ends on a summary: first try / with help (a hint or a wrong try) / shown,
+with "Study the ones I missed", "Learn new capitals" and "Back to the quiz".
+The summary takes focus on its title, not a button, so the Enter that ends the
+last question cannot press one. The quiz itself never asks a country twice in
+one visit until every country of the Region has been asked once, then starts a
+new round and says so ("Question n of N in this round"). The asked list is kept
+per player in sessionStorage (`capitals:v1:asked`), so it lasts for the visit
+(a reload included) and a new visit starts fresh; the mode, the set and a test
+in progress are kept in `capitals:v1:mode`. Changing Region in a test goes back
+to the quiz; in Learn it draws a new set. Pinned by state-guard sections 37-41.
+
 ## The shared account widget — Google or email, identical in eight pages
 
 `/fun/snake`, `/fun/sudoku`, `/fun/rooks`, `/fun/nomoi`, `/fun/capitals`,
