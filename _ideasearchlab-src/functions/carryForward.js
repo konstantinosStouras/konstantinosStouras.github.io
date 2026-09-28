@@ -13,17 +13,24 @@
 // the same rule with the target capped at what exists (2 ideas, 1 chosen: the
 // other one is picked for them).
 //
-// TWO PICKERS, and why. `pickUniform` is a genuine random draw (partial
-// Fisher–Yates) and serves the paths where the top-up is PERSISTED BEFORE
-// anyone can read it: Finish & Submit and the selection timer's auto-submit
-// write the ideas batch first and only then mark the participant complete.
-// `pickStable` orders ideas by a hash of their (random) Firestore ids, so every
-// reader derives the SAME top-up from the same documents without a write. It
-// serves the paths where the group may already be reading: the group page's
-// view of a member the instructor force-advanced before they submitted (and
-// that member's own client persisting exactly the set the others derived),
-// and the Cloud Function's force-advance. A random draw there would let the
-// group's list change under its members once the write landed.
+// ONE PICKER, deliberately deterministic. `pickStable` orders the candidate
+// ideas by a hash of their Firestore document ids. Those ids are random
+// strings minted at creation, so the ranking is a uniformly random
+// permutation — independent of the ideas' content, order and of anything the
+// participant did — and the subset it yields is a uniformly random subset
+// (measured in tools/carry-forward-guard.mjs over random ids). What a random
+// draw at submit time would NOT give is agreement: the same decision is made
+// by Finish & Submit, by the selection clock's auto-submit, by every group
+// member's page for a member the instructor force-advanced before they
+// submitted, and by the Cloud Function's force-advance — from the same
+// documents, with no coordination — so no two writers can ever land two
+// different "random" sets on one participant (the union would exceed the
+// cap), and a group never watches a member's ideas change under it once a
+// late write lands. A retry after a failed submit reaches the same set too.
+//
+// A computer pick already recorded on the documents (`priorComputer`) is
+// HONOURED, never re-drawn: a participant's own pick always beats it, it is
+// kept up to what is still needed, and only the remaining places are filled.
 //
 // This file exists TWICE — src/utils/carryForward.js (ES module, the app) and
 // functions/carryForward.js (CommonJS, the Cloud Functions, which deploy only
@@ -31,7 +38,12 @@
 // tools/carry-forward-guard.mjs fails when they drift.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SELECTED_BY = Object.freeze({ PARTICIPANT: 'participant', COMPUTER: 'computer' })
+// Who put an idea in the group phase. UNRECORDED = carried by a session run
+// before 2026-09-28, when the app did not yet say who chose an idea: it may be
+// the participant's own pick or the old clock's untagged auto-pick for
+// someone who chose none, and nothing can tell the two apart — so it is never
+// reported as either. Every write since then carries one of the other two.
+const SELECTED_BY = Object.freeze({ PARTICIPANT: 'participant', COMPUTER: 'computer', UNRECORDED: 'unrecorded' })
 
 /** The tag shown on an idea the computer moved to the group stage. */
 const COMPUTER_SELECTED_LABEL = 'Computer selected to group stage'
@@ -59,50 +71,62 @@ function pickStable(arr, n) {
     .slice(0, n)
 }
 
-/** Uniform random pick of `n` distinct ideas (partial Fisher–Yates); `rng` yields [0, 1). */
-function pickUniform(arr, n, rng) {
-  const rand = typeof rng === 'function' ? rng : Math.random
-  const pool = [...arr]
-  const k = Math.max(0, Math.min(n > 0 ? Math.floor(n) : 0, pool.length))
-  for (let i = 0; i < k; i++) {
-    const span = pool.length - i
-    const j = i + Math.min(span - 1, Math.max(0, Math.floor(rand() * span)))
-    const t = pool[i]; pool[i] = pool[j]; pool[j] = t
-  }
-  return pool.slice(0, k)
+function toIdSet(v) {
+  if (v instanceof Set) return v
+  return new Set(Array.isArray(v) ? v : [])
 }
 
 /**
  * Decide the carried set for one participant.
- *   ideas        — their individual-stage ideas ({ id, … })
- *   selectedIds  — the ids they selected (Set or array); ids of ideas that no
- *                  longer exist are ignored
- *   ideasCarried — the session's cap (phaseConfig.ideasCarriedToGroup); 0 means
- *                  nothing carries (a session with no group phase)
- *   pick         — pickUniform (default) or pickStable, see the header
+ *   ideas         — their individual-stage ideas ({ id, … })
+ *   selectedIds   — the ids THEY selected (Set or array); ids of ideas that no
+ *                   longer exist are ignored
+ *   priorComputer — ids the computer already picked for them, if any (a
+ *                   retry, a force-advance seen after the fact); honoured up
+ *                   to what is still needed, never re-drawn
+ *   ideasCarried  — the session's cap (phaseConfig.ideasCarriedToGroup); 0
+ *                   means nothing carries (no group phase follows)
  * Returns { selection, participantPicked, computerPicked }, three Sets of ids.
  * The participant's own picks are never removed, even above the cap.
  */
-function topUpSelection({ ideas, selectedIds, ideasCarried, pick }) {
+function topUpSelection({ ideas, selectedIds, priorComputer, ideasCarried }) {
   const list = Array.isArray(ideas) ? ideas.filter(i => i && i.id != null) : []
-  const chosen = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || [])
+  const chosen = toIdSet(selectedIds)
+  const prior = toIdSet(priorComputer)
   const participantPicked = new Set(list.filter(i => chosen.has(i.id)).map(i => i.id))
   const target = carryTarget(list.length, ideasCarried)
-  const missing = target - participantPicked.size
   const computerPicked = new Set()
+  let missing = target - participantPicked.size
   if (missing > 0) {
-    const pool = list.filter(i => !participantPicked.has(i.id))
-    const picker = typeof pick === 'function' ? pick : pickUniform
-    picker(pool, missing).forEach(i => computerPicked.add(i.id))
+    // Already-recorded computer picks first (trimmed if more than needed) …
+    pickStable(list.filter(i => prior.has(i.id) && !participantPicked.has(i.id)), missing)
+      .forEach(i => computerPicked.add(i.id))
+    missing = target - participantPicked.size - computerPicked.size
+    // … then the remaining places from the ideas nobody picked.
+    if (missing > 0) {
+      pickStable(list.filter(i => !participantPicked.has(i.id) && !computerPicked.has(i.id)), missing)
+        .forEach(i => computerPicked.add(i.id))
+    }
   }
   const selection = new Set([...participantPicked, ...computerPicked])
   return { selection, participantPicked, computerPicked }
 }
 
-/** Who carried this idea into the group phase: 'participant', 'computer' or '' (not carried). */
+/**
+ * Who carried this idea into the group phase: 'participant', 'computer',
+ * 'unrecorded' (carried before the tag existed) or '' (not carried).
+ */
 function carriedBy(idea) {
   if (!idea || !idea.selected) return ''
-  return idea.selectedBy === SELECTED_BY.COMPUTER ? SELECTED_BY.COMPUTER : SELECTED_BY.PARTICIPANT
+  if (idea.selectedBy === SELECTED_BY.COMPUTER) return SELECTED_BY.COMPUTER
+  if (idea.selectedBy === SELECTED_BY.PARTICIPANT) return SELECTED_BY.PARTICIPANT
+  return SELECTED_BY.UNRECORDED
+}
+
+/** True when the idea counts as the participant's own pick (a legacy untagged pick included). */
+function isOwnPick(idea) {
+  const by = carriedBy(idea)
+  return by === SELECTED_BY.PARTICIPANT || by === SELECTED_BY.UNRECORDED
 }
 
 /** The fields to write on one idea once a decision is made. */
@@ -110,6 +134,19 @@ function selectionPatch(ideaId, decision) {
   if (decision.computerPicked.has(ideaId)) return { selected: true, selectedBy: SELECTED_BY.COMPUTER }
   if (decision.selection.has(ideaId)) return { selected: true, selectedBy: SELECTED_BY.PARTICIPANT }
   return { selected: false, selectedBy: null }
+}
+
+/**
+ * True when the patch would change what the document already says. A legacy
+ * untagged pick that stays a participant pick is left as it is: stamping it
+ * 'participant' now would assert something the data never recorded.
+ */
+function patchChanges(idea, patch) {
+  const was = carriedBy(idea)
+  if (!!(idea && idea.selected) !== patch.selected) return true
+  if (!patch.selected) return false
+  if (was === patch.selectedBy) return false
+  return !(was === SELECTED_BY.UNRECORDED && patch.selectedBy === SELECTED_BY.PARTICIPANT)
 }
 
 /**
@@ -128,6 +165,6 @@ function carriedSummary(total, byComputer) {
 }
 
 module.exports = {
-  SELECTED_BY, COMPUTER_SELECTED_LABEL, carryTarget, hashStr, pickStable, pickUniform,
-  topUpSelection, carriedBy, selectionPatch, carriedSummary,
+  SELECTED_BY, COMPUTER_SELECTED_LABEL, carryTarget, hashStr, pickStable,
+  topUpSelection, carriedBy, isOwnPick, selectionPatch, patchChanges, carriedSummary,
 }

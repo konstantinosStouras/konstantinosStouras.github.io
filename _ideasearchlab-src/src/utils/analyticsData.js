@@ -675,7 +675,8 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       // enteredGroupPhase() helper adds them in via phase.
       carried: idea.selected ? 1 : 0,
       // 'participant' or 'computer' (the computer filled the selection up to
-      // the cap at random — owner 2026-09-28); '' when not carried.
+      // the cap at random — owner 2026-09-28), 'unrecorded' for a session
+      // before that date; '' when not carried.
       carried_by: carriedBy(idea),
       text,
     }
@@ -987,10 +988,10 @@ const STD_IMPORT_COLS = new Set([
   'n edges', 'n_edges', 'n nodes', 'n_nodes', 'scorable', 'score_mode', 'score mode',
 ])
 
-/** A "Carried by" cell read back from a file: 'participant' | 'computer' | '' (absent or anything else). */
+/** A "Carried by" cell read back from a file: 'participant' | 'computer' | 'unrecorded' | '' (absent or anything else). */
 function carriedByFromCell(v) {
   const s = String(v == null ? '' : v).trim().toLowerCase()
-  return s === 'computer' || s === 'participant' ? s : ''
+  return s === 'computer' || s === 'participant' || s === 'unrecorded' ? s : ''
 }
 
 /** Truthiness from a 0/1 dummy (preferred) or a Yes/No flag; null if unknown. */

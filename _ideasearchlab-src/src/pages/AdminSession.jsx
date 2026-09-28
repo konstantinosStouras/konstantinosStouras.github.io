@@ -723,7 +723,9 @@ export default function AdminSession() {
                                     className={`${styles.ideaSummaryBadge} ${carriedBy(idea) === 'computer' ? styles.ideaSummaryBadgeAuto : ''}`}
                                     title={carriedBy(idea) === 'computer'
                                       ? 'The participant chose fewer ideas than the number that carries forward; the computer picked this one at random.'
-                                      : 'The participant chose this idea to carry into the group phase.'}
+                                      : carriedBy(idea) === 'unrecorded'
+                                        ? 'Carried into the group phase before the app recorded who chose an idea (2026-09-28): their own pick, or the old timer\'s auto-pick if they chose none.'
+                                        : 'The participant chose this idea to carry into the group phase.'}
                                   >
                                     {carriedBy(idea) === 'computer' ? 'computer selected to group' : 'carried to group'}
                                   </span>
@@ -767,7 +769,9 @@ export default function AdminSession() {
                                   className={`${styles.ideaSummaryBadge} ${carriedBy(idea) === 'computer' ? styles.ideaSummaryBadgeAuto : ''}`}
                                   title={carriedBy(idea) === 'computer'
                                     ? 'The participant chose fewer ideas than the number that carries forward; the computer picked this one at random.'
-                                    : 'The participant chose this idea to carry into the group phase.'}
+                                    : carriedBy(idea) === 'unrecorded'
+                                      ? 'Carried into the group phase before the app recorded who chose an idea (2026-09-28): their own pick, or the old timer\'s auto-pick if they chose none.'
+                                      : 'The participant chose this idea to carry into the group phase.'}
                                 >
                                   {carriedBy(idea) === 'computer' ? 'computer selected to group' : 'carried to group'}
                                 </span>

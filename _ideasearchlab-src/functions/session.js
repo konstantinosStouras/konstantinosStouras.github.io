@@ -8,7 +8,7 @@ const { statusPhaseIndex, shouldSetStatus } = require('./phaseGuard')
 // The carry-forward rule (owner 2026-09-28), vendored from
 // src/utils/carryForward.js — tools/carry-forward-guard.mjs keeps the two
 // copies identical.
-const { topUpSelection, pickStable, SELECTED_BY } = require('./carryForward')
+const { topUpSelection, selectionPatch, patchChanges, carriedBy, isOwnPick, SELECTED_BY } = require('./carryForward')
 
 const db = admin.firestore()
 
@@ -541,12 +541,17 @@ exports.advancePhase = functions.https.onCall(async (data, context) => {
  * advanced the session) has only the ideas they had ticked so far flagged
  * `selected`. The rule says they still send `ideasCarriedToGroup` ideas when
  * they wrote that many: fill the selection up to the cap from their other
- * ideas and tag those `selectedBy: 'computer'`. The STABLE picker, so this
- * set is exactly the one every group member's page derives for them from the
- * same documents (and the one their own client would write back) — a random
- * draw here would change the group's list under its members. A participant
- * who already submitted is a no-op: their selection is full. One session-wide
- * read of the individual-stage ideas, then batched writes of ≤400.
+ * ideas and tag those `selectedBy: 'computer'`. The module's deterministic
+ * pick, so this set is exactly the one every group member's page derives for
+ * them from the same documents (and the one their own client would write
+ * back) — a random draw here would change the group's list under its members.
+ * A participant who already submitted is a no-op: their selection is full.
+ * One session-wide read of the individual-stage ideas, then one small batch
+ * per participant whose documents change, each write CONDITIONAL on the
+ * document being as it was read (`lastUpdateTime`): if that participant's own
+ * client wrote in the meantime (their clock ran out as the instructor
+ * pressed Advance), its decision — the same set, from the same rule — stands
+ * and this batch simply fails, so two writers can never land two sets.
  */
 async function topUpCarriedIdeas(sessionRef, participantIds, phaseConfig) {
   const ideasCarried = (phaseConfig && phaseConfig.ideasCarriedToGroup) || 3
@@ -555,28 +560,36 @@ async function topUpCarriedIdeas(sessionRef, participantIds, phaseConfig) {
   snap.docs.forEach(d => {
     const idea = { id: d.id, ...d.data() }
     if (!idea.authorId) return
-    ;(byAuthor[idea.authorId] = byAuthor[idea.authorId] || []).push(idea)
+    ;(byAuthor[idea.authorId] = byAuthor[idea.authorId] || []).push({ idea, updateTime: d.updateTime })
   })
-  const toTag = []
-  participantIds.forEach(uid => {
-    const mine = byAuthor[uid] || []
-    if (!mine.length) return
-    const { computerPicked } = topUpSelection({
+  let written = 0
+  for (const uid of participantIds) {
+    const rows = byAuthor[uid] || []
+    if (!rows.length) continue
+    const mine = rows.map(r => r.idea)
+    const decision = topUpSelection({
       ideas: mine,
-      selectedIds: mine.filter(i => i.selected).map(i => i.id),
+      selectedIds: mine.filter(isOwnPick).map(i => i.id),
+      priorComputer: mine.filter(i => carriedBy(i) === SELECTED_BY.COMPUTER).map(i => i.id),
       ideasCarried,
-      pick: pickStable,
     })
-    computerPicked.forEach(id => toTag.push(id))
-  })
-  for (let i = 0; i < toTag.length; i += 400) {
+    const changes = rows
+      .map(r => ({ ...r, patch: selectionPatch(r.idea.id, decision) }))
+      .filter(r => patchChanges(r.idea, r.patch))
+    if (!changes.length) continue
     const b = db.batch()
-    toTag.slice(i, i + 400).forEach(id => {
-      b.update(sessionRef.collection('ideas').doc(id), { selected: true, selectedBy: SELECTED_BY.COMPUTER })
+    changes.forEach(r => {
+      b.update(sessionRef.collection('ideas').doc(r.idea.id), r.patch, { lastUpdateTime: r.updateTime })
     })
-    await b.commit()
+    try {
+      await b.commit()
+      written += changes.length
+    } catch (err) {
+      // A precondition failure: the participant's own client decided first.
+      console.warn(`topUpCarriedIdeas: skipped ${uid} (${err.code || err.message})`)
+    }
   }
-  return toTag.length
+  return written
 }
 
 /**

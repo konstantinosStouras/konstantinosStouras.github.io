@@ -191,7 +191,7 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     ['Clustering unit (triad)', 'use Group UID (= "SessionCode:groupId"), NOT the bare Group ID — g0/g1… repeat across sessions and would collide when pooled. Participant nesting: Author ID / Participant ID (Firebase uids, globally unique).'],
     [],
     ['WHERE EACH MEASURE LIVES'],
-    ['Dependent variables (idea creativity)', '"Ideas" sheet, one row per idea. Empty rater columns Novelty (rater 1..3) / Usefulness (rater 1..3) for blind expert scoring — aggregate across raters, then Overall Quality = mean(Novelty, Usefulness). Also Stage, Carried to Group, Carried by (participant = they chose it; computer = the app filled their selection up to the cap at random because they chose fewer), Vote Count, Final Group Pick, and Exclude (Yes/No) + Exclusion reason for the pre-registered "drop nonsensical/empty ideas" screen.'],
+    ['Dependent variables (idea creativity)', '"Ideas" sheet, one row per idea. Empty rater columns Novelty (rater 1..3) / Usefulness (rater 1..3) for blind expert scoring — aggregate across raters, then Overall Quality = mean(Novelty, Usefulness). Also Stage, Carried to Group, Carried by (participant = they chose it; computer = the app filled their selection up to the cap at random because they chose fewer; unrecorded = carried in a session before 2026-09-28, when the app did not record who chose an idea — their own pick or the old timer\'s auto-pick for someone who chose none, indistinguishable), Vote Count, Final Group Pick, and Exclude (Yes/No) + Exclusion reason for the pre-registered "drop nonsensical/empty ideas" screen.'],
     ['Selected ideas (group level)', '"Ideas" sheet → filter Final Group Pick = Yes (the ideas each group locked in after voting). "Groups" sheet lists them per group as titles.'],
     ['Who voted for which idea', '"Votes" sheet: one row per cast vote (voter x idea), with the voter\'s id/label, the idea, whether it was their own, and whether it became the group\'s Final Group Pick. The same ballots also read idea-first in "Ideas" (Vote Count + Voted By (labels)/(IDs)) and voter-first in "Participants" (Voted For (idea IDs)/(titles)). A participant who cast no vote has NO row in "Votes" by construction — use "Participants" → Ballot Status as the census of who did and did not vote.'],
     ['Vote completeness (read this before vote analysis)', '"Participants" sheet → Ballot Status + Votes Cast. A "submitted" ballot can hold ZERO votes (auto-submitted at timer expiry), so do NOT treat Votes Submitted = Yes as "actually voted". Ballot Status = voted / partial (n/required) / empty (submitted, no votes) / not submitted; treat empty + not submitted as non-votes, partial as fewer than the required votes. "Voted For (titles)" lists each ballot\'s chosen ideas by name. If many ballots are empty, check "Timing" → Group voting time (s): ~0 with Proceeded to voting At == Votes submitted At means the group phase timer expired while the group was still in ideation and the ballot was auto-submitted, i.e. those participants never reached the voting screen.'],
@@ -311,7 +311,9 @@ export function buildSessionSheets(session, { participants = [], ideas = [], gro
     'Full Text': idea.text || '',
     'Carried to Group': idea.selected ? 'Yes' : 'No',
     // Who put it there: the participant, or the computer filling their
-    // selection up to the cap at random (owner 2026-09-28). Blank = not carried.
+    // selection up to the cap at random (owner 2026-09-28); 'unrecorded' for
+    // an idea carried before that date, when the app did not say (their own
+    // pick, or the old timer's auto-pick if they chose none). Blank = not carried.
     'Carried by': carriedBy(idea),
     'Vote Count': countVotes(idea.id, countedParticipants),
     'Voted By (labels)': votersOf(idea.id, countedParticipants).map(v => v.anonymousLabel || v.id).join(', '),

@@ -3102,17 +3102,24 @@ data: participants who generated 3 or more ideas but selected only k = 0, 1 or
 did not choose and each is tagged `selectedBy: 'computer'` ("Computer selected
 to group stage" on the confirmation screen, "computer selected to group" on the
 admin's session page, `Carried by = computer` in the export's Ideas sheet and
-the analytics rows) so the data says who put each idea there. Someone with
-fewer ideas than the cap sends all of them. The rule lives in ONE pure module,
+the analytics rows; an idea carried before this shipped reads `unrecorded`,
+never `participant`, because the old clock's auto-pick was untagged too) so
+the data says who put each idea there. Someone with
+fewer ideas than the cap sends all of them; nothing is added when no group
+phase follows (a `group_first` session). The rule lives in ONE pure module,
 `_ideasearchlab-src/src/utils/carryForward.js`, vendored byte-for-byte into
-`functions/carryForward.js` for the Cloud Functions: Finish & Submit and the
-selection clock's auto-submit draw at random and persist the ideas batch BEFORE
-marking the participant complete (that flag is what moves the group on); the
-group page and the server's force-advance (`advancePhase`) use the module's
-STABLE picker, a hash of the random Firestore ids, so a member the instructor
-advanced before they submitted gets the same top-up from every reader, which
-the member's own client (and the function) then writes back with the tag.
-The group's own cards show no such tag. Tests:
+`functions/carryForward.js` for the Cloud Functions, and its pick is
+DETERMINISTIC on purpose — ideas ordered by a hash of their random Firestore
+ids, which is a uniform draw in distribution (measured) but the SAME draw from
+every reader: Finish & Submit and the selection clock's auto-submit (which
+persist the ideas batch BEFORE marking the participant complete, since that
+flag is what moves the group on), every group member's page for a member the
+instructor advanced before they submitted, and the server's force-advance
+(`advancePhase`, conditional writes) all reach one set from the same
+documents, so two writers can never land two "random" sets on one participant
+and a group never sees a member's ideas change under it; a computer pick
+already recorded is honoured, never re-drawn. The group's own cards show no
+such tag. Tests:
 `node _ideasearchlab-src/tools/carry-forward-guard.mjs` (offline; the two
 copies must stay identical) and `carry-forward-page-guard.mjs` (Playwright over
 the Test-round sandbox). The server half needs

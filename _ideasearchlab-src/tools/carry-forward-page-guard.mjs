@@ -106,8 +106,8 @@ try {
     const titles = await writeIdeas(p, 5);
     await clickIf(/Proceed to Selection/i, 900);
     const selText = await p.innerText('body');
-    check('the selection stage says fewer picks are filled at random', /choose fewer and the computer picks the rest for you at random/i.test(selText));
-    check('…and the note under the list says so too', /If you choose fewer, the computer selects the rest of your ideas for you at random/i.test(selText));
+    check('the selection stage says at least one is needed and the remaining places are filled at random', /choose at least one; if you choose fewer than 3, the computer fills the remaining places at random from your other ideas/i.test(selText));
+    check('…and the note under the list says so too', /Choose at least one; if you choose fewer than 3, the computer fills the remaining places at random from your other ideas\./i.test(selText));
     check('no computer tag before submit', !selText.includes(TAG));
     await choose(p, [titles[3]]);   // "Idea D"
     check('1 / 3 selected', /Selected ideas:\s*1\s*\/\s*3/.test(await p.innerText('body')));
@@ -171,6 +171,7 @@ try {
     await clickIf(/Proceed to Selection/i, 600);
     const finish = p.getByRole('button', { name: /Finish & Submit/i }).first();
     check('Finish & Submit stays disabled with nothing chosen', await finish.isDisabled().catch(() => false));
+    check('…and says why', (await finish.getAttribute('title')) === 'Choose at least one idea first');
     await p.waitForTimeout(6500);
     const c = await readConfirmation(p);
     check('the clock auto-submitted', /Your ideas are submitted/i.test(c.body), c.body.slice(0, 160));

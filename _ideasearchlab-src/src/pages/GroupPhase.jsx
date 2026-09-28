@@ -18,10 +18,10 @@ import { groupTimers, minutesOf } from '../utils/phaseTimers'
 import RichText from '../components/RichText'
 import { Done } from './Survey'
 // The carry-forward rule shared with IndividualPhase and the Cloud Functions:
-// a member's own picks first, the computer filling the rest up to the cap.
-// Here the STABLE picker, so every member derives the same set — see the
-// module header for why.
-import { topUpSelection, pickStable, SELECTED_BY } from '../utils/carryForward'
+// a member's own picks first, the computer filling the rest up to the cap —
+// deterministically, so every member derives the same set from the same
+// documents (see the module header for why).
+import { topUpSelection, carriedBy, isOwnPick, SELECTED_BY } from '../utils/carryForward'
 import styles from './GroupPhase.module.css'
 
 const MAX_VOTES = 3
@@ -524,12 +524,16 @@ export default function GroupPhase() {
     // normally there is nothing to add here. A member the instructor
     // FORCE-ADVANCED before they submitted still carries only what they had
     // ticked (toggleSelect saves each pick as it is made), and this is where
-    // the rest is filled in — with the STABLE picker, so all members derive the
-    // same set from the same documents. THIS participant's own client then
-    // writes exactly that set back with the 'computer' tag, so the export says
-    // who picked what (the rules let an author update only their own ideas).
-    // The Cloud Function's force-advance writes the same set server-side; the
-    // two agree by construction, and either alone is enough.
+    // the rest is filled in — with the module's deterministic pick, so all
+    // members derive the same set from the same documents, and a computer
+    // pick already on the documents is honoured. THIS participant's own client
+    // then writes the picks not yet recorded back with the 'computer' tag, so
+    // the export says who picked what (the rules let an author update only
+    // their own ideas). The Cloud Function's force-advance writes the same set
+    // server-side; the two agree by construction. The write-back here runs
+    // only in the force-advanced participant's OWN browser, so a participant
+    // who is not there at all (the case force-advance exists for) is covered
+    // by the function alone — deploy it.
     const persistComputerPicks = ids => {
       const fresh = [...ids].filter(id => !healedRef.current.has(id))
       if (!fresh.length) return
@@ -552,11 +556,14 @@ export default function GroupPhase() {
           const mine = all.filter(i => i.authorId === uid && i.phase === 'individual')
           const decision = topUpSelection({
             ideas: mine,
-            selectedIds: mine.filter(i => i.selected).map(i => i.id),
+            selectedIds: mine.filter(isOwnPick).map(i => i.id),
+            priorComputer: mine.filter(i => carriedBy(i) === SELECTED_BY.COMPUTER).map(i => i.id),
             ideasCarried,
-            pick: pickStable,
           })
-          if (uid === myUid && decision.computerPicked.size > 0) persistComputerPicks(decision.computerPicked)
+          if (uid === myUid) {
+            const unrecorded = [...decision.computerPicked].filter(id => !mine.some(i => i.id === id && carriedBy(i) === SELECTED_BY.COMPUTER))
+            if (unrecorded.length) persistComputerPicks(unrecorded)
+          }
           return mine.filter(i => decision.selection.has(i.id))
         })
 
