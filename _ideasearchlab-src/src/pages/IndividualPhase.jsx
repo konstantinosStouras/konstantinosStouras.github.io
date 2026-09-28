@@ -20,7 +20,7 @@ import { Done } from './Survey'
 // `selectedBy: 'computer'`. One module, shared with the group page and the
 // Cloud Functions — see its header for why the draw is deterministic.
 import {
-  topUpSelection, selectionPatch, carriedBy, carriedSummary,
+  topUpSelection, selectionPatch, carriedBy, isOwnPick, carriedSummary,
   SELECTED_BY, COMPUTER_SELECTED_LABEL, CARRY_FORWARD_RULE,
 } from '../utils/carryForward'
 import { getNextPhase } from '../utils/phaseSequence'
@@ -402,8 +402,13 @@ export default function IndividualPhase() {
     // This ONE call also serves the selection timer's auto-submit
     // (`autoFinish`), which used to hash-pick only when nothing at all was
     // selected and left a 1-of-3 selection at 1.
+    // The participant's own picks: this tab's state AND the documents. A pick
+    // made in another tab or on another device (same account) is on the
+    // documents but not in this tab's state, and a pick is never removed or
+    // re-labelled by a submit from elsewhere. (A deselect made here writes
+    // selected:false at once, so a doc-level pick this tab dropped is gone.)
     const marked = selectionOverride instanceof Set ? selectionOverride : selectedIds
-    const mine = new Set([...marked].filter(id => !computerIds.has(id)))
+    const mine = new Set([...marked, ...ideas.filter(isOwnPick).map(i => i.id)].filter(id => !computerIds.has(id)))
     // A computer pick already on the documents (the instructor force-advanced
     // this participant, or a retry after a failed submit) is honoured, never
     // re-drawn — the group may already be looking at it.
@@ -449,8 +454,10 @@ export default function IndividualPhase() {
       submittedRef.current = false
       submittedAtRef.current = 0
       // The decided set stays on screen (the computer's picks read "Selected
-      // for you" and can still be changed), so Finish & Submit is enabled for
-      // the retry the message asks for — and the retry reaches the same set.
+      // for you"; one can be REPLACED by choosing another idea, though merely
+      // un-ticking it brings the same idea back, since the retry decides
+      // deterministically over the same candidates), so Finish & Submit is
+      // enabled for the retry the message asks for.
       // Say so. Silently reverting to the workspace looked like the submit had
       // gone through, and an expired timer then re-fired autoFinish in a loop,
       // flipping the screen between the confirmation card and the workspace.

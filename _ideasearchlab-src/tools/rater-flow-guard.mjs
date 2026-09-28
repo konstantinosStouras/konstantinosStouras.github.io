@@ -320,7 +320,11 @@ check('the CSV has the same columns as the Excel', csvHead.split(',').length ===
 
 // ── 4. The downloaded file re-uploaded as a top-up: nothing doubled ──────────
 head('4. the downloaded file, uploaded as a top-up, changes nothing and doubles nothing')
-await p.locator('input[type=file][accept=".xlsx,.xls,.csv"]').nth(1).setInputFiles({ name: 'all.xlsx', mimeType: XLSX_MIME, buffer: buf })
+// The 3.2 top-up input is the one beside "Upload full dataset (top up AI scores)".
+// (It used to be picked as the second .xlsx/.xls/.csv input on the page, which is
+// Step 2's aggregate import — a path that APPENDS by design — and only a race with
+// the file reader kept that reading 320.)
+await p.locator('button', { hasText: /Upload full dataset/ }).locator('xpath=following-sibling::input[@type="file"][1]').setInputFiles({ name: 'all.xlsx', mimeType: XLSX_MIME, buffer: buf })
 const topMsg = await p.locator('p').filter({ hasText: /matched|filled|already/ }).last().textContent({ timeout: 10000 }).catch(() => '')
 check('the top-up matched every idea and filled none (they are all scored)', /matched/i.test(topMsg) && !/filled [1-9]/.test(topMsg), topMsg.slice(0, 200))
 check(`still ${IDEAS.length} ideas (nothing appended)`, new RegExp(`for ${IDEAS.length} ideas`).test(await p.getByRole('button', { name: /empirical KPIs for/ }).first().textContent().catch(() => '')),

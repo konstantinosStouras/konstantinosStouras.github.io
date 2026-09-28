@@ -220,7 +220,9 @@ BEFORE that date reads `unrecorded`: the app did not yet say who chose it, and
 a participant's own pick and the old timer's untagged auto-pick (for someone
 who chose none) cannot be told apart. In that old data a participant who chose
 1 of 3 arrived in the group with 1; only a participant who chose NONE had ideas
-picked for them.
+picked for them. A selection SUBMITTED under the old rule is never topped up
+afterwards, even when the session is re-opened or exported with the new app:
+what the group worked with is what the data says.
 
 ---
 

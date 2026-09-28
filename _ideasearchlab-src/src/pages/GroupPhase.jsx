@@ -21,7 +21,7 @@ import { Done } from './Survey'
 // a member's own picks first, the computer filling the rest up to the cap —
 // deterministically, so every member derives the same set from the same
 // documents (see the module header for why).
-import { topUpSelection, carriedBy, isOwnPick, SELECTED_BY } from '../utils/carryForward'
+import { topUpSelection, carriedBy, isOwnPick, isLegacySubmission, selectionPatch, patchChanges } from '../utils/carryForward'
 import styles from './GroupPhase.module.css'
 
 const MAX_VOTES = 3
@@ -511,6 +511,10 @@ export default function GroupPhase() {
   // a tap land on the wrong card) while people were voting.
   const memberKey = members.map(m => m.id).sort().join(',')
   const myUid = user?.uid
+  // Each member's document, for the legacy gate below. Read through a ref so
+  // the listener effect keys on the stable memberKey, not the members array.
+  const membersByIdRef = useRef({})
+  membersByIdRef.current = Object.fromEntries(members.map(m => [m.id, m]))
   // Computer picks this participant's own client has already written back
   // (one write per idea, ever), see persistComputerPicks below.
   const healedRef = useRef(new Set())
@@ -533,15 +537,23 @@ export default function GroupPhase() {
     // server-side; the two agree by construction. The write-back here runs
     // only in the force-advanced participant's OWN browser, so a participant
     // who is not there at all (the case force-advance exists for) is covered
-    // by the function alone — deploy it.
-    const persistComputerPicks = ids => {
-      const fresh = [...ids].filter(id => !healedRef.current.has(id))
-      if (!fresh.length) return
-      fresh.forEach(id => healedRef.current.add(id))
+    // by the function alone — deploy it. It is SYMMETRIC: every own idea whose
+    // document disagrees with the derived set is patched — a computer pick
+    // recorded, and a surplus one (a pick of the participant's that landed
+    // while the server was deciding) released — so the documents converge on
+    // exactly the set every reader derives, once per (idea, patch).
+    const healOwnIdeas = (mine, decision) => {
       const batch = writeBatch(db)
-      fresh.forEach(id => batch.update(doc(db, 'sessions', sessionId, 'ideas', id),
-        { selected: true, selectedBy: SELECTED_BY.COMPUTER }))
-      batch.commit().catch(err => console.warn('Could not record the computer-selected ideas:', err.message))
+      let n = 0
+      mine.forEach(idea => {
+        const patch = selectionPatch(idea.id, decision)
+        const key = `${idea.id}:${patch.selected}:${patch.selectedBy}`
+        if (!patchChanges(idea, patch) || healedRef.current.has(key)) return
+        healedRef.current.add(key)
+        batch.update(doc(db, 'sessions', sessionId, 'ideas', idea.id), patch)
+        n++
+      })
+      if (n) batch.commit().catch(err => console.warn('Could not record the carried set:', err.message))
     }
 
     const unsub = onSnapshot(
@@ -551,19 +563,20 @@ export default function GroupPhase() {
       ),
       snap => {
         const all = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        const membersById = membersByIdRef.current
 
         const individualIdeas = memberIds.flatMap(uid => {
           const mine = all.filter(i => i.authorId === uid && i.phase === 'individual')
+          // A selection submitted under the OLD rule (completed, with an
+          // untagged carried idea) stays exactly as submitted — see the module.
+          if (isLegacySubmission(membersById[uid], mine)) return mine.filter(i => i.selected)
           const decision = topUpSelection({
             ideas: mine,
             selectedIds: mine.filter(isOwnPick).map(i => i.id),
-            priorComputer: mine.filter(i => carriedBy(i) === SELECTED_BY.COMPUTER).map(i => i.id),
+            priorComputer: mine.filter(i => carriedBy(i) === 'computer').map(i => i.id),
             ideasCarried,
           })
-          if (uid === myUid) {
-            const unrecorded = [...decision.computerPicked].filter(id => !mine.some(i => i.id === id && carriedBy(i) === SELECTED_BY.COMPUTER))
-            if (unrecorded.length) persistComputerPicks(unrecorded)
-          }
+          if (uid === myUid) healOwnIdeas(mine, decision)
           return mine.filter(i => decision.selection.has(i.id))
         })
 

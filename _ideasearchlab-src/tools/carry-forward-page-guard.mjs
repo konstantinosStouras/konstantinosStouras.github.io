@@ -25,6 +25,12 @@
  *      test-only hook flips their status, as the instructor's Advance does):
  *      the group page lists exactly 3 of their ideas, and their own client
  *      writes the 2 computer picks back to the documents with the tag.
+ *   F. cap 3, 4 ideas, 1 ticked here and 1 ticked "from another tab" (written
+ *      straight to the document, as a second device on the same account
+ *      does) → Finish & Submit honours BOTH as the participant's and adds 1.
+ *   G. a selection SUBMITTED under the old rule (completed participant, one
+ *      untagged carried idea) reaches the group page exactly as submitted:
+ *      1 idea listed, nothing added, nothing written.
  * After every submit the DOCUMENTS are read back through the same hook: the
  * participant's picks carry selectedBy 'participant', the computer's
  * 'computer', the rest selected false — what the confirmation screen shows is
@@ -233,6 +239,45 @@ try {
     await p.waitForTimeout(1500);
     const again = await readDocs(p);
     check('the documents are stable afterwards', JSON.stringify(again) === JSON.stringify(after));
+    await p.close();
+  }
+
+  /* ── F. a pick made from another tab ─────────────────────────────────── */
+  console.log('\n=== F. cap 3 · 4 ideas · 1 ticked here + 1 ticked from another tab ===');
+  {
+    const { p, clickIf } = await openIndividual({ ideasCarriedToGroup: 3 });
+    const titles = await writeIdeas(p, 4);
+    await clickIf(/Proceed to Selection/i, 900);
+    await choose(p, [titles[0]]);   // "Idea A" here
+    // "Idea C" from another tab: written to the document, never to this tab's state.
+    await p.evaluate(() => { const c = window.__islPreview.docs('sessions/PREVIEW/ideas').find(d => d.title === 'Idea C'); return window.__islPreview.setIdea(c.id, { selected: true, selectedBy: 'participant' }); });
+    await p.waitForTimeout(400);
+    await clickIf(/Finish & Submit/i, 2500);
+    const c = await readConfirmation(p);
+    check('the summary counts both picks as the participant\'s: 2 chosen + 1 by the computer', c.body.includes('3 ideas carry into the group phase: 2 you chose and 1 the computer selected at random.'), (c.body.match(/You submitted[^\n]*/) || [''])[0]);
+    const docs = await readDocs(p);
+    const auto = docs.filter(d => d.selectedBy === 'computer').map(d => d.title);
+    check('the other tab\'s pick is neither removed nor re-labelled', docs.find(d => d.title === 'Idea C').selected && docs.find(d => d.title === 'Idea C').selectedBy === 'participant', JSON.stringify(docs));
+    docCheck('F', docs, ['Idea A', 'Idea C'], auto);
+    await p.close();
+  }
+
+  /* ── G. a selection submitted under the old rule ─────────────────────── */
+  console.log('\n=== G. cap 3 · 4 ideas · submitted under the OLD rule (1 untagged pick) · group page ===');
+  {
+    const { p, clickIf } = await openIndividual({ ideasCarriedToGroup: 3 });
+    const titles = await writeIdeas(p, 4);
+    // What the old bundle left behind: one carried idea with no tag, the
+    // participant marked complete.
+    await p.evaluate(() => { const b = window.__islPreview.docs('sessions/PREVIEW/ideas').find(d => d.title === 'Idea B'); return window.__islPreview.setIdea(b.id, { selected: true }); });
+    await p.evaluate(() => window.__islPreview.setParticipant({ individualComplete: true, status: 'group' }));
+    await p.waitForTimeout(2500);
+    check('the participant lands on the group page', /\/group/.test(p.url()), p.url());
+    const docs = await readDocs(p);
+    check('nothing was added or written: 1 carried, still untagged', docs.filter(d => d.selected).length === 1 && docs.find(d => d.title === 'Idea B').selectedBy === null && docs.every(d => d.selectedBy === null), JSON.stringify(docs));
+    await clickIf(/^start$/i, 1500);
+    const g = await p.evaluate(() => [...document.querySelectorAll('h3, h4')].map(h => h.textContent.trim()).filter(t => /^Idea [A-Z]$/.test(t)));
+    check('the group page lists exactly that 1 idea', g.length === 1 && g[0] === 'Idea B', g.join(', '));
     await p.close();
   }
 } catch (e) {

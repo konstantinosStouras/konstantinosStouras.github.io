@@ -52,7 +52,7 @@ const check = (name, cond, detail) => {
 
 const esm = await import(join(SRC, 'src', 'utils', 'carryForward.js'))
 const cjs = require(join(SRC, 'functions', 'carryForward.js'))
-const { topUpSelection, pickStable, carryTarget, carriedBy, isOwnPick, selectionPatch, patchChanges, carriedSummary, SELECTED_BY, COMPUTER_SELECTED_LABEL, CARRY_FORWARD_RULE } = esm
+const { topUpSelection, pickStable, carryTarget, carriedBy, isOwnPick, isLegacySubmission, selectionPatch, patchChanges, carriedSummary, SELECTED_BY, COMPUTER_SELECTED_LABEL, CARRY_FORWARD_RULE } = esm
 
 const ideas = n => Array.from({ length: n }, (_, i) => ({ id: `idea_${i + 1}` }))
 const ids = set => [...set].sort()
@@ -161,6 +161,12 @@ console.log('\n3. the patches written to each idea')
     && carriedBy({ selected: false, selectedBy: 'computer' }) === '')
   check("a legacy untagged pick counts as the participant's own (never removed, never re-labelled)",
     isOwnPick({ selected: true }) && isOwnPick({ selected: true, selectedBy: 'participant' }) && !isOwnPick({ selected: true, selectedBy: 'computer' }) && !isOwnPick({ selected: false }))
+  check('a selection SUBMITTED under the old rule (completed + an untagged carried idea) is a legacy submission',
+    isLegacySubmission({ individualComplete: true }, [{ selected: true }, { selected: false }])
+    && !isLegacySubmission({ individualComplete: true }, [{ selected: true, selectedBy: 'participant' }, { selected: true, selectedBy: 'computer' }])
+    && !isLegacySubmission({ individualComplete: false }, [{ selected: true }])
+    && !isLegacySubmission(undefined, [{ selected: true }])
+    && !isLegacySubmission({ individualComplete: true }, []))
   check('the tag text is what the owner asked for', COMPUTER_SELECTED_LABEL === 'Computer selected to group stage' && SELECTED_BY.COMPUTER === 'computer')
 }
 
@@ -200,6 +206,23 @@ console.log('\n5. over Firestore-shaped random ids the pick is a uniform draw (m
   const pairKeys = Object.keys(pairs)
   check('all 6 pairs occur, each about 1/6 of the time (±1.5%)', pairKeys.length === 6 && pairKeys.every(k => Math.abs(pairs[k] / N - 1 / 6) < 0.015), pairKeys.map(k => `${k}:${(pairs[k] / N).toFixed(3)}`).join(' '))
   check('n larger than the pool returns the whole pool', pickStable(ideas(5), 9).length === 5)
+  // The measurement above holds for ANY ordering that is a function of the
+  // ids alone (with i.i.d. random ids every such ordering is exchangeable),
+  // so it proves the pick ignores order and content, not that the hash does
+  // anything. This one does: ids minted in CREATION ORDER (a counter, no
+  // randomness in them — the preview store's shape without its random
+  // suffix). A hash still spreads them, so the pick stays independent of
+  // creation order; a plain string order (hashStr = () => 0) would take the
+  // two earliest ideas every time and fail here.
+  const seqCount = [0, 0, 0, 0, 0]
+  let counter = 1000
+  for (let r = 0; r < N; r++) {
+    const list = Array.from({ length: 5 }, (_, i) => ({ id: `pv_${(counter++).toString(36)}`, pos: i }))
+    const d = topUpSelection({ ideas: list, selectedIds: [list[0].id], ideasCarried: 3 })
+    list.forEach(i => { if (d.computerPicked.has(i.id)) seqCount[i.pos]++ })
+  }
+  const seqPos = seqCount.slice(1).map(c => c / N)
+  check('with ids minted in creation order the hash still decorrelates the pick from that order (each ±4%)', seqPos.every(p => Math.abs(p - 0.5) < 0.04), seqPos.map(p => p.toFixed(3)).join(' '))
 }
 
 console.log('\n6. the stable picker')
@@ -258,8 +281,8 @@ console.log('\n8. the consumers (by source)')
   const md = ind.slice(ind.indexOf('async function markDone('), ind.indexOf('function autoFinish('))
   check('markDone is a bounded slice', md.length > 500 && md.length < 7000, String(md.length))
   check('markDone tops the selection up under that cap', /topUpSelection\(\{[\s\S]*?ideasCarried: carriesForward \? ideasCarried : 0/.test(md))
-  check("markDone separates the participant's picks from the computer's and honours recorded computer picks",
-    /const mine = new Set\(\[\.\.\.marked\]\.filter\(id => !computerIds\.has\(id\)\)\)/.test(md)
+  check("markDone takes the participant's picks from this tab's state AND the documents, minus the computer's, and honours recorded computer picks",
+    /const mine = new Set\(\[\.\.\.marked, \.\.\.ideas\.filter\(isOwnPick\)\.map\(i => i\.id\)\]\.filter\(id => !computerIds\.has\(id\)\)\)/.test(md)
     && /priorComputer: prior/.test(md) && /carriedBy\(i\) === SELECTED_BY\.COMPUTER\)\.map\(i => i\.id\)/.test(md))
   check('markDone writes the tag through selectionPatch', /batch\.update\(ref, selectionPatch\(idea\.id, decision\)\)/.test(md))
   const batchAt = md.indexOf('batch.commit()')
@@ -283,26 +306,28 @@ console.log('\n8. the consumers (by source)')
   check('Finish & Submit still needs at least one pick (the k = 0 case is the clock\'s)', /const canFinish = ideas\.length > 0 && \(!groupPhaseActive \|\| hasSelection\) && !done/.test(ind))
 
   check('GroupPhase imports the module and keeps no picker of its own',
-    /import \{ topUpSelection, carriedBy, isOwnPick, SELECTED_BY \} from '\.\.\/utils\/carryForward'/.test(grp) && !/pickRandomStable|function hashStr|pickStable|pickUniform/.test(grp))
+    /import \{ topUpSelection, carriedBy, isOwnPick, isLegacySubmission, selectionPatch, patchChanges \} from '\.\.\/utils\/carryForward'/.test(grp) && !/pickRandomStable|function hashStr|pickStable|pickUniform/.test(grp))
   const lis = grp.slice(grp.indexOf('const memberKey ='), grp.indexOf('// ── Listen to chat messages'))
   check('the ideas listener is a bounded slice', lis.length > 800 && lis.length < 7000, String(lis.length))
   check("the group derives each member's set from their own picks (legacy untagged included), honouring recorded computer picks",
-    /selectedIds: mine\.filter\(isOwnPick\)/.test(lis) && /priorComputer: mine\.filter\(i => carriedBy\(i\) === SELECTED_BY\.COMPUTER\)/.test(lis))
+    /selectedIds: mine\.filter\(isOwnPick\)/.test(lis) && /priorComputer: mine\.filter\(i => carriedBy\(i\) === 'computer'\)/.test(lis))
   check('the group page says the function is what covers an absent participant', /covered\s+\/\/ by the function alone|by the function alone/.test(lis))
-  check("…and writes only the UNRECORDED computer picks back, for the participant's OWN ideas only",
-    /if \(uid === myUid\) \{/.test(lis) && /const unrecorded = \[\.\.\.decision\.computerPicked\]\.filter/.test(lis) && /selectedBy: SELECTED_BY\.COMPUTER/.test(lis) && /healedRef\.current\.has\(id\)/.test(lis))
+  check("…and heals the participant's OWN documents to the derived set, both ways, once per (idea, patch)",
+    /if \(uid === myUid\) healOwnIdeas\(mine, decision\)/.test(lis) && /const patch = selectionPatch\(idea\.id, decision\)/.test(lis) && /if \(!patchChanges\(idea, patch\) \|\| healedRef\.current\.has\(key\)\) return/.test(lis))
+  check('a selection submitted under the old rule is left as submitted on the group page', /if \(isLegacySubmission\(membersById\[uid\], mine\)\) return mine\.filter\(i => i\.selected\)/.test(lis))
   check('the listener re-runs when the signed-in uid changes', /\[sessionId, groupId, memberKey, ideasCarried, myUid\]/.test(lis))
 
   check('the Cloud Function requires the vendored module', /require\('\.\/carryForward'\)/.test(fn))
   const adv = fn.slice(fn.indexOf('exports.advancePhase'), fn.indexOf('async function topUpCarriedIdeas'))
-  check('advancePhase collects everyone entering the group phase', /if \(nextPhase === 'group' && newStatus === 'group'\) enteringGroup\.push\(pDoc\.id\)/.test(adv))
+  check('advancePhase collects everyone entering the group phase, with their documents', /if \(nextPhase === 'group' && newStatus === 'group'\) enteringGroup\.push\(\{ id: pDoc\.id, \.\.\.p \}\)/.test(adv))
   const topAt = adv.indexOf('await topUpCarriedIdeas(')
   const commitAt = adv.indexOf('await batch.commit()')
   check('…and tops them up BEFORE the status flip is committed', topAt > 0 && commitAt > topAt, `topUp@${topAt} commit@${commitAt}`)
   const tu = fn.slice(fn.indexOf('async function topUpCarriedIdeas'), fn.indexOf('async function tallyGroupVotes'))
-  check('the server honours recorded computer picks and writes through selectionPatch', /selectedIds: mine\.filter\(isOwnPick\)/.test(tu) && /priorComputer: mine\.filter\(i => carriedBy\(i\) === SELECTED_BY\.COMPUTER\)/.test(tu) && /selectionPatch\(r\.idea\.id, decision\)/.test(tu) && /patchChanges\(r\.idea, r\.patch\)/.test(tu))
-  check("the server's writes are conditional on the document being as read, one batch per participant",
-    /\{ lastUpdateTime: r\.updateTime \}/.test(tu) && /for \(const uid of participantIds\)/.test(tu) && /const b = db\.batch\(\)/.test(tu))
+  check('the server honours recorded computer picks and writes through selectionPatch', /selectedIds: mine\.filter\(isOwnPick\)/.test(tu) && /priorComputer: mine\.filter\(i => carriedBy\(i\) === 'computer'\)/.test(tu) && /const patch = selectionPatch\(idea\.id, decision\)/.test(tu) && /if \(!patchChanges\(idea, patch\)\) return/.test(tu))
+  check('the server decides inside ONE TRANSACTION PER PARTICIPANT over fresh reads of all their ideas',
+    /for \(const p of participants\)/.test(tu) && /await db\.runTransaction\(async tx => \{/.test(tu) && /const snaps = await Promise\.all\(refs\.map\(r => tx\.get\(r\)\)\)/.test(tu) && /tx\.update\(sessionRef\.collection\('ideas'\)\.doc\(idea\.id\), patch\)/.test(tu))
+  check('…and leaves a selection submitted under the old rule alone', /if \(isLegacySubmission\(p, mine\)\) return 0/.test(tu))
   check("the server's copy is not itself deployed as a function", !/exports\._topUpCarriedIdeas/.test(fn))
 
   check('the Ideas sheet carries "Carried by"', /'Carried by': carriedBy\(idea\)/.test(exp) && /import \{ carriedBy \} from '\.\/carryForward'/.test(exp))
@@ -314,7 +339,7 @@ console.log('\n8. the consumers (by source)')
   check('the importer defaults a carried idea with no cell to unrecorded, an uncarried one to nothing',
     /row\.carried_by = row\.carried\s*\n?\s*\? \(carriedByFromCell\(pick\('carried by', 'carried_by', 'selected by'\)\) \|\| SELECTED_BY\.UNRECORDED\)\s*\n?\s*: ''/.test(ana))
   const pv = read(join(SRC, 'src', 'utils', 'previewDb.js'))
-  check('the sandbox exposes its inspection hook only in preview', /if \(isPreview\(\) && typeof window !== 'undefined'\) \{\s*\n\s*window\.__islPreview = \{/.test(pv) && /docs: collPath =>/.test(pv) && /setParticipant: patch =>/.test(pv))
+  check('the sandbox exposes its inspection hook only in preview', /if \(isPreview\(\) && typeof window !== 'undefined'\) \{\s*\n\s*window\.__islPreview = \{/.test(pv) && /docs: collPath =>/.test(pv) && /setParticipant: patch =>/.test(pv) && /setIdea: \(id, patch\) =>/.test(pv))
   check('the admin session page badges the computer\'s picks', /computer selected to group/.test(adm) && /ideaSummaryBadgeAuto/.test(adm) && /import \{ carriedBy \} from '\.\.\/utils\/carryForward'/.test(adm))
 }
 

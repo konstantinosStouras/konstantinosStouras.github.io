@@ -3115,10 +3115,14 @@ every reader: Finish & Submit and the selection clock's auto-submit (which
 persist the ideas batch BEFORE marking the participant complete, since that
 flag is what moves the group on), every group member's page for a member the
 instructor advanced before they submitted, and the server's force-advance
-(`advancePhase`, conditional writes) all reach one set from the same
-documents, so two writers can never land two "random" sets on one participant
-and a group never sees a member's ideas change under it; a computer pick
-already recorded is honoured, never re-drawn. The group's own cards show no
+(`advancePhase`, one transaction per participant over fresh reads of all
+their ideas) all reach one set from the same documents, so two writers can
+never land two "random" sets on one participant and a group never sees a
+member's ideas change under it; a computer pick already recorded is
+honoured, never re-drawn, a pick made from another tab or device counts as
+the participant's, the participant's own group page heals their documents
+to the derived set both ways, and a selection SUBMITTED under the older
+untagged rule is left exactly as submitted. The group's own cards show no
 such tag. Tests:
 `node _ideasearchlab-src/tools/carry-forward-guard.mjs` (offline; the two
 copies must stay identical, and the shipped bundle must carry the module's

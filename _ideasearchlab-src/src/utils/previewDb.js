@@ -289,14 +289,17 @@ export function ensurePreviewSeed() {
 if (isPreview()) ensurePreviewSeed()
 
 // ── test-only inspection hook ────────────────────────────────────────────────
-// Only in the sandbox (the module is not even loaded otherwise): lets a browser
-// test read the sandbox's documents back and put the participant into a state
-// the solo flow cannot reach on its own — the instructor force-advancing them
-// into the group phase before they submitted. Nothing here runs in a real
-// session and nothing it does is saved anywhere.
+// Gated by isPreview(): db.js imports this module statically, so it is loaded
+// on every page, and ONLY this block (like the seed above) is sandbox-only.
+// It lets a browser test read the sandbox's documents back and put the
+// participant into a state the solo flow cannot reach on its own — the
+// instructor force-advancing them into the group phase before they submitted,
+// a pick made from another tab, a selection submitted under an older rule.
+// Nothing it does is saved anywhere, and nothing in a real session reaches it.
 if (isPreview() && typeof window !== 'undefined') {
   window.__islPreview = {
     docs: collPath => collDocs(collPath).map(r => ({ id: r.id, ...r.data })),
     setParticipant: patch => updateDoc(doc(PREVIEW_DB, 'sessions', PREVIEW_SESSION_ID, 'participants', PREVIEW_UID), patch),
+    setIdea: (id, patch) => updateDoc(doc(PREVIEW_DB, 'sessions', PREVIEW_SESSION_ID, 'ideas', id), patch),
   }
 }

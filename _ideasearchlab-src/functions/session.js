@@ -8,7 +8,7 @@ const { statusPhaseIndex, shouldSetStatus } = require('./phaseGuard')
 // The carry-forward rule (owner 2026-09-28), vendored from
 // src/utils/carryForward.js — tools/carry-forward-guard.mjs keeps the two
 // copies identical.
-const { topUpSelection, selectionPatch, patchChanges, carriedBy, isOwnPick, SELECTED_BY } = require('./carryForward')
+const { topUpSelection, selectionPatch, patchChanges, carriedBy, isOwnPick, isLegacySubmission } = require('./carryForward')
 
 const db = admin.firestore()
 
@@ -509,7 +509,7 @@ exports.advancePhase = functions.https.onCall(async (data, context) => {
     if (newStatus !== p.status) {
       batch.update(pDoc.ref, { status: newStatus })
     }
-    if (nextPhase === 'group' && newStatus === 'group') enteringGroup.push(pDoc.id)
+    if (nextPhase === 'group' && newStatus === 'group') enteringGroup.push({ id: pDoc.id, ...p })
   })
 
   // The carry-forward rule, applied BEFORE the status flip so the group reads
@@ -545,48 +545,61 @@ exports.advancePhase = functions.https.onCall(async (data, context) => {
  * pick, so this set is exactly the one every group member's page derives for
  * them from the same documents (and the one their own client would write
  * back) — a random draw here would change the group's list under its members.
- * A participant who already submitted is a no-op: their selection is full.
- * One session-wide read of the individual-stage ideas, then one small batch
- * per participant whose documents change, each write CONDITIONAL on the
- * document being as it was read (`lastUpdateTime`): if that participant's own
- * client wrote in the meantime (their clock ran out as the instructor
- * pressed Advance), its decision — the same set, from the same rule — stands
- * and this batch simply fails, so two writers can never land two sets.
+ * A participant who already submitted normally has a full selection, so the
+ * transaction changes nothing; one whose selection is SHORT anyway (their
+ * ideas batch was refused, or the cap was raised after they submitted) is
+ * topped up like anyone else entering the group phase — the rule is about
+ * what the group receives. Only a selection submitted under the OLD rule (an
+ * untagged carried idea) is left exactly as submitted (`isLegacySubmission`).
+ *
+ * One session-wide read of the individual-stage ideas finds each entering
+ * participant's ideas; then ONE TRANSACTION PER PARTICIPANT re-reads every
+ * one of their ideas, decides from those fresh documents and writes the
+ * changes. A transaction commits only if none of the documents it READ
+ * changed meanwhile, whether or not it wrote them: a pick the participant
+ * makes on ANY of their ideas while this runs (their clock expiring as the
+ * instructor presses Advance, a last-instant Select) makes it retry from the
+ * new documents and decide again, so the cap is never exceeded and two
+ * writers never leave two sets. Non-fatal per participant: a participant
+ * whose transaction still fails is skipped, and their own client heals the
+ * documents when they reach the group page.
  */
-async function topUpCarriedIdeas(sessionRef, participantIds, phaseConfig) {
+async function topUpCarriedIdeas(sessionRef, participants, phaseConfig) {
   const ideasCarried = (phaseConfig && phaseConfig.ideasCarriedToGroup) || 3
   const snap = await sessionRef.collection('ideas').where('phase', '==', 'individual').get()
-  const byAuthor = {}
+  const refsByAuthor = {}
   snap.docs.forEach(d => {
-    const idea = { id: d.id, ...d.data() }
-    if (!idea.authorId) return
-    ;(byAuthor[idea.authorId] = byAuthor[idea.authorId] || []).push({ idea, updateTime: d.updateTime })
+    const authorId = d.get('authorId')
+    if (!authorId) return
+    ;(refsByAuthor[authorId] = refsByAuthor[authorId] || []).push(d.ref)
   })
   let written = 0
-  for (const uid of participantIds) {
-    const rows = byAuthor[uid] || []
-    if (!rows.length) continue
-    const mine = rows.map(r => r.idea)
-    const decision = topUpSelection({
-      ideas: mine,
-      selectedIds: mine.filter(isOwnPick).map(i => i.id),
-      priorComputer: mine.filter(i => carriedBy(i) === SELECTED_BY.COMPUTER).map(i => i.id),
-      ideasCarried,
-    })
-    const changes = rows
-      .map(r => ({ ...r, patch: selectionPatch(r.idea.id, decision) }))
-      .filter(r => patchChanges(r.idea, r.patch))
-    if (!changes.length) continue
-    const b = db.batch()
-    changes.forEach(r => {
-      b.update(sessionRef.collection('ideas').doc(r.idea.id), r.patch, { lastUpdateTime: r.updateTime })
-    })
+  for (const p of participants) {
+    const refs = refsByAuthor[p.id] || []
+    if (!refs.length) continue
     try {
-      await b.commit()
-      written += changes.length
+      written += await db.runTransaction(async tx => {
+        const snaps = await Promise.all(refs.map(r => tx.get(r)))
+        const mine = snaps.filter(sn => sn.exists).map(sn => ({ id: sn.id, ...sn.data() }))
+          .filter(i => i.phase === 'individual' && i.authorId === p.id)
+        if (isLegacySubmission(p, mine)) return 0
+        const decision = topUpSelection({
+          ideas: mine,
+          selectedIds: mine.filter(isOwnPick).map(i => i.id),
+          priorComputer: mine.filter(i => carriedBy(i) === 'computer').map(i => i.id),
+          ideasCarried,
+        })
+        let n = 0
+        mine.forEach(idea => {
+          const patch = selectionPatch(idea.id, decision)
+          if (!patchChanges(idea, patch)) return
+          tx.update(sessionRef.collection('ideas').doc(idea.id), patch)
+          n++
+        })
+        return n
+      })
     } catch (err) {
-      // A precondition failure: the participant's own client decided first.
-      console.warn(`topUpCarriedIdeas: skipped ${uid} (${err.code || err.message})`)
+      console.warn(`topUpCarriedIdeas: skipped ${p.id} (${err.code || err.message})`)
     }
   }
   return written

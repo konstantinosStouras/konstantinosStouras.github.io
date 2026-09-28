@@ -50,7 +50,7 @@ const SELECTED_BY = Object.freeze({ PARTICIPANT: 'participant', COMPUTER: 'compu
 // tools/carry-forward-guard.mjs can tell a stale rebuild from a current one
 // (the tag strings alone are the same in every version). BUMP IT with every
 // change to this file.
-const CARRY_FORWARD_RULE = 'cf/2026-09-28b'
+const CARRY_FORWARD_RULE = 'cf/2026-09-28d'
 
 /** The tag shown on an idea the computer moved to the group stage. */
 const COMPUTER_SELECTED_LABEL = 'Computer selected to group stage'
@@ -62,10 +62,19 @@ function carryTarget(ideaCount, ideasCarried) {
   return Math.min(cap, n)
 }
 
+// FNV-1a over the id's code units, then murmur3's finaliser. The finaliser is
+// what makes it a fair draw for ANY id shape: a plain polynomial hash keeps
+// ids that differ in one trailing character (a counter) in their original
+// order, so with such ids it would favour the earliest ideas (measured in the
+// guard: 95% of the picks fell on the first two). Firestore's ids are random,
+// but the rule should not depend on that.
 function hashStr(s) {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
-  return h
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) }
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b)
+  h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35)
+  h ^= h >>> 16
+  return h | 0
 }
 
 /** Deterministic pick: the same `n` ideas for the same ids, whatever the input order. */
@@ -136,6 +145,20 @@ function isOwnPick(idea) {
   return by === SELECTED_BY.PARTICIPANT || by === SELECTED_BY.UNRECORDED
 }
 
+/**
+ * A selection SUBMITTED before this rule shipped is left exactly as it was
+ * submitted. Finish & Submit now writes a tag onto every idea, so a completed
+ * participant whose carried ideas include an untagged one submitted under the
+ * old rule; topping their set up now would change what their group works
+ * with in the middle of a session that was in flight when the bundle
+ * shipped (and mix new picks into votes already cast). A participant who
+ * never submitted (force-advanced) is topped up whatever their tags say.
+ */
+function isLegacySubmission(participant, ideas) {
+  if (!participant || !participant.individualComplete) return false
+  return (Array.isArray(ideas) ? ideas : []).some(i => carriedBy(i) === SELECTED_BY.UNRECORDED)
+}
+
 /** The fields to write on one idea once a decision is made. */
 function selectionPatch(ideaId, decision) {
   if (decision.computerPicked.has(ideaId)) return { selected: true, selectedBy: SELECTED_BY.COMPUTER }
@@ -173,5 +196,5 @@ function carriedSummary(total, byComputer) {
 
 module.exports = {
   SELECTED_BY, COMPUTER_SELECTED_LABEL, CARRY_FORWARD_RULE, carryTarget, hashStr, pickStable,
-  topUpSelection, carriedBy, isOwnPick, selectionPatch, patchChanges, carriedSummary,
+  topUpSelection, carriedBy, isOwnPick, isLegacySubmission, selectionPatch, patchChanges, carriedSummary,
 }

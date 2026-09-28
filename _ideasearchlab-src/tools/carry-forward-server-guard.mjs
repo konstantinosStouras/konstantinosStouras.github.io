@@ -16,12 +16,18 @@
      P4  ticked 1 (legacy, untagged), never submitted → the legacy pick keeps its
                                                         missing tag, 2 added
      P5  removed                                      → untouched
-     P6  the session's instructor is not this caller  → permission-denied
+     P6  submitted under the OLD rule (completed, one
+         untagged carried idea of 4)                  → left exactly as submitted
+     P7  submitted under THIS rule but short (one
+         tagged pick of 4: batch refused / cap raised) → topped up to 3
+     and a stranger as the caller                     → permission-denied
 
-   and again with one of P1's ideas changed AFTER the read (the participant's
-   own clock deciding first): the precondition fails and the server writes
-   nothing for P1 while P3 still gets its picks. The status flip and the
-   ordering (top-up before the status batch) are asserted from the write log.
+   and again with P1 SELECTING another idea after the server's first read (a
+   last-instant Select, their clock expiring as the instructor presses
+   Advance): the per-participant TRANSACTION retries from the fresh documents
+   and decides again, so the new pick is honoured and the cap is never
+   exceeded. The status flip and the ordering (top-up before the status
+   batch) are asserted from the write log.
    ========================================================================== */
 import { createRequire } from 'node:module'
 import Module from 'node:module'
@@ -31,7 +37,7 @@ import { dirname, join } from 'node:path'
 const require = createRequire(import.meta.url)
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FN = join(HERE, '..', 'functions')
-const { topUpSelection, pickStable } = require(join(FN, 'carryForward.js'))
+const { topUpSelection } = require(join(FN, 'carryForward.js'))
 
 let fail = 0
 const check = (name, cond, detail) => {
@@ -75,7 +81,7 @@ function makeDb() {
         for (const [p, r] of store) {
           if (!p.startsWith(path + '/') || p.slice(path.length + 1).includes('/')) continue
           if (!filters.every(f => f.op === '==' ? r.data[f.field] === f.value : true)) continue
-          docs.push({ id: p.split('/').pop(), data: () => ({ ...r.data }), ref: docRef(p), updateTime: r.updateTime, exists: true })
+          docs.push({ id: p.split('/').pop(), data: () => ({ ...r.data }), get: f => r.data[f], ref: docRef(p), updateTime: r.updateTime, exists: true })
         }
         return { docs, empty: docs.length === 0, size: docs.length, forEach: fn => docs.forEach(fn) }
       },
@@ -84,6 +90,32 @@ function makeDb() {
   }
   const db = {
     collection: name => collRef(name),
+    // A transaction commits only if none of the documents it READ changed
+    // meanwhile — read or written — and otherwise retries from fresh reads,
+    // exactly as Firestore's does (up to 5 attempts). `onAfterRead` lets a
+    // test change a document between a transaction's read and its commit.
+    async runTransaction(fn) {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const reads = new Map()   // path -> updateTime at read
+        const writes = []
+        const tx = {
+          async get(ref) {
+            const r = store.get(ref.path)
+            reads.set(ref.path, r ? r.updateTime : null)
+            return { exists: !!r, id: ref.path.split('/').pop(), ref, data: () => (r ? { ...r.data } : undefined), get: f => (r ? r.data[f] : undefined), updateTime: r && r.updateTime }
+          },
+          update: (ref, patch) => writes.push({ ref, patch, kind: 'update' }),
+          set: (ref, data, opts) => writes.push({ ref, patch: data, kind: opts && opts.merge ? 'merge' : 'set' }),
+        }
+        const result = await fn(tx)
+        if (db.onAfterRead) { const hook = db.onAfterRead; db.onAfterRead = null; hook() }
+        const conflict = [...reads].some(([path, t]) => { const r = store.get(path); return (r ? r.updateTime : null) !== t })
+        if (conflict) { txRetries++; continue }
+        writes.forEach(w => applyWrite(w.ref.path, w.patch, undefined, w.kind))
+        return result
+      }
+      const e = new Error('too much contention'); e.code = 'aborted'; throw e
+    },
     batch() {
       const ops = []
       return {
@@ -105,10 +137,12 @@ function makeDb() {
       }
     },
   }
+  let txRetries = 0
   const seed = (path, data) => store.set(path, { data: { ...data }, updateTime: tick() })
   const read = path => { const r = store.get(path); return r ? { ...r.data } : undefined }
   const touch = path => { const r = store.get(path); store.set(path, { data: r.data, updateTime: tick() }) }
-  return { db, store, log, seed, read, touch }
+  const write = (path, patch) => applyWrite(path, patch, undefined, 'update')
+  return { db, store, log, seed, read, touch, write, retries: () => txRetries }
 }
 
 /* ── load functions/session.js with Firebase stubbed ───────────────────── */
@@ -123,7 +157,7 @@ const fnStub = {
 const functionsV1 = { region: () => fnStub, https: { HttpsError, onCall: fn => fn } }
 // session.js captures `admin.firestore()` ONCE at load, so hand it a proxy
 // that forwards to whichever fixture is current at call time.
-const dbProxy = { collection: (...a) => current.db.collection(...a), batch: (...a) => current.db.batch(...a) }
+const dbProxy = { collection: (...a) => current.db.collection(...a), batch: (...a) => current.db.batch(...a), runTransaction: (...a) => current.db.runTransaction(...a) }
 const firestoreFn = () => dbProxy
 firestoreFn.FieldValue = { serverTimestamp: () => '__ts__', delete: () => '__del__', increment: n => n, arrayUnion: (...v) => v, arrayRemove: (...v) => v }
 const adminStub = { initializeApp() {}, firestore: firestoreFn, apps: [] }
@@ -144,6 +178,8 @@ function fixture() {
   f.seed('sessions/S', { instructorId: 'INSTR', status: 'individual', phaseConfig: { ideasCarriedToGroup: 3, phaseOrder: 'individual_first', individualPhaseActive: true, groupPhaseActive: true } })
   const P = (id, extra) => f.seed(`sessions/S/participants/${id}`, { uid: id, groupId: 'g1', status: 'individual', individualComplete: false, ...extra })
   P('P1'); P('P2', { status: 'waiting_for_group', individualComplete: true }); P('P3'); P('P4'); P('P5', { removed: true, status: 'removed' })
+  P('P6', { status: 'waiting_for_group', individualComplete: true })
+  P('P7', { status: 'waiting_for_group', individualComplete: true })
   const I = (id, authorId, extra) => f.seed(`sessions/S/ideas/${id}`, { authorId, phase: 'individual', title: id, selected: false, ...extra })
   // P1: 5 ideas, one ticked by hand
   I('a1', 'P1'); I('a2', 'P1', { selected: true, selectedBy: 'participant' }); I('a3', 'P1'); I('a4', 'P1'); I('a5', 'P1')
@@ -155,6 +191,11 @@ function fixture() {
   I('d1', 'P4', { selected: true }); I('d2', 'P4'); I('d3', 'P4'); I('d4', 'P4')
   // P5 (removed) has an idea too
   I('e1', 'P5')
+  // P6 submitted under the OLD rule: completed, one untagged carried idea of four
+  I('f1', 'P6', { selected: true }); I('f2', 'P6'); I('f3', 'P6'); I('f4', 'P6')
+  // P7 submitted under THIS rule but SHORT (their ideas batch was refused, or the
+  // cap was raised after): completed, one TAGGED pick of four
+  I('h1', 'P7', { selected: true, selectedBy: 'participant' }); I('h2', 'P7'); I('h3', 'P7'); I('h4', 'P7')
   // a group-stage idea must be ignored by the top-up
   I('g1', 'P1', { phase: 'group', groupId: 'g1' })
   return f
@@ -185,8 +226,11 @@ console.log('\n1. advancePhase individual → group tops up everyone entering th
   check(`P3: both ideas become computer picks (${p3Expected})`, JSON.stringify(tagged('P3')) === JSON.stringify(['c1', 'c2']))
   check(`P4: the legacy untagged pick stays untagged and 2 are added (${p4Expected})`, f.read('sessions/S/ideas/d1').selected === true && f.read('sessions/S/ideas/d1').selectedBy === undefined && JSON.stringify(tagged('P4')) === JSON.stringify(p4Expected) && p4Expected.length === 2, JSON.stringify(tagged('P4')))
   check('P5 (removed): nothing written, status untouched', !f.log.some(w => w.path === 'sessions/S/ideas/e1') && f.read('sessions/S/participants/P5').status === 'removed')
-  const statuses = ['P1', 'P2', 'P3', 'P4'].map(id => f.read(`sessions/S/participants/${id}`).status)
-  check('P1–P4 are moved to the group phase', statuses.every(s => s === 'group'), statuses.join(','))
+  check('P6 (submitted under the old rule): left exactly as submitted — 1 carried, untagged, nothing added', !f.log.some(w => w.path.startsWith('sessions/S/ideas/f')) && ideasOf(f, 'P6').filter(i => i.selected).length === 1 && f.read('sessions/S/ideas/f1').selectedBy === undefined)
+  check('P7 (submitted under this rule, but short): topped up to 3 — the tagged pick kept, 2 computer picks added',
+    ideasOf(f, 'P7').filter(i => i.selected).length === 3 && f.read('sessions/S/ideas/h1').selectedBy === 'participant' && ideasOf(f, 'P7').filter(i => i.selectedBy === 'computer').length === 2, JSON.stringify(ideasOf(f, 'P7').map(i => [i.id, i.selected, i.selectedBy])))
+  const statuses = ['P1', 'P2', 'P3', 'P4', 'P6', 'P7'].map(id => f.read(`sessions/S/participants/${id}`).status)
+  check('P1–P4, P6 and P7 are moved to the group phase', statuses.every(s => s === 'group'), statuses.join(','))
   const firstIdeaWrite = f.log.findIndex(w => w.path.startsWith('sessions/S/ideas/'))
   const firstStatusWrite = f.log.findIndex(w => w.path.startsWith('sessions/S/participants/') && w.patch && w.patch.status === 'group')
   check('the top-up lands BEFORE the participants\' status flip', firstIdeaWrite >= 0 && firstStatusWrite > firstIdeaWrite, `ideas@${firstIdeaWrite} status@${firstStatusWrite}`)
@@ -200,38 +244,32 @@ console.log('\n1. advancePhase individual → group tops up everyone entering th
   check('a second force-advance writes nothing more to the ideas (idempotent)', !f.log.slice(before).some(w => w.path.startsWith('sessions/S/ideas/')))
 }
 
-/* ── run 2: the participant's own client decided first ─────────────────── */
-console.log('\n2. a document changed after the read: the precondition fails and the server backs off')
+/* ── run 2: a pick lands while the server is deciding ──────────────────── */
+console.log('\n2. a pick made after the transaction\'s read: it retries from the fresh documents')
 {
   const f = fixture(); current = f
-  // Make the ideas query hand back P1's rows, then bump one of the ideas the
-  // server will want to write BEFORE its batch commits — as if P1's clock
-  // expired and markDone wrote in between.
-  const p1Expected = expectedPicks(f, 'P1')
-  const realGet = f.db.collection
-  let armed = true
-  f.db.collection = name => {
-    const c = realGet(name)
-    if (name !== 'sessions') return c
-    const doc = c.doc
-    c.doc = id => {
-      const d = doc(id)
-      const coll = d.collection
-      d.collection = sub => {
-        const sc = coll(sub)
-        if (sub !== 'ideas') return sc
-        const get = sc.get
-        sc.get = async () => { const snap = await get(); if (armed) { armed = false; f.touch(`sessions/S/ideas/${p1Expected[0]}`) } return snap }
-        return sc
-      }
-      return d
-    }
-    return c
-  }
+  // Between P1's transaction reading its five ideas and committing, P1 taps
+  // Select on a4 (toggleSelect writes it as the participant's).
+  f.db.onAfterRead = () => f.write('sessions/S/ideas/a4', { selected: true, selectedBy: 'participant' })
   await session.advancePhase({ sessionId: 'S' }, { auth: { uid: 'INSTR' } })
-  check('P1: nothing written (its documents moved under the server)', !f.log.some(w => w.path.startsWith('sessions/S/ideas/a')))
-  check('P3 still got its picks (one batch per participant)', ideasOf(f, 'P3').filter(i => i.selectedBy === 'computer').length === 2)
-  check('the advance itself still went through', f.read('sessions/S').status === 'group' && f.read('sessions/S/participants/P1').status === 'group')
+  const mine = ideasOf(f, 'P1')
+  const carried = mine.filter(i => i.selected)
+  check('the transaction retried', f.retries() >= 1, String(f.retries()))
+  check('P1 carries exactly 3 — never cap + 1', carried.length === 3, JSON.stringify(mine.map(i => [i.id, i.selected, i.selectedBy])))
+  check("both of P1's own picks are honoured", carried.some(i => i.id === 'a2' && i.selectedBy === 'participant') && carried.some(i => i.id === 'a4' && i.selectedBy === 'participant'))
+  check('and ONE computer pick fills the last place', carried.filter(i => i.selectedBy === 'computer').length === 1)
+  const expected = topUpSelection({ ideas: mine.map(i => ({ id: i.id })), selectedIds: ['a2', 'a4'], ideasCarried: 3 })
+  check('…the stable one every reader would derive', carried.filter(i => i.selectedBy === 'computer').every(i => expected.computerPicked.has(i.id)))
+  check('P3 still got its picks', ideasOf(f, 'P3').filter(i => i.selectedBy === 'computer').length === 2)
+  check('the advance itself went through', f.read('sessions/S').status === 'group' && f.read('sessions/S/participants/P1').status === 'group')
+  // A transaction that cannot commit at all is skipped, non-fatally.
+  const g = fixture(); current = g
+  let bumps = 0
+  const keep = () => { g.touch('sessions/S/ideas/a1'); if (++bumps < 9) g.db.onAfterRead = keep }
+  g.db.onAfterRead = keep
+  await session.advancePhase({ sessionId: 'S' }, { auth: { uid: 'INSTR' } })
+  check('a participant whose documents keep changing is skipped, the others and the advance unaffected',
+    !g.log.some(w => w.path.startsWith('sessions/S/ideas/a')) && ideasOf(g, 'P3').filter(i => i.selectedBy === 'computer').length === 2 && g.read('sessions/S').status === 'group')
 }
 
 /* ── run 3: guards ─────────────────────────────────────────────────────── */
