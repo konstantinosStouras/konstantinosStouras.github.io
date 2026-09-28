@@ -21,7 +21,7 @@ import { Done } from './Survey'
 // Cloud Functions — see its header for why the draw is deterministic.
 import {
   topUpSelection, selectionPatch, carriedBy, carriedSummary,
-  SELECTED_BY, COMPUTER_SELECTED_LABEL,
+  SELECTED_BY, COMPUTER_SELECTED_LABEL, CARRY_FORWARD_RULE,
 } from '../utils/carryForward'
 import { getNextPhase } from '../utils/phaseSequence'
 import styles from './IndividualPhase.module.css'
@@ -602,7 +602,10 @@ export default function IndividualPhase() {
           <HeaderControls />
         </header>
         <div className={styles.confirmContainer}>
-          <div className={styles.confirmCard}>
+          {/* data-carry-rule: the version of the carry-forward rule this
+              bundle was built from — read by carry-forward-guard's
+              stale-bundle check, invisible to the participant. */}
+          <div className={styles.confirmCard} data-carry-rule={CARRY_FORWARD_RULE}>
             <div className={styles.confirmCheck}>{'✓'}</div>
             <h1 className={styles.confirmTitle}>Your ideas are submitted</h1>
             <p className={styles.confirmSub}>

@@ -3121,9 +3121,12 @@ and a group never sees a member's ideas change under it; a computer pick
 already recorded is honoured, never re-drawn. The group's own cards show no
 such tag. Tests:
 `node _ideasearchlab-src/tools/carry-forward-guard.mjs` (offline; the two
-copies must stay identical) and `carry-forward-page-guard.mjs` (Playwright over
-the Test-round sandbox). The server half needs
-`firebase deploy --only functions --project ideasearchlab`.
+copies must stay identical, and the shipped bundle must carry the module's
+version marker `CARRY_FORWARD_RULE`, bumped with every change),
+`carry-forward-server-guard.mjs` (runs the Cloud Function's force-advance
+with Firebase stubbed) and `carry-forward-page-guard.mjs` (Playwright over
+the Test-round sandbox, a force-advanced participant included). The server
+half needs `firebase deploy --only functions --project ideasearchlab`.
 
 **Admin "Test round" (no data logged).** Every session card in `/admin` has a
 **🧪 Test round** button that opens the whole participant flow (Welcome →

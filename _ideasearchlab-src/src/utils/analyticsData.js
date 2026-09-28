@@ -31,7 +31,7 @@ import {
   UNRECORDED, aiNovKey, aiUseKey, isAiModelKey, parseAiHeader, isBareAiScoreHeader, headerNoteKind,
   aiKpiDefs, aiModelSlugs, hasAiModelFields, panelMean,
 } from './aiScoreColumns.js'
-import { carriedBy } from './carryForward.js'
+import { carriedBy, SELECTED_BY } from './carryForward.js'
 // The page reads AI headers through this file too.
 export { isBareAiScoreHeader }
 
@@ -938,9 +938,16 @@ export function normalizeImportedRows(rawRows) {
       det_usefulness: numOrBlank(pick('det_usefulness', 'usefulness score (empirical)', 'usefulness score (objective)')),
       final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
       carried: /^(1|yes|true)$/i.test(String(pick('carried to group', 'carried', 'carried_to_group')).trim()) ? 1 : 0,
-      carried_by: carriedByFromCell(pick('carried by', 'carried_by', 'selected by')),
+      // Mirrors buildRowsForSession: a carried idea whose file says nothing
+      // about who chose it (every export made before the column existed) is
+      // 'unrecorded', and an idea that was not carried has no carrier.
+      carried_by: '',
       text,
     }
+
+    row.carried_by = row.carried
+      ? (carriedByFromCell(pick('carried by', 'carried_by', 'selected by')) || SELECTED_BY.UNRECORDED)
+      : ''
 
     // Carry through any OTHER continuous KPI column the file has (e.g. a re-imported
     // ideas_with_kpis / aggregate Rankings with Prototypicality, KS, …) as an uploaded

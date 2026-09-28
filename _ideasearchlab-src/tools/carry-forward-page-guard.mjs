@@ -20,6 +20,15 @@
  *   D. cap 2, 3 ideas written, NONE chosen and the selection clock (3 s)
  *      runs out → auto-submitted with 2 computer picks and the sentence that
  *      says so.
+ *   E. cap 3, 4 ideas written, 1 ticked, then the participant is FORCE-
+ *      ADVANCED into the group phase without submitting (the sandbox's
+ *      test-only hook flips their status, as the instructor's Advance does):
+ *      the group page lists exactly 3 of their ideas, and their own client
+ *      writes the 2 computer picks back to the documents with the tag.
+ * After every submit the DOCUMENTS are read back through the same hook: the
+ * participant's picks carry selectedBy 'participant', the computer's
+ * 'computer', the rest selected false — what the confirmation screen shows is
+ * what was persisted, not only what the page remembers.
  * Plus: the selection stage TELLS the participant fewer picks are filled in.
  */
 const PW = process.env.PW || '/opt/node22/lib/node_modules/playwright/index.mjs';
@@ -40,6 +49,16 @@ const srv = createServer(async (req, res) => {
 await new Promise(r => srv.listen(0, r));
 const B = `http://localhost:${srv.address().port}/lab/ideasearchlab/`;
 const TAG = 'Computer selected to group stage';
+// The sandbox's documents (previewDb.js exposes them in preview only).
+const readDocs = p => p.evaluate(() => window.__islPreview.docs('sessions/PREVIEW/ideas').map(d => ({ title: d.title, selected: !!d.selected, selectedBy: d.selectedBy === undefined ? null : d.selectedBy })));
+const docCheck = (label, docs, own, auto) => {
+  const byTitle = Object.fromEntries(docs.map(d => [d.title, d]));
+  const okOwn = own.every(t => byTitle[t] && byTitle[t].selected && byTitle[t].selectedBy === 'participant');
+  const okAuto = auto.every(t => byTitle[t] && byTitle[t].selected && byTitle[t].selectedBy === 'computer');
+  const rest = docs.filter(d => !own.includes(d.title) && !auto.includes(d.title));
+  const okRest = rest.every(d => !d.selected && d.selectedBy === null);
+  check(`${label}: the documents say the same — ${own.length} participant, ${auto.length} computer, ${rest.length} left`, okOwn && okAuto && okRest, JSON.stringify(docs));
+};
 
 let fails = 0;
 const check = (n, c, d) => { console.log((c ? '  ok   ' : '  FAIL ') + n + (c || !d ? '' : ' — ' + d)); if (!c) fails++; };
@@ -121,6 +140,7 @@ try {
     check(`two OTHER ideas are badged "${TAG}"`, auto.length === 2 && auto.every(x => x.title !== 'Idea D'), JSON.stringify(c.cards));
     check('the remaining two carry no badge', c.cards.filter(x => !x.badge).length === 2);
     const carriedA = new Set([...own, ...auto].map(x => x.title));
+    docCheck('A', await readDocs(p), own.map(x => x.title), auto.map(x => x.title));
     await p.waitForTimeout(16000);
     check('it advanced to the group phase after the hold', /\/group/.test(p.url()), p.url());
     await clickIf(/^start$/i, 1500);
@@ -146,6 +166,7 @@ try {
     check('both ideas carry, one by the computer', c.body.includes('2 ideas carry into the group phase: 1 you chose and 1 the computer selected at random.'), (c.body.match(/You submitted[^\n]*/) || [''])[0]);
     check('Idea A is the participant\'s, Idea B the computer\'s',
       c.cards.find(x => x.title === 'Idea A')?.badge.toLowerCase() === 'carried to group' && c.cards.find(x => x.title === 'Idea B')?.badge === TAG, JSON.stringify(c.cards));
+    docCheck('B', await readDocs(p), ['Idea A'], ['Idea B']);
     await p.close();
   }
 
@@ -160,6 +181,7 @@ try {
     const c = await readConfirmation(p);
     check('3 carry and nothing is added', c.body.includes('3 ideas carry into the group phase.') && !c.body.includes('computer'), (c.body.match(/You submitted[^\n]*/) || [''])[0]);
     check('no computer badge anywhere', c.cards.every(x => x.badge !== TAG) && c.cards.filter(x => /carried to group/i.test(x.badge)).length === 3, JSON.stringify(c.cards));
+    docCheck('C', await readDocs(p), ['Idea A', 'Idea B', 'Idea C'], []);
     await p.close();
   }
 
@@ -177,6 +199,40 @@ try {
     check('the clock auto-submitted', /Your ideas are submitted/i.test(c.body), c.body.slice(0, 160));
     check('2 carry, both chosen by the computer, and the sentence says why', c.body.includes('2 ideas carry into the group phase, selected by the computer at random because you chose none.'), (c.body.match(/You submitted[^\n]*/) || [''])[0]);
     check('two computer badges, one idea left', c.cards.filter(x => x.badge === TAG).length === 2 && c.cards.filter(x => !x.badge).length === 1, JSON.stringify(c.cards));
+    docCheck('D', await readDocs(p), [], c.cards.filter(x => x.badge === TAG).map(x => x.title));
+    await p.close();
+  }
+
+  /* ── E. force-advanced before submitting ─────────────────────────────── */
+  console.log('\n=== E. cap 3 · 4 ideas · 1 ticked · force-advanced without Finish & Submit ===');
+  {
+    const { p, clickIf } = await openIndividual({ ideasCarriedToGroup: 3 });
+    const titles = await writeIdeas(p, 4);
+    await clickIf(/Proceed to Selection/i, 900);
+    await choose(p, [titles[1]]);   // "Idea B", persisted by toggleSelect
+    const before = await readDocs(p);
+    check('before the advance: only the ticked idea is on the documents', before.filter(d => d.selected).length === 1 && before.find(d => d.title === 'Idea B').selectedBy === 'participant', JSON.stringify(before));
+    // The instructor's Advance, as the sandbox can express it: the participant's
+    // status flips to 'group' with no submit and no individualComplete.
+    await p.evaluate(() => window.__islPreview.setParticipant({ status: 'group' }));
+    await p.waitForTimeout(2500);
+    check('the participant lands on the group page', /\/group/.test(p.url()), p.url());
+    const after = await readDocs(p);
+    const auto = after.filter(d => d.selectedBy === 'computer').map(d => d.title);
+    check('their own client wrote 2 computer picks back to the documents', auto.length === 2 && !auto.includes('Idea B'), JSON.stringify(after));
+    docCheck('E', after, ['Idea B'], auto);
+    await clickIf(/^start$/i, 1500);
+    const g = await p.evaluate(() => {
+      const body = document.body.innerText || '';
+      const titles = [...document.querySelectorAll('h3, h4')].map(h => h.textContent.trim()).filter(t => /^Idea [A-Z]$/.test(t));
+      return { body, titles };
+    });
+    check('the group page lists exactly those 3 ideas', g.titles.length === 3 && g.titles.includes('Idea B') && auto.every(t => g.titles.includes(t)), g.titles.join(', '));
+    check('and shows the group no computer tag', !g.body.includes(TAG));
+    // Nothing more is written once the picks are recorded (no write loop).
+    await p.waitForTimeout(1500);
+    const again = await readDocs(p);
+    check('the documents are stable afterwards', JSON.stringify(again) === JSON.stringify(after));
     await p.close();
   }
 } catch (e) {

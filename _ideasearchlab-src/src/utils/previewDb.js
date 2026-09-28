@@ -287,3 +287,16 @@ export function ensurePreviewSeed() {
 }
 
 if (isPreview()) ensurePreviewSeed()
+
+// ── test-only inspection hook ────────────────────────────────────────────────
+// Only in the sandbox (the module is not even loaded otherwise): lets a browser
+// test read the sandbox's documents back and put the participant into a state
+// the solo flow cannot reach on its own — the instructor force-advancing them
+// into the group phase before they submitted. Nothing here runs in a real
+// session and nothing it does is saved anywhere.
+if (isPreview() && typeof window !== 'undefined') {
+  window.__islPreview = {
+    docs: collPath => collDocs(collPath).map(r => ({ id: r.id, ...r.data })),
+    setParticipant: patch => updateDoc(doc(PREVIEW_DB, 'sessions', PREVIEW_SESSION_ID, 'participants', PREVIEW_UID), patch),
+  }
+}

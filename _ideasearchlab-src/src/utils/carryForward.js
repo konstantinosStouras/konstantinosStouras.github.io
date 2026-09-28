@@ -45,6 +45,13 @@
 // reported as either. Every write since then carries one of the other two.
 const SELECTED_BY = Object.freeze({ PARTICIPANT: 'participant', COMPUTER: 'computer', UNRECORDED: 'unrecorded' })
 
+// Version marker of this rule. IndividualPhase renders it into the page, so
+// the SHIPPED bundle carries the value of the module it was built from and
+// tools/carry-forward-guard.mjs can tell a stale rebuild from a current one
+// (the tag strings alone are the same in every version). BUMP IT with every
+// change to this file.
+const CARRY_FORWARD_RULE = 'cf/2026-09-28b'
+
 /** The tag shown on an idea the computer moved to the group stage. */
 const COMPUTER_SELECTED_LABEL = 'Computer selected to group stage'
 
@@ -165,6 +172,6 @@ function carriedSummary(total, byComputer) {
 }
 
 export {
-  SELECTED_BY, COMPUTER_SELECTED_LABEL, carryTarget, hashStr, pickStable,
+  SELECTED_BY, COMPUTER_SELECTED_LABEL, CARRY_FORWARD_RULE, carryTarget, hashStr, pickStable,
   topUpSelection, carriedBy, isOwnPick, selectionPatch, patchChanges, carriedSummary,
 }

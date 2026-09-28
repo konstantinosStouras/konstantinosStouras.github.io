@@ -24,8 +24,13 @@
         participant flag, tag written), the group page's stable top-up and its
         write-back for the participant's own ideas, the Cloud Function's
         force-advance, the admin badge, the export and analytics columns;
-     4. that the SHIPPED bundle in lab/ideasearchlab carries the change (a
-        stale rebuild fails here rather than on a class).
+     4. that the SHIPPED bundle in lab/ideasearchlab was built from THIS
+        version of the module (the rule's version marker is rendered into the
+        page, so a stale rebuild fails here rather than on a class);
+     5. that the analytics rows round-trip: what buildRowsForSession says
+        about who carried an idea is what normalizeImportedRows reads back
+        from the exported headers, a file from before the column included.
+   The Cloud Function half is RUN by tools/carry-forward-server-guard.mjs.
    ========================================================================== */
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -47,7 +52,7 @@ const check = (name, cond, detail) => {
 
 const esm = await import(join(SRC, 'src', 'utils', 'carryForward.js'))
 const cjs = require(join(SRC, 'functions', 'carryForward.js'))
-const { topUpSelection, pickStable, carryTarget, carriedBy, isOwnPick, selectionPatch, patchChanges, carriedSummary, SELECTED_BY, COMPUTER_SELECTED_LABEL } = esm
+const { topUpSelection, pickStable, carryTarget, carriedBy, isOwnPick, selectionPatch, patchChanges, carriedSummary, SELECTED_BY, COMPUTER_SELECTED_LABEL, CARRY_FORWARD_RULE } = esm
 
 const ideas = n => Array.from({ length: n }, (_, i) => ({ id: `idea_${i + 1}` }))
 const ids = set => [...set].sort()
@@ -216,10 +221,19 @@ console.log('\n6. the stable picker')
 /* ── 7. the vendored copy ──────────────────────────────────────────────── */
 console.log('\n7. functions/carryForward.js is the same module')
 {
-  const body = p => read(p).replace(/\n(export \{|module\.exports = \{)[\s\S]*$/, '')
-  const a = body(join(SRC, 'src', 'utils', 'carryForward.js'))
-  const b = body(join(SRC, 'functions', 'carryForward.js'))
-  check('identical up to the export line', a === b)
+  // The WHOLE file is compared: the export statement must be the last thing
+  // in each copy (so nothing can hide after it), and everything before it
+  // must be byte-identical.
+  const split = p => {
+    const t = read(p)
+    const m = t.match(/\n(export \{[^}]*\}|module\.exports = \{[^}]*\})\s*$/)
+    return m ? { body: t.slice(0, m.index), names: m[1].replace(/^(export|module\.exports =) \{|\}$/g, '').replace(/\s+/g, '') } : null
+  }
+  const a = split(join(SRC, 'src', 'utils', 'carryForward.js'))
+  const b = split(join(SRC, 'functions', 'carryForward.js'))
+  check('each copy ends in its export statement and nothing else', !!a && !!b)
+  check('identical up to the export statement', !!a && !!b && a.body === b.body)
+  check('the export statements name the same things', !!a && !!b && a.names === b.names, a && b ? `${a.names} | ${b.names}` : '')
   check('the same names are exported', JSON.stringify(Object.keys(esm).sort()) === JSON.stringify(Object.keys(cjs).sort()), Object.keys(cjs).join())
   const dd = cjs.topUpSelection({ ideas: ideas(5), selectedIds: ['idea_2'], ideasCarried: 3 })
   const de = esm.topUpSelection({ ideas: ideas(5), selectedIds: ['idea_2'], ideasCarried: 3 })
@@ -256,6 +270,7 @@ console.log('\n8. the consumers (by source)')
   check('the timer\'s auto-submit is the same call', /markDone\(\)/.test(af))
   check('toggleSelect tags a manual pick as the participant\'s and drops a computer pick', /selected: on, selectedBy: on \? SELECTED_BY\.PARTICIPANT : null/.test(ind) && /setComputerIds\(prev => \{ if \(!prev\.has\(ideaId\)\) return prev/.test(ind))
   check('the confirmation screen badges the computer\'s picks', ind.includes('COMPUTER_SELECTED_LABEL') && ind.includes('confirmBadgeAuto') && ind.includes('carriedSummary(carried.length, computerCount)'))
+  check('the confirmation card renders the rule\'s version marker (the stale-bundle check depends on it)', /data-carry-rule=\{CARRY_FORWARD_RULE\}/.test(ind))
   check('the confirmation badges nothing when no group phase follows', /const isCarried = i => carriesForward && \(/.test(ind))
   check('the selection stage says at least one is needed and the REMAINING PLACES are filled at random (visible text, no tooltip)',
     /choose at least one; if you choose fewer than \{Math\.min\(ideasCarried, ideas\.length\)\}, the computer fills the remaining places at random from your other ideas/.test(ind)
@@ -292,15 +307,19 @@ console.log('\n8. the consumers (by source)')
 
   check('the Ideas sheet carries "Carried by"', /'Carried by': carriedBy\(idea\)/.test(exp) && /import \{ carriedBy \} from '\.\/carryForward'/.test(exp))
   check('the Conditions sheet counts the computer-selected ones', /'Carried-to-group ideas \(computer-selected\)'/.test(exp))
-  check('analytics rows carry carried_by, in and out (unrecorded included)', /carried_by: carriedBy\(idea\)/.test(ana) && /carried_by: carriedByFromCell\(pick\('carried by', 'carried_by', 'selected by'\)\)/.test(ana) && /'carried by', 'carried_by', 'selected by'/.test(ana) && /s === 'computer' \|\| s === 'participant' \|\| s === 'unrecorded'/.test(ana))
+  check('analytics rows carry carried_by, in and out (unrecorded included)', /carried_by: carriedBy\(idea\)/.test(ana) && /'carried by', 'carried_by', 'selected by'/.test(ana) && /s === 'computer' \|\| s === 'participant' \|\| s === 'unrecorded'/.test(ana))
   check('the export explains the unrecorded value', /unrecorded = carried in a session before 2026-09-28/.test(exp))
   check('the admin badge explains a legacy pick', /carriedBy\(idea\) === 'unrecorded'/.test(adm))
   check('the analytics download carries it too', /'Carried by': r\.carried_by \|\| ''/.test(dan))
+  check('the importer defaults a carried idea with no cell to unrecorded, an uncarried one to nothing',
+    /row\.carried_by = row\.carried\s*\n?\s*\? \(carriedByFromCell\(pick\('carried by', 'carried_by', 'selected by'\)\) \|\| SELECTED_BY\.UNRECORDED\)\s*\n?\s*: ''/.test(ana))
+  const pv = read(join(SRC, 'src', 'utils', 'previewDb.js'))
+  check('the sandbox exposes its inspection hook only in preview', /if \(isPreview\(\) && typeof window !== 'undefined'\) \{\s*\n\s*window\.__islPreview = \{/.test(pv) && /docs: collPath =>/.test(pv) && /setParticipant: patch =>/.test(pv))
   check('the admin session page badges the computer\'s picks', /computer selected to group/.test(adm) && /ideaSummaryBadgeAuto/.test(adm) && /import \{ carriedBy \} from '\.\.\/utils\/carryForward'/.test(adm))
 }
 
 /* ── 9. the shipped bundle ─────────────────────────────────────────────── */
-console.log('\n9. the shipped bundle (lab/ideasearchlab)')
+console.log('\n9. the shipped bundle (lab/ideasearchlab) was built from THIS module')
 {
   const html = read(join(SITE, 'lab', 'ideasearchlab', 'index.html'))
   const m = html.match(/assets\/(index-[^"']+\.js)/)
@@ -309,11 +328,47 @@ console.log('\n9. the shipped bundle (lab/ideasearchlab)')
   if (bundle) {
     const js = existsSync(bundle) ? read(bundle) : ''
     check(`the bundle ${m[1]} exists`, js.length > 0)
-    check('it carries the computer tag', js.includes(COMPUTER_SELECTED_LABEL))
-    check('it carries the selectedBy field and the confirmation sentence',
-      js.includes('selectedBy') && js.includes('the computer selected at random'))
-    check('it carries the export column', js.includes('Carried by'))
+    check(`it carries the CURRENT rule marker ${CARRY_FORWARD_RULE} (a stale rebuild fails here)`, js.includes(CARRY_FORWARD_RULE))
+    check('it carries the computer tag, the selectedBy field, the confirmation sentence and the export column',
+      js.includes(COMPUTER_SELECTED_LABEL) && js.includes('selectedBy') && js.includes('the computer selected at random') && js.includes('Carried by'))
   }
+  check('the marker is a dated version string', /^cf\/\d{4}-\d{2}-\d{2}[a-z]?$/.test(CARRY_FORWARD_RULE), CARRY_FORWARD_RULE)
+}
+
+/* ── 10. the analytics rows round-trip ─────────────────────────────────── */
+console.log('\n10. analytics rows: what the builder says is what the importer reads back')
+{
+  const { buildRowsForSession, normalizeImportedRows } = await import(join(SRC, 'src', 'utils', 'analyticsData.js'))
+  const session = { id: 's1', code: 'S1', name: 'test', phaseConfig: { individualPhaseActive: true, groupPhaseActive: true, phaseOrder: 'individual_first' }, aiConfig: {} }
+  const ideas = [
+    { id: 'i1', authorId: 'u1', phase: 'individual', title: 'own', description: 'd', selected: true, selectedBy: 'participant' },
+    { id: 'i2', authorId: 'u1', phase: 'individual', title: 'auto', description: 'd', selected: true, selectedBy: 'computer' },
+    { id: 'i3', authorId: 'u1', phase: 'individual', title: 'legacy', description: 'd', selected: true },
+    { id: 'i4', authorId: 'u1', phase: 'individual', title: 'left', description: 'd', selected: false },
+    { id: 'i5', authorId: 'u1', phase: 'individual', title: 'stale tag', description: 'd', selected: false, selectedBy: 'computer' },
+  ]
+  const participants = [{ id: 'u1', uid: 'u1', groupId: 'g0', anonymousLabel: 'p1' }]
+  const built = buildRowsForSession(session, ideas, participants, [])
+  const byId = Object.fromEntries(built.map(r => [r.idea_id, r]))
+  check('builder: participant / computer / unrecorded / blank / blank',
+    byId.i1 && byId.i1.carried_by === 'participant' && byId.i2.carried_by === 'computer' && byId.i3.carried_by === 'unrecorded' && byId.i4.carried_by === '' && byId.i5.carried_by === '',
+    JSON.stringify(built.map(r => [r.idea_id, r.carried, r.carried_by])))
+  check('builder: carried follows selected', byId.i1.carried === 1 && byId.i2.carried === 1 && byId.i3.carried === 1 && byId.i4.carried === 0 && byId.i5.carried === 0)
+  // The ideas download writes these two headers (DataAnalytics.jsx); read them back.
+  const exported = built.map(r => ({ 'Idea ID': r.idea_id, 'Session Code': r.session, 'Condition': r.condition, 'Stage': r.phase, 'Title': r.idea_title, 'Description': r.idea_description, 'Carried to group': r.carried ? 'Yes' : 'No', 'Carried by': r.carried_by }))
+  const back = normalizeImportedRows(exported)
+  const backById = Object.fromEntries(back.map(r => [r.idea_id, r]))
+  check('round trip: every idea comes back with the same (carried, carried_by)',
+    built.every(r => backById[r.idea_id] && backById[r.idea_id].carried === r.carried && backById[r.idea_id].carried_by === r.carried_by),
+    JSON.stringify(back.map(r => [r.idea_id, r.carried, r.carried_by])))
+  // A file from before the column existed: carried ideas read as unrecorded.
+  const old = normalizeImportedRows(exported.map(({ 'Carried by': _drop, ...rest }) => rest))
+  const oldById = Object.fromEntries(old.map(r => [r.idea_id, r]))
+  check('a file with no "Carried by" column: carried → unrecorded, not carried → blank',
+    oldById.i1.carried_by === 'unrecorded' && oldById.i2.carried_by === 'unrecorded' && oldById.i3.carried_by === 'unrecorded' && oldById.i4.carried_by === '' && oldById.i5.carried_by === '')
+  // A contradictory cell never invents a carrier for an idea that was not carried.
+  const odd = normalizeImportedRows([{ 'Idea ID': 'x', 'Session Code': 'S1', 'Condition': 'None', 'Title': 't', 'Description': 'd', 'Carried to group': 'No', 'Carried by': 'computer' }])
+  check('"Carried to group: No" wins over a stray "Carried by"', odd[0].carried === 0 && odd[0].carried_by === '')
 }
 
 console.log(fail ? `\n${fail} check(s) FAILED` : '\nAll checks passed')
