@@ -5,6 +5,10 @@ const admin = require('firebase-admin')
 // Never move a participant BACKWARDS when a group advances together — see
 // functions/phaseGuard.js for the bug this exists to prevent.
 const { statusPhaseIndex, shouldSetStatus } = require('./phaseGuard')
+// The carry-forward rule (owner 2026-09-28), vendored from
+// src/utils/carryForward.js — tools/carry-forward-guard.mjs keeps the two
+// copies identical.
+const { topUpSelection, selectionPatch, patchChanges, carriedBy, isOwnPick, isLegacySubmission } = require('./carryForward')
 
 const db = admin.firestore()
 
@@ -460,6 +464,9 @@ exports.advancePhase = functions.https.onCall(async (data, context) => {
   // Update participant statuses based on next phase
   const participantsSnap = await sessionRef.collection('participants').get()
   const batch = db.batch()
+  // Everyone this advance puts INTO the group phase: their carried ideas are
+  // topped up to the cap first (see topUpCarriedIdeas below).
+  const enteringGroup = []
 
   participantsSnap.docs.forEach(pDoc => {
     const p = pDoc.data()
@@ -502,7 +509,20 @@ exports.advancePhase = functions.https.onCall(async (data, context) => {
     if (newStatus !== p.status) {
       batch.update(pDoc.ref, { status: newStatus })
     }
+    if (nextPhase === 'group' && newStatus === 'group') enteringGroup.push({ id: pDoc.id, ...p })
   })
+
+  // The carry-forward rule, applied BEFORE the status flip so the group reads
+  // a complete, tagged selection from its first snapshot. Non-fatal: the group
+  // page derives the same (stable) set on its own and the member's own client
+  // writes it back, so a failure here costs nothing but the tag until then.
+  if (enteringGroup.length) {
+    try {
+      await topUpCarriedIdeas(sessionRef, enteringGroup, session.phaseConfig)
+    } catch (err) {
+      console.error('topUpCarriedIdeas failed:', err)
+    }
+  }
 
   await batch.commit()
 
@@ -513,6 +533,77 @@ exports.advancePhase = functions.https.onCall(async (data, context) => {
   return { nextPhase }
 })
 
+
+/**
+ * topUpCarriedIdeas
+ *
+ * A participant who never reached Finish & Submit (the instructor force-
+ * advanced the session) has only the ideas they had ticked so far flagged
+ * `selected`. The rule says they still send `ideasCarriedToGroup` ideas when
+ * they wrote that many: fill the selection up to the cap from their other
+ * ideas and tag those `selectedBy: 'computer'`. The module's deterministic
+ * pick, so this set is exactly the one every group member's page derives for
+ * them from the same documents (and the one their own client would write
+ * back) — a random draw here would change the group's list under its members.
+ * A participant who already submitted normally has a full selection, so the
+ * transaction changes nothing; one whose selection is SHORT anyway (their
+ * ideas batch was refused, or the cap was raised after they submitted) is
+ * topped up like anyone else entering the group phase — the rule is about
+ * what the group receives. Only a selection submitted under the OLD rule (an
+ * untagged carried idea) is left exactly as submitted (`isLegacySubmission`).
+ *
+ * One session-wide read of the individual-stage ideas finds each entering
+ * participant's ideas; then ONE TRANSACTION PER PARTICIPANT re-reads every
+ * one of their ideas, decides from those fresh documents and writes the
+ * changes. A transaction commits only if none of the documents it READ
+ * changed meanwhile, whether or not it wrote them: a pick the participant
+ * makes on ANY of their ideas while this runs (their clock expiring as the
+ * instructor presses Advance, a last-instant Select) makes it retry from the
+ * new documents and decide again, so the cap is never exceeded and two
+ * writers never leave two sets. Non-fatal per participant: a participant
+ * whose transaction still fails is skipped, and their own client heals the
+ * documents when they reach the group page.
+ */
+async function topUpCarriedIdeas(sessionRef, participants, phaseConfig) {
+  const ideasCarried = (phaseConfig && phaseConfig.ideasCarriedToGroup) || 3
+  const snap = await sessionRef.collection('ideas').where('phase', '==', 'individual').get()
+  const refsByAuthor = {}
+  snap.docs.forEach(d => {
+    const authorId = d.get('authorId')
+    if (!authorId) return
+    ;(refsByAuthor[authorId] = refsByAuthor[authorId] || []).push(d.ref)
+  })
+  let written = 0
+  for (const p of participants) {
+    const refs = refsByAuthor[p.id] || []
+    if (!refs.length) continue
+    try {
+      written += await db.runTransaction(async tx => {
+        const snaps = await Promise.all(refs.map(r => tx.get(r)))
+        const mine = snaps.filter(sn => sn.exists).map(sn => ({ id: sn.id, ...sn.data() }))
+          .filter(i => i.phase === 'individual' && i.authorId === p.id)
+        if (isLegacySubmission(p, mine)) return 0
+        const decision = topUpSelection({
+          ideas: mine,
+          selectedIds: mine.filter(isOwnPick).map(i => i.id),
+          priorComputer: mine.filter(i => carriedBy(i) === 'computer').map(i => i.id),
+          ideasCarried,
+        })
+        let n = 0
+        mine.forEach(idea => {
+          const patch = selectionPatch(idea.id, decision)
+          if (!patchChanges(idea, patch)) return
+          tx.update(sessionRef.collection('ideas').doc(idea.id), patch)
+          n++
+        })
+        return n
+      })
+    } catch (err) {
+      console.warn(`topUpCarriedIdeas: skipped ${p.id} (${err.code || err.message})`)
+    }
+  }
+  return written
+}
 
 /**
  * tallyGroupVotes

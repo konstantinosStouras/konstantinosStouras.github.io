@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   collection, addDoc, onSnapshot, query, where, orderBy,
-  serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, db
+  serverTimestamp, doc, updateDoc, writeBatch, arrayUnion, arrayRemove, db
 } from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import { useSession, useSessionEnded, useAIModelLabel } from '../context/SessionContext'
@@ -17,6 +17,11 @@ import { getNextPhase } from '../utils/phaseSequence'
 import { groupTimers, minutesOf } from '../utils/phaseTimers'
 import RichText from '../components/RichText'
 import { Done } from './Survey'
+// The carry-forward rule shared with IndividualPhase and the Cloud Functions:
+// a member's own picks first, the computer filling the rest up to the cap —
+// deterministically, so every member derives the same set from the same
+// documents (see the module header for why).
+import { topUpSelection, carriedBy, isOwnPick, isLegacySubmission, selectionPatch, patchChanges } from '../utils/carryForward'
 import styles from './GroupPhase.module.css'
 
 const MAX_VOTES = 3
@@ -50,18 +55,6 @@ function formatTime(timestamp) {
   if (!timestamp?.seconds) return ''
   const d = new Date(timestamp.seconds * 1000)
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-// Deterministic pseudo-random pick: stable across renders for the same set of
-// ideas. Used to pick ideas "on behalf of" a participant who selected none, so
-// the carried-forward subset is random (not just the latest) and never reshuffles.
-function hashStr(s) {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
-  return h
-}
-function pickRandomStable(arr, n) {
-  return [...arr].sort((a, b) => hashStr(a.id) - hashStr(b.id)).slice(0, n)
 }
 
 // IdeaPill and ChatBubble are defined at module scope (not inside GroupPhase) so
@@ -517,9 +510,51 @@ export default function GroupPhase() {
   // re-delivered the lot. That churn is what made the ideas list re-render (and
   // a tap land on the wrong card) while people were voting.
   const memberKey = members.map(m => m.id).sort().join(',')
+  const myUid = user?.uid
+  // Each member's document, for the legacy gate below. Read through a ref so
+  // the listener effect keys on the stable memberKey, not the members array.
+  const membersByIdRef = useRef({})
+  membersByIdRef.current = Object.fromEntries(members.map(m => [m.id, m]))
+  // Computer picks this participant's own client has already written back
+  // (one write per idea, ever), see persistComputerPicks below.
+  const healedRef = useRef(new Set())
   useEffect(() => {
     if (!sessionId || !groupId || !memberKey) return
     const memberIds = memberKey.split(',')
+
+    // A member's carried set is their own picks topped up to the cap by the
+    // computer (owner 2026-09-28: 1 of 3 chosen → 2 more, never just the 1).
+    // Finish & Submit persists that top-up before the group can read it, so
+    // normally there is nothing to add here. A member the instructor
+    // FORCE-ADVANCED before they submitted still carries only what they had
+    // ticked (toggleSelect saves each pick as it is made), and this is where
+    // the rest is filled in — with the module's deterministic pick, so all
+    // members derive the same set from the same documents, and a computer
+    // pick already on the documents is honoured. THIS participant's own client
+    // then writes the picks not yet recorded back with the 'computer' tag, so
+    // the export says who picked what (the rules let an author update only
+    // their own ideas). The Cloud Function's force-advance writes the same set
+    // server-side; the two agree by construction. The write-back here runs
+    // only in the force-advanced participant's OWN browser, so a participant
+    // who is not there at all (the case force-advance exists for) is covered
+    // by the function alone — deploy it. It is SYMMETRIC: every own idea whose
+    // document disagrees with the derived set is patched — a computer pick
+    // recorded, and a surplus one (a pick of the participant's that landed
+    // while the server was deciding) released — so the documents converge on
+    // exactly the set every reader derives, once per (idea, patch).
+    const healOwnIdeas = (mine, decision) => {
+      const batch = writeBatch(db)
+      let n = 0
+      mine.forEach(idea => {
+        const patch = selectionPatch(idea.id, decision)
+        const key = `${idea.id}:${patch.selected}:${patch.selectedBy}`
+        if (!patchChanges(idea, patch) || healedRef.current.has(key)) return
+        healedRef.current.add(key)
+        batch.update(doc(db, 'sessions', sessionId, 'ideas', idea.id), patch)
+        n++
+      })
+      if (n) batch.commit().catch(err => console.warn('Could not record the carried set:', err.message))
+    }
 
     const unsub = onSnapshot(
       query(
@@ -528,15 +563,21 @@ export default function GroupPhase() {
       ),
       snap => {
         const all = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        const membersById = membersByIdRef.current
 
         const individualIdeas = memberIds.flatMap(uid => {
           const mine = all.filter(i => i.authorId === uid && i.phase === 'individual')
-          const selected = mine.filter(i => i.selected)
-          if (selected.length > 0) return selected
-          // Participant never selected any ideas (e.g. inactive): the system
-          // selects on their behalf, choosing a random (deterministic, stable)
-          // subset so the group still gets a fair carry-forward.
-          return pickRandomStable(mine, ideasCarried)
+          // A selection submitted under the OLD rule (completed, with an
+          // untagged carried idea) stays exactly as submitted — see the module.
+          if (isLegacySubmission(membersById[uid], mine)) return mine.filter(i => i.selected)
+          const decision = topUpSelection({
+            ideas: mine,
+            selectedIds: mine.filter(isOwnPick).map(i => i.id),
+            priorComputer: mine.filter(i => carriedBy(i) === 'computer').map(i => i.id),
+            ideasCarried,
+          })
+          if (uid === myUid) healOwnIdeas(mine, decision)
+          return mine.filter(i => decision.selection.has(i.id))
         })
 
         // A group idea is authored by a member of this group, so the same
@@ -548,7 +589,7 @@ export default function GroupPhase() {
       err => console.error('Group ideas listener error:', err)
     )
     return unsub
-  }, [sessionId, groupId, memberKey, ideasCarried])
+  }, [sessionId, groupId, memberKey, ideasCarried, myUid])
 
   // ── Listen to chat messages ─────────────────────────
   useEffect(() => {

@@ -121,7 +121,7 @@ try {
   await noteControls('individual confirmation');
   const body1 = await p.innerText('body');
   check('the submission summary is shown', /Your ideas are submitted/i.test(body1), body1.slice(0,120));
-  check('it lists the carried ideas', /CARRIED TO GROUP|Carried to group/i.test(body1));
+  check('it lists the carried ideas', /Carried to group|Computer selected to group/i.test(body1));
   const holdLine = (body1.match(/starts in (\d+)s/i) || [])[1];
   check('the 15s hold countdown is running', Number(holdLine) > 0 && Number(holdLine) <= 15, `line="${(body1.match(/.*starts in.*/i)||[''])[0]}"`);
   const clock1 = await headerClock();

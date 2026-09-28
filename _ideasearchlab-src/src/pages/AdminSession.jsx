@@ -9,6 +9,7 @@ import { individualTimers, groupTimers, formatDuration } from '../utils/phaseTim
 import { MODEL_PRICES, USD_TO_EUR, PRICES_AS_OF, replyCostUSD } from '../data/aiPricing'
 import * as XLSX from 'xlsx-js-style'
 import { exportSessionWorkbook } from '../utils/sessionExport'
+import { carriedBy } from '../utils/carryForward'
 import { participantIsDone, hasCompletedSurvey, healFinishedParticipants, healParticipantIdentities } from '../utils/participantStatus'
 import { displayNameOrId, displayEmail, realIdentity } from '../utils/participantIdentity'
 import styles from './AdminSession.module.css'
@@ -718,7 +719,16 @@ export default function AdminSession() {
                                   )}
                                 </div>
                                 {idea.selected && (
-                                  <span className={styles.ideaSummaryBadge}>carried to group</span>
+                                  <span
+                                    className={`${styles.ideaSummaryBadge} ${carriedBy(idea) === 'computer' ? styles.ideaSummaryBadgeAuto : ''}`}
+                                    title={carriedBy(idea) === 'computer'
+                                      ? 'The participant chose fewer ideas than the number that carries forward; the computer picked this one at random.'
+                                      : carriedBy(idea) === 'unrecorded'
+                                        ? 'Carried into the group phase before the app recorded who chose an idea (2026-09-28): their own pick, or the old timer\'s auto-pick if they chose none.'
+                                        : 'The participant chose this idea to carry into the group phase.'}
+                                  >
+                                    {carriedBy(idea) === 'computer' ? 'computer selected to group' : 'carried to group'}
+                                  </span>
                                 )}
                               </div>
                             ))}
@@ -755,7 +765,16 @@ export default function AdminSession() {
                                 )}
                               </div>
                               {idea.selected && (
-                                <span className={styles.ideaSummaryBadge}>carried to group</span>
+                                <span
+                                  className={`${styles.ideaSummaryBadge} ${carriedBy(idea) === 'computer' ? styles.ideaSummaryBadgeAuto : ''}`}
+                                  title={carriedBy(idea) === 'computer'
+                                    ? 'The participant chose fewer ideas than the number that carries forward; the computer picked this one at random.'
+                                    : carriedBy(idea) === 'unrecorded'
+                                      ? 'Carried into the group phase before the app recorded who chose an idea (2026-09-28): their own pick, or the old timer\'s auto-pick if they chose none.'
+                                      : 'The participant chose this idea to carry into the group phase.'}
+                                >
+                                  {carriedBy(idea) === 'computer' ? 'computer selected to group' : 'carried to group'}
+                                </span>
                               )}
                             </div>
                           ))}

@@ -3094,6 +3094,44 @@ clock across both stages, expiring straight into the auto-submit exactly as
 before (`migratePhaseTimers` fills the per-stage fields from them wherever a
 stored `phaseConfig` is read, so a legacy session never loses its countdown).
 
+**A participant always carries the cap's worth of ideas into the group phase;
+the computer fills in what they did not choose** (owner 2026-09-28, from the
+data: participants who generated 3 or more ideas but selected only k = 0, 1 or
+2 arrived in the group with k). Their own picks go first; the remaining
+`ideasCarriedToGroup − k` are picked **uniformly at random** from the ideas they
+did not choose and each is tagged `selectedBy: 'computer'` ("Computer selected
+to group stage" on the confirmation screen, "computer selected to group" on the
+admin's session page, `Carried by = computer` in the export's Ideas sheet and
+the analytics rows; an idea carried before this shipped reads `unrecorded`,
+never `participant`, because the old clock's auto-pick was untagged too) so
+the data says who put each idea there. Someone with
+fewer ideas than the cap sends all of them; nothing is added when no group
+phase follows (a `group_first` session). The rule lives in ONE pure module,
+`_ideasearchlab-src/src/utils/carryForward.js`, vendored byte-for-byte into
+`functions/carryForward.js` for the Cloud Functions, and its pick is
+DETERMINISTIC on purpose — ideas ordered by a hash of their random Firestore
+ids, which is a uniform draw in distribution (measured) but the SAME draw from
+every reader: Finish & Submit and the selection clock's auto-submit (which
+persist the ideas batch BEFORE marking the participant complete, since that
+flag is what moves the group on), every group member's page for a member the
+instructor advanced before they submitted, and the server's force-advance
+(`advancePhase`, one transaction per participant over fresh reads of all
+their ideas) all reach one set from the same documents, so two writers can
+never land two "random" sets on one participant and a group never sees a
+member's ideas change under it; a computer pick already recorded is
+honoured, never re-drawn, a pick made from another tab or device counts as
+the participant's, the participant's own group page heals their documents
+to the derived set both ways, and a selection SUBMITTED under the older
+untagged rule is left exactly as submitted. The group's own cards show no
+such tag. Tests:
+`node _ideasearchlab-src/tools/carry-forward-guard.mjs` (offline; the two
+copies must stay identical, and the shipped bundle must carry the module's
+version marker `CARRY_FORWARD_RULE`, bumped with every change),
+`carry-forward-server-guard.mjs` (runs the Cloud Function's force-advance
+with Firebase stubbed) and `carry-forward-page-guard.mjs` (Playwright over
+the Test-round sandbox, a force-advanced participant included). The server
+half needs `firebase deploy --only functions --project ideasearchlab`.
+
 **Admin "Test round" (no data logged).** Every session card in `/admin` has a
 **🧪 Test round** button that opens the whole participant flow (Welcome →
 Registration → Individual → Group → Survey → Done) in a throwaway sandbox tab
