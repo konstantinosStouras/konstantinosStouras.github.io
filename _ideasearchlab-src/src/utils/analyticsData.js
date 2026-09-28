@@ -31,6 +31,7 @@ import {
   UNRECORDED, aiNovKey, aiUseKey, isAiModelKey, parseAiHeader, isBareAiScoreHeader, headerNoteKind,
   aiKpiDefs, aiModelSlugs, hasAiModelFields, panelMean,
 } from './aiScoreColumns.js'
+import { carriedBy } from './carryForward.js'
 // The page reads AI headers through this file too.
 export { isBareAiScoreHeader }
 
@@ -673,6 +674,9 @@ export function buildRowsForSession(session, ideas = [], participants = [], grou
       // to carry forward (idea.selected). Group-stage ideas weren't "carried"; the
       // enteredGroupPhase() helper adds them in via phase.
       carried: idea.selected ? 1 : 0,
+      // 'participant' or 'computer' (the computer filled the selection up to
+      // the cap at random — owner 2026-09-28); '' when not carried.
+      carried_by: carriedBy(idea),
       text,
     }
   })
@@ -933,6 +937,7 @@ export function normalizeImportedRows(rawRows) {
       det_usefulness: numOrBlank(pick('det_usefulness', 'usefulness score (empirical)', 'usefulness score (objective)')),
       final_pick: /^(1|yes|true)$/i.test(String(pick('final group pick', 'final_pick', 'final pick', 'final', 'selected')).trim()) ? 1 : 0,
       carried: /^(1|yes|true)$/i.test(String(pick('carried to group', 'carried', 'carried_to_group')).trim()) ? 1 : 0,
+      carried_by: carriedByFromCell(pick('carried by', 'carried_by', 'selected by')),
       text,
     }
 
@@ -976,11 +981,17 @@ const STD_IMPORT_COLS = new Set([
   'author name', 'author label', 'author_name', 'name', 'author email', 'email', 'author_email',
   'idea title', 'title', 'description', 'full text', 'text', 'idea', 'idea_text', 'content',
   'final group pick', 'final_pick', 'final pick', 'final', 'selected',
-  'carried to group', 'carried', 'carried_to_group', 'final pick rank',
+  'carried to group', 'carried', 'carried_to_group', 'carried by', 'carried_by', 'selected by', 'final pick rank',
   'exclude (yes/no)', 'exclude', 'excluded', 'exclusion reason',
   'votes', 'vote count', 'votes cast', 'created at', 'createdat',
   'n edges', 'n_edges', 'n nodes', 'n_nodes', 'scorable', 'score_mode', 'score mode',
 ])
+
+/** A "Carried by" cell read back from a file: 'participant' | 'computer' | '' (absent or anything else). */
+function carriedByFromCell(v) {
+  const s = String(v == null ? '' : v).trim().toLowerCase()
+  return s === 'computer' || s === 'participant' ? s : ''
+}
 
 /** Truthiness from a 0/1 dummy (preferred) or a Yes/No flag; null if unknown. */
 function toFlag(zeroOne, yesNo) {

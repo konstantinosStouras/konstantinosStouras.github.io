@@ -3094,6 +3094,30 @@ clock across both stages, expiring straight into the auto-submit exactly as
 before (`migratePhaseTimers` fills the per-stage fields from them wherever a
 stored `phaseConfig` is read, so a legacy session never loses its countdown).
 
+**A participant always carries the cap's worth of ideas into the group phase;
+the computer fills in what they did not choose** (owner 2026-09-28, from the
+data: participants who generated 3 or more ideas but selected only k = 0, 1 or
+2 arrived in the group with k). Their own picks go first; the remaining
+`ideasCarriedToGroup − k` are picked **uniformly at random** from the ideas they
+did not choose and each is tagged `selectedBy: 'computer'` ("Computer selected
+to group stage" on the confirmation screen, "computer selected to group" on the
+admin's session page, `Carried by = computer` in the export's Ideas sheet and
+the analytics rows) so the data says who put each idea there. Someone with
+fewer ideas than the cap sends all of them. The rule lives in ONE pure module,
+`_ideasearchlab-src/src/utils/carryForward.js`, vendored byte-for-byte into
+`functions/carryForward.js` for the Cloud Functions: Finish & Submit and the
+selection clock's auto-submit draw at random and persist the ideas batch BEFORE
+marking the participant complete (that flag is what moves the group on); the
+group page and the server's force-advance (`advancePhase`) use the module's
+STABLE picker, a hash of the random Firestore ids, so a member the instructor
+advanced before they submitted gets the same top-up from every reader, which
+the member's own client (and the function) then writes back with the tag.
+The group's own cards show no such tag. Tests:
+`node _ideasearchlab-src/tools/carry-forward-guard.mjs` (offline; the two
+copies must stay identical) and `carry-forward-page-guard.mjs` (Playwright over
+the Test-round sandbox). The server half needs
+`firebase deploy --only functions --project ideasearchlab`.
+
 **Admin "Test round" (no data logged).** Every session card in `/admin` has a
 **🧪 Test round** button that opens the whole participant flow (Welcome →
 Registration → Individual → Group → Survey → Done) in a throwaway sandbox tab

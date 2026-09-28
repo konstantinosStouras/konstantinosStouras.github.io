@@ -519,6 +519,13 @@
   padding: 3px 9px;
   white-space: nowrap;
 }
+/* Carried by the computer, not the participant — see .confirmBadgeAuto in
+   IndividualPhase.module.css (keep the two in step). */
+.ideaSummaryBadgeAuto {
+  color: #3b6ea5;
+  background: rgba(59,110,165,0.10);
+  border-color: rgba(59,110,165,0.35);
+}
 
 /* Submitted ideas, grouped by group → participant */
 .ideaGroups { display: flex; flex-direction: column; gap: 18px; margin-top: 8px; }

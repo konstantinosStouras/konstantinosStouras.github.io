@@ -1395,6 +1395,7 @@ export default function DataAnalytics() {
         'Author Email': r.author_email || '',
         'Final Group Pick': r.final_pick ? 'Yes' : 'No',
         'Carried to group': r.carried ? 'Yes' : 'No',
+        'Carried by': r.carried_by || '',
         'Title': r.idea_title || '',
         'Description': r.idea_description || '',
         'Full Text': r.text || '',

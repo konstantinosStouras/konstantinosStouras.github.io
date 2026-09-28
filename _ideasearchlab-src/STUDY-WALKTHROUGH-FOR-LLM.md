@@ -207,6 +207,15 @@ If the **selection** timer expired before they finished, the system
 **auto-submitted** whatever existed and auto-selected ideas up to the carry limit,
 so no one could stall their group by never finishing.
 
+**Since 2026-09-28 the carry limit is always met when it can be.** A participant
+who wrote at least 3 ideas but chose fewer (0, 1 or 2) sends 3 anyway: their own
+picks first, the rest picked by the computer uniformly at random from their
+other ideas. In the export the Ideas sheet's **Carried by** column says
+`participant` or `computer` for every carried idea (blank = not carried). Data
+collected BEFORE that date has no such column: there, a participant who chose
+1 of 3 arrived in the group with 1, and only a participant who chose NONE had
+ideas picked for them (a deterministic pick, untagged).
+
 ---
 
 ## 6. The Group phase (in detail)

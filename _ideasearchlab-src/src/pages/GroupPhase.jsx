@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   collection, addDoc, onSnapshot, query, where, orderBy,
-  serverTimestamp, doc, updateDoc, arrayUnion, arrayRemove, db
+  serverTimestamp, doc, updateDoc, writeBatch, arrayUnion, arrayRemove, db
 } from '../utils/db'
 import { useAuth } from '../context/AuthContext'
 import { useSession, useSessionEnded, useAIModelLabel } from '../context/SessionContext'
@@ -17,6 +17,11 @@ import { getNextPhase } from '../utils/phaseSequence'
 import { groupTimers, minutesOf } from '../utils/phaseTimers'
 import RichText from '../components/RichText'
 import { Done } from './Survey'
+// The carry-forward rule shared with IndividualPhase and the Cloud Functions:
+// a member's own picks first, the computer filling the rest up to the cap.
+// Here the STABLE picker, so every member derives the same set — see the
+// module header for why.
+import { topUpSelection, pickStable, SELECTED_BY } from '../utils/carryForward'
 import styles from './GroupPhase.module.css'
 
 const MAX_VOTES = 3
@@ -50,18 +55,6 @@ function formatTime(timestamp) {
   if (!timestamp?.seconds) return ''
   const d = new Date(timestamp.seconds * 1000)
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-// Deterministic pseudo-random pick: stable across renders for the same set of
-// ideas. Used to pick ideas "on behalf of" a participant who selected none, so
-// the carried-forward subset is random (not just the latest) and never reshuffles.
-function hashStr(s) {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
-  return h
-}
-function pickRandomStable(arr, n) {
-  return [...arr].sort((a, b) => hashStr(a.id) - hashStr(b.id)).slice(0, n)
 }
 
 // IdeaPill and ChatBubble are defined at module scope (not inside GroupPhase) so
@@ -517,9 +510,35 @@ export default function GroupPhase() {
   // re-delivered the lot. That churn is what made the ideas list re-render (and
   // a tap land on the wrong card) while people were voting.
   const memberKey = members.map(m => m.id).sort().join(',')
+  const myUid = user?.uid
+  // Computer picks this participant's own client has already written back
+  // (one write per idea, ever), see persistComputerPicks below.
+  const healedRef = useRef(new Set())
   useEffect(() => {
     if (!sessionId || !groupId || !memberKey) return
     const memberIds = memberKey.split(',')
+
+    // A member's carried set is their own picks topped up to the cap by the
+    // computer (owner 2026-09-28: 1 of 3 chosen → 2 more, never just the 1).
+    // Finish & Submit persists that top-up before the group can read it, so
+    // normally there is nothing to add here. A member the instructor
+    // FORCE-ADVANCED before they submitted still carries only what they had
+    // ticked (toggleSelect saves each pick as it is made), and this is where
+    // the rest is filled in — with the STABLE picker, so all members derive the
+    // same set from the same documents. THIS participant's own client then
+    // writes exactly that set back with the 'computer' tag, so the export says
+    // who picked what (the rules let an author update only their own ideas).
+    // The Cloud Function's force-advance writes the same set server-side; the
+    // two agree by construction, and either alone is enough.
+    const persistComputerPicks = ids => {
+      const fresh = [...ids].filter(id => !healedRef.current.has(id))
+      if (!fresh.length) return
+      fresh.forEach(id => healedRef.current.add(id))
+      const batch = writeBatch(db)
+      fresh.forEach(id => batch.update(doc(db, 'sessions', sessionId, 'ideas', id),
+        { selected: true, selectedBy: SELECTED_BY.COMPUTER }))
+      batch.commit().catch(err => console.warn('Could not record the computer-selected ideas:', err.message))
+    }
 
     const unsub = onSnapshot(
       query(
@@ -531,12 +550,14 @@ export default function GroupPhase() {
 
         const individualIdeas = memberIds.flatMap(uid => {
           const mine = all.filter(i => i.authorId === uid && i.phase === 'individual')
-          const selected = mine.filter(i => i.selected)
-          if (selected.length > 0) return selected
-          // Participant never selected any ideas (e.g. inactive): the system
-          // selects on their behalf, choosing a random (deterministic, stable)
-          // subset so the group still gets a fair carry-forward.
-          return pickRandomStable(mine, ideasCarried)
+          const decision = topUpSelection({
+            ideas: mine,
+            selectedIds: mine.filter(i => i.selected).map(i => i.id),
+            ideasCarried,
+            pick: pickStable,
+          })
+          if (uid === myUid && decision.computerPicked.size > 0) persistComputerPicks(decision.computerPicked)
+          return mine.filter(i => decision.selection.has(i.id))
         })
 
         // A group idea is authored by a member of this group, so the same
@@ -548,7 +569,7 @@ export default function GroupPhase() {
       err => console.error('Group ideas listener error:', err)
     )
     return unsub
-  }, [sessionId, groupId, memberKey, ideasCarried])
+  }, [sessionId, groupId, memberKey, ideasCarried, myUid])
 
   // ── Listen to chat messages ─────────────────────────
   useEffect(() => {

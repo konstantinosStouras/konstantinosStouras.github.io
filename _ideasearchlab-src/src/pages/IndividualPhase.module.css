@@ -688,6 +688,14 @@
   border-radius: 20px;
   padding: 3px 10px;
 }
+/* An idea the COMPUTER carried (the participant chose fewer than the cap):
+   the same pill in a cooler steel-blue, so the two kinds read apart at a
+   glance — mirrored by .ideaSummaryBadgeAuto on the admin's session page. */
+.confirmBadgeAuto {
+  color: #3b6ea5;
+  background: rgba(59,110,165,0.10);
+  border-color: rgba(59,110,165,0.35);
+}
 .confirmItemDesc {
   font-size: 13.5px;
   color: var(--muted);

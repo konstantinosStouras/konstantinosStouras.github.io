@@ -15,18 +15,15 @@ import { getContent } from '../data/defaultContent'
 import { individualTimers, minutesOf } from '../utils/phaseTimers'
 import RichText from '../components/RichText'
 import { Done } from './Survey'
+// The carry-forward rule (owner 2026-09-28): the participant's own picks first,
+// the computer filling the rest up to the cap uniformly at random, each such
+// idea tagged `selectedBy: 'computer'`. One module, shared with the group page
+// and the Cloud Functions — see its header.
+import {
+  topUpSelection, pickUniform, selectionPatch, carriedBy, carriedSummary,
+  SELECTED_BY, COMPUTER_SELECTED_LABEL,
+} from '../utils/carryForward'
 import styles from './IndividualPhase.module.css'
-
-// Deterministic pseudo-random pick, stable across renders for the same ideas.
-// Used to select ideas "on behalf of" a participant who chose none.
-function hashStr(s) {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
-  return h
-}
-function pickRandomStable(arr, n) {
-  return [...arr].sort((a, b) => hashStr(a.id) - hashStr(b.id)).slice(0, n)
-}
 
 // How long the submission-confirmation screen is guaranteed to stay on screen
 // before this page follows a status change to the next phase.
@@ -73,6 +70,10 @@ export default function IndividualPhase() {
   const individualOpenedWrittenRef = useRef(false)
   const [briefOpen, setBriefOpen] = useState(true)
   const [selectedIds, setSelectedIds] = useState(new Set())
+  // Ideas the computer added to the carried set at submit (see markDone), so
+  // the confirmation screen can badge them before the ideas snapshot echoes
+  // the tag back.
+  const [computerIds, setComputerIds] = useState(new Set())
   const [editingId, setEditingId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
   const [editDesc, setEditDesc] = useState('')
@@ -124,8 +125,13 @@ export default function IndividualPhase() {
     const unsub = onSnapshot(q, snap => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       setIdeas(list)
+      // The PARTICIPANT's own picks seed the selection state on a reload. An
+      // idea the computer carried is `selected` too, but it is not a pick they
+      // made — the confirmation screen reads those straight off the documents
+      // (`carriedBy`), and in the workspace (only ever after a failed submit)
+      // they must not come back as choices the participant can no longer undo.
       const sel = new Set()
-      list.forEach(idea => { if (idea.selected) sel.add(idea.id) })
+      list.forEach(idea => { if (carriedBy(idea) === SELECTED_BY.PARTICIPANT) sel.add(idea.id) })
       setSelectedIds(prev => prev.size === 0 && sel.size > 0 ? sel : prev)
     })
     return unsub
@@ -301,7 +307,9 @@ export default function IndividualPhase() {
       // author-update rule already permits this; markDone's batch stays as the
       // confirming pass.
       if (sessionId && user) {
-        updateDoc(doc(db, 'sessions', sessionId, 'ideas', ideaId), { selected: next.has(ideaId) })
+        const on = next.has(ideaId)
+        updateDoc(doc(db, 'sessions', sessionId, 'ideas', ideaId),
+          { selected: on, selectedBy: on ? SELECTED_BY.PARTICIPANT : null })
           .catch(err => console.warn('Could not save idea selection:', err.message))
       }
       return next
@@ -361,9 +369,46 @@ export default function IndividualPhase() {
     // Anchors the confirmation hold. Stamped before the write, so the status
     // change it triggers can never beat it and slip past the hold.
     submittedAtRef.current = Date.now()
-    const selection = selectionOverride instanceof Set ? selectionOverride : selectedIds
+    const chosen = selectionOverride instanceof Set ? selectionOverride : selectedIds
+    // THE CARRY-FORWARD RULE (owner 2026-09-28). A participant who wrote at
+    // least `ideasCarried` ideas always sends exactly that many to their group:
+    // their own picks first, and if they chose fewer (k = 0, 1, 2 of 3) the
+    // computer picks the remaining `ideasCarried − k` uniformly at random from
+    // the ideas they did not choose, each tagged `selectedBy: 'computer'`
+    // ("Computer selected to group stage") so the data says which picks were
+    // theirs. Fewer ideas than the cap: all of them carry. No group phase: the
+    // cap is 0 and nothing is added. This ONE call also serves the selection
+    // timer's auto-submit (`autoFinish`), which used to hash-pick only when
+    // nothing at all was selected and left a 1-of-3 selection at 1.
+    const decision = topUpSelection({
+      ideas, selectedIds: chosen,
+      ideasCarried: groupPhaseActive ? ideasCarried : 0,
+      pick: pickUniform,
+    })
+    setSelectedIds(decision.selection)
+    setComputerIds(decision.computerPicked)
     try {
-      // 1. Mark participant as done (critical, should always succeed)
+      // 1. The carried set — the computer's picks included — goes down FIRST.
+      //    Marking the participant complete is what moves their group on
+      //    (autoGroupParticipants), so the flags must be on the ideas before
+      //    anyone can read them; written the other way round, a group whose
+      //    last member just submitted read a short selection, derived its own
+      //    stable top-up, and then watched the list change as this batch
+      //    landed. Still non-critical: a refused batch (rules missing) must not
+      //    stop the submit — the group page derives the same set from the
+      //    participant's own picks and records it (see GroupPhase).
+      try {
+        const batch = writeBatch(db)
+        ideas.forEach(idea => {
+          const ref = doc(db, 'sessions', sessionId, 'ideas', idea.id)
+          batch.update(ref, selectionPatch(idea.id, decision))
+        })
+        await batch.commit()
+      } catch (ideaErr) {
+        console.warn('Could not update idea selection flags:', ideaErr.message)
+      }
+
+      // 2. Mark participant as done (critical, should always succeed)
       await updateDoc(
         doc(db, 'sessions', sessionId, 'participants', user.uid),
         {
@@ -373,24 +418,16 @@ export default function IndividualPhase() {
           individualSubmittedAt: serverTimestamp(),
         }
       )
-
-      // 2. Try to mark selected ideas in Firestore (non-critical)
-      //    Requires update rules on ideas subcollection.
-      try {
-        const batch = writeBatch(db)
-        ideas.forEach(idea => {
-          const ref = doc(db, 'sessions', sessionId, 'ideas', idea.id)
-          batch.update(ref, { selected: selection.has(idea.id) })
-        })
-        await batch.commit()
-      } catch (ideaErr) {
-        console.warn('Could not update idea selection flags:', ideaErr.message)
-      }
     } catch (err) {
       console.error('Failed to submit:', err)
       setDone(false)
       submittedRef.current = false
       submittedAtRef.current = 0
+      // Back to the participant's OWN picks: the computer's are not choices
+      // they made, and a retry draws afresh (its batch rewrites every idea, so
+      // a tag the failed attempt left behind is corrected by the retry).
+      setSelectedIds(decision.participantPicked)
+      setComputerIds(new Set())
       // Say so. Silently reverting to the workspace looked like the submit had
       // gone through, and an expired timer then re-fired autoFinish in a loop,
       // flipping the screen between the confirmation card and the workspace.
@@ -399,18 +436,14 @@ export default function IndividualPhase() {
   }
 
   // Default decision when the phase timer expires: submit whatever exists.
-  // If the participant selected nothing (e.g. inactive), the system selects on
-  // their behalf, choosing a random subset of their ideas so they still carry
-  // work into the group phase and never stall the rest of their group.
+  // The carry-forward rule inside markDone fills the selection up to the cap
+  // on the participant's behalf — the ideas they chose first, the rest picked
+  // uniformly at random and tagged as the computer's — so an inactive
+  // participant still carries work into the group phase and never stalls the
+  // rest of their group.
   function autoFinish() {
     if (done) return
-    let selection = selectedIds
-    if (groupPhaseActive && selection.size === 0 && ideas.length > 0) {
-      const picked = pickRandomStable(ideas, ideasCarried)
-      selection = new Set(picked.map(i => i.id))
-      setSelectedIds(selection)
-    }
-    markDone(selection)
+    markDone()
   }
 
   // ── Which countdown is live right now ───────────────
@@ -522,7 +555,12 @@ export default function IndividualPhase() {
     const submitted = [...ideas].sort(
       (a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)
     )
-    const carried = submitted.filter(i => selectedIds.has(i.id))
+    // Carried = the decision made at submit (state) or, after a reload, what
+    // the documents say; the computer's picks are badged as such either way.
+    const isCarried = i => selectedIds.has(i.id) || !!i.selected
+    const byComputer = i => computerIds.has(i.id) || carriedBy(i) === SELECTED_BY.COMPUTER
+    const carried = submitted.filter(isCarried)
+    const computerCount = carried.filter(byComputer).length
     const groupSize = session?.phaseConfig?.groupSize ?? 3
     const firestoreCount = groupMembers.filter(m => m.individualComplete).length
     const selfCounted = groupMembers.some(m => m.id === user?.uid && m.individualComplete)
@@ -546,12 +584,13 @@ export default function IndividualPhase() {
             <p className={styles.confirmSub}>
               You submitted {submitted.length} idea{submitted.length === 1 ? '' : 's'}.
               {groupPhaseActive && carried.length > 0 &&
-                ` ${carried.length} selected to carry into the group phase.`}
+                ` ${carriedSummary(carried.length, computerCount)}`}
             </p>
 
             <div className={styles.confirmList}>
               {submitted.map(idea => {
-                const sel = selectedIds.has(idea.id)
+                const sel = isCarried(idea)
+                const auto = sel && byComputer(idea)
                 return (
                   <div
                     key={idea.id}
@@ -560,7 +599,14 @@ export default function IndividualPhase() {
                     <div className={styles.confirmItemHead}>
                       <h3 className={styles.confirmItemTitle}>{idea.title || idea.text}</h3>
                       {groupPhaseActive && sel && (
-                        <span className={styles.confirmBadge}>Carried to group</span>
+                        <span
+                          className={`${styles.confirmBadge} ${auto ? styles.confirmBadgeAuto : ''}`}
+                          title={auto
+                            ? 'You chose fewer ideas than the number that carries forward, so the computer picked this one for you at random.'
+                            : undefined}
+                        >
+                          {auto ? COMPUTER_SELECTED_LABEL : 'Carried to group'}
+                        </span>
                       )}
                     </div>
                     {idea.description && (
@@ -728,6 +774,10 @@ export default function IndividualPhase() {
           </span>
           <span className={styles.selectionHint}>
             Tap <strong>Select</strong> on an idea (or double-click it) to choose it
+            {' · '}
+            <span title="Whatever you choose goes first; any places left are filled at random from your other ideas when you submit.">
+              choose fewer and the computer picks the rest for you at random
+            </span>
             {!atMax && (
               <>
                 {' · '}
@@ -899,7 +949,7 @@ export default function IndividualPhase() {
           <div className={styles.maxReached}>
             {ideas.length === 0
               ? 'You have no ideas to select from.'
-              : `Double-click to select your top ${ideasCarried}, then click Finish & Submit.`}
+              : `Double-click to select your top ${ideasCarried}, then click Finish & Submit. If you choose fewer, the computer selects the rest of your ideas for you at random.`}
           </div>
         )}
       </div>
