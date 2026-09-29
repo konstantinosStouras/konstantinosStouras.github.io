@@ -313,7 +313,7 @@ try {
     'the preview\'s MS sample carries editor + area chips');
   ok(prevHtml.includes('Pre-print (Open Access)'),
     'the preview\'s pre-print link uses the site\'s own label');
-  ok(/&nbsp;<\/span>&nbsp; <span/.test(prevHtml) && /border-bottom:1px solid var\(--border\)/.test(prevHtml),
+  ok(/&nbsp;<\/span> <span/.test(prevHtml) && !/<\/span>&nbsp;/.test(prevHtml) && /border-bottom:1px solid var\(--border\)/.test(prevHtml),
     'the preview mirrors the mailer\'s layout: chips never touch, a hairline between papers');
 
   // ── The sub-pages' account menu (owner report 2026-08-31: "I entered the
