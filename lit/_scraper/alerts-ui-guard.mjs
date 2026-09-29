@@ -305,12 +305,16 @@ try {
   //    request 2026-08-31; keep in sync with paperChipsHTML in
   //    alerts-mailer.mjs).
   const prevHtml = await page.$eval('#litAlertPreview', el => el.innerHTML);
-  ok(prevHtml.includes('#003087') && /Management Science<\/span>/.test(prevHtml),
+  // Chips are framed by a non-breaking space either side — the padding the
+  // mailer adds for Outlook (chipHTML), mirrored here.
+  ok(prevHtml.includes('#003087') && /Management Science&nbsp;<\/span>/.test(prevHtml),
     'the preview shows the journal as the site\'s own colored chip');
-  ok(prevHtml.includes('✎ Eric So') && /accounting<\/span>/.test(prevHtml),
+  ok(prevHtml.includes('✎ Eric So') && /accounting&nbsp;<\/span>/.test(prevHtml),
     'the preview\'s MS sample carries editor + area chips');
   ok(prevHtml.includes('Pre-print (Open Access)'),
     'the preview\'s pre-print link uses the site\'s own label');
+  ok(/&nbsp;<\/span>&nbsp; <span/.test(prevHtml) && /border-bottom:1px solid var\(--border\)/.test(prevHtml),
+    'the preview mirrors the mailer\'s layout: chips never touch, a hairline between papers');
 
   // ── The sub-pages' account menu (owner report 2026-08-31: "I entered the
   // About page and clicked my user profile, but I don't see my email alerts")

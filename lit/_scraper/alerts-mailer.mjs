@@ -809,8 +809,32 @@ function jkColors(jk) {
   for (let i = 0; i < jk.length; i++) h = (h * 31 + jk.charCodeAt(i)) % 360;
   return [hslToHex(h, 52, 92), hslToHex(h, 65, 28)];
 }
+// ── Outlook-safe layout (owner report 2026-09-29, a screenshot from Outlook
+// for Windows). Outlook's desktop client draws HTML with Word's engine, which
+// ignores most of the CSS these e-mails used to rely on: display:inline-block,
+// padding/margin/border-radius on a <span>, margins on <li>/<div>,
+// list-style:none, max-width and linear-gradient backgrounds. So every chip
+// ran into the next as one highlighted strip ("Production and Operations
+// Management2026Articles in Advance"), the list kept its bullets, items had
+// no gap between them, and the header's white text sat on no background at
+// all. Everything is therefore laid out with tables (padding on a <td> is
+// the one spacing Outlook always honours), each block carries its own font,
+// a background has a solid bgcolor fallback, and the CSS the other clients
+// understand stays on top of that, so Gmail and Apple Mail look as before.
+const FONT = 'Arial,Helvetica,sans-serif';
+const TABLE = 'role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"';
+// A fixed-height gap Outlook keeps (it drops margins on tables and divs).
+function spacerRow(px) {
+  return `<tr><td height="${px}" style="height:${px}px;font-size:0;line-height:0;mso-line-height-rule:exactly">&nbsp;</td></tr>`;
+}
+// A chip is its background colour and nothing else in Outlook, so the
+// padding is ALSO written as a non-breaking space on each side (the CSS
+// padding is trimmed by the same amount, keeping the chip the same size in
+// every other client), and chips are joined by CHIP_GAP — "&nbsp; " — so
+// two chips never touch, and a long row can still wrap between them.
+const CHIP_GAP = '&nbsp; ';
 function chipHTML(text, bg, fg, bold) {
-  return `<span style="display:inline-block;padding:3px 10px;border-radius:100px;font-size:11.5px;font-weight:${bold ? 600 : 500};margin:2px 6px 2px 0;background:${bg};color:${fg}">${esc(text)}</span>`;
+  return `<span style="display:inline-block;padding:3px 7px;border-radius:100px;font-size:11.5px;line-height:16px;${bold ? 'font-weight:bold;' : ''}background-color:${bg};color:${fg}">&nbsp;${esc(text)}&nbsp;</span>`;
 }
 // One chip row per listed paper — the same chips, in the same order and
 // colors, as the site's own paper card (journalTagsHTML + the .paper-meta row
@@ -840,7 +864,7 @@ function paperChipsHTML(p) {
   for (const e of splitList(p['Associate Editor'])) chips.push(chipHTML('AE: ' + e, '#e6eef9', '#2d5f8a'));
   if (p.Status === 'Other') chips.push(chipHTML('Other', '#fce8e8', '#b33a3a'));
   else if (p.Status) chips.push(chipHTML(p.Status, '#fff3e0', '#b36b00'));
-  return chips.join('');
+  return chips.join(CHIP_GAP);
 }
 
 // Shared e-mail chrome (claret header + footnote), reused by paper alerts AND
@@ -855,24 +879,61 @@ You subscribed to e-mails from The Lit (${SITE_URL}).
 · Questions, help or feedback: ${CONTACT_EMAIL}`;
 }
 function footerHtml() {
-  return `<hr style="border:none;border-top:1px solid #dce1ea;margin:20px 0 12px">
-    <p style="color:#6a5a60;font-size:11px;margin:0 0 5px">You subscribed to e-mails from
-      <a href="${esc(SITE_URL)}" style="color:#7d1d3f">The Lit</a>.</p>
-    <p style="color:#6a5a60;font-size:11px;margin:0;line-height:1.8">
-      <a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Edit your preferences</a> &nbsp;·&nbsp;
-      <a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Unsubscribe</a> from future e-mails (pause or delete it in the “E-mail alerts” panel) &nbsp;·&nbsp;
-      <a href="mailto:${esc(CONTACT_EMAIL)}" style="color:#7d1d3f;font-weight:600">Questions or feedback</a></p>`;
+  const p = `font-family:${FONT};color:#6a5a60;font-size:11px;line-height:18px;mso-line-height-rule:exactly`;
+  const a = 'color:#7d1d3f;font-weight:bold;text-decoration:none';
+  return `<table ${TABLE} style="border-collapse:collapse">${spacerRow(8)}
+      <tr><td style="border-top:1px solid #dce1ea;padding:12px 0 0">
+        <p style="${p};margin:0 0 5px">You subscribed to e-mails from
+          <a href="${esc(SITE_URL)}" style="color:#7d1d3f;text-decoration:underline">The Lit</a>.</p>
+        <p style="${p};margin:0">
+          <a href="${esc(SITE_URL)}" style="${a}">Edit your preferences</a> &nbsp;·&nbsp;
+          <a href="${esc(SITE_URL)}" style="${a}">Unsubscribe</a> from future e-mails (pause or delete it in the “E-mail alerts” panel) &nbsp;·&nbsp;
+          <a href="mailto:${esc(CONTACT_EMAIL)}" style="${a}">Questions or feedback</a></p>
+      </td></tr></table>`;
 }
+// The chrome is a 640px table: Outlook ignores max-width, so it gets the
+// width from the ghost table inside the [if mso] comments, which every other
+// client skips (they read max-width instead and stay fluid on a phone). The
+// header's gradient is a background-image over a solid bgcolor, because
+// Outlook draws no gradient — without the fallback its text was white on
+// white and only the gold "The Lit" showed.
 function emailShell(headerLabel, innerHtml, bannerHtml) {
-  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#241a1e">
-  <div style="background:linear-gradient(135deg,#7d1d3f,#591428);padding:18px 22px;border-radius:10px 10px 0 0">
-    <div style="color:#fff;font-size:20px"><span style="color:#c9a24b;font-style:italic">The Lit</span> — ${esc(headerLabel)}</div>
-  </div>
-  <div style="border:1px solid #dce1ea;border-top:none;border-radius:0 0 10px 10px;padding:20px 22px">
+  return `<!--[if mso]><table role="presentation" width="640" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" align="center" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;margin:0 auto;border-collapse:separate;font-family:${FONT};color:#241a1e">
+  <tr><td bgcolor="#7d1d3f" style="background-color:#7d1d3f;background-image:linear-gradient(135deg,#7d1d3f,#591428);padding:18px 22px;border-radius:10px 10px 0 0;font-family:${FONT};font-size:20px;line-height:26px;mso-line-height-rule:exactly;color:#ffffff">
+    <span style="color:#c9a24b;font-style:italic">The Lit</span> — ${esc(headerLabel)}
+  </td></tr>
+  <tr><td style="border:1px solid #dce1ea;border-top:none;border-radius:0 0 10px 10px;padding:20px 22px;font-family:${FONT};font-size:14px;color:#241a1e">
     ${bannerHtml || ''}${innerHtml}
     ${footerHtml()}
-  </div>
-</div>`;
+  </td></tr>
+</table>
+<!--[if mso]></td></tr></table><![endif]-->`;
+}
+
+// One listed item per table row, a hairline between rows. Used for the
+// papers of an alert and the entries of a feature digest, so the two lists
+// look alike. `lines` are the row's inner blocks, already HTML.
+function listTable(rows) {
+  return `<table ${TABLE} style="border-collapse:collapse">${rows.map((lines, i) =>
+    `<tr><td style="padding:${i ? 14 : 2}px 0 14px;${i < rows.length - 1 ? 'border-bottom:1px solid #eee4e8;' : ''}font-family:${FONT}">${lines.join('')}</td></tr>`
+  ).join('')}</table>`;
+}
+function listTitle(url, title) {
+  return `<p style="margin:0;font-family:${FONT};font-size:15px;line-height:20px"><a href="${esc(url)}" style="color:#7d1d3f;font-weight:bold;text-decoration:none">${esc(title)}</a></p>`;
+}
+function listLine(html) {
+  return `<p style="margin:4px 0 0;font-family:${FONT};font-size:13px;line-height:18px;color:#241a1e">${html}</p>`;
+}
+// The rows of a paper alert: title, authors, the chip row, the pre-print link.
+function paperRowLines(p) {
+  const lines = [listTitle(paperUrl(p), p.Title || '(untitled)')];
+  if (p.Authors) lines.push(listLine(esc(p.Authors)));
+  const chips = paperChipsHTML(p);
+  if (chips) lines.push(`<p style="margin:6px 0 0;font-family:${FONT};font-size:11.5px;line-height:26px;mso-line-height-rule:exactly">${chips}</p>`);
+  const pre = safeUrl(p.Preprint);
+  if (pre) lines.push(`<p style="margin:4px 0 0;font-family:${FONT};font-size:12px;line-height:18px"><a href="${esc(pre)}" style="color:#c2410c;font-weight:bold;text-decoration:none">Pre-print (Open Access) ↗</a></p>`);
+  return lines;
 }
 
 // `opts` lets the test-e-mail path reuse this template: subjectPrefix (e.g.
@@ -933,21 +994,12 @@ ${lineText}${more > 0 ? `\n\n…and ${fmt(more)} more. See them all on ${SITE_UR
 
 ${footerText()}`;
 
-  const items = shown.map(p => {
-    const pre = safeUrl(p.Preprint);
-    return `<li style="margin:0 0 18px">
-      <a href="${esc(paperUrl(p))}" style="color:#7d1d3f;font-weight:600;text-decoration:none;font-size:15px">${esc(p.Title || '(untitled)')}</a>
-      <div style="color:#241a1e;font-size:13px;margin-top:2px">${esc(p.Authors || '')}</div>
-      <div style="margin-top:5px;line-height:2">${paperChipsHTML(p)}</div>
-      ${pre ? `<div style="font-size:12px;margin-top:3px"><a href="${esc(pre)}" style="color:#c2410c;font-weight:600">Pre-print (Open Access) ↗</a></div>` : ''}
-    </li>`;
-  }).join('');
   const inner =
-`<p style="font-size:14px;margin:0 0 4px"><strong>${esc(countPhrase)}</strong> matching your alert
+`<p style="font-family:${FONT};font-size:14px;line-height:20px;margin:0 0 4px"><strong>${esc(countPhrase)}</strong> matching your alert
       <strong>${esc(name)}</strong> ${total === 1 ? 'was' : 'were'} added to The Lit.</p>
-    <p style="color:#6a5a60;font-size:12.5px;margin:0 0 16px">Criteria: ${esc(describeCriteria(alert.criteria || {}))}</p>
-    <ul style="list-style:none;padding:0;margin:0">${items}</ul>
-    ${more > 0 ? `<p style="font-size:13px;margin:14px 0 0">…and ${fmt(more)} more. <a href="${esc(SITE_URL)}" style="color:#7d1d3f">See them all on The Lit</a>.</p>` : ''}`;
+    <p style="font-family:${FONT};color:#6a5a60;font-size:12.5px;line-height:18px;margin:0 0 12px">Criteria: ${esc(describeCriteria(alert.criteria || {}))}</p>
+    ${listTable(shown.map(paperRowLines))}
+    ${more > 0 ? `<p style="font-family:${FONT};font-size:13px;line-height:18px;margin:14px 0 0">…and ${fmt(more)} more. <a href="${esc(SITE_URL)}" style="color:#7d1d3f">See them all on The Lit</a>.</p>` : ''}`;
   return { subject, text, html: emailShell('new papers', inner, opts.bannerHtml) };
 }
 
@@ -958,9 +1010,9 @@ function renderAnnouncement({ subject, bodyText, bodyHtml }, opts) {
   opts = opts || {};
   const subj = (opts.subjectPrefix || '') + (subject || 'The Lit: a new feature is available');
   const text = `${opts.noteText || ''}${(bodyText || '').trim()}\n\n${footerText()}`;
-  const inner = `<p style="font-size:14px;margin:0 0 12px">Here’s what’s new on <strong>The Lit</strong>:</p>
-    <div style="font-size:14px;line-height:1.6">${bodyHtml || esc(bodyText || '')}</div>
-    <p style="font-size:13px;margin:16px 0 0"><a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Open The Lit →</a></p>`;
+  const inner = `<p style="font-family:${FONT};font-size:14px;line-height:20px;margin:0 0 12px">Here’s what’s new on <strong>The Lit</strong>:</p>
+    <div style="font-family:${FONT};font-size:14px;line-height:1.6">${bodyHtml || esc(bodyText || '')}</div>
+    <p style="font-family:${FONT};font-size:13px;line-height:18px;margin:16px 0 0"><a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:bold">Open The Lit →</a></p>`;
   return { subject: subj, text, html: emailShell('what’s new', inner, opts.bannerHtml) };
 }
 
@@ -991,17 +1043,14 @@ ${lineText || 'A new feature is available on The Lit.'}
 
 ${footerText()}`;
 
-  const items = list.map(f => {
-    const url = safeUrl(f.url) || SITE_URL;
-    return `<li style="margin:0 0 16px">
-      <a href="${esc(url)}" style="color:#7d1d3f;font-weight:600;text-decoration:none;font-size:15px">${esc(f.title || '')}</a>
-      ${f.summary ? `<div style="color:#241a1e;font-size:13px;margin-top:2px">${esc(f.summary)}</div>` : ''}
-    </li>`;
-  }).join('');
   const inner =
-`<p style="font-size:14px;margin:0 0 12px">Here’s what’s new on <strong>The Lit</strong>:</p>
-    <ul style="list-style:none;padding:0;margin:0">${items}</ul>
-    <p style="font-size:13px;margin:16px 0 0"><a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:600">Open The Lit →</a></p>`;
+`<p style="font-family:${FONT};font-size:14px;line-height:20px;margin:0 0 8px">Here’s what’s new on <strong>The Lit</strong>:</p>
+    ${list.length ? listTable(list.map(f => {
+      const lines = [listTitle(safeUrl(f.url) || SITE_URL, f.title || '')];
+      if (f.summary) lines.push(listLine(esc(f.summary)));
+      return lines;
+    })) : ''}
+    <p style="font-family:${FONT};font-size:13px;line-height:18px;margin:16px 0 0"><a href="${esc(SITE_URL)}" style="color:#7d1d3f;font-weight:bold">Open The Lit →</a></p>`;
   return { subject, text, html: emailShell('what’s new', inner, opts.bannerHtml) };
 }
 
@@ -1018,10 +1067,11 @@ const TEST_SAMPLE_MAX = 3;
 // on-page live preview's samples in index.html (renderAlertPreview) — keep in sync.
 const SAMPLE_PAPERS = [
   { Title: 'Dispatching and Pricing in Two-Sided Spatial Queues', Authors: 'Ang Xu, Chiwei Yan',
-    Journal: 'Operations Research', Year: '2026', Status: 'Articles in Advance',
+    Journal: 'Operations Research', JKey: 'opre', Year: '2026', Status: 'Articles in Advance',
     Preprint: 'https://arxiv.org/abs/2401.00001', DOI: '' },
   { Title: 'Learning and Information in Dynamic Marketplaces', Authors: 'A. Researcher, B. Coauthor',
-    Journal: 'Management Science', Year: '2026', Status: '', DOI: '' },
+    Journal: 'Management Science', JKey: 'ms', Year: '2026', Status: 'Articles in Advance',
+    'Accepting Editor': 'Eric So', Area: 'accounting', DOI: '' },
 ];
 // Fallback feature entries for a features-only test e-mail when the changelog is
 // empty/unreadable, so the "what's new" preview always renders. Mirrors the
@@ -1035,11 +1085,12 @@ const SAMPLE_FEATURES = [
 const TEST_NOTE_TEXT =
   'This is a TEST e-mail so you can preview how your alert looks. No alert has actually ' +
   'triggered, and the papers shown are examples.\n\n';
+// A table cell, not a padded <p>, so Outlook keeps its box and padding too.
 const TEST_BANNER_HTML =
-  '<p style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12.5px;' +
-  'border-radius:8px;padding:9px 12px;margin:0 0 14px"><strong>Test e-mail.</strong> ' +
-  'This is a preview of how your alert looks — no alert has actually triggered, and the ' +
-  'papers below are examples.</p>';
+  `<table ${TABLE} style="border-collapse:separate"><tr><td bgcolor="#fff7ed" style="background-color:#fff7ed;` +
+  `border:1px solid #fed7aa;border-radius:8px;padding:9px 12px;font-family:${FONT};font-size:12.5px;line-height:18px;` +
+  'color:#9a3412"><strong>Test e-mail.</strong> This is a preview of how your alert looks — no alert has ' +
+  `actually triggered, and the papers below are examples.</td></tr>${spacerRow(14)}</table>`;
 
 function renderTestEmail(req, papers, ctx, changelog) {
   const criteria = (req && req.criteria) || {};
@@ -1707,11 +1758,14 @@ function selftest() {
     Area: 'Accounting', Preprint: 'https://arxiv.org/abs/2410.13767',
   })]);
   ok('journal chip carries the site\'s ms colors', emChips.html.includes('#003087') && emChips.html.includes('#e8eef7'));
-  ok('journal chip names the journal', />Management Science<\/span>/.test(emChips.html));
+  // A chip's text is framed by a non-breaking space on each side — the
+  // padding Outlook keeps (see chipHTML).
+  const chipOf = (t) => new RegExp('>&nbsp;' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '&nbsp;</span>');
+  ok('journal chip names the journal', chipOf('Management Science').test(emChips.html));
   ok('editor chip shows the normalized name, never the sentence',
      emChips.html.includes('✎ Eric So') && !emChips.html.includes('accepted by'));
-  ok('area chip shows the normalized area in the site\'s green', />accounting<\/span>/.test(emChips.html) && emChips.html.includes('#2a7d4f'));
-  ok('status chip present', />Articles in Advance<\/span>/.test(emChips.html));
+  ok('area chip shows the normalized area in the site\'s green', chipOf('accounting').test(emChips.html) && emChips.html.includes('#2a7d4f'));
+  ok('status chip present', chipOf('Articles in Advance').test(emChips.html));
   ok('pre-print link is the site\'s own label', emChips.html.includes('Pre-print (Open Access) ↗'));
   ok('text part carries editor + area too', emChips.text.includes('✎ Eric So') && emChips.text.includes('· accounting ·'));
   const emSe = renderEmail({ name: 'x', criteria: {} }, [P({ JKey: 'isre', Journal: 'Information Systems Research',
@@ -1724,7 +1778,45 @@ function selftest() {
      (() => { const [bg, fg] = jkColors('respol'); return /^#[0-9a-f]{6}$/.test(bg) && /^#[0-9a-f]{6}$/.test(fg)
        && renderEmail({ name: 'x', criteria: {} }, [P({ JKey: 'respol', Journal: 'Research Policy' })]).html.includes(bg); })());
   ok('a working paper\'s status chips as on the site',
-     />Working paper<\/span>/.test(renderEmail({ name: 'x', criteria: {} }, [P({ JKey: 'wp-ssrn', Status: 'Working paper' })]).html));
+     chipOf('Working paper').test(renderEmail({ name: 'x', criteria: {} }, [P({ JKey: 'wp-ssrn', Status: 'Working paper' })]).html));
+
+  // ── Outlook for Windows (owner report 2026-09-29, a screenshot): Word's HTML
+  // engine ignores inline-block, span padding/margins, li margins,
+  // list-style:none, max-width and gradients, so the chips ran into one strip,
+  // the list kept its bullets and the header text was white on white. Pin the
+  // table layout that every client draws the same way.
+  const outlookSafe = (label, html) => {
+    ok(label + ': no <ul>/<li> list (Outlook draws its bullets)', !/<(ul|li)\b/i.test(html));
+    ok(label + ': header has a solid bgcolor under the gradient', /<td bgcolor="#7d1d3f" style="background-color:#7d1d3f;background-image:linear-gradient/.test(html));
+    ok(label + ': a 640px ghost table for Outlook, fluid elsewhere',
+       html.includes('<!--[if mso]><table role="presentation" width="640"') && html.includes('<![endif]-->') && /max-width:640px/.test(html));
+    ok(label + ': every paragraph carries its own font (Outlook does not inherit it into tables)',
+       (html.match(/<p\b[^>]*>/g) || []).every(t => /font-family:/.test(t)));
+    ok(label + ': no layout <div> left in the chrome or the list', !/<div\b/.test(html));
+    ok(label + ': no <hr> (Outlook draws its own grey rule)', !/<hr\b/.test(html));
+  };
+  const emOl = renderEmail({ name: 'x', criteria: {} }, [
+    P({ JKey: 'pom', Journal: 'Production and Operations Management', Status: 'Articles in Advance', Preprint: 'https://arxiv.org/abs/2410.13767' }),
+    P({ JKey: 'jfqa', Journal: 'Journal of Financial and Quantitative Analysis', Status: 'Articles in Advance',
+        'Accepting Editor': 'This paper was accepted by Eric So, accounting.', Area: 'Accounting' }),
+  ]);
+  outlookSafe('paper alert', emOl.html);
+  outlookSafe('feature digest', renderFeatureDigest([{ title: 'A', summary: 'B', url: SITE_URL }, { title: 'C', summary: '', url: SITE_URL }]).html);
+  outlookSafe('test e-mail', renderTestEmail({ criteria: { allPapers: true } }, [], ctx).html);
+  ok('two chips never touch — a visible gap in every client', !/<\/span><span style="display:inline-block/.test(emOl.html)
+     && (emOl.html.match(/&nbsp;<\/span>&nbsp; <span/g) || []).length >= 2);
+  ok('every chip keeps a non-breaking space either side (its padding in Outlook)',
+     (emOl.html.match(/<span style="display:inline-block[^"]*">[^<]*<\/span>/g) || []).every(c => />&nbsp;[^<]*&nbsp;<\/span>$/.test(c)));
+  // The row cell that opens before each paper's own chip: the first one draws
+  // the hairline under itself, the last one none.
+  const rowCellBefore = (needle) => { const i = emOl.html.indexOf(needle); return emOl.html.slice(emOl.html.lastIndexOf('<tr><td', i), i); };
+  ok('one table row per paper, with a hairline between rows and none after the last',
+     (emOl.html.match(/border-bottom:1px solid #eee4e8/g) || []).length === 1
+     && /^<tr><td style="[^"]*border-bottom:1px solid #eee4e8/.test(rowCellBefore('Production and Operations Management'))
+     && !/border-bottom/.test(rowCellBefore('Journal of Financial and Quantitative Analysis')));
+  ok('the pre-print link sits in its own row block, not glued to the next title',
+     /Pre-print \(Open Access\) ↗<\/a><\/p><\/td><\/tr><tr>/.test(emOl.html));
+  ok('the test banner is a table cell with a bgcolor (Outlook keeps its box)', /<td bgcolor="#fff7ed"/.test(TEST_BANNER_HTML));
 
   // ── Working papers in alerts (user report 2026-08-10: an "any new paper"
   // subscriber had never received a single working paper — the archive's
