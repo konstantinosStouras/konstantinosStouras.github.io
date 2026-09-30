@@ -556,7 +556,9 @@ try {
     const r = await page.evaluate(() => {
       const box = e => e.getBoundingClientRect();
       const links = [...document.querySelectorAll('#nav a')], lr = links.map(box);
-      const brand = [document.querySelector('.brand'), ...document.querySelectorAll('.brand-text span')].map(box).filter(b => b.width > 0);
+      // the text's own extent (left + scrollWidth), not its box: a nowrap line can overflow a shrunken box
+      const brand = [document.querySelector('.brand'), ...document.querySelectorAll('.brand-text span')].filter(e => box(e).width > 0)
+        .map(e => ({ right: Math.max(box(e).right, box(e).left + e.scrollWidth) }));
       const acct = box(document.querySelector('#acct-slot').firstElementChild);
       return { toggle: getComputedStyle(document.querySelector('.nav-toggle')).display,
         n: links.length, shown: links.filter(a => box(a).width > 0 && getComputedStyle(a).visibility !== 'hidden').length,
@@ -577,7 +579,8 @@ try {
     const tap = async sel => phone ? page.locator(sel).first().tap() : page.locator(sel).first().click();
     const hdr = await page.evaluate(() => {
       const box = s => document.querySelector(s).getBoundingClientRect();
-      const brand = [...document.querySelectorAll('.brand, .brand-text span')].map(e => e.getBoundingClientRect()).filter(b => b.width > 0);
+      const brand = [...document.querySelectorAll('.brand, .brand-text span')].filter(e => e.getBoundingClientRect().width > 0)
+        .map(e => ({ right: Math.max(e.getBoundingClientRect().right, e.getBoundingClientRect().left + e.scrollWidth) }));
       return { toggle: getComputedStyle(document.querySelector('.nav-toggle')).display, navShown: box('#nav').height > 0,
         brandR: Math.max(...brand.map(b => b.right)), acct: box('#acct-slot'), tog: box('.nav-toggle'), vw: innerWidth, headerH: box('.site-header').height };
     });

@@ -229,6 +229,7 @@ async function scenario(id, title, opts, fn) {
     const url = route.request().url();
     if (/^https:\/\/www\.gstatic\.com\/firebasejs\//.test(url)) {
       env.sdkUrls.push(url);
+      if (opts.sdkDelayMs) await sleep(opts.sdkDelayMs);
       if (/\/firebase-(app|auth|firestore)-compat\.js$/.test(url)) return route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: FAKE });
       return route.fulfill({ status: 404, body: '' });
     }
@@ -1062,6 +1063,140 @@ await scenario('J', 'stored XSS on the account and members pages, and in the hea
   await sleep(300);
   t(!(await xssFired(page)), 'members page: no injected script ran');
   t(await page.locator('#members-app img, #members-app script, #members-app svg[onload]').count() === 0, '… and no injected element exists');
+});
+
+/* ================================================================================== */
+await scenario('K1', 'account page: what is typed survives a redraw (approval while editing) and the reviewed name stays frozen', { cfg: 'oidc',
+  seed: signedInSeed(mariaAcct(), { docs: { ['members/' + MARIA.uid]: member({ firstName: 'Μαρία', lastName: 'Παπαδοπούλου', email: MARIA.email, status: 'pending', city: 'Αθήνα', employer: '' }) } }) }, async (page) => {
+  await page.goto(URL_('account/'));
+  await page.click('#account-app [data-edit]');
+  await page.fill('#f-lastName', 'Παπαδοπούλου-Νέα');
+  await page.fill('#f-city', 'Βόλος');
+  await page.fill('#f-employer', 'Νέος Εργοδότης');
+  await page.focus('#f-employer');
+  // the admin approves while the member is typing: the listener redraws the page
+  const cur = await docOf(page, 'members/' + MARIA.uid);
+  await server(page, 'setDoc', 'members/' + MARIA.uid, Object.assign({}, cur, { status: 'active', reviewedBy: ADMIN, reviewedAt: ts(Date.now()) }));
+  t(await hasText(page.locator('#account-app .profile-head'), 'Ενεργό μέλος'), 'the approval arrives while the form is open');
+  t((await page.inputValue('#f-city')) === 'Βόλος' && (await page.inputValue('#f-employer')) === 'Νέος Εργοδότης', 'what was typed is still in the form after the redraw');
+  t(await page.evaluate(() => document.activeElement && document.activeElement.id) === 'f-employer', '… and the cursor is still in the same field');
+  t((await page.inputValue('#f-lastName')) === 'Παπαδοπούλου' && await page.$eval('#f-lastName', e => e.readOnly), 'the now-reviewed surname shows the stored one and is read-only');
+  await page.click('#account-app form[data-apply] [type=submit]');
+  const up = (await waitCalls(page, 'fs.update', 1)).filter(x => x.args[0] === 'members/' + MARIA.uid).pop();
+  t(up && up.args[1].lastName === 'Παπαδοπούλου' && up.args[1].city === 'Βόλος', 'saving sends the stored surname (the rules freeze it) and the new city');
+  t(await waitFor(page, () => !document.querySelector('#account-app form[data-apply]')), 'the form closes after a successful save');
+});
+
+await scenario('K2', 'account page: an unconfirmed e-mail account keeps its typing when it confirms', { cfg: 'oidc',
+  seed: signedInSeed(acct('u-pw2', { email: 'eleni@example.com', name: 'Ελένη Σταύρου', verified: false, providers: ['password'], password: 'pass-word-123' })) }, async (page) => {
+  await page.goto(URL_('account/'));
+  await page.fill('#f-employer', 'CERN');
+  await page.fill('#f-city', 'Γενεύη');
+  await page.selectOption('#f-stage', 'graduate');
+  await server(page, 'verify', 'u-pw2', true);
+  await page.click('#account-app [data-verified]');
+  t(await waitFor(page, () => !/Επιβεβαιώστε το e-mail σας/.test(document.getElementById('account-app').textContent)), 'the address is confirmed');
+  t((await page.inputValue('#f-employer')) === 'CERN' && (await page.inputValue('#f-city')) === 'Γενεύη' && (await page.inputValue('#f-stage')) === 'graduate',
+    'the fields typed before confirming are still filled in');
+});
+
+await scenario('K3', 'account page: a mistyped year is refused, not saved as empty', { cfg: 'oidc', seed: signedInSeed(mariaAcct()) }, async (page) => {
+  await page.goto(URL_('account/'));
+  await page.fill('#f-firstName', 'Μαρία'); await page.fill('#f-lastName', 'Παπαδοπούλου');
+  await page.selectOption('#f-stage', 'graduate');
+  await page.setChecked('#f-acceptedPrivacy', true);
+  await page.focus('#f-gradYear');
+  await page.keyboard.type('2013-');
+  await page.click('#account-app form[data-apply] [type=submit]');
+  t(await hasText(page.locator('#account-app [data-form-msg]'), 'Το έτος αποφοίτησης δεν φαίνεται σωστό'), '«2013-» in the graduation year: «Το έτος αποφοίτησης δεν φαίνεται σωστό.»');
+  t((await calls(page, 'fs.set')).length === 0, '… and nothing is written');
+});
+
+await scenario('K4', 'account page: an active, listed member who unticks the directory in the edit form is removed', { cfg: 'oidc',
+  seed: signedInSeed(mariaAcct(), { docs: {
+    ['members/' + MARIA.uid]: member({ firstName: 'Μαρία', lastName: 'Παπαδοπούλου', email: MARIA.email, status: 'active', consentDirectory: true }),
+    ['directory/' + MARIA.uid]: dirEntry({ name: 'Μαρία Παπαδοπούλου' }) } }) }, async (page) => {
+  await page.goto(URL_('account/'));
+  await page.click('#account-app [data-edit]');
+  t(await hasText(page.locator('#account-app form[data-apply]'), 'Θέλω να εμφανίζομαι στον κατάλογο μελών'), 'for an active member the box reads «Θέλω να εμφανίζομαι…»');
+  await page.setChecked('#f-consentDirectory', false);
+  await page.click('#account-app form[data-apply] [type=submit]');
+  t(await waitFor(page, () => !JSON.parse(localStorage.getItem('__fbfake')).docs['directory/u-maria']), 'the directory entry is deleted');
+  t(await waitFor(page, () => { const b = document.querySelector('#account-app [data-dir]'); return b && !b.checked; }), '… and the directory box shows unticked');
+});
+
+await scenario('K5', 'account page: a password account with LinkedIn (Cloud Function) is asked for its password to delete', { cfg: 'function',
+  seed: signedInSeed(acct('u-pl', { email: 'giorgos@example.com', name: 'Γιώργος Νικολάου', providers: ['password'], password: 'pass-word-123', claims: { li: true }, lastSignIn: Date.now() - 3 * HOUR })) }, async (page) => {
+  await page.goto(URL_('account/'));
+  t(await waitFor(page, () => /Συνδεδεμένο/.test((document.querySelector('#methods') || {}).textContent || '')), 'LinkedIn shows as connected');
+  await page.click('#account-app [data-del-open]');
+  t(await page.locator('#del-pass').isVisible(), 'the delete box asks for the password (the only way it can re-prove who it is)');
+});
+
+await scenario('K6', 'account page: another sign-in method can be linked only once the e-mail is confirmed', { cfg: 'oidc',
+  seed: signedInSeed(acct('u-fb', { email: 'kostas@example.com', name: 'Κώστας Ιωάννου', verified: false, providers: ['facebook.com'] })) }, async (page) => {
+  await page.goto(URL_('account/'));
+  t(await waitFor(page, () => !!document.querySelector('#account-app [data-link="google"]')), 'the Google «Σύνδεση» button is shown');
+  t(await page.$eval('#account-app [data-link="google"]', b => b.disabled), '… disabled while the e-mail is unconfirmed');
+  t(await hasText(page.locator('#link-needs-email'), 'χρειάζεται επιβεβαιωμένο e-mail'), '… with a line saying why, and how to confirm');
+  await page.click('#account-app [data-send-verify]');
+  t((await waitCalls(page, 'user.sendEmailVerification', 1)).length === 1, '«Στείλτε μου e-mail επιβεβαίωσης» sends it');
+  await server(page, 'verify', 'u-fb', true);
+  await page.click('#account-app [data-verified-li]');
+  t(await waitFor(page, () => { const b = document.querySelector('#account-app [data-link="google"]'); return b && !b.disabled; }), 'once confirmed, the button is enabled');
+  t(await page.evaluate(() => document.activeElement && document.activeElement.closest && !!document.activeElement.closest('#methods')), '… and keyboard focus stays in «Τρόποι σύνδεσης»');
+});
+
+await scenario('K7', 'account page: after deleting, signing in again on the same page shows the new account', { cfg: 'oidc',
+  seed: signedInSeed(mariaAcct({ lastSignIn: Date.now() - 60e3 }), { docs: { ['members/' + MARIA.uid]: member({ firstName: 'Μαρία', lastName: 'Παπαδοπούλου' }) } }) }, async (page) => {
+  await page.goto(URL_('account/'));
+  await page.click('#account-app [data-del-open]');
+  await page.fill('#del-confirm', 'ΔΙΑΓΡΑΦΗ');
+  await page.click('#account-app [data-del-go]');
+  t(await hasText(page.locator('#account-app'), 'Ο λογαριασμός σας διαγράφηκε.'), 'the account is deleted');
+  await page.click('#acct-slot [data-signin]');
+  await sdkReady(page);
+  await queue(page, 'signInWithPopup', { provider: 'google.com', resolve: { uid: 'u-new', email: 'new@example.com', displayName: 'Νέος Χρήστης', isNewUser: true } });
+  await page.click('.modal [data-provider="google"]');
+  t(await waitFor(page, () => !!document.querySelector('#account-app form[data-apply]')), 'signing in again shows the new account and its application form');
+  t(!(await hasText(page.locator('#account-app'), 'Ο λογαριασμός σας διαγράφηκε.', 200)), '… not the old «deleted» message');
+});
+
+await scenario('K8', 'header: «Αποσύνδεση» pressed before the sign-in service has loaded really signs out', { cfg: 'oidc', sdkDelayMs: 1500,
+  seed: signedInSeed(mariaAcct()) }, async (page) => {
+  await page.addInitScript(() => { try { localStorage.setItem('semfe:auth-hint', JSON.stringify({ n: 'Μαρία Παπαδοπούλου', p: '', e: 'maria@example.com' })); } catch (e) {} });
+  await page.goto(URL_('blog/'));
+  t(await visible(page.locator('#acct-slot .acct-chip'), 1000), 'the header shows the member from the saved hint at once');
+  await page.click('#acct-slot .acct-chip');
+  await page.click('#acct-slot [data-signout]');
+  t(await visible(page.locator('#acct-slot [data-signin]'), 1000), 'the header shows «Σύνδεση» straight away');
+  await sleep(2500);
+  t((await calls(page, 'auth.signOut')).length === 1, 'once the SDK arrives, auth.signOut() is called');
+  t(await visible(page.locator('#acct-slot [data-signin]')) && !(await page.locator('#acct-slot .acct-chip').count()), 'and the session does not come back');
+});
+
+await scenario('K9', '?signin while already signed in does not open the dialog', { cfg: 'oidc', seed: signedInSeed(mariaAcct()) }, async (page) => {
+  await page.goto(URL_('blog/?signin'));
+  t(await visible(page.locator('#acct-slot .acct-chip')), 'the member is signed in');
+  await sleep(400);
+  t(!(await dialogOpen(page)), 'no sign-in dialog opens over them');
+});
+
+await scenario('K10', 'LinkedIn callback: an error text in a hand-made link is not shown', { cfg: 'function' }, async (page) => {
+  await page.goto(URL_('auth/linkedin/?error=server_error&error_description=Ο+λογαριασμός+σας+ανεστάλη,+τηλεφωνήστε+στο+210'));
+  t(await hasText(page.locator('#li-app'), 'Το LinkedIn δεν ολοκλήρωσε τη σύνδεση'), 'the generic failure message is shown');
+  t(!(await hasText(page.locator('#li-app'), 'ανεστάλη', 200)), '… and not the text from the address');
+});
+
+await scenario('K11', 'admin page: keyboard focus stays on the same control after a redraw', { cfg: 'oidc', seed: ADMIN_SEED }, async (page) => {
+  await page.goto(URL_('admin/'));
+  await page.click('[data-filter="all"]');
+  const row = page.locator('#admin-app tr[data-id]').first();
+  const id = await row.getAttribute('data-id');
+  await row.locator('[data-act="dues"]').focus();
+  await page.keyboard.press('Enter');
+  t(await waitFor(page, i => { const a = document.activeElement; const tr = a && a.closest && a.closest('tr'); return !!tr && tr.getAttribute('data-id') === i && a.getAttribute('data-act') === 'dues'; }, id),
+    'after recording dues, focus is on the same row\'s dues button');
 });
 
 await browser.close();

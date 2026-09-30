@@ -81,7 +81,8 @@
 
   /* ---- state ------------------------------------------------------------- */
   var auth = null, fs = null, sdkReady = false, authKnown = false, current = null;
-  var listeners = [], pendingLink = null, dialog = null, lastFocus = null, mode = 'signin';
+  var listeners = [], pendingLink = null, dialog = null, lastFocus = null, lastFocusSel = '', mode = 'signin';
+  var signingOut = false;
 
   /* ---- loading the SDK --------------------------------------------------- */
   function loadScript(src) {
@@ -106,7 +107,12 @@
         sdkReady = true;
         setBusy(false);
         auth.onAuthStateChanged(function (u) {
+          // "Αποσύνδεση" pressed before the SDK had loaded: do not bring the
+          // restored session back on screen, auth.signOut() is on its way
+          if (u && signingOut) return;
           current = u; authKnown = true;
+          // signed in some other way (another tab, a LinkedIn return): the dialog has nothing left to do
+          if (u && dialog && !dialog.hidden && !pendingLink) close();
           if (u) saveHint(u); else clearHint();
           paintHeader();
           listeners.forEach(function (fn) { try { fn(u); } catch (e) { if (window.console) console.error(e); } });
@@ -288,6 +294,11 @@
     if (!dialog) dialog = buildDialog();
     var ae = document.activeElement;             // Safari does not focus a clicked button: prefer the trigger
     lastFocus = trigger || (ae && ae !== document.body ? ae : $('[data-signin]'));
+    // the header and the account page redraw their buttons when sign-in state
+    // arrives, which can detach the trigger: keep a way to find its successor
+    lastFocusSel = !lastFocus || !lastFocus.getAttribute ? '' : lastFocus.id ? '#' + lastFocus.id
+      : lastFocus.hasAttribute('data-open') ? '[data-open="' + lastFocus.getAttribute('data-open') + '"]'
+      : lastFocus.hasAttribute('data-signin') ? '#acct-slot [data-signin]' : '';
     if (!pendingLink) $('[data-link-notice]', dialog).hidden = true;
     setMode(m || 'signin');
     dialog.hidden = false;
@@ -299,7 +310,9 @@
     if (!dialog || dialog.hidden) return;
     dialog.hidden = true;
     if (U.unlockScroll) U.unlockScroll(); else document.body.classList.remove('modal-open');
-    if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) lastFocus.focus();
+    var to = lastFocus && document.body.contains(lastFocus) ? lastFocus
+      : (lastFocusSel && $(lastFocusSel)) || $('#acct-slot [data-signin], #acct-slot .acct-chip');
+    if (to && to.focus) try { to.focus(); } catch (e) {}
   }
   function showStatus(msg, kind) {
     if (!dialog) return;
@@ -316,7 +329,7 @@
   function providerSignIn(key, btn) {
     var p = PROVIDERS[key];
     if (!p || !configured) return;
-    if (key === 'linkedin' && LI_FUNCTION) { linkedinStart('signin'); return; }
+    if (key === 'linkedin' && LI_FUNCTION) { linkedinStart('signin', pendingLink ? pendingLink.name : ''); return; }
     if (!sdkReady) { showStatus('Μια στιγμή, φορτώνει η υπηρεσία σύνδεσης…'); loadSdk(); return; }
     showStatus('');
     var label = btn && $('span', btn), old = label ? label.textContent : '';
@@ -408,11 +421,17 @@
     showStatus(friendly(e));
   }
   function signOut() {
-    if (!auth) { clearHint(); current = null; paintHeader(); return Promise.resolve(); }
-    return auth.signOut().then(function () {
+    clearHint();
+    if (!configured) { current = null; paintHeader(); return Promise.resolve(); }
+    // the SDK may still be downloading (the header was drawn from the saved
+    // hint): wait for it and sign out for real, or the session comes back
+    signingOut = true;
+    if (!authKnown) paintHeader();
+    return loadSdk().then(function () { return auth.signOut(); }).then(function () {
+      signingOut = false;
       clearHint();
       if (/\/(account|members|admin)\/?$/.test(location.pathname)) location.reload();
-    });
+    }, function (e) { signingOut = false; throw e; });
   }
 
   /* ---- account management (used by account.js) ------------------------- */
@@ -447,17 +466,27 @@
   // Leave the page for LinkedIn. A full-page visit (not a popup) avoids popup
   // blockers and the opener being cut off by LinkedIn's security headers; the
   // member comes back to auth/linkedin/, which calls linkedinComplete().
-  function linkedinStart(mode) {
+  function linkedinStart(mode, waiting) {
     if (!liReady) return;
     var state = randomState();
     try {
-      sessionStorage.setItem(LI_STATE, JSON.stringify({ state: state, mode: mode === 'link' ? 'link' : 'signin', returnTo: location.href.split('#')[0], t: Date.now() }));
+      sessionStorage.setItem(LI_STATE, JSON.stringify({ state: state, mode: mode === 'link' ? 'link' : 'signin', returnTo: returnAddress(),
+        waiting: String(waiting || '').slice(0, 40), t: Date.now() }));
     } catch (e) { showStatus('Ο browser σας δεν επιτρέπει την αποθήκευση δεδομένων (cookies), που χρειάζεται η σύνδεση με LinkedIn.'); return; }
     location.assign('https://www.linkedin.com/oauth/v2/authorization?response_type=code' +
       '&client_id=' + encodeURIComponent(LI.clientId) +
       '&redirect_uri=' + encodeURIComponent(linkedinRedirectUri()) +
       '&state=' + encodeURIComponent(state) +
       '&scope=' + encodeURIComponent('openid profile email'));
+  }
+  /* this page without its #hash and without ?signin / ?register, which would open the dialog again */
+  function returnAddress() {
+    try {
+      var u = new URL(location.href);
+      u.hash = '';
+      u.searchParams.delete('signin'); u.searchParams.delete('register');
+      return u.href;
+    } catch (e) { return location.href.split('#')[0]; }
   }
   function linkedinRedirectUri() { return absolute(root + 'auth/linkedin/'); }
   function linkedinTakeState() {
@@ -547,8 +576,8 @@
       'auth/invalid-action-code': 'Ο σύνδεσμος δεν ισχύει πια. Ζητήστε νέο.',
       'semfe/relogin': 'Για λόγους ασφαλείας, αποσυνδεθείτε, συνδεθείτε ξανά και επαναλάβετε μέσα σε λίγα λεπτά.',
       'semfe/needs-password': 'Γράψτε τον κωδικό σας για επιβεβαίωση.',
-      'semfe/account-exists-unverified': 'Υπάρχει ήδη λογαριασμός με το e-mail του LinkedIn σας, που όμως δεν έχει επιβεβαιωθεί. Συνδεθείτε με e-mail και κωδικό, επιβεβαιώστε το e-mail σας και μετά συνδέστε το LinkedIn από τη σελίδα «Ο λογαριασμός μου».',
-      'semfe/link-needs-verified-email': 'Για να συνδέσετε το LinkedIn, χρειάζεται πρώτα να επιβεβαιώσετε το e-mail του λογαριασμού σας (δείτε «Επιβεβαίωση e-mail» στη σελίδα «Ο λογαριασμός μου»).',
+      'semfe/account-exists-unverified': 'Υπάρχει ήδη λογαριασμός με το e-mail του LinkedIn σας, που όμως δεν έχει επιβεβαιωθεί. Συνδεθείτε με τον τρόπο που χρησιμοποιήσατε την πρώτη φορά (π.χ. Facebook ή e-mail και κωδικό), επιβεβαιώστε το e-mail σας από τη σελίδα «Ο λογαριασμός μου» και μετά συνδέστε από εκεί το LinkedIn.',
+      'semfe/link-needs-verified-email': 'Για να συνδέσετε το LinkedIn, χρειάζεται πρώτα να επιβεβαιώσετε το e-mail του λογαριασμού σας (δείτε «Τρόποι σύνδεσης» στη σελίδα «Ο λογαριασμός μου»).',
       'semfe/credential-already-in-use': 'Αυτός ο λογαριασμός LinkedIn είναι ήδη συνδεδεμένος με άλλον λογαριασμό του ιστότοπου.',
       'semfe/linkedin-code-rejected': 'Το LinkedIn δεν δέχτηκε τη σύνδεση (ίσως έληξε). Δοκιμάστε ξανά.',
       'semfe/linkedin-profile-unavailable': 'Το LinkedIn δεν έδωσε τα στοιχεία του προφίλ σας. Δοκιμάστε ξανά σε λίγο.',
@@ -613,7 +642,9 @@
     authKnown = true;
   }
   // a link such as account/#signin or ?signin opens the dialog
+  // (only once we know nobody is signed in: a member following such a link stays where they are)
   if (/(^|[?&#])(signin|register)\b/.test(location.search + location.hash) && !/\/account\/?$/.test(location.pathname)) {
-    open(/register/.test(location.search + location.hash) ? 'register' : 'signin');
+    var asked = /register/.test(location.search + location.hash) ? 'register' : 'signin', handled = false;
+    onChange(function (u) { if (handled) return; handled = true; if (!u) open(asked); });
   }
 })();

@@ -152,12 +152,23 @@ run `node tools/check.mjs` (it fails if they differ), and publish the rules
 again. An admin must sign in with a **verified** address: signing in with
 Google does that automatically.
 
+**Claim both admin addresses before you share the link.** As soon as sign-in
+works (step A8), sign in once with each admin address (with Google once Part B
+is done, or register with e-mail and click the confirmation link). An address
+that already has an account cannot be registered by anyone else. This matters
+because the admin addresses are visible in the site's files: without this
+step, someone could register an admin address with a password of their own,
+never confirm it, and attach their own Facebook or Google login to that
+account, keeping a way in after you later take the address back. The account
+page already refuses to attach a second login until the e-mail is confirmed,
+but claiming the addresses first closes the door completely.
+
 ### A8. Publish and test
 
 1. Run `node tools/check.mjs`, commit, and push. GitHub Pages republishes in
    about a minute.
 2. Open https://www.stouras.com/semfealumni/account/, click **Εγγραφή**, and
-   create an account with your e-mail. You should receive a Greek e-mail with a
+   create an account with an admin e-mail (see A7: claim these first). You should receive a Greek e-mail with a
    confirmation link. Click it, go back, press **"Το επιβεβαίωσα"**, and fill in
    the membership application.
 3. Sign in with an admin address and open **Διαχείριση μελών** from the

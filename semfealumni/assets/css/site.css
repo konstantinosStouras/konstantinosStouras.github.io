@@ -220,7 +220,9 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
   .js .nav a { padding: 9px 10px; }
 }
 @media (max-width: 420px) {
-  .brand-text .top { letter-spacing: .12em; font-size: .62rem; }
+  /* too long for one line beside the buttons on most phones: it wraps
+     ("ΣΥΛΛΟΓΟΣ / ΔΙΠΛΩΜΑΤΟΥΧΩΝ") instead of running under «Σύνδεση» */
+  .brand-text .top { letter-spacing: .12em; font-size: .62rem; white-space: normal; line-height: 1.2; margin-bottom: 1px; }
   .brand-text .bottom { font-size: .92rem; }
   .brand-mark { width: 36px; height: 36px; }
   .acct-chip .nm { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -381,7 +383,7 @@ section.dark a:not(.btn) { color: var(--gold); }
 }
 @media (hover: hover) { .post-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); } }
 .post-card .thumb { aspect-ratio: 16 / 9; background: var(--sky); overflow: hidden; }
-.post-card .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.post-card .thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }  /* the posts' pictures are posters: their title is at the top */
 .post-card .thumb.logo { display: grid; place-items: center; background: linear-gradient(160deg, #0a2240, #1b4f86); }
 .post-card .thumb.logo img { width: 42%; height: auto; border-radius: 50%; background: #fff; padding: 6px; object-fit: contain; }
 .post-card .body { padding: 18px 20px 22px; display: flex; flex-direction: column; gap: 8px; flex: 1; }

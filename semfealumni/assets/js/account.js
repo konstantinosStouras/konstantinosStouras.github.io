@@ -6,17 +6,18 @@
  * below are the ones those rules check (tools/rules-test/ tests exactly these).
  *
  * The page is redrawn from state on every change (the members/{uid} listener
- * fires on our own writes too), so anything that must survive a redraw lives
- * in module state: the draft of a refused form (draft, formErr), the directory
- * message (dirMsg) and where keyboard focus should return (refocus). */
+ * fires on our own writes too, and again when their server time resolves), so
+ * every redraw first saves what is on screen and puts it back: whatever is
+ * typed in the form (draft), the half-filled delete box, and keyboard focus.
+ * Messages live in module state (formErr, dirMsg) and are also announced. */
 (function () {
   'use strict';
-  var A = window.SemfeAuth, C = window.SEMFE || {};
+  var A = window.SemfeAuth, C = window.SEMFE || {}, U = window.SEMFE_UTIL || {};
   var app = document.getElementById('account-app');
   if (!A || !app) return;
   var esc = A.esc, FV = null, db = null, unsub = null, user = null, member = null, dirEntry = null;
   var editing = false, deleted = false, autoDirTried = false, linked = [];
-  var draft = null, formErr = '', dirMsg = null, refocus = null;
+  var draft = null, formErr = '', dirMsg = null, refocus = null, applyScrolled = false, delBox = null;
   var YEAR = new Date().getFullYear();
   var STAGES = { graduate: 'Απόφοιτος/η ΣΕΜΦΕ', 'final-year': 'Τελειόφοιτος/η ΣΕΜΦΕ', faculty: 'Μέλος ΔΕΠ ΣΕΜΦΕ' };
   var DIRECTIONS = ['Εφαρμοσμένα Μαθηματικά', 'Εφαρμοσμένη Φυσική', 'Άλλη / δεν ισχύει'];
@@ -34,8 +35,12 @@
     user = u;
     if (unsub) { unsub(); unsub = null; }
     member = null; dirEntry = null; editing = false; draft = null; formErr = ''; dirMsg = null; refocus = null;
+    autoDirTried = false; delBox = null;
     linked = u ? A.providers(u) : [];
-    if (deleted) return;            // keep the "account deleted" message on screen
+    if (deleted) {                  // keep the "account deleted" message on screen…
+      if (!u) return;
+      deleted = false;              // …until someone signs in again on this page
+    }
     if (!A.configured) return renderOffline();
     if (!u) return renderSignedOut();
     html('<div class="loading"><span class="spinner" aria-hidden="true"></span>Φόρτωση του λογαριασμού σας…</div>');
@@ -92,13 +97,54 @@
     return user && !user.emailVerified && (user.providerData || []).some(function (p) { return p.providerId === 'password'; })
       && !(user.providerData || []).some(function (p) { return p.providerId !== 'password'; });
   }
-  /* connecting LinkedIn through the Cloud Function needs a proven address
-     (functions/linkedin.js refuses otherwise) */
-  function linkedinNeedsVerifiedEmail() {
-    return A.linkedinViaFunction() && user && user.email && !user.emailVerified;
+  /* connecting another sign-in method needs a proven address: otherwise
+     someone could register with another person's e-mail, never confirm it,
+     attach their own Google/Facebook/LinkedIn, and keep a way in after the
+     real owner takes the address back (functions/linkedin.js refuses LinkedIn
+     outright in that case) */
+  function linkNeedsVerifiedEmail() {
+    return !!(user && user.email && !user.emailVerified);
   }
 
-  function render() {
+  /* what has keyboard focus, as a selector that finds its replacement after a
+     redraw (and the panel it was in, for when the control itself is gone) */
+  function focusKey() {
+    var el = document.activeElement;
+    if (!el || el === document.body || !app.contains(el)) return null;
+    var attrs = ['data-dir', 'data-edit', 'data-cancel', 'data-verified', 'data-resend', 'data-send-verify', 'data-verified-li',
+      'data-reset', 'data-signout', 'data-del-open', 'data-del-go'], sel = el.id ? '#' + el.id : null;
+    for (var i = 0; !sel && i < attrs.length; i++) if (el.hasAttribute(attrs[i])) sel = '[' + attrs[i] + ']';
+    if (!sel && el.hasAttribute('data-link')) sel = '[data-link="' + el.getAttribute('data-link') + '"]';
+    if (!sel && el.type === 'submit') sel = '#apply [type=submit]';
+    var panel = el.closest ? el.closest('.panel[id]') : null;
+    return { sel: sel, panel: panel ? '#' + panel.id : null };
+  }
+  function restoreFocus(k) {
+    if (!k) return;
+    if (typeof k === 'string') k = { sel: k };
+    var el = (k.sel && app.querySelector(k.sel)) || (k.panel && app.querySelector(k.panel + ' h2'));
+    if (el && el.hidden) el = k.panel && app.querySelector(k.panel + ' h2');
+    if (el) try { el.focus(); } catch (e) {}
+  }
+  /* the form's fields exactly as typed (so a redraw can put them back) */
+  function formValues(form) {
+    var o = {};
+    Array.prototype.forEach.call(form.elements, function (el) {
+      if (!el.name) return;
+      o[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+    return o;
+  }
+
+  function render(fresh) {
+    // keep what is on screen: a redraw must never lose typing or focus
+    var keep = refocus || focusKey();
+    refocus = null;
+    var form = app.querySelector('form[data-apply]');
+    if (form && !fresh) draft = formValues(form);
+    var del = app.querySelector('[data-del-box]');
+    if (del && !del.hidden) delBox = { confirm: (app.querySelector('#del-confirm') || {}).value || '' };
+    else if (del) delBox = null;
     var name = A.displayName(user);
     var s = '<div class="panel profile-head">' + A.avatarHtml(name, user.photoURL, 'avatar-lg') +
       '<div class="who"><strong>' + esc(name) + '</strong><span class="muted">' + esc(user.email || '') + '</span></div>' + statusBadge(member) + '</div>';
@@ -118,17 +164,23 @@
     s += '</div></div>';
     html(s);
     wire();
-    if (refocus) {                        // put keyboard focus back where the person was
-      var el = app.querySelector(refocus);
-      refocus = null;
-      if (el) try { el.focus(); } catch (e) {}
+    if (delBox) {
+      app.querySelector('[data-del-box]').hidden = false;
+      app.querySelector('[data-del-open]').hidden = true;
+      app.querySelector('#del-confirm').value = delBox.confirm;
     }
-    if (/apply/.test(location.hash) && !member) { var f = document.getElementById('apply'); if (f && f.scrollIntoView) f.scrollIntoView({ block: 'start' }); }
+    restoreFocus(keep);
+    // arriving at account/#apply (straight after registering): show the form, once
+    if (/apply/.test(location.hash) && !member && !applyScrolled) {
+      applyScrolled = true;
+      var f = document.getElementById('apply'); if (f && f.scrollIntoView) f.scrollIntoView({ block: 'start' });
+    }
   }
+  function say(msg) { if (msg && U.announce) U.announce(msg); }
 
   function membershipPanel() {
     if (!member || editing || draft) return applyForm();
-    var m = member, faculty = isFaculty(m), s = '<div class="panel" id="apply"><h2>Η ιδιότητα μέλους</h2>';
+    var m = member, faculty = isFaculty(m), s = '<div class="panel" id="apply"><h2 tabindex="-1">Η ιδιότητα μέλους</h2>';
     if (m.status === 'active') {
       var paid = (m.duesYears || []).slice().sort();
       s += faculty
@@ -194,14 +246,15 @@
 
   function applyForm() {
     var m = draft || member || {}, parts = String(user.displayName || '').trim().split(/\s+/);
-    var first = m.firstName || (parts.length > 1 ? parts.slice(0, -1).join(' ') : parts[0] || '');
-    var last = m.lastName || (parts.length > 1 ? parts[parts.length - 1] : '');
     // once reviewed, the name is the vetted one (firestore.rules freezes it)
     var frozen = !!member && member.status !== 'pending';
+    var first = frozen ? member.firstName : m.firstName != null ? m.firstName : (parts.length > 1 ? parts.slice(0, -1).join(' ') : parts[0] || '');
+    var last = frozen ? member.lastName : m.lastName != null ? m.lastName : (parts.length > 1 ? parts[parts.length - 1] : '');
     var nameHint = frozen ? 'Για αλλαγή ονόματος <a href="' + A.root + 'contact/">επικοινωνήστε με τον Σύλλογο</a>.' : '';
     var blocked = needsEmailCheck();
     var msg = formErr || (blocked ? 'Επιβεβαιώστε πρώτα το e-mail σας (δείτε παραπάνω).' : '');
-    return '<div class="panel" id="apply"><h2>' + (member ? 'Επεξεργασία στοιχείων' : 'Αίτηση μέλους') + '</h2>' +
+    var active = !!member && member.status === 'active';
+    return '<div class="panel" id="apply"><h2 tabindex="-1">' + (member ? 'Επεξεργασία στοιχείων' : 'Αίτηση μέλους') + '</h2>' +
       (member ? '' : '<p class="muted">Συμπληρώστε τα στοιχεία σας. Τα πεδία με <span class="req">*</span> είναι υποχρεωτικά. Θα τα ελέγξουμε και θα ενεργοποιήσουμε την ιδιότητα μέλους μόλις λάβουμε τη συνδρομή των ' + esc(C.annualFee || 10) + '€ (δεν ισχύει για μέλη ΔΕΠ).</p>') +
       '<form class="form" novalidate data-apply>' +
       '<div class="row">' + field('firstName', 'Όνομα', first, { required: true, auto: 'given-name', max: 80, readonly: frozen, hint: nameHint }) +
@@ -219,38 +272,44 @@
       '<fieldset><legend>Επικοινωνία</legend><div class="form" style="gap:10px">' +
       check('consentNewsletter', 'Θέλω να λαμβάνω το ενημερωτικό newsletter του Συλλόγου.', m.consentNewsletter) +
       check('consentJobs', 'Θέλω να λαμβάνω ανακοινώσεις θέσεων εργασίας και πρακτικής άσκησης.', m.consentJobs) +
-      check('consentDirectory', 'Όταν ενεργοποιηθεί η ιδιότητά μου, θέλω να εμφανίζομαι στον κατάλογο μελών (τον βλέπουν μόνο ενεργά μέλη).', m.consentDirectory) +
+      check('consentDirectory', (active ? 'Θέλω να εμφανίζομαι' : 'Όταν ενεργοποιηθεί η ιδιότητά μου, θέλω να εμφανίζομαι') + ' στον κατάλογο μελών (τον βλέπουν μόνο ενεργά μέλη).', m.consentDirectory) +
       check('acceptedPrivacy', 'Έχω διαβάσει την <a href="' + A.root + 'privacy/" target="_blank" rel="noopener">πολιτική απορρήτου</a> και συμφωνώ να αποθηκευτούν τα στοιχεία μου για την τήρηση του μητρώου μελών.', m.acceptedPrivacy, true) +
       '</div></fieldset>' +
-      '<div class="form-error" role="alert" id="apply-msg" data-form-msg>' + esc(msg) + '</div>' +
+      '<div class="form-error" role="alert" id="apply-msg" tabindex="-1" data-form-msg>' + esc(msg) + '</div>' +
       '<div class="section-foot" style="margin-top:0"><button type="submit" class="btn btn-primary"' + (blocked ? ' disabled' : '') + '>' + (member ? 'Αποθήκευση' : 'Υποβολή αίτησης') + '</button>' +
       (member ? '<button type="button" class="btn btn-outline" data-cancel>Ακύρωση</button>' : '') + '</div>' +
       '</form></div>';
   }
 
   function methodsPanel() {
-    var rows = '', liBlocked = linkedinNeedsVerifiedEmail();
+    var rows = '', blocked = linkNeedsVerifiedEmail(), missing = false;
     A.enabledProviders().concat(['password']).forEach(function (k) {
       var info = k === 'password' ? { name: 'E-mail και κωδικός' } : A.providerInfo(k);
       var on = linked.indexOf(k) !== -1;
+      if (!on && k !== 'password') missing = true;
       var action = on
         ? (k === 'password' ? '<button type="button" class="btn btn-outline btn-sm" data-reset>Αλλαγή κωδικού</button>' : '<span class="badge ok">Συνδεδεμένο</span>')
         : (k === 'password' ? '<span class="muted" style="font-size:.85rem">—</span>'
-          : '<button type="button" class="btn btn-outline btn-sm" data-link="' + k + '"' + (k === 'linkedin' && liBlocked ? ' disabled aria-describedby="li-needs-email"' : '') + '>Σύνδεση</button>');
+          : '<button type="button" class="btn btn-outline btn-sm" data-link="' + k + '"' + (blocked ? ' disabled aria-describedby="link-needs-email"' : '') + '>Σύνδεση</button>');
       rows += '<div class="row"><span>' + A.icon(k) + esc(info.name) + '</span>' + action + '</div>';
     });
-    var liNote = liBlocked && linked.indexOf('linkedin') === -1 && A.enabledProviders().indexOf('linkedin') !== -1
-      ? '<p class="muted" id="li-needs-email" style="font-size:.88rem;margin:10px 0 0">Για να συνδέσετε το LinkedIn χρειάζεται επιβεβαιωμένο e-mail. ' +
+    // (an e-mail + password account that still has to confirm already has the box at the top)
+    var liNote = blocked && missing && !needsEmailCheck()
+      ? '<p class="muted" id="link-needs-email" style="font-size:.88rem;margin:10px 0 0">Για να συνδέσετε κι άλλον τρόπο σύνδεσης χρειάζεται επιβεβαιωμένο e-mail (' + esc(user.email) + '). ' +
         '<button type="button" class="link-btn" data-send-verify>Στείλτε μου e-mail επιβεβαίωσης</button> · <button type="button" class="link-btn" data-verified-li>Το επιβεβαίωσα</button></p>'
+      : blocked && missing ? '<p class="muted" id="link-needs-email" style="font-size:.88rem;margin:10px 0 0">Για να συνδέσετε κι άλλον τρόπο σύνδεσης, επιβεβαιώστε πρώτα το e-mail σας (δείτε παραπάνω).</p>'
       : '';
-    return '<div class="panel"><h2>Τρόποι σύνδεσης</h2><p class="muted" style="font-size:.92rem">Συνδέστε περισσότερους τρόπους στον ίδιο λογαριασμό, για να μπαίνετε με όποιον σας βολεύει.</p>' +
+    return '<div class="panel" id="methods"><h2 tabindex="-1">Τρόποι σύνδεσης</h2><p class="muted" style="font-size:.92rem">Συνδέστε περισσότερους τρόπους στον ίδιο λογαριασμό, για να μπαίνετε με όποιον σας βολεύει.</p>' +
       '<div class="linked">' + rows + '</div>' + liNote + '<div class="form-error" data-methods-msg role="status" style="margin-top:10px"></div>' +
       '<p style="margin:14px 0 0"><button type="button" class="btn btn-outline btn-sm" data-signout>Αποσύνδεση</button></p></div>';
   }
 
   function dangerPanel() {
-    var pwOnly = linked.length > 0 && linked.every(function (k) { return k === 'password'; });
-    return '<div class="panel" id="delete"><h2>Διαγραφή λογαριασμού</h2>' +
+    // decided by what reauth() can use: a popup provider, else the password
+    // (a LinkedIn connected through the Cloud Function is only a claim, not a way to re-prove)
+    var pd = A.providers(user);
+    var pwOnly = pd.indexOf('password') !== -1 && pd.every(function (k) { return k === 'password'; });
+    return '<div class="panel" id="delete"><h2 tabindex="-1">Διαγραφή λογαριασμού</h2>' +
       '<p class="muted" style="font-size:.92rem">Διαγράφει οριστικά τον λογαριασμό σας, την αίτηση μέλους και την καταχώρισή σας στον κατάλογο.</p>' +
       '<div data-del-box hidden class="form" style="margin-bottom:12px">' +
       '<div class="field"><label for="del-confirm">Γράψτε <strong>ΔΙΑΓΡΑΦΗ</strong> για επιβεβαίωση</label><input id="del-confirm" autocomplete="off" autocapitalize="characters"></div>' +
@@ -262,10 +321,10 @@
 
   /* reload the user and refresh the ID token, so the rules (and the LinkedIn
      function) see email_verified; msgEl gets the outcome */
-  function checkVerified(msgEl) {
+  function checkVerified(msgEl, focusAfter) {
     user.reload().then(function () { return user.getIdToken(true); }).then(function () {
       user = firebase.auth().currentUser;
-      if (user.emailVerified) { formErr = ''; render(); A.flash('Το e-mail σας επιβεβαιώθηκε.'); }
+      if (user.emailVerified) { formErr = ''; refocus = focusAfter; render(); A.flash('Το e-mail σας επιβεβαιώθηκε.'); }
       else if (msgEl) { msgEl.className = 'form-error'; msgEl.textContent = 'Δεν έχει επιβεβαιωθεί ακόμα. Πατήστε τον σύνδεσμο στο e-mail και δοκιμάστε ξανά.'; }
     }, function (err) { if (msgEl) { msgEl.className = 'form-error'; msgEl.textContent = A.friendly(err); } });
   }
@@ -279,25 +338,31 @@
     var q = function (s) { return app.querySelector(s); };
     var on = function (s, ev, fn) { var el = q(s); if (el) el.addEventListener(ev, fn); };
     on('[data-edit]', 'click', function () { editing = true; refocus = '#f-email'; render(); });
-    on('[data-cancel]', 'click', function () { editing = false; draft = null; formErr = ''; refocus = '[data-edit]'; render(); });
+    on('[data-cancel]', 'click', function () { editing = false; draft = null; formErr = ''; refocus = '[data-edit]'; render(true); });
     on('[data-apply]', 'submit', function (e) { e.preventDefault(); submitApplication(e.target); });
     on('[data-signout]', 'click', function () { A.signOut(); });
     on('[data-dir]', 'change', function (e) { toggleDirectory(e.target); });
     on('[data-resend]', 'click', function () { sendVerify(q('[data-verify-msg]')); });
-    on('[data-verified]', 'click', function () { checkVerified(q('[data-verify-msg]')); });
+    on('[data-verified]', 'click', function () { checkVerified(q('[data-verify-msg]'), '#apply h2'); });
     on('[data-send-verify]', 'click', function () { sendVerify(q('[data-methods-msg]')); });
-    on('[data-verified-li]', 'click', function () { checkVerified(q('[data-methods-msg]')); });
+    on('[data-verified-li]', 'click', function () { checkVerified(q('[data-methods-msg]'), '#methods h2'); });
     Array.prototype.forEach.call(app.querySelectorAll('[data-link]'), function (b) {
       b.addEventListener('click', function () {
         var k = b.getAttribute('data-link'), msg = q('[data-methods-msg]');
         b.disabled = true;
         A.link(k).then(function () {
           user = firebase.auth().currentUser;
-          linked = A.providers(user);           // linkWithPopup keeps the uid, so onChange does not fire
-          render();
-          A.flash('Το ' + A.providerInfo(k).name + ' συνδέθηκε με τον λογαριασμό σας.');
+          // linkWithPopup keeps the uid, so onChange does not fire; the async
+          // list keeps a LinkedIn that was connected through the Cloud Function
+          return A.providersAsync(user).then(function (l) {
+            linked = l;
+            refocus = '#methods h2';
+            render();
+            A.flash('Το ' + A.providerInfo(k).name + ' συνδέθηκε με τον λογαριασμό σας.');
+          });
         }, function (err) {
           b.disabled = false;
+          try { b.focus(); } catch (e) {}      // disabling it had dropped keyboard focus
           if (err && (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request')) return;
           msg.className = 'form-error';
           msg.textContent = A.friendly(err);
@@ -310,14 +375,19 @@
         msg.className = 'form-ok'; msg.textContent = 'Σας στείλαμε e-mail με σύνδεσμο για νέο κωδικό.';
       }, function (err) { msg.className = 'form-error'; msg.textContent = A.friendly(err); });
     });
-    on('[data-del-open]', 'click', function () { q('[data-del-box]').hidden = false; this.hidden = true; q('#del-confirm').focus(); });
+    on('[data-del-open]', 'click', function () { q('[data-del-box]').hidden = false; this.hidden = true; delBox = { confirm: '' }; q('#del-confirm').focus(); });
     on('[data-del-go]', 'click', deleteAccount);
   }
 
   function readForm(form) {
     var v = function (n) { var el = form.elements[n]; return el ? String(el.value || '').trim() : ''; };
     var c = function (n) { var el = form.elements[n]; return !!(el && el.checked); };
-    var y = function (n) { var s = v(n); if (!s) return null; var x = parseInt(s, 10); return isNaN(x) ? NaN : x; };
+    var y = function (n) {
+      var el = form.elements[n];
+      if (el && el.validity && el.validity.badInput) return NaN;   // e.g. "2013-": the browser reports ""
+      var s = v(n); if (!s) return null;
+      return /^\d{4}$/.test(s) ? parseInt(s, 10) : NaN;
+    };
     return {
       firstName: v('firstName'), lastName: v('lastName'), email: v('email'), phone: v('phone'),
       stage: v('stage'), direction: v('direction'), entryYear: y('entryYear'), gradYear: y('gradYear'),
@@ -361,7 +431,7 @@
     var msg = form.querySelector('[data-form-msg]'), btn = form.querySelector('[type=submit]');
     var d = readForm(form), err = validate(d, form);
     msg.className = 'form-error';
-    if (err) { formErr = err; msg.textContent = err; return; }
+    if (err) { formErr = err; msg.textContent = err; say(err); return; }
     msg.textContent = '';
     btn.disabled = true;
     var wasNew = !member;
@@ -369,7 +439,9 @@
     var provider = ((user.providerData || [])[0] || {}).providerId || (linked.indexOf('linkedin') !== -1 ? 'linkedin' : 'unknown');
     // Firestore shows our write to the listener before the server accepts it, and
     // rolls it back if refused: keep what was typed so a refusal redraws it
-    draft = readForm(form); draft.linkedin = d.linkedin; formErr = '';
+    draft = formValues(form); draft.linkedin = d.linkedin; formErr = '';
+    // a reviewed name is frozen (firestore.rules): send the stored one
+    if (member && member.status !== 'pending') { d.firstName = member.firstName; d.lastName = member.lastName; }
     d.provider = provider.slice(0, 40);
     d.updatedAt = FV.serverTimestamp();
     var job;
@@ -382,15 +454,20 @@
     }
     job.then(function () {
       editing = false; draft = null; formErr = '';
-      if (dirEntry && member && member.status === 'active') writeDirectory().catch(function () {});
+      // an active member: the directory follows the form (listed, updated, or removed)
+      if (member && member.status === 'active') {
+        if (d.consentDirectory) writeDirectory().catch(function () {});
+        else if (dirEntry) db.collection('directory').doc(user.uid).delete().then(function () { dirEntry = null; render(); }, function () {});
+      }
       A.flash(wasNew ? 'Η αίτησή σας υποβλήθηκε. Ευχαριστούμε!' : 'Τα στοιχεία σας αποθηκεύτηκαν.');
       refocus = '#apply h2';
-      render();
+      render(true);
     }, function (e) {
       formErr = A.friendly(e);
       editing = !wasNew;
       refocus = '#apply-msg';
       render();
+      say(formErr);
     });
   }
 
@@ -416,10 +493,12 @@
       dirMsg = { cls: 'form-ok', text: want ? 'Εμφανίζεστε στον κατάλογο μελών.' : 'Αφαιρεθήκατε από τον κατάλογο μελών.' };
       refocus = '[data-dir]';
       render();
+      say(dirMsg.text);
     }, function (e) {
       dirMsg = { cls: 'form-error', text: A.friendly(e) };
       refocus = '[data-dir]';
       render();
+      say(dirMsg.text);
     });
   }
 

@@ -9,7 +9,7 @@
   var A = window.SemfeAuth;
   var app = document.getElementById('admin-app');
   if (!A || !app) return;
-  var esc = A.esc, db = null, FV = null, unsub = null, all = [], filter = 'pending', query = '', me = null;
+  var esc = A.esc, db = null, FV = null, unsub = null, all = [], filter = 'pending', query = '', me = null, keepFocus = null;
   var YEAR = new Date().getFullYear();
   var STAGES = { graduate: 'Απόφοιτος', 'final-year': 'Τελειόφοιτος', faculty: 'ΔΕΠ' };
   var STATUS = { pending: ['warn', 'Σε αναμονή'], active: ['ok', 'Ενεργό μέλος'], rejected: ['err', 'Απορρίφθηκε'] };
@@ -93,7 +93,8 @@
   function cssEsc(v) { return window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&'); }
 
   function render() {
-    var keep = focusKey();
+    var keep = focusKey() || keepFocus;
+    keepFocus = null;
     var count = function (st) { return all.filter(function (m) { return (m.status || 'pending') === st; }).length; };
     var paidNow = all.filter(function (m) { return m.status === 'active' && (m.duesYears || []).indexOf(YEAR) !== -1; }).length;
     var list = visible();
@@ -179,6 +180,7 @@
       job = db.collection('directory').doc(m.id).delete().catch(function () {}).then(function () { return ref.delete(); });
     }
     if (!job) return;
+    keepFocus = focusKey();        // disabling the focused button drops focus: remember it first
     btn.disabled = true;
     job.catch(function (e) { btn.disabled = false; window.alert(A.friendly(e)); });
   }

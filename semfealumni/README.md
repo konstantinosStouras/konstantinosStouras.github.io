@@ -94,6 +94,7 @@ the build.
 
 ## Moving to semfealumni.gr later
 
+This needs the site in a repository of its own first (see Hosting below).
 All links are relative, so the files work at any address. Change `siteUrl` in
 `assets/js/config.js`, add a `CNAME` file with the domain, run
 `node tools/build.mjs` and `node tools/make-share-images.mjs`, point the DNS at
@@ -106,13 +107,31 @@ Facebook app's App Domains).
     node tools/smoke.mjs                  every page at 10 screen sizes, menu, dialog, gallery (Playwright)
     node tools/auth-flow.mjs              the sign-in, account, members and admin flows against a fake Firebase
     cd tools/rules-test && npm install && npm test   the Firestore rules against the real emulator (needs Java)
+    cd functions && npm install && npm test          the LinkedIn Cloud Function (offline, with fakes)
 
 ## Hosting
 
-GitHub Pages, from the `main` branch, root folder (Settings, Pages, Source:
-"Deploy from a branch", `main`, `/ (root)`). Because the owner's user site
-carries the custom domain `www.stouras.com`, this project site is served under
-it automatically at `/semfealumni/`.
+Today the site is the `semfealumni/` folder of the stouras.com repository
+(`konstantinosStouras/konstantinosStouras.github.io`, branch `master`), so
+GitHub Pages serves it at `https://www.stouras.com/semfealumni/` with the rest
+of that site. Nothing else needs switching on.
 
-Do **not** add a `.nojekyll` file: Jekyll is what keeps `_src/` off the web,
-and `_config.yml` keeps `tools/` and the Firebase files off it too.
+The folder is self-contained, so it can move to a repository of its own at any
+time: create an empty public repository named `semfealumni`, copy this folder's
+contents to its root, push to `main`, turn on Pages (Settings, Pages, Source:
+"Deploy from a branch", `main`, `/ (root)`), then delete the folder from the
+stouras.com repository. Because the owner's user site carries the custom domain
+`www.stouras.com`, a project site named `semfealumni` is served at the same
+address, so no link changes.
+
+Two differences between the two set-ups:
+
+* As a folder of the stouras.com repository, a missing address under
+  `/semfealumni/` shows stouras.com's own 404 page (Pages serves only the root
+  one). In its own repository, this site's `404.html` is used.
+* As a folder, `_config.yml` here has no effect (Jekyll reads only the root
+  one), so `tools/`, `functions/` and the Firebase files are served as plain
+  files. They hold no secrets (the repository is public anyway); `_src/` stays
+  off the web in both cases because its name starts with `_`.
+
+Do **not** add a `.nojekyll` file: Jekyll is what keeps `_src/` off the web.
