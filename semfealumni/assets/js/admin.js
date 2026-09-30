@@ -92,14 +92,30 @@
   }
   function cssEsc(v) { return window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&'); }
 
+  /* The frame (filters, search box, buttons) is built ONCE and only the
+     figures and the table are redrawn. Rebuilding the search box on every
+     keystroke would break typing with an input method (Android keyboards,
+     the Greek accent key), which composes a word across several events. */
   function render() {
     var keep = focusKey() || keepFocus;
     keepFocus = null;
+    if (!app.querySelector('[data-admin-frame]')) buildFrame();
     var count = function (st) { return all.filter(function (m) { return (m.status || 'pending') === st; }).length; };
     var paidNow = all.filter(function (m) { return m.status === 'active' && (m.duesYears || []).indexOf(YEAR) !== -1; }).length;
     var list = visible();
-    var s = '<div class="tiles">' +
-      tile(all.length, 'Αιτήσεις συνολικά') + tile(count('pending'), 'Σε αναμονή') + tile(count('active'), 'Ενεργά μέλη') + tile(paidNow, 'Συνδρομή ' + YEAR) + '</div>' +
+    app.querySelector('[data-tiles]').innerHTML =
+      tile(all.length, 'Αιτήσεις συνολικά') + tile(count('pending'), 'Σε αναμονή') + tile(count('active'), 'Ενεργά μέλη') + tile(paidNow, 'Συνδρομή ' + YEAR);
+    app.querySelectorAll('[data-filter]').forEach(function (b) { b.setAttribute('aria-pressed', String(filter === b.getAttribute('data-filter'))); });
+    app.querySelector('[data-csv]').textContent = 'Εξαγωγή CSV (' + list.length + ')';
+    app.querySelector('[data-list]').innerHTML = !list.length ? '<p class="muted">Καμία αίτηση σε αυτή την κατηγορία.</p>'
+      : '<div class="table-wrap"><table class="data stack"><thead><tr><th>Μέλος</th><th>Κατάσταση</th><th>ΣΕΜΦΕ</th><th>Εργασία</th><th>Αίτηση</th><th>Συνδρομές</th><th>Ενέργειες</th></tr></thead><tbody>' +
+        list.map(row).join('') + '</tbody></table></div>';
+    wireRows();
+    // focus inside the frame (search box, filters, buttons) was never lost; only rows are redrawn
+    if (keep && keep.id) restoreFocus(keep);
+  }
+  function buildFrame() {
+    html('<div data-admin-frame><div class="tiles" data-tiles></div>' +
       '<div class="dir-tools">' +
       '<div class="filters" role="group" aria-label="Κατάσταση" style="margin:0">' +
       [['pending', 'Σε αναμονή'], ['active', 'Ενεργά'], ['rejected', 'Απορρίφθηκαν'], ['all', 'Όλες']].map(function (f) {
@@ -107,16 +123,12 @@
       }).join('') + '</div>' +
       '<div class="field"><label for="adm-q" class="sr-only">Αναζήτηση</label><input id="adm-q" type="search" placeholder="Αναζήτηση: όνομα, e-mail, εργοδότης…" value="' + esc(query) + '"></div></div>' +
       '<div class="section-foot" style="margin:0 0 16px">' +
-      '<button type="button" class="btn btn-outline btn-sm" data-csv>Εξαγωγή CSV (' + list.length + ')</button>' +
+      '<button type="button" class="btn btn-outline btn-sm" data-csv>Εξαγωγή CSV</button>' +
       '<button type="button" class="btn btn-outline btn-sm" data-copy="consentNewsletter">Αντιγραφή e-mail: newsletter</button>' +
       '<button type="button" class="btn btn-outline btn-sm" data-copy="consentJobs">Αντιγραφή e-mail: θέσεις εργασίας</button>' +
-      '<span class="form-ok" data-msg role="status"></span></div>';
-    if (!list.length) s += '<p class="muted">Καμία αίτηση σε αυτή την κατηγορία.</p>';
-    else s += '<div class="table-wrap"><table class="data stack"><thead><tr><th>Μέλος</th><th>Κατάσταση</th><th>ΣΕΜΦΕ</th><th>Εργασία</th><th>Αίτηση</th><th>Συνδρομές</th><th>Ενέργειες</th></tr></thead><tbody>' +
-      list.map(row).join('') + '</tbody></table></div>';
-    html(s);
-    wire();
-    restoreFocus(keep);
+      '<span class="form-ok" data-msg role="status"></span></div>' +
+      '<div data-list></div></div>');
+    wireFrame();
   }
   function tile(v, l) { return '<div class="tile"><div class="v">' + v + '</div><div class="l">' + l + '</div></div>'; }
   function row(m) {
@@ -131,15 +143,15 @@
       '<td data-label="Εργασία">' + esc([m.position, m.employer].filter(Boolean).join(', ')) + (m.city ? '<br><span class="muted">' + esc(m.city) + '</span>' : '') + '</td>' +
       '<td data-label="Αίτηση">' + date(m.createdAt) + '<br><small class="muted">' + esc(String(m.provider || '').replace('.com', '')) + '</small></td>' +
       '<td data-label="Συνδρομές">' + (years.length ? esc(years.join(', ')) : '—') + '</td>' +
-      '<td class="acts" data-label="Ενέργειες">' +
+      '<td class="acts" data-label="Ενέργειες"><div class="acts-in">' +
       (m.status !== 'active' ? '<button type="button" class="btn btn-dark btn-sm" data-act="approve">Έγκριση</button> ' : '') +
       '<button type="button" class="btn btn-outline btn-sm" data-act="dues" aria-pressed="' + paid + '">' + (paid ? '✓ Πλήρωσε ' + YEAR : 'Πλήρωσε ' + YEAR) + '</button> ' +
       (m.status !== 'rejected' ? '<button type="button" class="btn btn-outline btn-sm" data-act="reject">Απόρριψη</button> ' : '') +
       (m.status !== 'pending' ? '<button type="button" class="btn btn-outline btn-sm" data-act="pending">Σε αναμονή</button> ' : '') +
-      '<button type="button" class="btn btn-danger btn-sm" data-act="delete">Διαγραφή</button></td></tr>';
+      '<button type="button" class="btn btn-danger btn-sm" data-act="delete">Διαγραφή</button></div></td></tr>';
   }
 
-  function wire() {
+  function wireFrame() {
     var msg = app.querySelector('[data-msg]');
     app.querySelectorAll('[data-filter]').forEach(function (b) { b.addEventListener('click', function () { filter = b.getAttribute('data-filter'); render(); }); });
     var q = app.querySelector('#adm-q');
@@ -155,6 +167,8 @@
         });
       });
     });
+  }
+  function wireRows() {
     app.querySelectorAll('[data-act]').forEach(function (b) {
       b.addEventListener('click', function () {
         var id = b.closest('tr').getAttribute('data-id'), m = all.filter(function (x) { return x.id === id; })[0];

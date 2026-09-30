@@ -79,7 +79,7 @@ const NAV = [
   { key: 'governance', label: 'Διοίκηση', href: 'governance/' },
   { key: 'history', label: 'Ιστορία', href: 'how_we_started/' },
   { key: 'blog', label: 'Ανακοινώσεις', href: 'blog/' },
-  { key: 'support', label: 'Εγγραφή & Δωρεές', href: 'support/' },
+  { key: 'support', label: 'Εγγραφές & Δωρεές', href: 'support/' },
   { key: 'contact', label: 'Επικοινωνία', href: 'contact/' }
 ];
 /* The pill row under an inner page's title, linking the pages of one section. */
@@ -97,6 +97,8 @@ const SOCIAL = [
 
 /* ---- helpers --------------------------------------------------------------- */
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/* a date stays on one line: "27 Φεβρουαρίου" never breaks between day and month */
+const keepDate = s => s.replace(new RegExp('(\\d{1,2}) (' + MONTHS.join('|') + ')', 'g'), '$1&nbsp;$2');   // MONTHS is below
 const depthOf = p => (p.replace(/index\.html$/, '').match(/\//g) || []).length;
 const rootFor = p => '../'.repeat(depthOf(p)) || './';
 const MONTHS = ['Ιανουαρίου', 'Φεβρουαρίου', 'Μαρτίου', 'Απριλίου', 'Μαΐου', 'Ιουνίου', 'Ιουλίου', 'Αυγούστου', 'Σεπτεμβρίου', 'Οκτωβρίου', 'Νοεμβρίου', 'Δεκεμβρίου'];
@@ -124,14 +126,18 @@ const posts = readSrc('posts').map(p => {
 }).sort((a, b) => b.meta.date.localeCompare(a.meta.date) || a.meta.slug.localeCompare(b.meta.slug));
 const postBySlug = Object.fromEntries(posts.map(p => [p.meta.slug, p]));
 
-function postCard(p, root) {
+function postCard(p, root, i) {
+  const load = i < 3 ? 'eager' : 'lazy';          // the first row is on screen at once
   const img = p.meta.image
-    ? `<div class="thumb"><img src="${root}assets/img/posts/${esc(p.meta.image)}" alt="" loading="lazy" decoding="async"></div>`
-    : `<div class="thumb logo"><img src="${root}assets/img/logos/logo.png" alt="" loading="lazy" decoding="async"></div>`;
+    ? `<div class="thumb"><img src="${root}assets/img/posts/${esc(p.meta.image)}" alt="" loading="${load}" decoding="async"></div>`
+    : `<div class="thumb logo"><img src="${root}assets/img/logos/logo.png" alt="" loading="${load}" decoding="async"></div>`;
+  // an excerpt that only repeats the title says nothing: leave it out
+  const same = a => String(a || '').replace(/[.\s]+$/, '').trim().toLowerCase();
+  const excerpt = same(p.meta.description) === same(p.meta.title) ? '' : `<p>${esc(p.meta.description)}</p>`;
   const cat = p.meta.category || 'Ανακοινώσεις';
   return `<a class="post-card" href="${root}${p.path}" data-cat="${esc(cat)}">${img}<div class="body">` +
     `<div class="meta"><span class="tag${cat === 'Εκδηλώσεις' ? ' events' : ''}">${esc(cat)}</span><time datetime="${p.meta.date}">${greekDate(p.meta.date)}</time></div>` +
-    `<h3>${esc(p.meta.title)}</h3><p>${esc(p.meta.description)}</p><span class="more">Διαβάστε περισσότερα →</span></div></a>`;
+    `<h3>${keepDate(esc(p.meta.title))}</h3>${excerpt}<span class="more">Διαβάστε περισσότερα →</span></div></a>`;
 }
 
 /* ---- the layout ------------------------------------------------------------ */
@@ -227,7 +233,7 @@ function pageHero(page, root) {
   <div class="wrap">
     ${crumbHtml}
     ${h.eyebrow ? `<span class="eyebrow">${esc(h.eyebrow)}</span>` : ''}
-    <h1>${h.titleHtml || esc(h.title || page.meta.title)}</h1>
+    <h1>${h.titleHtml || keepDate(esc(h.title || page.meta.title))}</h1>
     ${h.lede ? `<p class="lede">${esc(h.lede)}</p>` : ''}
     ${meta}
     ${subHtml}
@@ -243,7 +249,7 @@ function footer(root) {
       <div>
         <div class="footer-brand">
           <img src="${root}assets/img/logos/semfe_alumni_logo.jpg" alt="" width="46" height="46" loading="lazy">
-          <p><strong style="color:#fff">Σύλλογος Διπλωματούχων ΣΕΜΦΕ ΕΜΠ</strong><br>Ο επίσημος φορέας των αποφοίτων της Σχολής Εφαρμοσμένων Μαθηματικών και Φυσικών Επιστημών του ΕΜΠ, από το 2013.</p>
+          <p><strong style="color:#fff">Σύλλογος Διπλωματούχων ΣΕΜΦΕ&nbsp;ΕΜΠ</strong><br>Ο επίσημος φορέας των αποφοίτων της Σχολής Εφαρμοσμένων Μαθηματικών και Φυσικών Επιστημών του ΕΜΠ, από το 2013.</p>
         </div>
         <div class="footer-social">${social}</div>
       </div>
@@ -268,7 +274,7 @@ function footer(root) {
       <div>
         <h2>Μέλη</h2>
         <ul>
-          <li><a href="${root}support/">Εγγραφή &amp; Δωρεές</a></li>
+          <li><a href="${root}support/">Εγγραφές &amp; Δωρεές</a></li>
           <li><a href="${root}account/">Ο λογαριασμός μου</a></li>
           <li><a href="${root}members/">Περιοχή μελών</a></li>
           <li><a href="${root}contact/">Επικοινωνία</a></li>
@@ -277,7 +283,7 @@ function footer(root) {
     </div>
     <div class="footer-bottom">
       <span>Copyright &copy; 2013–${YEAR_NOW} Σύλλογος Διπλωματούχων ΣΕΜΦΕ ΕΜΠ</span>
-      <span><a href="${root}privacy/">Πολιτική απορρήτου</a> · <a href="${root}terms/">Όροι χρήσης</a> · <a href="${root}data-deletion/">Διαγραφή δεδομένων</a></span>
+      <span class="legal"><a href="${root}privacy/">Πολιτική απορρήτου</a><a href="${root}terms/">Όροι χρήσης</a><a href="${root}data-deletion/">Διαγραφή δεδομένων</a></span>
     </div>
   </div>
 </footer>`;
@@ -287,8 +293,8 @@ function fill(body, root, page) {
   return body
     .replace(/\{\{root\}\}/g, root)
     .replace(/\{\{icon:([a-z]+)\}\}/g, (m, k) => { if (!ICONS[k]) throw new Error(`${page.file}: unknown icon "${k}"`); return ICONS[k]; })
-    .replace(/\{\{latest\}\}/g, () => `<div class="posts">${posts.slice(0, 3).map(p => postCard(p, root)).join('\n')}</div>`)
-    .replace(/\{\{posts\}\}/g, () => `<div class="posts" id="post-list">${posts.map(p => postCard(p, root)).join('\n')}</div>`)
+    .replace(/\{\{latest\}\}/g, () => `<div class="posts">${posts.slice(0, 3).map((p, i) => postCard(p, root, i)).join('\n')}</div>`)
+    .replace(/\{\{posts\}\}/g, () => `<div class="posts" id="post-list">${posts.map((p, i) => postCard(p, root, i)).join('\n')}</div>`)
     .replace(/\{\{post:([a-z0-9_-]+)\}\}/g, (m, slug) => { const p = postBySlug[slug]; if (!p) throw new Error(`${page.file}: no post with slug ${slug}`); return root + p.path; })
     .replace(/\{\{social\}\}/g, () => `<div class="social">${SOCIAL.map(([k, label, href]) => `<a class="${k}" href="${href}" target="_blank" rel="noopener">${ICONS[k]}${label}</a>`).join('')}</div>`);
 }

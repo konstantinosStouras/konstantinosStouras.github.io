@@ -1199,6 +1199,25 @@ await scenario('K11', 'admin page: keyboard focus stays on the same control afte
     'after recording dues, focus is on the same row\'s dues button');
 });
 
+await scenario('K12', 'admin page: typing in the search box with an input method (a word composed over several steps) works', { cfg: 'oidc', seed: ADMIN_SEED }, async (page) => {
+  await page.goto(URL_('admin/'));
+  await page.click('[data-filter="all"]');
+  await page.focus('#adm-q');
+  const cdp = await page.context().newCDPSession(page);
+  for (const t of ['κ', 'κα', 'καρ']) await cdp.send('Input.imeSetComposition', { text: t, selectionStart: t.length, selectionEnd: t.length });
+  await cdp.send('Input.insertText', { text: 'καρ' });
+  await sleep(200);
+  t((await page.inputValue('#adm-q')) === 'καρ', 'the search box holds exactly «καρ»' + list([await page.inputValue('#adm-q')]));
+  t(await page.evaluate(() => document.activeElement && document.activeElement.id === 'adm-q'), '… and keeps focus');
+});
+
+await scenario('K13', 'account page: #delete (from the data-deletion page) scrolls to the delete panel', { cfg: 'oidc', viewport: { width: 390, height: 844 },
+  seed: signedInSeed(mariaAcct(), { docs: { ['members/' + MARIA.uid]: member({ firstName: 'Μαρία', lastName: 'Παπαδοπούλου', status: 'active' }) } }) }, async (page) => {
+  await page.goto(URL_('account/#delete'));
+  t(await waitFor(page, () => { const h = document.querySelector('#delete h2'); if (!h) return false; const r = h.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }), 'the delete panel is on screen');
+  t(await page.evaluate(() => document.activeElement && document.activeElement.closest && !!document.activeElement.closest('#delete')), '… with keyboard focus on its heading');
+});
+
 await browser.close();
 console.log(`\n${passes} passed, ${fails} failed`);
 if (fails) { console.log('\nFailures:\n  ' + failed.join('\n  ')); }

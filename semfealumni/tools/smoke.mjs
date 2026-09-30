@@ -346,7 +346,7 @@ const firebaseLoads = [], thirdParty = new Set();
 const browser = await pw.chromium.launch();
 
 async function open(url, o = {}) {
-  const { width = 1280, height = 800, phone = false, touch = false, colorScheme = 'light', reducedMotion = 'no-preference', permissions = [], allow404 = null } = o;
+  const { width = 1280, height = 800, phone = false, touch = false, colorScheme = 'light', reducedMotion = 'no-preference', permissions = [], allow404 = null, noFonts = false } = o;
   const ctx = await browser.newContext({
     ignoreHTTPSErrors: true, viewport: { width, height }, isMobile: phone, hasTouch: phone || touch,
     deviceScaleFactor: phone ? 2 : 1, colorScheme, reducedMotion, permissions
@@ -360,6 +360,7 @@ async function open(url, o = {}) {
       return route.continue();
     }
     if (FONT.test(u)) {
+      if (noFonts) return route.abort();        // as where Google Fonts is blocked
       const hit = fontCache.get(u);
       if (hit) return route.fulfill(hit);
       try {
@@ -571,6 +572,25 @@ try {
     t(r.rowSpread < 1 && r.wraps === 0 && r.headerH < 80, `${w}px: the links sit in one row (spread ${r.rowSpread.toFixed(1)}px, header ${Math.round(r.headerH)}px)`);
     t(r.navL >= r.brandR && r.navR <= r.acctL && r.acctR <= r.vw,
       `${w}px: links clear the brand and the Σύνδεση button (gaps ${Math.round(r.navL - r.brandR)}px / ${Math.round(r.acctL - r.navR)}px)`);
+    await ctx.close();
+  }
+  // no web font (a wider fallback) or a larger text size: the row may tighten or
+  // turn into the menu button, but it never runs past the edge
+  for (const [w, big] of [[1101, false], [1280, false], [1440, false], [1280, true], [1920, true]]) {
+    const { ctx, page } = await open(SUB + 'blog/', { width: w, height: 800, noFonts: !big });
+    if (big) await page.evaluate(() => { document.documentElement.style.fontSize = '125%'; dispatchEvent(new Event('resize')); });
+    await page.waitForTimeout(250);
+    const r = await page.evaluate(() => {
+      const wrap = document.querySelector('.site-header .wrap'), nav = document.querySelector('#nav'), links = [...nav.querySelectorAll('a')];
+      let br = 0; document.querySelectorAll('.brand-text span').forEach(s => { const b = s.getBoundingClientRect(); br = Math.max(br, b.right, b.left + s.scrollWidth); });
+      const row = getComputedStyle(nav).position !== 'absolute' && getComputedStyle(nav).display !== 'none';
+      const tog = getComputedStyle(document.querySelector('.nav-toggle')).display !== 'none';
+      return { over: wrap.scrollWidth > wrap.clientWidth + 1 || document.documentElement.scrollWidth > innerWidth, row, tog,
+        oneRow: !row || links.every(a => Math.abs(a.getBoundingClientRect().top - links[0].getBoundingClientRect().top) < 2),
+        clear: !row || br <= links[0].getBoundingClientRect().left };
+    });
+    t(!r.over && (r.row !== r.tog) && r.oneRow && r.clear,
+      `${w}px ${big ? '125% text' : 'no web font'}: the header fits (${r.row ? 'one row of links' : 'menu button'})`);
     await ctx.close();
   }
   for (const [w, h] of [[1100, 800], [1024, 768], [768, 1024], [844, 390], [414, 896], [390, 844], [375, 667], [360, 740], [320, 568]]) {

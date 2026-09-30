@@ -29,10 +29,49 @@
     });
     if (window.matchMedia) {
       var mq = window.matchMedia('(min-width: 1101px)');
-      var onChange = function () { if (mq.matches) setOpen(false); };
+      var onChange = function () { fitHeader(); if (mq.matches && !tight()) setOpen(false); };
       if (mq.addEventListener) mq.addEventListener('change', onChange); else if (mq.addListener) mq.addListener(onChange);
     }
   }
+
+  /* ---- the header row must fit ----
+     Above 1100px the links sit in one row. When they do not fit (the web font
+     did not load and a wider fallback is used, e.g. where Google Fonts is
+     blocked, or the reader has a larger default text size), switch to the
+     menu button (html.nav-tight, see site.css) instead of spilling past the
+     edge. Measured again when fonts arrive, on resize and when the account
+     button changes. */
+  var headerWrap = $('.site-header .wrap'), docEl = document.documentElement;
+  function tight() { return docEl.classList.contains('nav-tight'); }
+  function headerOver() {
+    var links = $$('a', nav), first = links[0], brandRight = 0;
+    if (!first) return false;
+    $$('.brand-text span').forEach(function (sp) { var r = sp.getBoundingClientRect(); brandRight = Math.max(brandRight, r.right, r.left + sp.scrollWidth); });
+    var top = first.getBoundingClientRect().top;
+    return headerWrap.scrollWidth > headerWrap.clientWidth + 1 ||
+      brandRight > first.getBoundingClientRect().left - 6 ||
+      links.some(function (a) { return a.getBoundingClientRect().top > top + 2; });
+  }
+  function fitHeader() {
+    if (!headerWrap || !nav || !window.matchMedia) return;
+    var was = tight();
+    docEl.classList.remove('nav-tight', 'nav-compact');
+    if (window.matchMedia('(min-width: 1101px)').matches && headerOver()) {
+      docEl.classList.add('nav-compact');             // first: a little less space around each link
+      if (headerOver()) docEl.classList.add('nav-tight');   // still too wide: the menu button
+    }
+    if (was !== tight() && toggle) { nav.classList.remove('open'); toggle.setAttribute('aria-expanded', 'false'); }
+  }
+  var fitQueued = false;
+  function queueFit() { if (fitQueued) return; fitQueued = true; (window.requestAnimationFrame || setTimeout)(function () { fitQueued = false; fitHeader(); }); }
+  fitHeader();
+  window.addEventListener('resize', queueFit);
+  if (document.fonts) {
+    if (document.fonts.ready) document.fonts.ready.then(queueFit);
+    if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', queueFit);
+  }
+  var slot = $('#acct-slot');
+  if (slot && window.MutationObserver) new MutationObserver(queueFit).observe(slot, { childList: true, subtree: true });
 
   /* ---- copy buttons (IBAN, BIC) ---- */
   $$('[data-copy]').forEach(function (btn) {

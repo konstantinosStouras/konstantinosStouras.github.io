@@ -17,7 +17,7 @@
   if (!A || !app) return;
   var esc = A.esc, FV = null, db = null, unsub = null, user = null, member = null, dirEntry = null;
   var editing = false, deleted = false, autoDirTried = false, linked = [];
-  var draft = null, formErr = '', dirMsg = null, refocus = null, applyScrolled = false, delBox = null;
+  var draft = null, formErr = '', dirMsg = null, refocus = null, applyScrolled = false, deleteShown = false, delBox = null;
   var YEAR = new Date().getFullYear();
   var STAGES = { graduate: 'Απόφοιτος/η ΣΕΜΦΕ', 'final-year': 'Τελειόφοιτος/η ΣΕΜΦΕ', faculty: 'Μέλος ΔΕΠ ΣΕΜΦΕ' };
   var DIRECTIONS = ['Εφαρμοσμένα Μαθηματικά', 'Εφαρμοσμένη Φυσική', 'Άλλη / δεν ισχύει'];
@@ -174,6 +174,13 @@
     if (/apply/.test(location.hash) && !member && !applyScrolled) {
       applyScrolled = true;
       var f = document.getElementById('apply'); if (f && f.scrollIntoView) f.scrollIntoView({ block: 'start' });
+    }
+    // arriving at account/#delete (from the data-deletion page): the panel is drawn only now,
+    // after the browser's own jump to the fragment, so go there once ourselves
+    if (/^#delete$/.test(location.hash) && !deleteShown) {
+      deleteShown = true;
+      var dh = app.querySelector('#delete h2');
+      if (dh) { if (dh.scrollIntoView) dh.scrollIntoView({ block: 'start' }); try { dh.focus({ preventScroll: true }); } catch (e) { dh.focus(); } }
     }
   }
   function say(msg) { if (msg && U.announce) U.announce(msg); }

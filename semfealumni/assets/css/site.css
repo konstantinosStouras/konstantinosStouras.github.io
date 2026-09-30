@@ -81,12 +81,12 @@ img, svg, video { max-width: 100%; display: block; }
 img { height: auto; }
 a { color: var(--navy); text-underline-offset: .18em; }
 a:not(.btn):hover { text-decoration-thickness: 2px; }
-h1, h2, h3, h4 { line-height: 1.18; margin: 0 0 .5em; letter-spacing: -0.01em; }
+h1, h2, h3, h4 { line-height: 1.18; margin: 0 0 .5em; letter-spacing: -0.01em; text-wrap: balance; }
 h1 { font-size: clamp(2rem, 6vw, 3.6rem); font-weight: 800; }
 h2 { font-size: clamp(1.6rem, 3.6vw, 2.35rem); font-weight: 800; }
 h3 { font-size: 1.18rem; font-weight: 800; }
 h4 { font-size: 1.02rem; font-weight: 700; }
-p { margin: 0 0 1em; }
+p { margin: 0 0 1em; text-wrap: pretty; }   /* no single word left alone on the last line (where supported) */
 ul, ol { padding-left: 1.3em; }
 strong { font-weight: 800; }
 mark { background: var(--gold-soft); color: inherit; padding: 0 .2em; border-radius: 4px; }
@@ -219,6 +219,25 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
 @media (max-width: 1100px) and (max-height: 500px) {
   .js .nav a { padding: 9px 10px; }
 }
+/* a wide screen whose header row is a little too wide: tighter links first */
+html.js.nav-compact .nav { gap: 0; }
+html.js.nav-compact .nav a { padding-left: 6px; padding-right: 6px; font-size: .88rem; }
+/* the same menu on a wide screen whose header row does not fit: the web font
+   failed (a wider fallback font), or the reader uses a larger text size.
+   site.js measures and sets .nav-tight; keep in step with the block above */
+html.js.nav-tight .nav-toggle { display: inline-flex; order: 1; }
+html.js.nav-tight .nav {
+  position: absolute; left: 0; right: 0; top: 100%;
+  flex-direction: column; align-items: stretch; gap: 0;
+  background: #0a2240; padding: 8px 16px 16px; display: none;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  max-height: calc(100vh - var(--header-h)); max-height: calc(100dvh - var(--header-h));
+  overflow-y: auto; overscroll-behavior: contain;
+  box-shadow: 0 18px 30px rgba(0,0,0,.28);
+}
+html.js.nav-tight .nav.open { display: flex; }
+html.js.nav-tight .nav a { padding: 13px 10px; font-size: 1.05rem; white-space: normal; }
+html.js.nav-tight .nav a + a { border-top: 1px solid rgba(255,255,255,.08); }
 @media (max-width: 420px) {
   /* too long for one line beside the buttons on most phones: it wraps
      ("ΣΥΛΛΟΓΟΣ / ΔΙΠΛΩΜΑΤΟΥΧΩΝ") instead of running under «Σύνδεση» */
@@ -314,10 +333,12 @@ section.dark a:not(.btn) { color: var(--gold); }
 .dark .section-head p { color: rgba(255,255,255,.8); }
 .section-foot { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; }
 .two-col { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 48px; align-items: start; }
+.two-col.middle { align-items: center; }
 @media (max-width: 860px) { .two-col { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
 
 /* stats */
 .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.stats.one { grid-template-columns: minmax(0, 1fr); }            /* sentence-long labels */
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 18px; box-shadow: var(--shadow); }
 .stat .value { font-size: 2rem; font-weight: 800; color: var(--navy); line-height: 1; }
 .stat .label { color: var(--muted); font-weight: 600; margin-top: 8px; font-size: .95rem; }
@@ -382,7 +403,7 @@ section.dark a:not(.btn) { color: var(--gold); }
   transition: transform .15s ease, box-shadow .15s ease;
 }
 @media (hover: hover) { .post-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); } }
-.post-card .thumb { aspect-ratio: 16 / 9; background: var(--sky); overflow: hidden; }
+.post-card .thumb { aspect-ratio: 16 / 9; background: linear-gradient(160deg, #0a2240, #1b4f86); overflow: hidden; }   /* the logo's colours while a picture loads */
 .post-card .thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }  /* the posts' pictures are posters: their title is at the top */
 .post-card .thumb.logo { display: grid; place-items: center; background: linear-gradient(160deg, #0a2240, #1b4f86); }
 .post-card .thumb.logo img { width: 42%; height: auto; border-radius: 50%; background: #fff; padding: 6px; object-fit: contain; }
@@ -417,6 +438,7 @@ section.dark a:not(.btn) { color: var(--gold); }
 .post-head .tag { background: rgba(255,255,255,.16); color: #fff; }
 .video { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: #000; margin: 20px 0; box-shadow: var(--shadow); }
 .video iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+.video::before { content: 'Το βίντεο φορτώνει από το YouTube…'; position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; place-items: center; color: rgba(255,255,255,.7); font-weight: 700; padding: 16px; text-align: center; }
 @supports not (aspect-ratio: 1 / 1) { .video { height: 0; padding-bottom: 56.25%; } }
 .post-nav { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 44px; max-width: 760px; }
 .post-nav a { display: block; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); text-decoration: none; background: var(--surface); }
@@ -444,6 +466,8 @@ section.dark a:not(.btn) { color: var(--gold); }
 .gallery a { position: relative; display: block; border-radius: var(--radius-sm); overflow: hidden; background: var(--sky); aspect-ratio: 4 / 3; }
 /* a captioned photo takes a 2x2 block; dense packing fills the gaps around it */
 .gallery a.wide { grid-column: span 2; grid-row: span 2; aspect-ratio: auto; }
+.gallery a.poster { background: #0a2240; }
+.gallery a.poster img { object-fit: contain; }
 .gallery img { width: 100%; height: 100%; object-fit: cover; transition: transform .35s ease; }
 @media (hover: hover) { .gallery a:hover img { transform: scale(1.04); } }
 .gallery figcaption, .gallery .cap {
@@ -470,7 +494,7 @@ section.dark a:not(.btn) { color: var(--gold); }
 .kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: .95rem; }
 .kv dt { color: var(--muted); font-weight: 700; }
 .kv dd { margin: 0; font-weight: 800; overflow-wrap: anywhere; }
-.copy-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.copy-row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .copy-btn { min-height: 40px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--navy); font: inherit; font-weight: 800; font-size: .82rem; cursor: pointer; }
 .copy-btn.done { color: var(--ok); border-color: var(--ok); }
 .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; counter-reset: step; }
@@ -571,10 +595,12 @@ body.modal-open { overflow: hidden; }
 .lock-ic svg { width: 26px; height: 26px; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); min-width: 0; }
 .panel + .panel { margin-top: 18px; }
+.acct-grid > .panel + .panel { margin-top: 0; }        /* side by side: the grid gap spaces them */
 .panel h2 { font-size: 1.35rem; }
 .profile-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.profile-head .who { min-width: 0; flex: 1; }
-.profile-head .who strong { display: block; font-size: 1.2rem; overflow-wrap: anywhere; }
+.profile-head .who { min-width: 0; flex: 1 1 14rem; }        /* a real width: on a phone the badge moves under the name */
+.profile-head .who strong { display: block; font-size: 1.2rem; overflow-wrap: break-word; }
+.profile-head .who .muted { overflow-wrap: anywhere; }         /* only a long e-mail address may break anywhere */
 .acct-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 @media (max-width: 900px) { .acct-grid { grid-template-columns: minmax(0, 1fr); } }
 .linked { display: grid; gap: 10px; }
@@ -590,16 +616,17 @@ body.modal-open { overflow: hidden; }
 table.data { width: 100%; border-collapse: collapse; font-size: .92rem; }
 table.data th, table.data td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 table.data th { background: var(--mist); font-weight: 800; white-space: nowrap; }
-table.data td { overflow-wrap: anywhere; min-width: 90px; }
-table.data td.acts { white-space: nowrap; min-width: 0; }
-table.data td.acts .btn { margin: 2px 0; }
+table.data td { overflow-wrap: break-word; }
+table.data td a[href^="mailto:"] { overflow-wrap: anywhere; }      /* long addresses only */
+table.data td.acts { min-width: 0; }
+table.data .acts-in { display: flex; flex-wrap: wrap; gap: 6px; width: 190px; }
 @media (max-width: 720px) {
   table.data.stack thead { display: none; }
   table.data.stack, table.data.stack tbody, table.data.stack tr, table.data.stack td { display: block; width: 100%; }
   table.data.stack tr { border-bottom: 1px solid var(--line); padding: 10px 4px; }
   table.data.stack td { border: 0; padding: 4px 10px; min-width: 0; }
   table.data.stack td[data-label]::before { content: attr(data-label); display: block; font-size: .75rem; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
-  table.data.stack td.acts { white-space: normal; }
+  table.data.stack .acts-in { width: auto; }
 }
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
 @media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -645,7 +672,8 @@ table.data td.acts .btn { margin: 2px 0; }
 .footer-social svg { width: 20px; height: 20px; color: #fff; }
 @media (hover: hover) { .footer-social a:hover { background: rgba(255,255,255,.18); } }
 .footer-bottom a { display: inline-block; padding: 10px 0; }
-.footer-bottom { border-top: 1px solid rgba(255,255,255,.1); margin-top: 30px; padding-top: 18px; display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; }
+.footer-bottom .legal { display: flex; flex-wrap: wrap; column-gap: 18px; }     /* no separator left dangling when the row wraps */
+.footer-bottom { border-top: 1px solid rgba(255,255,255,.1); margin-top: 30px; padding-top: 18px; display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; align-items: center; }
 @media (max-width: 860px) { .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .footer-grid > :first-child { grid-column: 1 / -1; } }
 @media (max-width: 420px) { .footer-grid { grid-template-columns: minmax(0, 1fr); } }
 
