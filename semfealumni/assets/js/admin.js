@@ -140,7 +140,8 @@
       (li ? '<br><a href="' + esc(li) + '" target="_blank" rel="noopener">LinkedIn</a>' : '') + (m.note ? '<br><em class="muted">«' + esc(m.note) + '»</em>' : '') + '</td>' +
       '<td data-label="Κατάσταση"><span class="badge ' + st[0] + '">' + st[1] + '</span>' + (m.reviewedBy ? '<br><small class="muted">' + esc(m.reviewedBy) + ' ' + date(m.reviewedAt) + '</small>' : '') + '</td>' +
       '<td data-label="ΣΕΜΦΕ">' + esc(STAGES[m.stage] || m.stage || '') + (m.entryYear ? '<br>Εισ. ' + esc(m.entryYear) : '') + (m.gradYear ? '<br>Αποφ. ' + esc(m.gradYear) : '') + (m.direction ? '<br>' + esc(m.direction) : '') + '</td>' +
-      '<td data-label="Εργασία">' + esc([m.position, m.employer].filter(Boolean).join(', ')) + (m.city ? '<br><span class="muted">' + esc(m.city) + '</span>' : '') + '</td>' +
+      '<td data-label="Εργασία">' + ([esc([m.position, m.employer].filter(Boolean).join(', ')), m.city ? '<span class="muted">' + esc(m.city) + '</span>' : '']
+        .filter(Boolean).join('<br>') || '—') + '</td>' +
       '<td data-label="Αίτηση">' + date(m.createdAt) + '<br><small class="muted">' + esc(String(m.provider || '').replace('.com', '')) + '</small></td>' +
       '<td data-label="Συνδρομές">' + (years.length ? esc(years.join(', ')) : '—') + '</td>' +
       '<td class="acts" data-label="Ενέργειες"><div class="acts-in">' +

@@ -229,6 +229,7 @@ async function scenario(id, title, opts, fn) {
     const url = route.request().url();
     if (/^https:\/\/www\.gstatic\.com\/firebasejs\//.test(url)) {
       env.sdkUrls.push(url);
+      if (opts.sdkFail) return route.abort();
       if (opts.sdkDelayMs) await sleep(opts.sdkDelayMs);
       if (/\/firebase-(app|auth|firestore)-compat\.js$/.test(url)) return route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: FAKE });
       return route.fulfill({ status: 404, body: '' });
@@ -1074,12 +1075,15 @@ await scenario('K1', 'account page: what is typed survives a redraw (approval wh
   await page.fill('#f-city', 'Βόλος');
   await page.fill('#f-employer', 'Νέος Εργοδότης');
   await page.focus('#f-employer');
+  await page.evaluate(() => { const e = document.getElementById('f-employer'); e.setSelectionRange(e.value.length, e.value.length); });
   // the admin approves while the member is typing: the listener redraws the page
   const cur = await docOf(page, 'members/' + MARIA.uid);
   await server(page, 'setDoc', 'members/' + MARIA.uid, Object.assign({}, cur, { status: 'active', reviewedBy: ADMIN, reviewedAt: ts(Date.now()) }));
   t(await hasText(page.locator('#account-app .profile-head'), 'Ενεργό μέλος'), 'the approval arrives while the form is open');
   t((await page.inputValue('#f-city')) === 'Βόλος' && (await page.inputValue('#f-employer')) === 'Νέος Εργοδότης', 'what was typed is still in the form after the redraw');
   t(await page.evaluate(() => document.activeElement && document.activeElement.id) === 'f-employer', '… and the cursor is still in the same field');
+  await page.keyboard.type(' ΑΕ');
+  t((await page.inputValue('#f-employer')) === 'Νέος Εργοδότης ΑΕ', '… at the same place: typing continues at the end («Νέος Εργοδότης ΑΕ»)' + list([await page.inputValue('#f-employer')]));
   t((await page.inputValue('#f-lastName')) === 'Παπαδοπούλου' && await page.$eval('#f-lastName', e => e.readOnly), 'the now-reviewed surname shows the stored one and is read-only');
   await page.click('#account-app form[data-apply] [type=submit]');
   const up = (await waitCalls(page, 'fs.update', 1)).filter(x => x.args[0] === 'members/' + MARIA.uid).pop();
@@ -1100,15 +1104,15 @@ await scenario('K2', 'account page: an unconfirmed e-mail account keeps its typi
     'the fields typed before confirming are still filled in');
 });
 
-await scenario('K3', 'account page: a mistyped year is refused, not saved as empty', { cfg: 'oidc', seed: signedInSeed(mariaAcct()) }, async (page) => {
+await scenario('K3', 'account page: a mistyped year is refused, not saved', { cfg: 'oidc', seed: signedInSeed(mariaAcct()) }, async (page) => {
   await page.goto(URL_('account/'));
   await page.fill('#f-firstName', 'Μαρία'); await page.fill('#f-lastName', 'Παπαδοπούλου');
   await page.selectOption('#f-stage', 'graduate');
   await page.setChecked('#f-acceptedPrivacy', true);
   await page.focus('#f-gradYear');
-  await page.keyboard.type('2013-');
+  await page.keyboard.type('20l3');          // a letter l for a one
   await page.click('#account-app form[data-apply] [type=submit]');
-  t(await hasText(page.locator('#account-app [data-form-msg]'), 'Το έτος αποφοίτησης δεν φαίνεται σωστό'), '«2013-» in the graduation year: «Το έτος αποφοίτησης δεν φαίνεται σωστό.»');
+  t(await hasText(page.locator('#account-app [data-form-msg]'), 'Το έτος αποφοίτησης δεν φαίνεται σωστό'), '«20l3» in the graduation year: «Το έτος αποφοίτησης δεν φαίνεται σωστό.»');
   t((await calls(page, 'fs.set')).length === 0, '… and nothing is written');
 });
 
@@ -1216,6 +1220,53 @@ await scenario('K13', 'account page: #delete (from the data-deletion page) scrol
   await page.goto(URL_('account/#delete'));
   t(await waitFor(page, () => { const h = document.querySelector('#delete h2'); if (!h) return false; const r = h.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }), 'the delete panel is on screen');
   t(await page.evaluate(() => document.activeElement && document.activeElement.closest && !!document.activeElement.closest('#delete')), '… with keyboard focus on its heading');
+});
+
+await scenario('K14', '?signin with a saved session and a slow SDK: a dialog the visitor already opened is left alone', { cfg: 'oidc', sdkDelayMs: 1500 }, async (page) => {
+  await page.addInitScript(() => { try { localStorage.setItem('semfe:auth-hint', JSON.stringify({ n: 'Παλιός Χρήστης', p: '', e: 'old@example.com' })); } catch (e) {} });
+  await page.goto(URL_('blog/?signin'));
+  await page.click('#acct-slot .acct-chip').catch(() => {});
+  // the hint says someone may be signed in, so nothing opens yet; the visitor opens the dialog from the account page link instead
+  await page.evaluate(() => window.SemfeAuth.open('register'));
+  await page.fill('#auth-first', 'Νίκος'); await page.fill('#auth-last', 'Δημητρίου');
+  await page.fill('#auth-email', 'nikos@example.com');
+  await sleep(2600);                                  // the SDK arrives: nobody is signed in
+  t((await page.getAttribute('#tab-register', 'aria-pressed')) === 'true', 'the dialog is still on «Εγγραφή»');
+  t((await page.inputValue('#auth-email')) === 'nikos@example.com' && (await page.inputValue('#auth-first')) === 'Νίκος', '… with everything typed still there');
+});
+
+await scenario('K15', '?signin when the sign-in service cannot load: the dialog says so', { cfg: 'oidc', sdkFail: true }, async (page) => {
+  await page.goto(URL_('blog/?signin'));
+  t(await visible(page.locator('.modal-backdrop')), 'the dialog opens');
+  t(await hasText(page.locator('.modal [data-status]'), 'Δεν ήταν δυνατή η φόρτωση'), '… and explains that the service could not load');
+  await page.click('.modal [data-provider="google"]');
+  t(await hasText(page.locator('.modal [data-status]'), 'Δεν ήταν δυνατή η φόρτωση'), 'pressing a button repeats that, not «φορτώνει…»');
+});
+
+await scenario('K16', 'header: «Αποσύνδεση» before the SDK loads, then leaving the page at once, still signs out', { cfg: 'oidc', sdkDelayMs: 1200,
+  seed: signedInSeed(mariaAcct()) }, async (page) => {
+  await page.addInitScript(() => { try { if (!sessionStorage.getItem('k16')) { sessionStorage.setItem('k16', '1'); localStorage.setItem('semfe:auth-hint', JSON.stringify({ n: 'Μαρία Παπαδοπούλου', p: '', e: 'maria@example.com' })); } } catch (e) {} });
+  await page.goto(URL_('blog/'));
+  await page.click('#acct-slot .acct-chip');
+  await page.click('#acct-slot [data-signout]');
+  await page.goto(URL_('governance/'));              // away before the SDK arrived
+  await sleep(2500);
+  t((await calls(page, 'auth.signOut')).length >= 1, 'the next page finishes the sign-out (auth.signOut() is called)');
+  t(await visible(page.locator('#acct-slot [data-signin]')) && !(await page.locator('#acct-slot .acct-chip').count()), 'and the member is not shown as signed in');
+  t(await page.evaluate(() => localStorage.getItem('semfe:signout') === null), 'the pending sign-out note is cleared');
+});
+
+await scenario('K17', 'account page: the half-filled delete box keeps the password across a redraw', { cfg: 'oidc',
+  seed: signedInSeed(acct('u-pw3', { email: 'giorgos@example.com', name: 'Γιώργος Νικολάου', providers: ['password'], password: 'pass-word-123', lastSignIn: Date.now() - 3 * HOUR }),
+    { docs: { 'members/u-pw3': member({ firstName: 'Γιώργος', lastName: 'Νικολάου', status: 'active' }) } }) }, async (page) => {
+  await page.goto(URL_('account/'));
+  await page.click('#account-app [data-del-open]');
+  await page.fill('#del-confirm', 'ΔΙΑΓΡΑΦΗ');
+  await page.fill('#del-pass', 'pass-word-123');
+  const cur = await docOf(page, 'members/u-pw3');
+  await server(page, 'setDoc', 'members/u-pw3', Object.assign({}, cur, { duesYears: [YEAR] }));   // the admin records dues meanwhile
+  t(await hasText(page.locator('#account-app'), 'Συνδρομές που έχουμε καταγράψει: ' + YEAR), 'the page redraws');
+  t((await page.inputValue('#del-confirm')) === 'ΔΙΑΓΡΑΦΗ' && (await page.inputValue('#del-pass')) === 'pass-word-123', 'the delete box is still open with both fields filled in');
 });
 
 await browser.close();

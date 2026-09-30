@@ -116,15 +116,19 @@
     for (var i = 0; !sel && i < attrs.length; i++) if (el.hasAttribute(attrs[i])) sel = '[' + attrs[i] + ']';
     if (!sel && el.hasAttribute('data-link')) sel = '[data-link="' + el.getAttribute('data-link') + '"]';
     if (!sel && el.type === 'submit') sel = '#apply [type=submit]';
-    var panel = el.closest ? el.closest('.panel[id]') : null;
-    return { sel: sel, panel: panel ? '#' + panel.id : null };
+    var panel = el.closest ? el.closest('.panel[id]') : null, caret = null;
+    try { if (typeof el.selectionStart === 'number') caret = [el.selectionStart, el.selectionEnd, el.selectionDirection || 'none']; } catch (e) {}
+    return { sel: sel, panel: panel ? '#' + panel.id : null, caret: caret };
   }
   function restoreFocus(k) {
     if (!k) return;
     if (typeof k === 'string') k = { sel: k };
     var el = (k.sel && app.querySelector(k.sel)) || (k.panel && app.querySelector(k.panel + ' h2'));
     if (el && el.hidden) el = k.panel && app.querySelector(k.panel + ' h2');
-    if (el) try { el.focus(); } catch (e) {}
+    if (!el) return;
+    try { el.focus(); } catch (e) {}
+    // the new field starts with the caret at 0: put it (and any selection) back where it was
+    if (k.caret) try { el.setSelectionRange(k.caret[0], k.caret[1], k.caret[2]); } catch (e) {}
   }
   /* the form's fields exactly as typed (so a redraw can put them back) */
   function formValues(form) {
@@ -143,7 +147,7 @@
     var form = app.querySelector('form[data-apply]');
     if (form && !fresh) draft = formValues(form);
     var del = app.querySelector('[data-del-box]');
-    if (del && !del.hidden) delBox = { confirm: (app.querySelector('#del-confirm') || {}).value || '' };
+    if (del && !del.hidden) delBox = { confirm: (app.querySelector('#del-confirm') || {}).value || '', pass: (app.querySelector('#del-pass') || {}).value || '' };
     else if (del) delBox = null;
     var name = A.displayName(user);
     var s = '<div class="panel profile-head">' + A.avatarHtml(name, user.photoURL, 'avatar-lg') +
@@ -168,6 +172,7 @@
       app.querySelector('[data-del-box]').hidden = false;
       app.querySelector('[data-del-open]').hidden = true;
       app.querySelector('#del-confirm').value = delBox.confirm;
+      if (app.querySelector('#del-pass')) app.querySelector('#del-pass').value = delBox.pass || '';   // kept in memory only, never stored
     }
     restoreFocus(keep);
     // arriving at account/#apply (straight after registering): show the form, once
@@ -262,16 +267,16 @@
     var msg = formErr || (blocked ? 'Επιβεβαιώστε πρώτα το e-mail σας (δείτε παραπάνω).' : '');
     var active = !!member && member.status === 'active';
     return '<div class="panel" id="apply"><h2 tabindex="-1">' + (member ? 'Επεξεργασία στοιχείων' : 'Αίτηση μέλους') + '</h2>' +
-      (member ? '' : '<p class="muted">Συμπληρώστε τα στοιχεία σας. Τα πεδία με <span class="req">*</span> είναι υποχρεωτικά. Θα τα ελέγξουμε και θα ενεργοποιήσουμε την ιδιότητα μέλους μόλις λάβουμε τη συνδρομή των ' + esc(C.annualFee || 10) + '€ (δεν ισχύει για μέλη ΔΕΠ).</p>') +
+      (member ? '' : '<p class="muted intro">Συμπληρώστε τα στοιχεία σας. Τα πεδία με <span class="req">*</span> είναι υποχρεωτικά. Θα τα ελέγξουμε και θα ενεργοποιήσουμε την ιδιότητα μέλους μόλις λάβουμε τη συνδρομή των ' + esc(C.annualFee || 10) + '€ (δεν ισχύει για μέλη ΔΕΠ).</p>') +
       '<form class="form" novalidate data-apply>' +
       '<div class="row">' + field('firstName', 'Όνομα', first, { required: true, auto: 'given-name', max: 80, readonly: frozen, hint: nameHint }) +
       field('lastName', 'Επώνυμο', last, { required: true, auto: 'family-name', max: 80, readonly: frozen }) + '</div>' +
-      '<div class="row">' + field('email', 'E-mail επικοινωνίας', m.email || user.email || '', { required: true, type: 'email', auto: 'email', max: 200, inputmode: 'email' }) +
+      '<div class="row">' + field('email', 'E-mail επικοινωνίας', m.email || user.email || '', { required: true, auto: 'email', max: 200, inputmode: 'email' }) +
       field('phone', 'Κινητό τηλέφωνο', m.phone, { type: 'tel', auto: 'tel', max: 40, inputmode: 'tel', hint: 'Προαιρετικό' }) + '</div>' +
       '<div class="row">' + select('stage', 'Ιδιότητα', m.stage || '', [['graduate', STAGES.graduate], ['final-year', STAGES['final-year']], ['faculty', STAGES.faculty]], true) +
       select('direction', 'Κατεύθυνση', m.direction || '', DIRECTIONS, false) + '</div>' +
-      '<div class="row">' + field('entryYear', 'Έτος εισαγωγής', m.entryYear, { type: 'number', inputmode: 'numeric', max: 4, placeholder: 'π.χ. 2008' }) +
-      field('gradYear', 'Έτος αποφοίτησης', m.gradYear, { type: 'number', inputmode: 'numeric', max: 4, placeholder: 'π.χ. 2013', hint: 'Κενό αν είστε τελειόφοιτος/η' }) + '</div>' +
+      '<div class="row">' + field('entryYear', 'Έτος εισαγωγής', m.entryYear, { inputmode: 'numeric', max: 4, placeholder: 'π.χ. 2008' }) +
+      field('gradYear', 'Έτος αποφοίτησης', m.gradYear, { inputmode: 'numeric', max: 4, placeholder: 'π.χ. 2013', hint: 'Κενό αν είστε τελειόφοιτος/η' }) + '</div>' +
       '<div class="row">' + field('position', 'Θέση εργασίας', m.position, { auto: 'organization-title', max: 120 }) + field('employer', 'Εργοδότης / Ίδρυμα', m.employer, { auto: 'organization', max: 120 }) + '</div>' +
       '<div class="row">' + field('city', 'Πόλη / Χώρα', m.city, { max: 80, auto: 'address-level2' }) +
       field('linkedin', 'Προφίλ LinkedIn', m.linkedin, { type: 'url', max: 200, placeholder: 'https://www.linkedin.com/in/…', hint: 'Ο πιο εύκολος τρόπος να επιβεβαιώσουμε ότι είστε απόφοιτος ΣΕΜΦΕ.' }) + '</div>' +
@@ -296,7 +301,7 @@
       if (!on && k !== 'password') missing = true;
       var action = on
         ? (k === 'password' ? '<button type="button" class="btn btn-outline btn-sm" data-reset>Αλλαγή κωδικού</button>' : '<span class="badge ok">Συνδεδεμένο</span>')
-        : (k === 'password' ? '<span class="muted" style="font-size:.85rem">—</span>'
+        : (k === 'password' ? '<span class="badge muted">Δεν χρησιμοποιείται</span>'
           : '<button type="button" class="btn btn-outline btn-sm" data-link="' + k + '"' + (blocked ? ' disabled aria-describedby="link-needs-email"' : '') + '>Σύνδεση</button>');
       rows += '<div class="row"><span>' + A.icon(k) + esc(info.name) + '</span>' + action + '</div>';
     });
@@ -306,7 +311,7 @@
         '<button type="button" class="link-btn" data-send-verify>Στείλτε μου e-mail επιβεβαίωσης</button> · <button type="button" class="link-btn" data-verified-li>Το επιβεβαίωσα</button></p>'
       : blocked && missing ? '<p class="muted" id="link-needs-email" style="font-size:.88rem;margin:10px 0 0">Για να συνδέσετε κι άλλον τρόπο σύνδεσης, επιβεβαιώστε πρώτα το e-mail σας (δείτε παραπάνω).</p>'
       : '';
-    return '<div class="panel" id="methods"><h2 tabindex="-1">Τρόποι σύνδεσης</h2><p class="muted" style="font-size:.92rem">Συνδέστε περισσότερους τρόπους στον ίδιο λογαριασμό, για να μπαίνετε με όποιον σας βολεύει.</p>' +
+    return '<div class="panel" id="methods"><h2 tabindex="-1">Τρόποι σύνδεσης</h2><p class="muted intro">Συνδέστε περισσότερους τρόπους στον ίδιο λογαριασμό, για να μπαίνετε με όποιον σας βολεύει.</p>' +
       '<div class="linked">' + rows + '</div>' + liNote + '<div class="form-error" data-methods-msg role="status" style="margin-top:10px"></div>' +
       '<p style="margin:14px 0 0"><button type="button" class="btn btn-outline btn-sm" data-signout>Αποσύνδεση</button></p></div>';
   }
@@ -317,7 +322,7 @@
     var pd = A.providers(user);
     var pwOnly = pd.indexOf('password') !== -1 && pd.every(function (k) { return k === 'password'; });
     return '<div class="panel" id="delete"><h2 tabindex="-1">Διαγραφή λογαριασμού</h2>' +
-      '<p class="muted" style="font-size:.92rem">Διαγράφει οριστικά τον λογαριασμό σας, την αίτηση μέλους και την καταχώρισή σας στον κατάλογο.</p>' +
+      '<p class="muted intro">Διαγράφει οριστικά τον λογαριασμό σας, την αίτηση μέλους και την καταχώρισή σας στον κατάλογο.</p>' +
       '<div data-del-box hidden class="form" style="margin-bottom:12px">' +
       '<div class="field"><label for="del-confirm">Γράψτε <strong>ΔΙΑΓΡΑΦΗ</strong> για επιβεβαίωση</label><input id="del-confirm" autocomplete="off" autocapitalize="characters"></div>' +
       (pwOnly ? '<div class="field"><label for="del-pass">Ο κωδικός σας</label><input id="del-pass" type="password" autocomplete="current-password"></div>' : '') +
@@ -382,7 +387,7 @@
         msg.className = 'form-ok'; msg.textContent = 'Σας στείλαμε e-mail με σύνδεσμο για νέο κωδικό.';
       }, function (err) { msg.className = 'form-error'; msg.textContent = A.friendly(err); });
     });
-    on('[data-del-open]', 'click', function () { q('[data-del-box]').hidden = false; this.hidden = true; delBox = { confirm: '' }; q('#del-confirm').focus(); });
+    on('[data-del-open]', 'click', function () { q('[data-del-box]').hidden = false; this.hidden = true; delBox = { confirm: '', pass: '' }; q('#del-confirm').focus(); });
     on('[data-del-go]', 'click', deleteAccount);
   }
 

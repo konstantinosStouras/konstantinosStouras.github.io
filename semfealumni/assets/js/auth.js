@@ -82,7 +82,9 @@
   /* ---- state ------------------------------------------------------------- */
   var auth = null, fs = null, sdkReady = false, authKnown = false, current = null;
   var listeners = [], pendingLink = null, dialog = null, lastFocus = null, lastFocusSel = '', mode = 'signin';
-  var signingOut = false;
+  var signingOut = false, sdkFailed = false;
+  var SIGNOUT_KEY = 'semfe:signout';          // "Αποσύνδεση" pressed; auth.signOut() not confirmed yet
+  var FAIL_MSG = 'Δεν ήταν δυνατή η φόρτωση της υπηρεσίας σύνδεσης. Ελέγξτε τη σύνδεσή σας στο διαδίκτυο και ανανεώστε τη σελίδα.';
 
   /* ---- loading the SDK --------------------------------------------------- */
   function loadScript(src) {
@@ -119,8 +121,9 @@
         });
       });
     sdkPromise.catch(function () {
+      sdkFailed = true;
       authKnown = true; paintHeader();
-      showStatus('Δεν ήταν δυνατή η φόρτωση της υπηρεσίας σύνδεσης. Ελέγξτε τη σύνδεσή σας στο διαδίκτυο και ανανεώστε τη σελίδα.', 'err');
+      showStatus(FAIL_MSG, 'err');
       listeners.forEach(function (fn) { try { fn(null); } catch (e) {} });
     });
     return sdkPromise;
@@ -286,7 +289,7 @@
     $('#auth-pass').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
     $('[data-submit]', dialog).textContent = reg ? 'Δημιουργία λογαριασμού' : 'Σύνδεση';
     $$('[data-provider] span', dialog).forEach(function (s, i) { s.textContent = 'Συνέχεια με ' + PROVIDERS[enabled[i]].name; });
-    showStatus('');
+    if (sdkFailed) showStatus(FAIL_MSG, 'err'); else showStatus('');
   }
   function open(m, trigger) {
     if (current) { location.href = root + 'account/'; return; }
@@ -330,7 +333,7 @@
     var p = PROVIDERS[key];
     if (!p || !configured) return;
     if (key === 'linkedin' && LI_FUNCTION) { linkedinStart('signin', pendingLink ? pendingLink.name : ''); return; }
-    if (!sdkReady) { showStatus('Μια στιγμή, φορτώνει η υπηρεσία σύνδεσης…'); loadSdk(); return; }
+    if (!sdkReady) { showStatus(sdkFailed ? FAIL_MSG : 'Μια στιγμή, φορτώνει η υπηρεσία σύνδεσης…'); loadSdk(); return; }
     showStatus('');
     var label = btn && $('span', btn), old = label ? label.textContent : '';
     if (btn) { btn.disabled = true; if (label) label.textContent = 'Άνοιγμα ' + p.name + '…'; }
@@ -341,7 +344,7 @@
   }
   function emailSubmit() {
     if (!configured) return;
-    if (!sdkReady) { showStatus('Μια στιγμή, φορτώνει η υπηρεσία σύνδεσης…'); loadSdk(); return; }
+    if (!sdkReady) { showStatus(sdkFailed ? FAIL_MSG : 'Μια στιγμή, φορτώνει η υπηρεσία σύνδεσης…'); loadSdk(); return; }
     var email = $('#auth-email').value.trim(), pass = $('#auth-pass').value;
     var reg = mode === 'register';
     var first = reg ? $('#auth-first').value.trim() : '', last = reg ? $('#auth-last').value.trim() : '';
@@ -424,11 +427,15 @@
     clearHint();
     if (!configured) { current = null; paintHeader(); return Promise.resolve(); }
     // the SDK may still be downloading (the header was drawn from the saved
-    // hint): wait for it and sign out for real, or the session comes back
+    // hint): wait for it and sign out for real, or the session comes back. The
+    // intent is written down first, so leaving the page at once cannot undo it:
+    // the next page finishes the sign-out before it accepts a restored session.
     signingOut = true;
+    try { localStorage.setItem(SIGNOUT_KEY, '1'); } catch (e) {}
     if (!authKnown) paintHeader();
     return loadSdk().then(function () { return auth.signOut(); }).then(function () {
       signingOut = false;
+      try { localStorage.removeItem(SIGNOUT_KEY); } catch (e) {}
       clearHint();
       if (/\/(account|members|admin)\/?$/.test(location.pathname)) location.reload();
     }, function (e) { signingOut = false; throw e; });
@@ -632,6 +639,16 @@
     var fl = sessionStorage.getItem('semfe:flash');
     if (fl) { sessionStorage.removeItem('semfe:flash'); flash(fl); }
   } catch (e) {}
+  var outPending = false;
+  try { outPending = localStorage.getItem(SIGNOUT_KEY) === '1'; } catch (e) {}
+  if (configured && outPending) {
+    // "Αποσύνδεση" was pressed on the previous page before it could finish
+    signingOut = true; clearHint();
+    loadSdk().then(function () { return auth.signOut(); }).then(function () {
+      signingOut = false;
+      try { localStorage.removeItem(SIGNOUT_KEY); } catch (e) {}
+    }, function () { signingOut = false; });
+  }
   if (configured) {
     // load right away on the member pages; elsewhere once the page is idle
     var eager = document.body.getAttribute('data-firestore') === '1' || !!hint();
@@ -645,6 +662,7 @@
   // (only once we know nobody is signed in: a member following such a link stays where they are)
   if (/(^|[?&#])(signin|register)\b/.test(location.search + location.hash) && !/\/account\/?$/.test(location.pathname)) {
     var asked = /register/.test(location.search + location.hash) ? 'register' : 'signin', handled = false;
-    onChange(function (u) { if (handled) return; handled = true; if (!u) open(asked); });
+    if (!hint()) { handled = true; open(asked); }     // no saved session here: open at once (a late sign-in closes it)
+    onChange(function (u) { if (handled) return; handled = true; if (!u && (!dialog || dialog.hidden)) open(asked); });
   }
 })();

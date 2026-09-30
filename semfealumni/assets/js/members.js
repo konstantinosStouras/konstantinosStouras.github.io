@@ -84,7 +84,7 @@
       (m ? '<p style="margin:12px 0 0"><a href="' + A.root + 'account/">' + (listed ? 'Αλλαγή της καταχώρισής μου' : 'Εμφάνιση στον κατάλογο') + '</a></p>' : '') + '</div></div>';
     s += '<div style="margin-top:28px"><div class="section-head" style="margin-bottom:18px"><span class="eyebrow">Κατάλογος μελών</span><h2>Το δίκτυο των αποφοίτων</h2>' +
       '<p>' + rows.length + ' μέλη έχουν επιλέξει να εμφανίζονται εδώ. Ο κατάλογος είναι ορατός μόνο σε ενεργά μέλη.</p></div>' +
-      '<div class="dir-tools"><div class="field"><label for="dir-q" class="sr-only">Αναζήτηση</label><input id="dir-q" type="search" placeholder="Αναζήτηση: όνομα, εργοδότης, πόλη, έτος…" autocomplete="off"></div></div>' +
+      '<div class="dir-tools"><div class="field"><label for="dir-q" class="sr-only">Αναζήτηση</label><input id="dir-q" type="search" placeholder="Όνομα, εργοδότης, πόλη, έτος…" autocomplete="off"></div></div>' +
       '<div class="dir" id="dir-list"></div><p class="muted" id="dir-empty" hidden>Δεν βρέθηκαν μέλη.</p></div>';
     html(s);
     var input = document.getElementById('dir-q');
