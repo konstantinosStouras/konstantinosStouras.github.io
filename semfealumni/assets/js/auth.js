@@ -663,6 +663,7 @@
   if (/(^|[?&#])(signin|register)\b/.test(location.search + location.hash) && !/\/account\/?$/.test(location.pathname)) {
     var asked = /register/.test(location.search + location.hash) ? 'register' : 'signin', handled = false;
     if (!hint()) { handled = true; open(asked); }     // no saved session here: open at once (a late sign-in closes it)
-    onChange(function (u) { if (handled) return; handled = true; if (!u && (!dialog || dialog.hidden)) open(asked); });
+    // (only if the visitor has not opened the dialog themselves meanwhile, even if they closed it again)
+    onChange(function (u) { if (handled) return; handled = true; if (!u && !dialog) open(asked); });
   }
 })();

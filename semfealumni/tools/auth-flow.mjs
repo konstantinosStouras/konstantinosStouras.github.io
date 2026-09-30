@@ -1269,6 +1269,15 @@ await scenario('K17', 'account page: the half-filled delete box keeps the passwo
   t((await page.inputValue('#del-confirm')) === 'ΔΙΑΓΡΑΦΗ' && (await page.inputValue('#del-pass')) === 'pass-word-123', 'the delete box is still open with both fields filled in');
 });
 
+await scenario('K18', '?signin with a saved session and a slow SDK: a dialog the visitor opened and closed stays closed', { cfg: 'oidc', sdkDelayMs: 1500 }, async (page) => {
+  await page.addInitScript(() => { try { localStorage.setItem('semfe:auth-hint', JSON.stringify({ n: 'Παλιός Χρήστης', p: '', e: 'old@example.com' })); } catch (e) {} });
+  await page.goto(URL_('blog/?signin'));
+  await page.evaluate(() => window.SemfeAuth.open('signin'));
+  await page.keyboard.press('Escape');
+  await sleep(2600);
+  t(!(await dialogOpen(page)), 'the dialog does not come back by itself');
+});
+
 await browser.close();
 console.log(`\n${passes} passed, ${fails} failed`);
 if (fails) { console.log('\nFailures:\n  ' + failed.join('\n  ')); }
