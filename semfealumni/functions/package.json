@@ -1,0 +1,14 @@
+{
+  "name": "semfealumni-functions",
+  "private": true,
+  "description": "LinkedIn sign-in for the SEMFE Alumni site: exchanges LinkedIn's one-time code for the member's profile and returns a Firebase custom token.",
+  "main": "index.js",
+  "engines": { "node": "22" },
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0"
+  }
+}

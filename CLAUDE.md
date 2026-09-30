@@ -44,7 +44,7 @@ guarding `FIREBASE_SERVICE_ACCOUNT`, `SMTP_*`, `S2_API_KEY`,
 
 ## Deploying Firebase rules — ALWAYS name the project
 
-This repository holds **six** unrelated Firebase projects, and the sibling
+This repository holds **seven** unrelated Firebase projects, and the sibling
 `OperationsAcademia.github.io` holds a seventh:
 
 | Folder | Project |
@@ -55,6 +55,11 @@ This repository holds **six** unrelated Firebase projects, and the sibling
 | `_portfoliofit-firebase/` | `stouras-portfoliofit` |
 | `_portfoliofit-lab-firebase/` | `stouras-portfoliofit-86127` |
 | `lab/search-v2/` | `search-with-ai-456d7` |
+| `semfealumni/` | not created yet (`.firebaserc` says `PASTE_PROJECT_ID` until the owner follows `semfealumni/FIREBASE-SETUP.md`) |
+
+(`semfealumni/tools/rules-test/` also holds a `firebase.json`, for the Firestore
+EMULATOR only: its `.firebaserc` names `demo-semfe`, which exists nowhere else,
+and its `check-project.mjs` refuses every deploy.)
 
 The Firebase CLI resolves the target from, in order: `--project`, the
 `FIREBASE_PROJECT` env var, **the "active project" it remembers PER DIRECTORY
@@ -4873,3 +4878,33 @@ second guard measures containment inside `.roster-wrap` plus `elementFromPoint`,
 NOT viewport coordinates: a button clipped inside a scrolling ancestor still
 reports a rect on screen, so a viewport-only check passes while the bug is
 present. Details in `simulation/README.md`.
+
+## `/semfealumni` — the SEMFE Alumni association site (with member sign-in)
+
+`semfealumni/` (top level, NOT under `/fun/`, so no landing-card rule) is a
+redesign of the Σύλλογος Διπλωματούχων ΣΕΜΦΕ ΕΜΠ MkDocs site
+(`semfealumni/semfealumni.github.io`, which the owner can only view) with
+member registration and sign-in through Firebase: Google, Facebook, e-mail +
+password, and LinkedIn (a Cloud Function that swaps LinkedIn's code for a
+Firebase custom token; an Identity Platform OIDC route is the documented
+alternative). It is SELF-CONTAINED so it can move to a repository of its own
+unchanged (its `README.md`, "Hosting"); everything about it is documented
+there and in `semfealumni/FIREBASE-SETUP.md` (the owner's step-by-step).
+
+* **Pages are GENERATED**: edit `semfealumni/_src/`, run
+  `node semfealumni/tools/build.mjs`, commit the regenerated HTML with the
+  source. `node semfealumni/tools/check.mjs` fails when the two differ.
+* **Sign-in is inert until configured**: `assets/js/config.js` holds `PASTE_`
+  placeholders; until the real web config is pasted the site shows "opens
+  soon" and never loads the Firebase SDK.
+* **`firestore.rules` is the gatekeeper** (members/{uid}, directory/{uid},
+  linkedinLinks/{sub}); `ADMIN_EMAILS` in config.js must equal the `isAdmin()`
+  list (check.mjs pins it). Deploy with `--project`, like every folder here.
+* **`noindex` on every page** (`INDEXABLE = false` in `tools/build.mjs`) while
+  the association's own semfealumni.gr is the official site.
+* Tests: `node semfealumni/tools/check.mjs`, `node semfealumni/tools/smoke.mjs`,
+  `node semfealumni/tools/auth-flow.mjs` (Playwright; a fake Firebase), `cd
+  semfealumni/functions && npm test`, `cd semfealumni/tools/rules-test && npm
+  test` (Firestore emulator, needs Java).
+* Served from a subfolder, a missing `/semfealumni/…` address gets the ROOT
+  `404.html`, and the folder's own `_config.yml` has no effect.

@@ -1,0 +1,16 @@
+# GitHub Pages runs Jekyll on this repository. The site is plain HTML and
+# needs none of it; this file only keeps the maintenance files off the web.
+# Folders starting with _ (like _src/) are already skipped by Jekyll.
+# Do NOT add a .nojekyll file: it would publish _src/ and everything below.
+exclude:
+  - README.md
+  - FIREBASE-SETUP.md
+  - tools
+  - functions
+  - firebase.json
+  - .firebaserc
+  - firestore.rules
+  - check-project.mjs
+  - package.json
+  - package-lock.json
+  - node_modules
