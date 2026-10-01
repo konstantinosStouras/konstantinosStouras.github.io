@@ -1,0 +1,22 @@
+<!--META
+{
+  "path": "blog/",
+  "nav": "blog",
+  "title": "Ανακοινώσεις",
+  "description": "Ανακοινώσεις, προσκλήσεις και εκδηλώσεις του Συλλόγου Διπλωματούχων ΣΕΜΦΕ ΕΜΠ.",
+  "hero": { "eyebrow": "Νέα", "title": "Ανακοινώσεις", "lede": "Προσκλήσεις, εκδηλώσεις και μηνύματα του Διοικητικού Συμβουλίου." },
+  "crumbs": [["Ανακοινώσεις", null]]
+}
+META-->
+<section class="tight">
+  <div class="wrap">
+    <div class="filters" role="group" aria-label="Φίλτρο κατηγορίας" data-post-filter hidden>
+      <button type="button" aria-pressed="true" data-cat="">Όλες</button>
+      <button type="button" aria-pressed="false" data-cat="Ανακοινώσεις">Ανακοινώσεις</button>
+      <button type="button" aria-pressed="false" data-cat="Εκδηλώσεις">Εκδηλώσεις</button>
+    </div>
+    <h2 class="sr-only">Όλες οι ανακοινώσεις</h2>
+    <p class="sr-only" data-post-count role="status"></p>
+    {{posts}}
+  </div>
+</section>

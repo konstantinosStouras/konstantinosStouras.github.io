@@ -1,0 +1,9 @@
+node_modules/
+tools/**/node_modules/
+tools/shot-*.png
+*.log
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+functions/node_modules/

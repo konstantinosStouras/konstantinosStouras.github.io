@@ -56,6 +56,12 @@ This repository holds **six** unrelated Firebase projects, and the sibling
 | `_portfoliofit-lab-firebase/` | `stouras-portfoliofit-86127` |
 | `lab/search-v2/` | `search-with-ai-456d7` |
 
+(`_backups/semfealumni-first-version/` also holds a `firebase.json`, but it is a
+BACKUP, never deployed: its `.firebaserc` still says `PASTE_PROJECT_ID`, so its
+own `check-project.mjs` refuses every deploy, and `tools/deploy-guard-selftest.mjs`
+skips `_backups/`. The SEMFE Alumni site's real project, `semfe-alumni`, is
+deployed from its own repository; see the SEMFE section at the end.)
+
 The Firebase CLI resolves the target from, in order: `--project`, the
 `FIREBASE_PROJECT` env var, **the "active project" it remembers PER DIRECTORY
 in its own global config**, and only then the default alias in `.firebaserc`.
@@ -4873,3 +4879,26 @@ second guard measures containment inside `.roster-wrap` plus `elementFromPoint`,
 NOT viewport coordinates: a button clipped inside a scrolling ancestor still
 reports a rect on screen, so a viewport-only check passes while the bug is
 present. Details in `simulation/README.md`.
+
+## SEMFE Alumni: it lives in its OWN repository; only a backup is here
+
+The SEMFE Alumni association site (Σύλλογος Διπλωματούχων ΣΕΜΦΕ ΕΜΠ, with
+member sign-in) was first built in this repository as `semfealumni/`. It moved
+to its own repository, **`konstantinosStouras/semfealumni`** (branch `main`,
+Firebase project `semfe-alumni`), and has been served at
+**https://semfealumni.gr/** since 1 October 2026. All work on it happens THERE,
+under that repository's own `CLAUDE.md`.
+
+The first version is kept here only as a backup, at
+**`_backups/semfealumni-first-version/`** (owner, 2026-10-01: "keep a backup
+folder for this old copy"). Two rules keep it harmless:
+
+* **It must stay under an underscore folder.** Jekyll does not serve folders
+  whose name begins with `_`, so the old pages are not on the web. A
+  `semfealumni/` folder at the top of this repository would also take over the
+  address `stouras.com/semfealumni/`, which today forwards to semfealumni.gr
+  through the other repository's Pages site. Never move it back up.
+* **It is never deployed.** Its `.firebaserc` says `PASTE_PROJECT_ID`, so its
+  `check-project.mjs` refuses every deploy, and `tools/deploy-guard-selftest.mjs`
+  skips `_backups/`. Do not edit it to fix the live site; edit the other
+  repository.

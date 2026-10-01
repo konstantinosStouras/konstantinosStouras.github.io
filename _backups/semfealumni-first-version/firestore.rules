@@ -1,0 +1,159 @@
+rules_version = '2';
+
+// SEMFE Alumni: Cloud Firestore security rules.
+//
+// These rules are the real gatekeeper. The pages only decide what to SHOW;
+// what anyone may READ or WRITE is decided here, on Google's servers.
+//
+//   members/{uid}    one membership application per account.
+//                    The account owner writes their own details; only an
+//                    admin can change status / duesYears / adminNote.
+//                    Readable by its owner and by admins, nobody else.
+//   directory/{uid}  the small card shown in the members-only directory.
+//                    Written by its owner ONLY while their membership is
+//                    active, under the name on their approved application;
+//                    readable only by active members and admins.
+//   linkedinLinks/   which account a LinkedIn profile signs in to. Written
+//                    only by the linkedinSignIn Cloud Function (Admin SDK,
+//                    which bypasses these rules); no browser may touch it.
+//
+// Everything else is denied.
+//
+// Deploy (always name the project):
+//   firebase deploy --only firestore:rules --project <your-project-id>
+// or paste this file into Firebase console > Firestore Database > Rules > Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- who is asking -------------------------------------------------
+    function signedIn() { return request.auth != null; }
+
+    // KEEP IN SYNC with ADMIN_EMAILS in assets/js/config.js
+    // (node tools/check.mjs fails when the two lists differ).
+    // (.get() because a token may carry no e-mail at all, e.g. some LinkedIn
+    // or Facebook sign-ins; such a token is simply not an admin)
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('email', '').lower() in ['kstouras@gmail.com', 'gradsemfe@gmail.com'];
+    }
+
+    function memberPath(uid) { return /databases/$(database)/documents/members/$(uid); }
+    function isActiveMember() {
+      return signedIn()
+        && exists(memberPath(request.auth.uid))
+        && get(memberPath(request.auth.uid)).data.status == 'active';
+    }
+
+    // Who may apply: an ALLOW-list of the sign-in methods the site offers.
+    //   google.com, facebook.com, oidc.linkedin (LINKEDIN.mode 'oidc');
+    //   custom WITH the li claim (LINKEDIN.mode 'function', functions/linkedin.js);
+    //   password once the address is verified, or when the account also has
+    //   Google / Facebook / LinkedIn linked (what account.js needsEmailCheck()
+    //   assumes). Anonymous, phone and any other custom token are refused.
+    // KEEP 'oidc.linkedin' IN SYNC with LINKEDIN.providerId in assets/js/config.js.
+    function vouchedProviders() { return ['google.com', 'facebook.com', 'oidc.linkedin']; }
+    function emailConfirmed() {
+      let p = request.auth.token.firebase.sign_in_provider;
+      return p in vouchedProviders()
+        || (p == 'custom' && request.auth.token.get('li', false) == true)
+        || (p == 'password'
+            && (request.auth.token.get('email_verified', false) == true
+                || request.auth.token.firebase.identities.keys().hasAny(vouchedProviders())));
+    }
+
+    // ---- field checks ----------------------------------------------------
+    function str(v, max) { return v is string && v.size() <= max; }
+    function name(v) { return v is string && v.size() > 0 && v.size() <= 80; }
+    function year(v) { return v == null || (v is int && v >= 1950 && v <= 2100); }
+
+    function profileKeys() {
+      return ['firstName', 'lastName', 'email', 'phone', 'stage', 'entryYear', 'gradYear',
+              'direction', 'employer', 'position', 'city', 'linkedin',
+              'consentNewsletter', 'consentJobs', 'consentDirectory', 'note',
+              'acceptedPrivacy', 'provider', 'createdAt', 'updatedAt'];
+    }
+    function adminKeys() { return ['status', 'duesYears', 'adminNote', 'reviewedAt', 'reviewedBy']; }
+
+    // duesYears: each admin write may add at most ONE year, and it must be a
+    // real year. Only admins ever write the list, so it only ever holds years.
+    function duesOk(d) {
+      let added = d.duesYears.removeAll(resource.data.get('duesYears', []));
+      return d.duesYears is list && d.duesYears.size() <= 100 && added.size() <= 1
+        && (added.size() == 0 || (added[0] is int && added[0] >= 1950 && added[0] <= 2100));
+    }
+
+    function validProfile(d) {
+      return name(d.firstName) && name(d.lastName)
+        && str(d.email, 200) && str(d.phone, 40)
+        && d.stage in ['graduate', 'final-year', 'faculty']
+        && year(d.entryYear) && year(d.gradYear)
+        && str(d.direction, 60) && str(d.employer, 120) && str(d.position, 120)
+        && str(d.city, 80) && str(d.linkedin, 200) && str(d.note, 1000)
+        && d.consentNewsletter is bool && d.consentJobs is bool && d.consentDirectory is bool
+        && d.acceptedPrivacy == true
+        && str(d.provider, 40);
+    }
+
+    // ---- membership applications ----------------------------------------
+    match /members/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+
+      // the owner applies: every profile field present, status starts 'pending'
+      allow create: if signedIn() && request.auth.uid == uid && emailConfirmed()
+        && request.resource.data.keys().hasOnly(profileKeys().concat(['status']))
+        && request.resource.data.keys().hasAll(profileKeys())
+        && validProfile(request.resource.data)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      // the owner edits their details; the admin fields and createdAt are
+      // untouchable, and once the application has been reviewed the vetted
+      // name is frozen (the directory shows it; to change it, the admin sets
+      // the application back to pending)
+      allow update: if signedIn() && request.auth.uid == uid && emailConfirmed()
+        && request.resource.data.keys().hasOnly(profileKeys().concat(adminKeys()))
+        && validProfile(request.resource.data)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(adminKeys().concat(['createdAt']))
+        && (resource.data.status == 'pending'
+            || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['firstName', 'lastName']))
+        && request.resource.data.updatedAt == request.time;
+
+      // an admin reviews: only the admin fields change
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(adminKeys())
+        && request.resource.data.status in ['pending', 'active', 'rejected']
+        && (!('duesYears' in request.resource.data) || duesOk(request.resource.data))
+        && (!('adminNote' in request.resource.data) || str(request.resource.data.adminNote, 500))
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.reviewedBy == request.auth.token.email;
+
+      // the owner may delete their application (with their account); so may an admin
+      allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // ---- members-only directory ------------------------------------------
+    match /directory/{uid} {
+      allow read: if isActiveMember() || isAdmin();
+
+      allow create, update: if signedIn() && request.auth.uid == uid && isActiveMember()
+        && request.resource.data.keys().hasOnly(['name', 'gradYear', 'direction', 'employer', 'position', 'city', 'linkedin', 'updatedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 161
+        && request.resource.data.name == get(memberPath(uid)).data.firstName + ' ' + get(memberPath(uid)).data.lastName
+        && year(request.resource.data.gradYear)
+        && str(request.resource.data.direction, 60) && str(request.resource.data.employer, 120)
+        && str(request.resource.data.position, 120) && str(request.resource.data.city, 80)
+        && str(request.resource.data.linkedin, 200)
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // ---- LinkedIn links: server only -------------------------------------
+    match /linkedinLinks/{sub} {
+      allow read, write: if false;
+    }
+  }
+}
