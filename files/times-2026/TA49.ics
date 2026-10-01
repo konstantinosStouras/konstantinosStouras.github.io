@@ -1,0 +1,27 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//INFORMS TIMES//Newsletter 2026//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:TIMES TA49: Innovating for Social Good: Technology\, Equity\, 
+ and Human-Centric Operations
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+UID:times2026-ta49@stouras.com
+DTSTAMP:20261001T000000Z
+DTSTART:20261103T160000Z
+DTEND:20261103T171500Z
+SUMMARY:TIMES TA49: Innovating for Social Good: Technology\, Equity\, and H
+ uman-Centric Operations
+LOCATION:Room South-312\, Level 3\, Moscone Center\, 747 Howard St\, San Fr
+ ancisco\, CA 94103
+DESCRIPTION:Chair: Zeya Wang & Wei Wei\nINFORMS 2026 Annual Meeting\, San F
+ rancisco (TIMES cluster).\nTimes are Pacific Time (PST\, UTC-8).\nProgram:
+  https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG.a
+ spx
+URL:https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG
+ .aspx
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR

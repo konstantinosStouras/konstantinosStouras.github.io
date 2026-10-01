@@ -1,0 +1,25 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//INFORMS TIMES//Newsletter 2026//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:TIMES TC24: Data-Driven Decision Making and Policy Evaluation
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+UID:times2026-tc24@stouras.com
+DTSTAMP:20261001T000000Z
+DTSTART:20261103T211500Z
+DTEND:20261103T223000Z
+SUMMARY:TIMES TC24: Data-Driven Decision Making and Policy Evaluation
+LOCATION:Room South-202\, Level 2\, Moscone Center\, 747 Howard St\, San Fr
+ ancisco\, CA 94103
+DESCRIPTION:Chair: Ersin Korpeoglu & Shuaishuai Yang\nINFORMS 2026 Annual M
+ eeting\, San Francisco (TIMES cluster).\nTimes are Pacific Time (PST\, UTC
+ -8).\nProgram: https://submissions.mirasmart.com/InformsAnnual2026/Itinera
+ ry/EventsAAG.aspx
+URL:https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG
+ .aspx
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR

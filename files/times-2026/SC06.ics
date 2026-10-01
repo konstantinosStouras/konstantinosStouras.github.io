@@ -1,0 +1,27 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//INFORMS TIMES//Newsletter 2026//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:TIMES SC06: Editors’ Roundtable: TIME and TIE (Panel Session
+ )
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+UID:times2026-sc06@stouras.com
+DTSTAMP:20261001T000000Z
+DTSTART:20261101T211500Z
+DTEND:20261101T223000Z
+SUMMARY:TIMES SC06: Editors’ Roundtable: TIME and TIE (Panel Session)
+LOCATION:Moscone South-74 (Lower Mezz)\, Moscone Center\, 747 Howard St\, S
+ an Francisco\, CA 94103
+DESCRIPTION:Panelists: Ryan Buell\, Serguei Netessine\, Param Vir Singh & J
+ ürgen Mihm\nJoint session with MSOM-TIE.\nINFORMS 2026 Annual Meeting\, S
+ an Francisco (TIMES cluster).\nTimes are Pacific Time (PST\, UTC-8).\nProg
+ ram: https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsA
+ AG.aspx
+URL:https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG
+ .aspx
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR
