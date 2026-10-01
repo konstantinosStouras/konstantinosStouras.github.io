@@ -1,0 +1,24 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//INFORMS TIMES//Newsletter 2026//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:TIMES SB06: Adoption and Implications of AI
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+UID:times2026-sb06@stouras.com
+DTSTAMP:20261001T000000Z
+DTSTART:20261101T190000Z
+DTEND:20261101T201500Z
+SUMMARY:TIMES SB06: Adoption and Implications of AI
+LOCATION:Moscone South-74 (Lower Mezz)\, Moscone Center\, 747 Howard St\, S
+ an Francisco\, CA 94103
+DESCRIPTION:Chair: Ilan Morgenstern\nINFORMS 2026 Annual Meeting\, San Fran
+ cisco (TIMES cluster).\nTimes are Pacific Time (PST\, UTC-8).\nProgram: ht
+ tps://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG.aspx
+URL:https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG
+ .aspx
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR

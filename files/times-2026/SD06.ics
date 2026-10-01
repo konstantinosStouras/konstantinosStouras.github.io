@@ -1,0 +1,27 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//INFORMS TIMES//Newsletter 2026//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:TIMES SD06: Advances in Technology\, Innovation\, and Entrepre
+ neurship
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+UID:times2026-sd06@stouras.com
+DTSTAMP:20261001T000000Z
+DTSTART:20261101T224500Z
+DTEND:20261102T000000Z
+SUMMARY:TIMES SD06: Advances in Technology\, Innovation\, and Entrepreneurs
+ hip
+LOCATION:Moscone South-74 (Lower Mezz)\, Moscone Center\, 747 Howard St\, S
+ an Francisco\, CA 94103
+DESCRIPTION:Chair: Janne Kettunen\nJoint session with MSOM-TIE.\nINFORMS 20
+ 26 Annual Meeting\, San Francisco (TIMES cluster).\nTimes are Pacific Time
+  (PST\, UTC-8).\nProgram: https://submissions.mirasmart.com/InformsAnnual2
+ 026/Itinerary/EventsAAG.aspx
+URL:https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG
+ .aspx
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR

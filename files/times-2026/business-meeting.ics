@@ -1,0 +1,25 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//INFORMS TIMES//Newsletter 2026//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:TIMES Business Meeting (INFORMS 2026)
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+UID:times2026-business-meeting@stouras.com
+DTSTAMP:20261001T000000Z
+DTSTART:20261103T024500Z
+DTEND:20261103T041500Z
+SUMMARY:TIMES Business Meeting (INFORMS 2026)
+LOCATION:Room 304 (Level 3)\, Moscone South\, Moscone Center\, 747 Howard S
+ t\, San Francisco\, CA 94103
+DESCRIPTION:Annual TIMES business meeting: section updates\, announcement o
+ f the award winners\, and the Distinguished Speaker talk by Glen Schmidt\,
+  "New TIMES? Innovation and New Product Development in the Age of AI".\nFo
+ od and drinks will be served.\nTimes are Pacific Time (PST\, UTC-8).
+URL:https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG
+ .aspx
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR

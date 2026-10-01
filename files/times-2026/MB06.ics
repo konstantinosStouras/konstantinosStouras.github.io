@@ -1,0 +1,26 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//INFORMS TIMES//Newsletter 2026//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:TIMES MB06: Innovations in Human-AI Collaboration and Interact
+ ion
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+UID:times2026-mb06@stouras.com
+DTSTAMP:20261001T000000Z
+DTSTART:20261102T190000Z
+DTEND:20261102T201500Z
+SUMMARY:TIMES MB06: Innovations in Human-AI Collaboration and Interaction
+LOCATION:Moscone South-74 (Lower Mezz)\, Moscone Center\, 747 Howard St\, S
+ an Francisco\, CA 94103
+DESCRIPTION:Chair: Rob Glew\nJoint session with MSOM-TIE.\nINFORMS 2026 Ann
+ ual Meeting\, San Francisco (TIMES cluster).\nTimes are Pacific Time (PST\
+ , UTC-8).\nProgram: https://submissions.mirasmart.com/InformsAnnual2026/It
+ inerary/EventsAAG.aspx
+URL:https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG
+ .aspx
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR

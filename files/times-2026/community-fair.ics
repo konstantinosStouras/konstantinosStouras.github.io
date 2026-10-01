@@ -1,0 +1,25 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//INFORMS TIMES//Newsletter 2026//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:INFORMS Community Fair: meet TIMES
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+UID:times2026-community-fair@stouras.com
+DTSTAMP:20261001T000000Z
+DTSTART:20261102T023000Z
+DTEND:20261102T040000Z
+SUMMARY:INFORMS Community Fair: meet TIMES
+LOCATION:Hall A (Exhibition level)\, Moscone South\, Moscone Center\, 747 H
+ oward St\, San Francisco\, CA 94103
+DESCRIPTION:TIMES will discuss and highlight its initiatives and activities
+ \, including competitions and awards\, newsletters\, social media presence
+ \, the Paper of the Month series\, sponsorship opportunities\, and busines
+ s meetings.\nTimes are Pacific Time (PST\, UTC-8).
+URL:https://submissions.mirasmart.com/InformsAnnual2026/Itinerary/EventsAAG
+ .aspx
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR
