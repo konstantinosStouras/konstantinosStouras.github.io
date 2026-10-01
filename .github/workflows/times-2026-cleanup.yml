@@ -1,0 +1,68 @@
+name: TIMES 2026 newsletter, remove calendar files
+
+# The 2026 INFORMS TIMES newsletter links to the calendar files in files/times-2026/
+# (one .ics per TIMES session plus times-2026-all.ics). They are only needed until the
+# INFORMS 2026 Annual Meeting (San Francisco, 1-4 Nov 2026), so this job deletes the
+# folder from 1 December 2026 onwards.
+#
+# It runs every day in December rather than once, because GitHub's scheduler delays or
+# skips cron runs for this repository (see the cadence caveat in CLAUDE.md). The first
+# run on or after 1 Dec 2026 removes the folder; every later run sees it is gone and
+# stops before checking anything out. Run it by hand (Actions > Run workflow) to remove
+# the folder earlier. This workflow file can be deleted once the folder is gone.
+
+on:
+  schedule:
+    - cron: '23 7 * 12 *'      # 07:23 UTC every day in December
+  workflow_dispatch:
+
+permissions:
+  contents: write             # deletes files/times-2026/ and pushes to master
+
+concurrency:
+  group: times-2026-cleanup
+  cancel-in-progress: false
+
+jobs:
+  remove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Only from 1 December 2026, and only while the folder exists
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = "schedule" ] && [ "$(date -u +%Y%m%d)" -lt 20261201 ]; then
+            echo "Before 1 December 2026: nothing to do."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          elif gh api "repos/${GITHUB_REPOSITORY}/contents/files/times-2026?ref=master" >/dev/null 2>&1; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "files/times-2026/ is already gone: nothing to do."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout (only the folder being removed)
+        if: steps.gate.outputs.go == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: master
+          fetch-depth: 1
+          sparse-checkout: files/times-2026
+
+      - name: Delete files/times-2026/ and push
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898231+github-actions[bot]@users.noreply.github.com"
+          git rm -r -q files/times-2026
+          git commit -q -m "Remove the TIMES 2026 calendar files (INFORMS 2026 is over)"
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:master; then exit 0; fi
+            sleep $((i * 10))
+            git pull --rebase -q origin master
+          done
+          echo "::error::Could not push the removal after 5 attempts."
+          exit 1
