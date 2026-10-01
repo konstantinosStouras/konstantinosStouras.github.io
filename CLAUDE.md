@@ -44,7 +44,7 @@ guarding `FIREBASE_SERVICE_ACCOUNT`, `SMTP_*`, `S2_API_KEY`,
 
 ## Deploying Firebase rules — ALWAYS name the project
 
-This repository holds **seven** unrelated Firebase projects, and the sibling
+This repository holds **six** unrelated Firebase projects, and the sibling
 `OperationsAcademia.github.io` holds a seventh:
 
 | Folder | Project |
@@ -55,11 +55,12 @@ This repository holds **seven** unrelated Firebase projects, and the sibling
 | `_portfoliofit-firebase/` | `stouras-portfoliofit` |
 | `_portfoliofit-lab-firebase/` | `stouras-portfoliofit-86127` |
 | `lab/search-v2/` | `search-with-ai-456d7` |
-| `semfealumni/` | not created yet (`.firebaserc` says `PASTE_PROJECT_ID` until the owner follows `semfealumni/FIREBASE-SETUP.md`) |
 
-(`semfealumni/tools/rules-test/` also holds a `firebase.json`, for the Firestore
-EMULATOR only: its `.firebaserc` names `demo-semfe`, which exists nowhere else,
-and its `check-project.mjs` refuses every deploy.)
+(`_backups/semfealumni-first-version/` also holds a `firebase.json`, but it is a
+BACKUP, never deployed: its `.firebaserc` still says `PASTE_PROJECT_ID`, so its
+own `check-project.mjs` refuses every deploy, and `tools/deploy-guard-selftest.mjs`
+skips `_backups/`. The SEMFE Alumni site's real project, `semfe-alumni`, is
+deployed from its own repository; see the SEMFE section at the end.)
 
 The Firebase CLI resolves the target from, in order: `--project`, the
 `FIREBASE_PROJECT` env var, **the "active project" it remembers PER DIRECTORY
@@ -4879,32 +4880,25 @@ NOT viewport coordinates: a button clipped inside a scrolling ancestor still
 reports a rect on screen, so a viewport-only check passes while the bug is
 present. Details in `simulation/README.md`.
 
-## `/semfealumni` — the SEMFE Alumni association site (with member sign-in)
+## SEMFE Alumni: it lives in its OWN repository; only a backup is here
 
-`semfealumni/` (top level, NOT under `/fun/`, so no landing-card rule) is a
-redesign of the Σύλλογος Διπλωματούχων ΣΕΜΦΕ ΕΜΠ MkDocs site
-(`semfealumni/semfealumni.github.io`, which the owner can only view) with
-member registration and sign-in through Firebase: Google, Facebook, e-mail +
-password, and LinkedIn (a Cloud Function that swaps LinkedIn's code for a
-Firebase custom token; an Identity Platform OIDC route is the documented
-alternative). It is SELF-CONTAINED so it can move to a repository of its own
-unchanged (its `README.md`, "Hosting"); everything about it is documented
-there and in `semfealumni/FIREBASE-SETUP.md` (the owner's step-by-step).
+The SEMFE Alumni association site (Σύλλογος Διπλωματούχων ΣΕΜΦΕ ΕΜΠ, with
+member sign-in) was first built in this repository as `semfealumni/`. It moved
+to its own repository, **`konstantinosStouras/semfealumni`** (branch `main`,
+Firebase project `semfe-alumni`), and has been served at
+**https://semfealumni.gr/** since 1 October 2026. All work on it happens THERE,
+under that repository's own `CLAUDE.md`.
 
-* **Pages are GENERATED**: edit `semfealumni/_src/`, run
-  `node semfealumni/tools/build.mjs`, commit the regenerated HTML with the
-  source. `node semfealumni/tools/check.mjs` fails when the two differ.
-* **Sign-in is inert until configured**: `assets/js/config.js` holds `PASTE_`
-  placeholders; until the real web config is pasted the site shows "opens
-  soon" and never loads the Firebase SDK.
-* **`firestore.rules` is the gatekeeper** (members/{uid}, directory/{uid},
-  linkedinLinks/{sub}); `ADMIN_EMAILS` in config.js must equal the `isAdmin()`
-  list (check.mjs pins it). Deploy with `--project`, like every folder here.
-* **`noindex` on every page** (`INDEXABLE = false` in `tools/build.mjs`) while
-  the association's own semfealumni.gr is the official site.
-* Tests: `node semfealumni/tools/check.mjs`, `node semfealumni/tools/smoke.mjs`,
-  `node semfealumni/tools/auth-flow.mjs` (Playwright; a fake Firebase), `cd
-  semfealumni/functions && npm test`, `cd semfealumni/tools/rules-test && npm
-  test` (Firestore emulator, needs Java).
-* Served from a subfolder, a missing `/semfealumni/…` address gets the ROOT
-  `404.html`, and the folder's own `_config.yml` has no effect.
+The first version is kept here only as a backup, at
+**`_backups/semfealumni-first-version/`** (owner, 2026-10-01: "keep a backup
+folder for this old copy"). Two rules keep it harmless:
+
+* **It must stay under an underscore folder.** Jekyll does not serve folders
+  whose name begins with `_`, so the old pages are not on the web. A
+  `semfealumni/` folder at the top of this repository would also take over the
+  address `stouras.com/semfealumni/`, which today forwards to semfealumni.gr
+  through the other repository's Pages site. Never move it back up.
+* **It is never deployed.** Its `.firebaserc` says `PASTE_PROJECT_ID`, so its
+  `check-project.mjs` refuses every deploy, and `tools/deploy-guard-selftest.mjs`
+  skips `_backups/`. Do not edit it to fix the live site; edit the other
+  repository.
