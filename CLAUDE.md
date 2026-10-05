@@ -4893,12 +4893,11 @@ its own `CLAUDE.md`; a push to its `main` is the whole publishing step. A
 Claude session can only push there when the Claude GitHub App is installed on
 the organisation (https://github.com/apps/claude/installations/select_target).
 
-Its earlier home, `konstantinosStouras/semfealumni`, holds the same code up to
-commit `30c9fd3`. GitHub Pages published the site from there until the domain
-was handed over to the organisation repository on 5 October 2026 (written down
-in that repository's `MOVE-TO-ORG.md`); the old repository's automation is off
-and it is archived a week later. **Do not edit the old repository to change the
-live site.**
+Its earlier home, `konstantinosStouras/semfealumni`, was **deleted on 5 October
+2026**, the day GitHub Pages stopped publishing the site from there and the
+domain was handed over to the organisation repository (written down in that
+repository's `MOVE-TO-ORG.md`). Nothing was lost: the organisation repository
+carries its whole history, up to its last commit `30c9fd3`.
 
 The first version is kept here only as a backup, at
 **`_backups/semfealumni-first-version/`** (owner, 2026-10-01: "keep a backup
@@ -4931,6 +4930,8 @@ gains a page). Same shape as the other stubs here: canonical, meta refresh,
 the Ideation Challenge's deep links in that script are untouched.
 
 The old repository's Pages site was unpublished on 5 October 2026 (the old
-address answered 404 from then until these pages went live). Never publish a
-Pages site from that repository again: its project site would claim the same
-`/semfealumni/` address as this folder.
+address answered 404 from then until these pages went live), and the repository
+was deleted the same day. **Never create a repository named `semfealumni` under
+`konstantinosStouras` again with Pages switched on** (nor restore the deleted
+one, which GitHub allows for 90 days, and publish it): its project site would
+claim the same `/semfealumni/` address as this folder.

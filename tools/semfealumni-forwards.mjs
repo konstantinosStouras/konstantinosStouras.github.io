@@ -5,7 +5,7 @@
    www.stouras.com/semfealumni/ (as the project site of the repository
    konstantinosStouras/semfealumni). It now lives at https://semfealumni.gr/,
    from the organisation repository semfealumni/semfealumni.github.io, and
-   the old repository's Pages site is switched off. Links to the old address
+   the old repository was deleted on 2026-10-05. Links to the old address
    are still out there (e-mails, bookmarks, search results), so this folder
    holds one tiny page per page the site has ever had there: each sends the
    reader to the SAME page on semfealumni.gr, keeping any ?query and #anchor.
@@ -25,7 +25,8 @@
                                                   page is missing or differs
 
    PAGES: every page of the site at commit 30c9fd3 of the old repository (the
-   last one it published) and of semfealumni/semfealumni.github.io main on
+   last one it published, kept in the organisation repository's history) and
+   of semfealumni/semfealumni.github.io main on
    2026-10-05, without 404.html. Add a path here if the site gains a page. */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
