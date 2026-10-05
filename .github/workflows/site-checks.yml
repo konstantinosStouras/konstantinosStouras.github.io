@@ -96,6 +96,11 @@ jobs:
       - name: No folder deploys into another Firebase project
         run: node tools/deploy-guard-selftest.mjs
 
+      # semfealumni/ is generated: old stouras.com/semfealumni/ links forward
+      # to the same page on semfealumni.gr (CLAUDE.md, the SEMFE section)
+      - name: The old SEMFE Alumni addresses forward to semfealumni.gr
+        run: node tools/semfealumni-forwards.mjs --check
+
       # The roster and the message threads: the rules, the main page, the
       # Feedback page and the sub-page menu are four files that nothing else
       # holds together, and one of them carries the maintainer's address.
