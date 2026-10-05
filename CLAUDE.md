@@ -4880,14 +4880,25 @@ NOT viewport coordinates: a button clipped inside a scrolling ancestor still
 reports a rect on screen, so a viewport-only check passes while the bug is
 present. Details in `simulation/README.md`.
 
-## SEMFE Alumni: it lives in its OWN repository; only a backup is here
+## SEMFE Alumni: it lives in its OWN repository, in the SEMFE Alumni organisation; only a backup is here
 
 The SEMFE Alumni association site (Σύλλογος Διπλωματούχων ΣΕΜΦΕ ΕΜΠ, with
 member sign-in) was first built in this repository as `semfealumni/`. It moved
-to its own repository, **`konstantinosStouras/semfealumni`** (branch `main`,
-Firebase project `semfe-alumni`), and has been served at
-**https://semfealumni.gr/** since 1 October 2026. All work on it happens THERE,
-under that repository's own `CLAUDE.md`.
+to its own repository, and since 5 October 2026 the code lives in
+**`semfealumni/semfealumni.github.io`** (branch `main`, Firebase project
+`semfe-alumni`), in the GitHub organisation **SEMFE Alumni**, so that it does
+not depend on one person's account. It is served at
+**https://semfealumni.gr/**. All work on it happens in that repository, under
+its own `CLAUDE.md`; a push to its `main` is the whole publishing step. A
+Claude session can only push there when the Claude GitHub App is installed on
+the organisation (https://github.com/apps/claude/installations/select_target).
+
+Its earlier home, `konstantinosStouras/semfealumni`, holds the same code up to
+commit `30c9fd3` and is the repository GitHub Pages published from until the
+domain was handed over. The hand-over (domain verification, Pages source, the
+`www` CNAME record) is written down in the organisation repository's
+`MOVE-TO-ORG.md`; the old repository is archived a week after it. **Do not edit
+the old repository to change the live site.**
 
 The first version is kept here only as a backup, at
 **`_backups/semfealumni-first-version/`** (owner, 2026-10-01: "keep a backup
@@ -4900,5 +4911,5 @@ folder for this old copy"). Two rules keep it harmless:
   through the other repository's Pages site. Never move it back up.
 * **It is never deployed.** Its `.firebaserc` says `PASTE_PROJECT_ID`, so its
   `check-project.mjs` refuses every deploy, and `tools/deploy-guard-selftest.mjs`
-  skips `_backups/`. Do not edit it to fix the live site; edit the other
-  repository.
+  skips `_backups/`. Do not edit it to fix the live site; edit the
+  organisation repository.
