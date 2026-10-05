@@ -4880,14 +4880,25 @@ NOT viewport coordinates: a button clipped inside a scrolling ancestor still
 reports a rect on screen, so a viewport-only check passes while the bug is
 present. Details in `simulation/README.md`.
 
-## SEMFE Alumni: it lives in its OWN repository; only a backup is here
+## SEMFE Alumni: it lives in its OWN repository, in the SEMFE Alumni organisation; only a backup is here
 
 The SEMFE Alumni association site (Σύλλογος Διπλωματούχων ΣΕΜΦΕ ΕΜΠ, with
 member sign-in) was first built in this repository as `semfealumni/`. It moved
-to its own repository, **`konstantinosStouras/semfealumni`** (branch `main`,
-Firebase project `semfe-alumni`), and has been served at
-**https://semfealumni.gr/** since 1 October 2026. All work on it happens THERE,
-under that repository's own `CLAUDE.md`.
+to its own repository, and since 5 October 2026 the code lives in
+**`semfealumni/semfealumni.github.io`** (branch `main`, Firebase project
+`semfe-alumni`), in the GitHub organisation **SEMFE Alumni**, so that it does
+not depend on one person's account. It is served at
+**https://semfealumni.gr/**. All work on it happens in that repository, under
+its own `CLAUDE.md`; a push to its `main` is the whole publishing step. A
+Claude session can only push there when the Claude GitHub App is installed on
+the organisation (https://github.com/apps/claude/installations/select_target).
+
+Its earlier home, `konstantinosStouras/semfealumni`, holds the same code up to
+commit `30c9fd3`. GitHub Pages published the site from there until the domain
+was handed over to the organisation repository on 5 October 2026 (written down
+in that repository's `MOVE-TO-ORG.md`); the old repository's automation is off
+and it is archived a week later. **Do not edit the old repository to change the
+live site.**
 
 The first version is kept here only as a backup, at
 **`_backups/semfealumni-first-version/`** (owner, 2026-10-01: "keep a backup
@@ -4896,9 +4907,12 @@ folder for this old copy"). Two rules keep it harmless:
 * **It must stay under an underscore folder.** Jekyll does not serve folders
   whose name begins with `_`, so the old pages are not on the web. A
   `semfealumni/` folder at the top of this repository would also take over the
-  address `stouras.com/semfealumni/`, which today forwards to semfealumni.gr
-  through the other repository's Pages site. Never move it back up.
+  address `stouras.com/semfealumni/` (the old preview address of the site, which
+  forwarded to semfealumni.gr through the old repository's Pages site until the
+  hand-over and shows a frozen copy since). Never move the old pages back up; a
+  folder of redirect-only pages to semfealumni.gr would be the one acceptable
+  thing to put there.
 * **It is never deployed.** Its `.firebaserc` says `PASTE_PROJECT_ID`, so its
   `check-project.mjs` refuses every deploy, and `tools/deploy-guard-selftest.mjs`
-  skips `_backups/`. Do not edit it to fix the live site; edit the other
-  repository.
+  skips `_backups/`. Do not edit it to fix the live site; edit the
+  organisation repository.
