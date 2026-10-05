@@ -4905,14 +4905,32 @@ The first version is kept here only as a backup, at
 folder for this old copy"). Two rules keep it harmless:
 
 * **It must stay under an underscore folder.** Jekyll does not serve folders
-  whose name begins with `_`, so the old pages are not on the web. A
-  `semfealumni/` folder at the top of this repository would also take over the
-  address `stouras.com/semfealumni/` (the old preview address of the site, which
-  forwarded to semfealumni.gr through the old repository's Pages site until the
-  hand-over and shows a frozen copy since). Never move the old pages back up; a
-  folder of redirect-only pages to semfealumni.gr would be the one acceptable
-  thing to put there.
+  whose name begins with `_`, so the old pages are not on the web. The top-level
+  `semfealumni/` folder holds ONLY forwarding pages (below); never move the old
+  pages back up there.
 * **It is never deployed.** Its `.firebaserc` says `PASTE_PROJECT_ID`, so its
   `check-project.mjs` refuses every deploy, and `tools/deploy-guard-selftest.mjs`
   skips `_backups/`. Do not edit it to fix the live site; edit the
   organisation repository.
+
+### The old address forwards to semfealumni.gr
+
+`www.stouras.com/semfealumni/...` was the site's address before it had a domain
+(the project site of `konstantinosStouras/semfealumni`), and links to it are
+still out there. Owner, 2026-10-05: "fix them so that they work as they should".
+So `semfealumni/` at the top of this repository holds **one redirect-only page
+per page the site has had** (32: every page of the old repository at `30c9fd3`
+and of the organisation repository's `main`, `404.html` aside), each sending
+the reader to the SAME page on semfealumni.gr with any `?query` and `#anchor`
+kept. They are written by **`node tools/semfealumni-forwards.mjs`** (`--check`
+to compare; the list of pages is in the script: add a path there if the site
+gains a page). Same shape as the other stubs here: canonical, meta refresh,
+`location.replace`, `noindex`, no `og:*`. Any other address under
+`/semfealumni/` (an old image, a page the list lacks) reaches the root
+`404.html`, whose script forwards it to the same address on semfealumni.gr;
+the Ideation Challenge's deep links in that script are untouched.
+
+The old repository's Pages site was unpublished on 5 October 2026 (the old
+address answered 404 from then until these pages went live). Never publish a
+Pages site from that repository again: its project site would claim the same
+`/semfealumni/` address as this folder.

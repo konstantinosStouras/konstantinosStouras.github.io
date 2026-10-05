@@ -41,6 +41,14 @@
         window.location.replace(
           '/lab/ideasearchlab/?redirect=' + encodeURIComponent(path + window.location.search + window.location.hash) + '&_=' + Date.now()
         );
+      } else if (path === '/semfealumni' || path.indexOf('/semfealumni/') === 0) {
+        // The SEMFE Alumni site lived at /semfealumni/ before it moved to its
+        // own domain. semfealumni/ holds a forwarding page for every page it
+        // had (tools/semfealumni-forwards.mjs); any OTHER old address goes to
+        // the same address on semfealumni.gr, which answers it itself.
+        window.location.replace(
+          'https://semfealumni.gr' + (path.slice('/semfealumni'.length) || '/') + window.location.search + window.location.hash
+        );
       }
     </script>
   </head>
