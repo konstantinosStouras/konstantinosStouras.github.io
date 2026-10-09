@@ -1,0 +1,105 @@
+// Offline browser regression: node lit/_scraper/filter-url-guard.mjs
+// Set PW to a Playwright package path and CHROMIUM to an existing browser.
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+const { chromium } = await import(process.env.PW || 'playwright');
+const root = fileURLToPath(new URL('../', import.meta.url));
+(async () => {
+ const browser = await chromium.launch({executablePath:process.env.CHROMIUM || undefined,headless:true});
+ const context = await browser.newContext();
+ const errors = [];
+ let graphDelay = 0, paperDelay = 0;
+ const page = await context.newPage();
+ page.on('pageerror',e=>errors.push(e.message));
+ const rows = [
+  {JKey:'ms',Title:'Innovation & supply chains',Authors:'Jane Doe',Year:'2026',DOI:'10.1/a',Abstract:'AI allocation',Affiliations:'INSEAD',Area:'entrepreneurship and innovation',Preprint:'https://arxiv.org/abs/1234.5678','Date Added':new Date().toISOString().slice(0,10)},
+  {JKey:'ms',Title:'Other paper',Authors:'John Smith',Year:'2025',DOI:'10.1/b',Abstract:'pricing',Affiliations:'UCD',Area:'operations management'}
+ ];
+ await context.route('**/*', async route=>{
+  const u=new URL(route.request().url()); let body, type='application/json';
+  if(u.pathname==='/lit/') {body=fs.readFileSync(root+'index.html','utf8').replace(/var ACCOUNTS_ENABLED = !!\([\s\S]*?\);/, 'var ACCOUNTS_ENABLED = false;');type='text/html';}
+  else if(u.pathname.match(/\/lit-(abstract|filter-url|news)\.js$/)){body=fs.readFileSync(root+u.pathname.split('/').pop(),'utf8');type='text/javascript';}
+  else if(u.hostname!=='lit.test') return route.fulfill({status:200,body:'',contentType:'text/javascript'});
+  else if(u.pathname==='/lit/data/sources.json') body=JSON.stringify([{key:'ms',file:'papers-ms.json',count:2}]);
+  else if(u.pathname==='/lit/data/papers-ms.json'||u.pathname==='/lit/data/recent.json') {if(paperDelay) await new Promise(r=>setTimeout(r,paperDelay)); body=JSON.stringify(rows);}
+  else if(u.pathname==='/lit/data-refs/manifest.json') {if(graphDelay) await new Promise(r=>setTimeout(r,graphDelay));body=JSON.stringify({citedShards:{ms:{file:'cited-ms.json'}},shards:{},index:{file:'refs-index.json'}});}
+  else if(u.pathname.endsWith('refs-index.json')) body=JSON.stringify({'10.1000/focal':['Focal paper','ms','2020','Jane Doe'],'10.1/a':['Innovation & supply chains','ms','2026','Jane Doe']});
+  else if(u.pathname.endsWith('cited-counts.json')) body=JSON.stringify({'10.1000/focal':1});
+  else if(u.pathname.endsWith('cited-ms.json')) body=JSON.stringify({'10.1000/focal':['10.1/a']});
+  else if(u.pathname.endsWith('authors.json')) body=JSON.stringify([{Author:'Jane Doe',Name_Variants:'Jane Doe; J. Doe'}]);
+  else if(u.pathname.endsWith('sources.json')||u.pathname.endsWith('affiliations.json')) body='[]';
+  else if(u.pathname.endsWith('changelog.json')) body=fs.readFileSync(root+'changelog.json','utf8');
+  else body='{}';
+  await route.fulfill({status:200,body,contentType:type});
+ });
+ const state=()=>page.evaluate(()=>({journal:[...sel.journal],year:[...sel.year],area:[...sel.area],author:sel.authorIdentity,title:[...sel.title],text:document.getElementById('filterAffiliations').value,preprint:preprintOnly,recent:recentMode,sort:document.getElementById('sortBy').value,matches:filtered.map(p=>p.DOI)}));
+ const params=()=>new URL(page.url()).searchParams;
+ await page.goto('https://lit.test/lit/?journal=ms&year=2026&affiliation-search=INSEAD&sort=title#results');
+ await page.waitForFunction(()=>allPapers.length===2);
+ assert.deepEqual((await state()).matches,['10.1/a']);
+ assert.equal((await state()).text,'INSEAD'); assert.deepEqual((await state()).area,[]);
+ assert.equal(await page.evaluate(()=>applyLitSiteDefault()),false);
+ assert.equal(params().get('sort'),'title'); assert.equal(new URL(page.url()).hash,'#results');
+ console.log('PASS shared filters, results, defaults and hash');
+ await page.locator('#filterSearch').fill('Innovation & supply');
+ await page.waitForFunction(()=>new URLSearchParams(location.search).get('title-search')==='Innovation & supply'); assert.equal(params().get('title-search'),'Innovation & supply');
+ await page.locator('#filterSearch').press('Enter');
+ assert.equal(params().get('title'),'innovation & supply'); assert.equal(params().has('title-search'),false);
+ await page.evaluate(()=>addTextChip('affiliation','filterAffiliations'));
+ assert.equal(params().get('affiliation'),'insead');
+ const share=page.url(); await page.goto(share); await page.waitForFunction(()=>allPapers.length===2);
+ assert.deepEqual((await state()).matches,['10.1/a']);
+ assert.deepEqual((await state()).title,['innovation & supply']);
+ console.log('PASS typing, Enter chips, encoded text and reload');
+ await page.evaluate(()=>removeChip('year','2026')); assert.equal(params().has('year'),false);
+ await page.evaluate(()=>togglePreprintOnly()); assert.equal(params().get('preprint'),'1');
+ await page.goto(page.url()); assert.equal((await state()).preprint,true);
+ await page.evaluate(()=>clearFilters());
+ assert.equal(params().has('title'),false);assert.equal(params().has('preprint'),false);assert.equal(params().get('filters'),'1');
+ await page.goto(page.url()); assert.deepEqual((await state()).journal,[]);
+ console.log('PASS removal, preprint and cleared-search sharing');
+ await page.goto('https://lit.test/lit/?author=Jane+Doe&journal=ms'); await page.waitForFunction(()=>authorData.length>0);
+ assert.deepEqual((await state()).author['Jane Doe'],['jane doe','j. doe']);
+ await page.evaluate(()=>addAuthorIdentityChip('John Smith',['john smith','j. smith']));
+ assert.equal(params().getAll('author').length,2);
+ await page.goto(page.url()); assert.equal(Object.keys((await state()).author).length,2);
+ console.log('PASS legacy author links, multiple identities and variants');
+ await page.evaluate(()=>{clearFilters();addJournalChip('ms');toggleRecent();});
+ assert.equal(params().get('recent'),'1');await page.goto(page.url());assert.equal((await state()).recent,true);
+ await page.evaluate(()=>addJournalChip('isre'));assert.equal(params().getAll('journal').length,2);
+ console.log('PASS recent view and journal scope');
+ await page.goto('https://lit.test/lit/?filters=1&journal=ms&area=entrepreneurship+and+innovation&journal=isre&se=Senior&ae=Associate&editor=Editor&year=2026&year=2025');
+ assert.deepEqual((await state()).year,['2026','2025']); assert.deepEqual((await state()).area,['entrepreneurship and innovation']);
+ assert.equal(await page.evaluate(()=>sel.se.has('Senior')&&sel.ae.has('Associate')&&sel.editor.has('Editor')),true);
+ console.log('PASS multiple years and editorial filters');
+ await page.evaluate(()=>history.pushState(null,'','?filters=1&journal=ms&year=2025'));
+ await page.evaluate(()=>{history.pushState(null,'','?filters=1&journal=ms&year=2026');litRestoreFilterUrl();});
+ await page.goBack();await page.waitForFunction(()=>sel.year.has('2025'));await page.goForward();await page.waitForFunction(()=>sel.year.has('2026'));
+ console.log('PASS browser Back and Forward');
+ await page.goto('https://lit.test/lit/?filters=1&sort=invalid&author-variants=bad&db=0&utm_source=shared#anchor');
+ await page.locator('#filterAuthors').fill('Jane');assert.equal(params().get('db'),'0');assert.equal(params().get('utm_source'),'shared');assert.equal((await state()).sort,'year-desc');
+ console.log('PASS invalid optional data and unrelated parameters');
+ await page.goto('https://lit.test/lit/?journal=ms&affiliation=INSEAD&abstract=AI'); await page.waitForFunction(()=>allPapers.length===2); assert.deepEqual((await state()).matches,['10.1/a']); console.log('PASS uppercase shared text terms');
+ graphDelay=400;
+ await page.goto('https://lit.test/lit/?journal=ms&year=2026&citedby=10.1000%2Ffocal');
+ await page.locator('#filterAffiliations').fill('INSEAD');
+ await page.waitForFunction(()=>new URLSearchParams(location.search).get('affiliation-search')==='INSEAD');
+ assert.equal(params().get('citedby'),'10.1000/focal');
+ await page.waitForFunction(()=>citedByFilter!==null);
+ assert.deepEqual((await state()).matches,['10.1/a']);
+ console.log('PASS pending citation survives other filter updates and resolves');
+ await page.goto('https://lit.test/lit/?journal=ms&citedby=10.1000%2Ffocal');
+ await page.evaluate(()=>clearFilters());
+ await page.waitForTimeout(600);
+ assert.equal(await page.evaluate(()=>citedByFilter),null);assert.equal(params().has('citedby'),false);
+ console.log('PASS Clear cancels an unresolved citation link');
+ graphDelay=0;paperDelay=400;
+ await page.goto('https://lit.test/lit/?filters=1');
+ await page.locator('#filterAuthors').fill('Jane');
+ await page.waitForFunction(()=>new URLSearchParams(location.search).get('author-search')==='Jane');
+ assert.equal(await page.evaluate(()=>applyLitSiteDefault()),false);
+ console.log('PASS typed filter URL updates before paper data arrives');
+ assert.deepEqual(errors,[]); console.log('PASS no page errors');
+ await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});

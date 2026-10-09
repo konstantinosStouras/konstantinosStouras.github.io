@@ -1034,6 +1034,7 @@
 <!-- The abstract a card shows and the Abstracts search matches: ONE definition,
      shared with the alerts mailer and emit-db.mjs (see lit/lit-abstract.js). -->
 <script src="lit-abstract.js"></script>
+<script src="lit-filter-url.js"></script>
 <script>
 // ── Data source: static JSON, no Google Sheets ───────────────────────────────
 // These files are built from public APIs (Crossref + friends) by a scheduled
@@ -2031,6 +2032,7 @@ function litCitedByKindChanged() {
 // Apply a resolved focal as the active cited-by filter (replaces any prior).
 function litApplyCitedByFilter(res, opts) {
   litRetireSiteDefault();
+  litCancelUrlCitation();
   citedByFilter = res;
   renderCitedByChip();
   litCbSetNote(res.dois.size ? '' :
@@ -2053,6 +2055,7 @@ function renderCitedByChip() {
 }
 
 function removeCitedByChip() {
+  litCancelUrlCitation();
   citedByFilter = null;
   renderCitedByChip();
   litCbSetNote('');
@@ -2064,14 +2067,7 @@ function removeCitedByChip() {
 // by DOI) / ?citedbyauthor= (name). Mirrors the ?author= deep-link discipline —
 // removing the chip strips the parameter so a reload can't resurrect the filter.
 function litSyncCitedByUrl() {
-  try {
-    var sp = new URLSearchParams(location.search);
-    sp.delete('citedby'); sp.delete('citedbyauthor');
-    if (citedByFilter && citedByFilter.kind === 'paper' && citedByFilter.doi) sp.set('citedby', citedByFilter.doi);
-    else if (citedByFilter && citedByFilter.kind === 'author') sp.set('citedbyauthor', citedByFilter.label);
-    var qs = sp.toString();
-    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
-  } catch (e) {}
+  litSyncFilterUrl();
   if (!citedByFilter) window.LIT_CITEDBY_DEEPLINK = false;
 }
 
@@ -3451,6 +3447,7 @@ function applyFilters() {
   // personal defaults, are never touched).
   litDropSiteDefaultForSearch();
   refreshJournalScope();
+  litSyncFilterUrl();
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
   const searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
   const searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
@@ -3540,6 +3537,7 @@ function applyFilters() {
 // journal-type chips (used by the "Recently added papers" view, which is
 // scoped to the selected journals).
 function resetFilterState(keepJournals) {
+  litCancelUrlCitation();
   if (!keepJournals) {
     sel.journal.clear(); document.getElementById('chipsJournal').innerHTML = '';
     sel.jtype.clear(); document.getElementById('chipsJType').innerHTML = '';
@@ -3684,7 +3682,7 @@ function litRetireSiteDefault() {
 window.litRetireSiteDefault = litRetireSiteDefault;
 
 function applyLitSiteDefault() {
-  if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK || window.LIT_CITEDBY_DEEPLINK) return false;   // a shared-list / author / cited-by deep-link view owns the page
+  if (window.LIT_FILTER_DEEPLINK || window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK || window.LIT_CITEDBY_DEEPLINK) return false;   // a shared-list / author / cited-by deep-link view owns the page
   if (window.litSiteDefaultApplied) return false;
   if (typeof sel === 'undefined' || typeof applyFilters !== 'function') return false;
   if (typeof recentMode !== 'undefined' && recentMode) return false;
@@ -3896,6 +3894,7 @@ function recentExactCount(base, cutoffDay) {
 
 function renderRecent() {
   refreshJournalScope();
+  litSyncFilterUrl();
   var countEl = document.getElementById('resultsCount');
   var list = document.getElementById('papersList');
 
@@ -4822,52 +4821,13 @@ async function updateDropdownOptionsDb(live) {
   fillCustomSelect('csYear', Object.keys(yCounts).sort().reverse(), yCounts);
 }
 
+initLitFilterUrl(); // restore shareable search before data/auth callbacks run
 loadLastPull(); // small + cached: render the last-pull date first
 loadData();     // manifests only — papers files download when a filter needs them
 if (DB_MODE) initLitDb();  // ?db=1: open the range-served SQLite DB in the background
 loadAuthorsFromCache(); // authors.json itself is fetched on first Authors-tab open
 loadRecent(); // pre-fetch the small recent.json so the "Recently added" view opens instantly
 
-// Author deep-link (?author=Name): pre-apply an author filter so a link can land
-// straight on one person's publications — used by the ORCID "My publications"
-// hub, and shareable on its own. Setting LIT_AUTHOR_DEEPLINK stands the
-// site/personal default filters down (like the shared-list view) so they don't
-// fight the author scope; the author chip itself also makes the selection
-// non-empty. Applying it triggers an all-journal load, exactly as typing the
-// author would.
-(function applyAuthorDeepLink() {
-  try {
-    var nm = new URLSearchParams(location.search).get('author');
-    if (!nm) return;
-    nm = nm.trim(); if (!nm) return;
-    window.LIT_AUTHOR_DEEPLINK = true;
-    if (typeof addAuthorIdentityChip === 'function') addAuthorIdentityChip(nm, [nm.toLowerCase()]);
-    // Widen the chip to the author's full ORCID-resolved Name_Variants: use
-    // the cached Authors index if present, and fetch it otherwise (the panel
-    // itself normally defers this to the first Authors-tab open).
-    litUpgradeAuthorDeepLink();
-    if (!authorsRequested) loadAuthors();
-  } catch (e) {}
-})();
-
-// Cited-by deep-link (?citedby=<doi-or-title> / ?citedbyauthor=<name>): land
-// the page straight on the papers citing a focal paper/author — shareable, and
-// what the chip's URL sync writes. Stands the site default down like the
-// ?author= deep-link; resolution is async (the graph index fetches first), so
-// the flag is set immediately and dropped if the focal can't be resolved.
-(function applyCitedByDeepLink() {
-  try {
-    var sp = new URLSearchParams(location.search);
-    var d = sp.get('citedby'), a = sp.get('citedbyauthor');
-    var q = ((d || a) || '').trim();
-    if (!q) return;
-    window.LIT_CITEDBY_DEEPLINK = true;
-    (d ? litCbResolvePaper(q) : litCbResolveAuthor(q)).then(function (res) {
-      if (res && !res.error) litApplyCitedByFilter(res);
-      else { window.LIT_CITEDBY_DEEPLINK = false; litCbSetNote((res && res.error) || ''); }
-    }).catch(function () { window.LIT_CITEDBY_DEEPLINK = false; });
-  } catch (e) {}
-})();
 </script>
 
 <!-- ── Accounts: sign in / register modal ─────────────────────────────────── -->
@@ -8106,7 +8066,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // (Applying before the manifests arrive is fine — applyFilters lazy-loads what
   // it needs and registerExtraSources re-applies as catalog journals register.)
   function maybeAutoApplyPrefs() {
-    if (window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK) return;   // a shared-list / author deep-link view owns the page; don't latch
+    if (window.LIT_FILTER_DEEPLINK || window.LIT_CITEDBY_DEEPLINK || window.LIT_SHARED_VIEW || window.LIT_AUTHOR_DEEPLINK) return;   // shared search owns the page; don't latch
     if (prefsAutoApplied) return;
     if (!state.user || !state.profile) return;          // profile snapshot not in yet — wait
     // The profile is loaded: this is our single landing-time decision. Latch the

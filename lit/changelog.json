@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "shareable-search-filters",
+      "date": "2026-10-09",
+      "title": "Share any search with a link",
+      "summary": "The address bar now follows your search filters. Copy the link to share journals, years, authors, titles, abstracts, affiliations, editorial and citation filters, sorting, or the Recently added and Pre-print views; opening it restores that selection ahead of saved defaults.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "elsevier-abstracts",
       "date": "2026-09-23",
       "title": "Abstracts for the Elsevier journals — EJOR, JFE, Research Policy and the rest",

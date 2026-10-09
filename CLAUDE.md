@@ -474,6 +474,17 @@ app's data (~190 MB), scraper and its two workflows (`ft50-update-data.yml`,
 `lit/_scraper-ft50/` with its own `lit-ft50-*` workflows.
 
 ## `/lit` — "The Lit", the multi-journal research paper browser
+**Shareable searches:** `lit/lit-filter-url.js` synchronizes public filter state
+with the query string (repeated parameters for chips, `*-search` for live text,
+`author` plus `author-variants` for identity chips, `recent`, `preprint`, `sort`,
+and the existing citation parameters). `filters=1` also preserves a deliberately
+empty search. Restore runs before data/auth callbacks; `LIT_FILTER_DEEPLINK`
+keeps both site and personal defaults from overriding a shared search. Preserve
+unrelated parameters and hashes, and leave `?list=` to the shared-list lifecycle.
+Browser regression: `node lit/_scraper/filter-url-guard.mjs` (set `PW` to a
+Playwright package and `CHROMIUM` to an installed browser when needed; all data
+and external services are mocked, including delayed citation resolution).
+
 Served at `stouras.com/lit/` (a **top-level** directory, `lit/`, NOT under
 `/fun/`; promoted from the old `fun/lit/`, which is now a redirect stub). The app
 uses **relative** data paths (`./data/`, `./data-ft50/`, …), so it is
