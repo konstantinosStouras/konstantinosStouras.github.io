@@ -8,6 +8,7 @@ var litUrlInputs = {
   'title-search': 'filterSearch', 'author-search': 'filterAuthors',
   'affiliation-search': 'filterAffiliations', 'abstract-search': 'filterAbstracts'
 };
+// Recognize and strip the retired `filters` marker from previously shared links.
 var litUrlSpecial = ['filters', 'author', 'author-variants', 'preprint', 'recent', 'sort', 'citedby', 'citedbyauthor'];
 var litUrlReady = false, litUrlRestoring = false, litUrlCitationVersion = 0;
 var litUrlPendingCitation = null;
@@ -26,9 +27,6 @@ function litSyncFilterUrl() {
       if (value) sp.set(key, value);
     });
     litUrlSpecial.forEach(function (key) { sp.delete(key); });
-    // The marker also shares a deliberately cleared search without reapplying
-    // the recipient's site or personal defaults.
-    sp.set('filters', '1');
     Object.keys(sel.authorIdentity).forEach(function (label) {
       sp.append('author', label);
       sp.append('author-variants', JSON.stringify([label, sel.authorIdentity[label]]));
@@ -40,7 +38,8 @@ function litSyncFilterUrl() {
     var focal = citedByFilter;
     if (focal) sp.set(focal.kind === 'author' ? 'citedbyauthor' : 'citedby', focal.doi || focal.label);
     else if (litUrlPendingCitation) sp.set(litUrlPendingCitation.key, litUrlPendingCitation.query);
-    var url = location.pathname + '?' + sp.toString() + location.hash;
+    var qs = sp.toString();
+    var url = location.pathname + (qs ? '?' + qs : '') + location.hash;
     if (url !== location.pathname + location.search + location.hash) history.replaceState(history.state, '', url);
   } catch (e) { /* A restricted history API must not interrupt searching. */ }
 }
@@ -136,6 +135,7 @@ function initLitFilterUrl() {
   // replace the incoming link with a partial selection.
   litRestoreFilterUrl();
   litUrlReady = true;
+  if (new URLSearchParams(location.search).has('filters')) litSyncFilterUrl();
   window.addEventListener('popstate', litRestoreFilterUrl);
   // Update typed searches even before any journal data finishes loading.
   Object.values(litUrlInputs).forEach(function (id) {

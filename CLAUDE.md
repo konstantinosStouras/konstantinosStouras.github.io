@@ -477,8 +477,10 @@ app's data (~190 MB), scraper and its two workflows (`ft50-update-data.yml`,
 **Shareable searches:** `lit/lit-filter-url.js` synchronizes public filter state
 with the query string (repeated parameters for chips, `*-search` for live text,
 `author` plus `author-variants` for identity chips, `recent`, `preprint`, `sort`,
-and the existing citation parameters). `filters=1` also preserves a deliberately
-empty search. Restore runs before data/auth callbacks; `LIT_FILTER_DEEPLINK`
+and the existing citation parameters). Only actual filters appear in the URL;
+old `filters=1` markers are removed, and clearing the last filter restores the
+plain page URL (a fresh visit then uses the ordinary default-filter behavior).
+Restore runs before data/auth callbacks; `LIT_FILTER_DEEPLINK`
 keeps both site and personal defaults from overriding a shared search. Preserve
 unrelated parameters and hashes, and leave `?list=` to the shared-list lifecycle.
 Browser regression: `node lit/_scraper/filter-url-guard.mjs` (set `PW` to a
