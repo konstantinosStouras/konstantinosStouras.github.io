@@ -18,9 +18,24 @@ name: lit — update analytics summary
 
 on:
   schedule:
-    # 08:10 UTC — after both the native lit build (05:30) and the FT50 catalog
-    # build (07:15) have refreshed and committed their data for the day.
-    - cron: '10 8 * * *'
+    # Hourly catch-up also covers satellite repositories, whose events cannot
+    # trigger workflow_run in this repository.
+    - cron: '17 * * * *'
+  workflow_run:
+    branches: [master]
+    types: [completed]
+    workflows:
+      - 'lit — update multi-journal data'
+      - 'lit — check for newly-published papers (incremental)'
+      - 'lit — update FT50 (merged catalog) data'
+      - 'lit — check for new FT50 catalog papers (incremental)'
+      - 'lit — refresh citation counts'
+      - 'lit-ft50 — refresh citation counts'
+      - 'lit — backfill pre-print links'
+      - 'lit-ft50 — backfill pre-print links'
+      - 'lit — backfill FT50 abstracts (OpenAlex/S2)'
+      - 'lit — backfill ISR/MkSc editors + INFORMS abstracts (pubsonline attempt)'
+      - 'lit — backfill citation graph'
   workflow_dispatch: {}      # run on demand from the Actions tab
   push:
     # Re-run whenever the aggregator or the page itself changes, so a merge
@@ -30,11 +45,18 @@ on:
       - 'lit/_scraper/build-analytics.mjs'
       - 'lit/_scraper/build-disruption.mjs'
       - 'lit/_scraper/build-citeflow.mjs'
+      - 'lit/_scraper/_analytics-inputs.mjs'
+      - 'lit/_scraper/analytics-selftest.mjs'
+      - 'lit/_scraper/verify-analytics-live.mjs'
+      - 'lit/analytics/index.html'
+      - 'lit/data/**'
+      - 'lit/data-ft50/**'
+      - 'lit/data-refs/**'
 
 # Never let two analytics builds race each other.
 concurrency:
   group: lit-analytics-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write            # needed to commit the refreshed summary back
@@ -42,6 +64,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -92,6 +115,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Test analytics filters and calculations
+        run: node lit/_scraper/analytics-selftest.mjs
+
       - name: Build analytics summary
         run: node lit/_scraper/build-analytics.mjs
 
@@ -117,6 +143,9 @@ jobs:
         # if data-refs/ is empty (writes empty maps, the page hides the charts).
         run: node lit/_scraper/build-citeflow.mjs
 
+      - name: Validate the complete analytics snapshot
+        run: node lit/_scraper/analytics-selftest.mjs --data
+
       - name: Commit refreshed analytics
         # Only master carries the committed summary. Feature branches (e.g. a PR
         # that edits the aggregator) still run the build above as a check but do
@@ -128,7 +157,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/analytics/data.json lit/analytics/authors.json lit/analytics/disruption.json lit/analytics/citeflow.json
+          git add lit/analytics/data.json lit/analytics/authors.json lit/analytics/disruption.json lit/analytics/citeflow.json lit/analytics/rankings.json
           if git diff --cached --quiet; then
             echo "No analytics changes — nothing to commit."
             exit 0
@@ -142,6 +171,14 @@ jobs:
             echo "Push rejected (concurrent data commit?) — rebasing onto the tip and retrying…"
             git fetch origin "$GITHUB_REF_NAME"
             git rebase "origin/$GITHUB_REF_NAME" || { git rebase --abort; exit 1; }
+            # Rebase can advance input data; regenerate rather than attaching
+            # an older summary to a newer data commit.
+            node lit/_scraper/build-analytics.mjs
+            node lit/_scraper/build-disruption.mjs
+            node lit/_scraper/build-citeflow.mjs
+            node lit/_scraper/analytics-selftest.mjs --data
+            git add lit/analytics/*.json
+            git commit --amend --no-edit
             sleep 5
           done
           echo "::error::Could not push the refreshed analytics after 4 attempts."
@@ -156,30 +193,15 @@ jobs:
         if: github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LIVE_DISR: https://www.stouras.com/lit/analytics/disruption.json
         run: |
-          want=$(jq -r '.generated // ""' lit/analytics/disruption.json)
-          echo "Committed analytics generated: $want"
-          if [ -z "$want" ]; then echo "No generation date to verify — skipping."; exit 0; fi
-          poll() {  # poll <tries> — succeed once the live disruption.json is generated >= committed
-            for i in $(seq 1 "$1"); do
-              live=$(curl -sf --max-time 25 "$LIVE_DISR?nc=${GITHUB_RUN_ID}-${RANDOM}" | jq -r '.generated // "unreachable"' || echo "unreachable")
-              echo "  try $i/$1: live generated = $live"
-              if [ "$live" != "unreachable" ] && [ -n "$live" ] && [ ! "$live" \< "$want" ]; then return 0; fi
-              sleep 60
-            done
-            return 1
-          }
-          if poll 8; then echo "Live analytics is current (disruption.json served)."; exit 0; fi
-          echo "Live site still stale — requesting a GitHub Pages rebuild..."
+          if node lit/_scraper/verify-analytics-live.mjs --attempts 8; then exit 0; fi
+          echo "Live analytics is stale — requesting a GitHub Pages rebuild..."
           curl -sf -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" \
             || echo "WARNING: Pages rebuild request failed (check token permissions)."
-          if poll 10; then echo "Live analytics recovered after the rebuild request."; exit 0; fi
-          echo "::error::Live analytics still stale (wanted generated >= $want). Re-run this workflow or the pages-build-deployment workflow."
-          exit 1
+          node lit/_scraper/verify-analytics-live.mjs --attempts 10
 
       - name: Summary
         if: always()

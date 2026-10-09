@@ -42,6 +42,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isNonArticle } from './_nonarticle.mjs';
+import { readAnalyticsInput, analyticsSnapshot, latestAnalyticsDate, topByYear } from './_analytics-inputs.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LIT_DIR = path.resolve(__dirname, '..');            // lit
@@ -78,10 +79,10 @@ function shardDir(repo) {
 // ~22 MB, lazy-loaded only when the Author tab opens.
 const AUTHOR_MIN_PAPERS = 3;
 // A journal's most-cited papers to carry, for the "top cited" table.
-const TOP_CITED_PER_JOURNAL = 12;
+const TOP_CITED_PER_JOURNAL = 15;
 // A dimension value's most-cited papers to carry (editor/area/SE/AE), so the
 // "most-cited in scope" table can honour an active editorial filter.
-const DIM_TOP_CITED = 8;
+const DIM_TOP_CITED = 15;
 // Editorial dimensions we aggregate for journals that carry them (accepting
 // editor + area for Management Science; senior/associate editor for ISR and
 // Marketing Science). A value must reach this many papers to be listed as a
@@ -165,10 +166,7 @@ function typesFor(jkey) {
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
-function readJson(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
-  catch { return fallback; }
-}
+function readJson(file) { return readAnalyticsInput(file); }
 
 function authorCount(authorsField) {
   if (!authorsField) return 0;
@@ -211,6 +209,8 @@ function ingestVariants(map, file) {
 // sources, then the FT50 catalog, then the shards in SHARDS order.
 const nativeSources = readJson(path.join(NATIVE_DIR, 'sources.json'), []);
 const ft50Sources = readJson(path.join(FT50_DIR, 'sources.json'), []);
+readJson(path.join(NATIVE_DIR, 'meta.json'));
+readJson(path.join(FT50_DIR, 'meta.json'));
 
 const journalMeta = new Map();   // jkey -> {key, name, publisher, file, dir}
 for (const s of nativeSources) {
@@ -225,9 +225,9 @@ const shardDirs = [];            // the shard data dirs actually found
 for (const repo of SHARD_REPOS) {
   const dir = shardDir(repo);
   if (!dir) {
-    console.warn('build-analytics: WARNING — shard ' + repo + ' not checked out; its journals are omitted from this build.');
-    continue;
+    throw new Error('Missing analytics shard: ' + repo);
   }
+  readJson(path.join(dir, 'meta.json'));
   shardDirs.push(dir);
   for (const s of readJson(path.join(dir, 'sources.json'), [])) {
     if (s.abs && !ABS_RATING[s.key] && !MANIFEST_ABS[s.key]) MANIFEST_ABS[s.key] = s.abs;
@@ -264,7 +264,7 @@ function canonAuthors(authorsField) {
 const authorCites = new Map();   // canonicalName -> total CitedBy across the corpus
 for (const meta of journalMeta.values()) {
   const arr = readJson(path.join(meta.dir, meta.file), []);
-  if (!Array.isArray(arr)) continue;
+  if (!Array.isArray(arr)) throw new Error('Invalid papers array: ' + meta.key);
   for (const p of arr) {
     if (isNonArticle(p.Title)) continue;
     const cites = (typeof p.CitedBy === 'number' && p.CitedBy > 0) ? p.CitedBy : 0;
@@ -275,6 +275,7 @@ for (const meta of journalMeta.values()) {
 
 // ── accumulate ──────────────────────────────────────────────────────────────
 const journals = [];
+const rankingJournals = {};
 // canonicalName -> {p, jy:{jkey:{year:[n, coauthorSlots, paperCites, coauthorCiteSum]}}}
 // jy replaces the old y/j marginals (the page derives those on load): the
 // per-(journal,year) cells let the Author-spotlight compare compute paper
@@ -286,10 +287,12 @@ let yearMin = Infinity, yearMax = -Infinity;
 
 for (const meta of journalMeta.values()) {
   const arr = readJson(path.join(meta.dir, meta.file), []);
-  if (!Array.isArray(arr) || arr.length === 0) continue;
+  if (!Array.isArray(arr)) throw new Error('Invalid papers array: ' + meta.key);
+  if (arr.length === 0) continue;
 
   const years = {};                                 // year -> {n,a,s,p,c,ab,t:[6]}
-  const cited = [];                                 // {t,y,c,a,d}
+  const cited = [];
+  const allCited = [];                                 // {t,y,c,a,d}
   // Editorial-dimension aggregates: dimKey -> value -> { years:{y:row} }. Only
   // populated for journals that carry the field (MS editors/areas, ISR/MkSc
   // SE/AE); mirrors the per-year row shape so the page aggregates them uniformly.
@@ -340,9 +343,43 @@ for (const meta of journalMeta.values()) {
       if (nonArt) bump(row.x || (row.x = { n: 0, a: 0, s: 0, p: 0, c: 0, ab: 0, t: [0, 0, 0, 0, 0, 0] }), na, hasPre, hasAbs, cites);
     }
 
+    if (cites && y != null) allCited.push({ t: p.Title || '', y, c: cites, a: p.Authors || '', d: p.DOI || '', x: nonArt ? 1 : 0 });
+    // author aggregation (canonicalised, one count per paper per author). Each
+    // (author, journal, year) cell carries [n, coauthorSlots, paperCites,
+    // coauthorCiteSum]: n papers; (team−1) summed so avg co-authors = slots/n;
+    // the papers' citations so avg citations/paper = cites/n; and the summed
+    // database-wide total citations of the OTHER authors on those papers so
+    // avg co-author prominence = coauthorCiteSum/coauthorSlots.
+    if (p.Authors) {
+      const team = canonAuthors(p.Authors);
+      const tsize = team.length;
+      let teamCiteSum = 0;
+      for (const m of team) teamCiteSum += authorCites.get(m) || 0;
+      for (const c of team) {
+        let a = authorAgg.get(c);
+        if (!a) { a = { p: 0, jy: {} }; authorAgg.set(c, a); }
+        if (!nonArt) a.p++;
+        if (y != null) {
+          const jj = a.jy[meta.key] || (a.jy[meta.key] = {});
+          const cell = jj[y] || (jj[y] = [0, 0, 0, 0]);
+          cell[0]++;
+          cell[1] += tsize - 1;
+          cell[2] += cites;
+          cell[3] += teamCiteSum - (authorCites.get(c) || 0);
+          if (nonArt) {
+            a.xjy ||= {};
+            const xj = a.xjy[meta.key] || (a.xjy[meta.key] = {});
+            const x = xj[y] || (xj[y] = [0, 0, 0, 0]);
+            x[0]++; x[1] += tsize - 1; x[2] += cites;
+            x[3] += teamCiteSum - (authorCites.get(c) || 0);
+          }
+        }
+      }
+    }
+
     // Everything below is RESEARCH-ONLY: non-research items (front matter, book
     // reviews, errata, …) never enter the most-cited table, the editorial
-    // breakdown or the author aggregates, regardless of the page toggle.
+    // breakdown. Author cells above retain a non-research delta for the toggle.
     if (nonArt) continue;
 
     if (cites) {
@@ -363,31 +400,7 @@ for (const meta of journalMeta.values()) {
       }
     }
 
-    // author aggregation (canonicalised, one count per paper per author). Each
-    // (author, journal, year) cell carries [n, coauthorSlots, paperCites,
-    // coauthorCiteSum]: n papers; (team−1) summed so avg co-authors = slots/n;
-    // the papers' citations so avg citations/paper = cites/n; and the summed
-    // database-wide total citations of the OTHER authors on those papers so
-    // avg co-author prominence = coauthorCiteSum/coauthorSlots.
-    if (p.Authors) {
-      const team = canonAuthors(p.Authors);
-      const tsize = team.length;
-      let teamCiteSum = 0;
-      for (const m of team) teamCiteSum += authorCites.get(m) || 0;
-      for (const c of team) {
-        let a = authorAgg.get(c);
-        if (!a) { a = { p: 0, jy: {} }; authorAgg.set(c, a); }
-        a.p++;
-        if (y != null) {
-          const jj = a.jy[meta.key] || (a.jy[meta.key] = {});
-          const cell = jj[y] || (jj[y] = [0, 0, 0, 0]);
-          cell[0]++;
-          cell[1] += tsize - 1;
-          cell[2] += cites;
-          cell[3] += teamCiteSum - (authorCites.get(c) || 0);
-        }
-      }
-    }
+
   }
 
   cited.sort((x, z) => z.c - x.c);
@@ -395,13 +408,17 @@ for (const meta of journalMeta.values()) {
   // Finalize editorial dimensions: keep values reaching the threshold, stamp a
   // total, attach the value's most-cited papers, and keep only non-empty dims.
   const dims = {};
+  const rankingDims = {};
   for (const d of DIMS) {
     const out = {};
     for (const [val, e] of Object.entries(dimAgg[d.key])) {
       let tot = 0; for (const yy in e.years) tot += e.years[yy].n;
       if (tot < d.min) continue;
       const o = { n: tot, years: e.years };
-      if (e.cited.length) { e.cited.sort((x, z) => z.c - x.c); o.tc = e.cited.slice(0, DIM_TOP_CITED); }
+      if (e.cited.length) {
+        e.cited.sort((x, z) => z.c - x.c); o.tc = e.cited.slice(0, DIM_TOP_CITED);
+        (rankingDims[d.key] ||= {})[val] = topByYear(e.cited);
+      }
       out[val] = o;
     }
     if (Object.keys(out).length) dims[d.key] = out;
@@ -421,6 +438,7 @@ for (const meta of journalMeta.values()) {
   };
   if (Object.keys(dims).length) rec.dims = dims;
   journals.push(rec);
+  rankingJournals[meta.key] = { years: topByYear(allCited), dims: rankingDims };
 }
 
 journals.sort((a, b) => b.papers - a.papers);
@@ -429,7 +447,7 @@ journals.sort((a, b) => b.papers - a.papers);
 const authorsOut = [];
 for (const [name, a] of authorAgg) {
   if (a.p < AUTHOR_MIN_PAPERS) continue;
-  authorsOut.push({ n: name, p: a.p, jy: a.jy });
+  authorsOut.push({ n: name, p: a.p, jy: a.jy, ...(a.xjy ? { xjy: a.xjy } : {}) });
 }
 authorsOut.sort((a, b) => b.p - a.p);
 
@@ -437,16 +455,18 @@ authorsOut.sort((a, b) => b.p - a.p);
 // The generation date is read from the native meta.json (its lastPull), never
 // from Date.now(), so re-runs on the same dataset are deterministic.
 const nativeMeta = readJson(path.join(NATIVE_DIR, 'meta.json'), {});
-const generated = nativeMeta.lastPull || '';
+const generated = latestAnalyticsDate();
+const snapshot = analyticsSnapshot();
 
 const data = {
   generated,
+  snapshot,
   yearMin: Number.isFinite(yearMin) ? yearMin : null,
   yearMax: Number.isFinite(yearMax) ? yearMax : null,
   totals: {
     papers: totPapers,
     journals: journals.length,
-    authors: authorAgg.size,
+    authors: [...authorAgg.values()].filter(a => a.p > 0).length,
     withPreprint: totPre,
     withAbstract: totAbs,
     citations: totCitations,
@@ -462,6 +482,7 @@ const data = {
 
 const authorsFile = {
   generated,
+  snapshot,
   minPapers: AUTHOR_MIN_PAPERS,
   count: authorsOut.length,
   authors: authorsOut,
@@ -470,6 +491,7 @@ const authorsFile = {
 fs.mkdirSync(OUT_DIR, { recursive: true });
 fs.writeFileSync(path.join(OUT_DIR, 'data.json'), JSON.stringify(data));
 fs.writeFileSync(path.join(OUT_DIR, 'authors.json'), JSON.stringify(authorsFile));
+fs.writeFileSync(path.join(OUT_DIR, 'rankings.json'), JSON.stringify({ generated, snapshot, journals: rankingJournals }));
 
 const kb = f => (fs.statSync(path.join(OUT_DIR, f)).size / 1024).toFixed(0);
 console.log('build-analytics: wrote analytics/data.json (' + kb('data.json') + ' KB) and analytics/authors.json (' + kb('authors.json') + ' KB)' +

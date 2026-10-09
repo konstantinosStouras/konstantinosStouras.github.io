@@ -560,15 +560,15 @@
           <div class="evo-hint" id="evoHint" style="display:none">Click a legend entry to hide or show that line. The year axis trims to when the shown journals actually have papers.</div>
         </div>
         <div class="card wide">
-          <h3>Citations over time</h3>
-          <div class="csub" id="citeEvoSub">Citations received per year</div>
+          <h3>Lifetime citations by publication year</h3>
+          <div class="csub" id="citeEvoSub">Current lifetime citations of papers, grouped by publication year</div>
           <div id="citeEvoChart"></div>
           <div class="legend toggleable" id="citeEvoLegend"></div>
           <div class="grp-toggles" id="grpCiteEvo"></div>
           <div class="evo-hint" id="citeEvoHint" style="display:none">Click a legend entry to hide or show that line. The year axis trims to when the shown journals actually have citations.</div>
         </div>
         <div class="card">
-          <h3>Average co-authors per paper</h3>
+          <h3>Average authors per paper</h3>
           <div class="csub" id="coSub">Mean number of authors, by year</div>
           <div id="coChart"></div>
           <div class="legend" id="coLegend"></div>
@@ -576,7 +576,7 @@
         </div>
         <div class="card">
           <h3>Co-authorship distribution</h3>
-          <div class="csub" id="teamSub">Share of papers by number of authors, within scope</div>
+          <div class="csub" id="teamSub">Share of papers with known authors, by team size, within scope</div>
           <div id="teamChart"></div>
           <div class="legend" id="teamLegend"></div>
           <div class="grp-toggles" id="grpTeam"></div>
@@ -817,7 +817,14 @@
   // p-th quantile (0..1) of an ALREADY-SORTED ascending array.
   function quantileSorted(sorted, p) { if (!sorted.length) return 0; var i = p * (sorted.length - 1); var lo = Math.floor(i), hi = Math.ceil(i); if (lo === hi) return sorted[lo]; return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo); }
   // percentile rank (0..100) of value v within an ascending sorted array.
-  function pctRankSorted(sorted, v) { if (!sorted.length) return 0; var lo = 0, hi = sorted.length; while (lo < hi) { var mid = (lo + hi) >> 1; if (sorted[mid] < v) lo = mid + 1; else hi = mid; } return lo / sorted.length * 100; }
+  function pctRankSorted(sorted, v) {
+    if (!sorted.length) return 0;
+    var lo = 0, hi = sorted.length;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (sorted[mid] < v) lo = mid + 1; else hi = mid; }
+    var first = lo; hi = sorted.length;
+    while (lo < hi) { var mid2 = (lo + hi) >> 1; if (sorted[mid2] <= v) lo = mid2 + 1; else hi = mid2; }
+    return (first + lo) / (2 * sorted.length) * 100;
+  }
 
   // The journals currently in scope: union of selected types' journals and
   // explicitly-checked journals. Nothing selected ⇒ the whole corpus.
@@ -1211,7 +1218,7 @@
       // counts everything (front matter, book reviews, errata included).
       { label: 'Papers', value: fmt(agg.n), hint: S.excludeNonResearch ? (agg.xn ? fmt(agg.xn) + ' non-research items excluded' : 'research items only') : undefined },
       { label: 'Journals in scope', value: fmt(jcount) },
-      { label: 'Avg. co-authors', value: avgCo.toFixed(2), hint: 'authors per paper' },
+      { label: 'Avg. authors', value: avgCo.toFixed(2), hint: 'authors per paper; missing lists count as 0' },
       { label: 'Solo-authored', value: agg.n ? pct(agg.s / agg.n) : '—' },
       { label: 'With pre-print', value: agg.n ? pct(agg.p / agg.n) : '—', hint: 'free open-access copy' },
       { label: 'With abstract', value: agg.n ? pct(agg.ab / agg.n) : '—' },
@@ -1290,10 +1297,10 @@
   function renderCitesOverTime(keys) {
     renderTimeSeries({ keys: keys, plot: 'citeEvo', metric: function (r) { return r.c; }, hidden: S.citeEvoHidden,
       els: { chart: 'citeEvoChart', legend: 'citeEvoLegend', grp: 'grpCiteEvo', hint: 'citeEvoHint', sub: 'citeEvoSub' },
-      subPrefix: 'Citations per year', emptySub: 'Citations received per year', redraw: function () { renderCitesOverTime(scopeKeys()); } });
+      subPrefix: 'Lifetime citations by publication year', emptySub: 'Current lifetime citations of papers, grouped by publication year', redraw: function () { renderCitesOverTime(scopeKeys()); } });
   }
 
-  // Average co-authors per paper, drawn as ONE LINE PER in-scope journal (the
+  // Average authors per paper, drawn as ONE LINE PER in-scope journal (the
   // largest first, capped like the volume chart) so you can compare team size
   // across the journals you've chosen; the subtitle keeps the overall mean.
   function renderCoauthors(agg, keys) {
@@ -1336,7 +1343,7 @@
     $('coLegend').innerHTML = drawSeries.map(function (s) { return '<span class="li' + (s.dash ? ' grp' : '') + '"><span class="sw" style="background:' + s.color + '"></span>' + esc(s.name) + '</span>'; }).join('');
     renderGroupToggles('grpCo', 'co', groups, function () { var kk = scopeKeys(); renderCoauthors(aggregate(kk), kk); });
     var dsum = dimActive() ? ' · ' + dimSummary() : '';
-    $('coSub').textContent = 'Mean authors per paper, by journal — overall ' + avg.toFixed(2) + ' in scope' + (hidden ? ' (top ' + focus.length + ' of ' + pool.length + ')' : '') + ' · ' + lo + '–' + hi + dsum;
+    $('coSub').textContent = 'Mean authors per paper (missing author lists count as 0), by journal — overall ' + avg.toFixed(2) + ' in scope' + (hidden ? ' (top ' + focus.length + ' of ' + pool.length + ')' : '') + ' · ' + lo + '–' + hi + dsum;
   }
 
   function renderTeam(agg) {
@@ -1355,7 +1362,7 @@
       ? '<span class="li"><span class="sw" style="background:' + NAVY + '"></span>Selected scope</span>' + overlays.map(function (o) { return '<span class="li grp"><span class="sw" style="background:' + o.color + '"></span>' + esc(o.name) + '</span>'; }).join('')
       : '';
     renderGroupToggles('grpTeam', 'team', groups, function () { renderTeam(aggregate(scopeKeys())); });
-    $('teamSub').textContent = 'Share of papers by number of authors, within scope' + (overlays.length ? ' — dashed lines are peer groups' : '');
+    $('teamSub').textContent = 'Share of papers with known authors, by team size, within scope' + (overlays.length ? ' — dashed lines are peer groups' : '');
   }
 
   function typeColor(t) { return { utd24: '#5e35b1', ft50: '#1565a7', abs4: '#2e7d47', abs3: '#8a7326' }[t] || NAVY; }
@@ -1646,7 +1653,27 @@
     $('areaTrendSub').textContent = 'Management Science papers per year, by editorial area' + (areas.length > top.length ? ' (top ' + top.length + ' of ' + areas.length + ')' : '') + ' · ' + lo + '–' + hi;
   }
 
+  var RANKINGS = null, rankingsState = 'idle';
+  function ensureRankings() {
+    if (rankingsState === 'loading') return;
+    rankingsState = 'loading';
+    fetch('./rankings.json').then(function (r) { if (!r.ok) throw new Error('Rankings unavailable'); return r.json(); }).then(function (data) {
+      if (DATA.snapshot && data.snapshot && DATA.snapshot.sha256 !== data.snapshot.sha256) throw new Error('Rankings snapshot mismatch');
+      RANKINGS = data; rankingsState = 'ready';
+      if (S.tab === 'overview') renderCited(scopeKeys());
+    }).catch(function () {
+      rankingsState = 'failed';
+      $('citedTable').innerHTML = '<div class="chart-empty">Could not load the most-cited rankings. Reload to try again.</div>';
+    });
+  }
   function renderCited(keys) {
+    if (rankingsState !== 'ready') {
+      if (rankingsState !== 'failed') {
+        $('citedTable').innerHTML = '<div class="chart-empty">Loading the most-cited rankings…</div>';
+        ensureRankings();
+      }
+      return;
+    }
     // Under an active editorial filter, draw the most-cited papers of the
     // selected editor/area/SE/AE values (dims[name][val].tc); otherwise the
     // per-journal topCited lists. Dedup by DOI/title (a paper can sit under two
@@ -1654,16 +1681,19 @@
     var rows = [], seen = {}, name = S.dim.name, vals = activeDimVals(), on = dimActive();
     function push(p, jname) {
       var y = +p.y; if (p.y && (y < S.yMin || y > S.yMax)) return;
+      if (S.excludeNonResearch && p.x) return;
       var id = p.d || p.t; if (seen[id]) return; seen[id] = 1;
       rows.push({ t: p.t, y: p.y, c: p.c, a: p.a, d: p.d, j: jname });
     }
     keys.forEach(function (k) {
-      var j = JMAP[k];
+      var j = JMAP[k], ranking = RANKINGS.journals[k];
+      if (!ranking) return;
+      function collect(years) { for (var yy in years) { if (+yy >= S.yMin && +yy <= S.yMax) years[yy].forEach(function (p) { push(p, j.name); }); } }
       if (on) {
-        if (!j.dims || !j.dims[name]) return;
-        vals.forEach(function (v) { var e = j.dims[name][v]; if (e && e.tc) e.tc.forEach(function (p) { push(p, j.name); }); });
+        if (!ranking.dims || !ranking.dims[name]) return;
+        vals.forEach(function (v) { if (ranking.dims[name][v]) collect(ranking.dims[name][v]); });
       } else {
-        (j.topCited || []).forEach(function (p) { push(p, j.name); });
+        collect(ranking.years);
       }
     });
     rows.sort(function (a, b) { return b.c - a.c; });
@@ -1828,6 +1858,7 @@
   function renderAuthor() {
     authorViewSeq++;
     renderAuthorChips();
+    $('authorHint').textContent = 'Journal, year and non-research filters apply. Editorial selections and the D range apply to the corpus team-science view.';
     if (!S.authors.length) {
       $('authorBody').innerHTML = '<div class="aspot-empty">Add one or more authors above to see their publication record across The Lit — and compare several side by side: how many papers, in which journals, and how their output has evolved over time.</div>';
       return;
@@ -1843,6 +1874,21 @@
   // co-author citation sum] — over either the CURRENT filters (journal scope ∩
   // year range) or their whole record. Feeds the collaboration rows of the
   // compare table; returns zeros for an old authors.json without jy.
+  function authorProjection(a, scoped) {
+    var keys = {}; scopeKeys().forEach(function (k) { keys[k] = 1; });
+    var out = { n: 0, y: {}, j: {} };
+    for (var jk in (a.jy || {})) {
+      if (scoped && !keys[jk]) continue;
+      for (var yy in a.jy[jk]) {
+        if (scoped && (+yy < S.yMin || +yy > S.yMax)) continue;
+        var count = a.jy[jk][yy][0];
+        if (S.excludeNonResearch && a.xjy && a.xjy[jk] && a.xjy[jk][yy]) count -= a.xjy[jk][yy][0];
+        if (!count) continue;
+        out.n += count; out.y[yy] = (out.y[yy] || 0) + count; out.j[jk] = (out.j[jk] || 0) + count;
+      }
+    }
+    return out;
+  }
   function authorJYStats(a, scoped) {
     var scope = null;
     if (scoped) { scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; }); }
@@ -1853,31 +1899,33 @@
       var ys = jy[jk];
       for (var yy in ys) {
         if (scoped && (+yy < S.yMin || +yy > S.yMax)) continue;
-        var r = ys[yy];
-        out.n += r[0]; out.ca += r[1]; out.c += r[2]; out.cc += r[3];
+        var r = ys[yy], x = S.excludeNonResearch && a.xjy && a.xjy[jk] && a.xjy[jk][yy] || [0, 0, 0, 0];
+        out.n += r[0] - x[0]; out.ca += r[1] - x[1]; out.c += r[2] - x[2]; out.cc += r[3] - x[3];
       }
     }
     return out;
   }
 
   function drawCompare(list) {
+    var projections = list.map(function (a) { return authorProjection(a, true); });
     // Auto-start the x-axis at the earliest first-publication among the compared
     // authors when the user hasn't set a start year (same cosmetic trim of
     // leading empty years as the single-author view in drawAuthor).
     var firstPubY = Infinity;
-    list.forEach(function (a) { var ks = Object.keys(a.y || {}); for (var i = 0; i < ks.length; i++) { var yy = +ks[i]; if (yy < firstPubY) firstPubY = yy; } });
+    projections.forEach(function (a) { var ks = Object.keys(a.y || {}); for (var i = 0; i < ks.length; i++) { var yy = +ks[i]; if (yy < firstPubY) firstPubY = yy; } });
     var axisLo = (S.yMin <= YEAR_LO && isFinite(firstPubY)) ? Math.max(firstPubY, YEAR_LO) : S.yMin;
     if (!(axisLo <= S.yMax)) axisLo = S.yMin;
     var years = []; for (var y = axisLo; y <= S.yMax; y++) years.push(y);
     var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
     var series = list.map(function (a, i) {
-      return { name: a.n, color: authorColor(i), pts: years.map(function (yy) { return [yy, a.y[yy] || 0]; }) };
+      return { name: a.n, color: authorColor(i), pts: years.map(function (yy) { return [yy, projections[i].y[yy] || 0]; }) };
     });
     var mets = list.map(function (a) {
-      var yrs = Object.keys(a.y).map(Number).sort(function (x, z) { return x - z; });
-      var inRange = 0; yrs.forEach(function (yy) { if (yy >= S.yMin && yy <= S.yMax) inRange += a.y[yy]; });
-      var allJ = Object.keys(a.j), inScope = 0; allJ.forEach(function (k) { if (scope[k]) inScope += a.j[k]; });
-      return { p: a.p, inRange: inRange, inScope: inScope, nj: allJ.length, span: (yrs[yrs.length - 1] - yrs[0] + 1), first: yrs[0], last: yrs[yrs.length - 1],
+      var all = authorProjection(a, false);
+      var yrs = Object.keys(all.y).map(Number).sort(function (x, z) { return x - z; });
+      var inRange = 0; yrs.forEach(function (yy) { if (yy >= S.yMin && yy <= S.yMax) inRange += all.y[yy]; });
+      var allJ = Object.keys(all.j), inScope = 0; allJ.forEach(function (k) { if (scope[k]) inScope += all.j[k]; });
+      return { p: authorProjection(a, false).n, inRange: inRange, inScope: inScope, nj: allJ.length, span: (yrs[yrs.length - 1] - yrs[0] + 1), first: yrs[0], last: yrs[yrs.length - 1],
                f: authorJYStats(a, true), all: authorJYStats(a, false) };
     });
     var hasJY = list.some(function (a) { return a.jy; });
@@ -1885,7 +1933,7 @@
     var rows = [
       ['Papers (all time)', function (m) { return fmt(m.p); }],
       ['In year range (' + S.yMin + '–' + S.yMax + ')', function (m) { return fmt(m.inRange); }],
-      ['In current journal scope', function (m) { return fmt(m.inScope); }],
+      ['In selected journals and years', function (m) { return fmt(m.f.n); }],
       ['Number of different journals', function (m) { return fmt(m.nj); }, 'The count of distinct journals this author has published in (across all their papers in the database).'],
       ['Active span', function (m) { return m.span + ' yrs'; }],
       ['First–last year', function (m) { return m.first + '–' + m.last; }]
@@ -1898,9 +1946,9 @@
         ['Avg co-authors per paper (all papers)', function (m) { return m.all.n ? (m.all.ca / m.all.n).toFixed(2) : dash; },
           'Mean number of co-authors across all of this author’s papers in the database.'],
         ['Avg citations of co-authors (in filters)', function (m) { return m.f.ca ? fmt(Math.round(m.f.cc / m.f.ca)) : dash; },
-          'How cited the people they work with are: each co-author’s TOTAL citations across the whole database, averaged over the co-authors of this author’s papers within the current filters.'],
+          'How cited the people they work with are: each co-author’s TOTAL citations across research papers in the database, averaged over the co-authors of this author’s papers within the current filters.'],
         ['Avg citations of co-authors (all papers)', function (m) { return m.all.ca ? fmt(Math.round(m.all.cc / m.all.ca)) : dash; },
-          'Each co-author’s total citations across the whole database, averaged over the co-authors of ALL this author’s papers.'],
+          'Each co-author’s total citations across research papers in the database, averaged over the co-authors of ALL this author’s papers.'],
         ['Avg citations per paper (in filters)', function (m) { return m.f.n ? (m.f.c / m.f.n).toFixed(1) : dash; },
           'Mean citations received by this author’s papers within the current journal scope and year range.'],
         ['Avg citations per paper (all papers)', function (m) { return m.all.n ? (m.all.c / m.all.n).toFixed(1) : dash; },
@@ -1919,19 +1967,19 @@
     tbody += '<tr id="cmpDisrRow"><td class="metric" title="Mean of the disruption index D over this author’s papers with a computed D that fall within the current journal scope and year range; the count of those papers is in parentheses.">Mean disruption Dⱼ (in filters)</td>' + list.map(function () { return '<td>—</td>'; }).join('') + '</tr>';
     tbody += '<tr id="cmpDisrRowAll"><td class="metric" title="Mean of the disruption index D over EVERY paper of this author in the database with a computed D, ignoring the filters; the count of those papers is in parentheses.">Mean disruption Dⱼ (all papers)</td>' + list.map(function () { return '<td>—</td>'; }).join('') + '</tr>';
 
-    var jtot = {}; list.forEach(function (a) { for (var k in a.j) jtot[k] = (jtot[k] || 0) + a.j[k]; });
+    var jtot = {}; projections.forEach(function (a) { for (var k in a.j) jtot[k] = (jtot[k] || 0) + a.j[k]; });
     var jkeys = Object.keys(jtot).sort(function (x, z) { return jtot[z] - jtot[x]; }).slice(0, 16);
     var jhead = '<th>Journal</th>' + list.map(function (a, i) { return '<th><span class="sw" style="background:' + authorColor(i) + '"></span>' + esc(a.n) + '</th>'; }).join('');
     var jrows = jkeys.map(function (k) {
       var nm = JMAP[k] ? JMAP[k].name : k, inS = scope[k];
       return '<tr><td class="metric' + (inS ? '' : ' grey') + '">' + esc(nm) + '</td>' +
-        list.map(function (a) { return '<td' + (inS ? '' : ' class="grey"') + '>' + (a.j[k] ? fmt(a.j[k]) : '·') + '</td>'; }).join('') + '</tr>';
+        projections.map(function (a) { return '<td>' + (a.j[k] ? fmt(a.j[k]) : '·') + '</td>'; }).join('') + '</tr>';
     }).join('');
 
     var html = '<div class="cards">';
     html += '<div class="card wide"><h3>Publications per year</h3><div class="csub">Comparing ' + list.length + ' authors across ' + axisLo + '–' + S.yMax + '</div><div id="cmpTimeline"></div><div class="legend" id="cmpLegend"></div></div>';
     html += '<div class="card wide"><h3>At a glance</h3><div class="csub">Key figures side by side — journal-scope and year filters apply</div><div class="tblscroll"><table class="cmp"><thead><tr>' + head + '</tr></thead><tbody>' + tbody + '</tbody></table></div></div>';
-    html += '<div class="card wide"><h3>Where they publish</h3><div class="csub">Papers per journal (top 16) — journals outside your current scope are greyed</div><div class="tblscroll"><table class="cmp"><thead><tr>' + jhead + '</tr></thead><tbody>' + jrows + '</tbody></table></div></div>';
+    html += '<div class="card wide"><h3>Where they publish</h3><div class="csub">Papers per journal (top 16) — selected journals and years</div><div class="tblscroll"><table class="cmp"><thead><tr>' + jhead + '</tr></thead><tbody>' + jrows + '</tbody></table></div></div>';
     html += '</div>';
     $('authorBody').innerHTML = html;
     $('cmpTimeline').innerHTML = lineChart(series, { years: years });
@@ -1966,26 +2014,27 @@
           cell.style.color = md > 0.02 ? C_DISRUPT : (md < -0.02 ? C_DEVELOP : '');
         });
       };
-      fill(rowScoped, function (p) { return scope[p.j] && p.y != null && p.y >= S.yMin && p.y <= S.yMax; });
-      fill(rowAll, function () { return true; });
+      fill(rowScoped, function (p) { return scope[p.j] && p.y != null && p.y >= S.yMin && p.y <= S.yMax && !(S.excludeNonResearch && p.x); });
+      fill(rowAll, function (p) { return !(S.excludeNonResearch && p.x); });
     });
   }
 
   function drawAuthor(a) {
-    // respect the year window; journal scope is shown but not restrictive here
+    var filtered = authorProjection(a, true), all = authorProjection(a, false);
+    // Every chart uses the same journal/year intersection; lifetime tiles are explicit.
     var years = [];
-    var yrs = Object.keys(a.y).map(Number).sort(function (x, z) { return x - z; });
-    var inRangePapers = 0, allJ = Object.keys(a.j);
-    yrs.forEach(function (y) { if (y >= S.yMin && y <= S.yMax) inRangePapers += a.y[y]; });
+    var yrs = Object.keys(all.y).map(Number).sort(function (x, z) { return x - z; });
+    var inRangePapers = 0, allJ = Object.keys(all.j);
+    yrs.forEach(function (y) { if (y >= S.yMin && y <= S.yMax) inRangePapers += all.y[y]; });
     var firstY = yrs[0], lastY = yrs[yrs.length - 1];
     var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
-    var inScope = 0; allJ.forEach(function (k) { if (scope[k]) inScope += a.j[k]; });
+    var inScope = 0; allJ.forEach(function (k) { if (scope[k]) inScope += all.j[k]; });
 
     var citAll = authorJYStats(a, false), citFil = authorJYStats(a, true);
     var tiles = [
-      { label: 'Papers (all time)', value: fmt(a.p) },
+      { label: 'Papers (all time)', value: fmt(all.n) },
       { label: 'In year range', value: fmt(inRangePapers), hint: S.yMin + '–' + S.yMax },
-      { label: 'In current journal scope', value: fmt(inScope) },
+      { label: 'In selected journals and years', value: fmt(filtered.n) },
       { label: 'Different journals', value: fmt(allJ.length) },
       { label: 'Active span', value: (lastY - firstY + 1) + ' yrs', hint: firstY + '–' + lastY },
       { label: 'Total citations (all papers)', value: fmt(citAll.c) },
@@ -2000,10 +2049,10 @@
     var axisLo = (S.yMin <= YEAR_LO && isFinite(firstY)) ? Math.max(firstY, YEAR_LO) : S.yMin;
     if (!(axisLo <= S.yMax)) axisLo = S.yMin;
     var axis = []; for (var y = axisLo; y <= S.yMax; y++) axis.push(y);
-    var tItems = axis.map(function (y) { return { label: (y % 10 === 0 || y === axisLo || y === S.yMax) ? "'" + String(y).slice(2) : '', value: a.y[y] || 0 }; });
+    var tItems = axis.map(function (y) { return { label: (y % 10 === 0 || y === axisLo || y === S.yMax) ? "'" + String(y).slice(2) : '', value: filtered.y[y] || 0 }; });
     // collapse to a cleaner bar count if the range is huge: bucket by year still fine (<=~75 bars)
-    var jItems = allJ.map(function (k) {
-      return { label: JMAP[k] ? JMAP[k].name : k, value: a.j[k], color: scope[k] ? NAVY : '#c9b8be' };
+    var jItems = Object.keys(filtered.j).map(function (k) {
+      return { label: JMAP[k] ? JMAP[k].name : k, value: filtered.j[k], color: NAVY };
     }).sort(function (x, z) { return z.value - x.value; });
 
     var html = '';
@@ -2011,7 +2060,7 @@
     html += '<div class="tiles">' + tiles.map(function (t) { return '<div class="tile"><div class="label">' + t.label + '</div><div class="value sm">' + t.value + '</div>' + (t.hint ? '<div class="hint">' + t.hint + '</div>' : '') + '</div>'; }).join('') + '</div>';
     html += '<div class="cards">';
     html += '<div class="card wide"><h3>Publications per year</h3><div class="csub">' + esc(a.n) + '’s output across ' + axisLo + '–' + S.yMax + '</div><div id="aTimeline"></div></div>';
-    html += '<div class="card wide"><h3>Where they publish</h3><div class="csub">Papers per journal — bars in claret are in your current journal scope</div><div id="aJournals"></div></div>';
+    html += '<div class="card wide"><h3>Where they publish</h3><div class="csub">Papers per journal — selected journals and years (top 16)</div><div id="aJournals"></div></div>';
     // Disruption profile — populated async from ./disruption.json, revealed only
     // if this author has scored papers in the current scope (see renderAuthorDisruption).
     html += '<div class="card wide" id="aDisrupt" style="display:none"><h3>Disruption profile</h3><div id="aDisruptBody"></div></div>';
@@ -2035,7 +2084,7 @@
       var id = disrNameToId[String(a.n || '').toLowerCase()];
       if (id == null) return;                                      // author not in the citation graph
       var scope = {}; scopeKeys().forEach(function (k) { scope[k] = 1; });
-      var mine = DISR.papers.filter(function (p) { return p.au && p.au.indexOf(id) !== -1 && scope[p.j] && p.y != null && p.y >= S.yMin && p.y <= S.yMax; });
+      var mine = DISR.papers.filter(function (p) { return p.au && p.au.indexOf(id) !== -1 && scope[p.j] && p.y != null && p.y >= S.yMin && p.y <= S.yMax && !(S.excludeNonResearch && p.x); });
       if (!mine.length) return;
       var ds = mine.map(function (p) { return p.d; }), meanD = mean(ds);
       // percentile is against the journal+year population (NOT the D-slider range),
@@ -2727,7 +2776,7 @@
     $('disrScissorLegend').innerHTML =
       '<span class="li"><span class="sw" style="background:' + C_DISRUPT + '"></span>Average disruption percentile, 0–100 (left)</span>' +
       '<span class="li"><span class="sw" style="background:' + C_CITE + '"></span>Median citations (right)</span>';
-    $('disrScissorSub').innerHTML = 'Adapted from the headline figure of <a href="https://www.nature.com/articles/s41586-019-0941-9" target="_blank" rel="noopener">Wu <em>et&nbsp;al.</em> (<em>Nature</em>&nbsp;570, 2019)</a>: across their 24&nbsp;million articles, median citations (red, right axis) <em>rise</em> with team size while the average <strong>disruption percentile</strong> (blue, left axis) — each paper’s <em>D</em> ranked 0–100 among the scored papers in this slice — <em>falls</em>: large teams develop science, small teams disrupt it. In our database the disruption curve is still nearly flat: most papers have only a handful of in-catalog citers so far, which pulls every team-size bin toward the 50th percentile. The gradient should emerge as the citation graph fills in.';
+    $('disrScissorSub').innerHTML = 'Adapted from the headline figure of <a href="https://www.nature.com/articles/s41586-019-0941-9" target="_blank" rel="noopener">Wu <em>et&nbsp;al.</em> (<em>Nature</em>&nbsp;570, 2019)</a>: across their 24&nbsp;million articles, median citations (red, right axis) <em>rise</em> with team size while the average <strong>disruption percentile</strong> (blue, left axis) — each paper’s <em>D</em> ranked 0–100 among the scored papers in this slice (ties receive their midrank) — <em>falls</em>: large teams develop science, small teams disrupt it. These curves describe the mapped citation graph in the selected scope. Its limited coverage can affect the pattern; additional data need not reproduce the same gradient.';
   }
 
   // Plot C — reference age (left) vs reference popularity (right) by team size.
