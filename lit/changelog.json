@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "compact-search-refinement",
+      "date": "2026-10-09",
+      "title": "More room for papers, with Refine search",
+      "summary": "The full search form scrolls away while a compact bar keeps your result count, active filters and Refine search within reach. Edit filters in a side panel on desktop or a sheet on mobile; closing it preserves your reading position. Shared searches open at the results.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "faster-journal-type-and-field-search",
       "date": "2026-10-09",
       "title": "Faster FT50 and other broad searches",

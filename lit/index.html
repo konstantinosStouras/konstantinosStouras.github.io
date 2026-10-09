@@ -105,61 +105,11 @@
   .header-meta { color: rgba(255,255,255,0.6); font-size: 13px; text-align: right; }
   .header-meta strong { color: rgba(255,255,255,0.9); font-weight: 500; }
 
-  /* Sticky, self-condensing top bar (navy header + filters + tab buttons). */
-  .topbar { position: sticky; top: 0; z-index: 100; }
-  /* Opt the page scroller out of browser scroll anchoring — but only where the
-     bar is sticky and self-condensing (the same >=769px breakpoint as the
-     .compact toggle; phones keep native anchoring). Condensing the bar shrinks
-     the page by 100-200px (the transitions make it land over ~200ms), and
-     Chrome/Firefox anchoring compensates by pulling scrollY back the same
-     amount to hold the visible card still. That adjustment can re-cross
-     applyCompact's expand threshold, which re-expands the bar, which pushes
-     scrollY forward again — an endless expand/condense loop that shakes the
-     whole screen at scroll positions just past COMPACT_ON. The hysteresis in
-     applyCompact assumes scrollY is invariant under the bar's height change;
-     this restores that invariant (Safari never anchored, so it was already
-     true there). No visual cost: the bar is the only above-viewport element
-     whose height changes, and content below the stuck bar keeps its position
-     relative to the bar's bottom edge either way. */
-  @media (min-width: 769px) { html { overflow-anchor: none; } }
-  .header-inner { transition: padding 0.2s ease; }
-  .header h1 { transition: font-size 0.2s ease; }
-  .filter-group input, .custom-select-trigger { transition: all 0.18s ease; }
-  body.compact .header-inner { padding-top: 8px; padding-bottom: 8px; }
-  body.compact .header h1 { font-size: 18px; }
-  body.compact .header-meta { display: none; }
-  body.compact .filters-bar { padding: 8px 0; }
-  body.compact .filter-group label { display: none; }
-  body.compact .filter-group input,
-  body.compact .custom-select-trigger,
-  body.compact .filter-group select,
-  body.compact .btn { height: 40px; font-size: 15px; padding-top: 8px; padding-bottom: 8px; }
-  body.compact .filter-actions { padding-top: 0; }
-  body.compact .filters-row { gap: 8px; }
-  body.compact .filters-row + .filters-row { margin-top: 8px; }
-  body.compact .summary-tab-btns { margin-top: 8px !important; }
-  body.compact .summary-tab-btn,
-  body.compact .recent-tab-btn { padding: 6px 14px; font-size: 13px; }
-  @media (max-width: 768px) { .topbar { position: static; } }
-
+  /* The full form scrolls normally; only the compact results bar sticks. */
+  .topbar { position: relative; }
   .filters-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; box-shadow: var(--shadow-sm); transition: padding 0.2s ease; }
   .filters-inner { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
-  /* Collapse/minimise the whole filter panel so the results are easier to browse. */
-  .filters-collapse-row { display: flex; justify-content: center; margin-top: 14px; }
-  .filters-collapse-btn { display: inline-flex; align-items: center; gap: 7px; font-family: 'Work Sans', sans-serif; font-size: 13px; font-weight: 700; color: #256b1e; background: #e9f6e2; border: 1.5px solid #8fce70; border-radius: 100px; padding: 7px 20px; cursor: pointer; transition: all .15s; }
-  .filters-collapse-btn:hover,
-  .filters-bar.collapsed:hover .filters-collapse-btn,
-  .filters-collapse-row:hover .filters-collapse-btn { color: #1c5417; border-color: #5ea943; background: #d9efcc; }
-  .filters-collapse-btn .fc-ico { font-size: 9px; line-height: 1; }
-  /* The whole strip toggles the filters (see the delegated click handler next
-     to toggleFilterPanel), so cue it: the collapsed bar and, when expanded,
-     the otherwise-empty button row read as clickable. */
-  .filters-bar.collapsed { cursor: pointer; }
-  .filters-collapse-row { cursor: pointer; }
-  .filters-bar.collapsed { padding-top: 10px; padding-bottom: 6px; }
-  .filters-bar.collapsed .filters-row,
-  .filters-bar.collapsed .summary-tab-btns { display: none !important; }
-  .filters-bar.collapsed .filters-collapse-row { margin-top: 0; }
+  .filters-collapse-row { display: flex; justify-content: center; margin-top: 16px; }
   /* In "My Library" the paper-search filter bar (journal types, journals, text,
      year…) doesn't apply — the library has its own search + list/tag chips — so
      hide the whole bar (including the Show/Hide-filters toggle) while it's open. */
@@ -820,6 +770,63 @@
   .alert-switch input:checked + .track { background: var(--green); }
   .alert-switch input:checked + .track + .knob { transform: translateX(18px); }
   @media (max-width: 560px) { .alert-delivery { grid-template-columns: 1fr; } }
+
+  /* Compact reading bar and on-demand refinement. No scroll-driven resizing. */
+  .lit-search-summary { position: sticky; top: 0; z-index: 100; background: var(--white); border-bottom: 1px solid var(--border); padding-top: 12px; padding-bottom: 12px; gap: 10px; box-shadow: var(--shadow-sm); }
+  .lit-search-summary .results-count { flex: 0 1 230px; font-size: 13px; }
+  .lit-search-summary .results-count:empty::before { content: 'Search papers'; }
+  .lit-active-filters { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .lit-active-filter { border: 0; border-radius: 20px; background: var(--navy-light); color: var(--navy); padding: 7px 11px; font: 500 12px 'Work Sans', sans-serif; cursor: pointer; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lit-active-filter:hover { background: #ecd7dd; }
+  .lit-refine-button { font-size: 14px; white-space: nowrap; padding: 10px 14px; }
+  .lit-search-summary .sort-control { gap: 5px; font-size: 12px; }
+  .lit-search-summary .sort-control select { font-size: 13px; padding: 9px 6px; max-width: 105px; }
+  body.lit-lib-mode .lit-active-filters, body.lit-lib-mode .lit-refine-button,
+  body.lit-shared-mode .lit-active-filters, body.lit-shared-mode .lit-refine-button { display: none; }
+  body.lit-lib-mode .lit-search-summary, body.lit-shared-mode .lit-search-summary { position: static; }
+  body.lit-refining { overflow: hidden; }
+  html:has(body.lit-refining) { scrollbar-gutter: stable; }
+  .lit-refine-dialog { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(440px, 100%); max-width: 100%; height: 100%; height: 100dvh; max-height: 100dvh; padding: 0; border: 0; border-left: 1px solid var(--border); background: var(--white); color: var(--text); box-shadow: -8px 0 40px rgba(0,0,0,.12); }
+  .lit-refine-dialog[open] { display: flex; flex-direction: column; }
+  .lit-refine-dialog::backdrop { background: rgba(25,15,22,.18); }
+  .lit-refine-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 22px; border-bottom: 1px solid var(--border); flex: none; }
+  .lit-refine-heading h2 { font-family: 'Fraunces', serif; font-size: 23px; font-weight: 500; color: var(--navy); }
+  .lit-refine-heading p { font-size: 12px; color: var(--text-muted); margin-top: 5px; }
+  #litRefineClose { border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--white); width: 36px; height: 36px; font: 24px 'Work Sans', sans-serif; cursor: pointer; flex: none; }
+  .lit-refine-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 22px; }
+  .lit-refine-footer { padding: 16px 22px max(16px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); flex: none; }
+  .lit-refine-footer button { width: 100%; background: var(--navy); color: white; }
+  .lit-refine-dialog .filters-bar { padding: 0; border: 0; box-shadow: none; }
+  .lit-refine-dialog .filters-inner { padding: 0; }
+  .lit-refine-dialog .filters-row:not(#editorialRow), .lit-refine-dialog .filters-collapse-row { display: none; }
+  .lit-refine-layout { display: flex; flex-direction: column; gap: 17px; }
+  .lit-refine-layout .filter-group { width: 100%; min-width: 0; flex: none; }
+  .lit-refine-layout .filter-group input, .lit-refine-layout .filter-group select, .lit-refine-layout .custom-select-trigger { font-size: 16px; height: 44px; padding: 10px 12px; }
+  .lit-refine-layout details { border-top: 1px solid var(--border); padding-top: 14px; }
+  .lit-refine-layout details[hidden] { display: none; }
+  .lit-refine-layout summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+  .lit-refine-layout details .filter-group { margin-top: 16px; }
+  .lit-refine-layout #editorialRow { flex-direction: column; margin-top: 0; gap: 0; }
+  .lit-refine-layout .custom-select-dropdown { position: relative; top: auto; max-height: 260px; box-shadow: none; margin-top: 4px; }
+  .lit-refine-layout .custom-select-items { max-height: 180px; }
+  .lit-refine-layout .summary-tab-btns { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 0 !important; }
+  .lit-refine-layout .summary-tab-btn, .lit-refine-layout .recent-tab-btn { font-size: 12px; padding: 8px 10px; }
+  .lit-refine-layout .filter-actions { padding: 0; }
+  .lit-refine-layout .cb-row { width: 100%; }
+  .lit-refine-layout .cb-kind { max-width: 100px; }
+  @media (max-width: 768px) {
+    html:has(body.lit-refining) { scrollbar-gutter: auto; }
+    .lit-search-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .lit-search-summary .results-count { grid-column: 1; grid-row: 1; font-size: 12px; }
+    .lit-refine-button { grid-column: 2; grid-row: 1; }
+    .lit-active-filters { grid-column: 1; grid-row: 2; max-height: 34px; overflow: hidden; flex-wrap: nowrap; }
+    .lit-active-filter { flex: 0 1 auto; min-width: 0; max-width: 160px; }
+    .lit-search-summary .sort-control { grid-column: 2; grid-row: 2; justify-content: end; }
+    .lit-refine-dialog { inset: auto 0 0; width: 100%; height: 92dvh; max-height: 92dvh; border: 0; border-radius: 18px 18px 0 0; }
+    .lit-refine-dialog .filter-group { grid-column: auto; }
+  }
+  @media (pointer: coarse) { .lit-active-filter, #litRefineClose, .lit-refine-button { min-height: 44px; } .lit-active-filters { max-height: 44px; } }
+
 </style>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication","name":"The Lit — Research Paper Browser","description":"Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, the ACM EC conference, and all 50 journals of the Financial Times FT50 rank (with FT50 and ABS/AJG journal-type filters).","url":"https://www.stouras.com/lit/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://www.stouras.com"}}
@@ -846,6 +853,7 @@
   </div>
 </header>
 
+<div id="litFiltersHome">
 <div class="filters-bar">
   <div class="filters-inner">
     <div class="filters-row filters-row-primary">
@@ -958,9 +966,10 @@
       <button class="recent-tab-btn" id="preprintBtn" onclick="togglePreprintOnly()" title="Only papers with a free author pre-print on arXiv or SSRN. Coverage grows daily as the backfill runs.">Pre-print (Open Access) papers</button>
     </div>
     <div class="filters-collapse-row">
-      <button class="filters-collapse-btn" id="filtersToggle" onclick="toggleFilterPanel()" aria-expanded="true" title="Collapse the filters to see more of your results"><span class="fc-ico">▲</span><span class="fc-label">Hide filters</span></button>
+      <button class="btn btn-secondary" id="filtersToggle" onclick="litViewResults()">View results ↓</button>
     </div>
   </div>
+</div>
 </div>
 </div>
 
@@ -1002,8 +1011,10 @@
   <div class="library-sub" id="sharedSub"></div>
 </div>
 
-<div class="results-bar">
+<div class="results-bar lit-search-summary" id="litSearchSummary" aria-label="Search results and active filters">
   <div class="results-count" id="resultsCount"></div>
+  <div id="litActiveFilters" class="lit-active-filters" aria-label="Active filters"></div>
+  <button type="button" class="btn btn-secondary lit-refine-button" id="litRefineButton" aria-haspopup="dialog" aria-controls="litRefineDialog" aria-expanded="false">Refine search</button>
   <div class="sort-control">
     Sort:
     <select id="sortBy" onchange="applyFilters()">
@@ -1014,6 +1025,12 @@
     </select>
   </div>
 </div>
+
+<dialog id="litRefineDialog" class="lit-refine-dialog" aria-labelledby="litRefineTitle" aria-describedby="litRefineHint">
+  <div class="lit-refine-heading"><div><h2 id="litRefineTitle">Refine search</h2><p id="litRefineHint">Results update as you refine your filters.</p></div><button type="button" id="litRefineClose" aria-label="Close refinement">×</button></div>
+  <div id="litRefineBody" class="lit-refine-body"></div>
+  <div class="lit-refine-footer"><button type="button" class="btn btn-secondary" id="litRefineDone">Show results</button></div>
+</dialog>
 
 <div id="papersList" class="papers-list">
   <div class="empty-state"><h3>Select a filter to get started</h3><p>Pick a journal type (UTD24, FT50, ABS 4/4*, ABS 3) or one or more journals, filter by year, or search by title, author, or affiliation. Everything is searched when no journal is selected (journal files download on demand — a first all-journal search fetches the full dataset, so give it a moment).</p></div>
@@ -1036,6 +1053,7 @@
 <script src="lit-abstract.js"></script>
 <script src="lit-filter-url.js?v=3"></script>
 <script src="lit-search-scope.js?v=2"></script>
+<script src="lit-search-ui.js?v=1" defer></script>
 <script>
 // ── Data source: static JSON, no Google Sheets ───────────────────────────────
 // These files are built from public APIs (Crossref + friends) by a scheduled
@@ -3483,38 +3501,6 @@ function resetFilterState(keepJournals) {
   updateMsScopeUI();
 }
 
-// Collapse/expand the whole filter panel so the results are easier to browse.
-// The state is remembered per browser; a visible "Show filters" button restores it.
-function toggleFilterPanel() {
-  var bar = document.querySelector('.filters-bar');
-  if (!bar) return;
-  var collapsed = bar.classList.toggle('collapsed');
-  var btn = document.getElementById('filtersToggle');
-  if (btn) {
-    btn.setAttribute('aria-expanded', String(!collapsed));
-    var ico = btn.querySelector('.fc-ico'), lab = btn.querySelector('.fc-label');
-    if (ico) ico.textContent = collapsed ? '▼' : '▲';
-    if (lab) lab.textContent = collapsed ? 'Show filters' : 'Hide filters';
-  }
-  try { localStorage.setItem('litFiltersCollapsed', collapsed ? '1' : '0'); } catch (e) {}
-}
-// Make the whole strip toggle the panel, not just the pill: anywhere on the
-// COLLAPSED bar expands it, and the (otherwise empty) button row collapses it
-// when expanded — clicks inside the open filters themselves never collapse.
-// One delegated handler so the button's own onclick isn't doubled.
-(function () {
-  var bar = document.querySelector('.filters-bar');
-  if (!bar) return;
-  bar.addEventListener('click', function (e) {
-    if (e.target.closest('.filters-collapse-btn')) return;      // the pill toggles itself
-    if (bar.classList.contains('collapsed')) { toggleFilterPanel(); return; }
-    if (e.target.closest('.filters-collapse-row')) toggleFilterPanel();
-  });
-})();
-(function restoreFilterPanel() {
-  try { if (localStorage.getItem('litFiltersCollapsed') === '1' && document.querySelector('.filters-bar')) toggleFilterPanel(); } catch (e) {}
-})();
-
 function clearFilters() {
   resetFilterState();
   clearAuthorDeepLink();   // Clear wipes the author chip too — the ?person= URL and flag go with it
@@ -4515,64 +4501,6 @@ function debounceAffSearch() {
     applyFilters();
   }, 150);
 }
-
-// Condense the sticky top bar once the user has scrolled past it, freeing screen
-// space for the papers list. Three safeguards stop this from making the page
-// "shake" (the bar flickering between full and condensed, frame after frame):
-//
-//   1. Hysteresis. The top bar is in normal flow, so condensing it shrinks the
-//      whole page by ~100px. With a single threshold, that height drop can pull
-//      the scroll position back across the line, which un-condenses, which grows
-//      the page, which crosses the line again, an endless toggle/reflow loop.
-//      Separate add/remove thresholds, with a gap wider than the height the
-//      condense removes, mean a height-driven scroll change can never cross both
-//      edges of the band, so the class always settles.
-//   2. The toggle only runs where the bar is actually sticky (wide viewports).
-//      On phones the bar is `position: static`, so condensing it as it scrolls
-//      out of view frees no space yet still shrinks the page, pure downside.
-//   3. `html { overflow-anchor: none; }` (see the .topbar CSS). The hysteresis
-//      reasons in a coordinate system where scrollY doesn't move when the bar
-//      resizes — but Chrome/Firefox scroll anchoring DID move it (by the full
-//      height delta, to keep the anchored card still), and once the transitions
-//      made that delta outgrow the 140px band, positions just past COMPACT_ON
-//      re-crossed COMPACT_OFF on every condense: the toggle/reflow loop of (1)
-//      through the browser's back door. Disabling anchoring for the page
-//      scroller restores the fixed-scrollY premise the band was designed on.
-//
-// Reads are coalesced into one layout write per frame via requestAnimationFrame.
-var compactSticky = window.matchMedia('(min-width: 769px)');
-var COMPACT_ON = 180;   // add `compact` only well below the full-height bar
-var COMPACT_OFF = 40;   // and drop it only after scrolling back near the top
-// Condensing shortens the top bar, which shortens the page. If the page can
-// barely scroll — e.g. when it is heavily zoomed in — that height change snaps
-// the scroll position back across the threshold and the bar flips on/off every
-// frame: the "whole screen shakes" bug. So only condense when there is
-// comfortably more scroll room than the toggle consumes, and expand again if
-// the page becomes too short. The two room thresholds are deliberately far
-// apart (and far apart from the header's own height change) so the guard itself
-// can never oscillate.
-var COMPACT_ROOM_MIN = 440;       // need at least this much scroll range to condense
-var COMPACT_ROOM_MIN_KEEP = 120;  // below this, force-expand even mid-scroll
-var compactScheduled = false;
-function applyCompact() {
-  compactScheduled = false;
-  if (!compactSticky.matches) { document.body.classList.remove('compact'); return; }
-  var y = window.scrollY || window.pageYOffset || 0;
-  var docH = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
-  var maxScroll = docH - window.innerHeight;
-  if (document.body.classList.contains('compact')) {
-    if (y < COMPACT_OFF || maxScroll < COMPACT_ROOM_MIN_KEEP) document.body.classList.remove('compact');
-  } else if (y > COMPACT_ON && maxScroll > COMPACT_ROOM_MIN) {
-    document.body.classList.add('compact');
-  }
-}
-function scheduleCompact() {
-  if (!compactScheduled) { compactScheduled = true; requestAnimationFrame(applyCompact); }
-}
-window.addEventListener('scroll', scheduleCompact, { passive: true });
-// Re-evaluate when crossing the sticky/static breakpoint (e.g. device rotation).
-if (compactSticky.addEventListener) compactSticky.addEventListener('change', applyCompact);
-else if (compactSticky.addListener) compactSticky.addListener(applyCompact);
 
 // ── Opt-in range-served SQLite mode (?db=1) ──────────────────────────────────
 // Answers native-journal-scoped filters from data/db/lit.db (chunked, fetched

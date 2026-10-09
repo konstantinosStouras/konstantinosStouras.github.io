@@ -22,7 +22,7 @@ try {
     if (path === '/lit/') {
       body = fs.readFileSync(root + 'index.html', 'utf8').replace(/var ACCOUNTS_ENABLED = !!\([\s\S]*?\);/, 'var ACCOUNTS_ENABLED = false;');
       type = 'text/html';
-    } else if (/\/lit-(abstract|filter-url|news|search-scope)\.js$/.test(path)) {
+    } else if (/\/lit-(abstract|filter-url|news|search-scope|search-ui)\.js$/.test(path)) {
       body = fs.readFileSync(root + path.split('/').pop(), 'utf8'); type = 'text/javascript';
     } else if (url.hostname !== 'lit.test') { body = ''; type = 'text/javascript'; }
     else if (path === '/lit/data/sources.json') body = JSON.stringify(['ms', 'msom', 'opre', 'pnas'].map(key => ({ key, file: 'papers-' + key + '.json', count: 1 })));

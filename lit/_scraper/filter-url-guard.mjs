@@ -19,7 +19,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
  await context.route('**/*', async route=>{
   const u=new URL(route.request().url()); let body, type='application/json';
   if(u.pathname==='/lit/') {body=fs.readFileSync(root+'index.html','utf8').replace(/var ACCOUNTS_ENABLED = !!\([\s\S]*?\);/, 'var ACCOUNTS_ENABLED = false;');type='text/html';}
-  else if(u.pathname.match(/\/lit-(abstract|filter-url|news|search-scope)\.js$/)){body=fs.readFileSync(root+u.pathname.split('/').pop(),'utf8');type='text/javascript';}
+  else if(u.pathname.match(/\/lit-(abstract|filter-url|news|search-scope|search-ui)\.js$/)){body=fs.readFileSync(root+u.pathname.split('/').pop(),'utf8');type='text/javascript';}
   else if(u.hostname!=='lit.test') return route.fulfill({status:200,body:'',contentType:'text/javascript'});
   else if(u.pathname==='/lit/data/sources.json') body=JSON.stringify([{key:'ms',file:'papers-ms.json',count:2}]);
   else if(u.pathname==='/lit/data/papers-ms.json'||u.pathname==='/lit/data/recent.json') {if(paperDelay) await new Promise(r=>setTimeout(r,paperDelay)); body=JSON.stringify(rows);}

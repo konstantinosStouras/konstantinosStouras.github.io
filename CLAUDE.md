@@ -474,6 +474,20 @@ app's data (~190 MB), scraper and its two workflows (`ft50-update-data.yml`,
 `lit/_scraper-ft50/` with its own `lit-ft50-*` workflows.
 
 ## `/lit` — "The Lit", the multi-journal research paper browser
+**Search layout:** The full header/form is in normal flow. The results bar is
+sticky, with bounded clickable active-filter chips and Refine search.
+`lit/lit-search-ui.js` (deferred) moves the SAME controls into a native modal
+side panel (mobile bottom sheet), using comment anchors to restore their exact
+positions on close. Preserve IDs, inline handlers, search semantics, account
+scope gating, and the public URL state. A placeholder and scroll restoration
+keep the reading position; explicit Show results returns to the results start.
+Typing must never scroll the page or steal focus. Shared filter links start at
+results, except explicit hash targets and public shared lists. The old
+`litFiltersCollapsed` preference and scroll-driven font shrinking are retired.
+Library/shared-list modes hide public refinement controls. Keyboard dropdown
+entry/selection and Escape are supported. Browser regression:
+`node lit/_scraper/search-ui-guard.mjs` (PW/CHROMIUM overrides below).
+
 **Shareable searches:** `lit/lit-filter-url.js` synchronizes public filter state
 with the query string (repeated parameters for chips, `author`, `title`, `abstract`, `affiliation` for live text,
 plural names for text chips and `person` plus `variants` for identity chips, `recent`, `preprint`, `sort`,
