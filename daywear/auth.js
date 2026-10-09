@@ -1,5 +1,6 @@
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261009-private-models';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261009-private-models';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261009-account-ui';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261009-account-ui';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261009-account-ui';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
@@ -14,12 +15,20 @@ const modal=document.createElement('dialog');
 modal.id='account-modal';modal.className='account-modal';modal.setAttribute('aria-label','Your account');modal.tabIndex=-1;
 document.body.append(modal);
 const trigger=document.querySelector('#account-button');
+let profileName='';
+function renderAccountButton(){
+ trigger.innerHTML=accountButtonMarkup(user,profileName);
+ trigger.classList.toggle('signed-in',!!user);trigger.setAttribute('aria-haspopup','dialog');
+ if(user)trigger.setAttribute('aria-label','Your account: '+accountIdentity(user,profileName).name);else trigger.removeAttribute('aria-label');
+ trigger.querySelector('img')?.addEventListener('error',event=>event.target.remove(),{once:true});
+}
+document.addEventListener('wardrobe:profile',event=>{if(!user||event.detail.uid!==user.uid)return;profileName=event.detail.name;renderAccountButton();});
 const providerNames={'google.com':'Google','facebook.com':'Facebook','apple.com':'Apple','microsoft.com':'Microsoft'};
 
 function notify(){document.dispatchEvent(new CustomEvent('wardrobe:account',{detail:{uid:user?.uid||null,name:user?.displayName||'',email:user?.email||''}}));}
 function message(text){notice=text;const el=modal.querySelector('#auth-message');if(el)el.textContent=text;}
 function render(){
- trigger.textContent=user?'Your account':'Sign in / Register';
+ renderAccountButton();
  if(!modal.open)return;
  const intro='<p class="eyebrow">YOUR PERSONAL COLLECTION</p>';
  const close='<button type="button" class="close" data-account="close" aria-label="Close account dialog">×</button>';
@@ -58,7 +67,7 @@ async function initialize(){
  try{
   const [app,authSdk]=await Promise.all([import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')]);
   sdk=authSdk;auth=sdk.initializeAuth(app.initializeApp(firebaseConfig),{persistence:[sdk.browserSessionPersistence,sdk.browserLocalPersistence],popupRedirectResolver:sdk.browserPopupRedirectResolver});
-  sdk.onAuthStateChanged(auth,next=>{user=next;ready=true;notify();render();},()=>{initializationError=true;render();});
+  sdk.onAuthStateChanged(auth,next=>{user=next;profileName='';ready=true;notify();render();},()=>{initializationError=true;render();});
  }catch{initializationError=true;render();}
 }
 trigger.addEventListener('click',()=>{view='signin';notice='';modal.showModal();render();});
