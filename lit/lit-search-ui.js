@@ -12,6 +12,7 @@
   var sentinel = document.getElementById('litSearchSentinel');
   var moves = [], layout, returnFocus, oldHeight, oldScroll, homePassed;
   var frame = 0, pendingText = false;
+  var readingFrame = 0;
   var anchorStyle = '';
   var targets = { jtype: 'csJType', journal: 'csJournal', author: 'filterAuthors',
     title: 'filterSearch', abstract: 'filterAbstracts', affiliation: 'filterAffiliations',
@@ -39,13 +40,16 @@
     if (recentMode) out.push({ text: 'Recently added', target: 'recentBtn' });
     return out;
   }
-  function update() {
-    frame = 0;
+  function updateReading() {
     // The original count/sort row is enough while the full form is visible.
     // The sentinel stays in normal flow, independent of the sticky bar.
     var boundary = sentinel.getBoundingClientRect().top;
     summary.classList.toggle('lit-search-reading', boundary <= 1 ||
       (summary.classList.contains('lit-search-reading') && boundary < 12));
+  }
+  function update() {
+    frame = 0;
+    updateReading();
     var selected = entries();
     // Keep the compact bar bounded even for a heavily refined search. All
     // selections remain visible in their original controls inside the dialog.
@@ -214,7 +218,11 @@
   }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   window.addEventListener('popstate', schedule);
   window.addEventListener('resize', schedule);
-  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('scroll', function () {
+    if (!readingFrame) readingFrame = requestAnimationFrame(function () {
+      readingFrame = 0; updateReading();
+    });
+  }, { passive: true });
   // Retire the former manual-collapse preference; the full form is available
   // by scrolling up, regardless of a browser's old Hide filters setting.
   try { localStorage.removeItem('litFiltersCollapsed'); } catch (e) {}
