@@ -254,5 +254,7 @@ export const greek = {
  'Appearance and fit notes:':'Σημειώσεις εμφάνισης και εφαρμογής:',
  'Top size:':'Μέγεθος μπλούζας:','Trouser size:':'Μέγεθος παντελονιού:','Shoe size:':'Μέγεθος παπουτσιού:',
  'collection':'συλλογή','Storage unavailable':'Μη διαθέσιμος αποθηκευτικός χώρος','Unknown look pool':'Άγνωστη συλλογή συνόλων',
+ 'Failed to fetch':'Η σύνδεση απέτυχε. Δοκίμασε ξανά.','fetch failed':'Η σύνδεση απέτυχε. Δοκίμασε ξανά.','Load failed':'Η φόρτωση απέτυχε. Δοκίμασε ξανά.',
+ 'The operation was aborted.':'Η διαδικασία ακυρώθηκε. Δοκίμασε ξανά.','The operation was aborted due to timeout':'Η διαδικασία έληξε λόγω καθυστέρησης. Δοκίμασε ξανά.','signal timed out':'Το αίτημα έληξε λόγω καθυστέρησης. Δοκίμασε ξανά.',
  'cm':'εκ.','kg':'κιλά'
 };

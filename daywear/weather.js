@@ -1,4 +1,4 @@
-import {looks} from './data.js?v=20261009-languages';
+import {looks} from './data.js?v=20261009-public-languages';
 export function seasonPool(temp,month,latitude=51){
  if(!Number.isFinite(temp))throw new Error('A valid apparent temperature is required');
  const m=latitude<0?(month+5)%12+1:month;

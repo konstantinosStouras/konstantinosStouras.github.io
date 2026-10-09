@@ -1,4 +1,4 @@
-import {greek} from './translations-el.js?v=20261009-languages';
+import {greek} from './translations-el.js?v=20261009-public-languages';
 const preferenceKey='daywear.language';
 let language='en';
 try{if(globalThis.localStorage?.getItem(preferenceKey)==='el')language='el';}catch{}
@@ -26,6 +26,7 @@ export function translateText(value,target=language){
  match=core.match(/^Remove (.*)$/s);if(match)return leading+'Αφαίρεση '+match[1]+trailing;
  match=core.match(/^Model reference brief for (.*)$/s);if(match)return leading+'Οδηγίες αναφοράς μοντέλου για '+match[1]+trailing;
  match=core.match(/^Appearance and fit notes: (.*)$/s);if(match)return leading+'Σημειώσεις εμφάνισης και εφαρμογής: '+match[1]+trailing;
+ match=core.match(/^← (Summer|Fall|Winter|Spring|Gym|Lounge) collection$/);if(match)return leading+'← Συλλογή: '+translateText(match[1],'el')+trailing;
  match=core.match(/^✓ Profile saved at ([\d:]+)\. Your sizes and measurements are saved in this browser(?: for (.*))?\.$/s);
  if(match)return leading+`✓ Το προφίλ αποθηκεύτηκε στις ${match[1]}. Τα μεγέθη και οι μετρήσεις αποθηκεύτηκαν σε αυτόν τον περιηγητή${match[2]?' για '+match[2]:''}.`+trailing;
  let result=text
@@ -77,13 +78,6 @@ export function installLanguages(){
  };
  const refresh=()=>{
   scheduled=false;document.documentElement.lang=language;
-  // Native dialogs make the page header inert. Mirror the switch inside an open
-  // dialog so people can change language while keeping their unsaved entries.
-  document.querySelectorAll('dialog[open]').forEach(dialog=>{
-   if(dialog.querySelector('[data-dialog-languages]'))return;
-   const controls=document.querySelector('.header-actions > .language-switch')?.cloneNode(true);
-   if(controls){controls.dataset.dialogLanguages='';controls.classList.add('dialog-languages');dialog.prepend(controls);}
-  });
   const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;while((node=walker.nextNode()))updateText(node);
   document.querySelectorAll('[aria-label],[placeholder],[title],[alt]').forEach(el=>{
    if(el.closest('[data-i18n-skip]'))return;
@@ -101,7 +95,7 @@ export function installLanguages(){
   refresh();document.dispatchEvent(new CustomEvent('wardrobe:language',{detail:{language}}));
  };
  document.addEventListener('click',event=>{const button=event.target.closest('[data-language]');if(button)switchLanguage(button.dataset.language);});
- new MutationObserver(schedule).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['aria-label','placeholder','title','alt','open']});
+ new MutationObserver(schedule).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['aria-label','placeholder','title','alt']});
  document.addEventListener('wardrobe:profile',schedule);
  refresh();
 }
