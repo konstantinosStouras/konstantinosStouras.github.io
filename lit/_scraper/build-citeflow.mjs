@@ -39,6 +39,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readAnalyticsInput, analyticsSnapshot } from './_analytics-inputs.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LIT_DIR = path.resolve(__dirname, '..');
@@ -61,9 +62,10 @@ function readJson(file, fallback) {
 }
 
 // Aggregate one refs dataset directory into the served citeflow object.
-export function buildCiteflow(refsDir) {
-  const manifest = readJson(path.join(refsDir, 'manifest.json'), {});
-  const index = readJson(path.join(refsDir, 'refs-index.json'), {});
+export function buildCiteflow(refsDir, strict = false) {
+  const read = strict ? readAnalyticsInput : readJson;
+  const manifest = read(path.join(refsDir, 'manifest.json'), {});
+  const index = read(path.join(refsDir, 'refs-index.json'), {});
   const shards = manifest.shards || {};
   const out = {};   // citing jkey -> cited jkey -> citing-paper year -> n
   const inn = {};   // cited jkey -> citing jkey -> cited-paper year -> n
@@ -71,7 +73,7 @@ export function buildCiteflow(refsDir) {
   let edges = 0, droppedYear = 0, droppedIndex = 0;
 
   for (const jk of Object.keys(shards)) {
-    const shard = readJson(path.join(refsDir, shards[jk].file), null);
+    const shard = read(path.join(refsDir, shards[jk].file), null);
     if (!shard) continue;
     for (const citingDoi of Object.keys(shard)) {
       const ci = index[citingDoi];
@@ -101,6 +103,7 @@ export function buildCiteflow(refsDir) {
     // Deterministic like the other analytics builds: the date mirrors the refs
     // manifest, never Date.now(), so a re-run on an unchanged graph is a no-op.
     generated: manifest.generated || '',
+    ...(strict ? { snapshot: analyticsSnapshot() } : {}),
     totals: { edges, journals: jset.size, pairs, droppedYear, droppedIndex },
     out,
     in: inn,
@@ -108,7 +111,7 @@ export function buildCiteflow(refsDir) {
 }
 
 function main() {
-  const flow = buildCiteflow(REFS_DIR);
+  const flow = buildCiteflow(REFS_DIR, true);
   fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
   fs.writeFileSync(OUT_FILE, JSON.stringify(flow));
   const kb = (fs.statSync(OUT_FILE).size / 1024).toFixed(0);

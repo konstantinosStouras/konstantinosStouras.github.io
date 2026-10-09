@@ -39,6 +39,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { forwardDisruption } from '../_scraper-refs/build-citedby.mjs';
 import { isNonArticle } from './_nonarticle.mjs';
+import { readAnalyticsInput, analyticsSnapshot, latestAnalyticsDate } from './_analytics-inputs.mjs';
 import { readChunkedJsonSync } from './_chunked-json.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -75,10 +76,7 @@ const USE_FORWARD = process.env.DISR_USE_FORWARD === '1';
 const FWD_REF_COVERAGE = 0.6;
 
 // ── helpers (mirror build-analytics.mjs) ────────────────────────────────────
-function readJson(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
-  catch { return fallback; }
-}
+function readJson(file) { return readAnalyticsInput(file); }
 function normDoi(doi) {
   return String(doi || '').replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').trim().toLowerCase();
 }
@@ -112,6 +110,8 @@ function ingestVariants(map, file) {
 // ── journal set: native wins on overlap (mirror build-analytics.mjs) ────────
 const nativeSources = readJson(path.join(NATIVE_DIR, 'sources.json'), []);
 const ft50Sources = readJson(path.join(FT50_DIR, 'sources.json'), []);
+readJson(path.join(NATIVE_DIR, 'meta.json'));
+readJson(path.join(FT50_DIR, 'meta.json'));
 const journalMeta = new Map();
 for (const s of nativeSources) journalMeta.set(s.key, { key: s.key, file: s.file, dir: NATIVE_DIR });
 for (const s of ft50Sources) {
@@ -145,7 +145,12 @@ ingestVariants(variantMap, path.join(NATIVE_DIR, 'authors.json'));
 ingestVariants(variantMap, path.join(FT50_DIR, 'authors.json'));
 for (const repo of SHARD_REPOS) {
   const dir = shardDir(repo);
-  if (dir) ingestVariants(variantMap, path.join(dir, 'authors.json'));
+  if (!dir) throw new Error('Missing analytics shard: ' + repo);
+  readJson(path.join(dir, 'meta.json'));
+  ingestVariants(variantMap, path.join(dir, 'authors.json'));
+  for (const source of readJson(path.join(dir, 'sources.json'))) {
+    if (source.count && !journalMeta.has(source.key)) journalMeta.set(source.key, { key: source.key, file: source.file, dir });
+  }
 }
 const canon = name => variantMap.get(name) || name;
 
@@ -154,7 +159,7 @@ const paper = new Map();       // normDoi -> record
 const citedByGlobal = new Map(); // normDoi -> citation count (for ref popularity)
 for (const meta of journalMeta.values()) {
   const arr = readJson(path.join(meta.dir, meta.file), []);
-  if (!Array.isArray(arr)) continue;
+  if (!Array.isArray(arr)) throw new Error('Invalid papers array: ' + meta.key);
   for (const p of arr) {
     const doi = normDoi(p.DOI);
     if (!doi || paper.has(doi)) continue;      // native wins on overlap
@@ -172,7 +177,7 @@ for (const meta of journalMeta.values()) {
       // toggle covers the team-science figures like every other figure.
       x: isNonArticle(ti) ? 1 : 0,
     });
-    if (c) citedByGlobal.set(doi, c);
+    if (typeof p.CitedBy === 'number' && p.CitedBy >= 0) citedByGlobal.set(doi, c);
   }
 }
 
@@ -215,7 +220,7 @@ for (const [jkey, sh] of Object.entries(manifest.shards || {})) {
 // OpenAlex ids of works that cite it. Both are read only when USE_FORWARD is on
 // AND the caches exist — otherwise D falls back to the catalog-inverted measure
 // below, unchanged.
-const oaidByDoi = readJson(path.join(REFS_DIR, '_oaid.json'), {}); // doi -> OpenAlex id
+const oaidByDoi = USE_FORWARD ? readJson(path.join(REFS_DIR, '_oaid.json')) : {}; // doi -> OpenAlex id
 const fwd = new Map();        // doi -> Set(citer OpenAlex ids), non-empty only
 const fwdKnown = new Set();   // every doi whose forward citations WERE harvested (incl. zero-citer)
 const fwdCapped = new Set();  // dois whose citer list hit the crawl cap (truncated → D unreliable)
@@ -333,7 +338,7 @@ const authorArr = authorNamesArr.slice();
 
 // ── stamp & write ───────────────────────────────────────────────────────────
 const nativeMeta = readJson(path.join(NATIVE_DIR, 'meta.json'), {});
-const generated = nativeMeta.lastPull || '';
+const generated = latestAnalyticsDate();
 
 // quick distribution summary for the log
 const ds = records.map(r => r.d).sort((a, b) => a - b);
@@ -341,6 +346,7 @@ const disr = ds.filter(d => d > 0).length, dev = ds.filter(d => d < 0).length, z
 
 const outObj = {
   generated,
+  snapshot: analyticsSnapshot(),
   ver: DISR_VER,
   note: (USE_FORWARD && forwardScored)
     ? 'Disruption index D — computed from harvested global forward citations where available (dm:"f"), else from The Lit\'s in-catalog citation graph (dm:"c"). D>0 disrupts, D<0 develops.'
