@@ -1,8 +1,15 @@
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261009-profile';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261009-profile';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261009-private-models';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261009-private-models';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
+export async function getAccountToken(expectedUid){
+ const current=user;
+ if(!current||current.uid!==expectedUid)throw Error('Please sign in again.');
+ const token=await current.getIdToken();
+ if(user!==current)throw Error('Your account changed. Please retry.');
+ return token;
+}
 const modal=document.createElement('dialog');
 modal.id='account-modal';modal.className='account-modal';modal.setAttribute('aria-label','Your account');modal.tabIndex=-1;
 document.body.append(modal);
