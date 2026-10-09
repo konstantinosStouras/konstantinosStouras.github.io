@@ -1,5 +1,5 @@
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261009-location';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261009-location';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261009-photos-7';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261009-photos-7';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
