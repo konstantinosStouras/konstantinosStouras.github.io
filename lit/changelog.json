@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "faster-journal-scoped-search",
+      "date": "2026-10-09",
+      "title": "Faster searches within your selected journals",
+      "summary": "Choose one or two journals and routine searches work only on their papers, even if other journals were loaded earlier. Narrowing the search stops unneeded paper downloads. Shared links also use shorter text parameters such as author=stouras and affiliation=INSEAD, without an extra filters marker.",
+      "url": "https://www.stouras.com/lit/"
+    },
+    {
       "id": "shareable-search-filters",
       "date": "2026-10-09",
       "title": "Share any search with a link",

@@ -1,15 +1,17 @@
 // Share the public paper search through the address bar. No account/library data.
 var litUrlSets = {
   jtype: 'jtype', journal: 'journal', year: 'year', editor: 'editor',
-  area: 'area', se: 'se', ae: 'ae', title: 'title', author: 'author-text',
-  affiliation: 'affiliation', abstract: 'abstract'
+  area: 'area', se: 'se', ae: 'ae', title: 'titles', author: 'authors',
+  affiliation: 'affiliations', abstract: 'abstracts'
 };
 var litUrlInputs = {
-  'title-search': 'filterSearch', 'author-search': 'filterAuthors',
-  'affiliation-search': 'filterAffiliations', 'abstract-search': 'filterAbstracts'
+  title: 'filterSearch', author: 'filterAuthors',
+  affiliation: 'filterAffiliations', abstract: 'filterAbstracts'
 };
-// Recognize and strip the retired `filters` marker from previously shared links.
-var litUrlSpecial = ['filters', 'author', 'author-variants', 'preprint', 'recent', 'sort', 'citedby', 'citedbyauthor'];
+// Older shared links are read, then rewritten using the shorter names.
+var litUrlLegacyInputs = { title: 'title-search', author: 'author-search', affiliation: 'affiliation-search', abstract: 'abstract-search' };
+var litUrlLegacySets = { title: 'title', author: 'author-text', affiliation: 'affiliation', abstract: 'abstract' };
+var litUrlSpecial = ['filters', 'author-text', 'author-variants', 'person', 'variants', 'preprint', 'recent', 'sort', 'citedby', 'citedbyauthor'].concat(Object.values(litUrlLegacyInputs));
 var litUrlReady = false, litUrlRestoring = false, litUrlCitationVersion = 0;
 var litUrlPendingCitation = null;
 
@@ -28,8 +30,8 @@ function litSyncFilterUrl() {
     });
     litUrlSpecial.forEach(function (key) { sp.delete(key); });
     Object.keys(sel.authorIdentity).forEach(function (label) {
-      sp.append('author', label);
-      sp.append('author-variants', JSON.stringify([label, sel.authorIdentity[label]]));
+      sp.append('person', label);
+      sp.append('variants', JSON.stringify([label, sel.authorIdentity[label]]));
     });
     if (preprintOnly) sp.set('preprint', '1');
     if (recentMode) sp.set('recent', '1');
@@ -48,6 +50,8 @@ function litRestoreFilterUrl() {
   var sp = new URLSearchParams(location.search);
   var keys = Object.values(litUrlSets).concat(Object.keys(litUrlInputs), litUrlSpecial);
   var ownsSearch = keys.some(function (key) { return sp.has(key); });
+  var legacy = sp.has('author-text') || sp.has('author-variants') ||
+    Object.values(litUrlLegacyInputs).some(function (key) { return sp.has(key); });
   // Shared public library lists keep their existing URL and view lifecycle.
   if (sp.get('list')) return;
   if (!ownsSearch && !litUrlReady) return; // ordinary landing keeps the auth/default lifecycle
@@ -62,19 +66,21 @@ function litRestoreFilterUrl() {
     window.litSiteDefaultActive = false;
     window.litAutoSig = undefined;
     Object.keys(litUrlSets).forEach(function (type) {
-      sp.getAll(litUrlSets[type]).forEach(function (value) {
+      var values = sp.getAll(litUrlSets[type]);
+      if (legacy && litUrlLegacySets[type]) values = values.concat(sp.getAll(litUrlLegacySets[type]));
+      values.forEach(function (value) {
         value = value.trim();
         if (['title', 'author', 'affiliation', 'abstract'].indexOf(type) !== -1) value = value.toLowerCase();
         if (value) sel[type].add(value);
       });
     });
-    sp.getAll('author').forEach(function (label) {
+    sp.getAll('person').concat(legacy ? sp.getAll('author') : []).forEach(function (label) {
       label = label.trim();
       if (label) Object.defineProperty(sel.authorIdentity, label, {
         value: [label.toLowerCase()], writable: true, enumerable: true, configurable: true
       });
     });
-    sp.getAll('author-variants').forEach(function (value) {
+    sp.getAll('variants').concat(sp.getAll('author-variants')).forEach(function (value) {
       try {
         var entry = JSON.parse(value);
         if (Array.isArray(entry) && typeof entry[0] === 'string' &&
@@ -87,7 +93,10 @@ function litRestoreFilterUrl() {
     });
     window.LIT_AUTHOR_DEEPLINK = Object.keys(sel.authorIdentity).length > 0;
     Object.keys(litUrlInputs).forEach(function (key) {
-      document.getElementById(litUrlInputs[key]).value = sp.get(key) || '';
+      var values = sp.getAll(legacy ? litUrlLegacyInputs[key] : key);
+      document.getElementById(litUrlInputs[key]).value = values.pop() || '';
+      // Repeated singular terms in older links are ANDed, just like chips.
+      values.forEach(function (value) { if (value.trim()) sel[key].add(value.trim().toLowerCase()); });
     });
     preprintOnly = sp.get('preprint') === '1';
     document.getElementById('preprintBtn').className = 'recent-tab-btn' + (preprintOnly ? ' active' : '');
@@ -135,7 +144,9 @@ function initLitFilterUrl() {
   // replace the incoming link with a partial selection.
   litRestoreFilterUrl();
   litUrlReady = true;
-  if (new URLSearchParams(location.search).has('filters')) litSyncFilterUrl();
+  var sp = new URLSearchParams(location.search);
+  if (sp.has('filters') || sp.has('author-variants') || sp.has('author-text') ||
+      Object.values(litUrlLegacyInputs).some(function (key) { return sp.has(key); })) litSyncFilterUrl();
   window.addEventListener('popstate', litRestoreFilterUrl);
   // Update typed searches even before any journal data finishes loading.
   Object.values(litUrlInputs).forEach(function (id) {

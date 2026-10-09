@@ -1034,7 +1034,8 @@
 <!-- The abstract a card shows and the Abstracts search matches: ONE definition,
      shared with the alerts mailer and emit-db.mjs (see lit/lit-abstract.js). -->
 <script src="lit-abstract.js"></script>
-<script src="lit-filter-url.js?v=2"></script>
+<script src="lit-filter-url.js?v=3"></script>
+<script src="lit-search-scope.js?v=1"></script>
 <script>
 // ── Data source: static JSON, no Google Sheets ───────────────────────────────
 // These files are built from public APIs (Crossref + friends) by a scheduled
@@ -1546,23 +1547,15 @@ function removeAuthorIdentity(label) {
   applyFilters();
 }
 
-// Retiring the author scope must retire the ?author= DEEP-LINK too: strip the
+// Retiring the author scope must retire the ?person= DEEP-LINK too: strip the
 // parameter from the address bar (a reload/share of the stale URL would
 // resurrect the filter — and its heavy all-journal load — the user just
 // removed) and drop the flag that makes the account chip navigate home and
 // stands the default filters down. No-ops while any identity chip remains.
 function clearAuthorDeepLink() {
-  if (!window.LIT_AUTHOR_DEEPLINK) return;
   if (Object.keys(sel.authorIdentity || {}).length) return;
   window.LIT_AUTHOR_DEEPLINK = false;
-  try {
-    var sp = new URLSearchParams(location.search);
-    if (sp.has('author')) {
-      sp.delete('author');
-      var qs = sp.toString();
-      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
-    }
-  } catch (e) {}
+  litSyncFilterUrl();
 }
 
 function addChipFromCard(type, val) {
@@ -2064,7 +2057,7 @@ function removeCitedByChip() {
 }
 
 // Keep the address bar shareable: the active focal lives in ?citedby= (paper,
-// by DOI) / ?citedbyauthor= (name). Mirrors the ?author= deep-link discipline —
+// by DOI) / ?citedbyauthor= (name). Mirrors the ?person= deep-link discipline —
 // removing the chip strips the parameter so a reload can't resurrect the filter.
 function litSyncCitedByUrl() {
   litSyncFilterUrl();
@@ -2082,10 +2075,12 @@ function litCitedByFromCard(doi) {
 // Fetch one extra journal's papers file (idempotent: repeated calls return
 // the same in-flight promise; a journal that failed all retries stays
 // 'missing' for the session rather than re-downloading on every keystroke).
-function loadExtraSource(key) {
+function loadExtraSource(key, searchOnly) {
   var src = EXTRA_SRC[key];
   if (!src) return Promise.resolve();
+  litRetainPaperLoad(key, searchOnly);
   if (extraPromise[key]) return extraPromise[key];
+  var load = litBeginPaperLoad(key, searchOnly);
   extraState[key] = 'loading';
   extraPromise[key] = (async function() {
     // A source may be CHUNKED across several part files (`files` in its
@@ -2103,24 +2098,34 @@ function loadExtraSource(key) {
         // this repo's 1 GB Pages limit without the page changing.
         var rows = [], notBuilt = false;
         for (var fi = 0; fi < files.length; fi++) {
-          var r = await fetch((src.base || FT50_DATA_BASE) + files[fi], { cache: 'default' });
+          var r = await fetch((src.base || FT50_DATA_BASE) + files[fi], { cache: 'default', signal: load.controller.signal });
           if (r.status === 404 && fi === 0) { notBuilt = true; break; } // not built yet
           if (!r.ok) throw new Error('HTTP ' + r.status); // a missing LATER part is an error worth retrying
           var part = await r.json();
           if (Array.isArray(part)) rows = rows.concat(part);
         }
         if (notBuilt) break;
+        if (load.controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
         rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); applySubmittedPreprint(p); });
         allPapers = allPapers.concat(rows);
+        litIndexPaperBatch(rows);
         extraState[key] = 'done';
-        afterSourceArrived();
+        litFinishPaperLoad(key, load);
+        afterSourceArrived(key);
         return;
       } catch (e) {
+        if (load.controller.signal.aborted) {
+          extraState[key] = 'pending'; delete extraPromise[key];
+          litFinishPaperLoad(key, load);
+          afterSourceArrived(key);
+          return;
+        }
         await new Promise(function(res) { setTimeout(res, 2500 * (attempt + 1)); });
       }
     }
     extraState[key] = 'missing';
-    afterSourceArrived();
+    litFinishPaperLoad(key, load);
+    afterSourceArrived(key);
   })();
   return extraPromise[key];
 }
@@ -2133,7 +2138,7 @@ function loadExtraSource(key) {
 // MS/ISR-specific editor filters can never match an extra paper and don't
 // trigger the download on their own.
 // A TEXT search (title / author / affiliation / abstract, typed or chipped,
-// incl. the ?author= identity chips) is active — the "search the entire
+// incl. the ?person= identity chips) is active — the "search the entire
 // database" case: it streams every catalog file INCLUDING the Working Papers
 // archive when no journal scope narrows it (matchesJournal admits WP rows via
 // the wpSearchable cache under the same predicate).
@@ -2174,7 +2179,7 @@ function neededExtraKeys() {
   return base;
 }
 
-function ensureExtraSources() { neededExtraKeys().forEach(loadExtraSource); }
+function ensureExtraSources() { neededExtraKeys().forEach(function (k) { loadExtraSource(k, true); }); }
 
 // How many extra journal files the current view is still waiting on.
 function extraPendingCount() {
@@ -2251,7 +2256,9 @@ function updateYearRangeText(loadedMinYear) {
 // idle, otherwise at most every ~700 ms with a trailing pass, so the final
 // state always lands and the thread breathes between passes.
 var srcArrivedTimer = null, srcArrivedLast = 0;
-function afterSourceArrived() {
+function afterSourceArrived(key) {
+  if (key && journalScope && !journalScope.has(key) &&
+      !(key === 'pnas' && Array.from(journalScope).some(function (k) { return k.indexOf('pnas-') === 0; }))) return;
   var now = Date.now();
   if (now - srcArrivedLast > 700) { srcArrivedLast = now; afterSourceArrivedNow(); return; }
   if (srcArrivedTimer) return;
@@ -2335,11 +2342,13 @@ async function loadData() {
 }
 
 // Fetch one native source's papers file (idempotent, like loadExtraSource).
-function loadNativeSource(key) {
+function loadNativeSource(key, searchOnly) {
   var src = null;
   for (var i = 0; i < sourcesManifest.length; i++) if (sourcesManifest[i].key === key) src = sourcesManifest[i];
   if (!src) return Promise.resolve();
+  litRetainPaperLoad(key, searchOnly);
   if (nativePromise[key]) return nativePromise[key];
+  var load = litBeginPaperLoad(key, searchOnly);
   nativeState[key] = 'loading';
   nativePromise[key] = (async function() {
     for (var attempt = 0; attempt < 4; attempt++) {
@@ -2349,25 +2358,35 @@ function loadNativeSource(key) {
         // reuse the cached bytes without a revalidation round-trip per file —
         // a big win over 'no-cache' given these files total ~50 MB — while the
         // 10-minute freshness window still keeps the daily-refreshed data current.
-        var r = await fetch(DATA_BASE + src.file, { cache: 'default' });
+        var r = await fetch(DATA_BASE + src.file, { cache: 'default', signal: load.controller.signal });
         if (r.status === 404) break; // not built yet (e.g. empty PNAS cache)
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var rows = await r.json();
         if (!Array.isArray(rows)) rows = [];
+        if (load.controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
         rows.forEach(function(p) { normalizeEditors(p); computeJkeys(p); applySubmittedPreprint(p); });
         allPapers = allPapers.concat(rows);
+        litIndexPaperBatch(rows);
         // Editor/area cleanup only applies to MS rows (others have none).
         if (src.key === 'ms') { fuzzyMergeEditors(); fuzzyMergeAreas(); }
         nativeState[key] = 'done';
         sourcesLoaded++;
-        afterSourceArrived();
+        litFinishPaperLoad(key, load);
+        afterSourceArrived(key);
         return;
       } catch (e) {
+        if (load.controller.signal.aborted) {
+          nativeState[key] = 'pending'; delete nativePromise[key];
+          litFinishPaperLoad(key, load);
+          afterSourceArrived(key);
+          return;
+        }
         await new Promise(function(res) { setTimeout(res, 2500 * (attempt + 1)); });
       }
     }
     nativeState[key] = 'missing';
-    afterSourceArrived();
+    litFinishPaperLoad(key, load);
+    afterSourceArrived(key);
   })();
   return nativePromise[key];
 }
@@ -2406,8 +2425,10 @@ function neededNativeKeys() {
 
 // Kick off every download the current view needs (natives + FT50 extras).
 function ensureScopeSources() {
-  neededNativeKeys().forEach(loadNativeSource);
-  ensureExtraSources();
+  var nativeKeys = neededNativeKeys(), extraKeys = neededExtraKeys();
+  litCancelUnusedPaperLoads(new Set(nativeKeys.concat(extraKeys)));
+  nativeKeys.forEach(function (k) { loadNativeSource(k, true); });
+  extraKeys.forEach(function (k) { loadExtraSource(k, true); });
 }
 
 // How many files (native + extra) the current view is still waiting on.
@@ -2445,7 +2466,7 @@ async function loadAuthors() {
   }
 }
 
-// Author deep-link → ORCID-resolved identity. The ?author= URL carries ONE
+// Author deep-link → ORCID-resolved identity. The ?person= URL carries ONE
 // spelling of a name, but papers may credit the author differently (a middle
 // initial gained or dropped — "Konstantinos Stouras" vs the credited
 // "Konstantinos I. Stouras"). The Authors index (authors.json) already knows
@@ -2478,7 +2499,7 @@ function litUpgradeAuthorDeepLink() {
     if (!found) {
       // Name-part fallback (mirror of the analytics page's resolveAuthor):
       // every query part must appear as a whole part of the author's
-      // canonical name, and only a UNIQUE hit counts — so ?author=
+      // canonical name, and only a UNIQUE hit counts — so ?person=
       // Konstantinos Stouras (the ORCID given+family form) widens to the
       // credited "Konstantinos I. Stouras", while a short/ambiguous query
       // stays as typed rather than grabbing the wrong person.
@@ -3264,7 +3285,7 @@ function closeSummaryTabs() {
 }
 
 // Cascading filters: update dropdown options based on cross-filtered results
-function updateDropdownOptions() {
+function updateDropdownOptions(includeOtherJournals) {
   // For each dropdown, compute available options from papers filtered by ALL OTHER filters
   refreshJournalScope();
   var search = document.getElementById('filterSearch').value.trim().toLowerCase();
@@ -3272,41 +3293,46 @@ function updateDropdownOptions() {
   var searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
   var searchAbs = document.getElementById('filterAbstracts').value.trim().toLowerCase();
 
+  function matchesCommon(p) {
+    if (preprintOnly && !safeUrl(p['Preprint'])) return false;
+    if (citedByFilter && !citedByFilter.dois.has(p._bdoi || (p._bdoi = refsNormDoi(p['DOI'])))) return false;
+    var titleText = (p['Title']||'').toLowerCase();
+    if (search && !textMatch(titleText, search)) return false;
+    for (var t of sel.title) { if (!textMatch(titleText, t)) return false; }
+    var authText = (p['Authors']||'').toLowerCase();
+    if (searchAuth && !authorMatch(authText, searchAuth)) return false;
+    for (var a of sel.author) { if (!authorMatch(authText, a)) return false; }
+    for (var lbl in sel.authorIdentity) { if (!identityMatch(authText, sel.authorIdentity[lbl])) return false; }
+    var affText = (p['Affiliations']||'').toLowerCase();
+    if (searchAff && !textMatch(affText, searchAff)) return false;
+    for (var af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
+    var absText = absSearchText(p); // the SHOWN abstract, never the raw deposit
+    if (searchAbs && !textMatch(absText, searchAbs)) return false;
+    for (var ab of sel.abstract) { if (!textMatch(absText, ab)) return false; }
+    return true;
+  }
+  var commonPapers = litPapersInScope().filter(function (p) { return matchesJournal(p) && matchesCommon(p); });
+
   function crossFilter(excludeType) {
-    return allPapers.filter(function(p) {
-      if (excludeType !== 'journal' && !matchesJournal(p)) return false;
-      // The pre-print toggle has no dropdown of its own, so every dropdown's
-      // counts honor it (a chained filter counts within the toggled set) — and
-      // the "Citing papers of" focal filter likewise.
-      if (preprintOnly && !safeUrl(p['Preprint'])) return false;
-      if (citedByFilter && !citedByFilter.dois.has(p._bdoi || (p._bdoi = refsNormDoi(p['DOI'])))) return false;
+    var basis = excludeType === 'journal' ? allPapers.filter(matchesCommon) : commonPapers;
+    return basis.filter(function(p) {
       if (excludeType !== 'editor' && sel.editor.size > 0 && !(p._editors || []).some(function(e) { return sel.editor.has(e); })) return false;
       if (excludeType !== 'area' && sel.area.size > 0 && !sel.area.has(p._area)) return false;
       if (excludeType !== 'se' && sel.se.size > 0 && !(p._se || []).some(function(e) { return sel.se.has(e); })) return false;
       if (excludeType !== 'ae' && sel.ae.size > 0 && !(p._ae || []).some(function(e) { return sel.ae.has(e); })) return false;
       if (excludeType !== 'year' && sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
-      var titleText = (p['Title']||'').toLowerCase();
-      if (search && !textMatch(titleText, search)) return false;
-      for (var t of sel.title) { if (!textMatch(titleText, t)) return false; }
-      var authText = (p['Authors']||'').toLowerCase();
-      if (searchAuth && !authorMatch(authText, searchAuth)) return false;
-      for (var a of sel.author) { if (!authorMatch(authText, a)) return false; }
-      for (var lbl in sel.authorIdentity) { if (!identityMatch(authText, sel.authorIdentity[lbl])) return false; }
-      var affText = (p['Affiliations']||'').toLowerCase();
-      if (searchAff && !textMatch(affText, searchAff)) return false;
-      for (var af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
-      var absText = absSearchText(p); // the SHOWN abstract, never the raw deposit
-      if (searchAbs && !textMatch(absText, searchAbs)) return false;
-      for (var ab of sel.abstract) { if (!textMatch(absText, ab)) return false; }
       return true;
     });
   }
 
   // Journal dropdown (live counts per source under the other active filters)
-  var jPapers = crossFilter('journal');
-  var jCounts = {};
-  jPapers.forEach(function(p) { (p._jkeys || []).forEach(function(k) { jCounts[k] = (jCounts[k] || 0) + 1; }); });
-  buildJournalSelect(jCounts);
+  var journalDrop = document.querySelector('#csJournal .custom-select-dropdown');
+  if (!journalScope || includeOtherJournals || (journalDrop && journalDrop.classList.contains('open'))) {
+    var jPapers = crossFilter('journal');
+    var jCounts = {};
+    jPapers.forEach(function(p) { (p._jkeys || []).forEach(function(k) { jCounts[k] = (jCounts[k] || 0) + 1; }); });
+    buildJournalSelect(jCounts);
+  }
 
   // Editor dropdown
   var edPapers = crossFilter('editor');
@@ -3379,6 +3405,7 @@ function toggleDrop(csId) {
   const isOpen = trigger.classList.toggle('open');
   drop.classList.toggle('open');
   if (isOpen) {
+    if (csId === 'csJournal' && !recentMode) updateDropdownOptions(true);
     const searchInput = cs.querySelector('.custom-select-search');
     searchInput.value = '';
     searchInput.focus();
@@ -3474,7 +3501,7 @@ function applyFilters() {
   ensureScopeSources();
 
   let inScope = 0;
-  filtered = allPapers.filter(p => {
+  filtered = litPapersInScope().filter(p => {
     if (!matchesJournal(p)) return false;
     inScope++;
     if (preprintOnly && !safeUrl(p['Preprint'])) return false;
@@ -3597,7 +3624,7 @@ function toggleFilterPanel() {
 
 function clearFilters() {
   resetFilterState();
-  clearAuthorDeepLink();   // Clear wipes the author chip too — the ?author= URL and flag go with it
+  clearAuthorDeepLink();   // Clear wipes the author chip too — the ?person= URL and flag go with it
   litSyncCitedByUrl();     // …and the ?citedby=/?citedbyauthor= deep-link with the cited-by chip
   closeSummaryTabs();
   applyFilters();
@@ -4471,7 +4498,7 @@ function authorMatch(haystack, query) {
   }
   return false;
 }
-// ORCID-identity matching (the ?author= deep link and the Authors-tab identity
+// ORCID-identity matching (the ?person= deep link and the Authors-tab identity
 // chips). An identity chip carries the author's exact credited spellings
 // (Name_Variants), so a paper matches only when one of its comma-separated
 // author names EQUALS a variant (folded). Substring/prefix tests are too loose
@@ -4578,7 +4605,7 @@ let searchTimer;
 function debounceSearch() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(function() {
-    if (allPapers.length > 0) applyFilters();
+    applyFilters(); // also starts the first scoped download when no papers are loaded
   }, 150);
 }
 
@@ -4592,7 +4619,7 @@ function debounceAffSearch() {
       filterAffiliationsList();
     }
     // Also filter papers live (like author search)
-    if (allPapers.length > 0) applyFilters();
+    applyFilters();
   }, 150);
 }
 
@@ -5602,7 +5629,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!state.user) {
       // Until the FIRST onAuthStateChanged fires, a returning user's session is
       // still being restored — showing "Sign in" then reads as a sign-out
-      // (especially on heavy loads like an ?author= all-journal search, where
+      // (especially on heavy loads like an ?person= all-journal search, where
       // restore can lag far behind first paint). Paint their chip from the
       // cached hint instead; it self-corrects either way once auth resolves.
       if (!authResolved) {
@@ -5672,7 +5699,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   }
   window.acctToggleMenu = function (e) { if (e) e.stopPropagation(); var m = document.getElementById('acctMenu'); if (m) m.classList.toggle('open'); };
   // The account chip always pops out the account menu — including on an
-  // ?author= page (e.g. arrived via the menu's "My publications"), where the
+  // ?person= page (e.g. arrived via the menu's "My publications"), where the
   // menu gains a "Back to The Lit" link to stouras.com/lit/ as its first item
   // (per the owner: the chip used to navigate home directly, which read as a
   // dead click while the author page's heavy all-journal load kept the main
@@ -5681,7 +5708,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // hint chip shares this handler but carries no menu, so on an author page
   // it falls back to that same home navigation.
   function acctOnAuthorPage() {
-    try { return !!new URLSearchParams(location.search).get('author'); } catch (er) { return false; }
+    try { var sp = new URLSearchParams(location.search); return !!(sp.get('person') || sp.get('author')); } catch (er) { return false; }
   }
   window.acctUserChipClick = function (e) {
     if (!document.getElementById('acctMenu')) {
@@ -6335,7 +6362,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   }
   // Tiny cached snapshot of the profile bits the account card renders from,
   // written on every profile snapshot and read while the NEXT page load's
-  // snapshot is still pending — heavy pages (an ?author= all-journal load)
+  // snapshot is still pending — heavy pages (an ?person= all-journal load)
   // can delay Firestore well past first paint, and the card must look the
   // same wherever/whenever the user opens it. Keyed by uid; display-only.
   function litProfHintGet() {
@@ -7054,10 +7081,10 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   // by AUTHOR NAME (their chosen match name, default = full profile name). The
   // hub links out to (a) the main database filtered to that author — showing
   // each paper's citation count — and (b) the Data Analytics author area. Both
-  // are plain ?author= deep-links, so they are shareable and need no extra data.
+  // are plain ?person= deep-links, so they are shareable and need no extra data.
   var orcidMode = 'manage';   // 'prompt' (first-run invite) | 'manage'
   function orcidUrl(id) { return 'https://orcid.org/' + id; }
-  function dbAuthorLink(name)  { return './?author=' + encodeURIComponent(name); }
+  function dbAuthorLink(name)  { return './?person=' + encodeURIComponent(name); }
   function anaAuthorLink(name) { return 'analytics/?author=' + encodeURIComponent(name); }
 
   // ── "Sign in with ORCID" (OpenID Connect implicit flow) ───────────────────
@@ -7218,7 +7245,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!state.user) { acctOpenAuth(); return; }
     acctCloseMenu();
     var nm = orcidMatchName();
-    // No match name on record (empty profile): ./?author= would silently land
+    // No match name on record (empty profile): ./?person= would silently land
     // on the default view — send the user to the profile card to set one up.
     if (!nm) { window.acctOpenProfile(); return; }
     location.assign(dbAuthorLink(nm));

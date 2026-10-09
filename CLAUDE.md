@@ -475,10 +475,10 @@ app's data (~190 MB), scraper and its two workflows (`ft50-update-data.yml`,
 
 ## `/lit` — "The Lit", the multi-journal research paper browser
 **Shareable searches:** `lit/lit-filter-url.js` synchronizes public filter state
-with the query string (repeated parameters for chips, `*-search` for live text,
-`author` plus `author-variants` for identity chips, `recent`, `preprint`, `sort`,
+with the query string (repeated parameters for chips, `author`, `title`, `abstract`, `affiliation` for live text,
+plural names for text chips and `person` plus `variants` for identity chips, `recent`, `preprint`, `sort`,
 and the existing citation parameters). Only actual filters appear in the URL;
-old `filters=1` markers are removed, and clearing the last filter restores the
+old `filters=1` markers and `*-search` names are removed, and clearing the last filter restores the
 plain page URL (a fresh visit then uses the ordinary default-filter behavior).
 Restore runs before data/auth callbacks; `LIT_FILTER_DEEPLINK`
 keeps both site and personal defaults from overriding a shared search. Preserve
@@ -486,6 +486,17 @@ unrelated parameters and hashes, and leave `?list=` to the shared-list lifecycle
 Browser regression: `node lit/_scraper/filter-url-guard.mjs` (set `PW` to a
 Playwright package and `CHROMIUM` to an installed browser when needed; all data
 and external services are mocked, including delayed citation resolution).
+
+**Journal-scoped search performance:** `lit/lit-search-scope.js` indexes rows
+as their source files load. `applyFilters` and the routine dropdown updates
+use only the union of the selected journal/type buckets, deduplicating PNAS
+parent/section overlaps. Common text/preprint/citation predicates are computed
+once per dropdown refresh; the broader journal counts are computed when the
+Journal dropdown is open. Scope changes cancel only search-owned downloads;
+explicit preference-picker loads are retained, and aborted sources return to
+`pending` so widening the scope retries them. Do not treat aborts as missing
+files or discard already-loaded data. Browser regression:
+`node lit/_scraper/search-scope-guard.mjs` (same `PW`/`CHROMIUM` overrides).
 
 Served at `stouras.com/lit/` (a **top-level** directory, `lit/`, NOT under
 `/fun/`; promoted from the old `fun/lit/`, which is now a redirect stub). The app
@@ -1755,18 +1766,18 @@ holds the identity (verified ORCID / own auth e-mail —
 merge, and `maybeApplyMergeStash` also reclaims the merged-away account's
 keys on import), and shows a pointer only on an account holding the
 identity unverified. Inert until the rules are redeployed. Independently of the
-stored name, **the `?author=` deep-link chip is widened to the catalog's full
+stored name, **the `?person=` deep-link chip is widened to the catalog's full
 `Name_Variants`** once authors.json is available (`litUpgradeAuthorDeepLink`;
 the deep-link auto-fetches authors.json; when no exact variant matches it
 falls back to a UNIQUE whole-name-part match, mirroring the analytics page's
-`resolveAuthor` — so `?author=Konstantinos Stouras`, the ORCID given+family
+`resolveAuthor` — so `?person=Konstantinos Stouras`, the ORCID given+family
 form, still finds the credited "Konstantinos I. Stouras") — so ANY author's
 page finds papers credited under any spelling. **Identity chips match
 exactly:** the `sel.authorIdentity` filter compares each comma-separated
 credited author name for (folded) EQUALITY with a variant (`identityMatch` in
 `index.html`, diacritic/apostrophe-folded via `nameFold` like `authorMatch`)
 — never substring/prefix, so "Xin Chen"'s page can't list "Yuxin Chen"'s
-papers. Clicking the account chip on an `?author=`
+papers. Clicking the account chip on an `?person=`
 page pops out the account menu like everywhere else, with a "Back to The Lit"
 link to `stouras.com/lit/` as its first item (`acctUserChipClick`/
 `acctOnAuthorPage`; the chip used to navigate home directly, which read as a
@@ -1775,7 +1786,7 @@ busy — and the mid-restore hint chip, which has no menu yet, QUEUES the
 menu-open via `acctWhenSignedIn` instead of navigating, since the old
 home-navigation fallback silently discarded the page's filters, e.g. a
 running author search). Removing the author chip (or Clear) retires the
-deep-link — `clearAuthorDeepLink` strips `?author=` from the URL and drops
+deep-link — `clearAuthorDeepLink` strips `?person=` from the URL and drops
 the flag, so a reload can't resurrect the heavy all-journal author load.
 The menu's "My publications" carries a **badge with the user's paper count**
 (`litMyPubCount` resolves the match name in the Authors index — fetching it
