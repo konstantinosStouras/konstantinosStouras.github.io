@@ -37,6 +37,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import vm from 'node:vm';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LIT = path.join(HERE, '..');
@@ -65,8 +66,8 @@ ok(!/=>|\bconst\b|\blet\b|`/.test(modSrc.slice(modSrc.indexOf("'use strict'"))),
 /* -------------------------------------- every consumer loads THAT file */
 // The page: the <script src> sits ABOVE the main script, the page keeps no
 // definition of its own (a second copy is how the two would drift), and the
-// Abstracts search reads the SHOWN text through absSearchText in BOTH filter
-// passes — never the raw field.
+// Results and facets share a compiled search; its final verification must
+// read the SHOWN text even when raw text is used to reject obvious misses.
 const main = read('index.html');
 const tagAt = main.indexOf('<script src="lit-abstract.js"></script>');
 const mainScriptAt = main.indexOf('\n<script>\n', main.indexOf('<script type="application/ld+json">'));
@@ -77,8 +78,23 @@ const wrapAt = main.indexOf('function cleanAbstract(');
 ok(wrapAt > 0 && main.indexOf('function cleanAbstract(', wrapAt + 1) === -1
   && /window\.LitAbstract\.cleanAbstract\(s\)/.test(main.slice(wrapAt, wrapAt + 400)),
   'the page\'s cleanAbstract is one wrapper over window.LitAbstract');
-ok((main.match(/absSearchText\(p\)/g) || []).length >= 2,
-  'both filter passes (applyFilters + crossFilter) search the shown abstract via absSearchText');
+const searchSrc = read('lit-search-scope.js');
+ok(/litCollectSearch\(false\)/.test(main) && /updateDropdownOptions\(false, searchResult\)/.test(main)
+  && /var common = litCompileSearch\(\)/.test(searchSrc),
+  'results and cascading counts share the compiled search');
+const searchContext = vm.createContext({
+  sel: { title: new Set(), author: new Set(), affiliation: new Set(), abstract: new Set(), authorIdentity: {} },
+  document: { getElementById: () => ({ value: '' }) },
+  preprintOnly: false, citedByFilter: null,
+  absSearchText: p => (p._absq ??= cleanAbstract(p.Abstract || '').toLowerCase())
+});
+vm.runInContext(searchSrc, searchContext);
+const searchPaper = { Abstract: 'Supply chain research. This paper was accepted by Jane Editor, operations.' };
+for (const [term, expected] of [['supply chain', true], ['accepted by', false], ['jane editor', false], ['research', true]]) {
+  searchContext.sel.abstract = new Set([term]);
+  eq(searchContext.litCompileSearch()(searchPaper), expected,
+    `compiled abstract search matches only the displayed text: ${term}`);
+}
 ok(!/(?<!cleanAbstract)\(p\['Abstract'\]\s*\|\|\s*''\)\.toLowerCase\(\)/.test(main),
   'no filter pass lower-cases the raw Abstract field for searching any more');
 ok(main.indexOf('function absSearchText(') > 0 && /_absq/.test(main.slice(main.indexOf('function absSearchText('), main.indexOf('function absSearchText(') + 300)),
