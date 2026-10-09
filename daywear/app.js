@@ -1,11 +1,12 @@
-import {createPrivateCatalog} from './private-models.js?v=20261009-account-ui';
-import {getAccountToken} from './auth.js?v=20261009-account-ui';
-import {hasPersonalModel,modelImageSource,modelCaption,modelFitNotes} from './model-policy.js?v=20261009-account-ui';
-import {profileFields,readProfile,saveProfile,modelBrief} from './profile.js?v=20261009-account-ui';
-import {accountStorageKey} from './auth-policy.js?v=20261009-account-ui';
-import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js?v=20261009-account-ui';
-import {fetchWeather,recommend,condition} from './weather.js?v=20261009-account-ui';
-import {detectLocation,locationPreference,rememberCity,locationError} from './location.js?v=20261009-account-ui';
+import {installMeasurementGuides} from './measurement-guides.js?v=20261009-measure-guides';
+import {createPrivateCatalog} from './private-models.js?v=20261009-measure-guides';
+import {getAccountToken} from './auth.js?v=20261009-measure-guides';
+import {hasPersonalModel,modelImageSource,modelCaption,modelFitNotes} from './model-policy.js?v=20261009-measure-guides';
+import {profileFields,readProfile,saveProfile,modelBrief} from './profile.js?v=20261009-measure-guides';
+import {accountStorageKey} from './auth-policy.js?v=20261009-measure-guides';
+import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js?v=20261009-measure-guides';
+import {fetchWeather,recommend,condition} from './weather.js?v=20261009-measure-guides';
+import {detectLocation,locationPreference,rememberCity,locationError} from './location.js?v=20261009-measure-guides';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let key=accountStorageKey(null),accountUid=null;
 const privateCatalog=createPrivateCatalog();let modelState='default',modelError='',modelRequest=0;
@@ -80,3 +81,5 @@ document.addEventListener('wardrobe:account',event=>{
  notifyProfile();$('#modal').close();render();if(hasPersonalModel(uid))loadPersonalModel();
  if(state.locationMode==='travel')refresh();else useCurrentLocation();
 });
+
+installMeasurementGuides();
