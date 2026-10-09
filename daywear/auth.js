@@ -1,6 +1,7 @@
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261009-account-ui';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261009-account-ui';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261009-account-ui';
+import {getLanguage} from './i18n.js?v=20261009-languages';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261009-languages';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261009-languages';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261009-languages';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
@@ -36,7 +37,7 @@ function render(){
  if(!ready){modal.innerHTML=close+intro+'<h2>Your wardrobe, your account.</h2><p>'+(initializationError?'Sign-in could not load. Check your connection and try again.':'Connecting securely…')+'</p>'+(initializationError?'<button data-account="retry">Try again</button>':'');return;}
  if(user){
   const verified=user.emailVerified;
-  modal.innerHTML=close+intro+'<h2>Welcome'+(user.displayName?', '+esc(user.displayName):' back')+'.</h2><p>'+esc(user.email)+'</p><span class="tag">'+(verified?'Email verified':'Email verification pending')+'</span>'+status+
+  modal.innerHTML=close+intro+'<h2>Welcome'+(user.displayName?', '+esc(user.displayName):' back')+'.</h2><p data-i18n-skip>'+esc(user.email)+'</p><span class="tag">'+(verified?'Email verified':'Email verification pending')+'</span>'+status+
    (!verified?'<div class="callout"><p>Check your inbox for a verification email.</p><div class="actions"><button data-account="verify">Resend email</button><button data-account="check-verification">I’ve verified my email</button></div></div>':'')+
    '<section class="section"><h3>Your account & data</h3><p class="form-note">Firebase securely manages your sign-in. Your wardrobe choices are saved separately for this account in this browser. Cross-device wardrobe sync is not enabled yet.</p><div class="actions"><button data-account="profile">Wardrobe profile</button><button data-account="signout">Sign out</button></div></section>'+
    '<details class="section"><summary>Delete account</summary><p class="form-note">Deletes your Firebase account and this account’s saved wardrobe on this device. Backups and data on other devices are not removed.</p><button data-account="delete-confirm">Delete my account…</button></details>';
@@ -67,6 +68,7 @@ async function initialize(){
  try{
   const [app,authSdk]=await Promise.all([import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')]);
   sdk=authSdk;auth=sdk.initializeAuth(app.initializeApp(firebaseConfig),{persistence:[sdk.browserSessionPersistence,sdk.browserLocalPersistence],popupRedirectResolver:sdk.browserPopupRedirectResolver});
+  auth.languageCode=getLanguage();
   sdk.onAuthStateChanged(auth,next=>{user=next;profileName='';ready=true;notify();render();},()=>{initializationError=true;render();});
  }catch{initializationError=true;render();}
 }
@@ -104,3 +106,5 @@ modal.addEventListener('submit',e=>{
  });
 });
 initialize();
+
+document.addEventListener('wardrobe:language',()=>{if(auth)auth.languageCode=getLanguage();});

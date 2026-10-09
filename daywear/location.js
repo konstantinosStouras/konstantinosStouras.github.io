@@ -1,3 +1,4 @@
+import {getLanguage} from './i18n.js?v=20261009-languages';
 export function locationPreference(saved={}){
  return saved.locationMode==='travel'&&saved.location?'travel':'current';
 }
@@ -27,7 +28,7 @@ export async function detectLocation({geolocation=globalThis.navigator?.geolocat
  // City-level coordinates are sufficient for a wardrobe forecast. Never store a precise fix.
  const location={latitude:Number(latitude.toFixed(2)),longitude:Number(longitude.toFixed(2)),name:'your current location',country:'',timezone:'auto',source:'device'};
  try{
-  const query=new URLSearchParams({latitude:location.latitude,longitude:location.longitude,localityLanguage:'en'});
+  const query=new URLSearchParams({latitude:location.latitude,longitude:location.longitude,localityLanguage:getLanguage()});
   const response=await fetcher(`https://api.bigdatacloud.net/data/reverse-geocode-client?${query}`,{signal:AbortSignal.timeout(6000)});
   if(response.ok){const city=await response.json();location.name=city.city||city.locality||location.name;location.country=city.countryName||'';}
  }catch{/* The coordinates still work for weather if the city-name service is unavailable. */}
@@ -36,7 +37,7 @@ export async function detectLocation({geolocation=globalThis.navigator?.geolocat
 export async function detectApproximateLocation(fetcher=globalThis.fetch){
  // The provider's documented client-side fallback resolves the calling device's IP.
  // No device coordinates are sent and the result is never labelled as a GPS fix.
- const response=await fetcher('https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=en',{signal:AbortSignal.timeout(8000)});
+ const response=await fetcher(`https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=${getLanguage()}`,{signal:AbortSignal.timeout(8000)});
  if(!response.ok)throw new Error('Automatic city detection is unavailable. Choose a city.');
  const data=await response.json();
  const {latitude,longitude}=data,name=data.city||data.locality||data.localityName;
