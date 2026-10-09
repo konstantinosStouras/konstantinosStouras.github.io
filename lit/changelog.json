@@ -6,7 +6,7 @@
       "id": "compact-search-refinement",
       "date": "2026-10-09",
       "title": "More room for papers, with Refine search",
-      "summary": "The full search form scrolls away while a compact bar keeps your result count, active filters and Refine search within reach. Edit filters in a side panel on desktop or a sheet on mobile; closing it preserves your reading position. Shared searches open at the results.",
+      "summary": "The full search form scrolls away while a compact bar appears only after scrolling, keeping your result count, active filters and Refine search within reach. Before scrolling, the original count-and-sort row stays uncluttered. Edit filters in a desktop side panel or mobile sheet; closing it preserves your reading position.",
       "url": "https://www.stouras.com/lit/"
     },
     {

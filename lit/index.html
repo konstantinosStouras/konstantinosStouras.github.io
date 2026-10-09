@@ -772,15 +772,17 @@
   @media (max-width: 560px) { .alert-delivery { grid-template-columns: 1fr; } }
 
   /* Compact reading bar and on-demand refinement. No scroll-driven resizing. */
-  .lit-search-summary { position: sticky; top: 0; z-index: 100; background: var(--white); border-bottom: 1px solid var(--border); padding-top: 12px; padding-bottom: 12px; gap: 10px; box-shadow: var(--shadow-sm); }
-  .lit-search-summary .results-count { flex: 0 1 230px; font-size: 13px; }
-  .lit-search-summary .results-count:empty::before { content: 'Search papers'; }
+  .lit-search-summary { position: sticky; top: 0; z-index: 100; }
+  .lit-search-summary:not(.lit-search-reading) .lit-active-filters, .lit-search-summary:not(.lit-search-reading) .lit-refine-button { display: none; }
+  .lit-search-summary.lit-search-reading { position: sticky; top: 0; z-index: 100; background: var(--white); border-bottom: 1px solid var(--border); padding-top: 12px; padding-bottom: 12px; gap: 10px; box-shadow: var(--shadow-sm); }
+  .lit-search-summary.lit-search-reading .results-count { flex: 0 1 230px; font-size: 13px; }
+  .lit-search-summary.lit-search-reading .results-count:empty::before { content: 'Search papers'; }
   .lit-active-filters { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .lit-active-filter { border: 0; border-radius: 20px; background: var(--navy-light); color: var(--navy); padding: 7px 11px; font: 500 12px 'Work Sans', sans-serif; cursor: pointer; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lit-active-filter:hover { background: #ecd7dd; }
   .lit-refine-button { font-size: 14px; white-space: nowrap; padding: 10px 14px; }
-  .lit-search-summary .sort-control { gap: 5px; font-size: 12px; }
-  .lit-search-summary .sort-control select { font-size: 13px; padding: 9px 6px; max-width: 105px; }
+  .lit-search-summary.lit-search-reading .sort-control { gap: 5px; font-size: 12px; }
+  .lit-search-summary.lit-search-reading .sort-control select { font-size: 13px; padding: 9px 6px; max-width: 105px; }
   body.lit-lib-mode .lit-active-filters, body.lit-lib-mode .lit-refine-button,
   body.lit-shared-mode .lit-active-filters, body.lit-shared-mode .lit-refine-button { display: none; }
   body.lit-lib-mode .lit-search-summary, body.lit-shared-mode .lit-search-summary { position: static; }
@@ -816,12 +818,12 @@
   .lit-refine-layout .cb-kind { max-width: 100px; }
   @media (max-width: 768px) {
     html:has(body.lit-refining) { scrollbar-gutter: auto; }
-    .lit-search-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-    .lit-search-summary .results-count { grid-column: 1; grid-row: 1; font-size: 12px; }
+    .lit-search-summary.lit-search-reading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .lit-search-summary.lit-search-reading .results-count { grid-column: 1; grid-row: 1; font-size: 12px; }
     .lit-refine-button { grid-column: 2; grid-row: 1; }
     .lit-active-filters { grid-column: 1; grid-row: 2; max-height: 34px; overflow: hidden; flex-wrap: nowrap; }
     .lit-active-filter { flex: 0 1 auto; min-width: 0; max-width: 160px; }
-    .lit-search-summary .sort-control { grid-column: 2; grid-row: 2; justify-content: end; }
+    .lit-search-summary.lit-search-reading .sort-control { grid-column: 2; grid-row: 2; justify-content: end; }
     .lit-refine-dialog { inset: auto 0 0; width: 100%; height: 92dvh; max-height: 92dvh; border: 0; border-radius: 18px 18px 0 0; }
     .lit-refine-dialog .filter-group { grid-column: auto; }
   }
@@ -965,9 +967,6 @@
       <button class="recent-tab-btn" id="recentBtn" onclick="toggleRecent()" title="Papers added to the database in the last 4 weeks, newest first.">Recently added papers</button>
       <button class="recent-tab-btn" id="preprintBtn" onclick="togglePreprintOnly()" title="Only papers with a free author pre-print on arXiv or SSRN. Coverage grows daily as the backfill runs.">Pre-print (Open Access) papers</button>
     </div>
-    <div class="filters-collapse-row">
-      <button class="btn btn-secondary" id="filtersToggle" onclick="litViewResults()">View results ↓</button>
-    </div>
   </div>
 </div>
 </div>
@@ -1011,6 +1010,7 @@
   <div class="library-sub" id="sharedSub"></div>
 </div>
 
+<div id="litSearchSentinel" aria-hidden="true"></div>
 <div class="results-bar lit-search-summary" id="litSearchSummary" aria-label="Search results and active filters">
   <div class="results-count" id="resultsCount"></div>
   <div id="litActiveFilters" class="lit-active-filters" aria-label="Active filters"></div>
@@ -1053,7 +1053,7 @@
 <script src="lit-abstract.js"></script>
 <script src="lit-filter-url.js?v=3"></script>
 <script src="lit-search-scope.js?v=2"></script>
-<script src="lit-search-ui.js?v=1" defer></script>
+<script src="lit-search-ui.js?v=2" defer></script>
 <script>
 // ── Data source: static JSON, no Google Sheets ───────────────────────────────
 // These files are built from public APIs (Crossref + friends) by a scheduled

@@ -475,7 +475,10 @@ app's data (~190 MB), scraper and its two workflows (`ft50-update-data.yml`,
 
 ## `/lit` — "The Lit", the multi-journal research paper browser
 **Search layout:** The full header/form is in normal flow. The results bar is
-sticky, with bounded clickable active-filter chips and Refine search.
+sticky, with bounded clickable active-filter chips and Refine search only after
+its normal-flow sentinel has scrolled past the viewport. Before scrolling,
+keep the original transparent count/sort row; no duplicated filter summary or
+extra View results row.
 `lit/lit-search-ui.js` (deferred) moves the SAME controls into a native modal
 side panel (mobile bottom sheet), using comment anchors to restore their exact
 positions on close. Preserve IDs, inline handlers, search semantics, account

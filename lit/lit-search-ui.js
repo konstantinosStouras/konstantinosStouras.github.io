@@ -9,6 +9,7 @@
   var dialog = document.getElementById('litRefineDialog');
   var refine = document.getElementById('litRefineButton');
   var count = document.getElementById('resultsCount');
+  var sentinel = document.getElementById('litSearchSentinel');
   var moves = [], layout, returnFocus, oldHeight, oldScroll, homePassed;
   var frame = 0, pendingText = false;
   var anchorStyle = '';
@@ -40,6 +41,11 @@
   }
   function update() {
     frame = 0;
+    // The original count/sort row is enough while the full form is visible.
+    // The sentinel stays in normal flow, independent of the sticky bar.
+    var boundary = sentinel.getBoundingClientRect().top;
+    summary.classList.toggle('lit-search-reading', boundary <= 1 ||
+      (summary.classList.contains('lit-search-reading') && boundary < 12));
     var selected = entries();
     // Keep the compact bar bounded even for a heavily refined search. All
     // selections remain visible in their original controls inside the dialog.
@@ -208,6 +214,7 @@
   }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   window.addEventListener('popstate', schedule);
   window.addEventListener('resize', schedule);
+  window.addEventListener('scroll', schedule, { passive: true });
   // Retire the former manual-collapse preference; the full form is available
   // by scrolling up, regardless of a browser's old Hide filters setting.
   try { localStorage.removeItem('litFiltersCollapsed'); } catch (e) {}

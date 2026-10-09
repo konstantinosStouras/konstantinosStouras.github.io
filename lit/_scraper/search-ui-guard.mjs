@@ -45,6 +45,13 @@ try {
 
 
   await page.setViewportSize({width:1440,height:900});
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.waitForFunction(()=>!document.getElementById('litSearchSummary').classList.contains('lit-search-reading'));
+  assert.equal(await page.locator('#litRefineButton').isVisible(),false);
+  assert.equal(await page.locator('#litActiveFilters').isVisible(),false);
+  assert.equal(await page.locator('#filtersToggle').count(),0);
+  assert.equal(await page.locator('#litSearchSummary').evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)');
+  console.log('PASS original count/sort row before scrolling; no additional white bar or View results row');
   await page.evaluate(() => {
     allPapers = Array.from({length:100},(_,i)=>({JKey:'ms',_jkeys:['ms'],DOI:'10.1/'+i,Title:'A research paper about supply chains '+i,Authors:'Konstantinos Stouras',Year:'2026',Abstract:'Supply chains',_editors:[],_se:[],_ae:[]}));
     applyFilters();litViewResults();
@@ -90,8 +97,11 @@ try {
   assert.equal(await page.locator('#litActiveFilters button').count(),0);
   console.log('PASS sticky compact bar, single live form, clickable filters, URL sync, Clear, Escape and reading position');
   if(process.env.UI_SCREENSHOT) await page.screenshot({path:process.env.UI_SCREENSHOT,fullPage:false});
+  await page.evaluate(()=>{sel.journal.add('ms');document.getElementById('filterAuthors').value='stouras';applyFilters();litViewResults();});
   for(const width of [768,390,320]){
     await page.setViewportSize({width,height:800});
+    await page.evaluate(()=>litViewResults());
+    await page.waitForFunction(()=>document.getElementById('litSearchSummary').classList.contains('lit-search-reading'));
     await page.locator('#litRefineButton').click();
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     const box=await page.locator('#litRefineDialog').boundingBox();
