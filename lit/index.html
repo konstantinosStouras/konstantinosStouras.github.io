@@ -1035,7 +1035,7 @@
      shared with the alerts mailer and emit-db.mjs (see lit/lit-abstract.js). -->
 <script src="lit-abstract.js"></script>
 <script src="lit-filter-url.js?v=3"></script>
-<script src="lit-search-scope.js?v=1"></script>
+<script src="lit-search-scope.js?v=2"></script>
 <script>
 // ── Data source: static JSON, no Google Sheets ───────────────────────────────
 // These files are built from public APIs (Crossref + friends) by a scheduled
@@ -3285,83 +3285,15 @@ function closeSummaryTabs() {
 }
 
 // Cascading filters: update dropdown options based on cross-filtered results
-function updateDropdownOptions(includeOtherJournals) {
-  // For each dropdown, compute available options from papers filtered by ALL OTHER filters
-  refreshJournalScope();
-  var search = document.getElementById('filterSearch').value.trim().toLowerCase();
-  var searchAuth = document.getElementById('filterAuthors').value.trim().toLowerCase();
-  var searchAff = document.getElementById('filterAffiliations').value.trim().toLowerCase();
-  var searchAbs = document.getElementById('filterAbstracts').value.trim().toLowerCase();
-
-  function matchesCommon(p) {
-    if (preprintOnly && !safeUrl(p['Preprint'])) return false;
-    if (citedByFilter && !citedByFilter.dois.has(p._bdoi || (p._bdoi = refsNormDoi(p['DOI'])))) return false;
-    var titleText = (p['Title']||'').toLowerCase();
-    if (search && !textMatch(titleText, search)) return false;
-    for (var t of sel.title) { if (!textMatch(titleText, t)) return false; }
-    var authText = (p['Authors']||'').toLowerCase();
-    if (searchAuth && !authorMatch(authText, searchAuth)) return false;
-    for (var a of sel.author) { if (!authorMatch(authText, a)) return false; }
-    for (var lbl in sel.authorIdentity) { if (!identityMatch(authText, sel.authorIdentity[lbl])) return false; }
-    var affText = (p['Affiliations']||'').toLowerCase();
-    if (searchAff && !textMatch(affText, searchAff)) return false;
-    for (var af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
-    var absText = absSearchText(p); // the SHOWN abstract, never the raw deposit
-    if (searchAbs && !textMatch(absText, searchAbs)) return false;
-    for (var ab of sel.abstract) { if (!textMatch(absText, ab)) return false; }
-    return true;
-  }
-  var commonPapers = litPapersInScope().filter(function (p) { return matchesJournal(p) && matchesCommon(p); });
-
-  function crossFilter(excludeType) {
-    var basis = excludeType === 'journal' ? allPapers.filter(matchesCommon) : commonPapers;
-    return basis.filter(function(p) {
-      if (excludeType !== 'editor' && sel.editor.size > 0 && !(p._editors || []).some(function(e) { return sel.editor.has(e); })) return false;
-      if (excludeType !== 'area' && sel.area.size > 0 && !sel.area.has(p._area)) return false;
-      if (excludeType !== 'se' && sel.se.size > 0 && !(p._se || []).some(function(e) { return sel.se.has(e); })) return false;
-      if (excludeType !== 'ae' && sel.ae.size > 0 && !(p._ae || []).some(function(e) { return sel.ae.has(e); })) return false;
-      if (excludeType !== 'year' && sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
-      return true;
-    });
-  }
-
-  // Journal dropdown (live counts per source under the other active filters)
-  var journalDrop = document.querySelector('#csJournal .custom-select-dropdown');
-  if (!journalScope || includeOtherJournals || (journalDrop && journalDrop.classList.contains('open'))) {
-    var jPapers = crossFilter('journal');
-    var jCounts = {};
-    jPapers.forEach(function(p) { (p._jkeys || []).forEach(function(k) { jCounts[k] = (jCounts[k] || 0) + 1; }); });
-    buildJournalSelect(jCounts);
-  }
-
-  // Editor dropdown
-  var edPapers = crossFilter('editor');
-  var edCounts = {};
-  edPapers.forEach(function(p) { (p._editors || []).forEach(function(e) { edCounts[e] = (edCounts[e] || 0) + 1; }); });
-  fillCustomSelect('csEditor', Object.keys(edCounts).sort(), edCounts);
-
-  // Senior/Associate Editor dropdowns (ISR & Marketing Science)
-  var seCounts = {};
-  crossFilter('se').forEach(function(p) { (p._se || []).forEach(function(e) { seCounts[e] = (seCounts[e] || 0) + 1; }); });
-  fillCustomSelect('csSE', Object.keys(seCounts).sort(), seCounts);
-  var aeCounts = {};
-  crossFilter('ae').forEach(function(p) { (p._ae || []).forEach(function(e) { aeCounts[e] = (aeCounts[e] || 0) + 1; }); });
-  fillCustomSelect('csAE', Object.keys(aeCounts).sort(), aeCounts);
-
-  // Area dropdown
-  var arPapers = crossFilter('area');
-  var arCounts = {};
-  arPapers.forEach(function(p) { if (p._area) arCounts[p._area] = (arCounts[p._area] || 0) + 1; });
-  fillCustomSelect('csArea', Object.keys(arCounts).sort(), arCounts);
-
-  // Year dropdown
-  var yrPapers = crossFilter('year');
-  var yrCounts = {};
-  yrPapers.forEach(function(p) { if (p['Year']) yrCounts[p['Year']] = (yrCounts[p['Year']] || 0) + 1; });
-  fillCustomSelect('csYear', Object.keys(yrCounts).sort().reverse(), yrCounts);
-
-  // Update summary tabs with filtered counts
-  buildSummaryTabs(edCounts, arCounts);
+function updateDropdownOptions(includeOtherJournals, result) {
+  if (!result) { refreshJournalScope(); result = litCollectSearch(includeOtherJournals); }
+  if (result.journal) buildJournalSelect(result.journal);
+  fillCustomSelect('csEditor', Object.keys(result.editor).sort(), result.editor);
+  fillCustomSelect('csSE', Object.keys(result.se).sort(), result.se);
+  fillCustomSelect('csAE', Object.keys(result.ae).sort(), result.ae);
+  fillCustomSelect('csArea', Object.keys(result.area).sort(), result.area);
+  fillCustomSelect('csYear', Object.keys(result.year).sort().reverse(), result.year);
+  buildSummaryTabs(result.editor, result.area);
 }
 
 // Selected values pin to the TOP of every filter dropdown, kept in their
@@ -3500,51 +3432,11 @@ function applyFilters() {
   // as each one lands.
   ensureScopeSources();
 
-  let inScope = 0;
-  filtered = litPapersInScope().filter(p => {
-    if (!matchesJournal(p)) return false;
-    inScope++;
-    if (preprintOnly && !safeUrl(p['Preprint'])) return false;
-    // The "Citing papers of" focal filter: only papers in the resolved citer
-    // set pass (bare DOI cached per row — the set is keyed by bare lowercase).
-    if (citedByFilter && !citedByFilter.dois.has(p._bdoi || (p._bdoi = refsNormDoi(p['DOI'])))) return false;
-    if (sel.editor.size > 0 && !(p._editors || []).some(e => sel.editor.has(e))) return false;
-    if (sel.area.size > 0 && !sel.area.has(p._area)) return false;
-    if (sel.se.size > 0 && !(p._se || []).some(e => sel.se.has(e))) return false;
-    if (sel.ae.size > 0 && !(p._ae || []).some(e => sel.ae.has(e))) return false;
-    if (sel.year.size > 0 && !sel.year.has(p['Year'])) return false;
+  var searchResult = litCollectSearch(false);
+  filtered = searchResult.rows;
+  scopeCount = searchResult.scope;
 
-    // Title: live typed text AND all chips must match (AND logic). Substring by
-    // default; a "quoted" query matches that exact word only (see textMatch).
-    const titleText = (p['Title']||'').toLowerCase();
-    if (search && !textMatch(titleText, search)) return false;
-    for (const t of sel.title) { if (!textMatch(titleText, t)) return false; }
-
-    // Authors: live typed text, substring chips, and ORCID-identity chips (each
-    // identity matches any of the person's name variants).
-    const authText = (p['Authors']||'').toLowerCase();
-    if (searchAuth && !authorMatch(authText, searchAuth)) return false;
-    for (const a of sel.author) { if (!authorMatch(authText, a)) return false; }
-    for (const lbl in sel.authorIdentity) { if (!identityMatch(authText, sel.authorIdentity[lbl])) return false; }
-
-    // Affiliations: live typed text AND all chips must match
-    const affText = (p['Affiliations']||'').toLowerCase();
-    if (searchAff && !textMatch(affText, searchAff)) return false;
-    for (const af of sel.affiliation) { if (!textMatch(affText, af)) return false; }
-
-    // Abstracts: full-text search over the abstract the card SHOWS (never the
-    // raw deposit with INFORMS' acceptance sentence on it), same substring/
-    // quoted-word rules as the title search (a paper with no abstract on
-    // record can never match, so an abstract query filters it out).
-    const absText = absSearchText(p);
-    if (searchAbs && !textMatch(absText, searchAbs)) return false;
-    for (const ab of sel.abstract) { if (!textMatch(absText, ab)) return false; }
-
-    return true;
-  });
-  scopeCount = inScope;
-
-  filtered.sort((a, b) => {
+  if (!searchResult.ordered) filtered.sort((a, b) => {
     switch(sort) {
       case 'year-desc': return (b['Year']||'').localeCompare(a['Year']||'') || (statusRank(b) - statusRank(a)) || (b['Volume']||'').localeCompare(a['Volume']||'');
       case 'year-asc': return (a['Year']||'').localeCompare(b['Year']||'') || (statusRank(a) - statusRank(b));
@@ -3554,9 +3446,10 @@ function applyFilters() {
     return 0;
   });
 
+  litRememberSearchOrder(searchResult);
   currentPage = 1;
   renderPage();
-  updateDropdownOptions();
+  updateDropdownOptions(false, searchResult);
 }
 
 // Clear all filter selections, chips and search inputs without re-rendering.
@@ -4056,8 +3949,8 @@ function filterByArea(name) {
 // is rendered; a "Show more" button appends the rest in slices. Card indices
 // stay equal to their position in `filtered`, so the Abstract/BibTeX toggles
 // keep resolving correctly on appended cards.
-const RENDER_FIRST = 250;
-const RENDER_MORE = 500;
+const RENDER_FIRST = 50;
+const RENDER_MORE = 100;
 
 function showMoreButtonHTML(remaining) {
   return '<div id="showMoreWrap" class="show-more-wrap"><button class="btn btn-secondary" onclick="showMoreCards()">Show ' +

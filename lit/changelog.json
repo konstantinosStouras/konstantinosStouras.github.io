@@ -3,6 +3,13 @@
   "version": 1,
   "updates": [
     {
+      "id": "faster-journal-type-and-field-search",
+      "date": "2026-10-09",
+      "title": "Faster FT50 and other broad searches",
+      "summary": "Journal-type and all-field searches now share one filtering pass with their dropdown counts, reuse prepared search text and sorting, and process abstracts only when needed. Results show the first 50 papers promptly, with more available through Show more.",
+      "url": "https://www.stouras.com/lit/?jtype=ft50"
+    },
+    {
       "id": "faster-journal-scoped-search",
       "date": "2026-10-09",
       "title": "Faster searches within your selected journals",

@@ -490,8 +490,17 @@ and external services are mocked, including delayed citation resolution).
 **Journal-scoped search performance:** `lit/lit-search-scope.js` indexes rows
 as their source files load. `applyFilters` and the routine dropdown updates
 use only the union of the selected journal/type buckets, deduplicating PNAS
-parent/section overlaps. Common text/preprint/citation predicates are computed
-once per dropdown refresh; the broader journal counts are computed when the
+parent/section overlaps. Results and cascading editor/area/SE/AE/year counts share a single pass,
+with the same common text/preprint/citation predicate. Terms (including quoted
+regexes and folded identity variants) compile once per search; row text is
+normalized lazily and cached with its raw source for metadata invalidation.
+Abstracts are only cleaned for abstract queries whose raw text can match,
+then verified against the shared display cleaner; unused fields are untouched.
+An already sorted full scope supplies subsequent filtered subsets in order;
+new data or a different sort invalidates that single-entry cache. Cards render
+50 initially and 100 per Show more click. Semantic and performance regression:
+`node lit/_scraper/search-performance-guard.mjs` (same browser overrides).
+The broader journal counts are computed when the
 Journal dropdown is open. Scope changes cancel only search-owned downloads;
 explicit preference-picker loads are retained, and aborted sources return to
 `pending` so widening the scope retries them. Do not treat aborts as missing
