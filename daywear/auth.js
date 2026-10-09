@@ -4,7 +4,7 @@ import {passwordProblem,authMessage} from './auth-policy.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
 const modal=document.createElement('dialog');
-modal.id='account-modal';modal.className='account-modal';modal.setAttribute('aria-label','Your account');
+modal.id='account-modal';modal.className='account-modal';modal.setAttribute('aria-label','Your account');modal.tabIndex=-1;
 document.body.append(modal);
 const trigger=document.querySelector('#account-button');
 const providerNames={'google.com':'Google','facebook.com':'Facebook','apple.com':'Apple','microsoft.com':'Microsoft'};
@@ -24,23 +24,25 @@ function render(){
    (!verified?'<div class="callout"><p>Check your inbox for a verification email.</p><div class="actions"><button data-account="verify">Resend email</button><button data-account="check-verification">I’ve verified my email</button></div></div>':'')+
    '<section class="section"><h3>Your account & data</h3><p class="form-note">Firebase securely manages your sign-in. Your wardrobe choices are saved separately for this account in this browser. Cross-device wardrobe sync is not enabled yet.</p><div class="actions"><button data-account="profile">Wardrobe profile</button><button data-account="signout">Sign out</button></div></section>'+
    '<details class="section"><summary>Delete account</summary><p class="form-note">Deletes your Firebase account and this account’s saved wardrobe on this device. Backups and data on other devices are not removed.</p><button data-account="delete-confirm">Delete my account…</button></details>';
-  return;
+  modal.scrollTop=0;return;
  }
  const register=view==='register',reset=view==='reset';
  modal.innerHTML=close+intro+'<h2>'+(reset?'A fresh start.':register?'Make room for better days.':'Welcome back.')+'</h2><p class="muted">'+(reset?'We’ll send a link to reset your password.':register?'Create your personal wardrobe account.':'Sign in to your wardrobe account.')+'</p>'+
   (!reset?'<div class="auth-providers">'+enabledProviders.map(id=>'<button type="button" class="social-button" data-provider="'+id+'">'+(id==='google.com'?'<svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.8 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.5a4.7 4.7 0 0 1-2 3.1v2.6h3.3c1.9-1.8 3-4.4 3-7.6Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.8-2.5l-3.3-2.6c-.9.6-2.1 1-3.5 1-2.6 0-4.8-1.8-5.6-4.2H3v2.7A10.2 10.2 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.7a6 6 0 0 1 0-3.4V7.6H3a10 10 0 0 0 0 8.8l3.4-2.7Z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.9-2.9A9.6 9.6 0 0 0 12 2a10.2 10.2 0 0 0-9 5.6l3.4 2.7C7.2 7.9 9.4 6.1 12 6.1Z"/></svg>':'')+'Continue with '+providerNames[id]+'</button>').join('')+'</div><div class="auth-divider"><span>or use your email</span></div>':'')+
   '<form id="auth-form">'+(register?'<label class="field">Your name<input name="name" autocomplete="given-name" maxlength="50" required></label>':'')+
   '<label class="field">Email address<input name="email" type="email" autocomplete="email" maxlength="254" required></label>'+
-  (!reset?'<label class="field">Password<span class="password-field"><input name="password" type="password" autocomplete="'+(register?'new-password':'current-password')+'" '+(register?'minlength="10" maxlength="128"':'')+' required><button type="button" data-account="show-password" aria-label="Show password">Show</button></span></label>':'')+
+  (!reset?'<div class="field"><label for="auth-password">Password</label><span class="password-field"><input id="auth-password" name="password" type="password" autocomplete="'+(register?'new-password':'current-password')+'" '+(register?'minlength="10" maxlength="128"':'')+' required><button type="button" data-account="show-password" aria-label="Show password">Show</button></span></div>':'')+
   (register?'<p class="caption">Use 10–128 characters. A long, unique passphrase works well.</p><label class="field">Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>':'')+
   (!reset?'<label class="remember"><input name="remember" type="checkbox"> Keep me signed in on this device</label>':'')+status+
   '<button class="primary auth-submit">'+(reset?'Send reset link':register?'Create account':'Sign in')+'</button></form>'+
   (!register&&!reset?'<button class="text-button auth-forgot" data-account="reset">Forgot password?</button>':'')+
   '<div class="auth-switch">'+(reset?'<button class="text-button" data-account="signin">Back to sign in</button>':register?'Already have an account? <button class="text-button" data-account="signin">Sign in</button>':'New here? <button class="text-button" data-account="register">Create an account</button>')+'</div><p class="caption muted">Your name, email and sign-in details are processed by Firebase. Passwords are never saved by this website. Wardrobe preferences stay on this device.</p>';
+ modal.scrollTop=0;modal.focus({preventScroll:true});
 }
-async function run(task){
- if(busy)return;busy=true;modal.setAttribute('aria-busy','true');modal.querySelectorAll('button,input').forEach(el=>el.disabled=true);message('Please wait…');
- try{await task();}catch(error){message(authMessage(error));}finally{busy=false;modal.removeAttribute('aria-busy');modal.querySelectorAll('button,input').forEach(el=>el.disabled=false);}
+async function run(task,waitingText='Still connecting. Check your internet connection if this takes a while.'){
+ if(busy)return;busy=true;modal.setAttribute('aria-busy','true');modal.querySelectorAll('button:not([data-account="close"]),input').forEach(el=>el.disabled=true);message('Please wait…');
+ const waiting=setTimeout(()=>message(waitingText),12000);
+ try{await task();}catch(error){message(authMessage(error));}finally{clearTimeout(waiting);busy=false;modal.removeAttribute('aria-busy');modal.querySelectorAll('button,input').forEach(el=>el.disabled=false);}
 }
 async function persistence(remember){await sdk.setPersistence(auth,remember?sdk.browserLocalPersistence:sdk.browserSessionPersistence);}
 function provider(id){if(!enabledProviders.includes(id))throw {code:'auth/operation-not-allowed'};if(id==='google.com'){const p=new sdk.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});return p;}if(id==='facebook.com')return new sdk.FacebookAuthProvider();return new sdk.OAuthProvider(id);}
@@ -61,7 +63,7 @@ modal.addEventListener('click',e=>{
  if(['signin','register','reset'].includes(action)){view=action;notice='';render();return;}
  if(action==='show-password'){const field=modal.querySelector('[name=password]');field.type=field.type==='password'?'text':'password';el.textContent=field.type==='password'?'Show':'Hide';el.setAttribute('aria-label',field.type==='password'?'Show password':'Hide password');return;}
  if(action==='profile'){modal.close();document.querySelector('[data-action=settings]').click();return;}
- if(el.dataset.provider){const p=provider(el.dataset.provider),remember=!!modal.querySelector('[name=remember]')?.checked;run(async()=>{await persistence(remember);await sdk.signInWithPopup(auth,p);notice='';render();});}
+ if(el.dataset.provider){const p=provider(el.dataset.provider),remember=!!modal.querySelector('[name=remember]')?.checked;run(async()=>{await persistence(remember);await sdk.signInWithPopup(auth,p);notice='';render();},'Complete sign-in in the Google window. If it did not open, allow pop-ups for this website or use email sign-in.');}
  if(action==='signout')run(async()=>{await sdk.signOut(auth);notice='You’re signed out.';view='signin';render();});
  if(action==='verify')run(async()=>{await sdk.sendEmailVerification(user);message('Verification email sent. Check your inbox and spam folder.');});
  if(action==='check-verification')run(async()=>{await sdk.reload(user);user=auth.currentUser;notice=user.emailVerified?'Your email is verified.':'Not verified yet. Open the link in your email, then try again.';render();});
