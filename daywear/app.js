@@ -1,7 +1,7 @@
-import {accountStorageKey} from './auth-policy.js';
-import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js';
-import {fetchWeather,recommend,condition} from './weather.js';
-import {detectLocation,locationPreference,rememberCity,locationError} from './location.js';
+import {accountStorageKey} from './auth-policy.js?v=20261009-location';
+import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js?v=20261009-location';
+import {fetchWeather,recommend,condition} from './weather.js?v=20261009-location';
+import {detectLocation,locationPreference,rememberCity,locationError} from './location.js?v=20261009-location';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let key=accountStorageKey(null),accountUid=null;
 let saved={};try{saved=JSON.parse(localStorage.getItem(key)||'{}')||{};}catch{}
