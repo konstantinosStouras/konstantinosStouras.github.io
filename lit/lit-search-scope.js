@@ -101,12 +101,21 @@ function litCompileSearch() {
     if (live) terms.push(live);
     if (!terms.length) return;
     var matchers = terms.map(function (q) { return litCompileTerm(q, f[1] === 'author'); });
+    var rawMatchers = f[1] === 'abstract' ? terms.map(function (q) {
+      var quoted = q.match(/^"(.*)"$/);
+      var needle = quoted ? quoted[1].trim() : q;
+      // Removing a trailer can create a word boundary at the new end.
+      // Raw text is only a substring pre-check, even for quoted queries.
+      return function (text) { return text.lower.indexOf(needle) !== -1; };
+    }) : matchers;
     tests.push(function (p) {
-      var text = f[1] === 'abstract' && p._absq !== undefined
+      var cachedAbstract = f[1] === 'abstract' && p._absq !== undefined;
+      var text = cachedAbstract
         ? { lower: p._absq } : litSearchText(p, f[0]);
       // Cleaning only removes text. Reject raw-text misses before running the
       // cleaner, then verify against the exact abstract shown on the card.
-      for (var i = 0; i < matchers.length; i++) if (!matchers[i](text)) return false;
+      var initialMatchers = cachedAbstract ? matchers : rawMatchers;
+      for (var i = 0; i < initialMatchers.length; i++) if (!initialMatchers[i](text)) return false;
       if (f[1] === 'abstract' && p._absq === undefined) {
         var shown = { lower: absSearchText(p) };
         p._litSearch.Abstract = undefined; // keep only the cleaned search text

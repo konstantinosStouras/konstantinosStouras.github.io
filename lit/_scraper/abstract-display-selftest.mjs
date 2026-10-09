@@ -86,6 +86,7 @@ const searchContext = vm.createContext({
   sel: { title: new Set(), author: new Set(), affiliation: new Set(), abstract: new Set(), authorIdentity: {} },
   document: { getElementById: () => ({ value: '' }) },
   preprintOnly: false, citedByFilter: null,
+  escRegex: s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
   absSearchText: p => (p._absq ??= cleanAbstract(p.Abstract || '').toLowerCase())
 });
 vm.runInContext(searchSrc, searchContext);
@@ -95,6 +96,9 @@ for (const [term, expected] of [['supply chain', true], ['accepted by', false], 
   eq(searchContext.litCompileSearch()(searchPaper), expected,
     `compiled abstract search matches only the displayed text: ${term}`);
 }
+searchContext.sel.abstract = new Set(['"research"']);
+eq(searchContext.litCompileSearch()({ Abstract: 'ResearchFunding: grant support' }), true,
+  'quoted abstract search sees word boundaries created by stripping a trailer');
 ok(!/(?<!cleanAbstract)\(p\['Abstract'\]\s*\|\|\s*''\)\.toLowerCase\(\)/.test(main),
   'no filter pass lower-cases the raw Abstract field for searching any more');
 ok(main.indexOf('function absSearchText(') > 0 && /_absq/.test(main.slice(main.indexOf('function absSearchText('), main.indexOf('function absSearchText(') + 300)),
