@@ -1,8 +1,8 @@
-import {deleteAccountFeedback} from './account-data.js?v=20261011-piece-feedback-v2';
-import {getLanguage,serviceLanguage} from './i18n.js?v=20261011-piece-feedback-v2';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-piece-feedback-v2';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-piece-feedback-v2';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-piece-feedback-v2';
+import {deleteAccountFeedback} from './account-data.js?v=20261011-news-v1';
+import {getLanguage,serviceLanguage} from './i18n.js?v=20261011-news-v1';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-news-v1';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-news-v1';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-news-v1';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
@@ -34,7 +34,7 @@ function renderAccountButton(){
  trigger.innerHTML=accountButtonMarkup(user,profileName);
  trigger.classList.toggle('signed-in',!!user);trigger.setAttribute('aria-haspopup',user?'true':'dialog');
  trigger.setAttribute('aria-expanded',String(!menu.hidden));trigger.setAttribute('aria-controls',user?'account-menu':'account-modal');
- menu.innerHTML=user?`<div class="account-menu-identity"><small>Signed in as</small><strong data-i18n-skip>${esc(accountIdentity(user,profileName).name)}</strong><span data-i18n-skip>${esc(user.email)}</span></div><a href="#profile">My Profile <span aria-hidden="true">↗</span></a><a href="#feedback">Send feedback <span aria-hidden="true">↗</span></a>${admin?'<a href="#review">Tester feedback <span aria-hidden="true">↗</span></a>':''}<button type="button" data-menu="signout">Sign out</button>`:'';
+ menu.innerHTML=user?`<div class="account-menu-identity"><small>Signed in as</small><strong data-i18n-skip>${esc(accountIdentity(user,profileName).name)}</strong><span data-i18n-skip>${esc(user.email)}</span></div><a href="#profile">My Profile <span aria-hidden="true">↗</span></a><a href="#feedback">Send feedback <span aria-hidden="true">↗</span></a>${admin?'<a href="#users">Registered users <span aria-hidden="true">↗</span></a><a href="#updates-admin">Manage updates <span aria-hidden="true">↗</span></a><a href="#review">Tester feedback <span aria-hidden="true">↗</span></a>':''}<button type="button" data-menu="signout">Sign out</button>`:'';
  if(!user)closeMenu();
  if(user)trigger.setAttribute('aria-label','Your account: '+accountIdentity(user,profileName).name);else trigger.removeAttribute('aria-label');
  trigger.querySelector('img')?.addEventListener('error',event=>event.target.remove(),{once:true});

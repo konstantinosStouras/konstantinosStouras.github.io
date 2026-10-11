@@ -1,6 +1,6 @@
-import {getAccountUser} from './auth.js?v=20261011-piece-feedback-v2';
-import {getPhotos,savePhoto,removePhoto} from './account-data.js?v=20261011-piece-feedback-v2';
-import {translateText} from './i18n.js?v=20261011-piece-feedback-v2';
+import {getAccountUser} from './auth.js?v=20261011-news-v1';
+import {getPhotos,savePhoto,removePhoto} from './account-data.js?v=20261011-news-v1';
+import {translateText} from './i18n.js?v=20261011-news-v1';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let loading=false,generation=0;
 export const validPhoto=data=>typeof data==='string'&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(data);

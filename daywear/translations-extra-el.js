@@ -1,4 +1,4 @@
-export default {
+export default {"Registered users":"Εγγεγραμμένοι χρήστες","What's new":"Τι νέο υπάρχει","Manage updates":"Διαχείριση ενημερώσεων",
   "Language": "Γλώσσα",
   "Automatic": "Αυτόματα",
   "Choose a language, or use your location automatically.": "Επίλεξε γλώσσα ή αυτόματη επιλογή βάσει τοποθεσίας.",

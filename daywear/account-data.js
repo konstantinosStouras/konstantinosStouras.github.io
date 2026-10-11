@@ -1,5 +1,5 @@
 // Private testing data is in Firebase. Ownership/checklists/rotation remain local.
-import {getAccountUser} from './auth.js?v=20261011-piece-feedback-v2';
+import {getAccountUser} from './auth.js?v=20261011-news-v1';
 let services;
 export async function database(){
  if(!services)services=import('https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js').then(s=>({s,db:s.getFirestore()})).catch(e=>{services=null;throw e;});
@@ -27,6 +27,7 @@ export async function deleteAccountFeedback(uid){
   if(records.empty)break;
   const batch=s.writeBatch(db);records.forEach(record=>batch.delete(record.ref));await batch.commit();
  }
+ await s.deleteDoc(s.doc(db,'daywearUpdateSubscriptions',uid));
  const photos=await s.getDocsFromServer(s.collection(db,'daywearProfiles',uid,'photos'));
  const batch=s.writeBatch(db);photos.forEach(photo=>batch.delete(photo.ref));batch.delete(s.doc(db,'daywearProfiles',uid));await batch.commit();
  // Keep the rate-limit receipt: it contains no profile, email, message or image.

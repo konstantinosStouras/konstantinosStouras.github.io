@@ -1,4 +1,4 @@
-import feedbackCopy from './style-feedback-languages.js?v=20261011-piece-feedback-v2';
+import feedbackCopy from './style-feedback-languages.js?v=20261011-news-v1';
 import es from './translations-es.js';
 import fr from './translations-fr.js';
 import pt from './translations-pt.js';

@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
  match /databases/{database}/documents {
-  function signedIn(){return request.auth != null;}
+  function signedIn(){return request.auth != null && !exists(/databases/$(database)/documents/daywearRemovedUsers/$(request.auth.uid));}
   function admin(){return signedIn() && request.auth.token.get('daywearAdmin',false) == true;}
   function receipt(){return /databases/$(database)/documents/daywearFeedbackLimits/$(request.auth.uid);}
   match /daywearFeedback/{id} {
@@ -59,6 +59,31 @@ service cloud.firestore {
     && getAfter(/databases/$(database)/documents/daywearFeedback/$(request.resource.data.feedbackId)).data.createdAt == request.time;
    allow delete: if false;
   }
+  match /daywearUpdates/{id} {allow read: if true; allow write: if false;}
+  match /daywearUpdateDrafts/{id} {
+   allow read, delete: if admin();
+   allow create, update: if admin()
+    && request.resource.data.keys().hasOnly(['titleEn','titleEl','bodyEn','bodyEl','updatedAt'])
+    && request.resource.data.titleEn is string && request.resource.data.titleEn.size()>0 && request.resource.data.titleEn.size()<=120
+    && request.resource.data.titleEl is string && request.resource.data.titleEl.size()>0 && request.resource.data.titleEl.size()<=120
+    && request.resource.data.bodyEn is string && request.resource.data.bodyEn.size()>0 && request.resource.data.bodyEn.size()<=4000
+    && request.resource.data.bodyEl is string && request.resource.data.bodyEl.size()>0 && request.resource.data.bodyEl.size()<=4000
+    && request.resource.data.updatedAt == request.time;
+  }
+  match /daywearUpdateSubscriptions/{uid} {
+   allow read: if admin() || (signedIn() && uid == request.auth.uid);
+   allow delete: if signedIn() && uid == request.auth.uid;
+   allow create, update: if signedIn() && uid == request.auth.uid
+    && request.resource.data.keys().hasOnly(['enabled','email','language','consentVersion','updatedAt'])
+    && request.resource.data.enabled is bool
+    && request.resource.data.email == request.auth.token.email
+    && request.resource.data.language in ['en','el']
+    && request.resource.data.consentVersion == 'daywear-updates-1'
+    && request.resource.data.updatedAt == request.time;
+  }
+  match /daywearUpdateMail/{id} {allow read: if admin(); allow write: if false;}
+  match /daywearUpdateApprovals/{id} {allow read: if admin(); allow write: if false;}
+  match /daywearAdminMessages/{id} {allow read: if admin(); allow write: if false;}
   match /{document=**} {allow read, write: if false;}
  }
 }

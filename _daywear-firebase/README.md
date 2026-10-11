@@ -1,5 +1,50 @@
 # DayWear private tester workflow
 
+## Updates and registered users
+
+The public `#whats-new` page shows a dated, newest-first timeline. Signed-in users
+can tick or untick email alerts; consent is stored privately per account in
+`daywearUpdateSubscriptions`. Public updates never contain subscriber details.
+
+The owner's account menu includes **Manage updates** (`#updates-admin`) and
+**Registered users** (`#users`). Both require the `daywearAdmin` role on the server.
+The directory reads Firebase Authentication, including accounts without profiles,
+and provides pages of 100 users with their profile name and account email.
+
+Updates start as private bilingual drafts. **Approve & publish** freezes the exact
+English/Greek text, records the approving admin and queues one private email item
+per opted-in account. Retrying approval does not republish or duplicate the queue.
+There is no automatic change announcement when website files are deployed.
+
+Messages to users are saved as private drafts. **Open in Gmail** rechecks that the
+recipient still exists; update emails also recheck consent. Review the sender,
+recipient and text in Gmail before sending. Opening Gmail never marks mail sent.
+For batches, the assistant uses the owner's connected Gmail only after explicit
+approval of that batch. Keep recipients separate; do not expose the subscriber list.
+
+```
+node private-mail.cjs pending
+node private-mail.cjs record-sent daywearUpdateMail <id>
+node private-mail.cjs record-sent daywearAdminMessages <id>
+```
+
+`record-sent` reads confirmed receipt JSON from stdin containing `from`, `to`,
+`subject`, `body` and `gmailMessageId`. It accepts only `kstouras@gmail.com` and
+the exact current approved content/recipient. Record only verified Gmail delivery;
+uncertain sends require checking Gmail before retrying. The website cannot observe
+a send performed manually in another Gmail tab. Completed items are recorded by
+the assistant from Gmail evidence, rather than an unverified “sent” button.
+
+**Remove user** requires typing the exact account email. Admin accounts are
+protected. Removal revokes refresh tokens, deletes the Auth account and triggers
+cleanup of profiles, reference photos, feedback, subscriptions, message drafts and
+queued mail. A private removal marker blocks existing tokens from private Firestore
+data immediately. This marker stores a UID and timestamp, with no name or email.
+Already-sent Gmail history and browser data on other devices are outside cleanup.
+
+Run `node --test functions/tests/admin.test.cjs` for authorization, protected-account
+removal, recipient integrity and idempotent update approval checks.
+
 Project: `stouras-personal-wardrobe`. Public website: https://www.stouras.com/daywear/ .
 
 The account menu opens `#profile`, `#feedback`, and Sign out. Only the owner,
