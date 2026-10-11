@@ -1,5 +1,5 @@
-import {preferenceScore} from './preferences.js?v=20261011-direct-login';
-import {looks} from './data.js?v=20261011-direct-login';
+import {preferenceScore} from './preferences.js?v=20261011-welcome-v2';
+import {looks} from './data.js?v=20261011-welcome-v2';
 export function seasonPool(temp,month,latitude=51){
  if(!Number.isFinite(temp))throw new Error('A valid apparent temperature is required');
  const m=latitude<0?(month+5)%12+1:month;
@@ -23,13 +23,13 @@ export function recommend(weather,{mode='everyday',month=10,latitude=51,day=0,se
  const look=best[((day%best.length)+best.length)%best.length];
  return {look,wet,layer:null,reason:`Feels like ${weather.temp.toFixed(1)}°C, so ${pool} is your temperature pool. ${wet?'Rain calls for a protective jacket and dark closed shoes. ':''}${weather.wind>=25?'A layer covers the wind. ':''}${weather.temp>=8&&weather.temp<15?'A mid-layer gets preference in cooler weather. ':''}A complete look from your existing thirty.`};
 }
-export function condition(code){if(code===0)return 'Clear sky';if(code<=3)return 'Partly cloudy';if(code<=48)return 'Fog';if(code<=57)return 'Drizzle';if(code<=67)return 'Rain';if(code<=77)return 'Snow';if(code<=82)return 'Rain showers';if(code<=86)return 'Snow showers';if(code>=95)return 'Thunderstorms';return 'Conditions unavailable';}
+export function condition(code){if(code===0)return 'Clear sky';if(code===1)return 'Mainly clear';if(code===2)return 'Partly cloudy';if(code===3)return 'Overcast';if([45,48].includes(code))return 'Fog';if([51,53,55,56,57].includes(code))return 'Drizzle';if([61,63,65,66,67].includes(code))return 'Rain';if([71,73,75,77].includes(code))return 'Snow';if([80,81,82].includes(code))return 'Rain showers';if([85,86].includes(code))return 'Snow showers';if([95,96,99].includes(code))return 'Thunderstorms';return 'Conditions unavailable';}
 export async function fetchWeather(location,signal){
- const query=new URLSearchParams({latitude:location.latitude,longitude:location.longitude,timezone:location.timezone||'auto',current:'apparent_temperature,precipitation,weather_code,wind_speed_10m',daily:'temperature_2m_max,temperature_2m_min,precipitation_sum',forecast_days:'1'});
+ const query=new URLSearchParams({latitude:location.latitude,longitude:location.longitude,timezone:location.timezone||'auto',current:'temperature_2m,relative_humidity_2m,is_day,apparent_temperature,precipitation,weather_code,wind_speed_10m',daily:'temperature_2m_max,temperature_2m_min,precipitation_sum',forecast_days:'1'});
  const response=await fetch(`https://api.open-meteo.com/v1/forecast?${query}`,{signal});
  if(!response.ok)throw new Error('The weather service is unavailable. Please try again.');
  const d=await response.json(),c=d.current;
  if(!c||![c.apparent_temperature,c.precipitation,c.wind_speed_10m,c.weather_code,d.daily?.temperature_2m_max?.[0],d.daily?.temperature_2m_min?.[0],d.daily?.precipitation_sum?.[0]].every(Number.isFinite)||typeof c.time!=='string')throw new Error('The weather service returned incomplete data.');
- return {temp:c.apparent_temperature,precip:c.precipitation,wind:c.wind_speed_10m,code:c.weather_code,dailyPrecip:d.daily.precipitation_sum[0],high:d.daily.temperature_2m_max[0],low:d.daily.temperature_2m_min[0],time:c.time,timezone:d.timezone,received:Date.now()};
+ return {temp:c.apparent_temperature,airTemp:Number.isFinite(c.temperature_2m)?c.temperature_2m:null,humidity:Number.isFinite(c.relative_humidity_2m)&&c.relative_humidity_2m>=0&&c.relative_humidity_2m<=100?c.relative_humidity_2m:null,isDay:[0,1].includes(c.is_day)?c.is_day===1:null,precip:c.precipitation,wind:c.wind_speed_10m,code:c.weather_code,dailyPrecip:d.daily.precipitation_sum[0],high:d.daily.temperature_2m_max[0],low:d.daily.temperature_2m_min[0],time:c.time,timezone:d.timezone,received:Date.now()};
 }
 

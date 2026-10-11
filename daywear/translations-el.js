@@ -341,6 +341,89 @@ Object.assign(greek,{
 Object.assign(greek, {'Choose photo':'Επιλογή φωτογραφίας'});
 
 Object.assign(greek,{
+  "Wardrobe": "Ντουλάπα",
+  "Calendar": "Ημερολόγιο",
+  "Looks": "Σύνολα",
+  "Collection": "Συλλογή",
+  "Wardrobe sections": "Ενότητες γκαρνταρόμπας",
+  "All 30 looks": "Και τα 30 σύνολα",
+  "Your wardrobe": "Η γκαρνταρόμπα σου",
+  "THIRTY LOOKS. ONE WARDROBE.": "ΤΡΙΑΝΤΑ ΣΥΝΟΛΑ. ΜΙΑ ΓΚΑΡΝΤΑΡΟΜΠΑ.",
+  "Find a look for the season, or review the pieces you own.": "Βρες ένα σύνολο για την εποχή ή έλεγξε τα κομμάτια που διαθέτεις.",
+  "Review unused clothes ↗": "Έλεγξε τα ρούχα που δεν φοράς ↗",
+  "← Back to pieces": "← Επιστροφή στα κομμάτια",
+  "← Back to shopping": "← Επιστροφή στις αγορές"
+});
+
+Object.assign(greek,{
+  "Discover": "Γνωριμία",
+  "Current weather": "Τρέχων καιρός",
+  "Change city / travel": "Αλλαγή πόλης / ταξίδι",
+  "Finding your location…": "Εντοπισμός τοποθεσίας…",
+  "Updating weather…": "Ενημέρωση καιρού…",
+  "Weather unavailable": "Ο καιρός δεν είναι διαθέσιμος",
+  "Approximate location": "Κατά προσέγγιση τοποθεσία",
+  "Travel city": "Πόλη ταξιδιού",
+  "Retry": "Νέα προσπάθεια",
+  "Wind": "Άνεμος",
+  "Humidity": "Υγρασία",
+  "Rain today": "Βροχή σήμερα",
+  "Mainly clear": "Κυρίως αίθριος",
+  "Overcast": "Συννεφιά",
+  "Feels like": "Αισθητή θερμοκρασία",
+  "High": "Μέγιστη",
+  "Low": "Ελάχιστη",
+  "Less deciding.": "Λιγότερες αποφάσεις.",
+  "More being you.": "Περισσότερο εσύ.",
+  "A calmer way to get dressed. Make more of what you own, dress for the weather, and find what feels like you.": "Ένας πιο ήρεμος τρόπος να ντύνεσαι. Αξιοποίησε όσα ήδη έχεις, ντύσου ανάλογα με τον καιρό και βρες αυτό που σου ταιριάζει.",
+  "Create your account ↗": "Δημιούργησε λογαριασμό ↗",
+  "Explore the sample wardrobe": "Δες τη δοκιμαστική γκαρνταρόμπα",
+  "Browse freely. Create an account when you want to make it yours.": "Περιηγήσου ελεύθερα. Δημιούργησε λογαριασμό όταν θελήσεις να το κάνεις δικό σου.",
+  "Different lives, individual style": "Διαφορετικές ζωές, προσωπικό στυλ",
+  "An older woman and a younger woman in relaxed everyday clothing": "Μια μεγαλύτερη και μια νεότερη γυναίκα με άνετα καθημερινά ρούχα",
+  "A father holding his baby, beside his young daughter, all in comfortable everyday clothes": "Ένας πατέρας κρατά το μωρό του δίπλα στη μικρή του κόρη, όλοι με άνετα καθημερινά ρούχα",
+  "Two adult men holding hands, each expressing his own everyday style": "Δύο ενήλικοι άνδρες κρατιούνται χέρι χέρι, ο καθένας με το δικό του καθημερινό στυλ",
+  "Style grows with you.": "Το στυλ εξελίσσεται μαζί σου.",
+  "For life’s little moments.": "Για τις μικρές στιγμές της ζωής.",
+  "Always, simply yourself.": "Πάντα, απλά ο εαυτός σου.",
+  "Fictional, AI-created lifestyle photography. Explore the current sample collection below.": "Φανταστικές φωτογραφίες καθημερινής ζωής, δημιουργημένες με τεχνητή νοημοσύνη. Δες παρακάτω την τρέχουσα δοκιμαστική συλλογή.",
+  "ROOM TO BE YOURSELF": "ΧΩΡΟΣ ΝΑ ΕΙΣΑΙ Ο ΕΑΥΤΟΣ ΣΟΥ",
+  "Everyday life comes": "Η καθημερινή ζωή έχει",
+  "in every kind of style.": "κάθε είδους στυλ.",
+  "Every age, gender, body and identity deserves to feel at home. LGBTQ+ people and every kind of family are welcome here. Your style is yours to define.": "Κάθε ηλικία, φύλο, σώμα και ταυτότητα αξίζει να νιώθει άνετα. Τα ΛΟΑΤΚΙ+ άτομα και κάθε μορφή οικογένειας είναι ευπρόσδεκτα εδώ. Εσύ ορίζεις το στυλ σου.",
+  "FEWER DECISIONS. BETTER DAYS.": "ΛΙΓΟΤΕΡΕΣ ΑΠΟΦΑΣΕΙΣ. ΚΑΛΥΤΕΡΕΣ ΜΕΡΕΣ.",
+  "A little help with your everyday.": "Λίγη βοήθεια στην καθημερινότητά σου.",
+  "Dress for your day.": "Ντύσου για τη μέρα σου.",
+  "Live local weather helps choose a suitable look. Change the city when you travel, or switch between everyday, gym and lounge.": "Ο τρέχων τοπικός καιρός βοηθά στην επιλογή κατάλληλου συνόλου. Άλλαξε πόλη όταν ταξιδεύεις ή διάλεξε καθημερινό ντύσιμο, γυμναστήριο ή χαλάρωση.",
+  "See today’s suggestion ↗": "Δες τη σημερινή πρόταση ↗",
+  "Find your favourites.": "Βρες τα αγαπημένα σου.",
+  "Like the looks that feel right and pass on those that don’t. Your feedback helps rank future weather-suitable suggestions.": "Δήλωσε ποια σύνολα σου αρέσουν και ποια δεν σου ταιριάζουν. Οι προτιμήσεις σου βοηθούν στην κατάταξη των επόμενων προτάσεων που ταιριάζουν στον καιρό.",
+  "Explore the looks ↗": "Δες τα σύνολα ↗",
+  "Pause before you buy.": "Μια παύση πριν αγοράσεις.",
+  "Compare a clothing photo with the pieces you’ve marked as owned. Spot possible combinations and things you may already have.": "Σύγκρινε μια φωτογραφία ρούχου με τα κομμάτια που έχεις δηλώσει ότι διαθέτεις. Βρες πιθανούς συνδυασμούς και πράγματα που ίσως έχεις ήδη.",
+  "Try a wardrobe check ↗": "Δοκίμασε έναν έλεγχο γκαρνταρόμπας ↗",
+  "EXPLORE OUR FIRST COLLECTION": "ΓΝΩΡΙΣΕ ΤΗΝ ΠΡΩΤΗ ΜΑΣ ΣΥΛΛΟΓΗ",
+  "Thirty looks.": "Τριάντα σύνολα.",
+  "Forty pieces.": "Σαράντα κομμάτια.",
+  "A place to start.": "Μια αφετηρία.",
+  "DayWear’s fictional sample model wearing a white T-shirt, chinos and a green overshirt": "Το φανταστικό μοντέλο της δοκιμαστικής συλλογής του DayWear με λευκό μπλουζάκι, chinos και πράσινο πουκάμισο-τζάκετ",
+  "Our current interactive sample is a menswear capsule: seven looks for each season, plus one gym and one lounge look. Browse the full collection before signing up.": "Το τρέχον διαδραστικό δείγμα είναι μια ανδρική συλλογή βασικών ρούχων: επτά σύνολα για κάθε εποχή, ένα για το γυμναστήριο και ένα για χαλάρωση. Δες ολόκληρη τη συλλογή πριν εγγραφείς.",
+  "The lifestyle photography reflects our wider vision. Women’s and children’s collections are not yet available. Families can explore together with a parent or carer.": "Οι φωτογραφίες καθημερινής ζωής εκφράζουν το ευρύτερο όραμά μας. Γυναικείες και παιδικές συλλογές δεν είναι ακόμα διαθέσιμες. Οι οικογένειες μπορούν να περιηγηθούν μαζί με έναν γονέα ή φροντιστή.",
+  "A FEW THINGS TO KNOW": "ΜΕΡΙΚΑ ΧΡΗΣΙΜΑ ΣΤΟΙΧΕΙΑ",
+  "Start with confidence.": "Ξεκίνα με σιγουριά.",
+  "What can I do without an account?": "Τι μπορώ να κάνω χωρίς λογαριασμό;",
+  "Explore the sample collection, check local weather and browse the calendar. Sign in to keep outfit votes separate for your account and open a private purchase-photo comparison.": "Δες τη δοκιμαστική συλλογή, τον τοπικό καιρό και το ημερολόγιο. Συνδέσου για να κρατάς τις προτιμήσεις συνόλων ξεχωριστά για τον λογαριασμό σου και να κάνεις ιδιωτική σύγκριση φωτογραφίας υποψήφιας αγοράς.",
+  "Where does my information go?": "Πού αποθηκεύονται τα στοιχεία μου;",
+  "Firebase manages sign-in. Wardrobe preferences and outfit votes stay in this browser, separately for each account. Purchase photos stay only in the open tab and are cleared when you leave or sign out.": "Το Firebase διαχειρίζεται τη σύνδεση. Οι προτιμήσεις γκαρνταρόμπας και συνόλων παραμένουν σε αυτόν τον περιηγητή, ξεχωριστά για κάθε λογαριασμό. Οι φωτογραφίες υποψήφιων αγορών μένουν μόνο στην ανοιχτή καρτέλα και αφαιρούνται όταν φύγεις ή αποσυνδεθείς.",
+  "Will I see myself in these outfits?": "Θα βλέπω τον εαυτό μου με αυτά τα σύνολα;",
+  "The public collection uses a fictional sample model. Saving your sizes does not create a personal model or guarantee garment fit. The purchase check compares the garment type and colour you choose; it is not a virtual try-on.": "Η δημόσια συλλογή χρησιμοποιεί ένα φανταστικό μοντέλο. Η αποθήκευση μεγεθών δεν δημιουργεί προσωπικό μοντέλο ούτε εγγυάται την εφαρμογή των ρούχων. Ο έλεγχος αγοράς συγκρίνει τον τύπο και το χρώμα που επιλέγεις· δεν είναι εικονική δοκιμή.",
+  "MAKE ROOM FOR BETTER DAYS": "ΔΩΣΕ ΧΩΡΟ ΣΕ ΚΑΛΥΤΕΡΕΣ ΜΕΡΕΣ",
+  "A little less “what should I wear?”": "Λίγο λιγότερο «τι να φορέσω;»"
+});
+
+
+
+Object.assign(greek,{
   "My Profile": "Το προφίλ μου",
   "Signed in as": "Συνδεδεμένος ως",
   "Send feedback": "Αποστολή σχολίων",
@@ -464,3 +547,5 @@ Object.assign(greek,{
   "Account email": "Email λογαριασμού",
   "Manage sign-in & verify email": "Διαχείριση σύνδεσης και επιβεβαίωση email"
 });
+
+Object.assign(greek,{"Firebase manages sign-in, your private profile, optional reference photos and feedback. During this test, the DayWear administrator can review submitted profile details and feedback. Wardrobe ownership and outfit votes stay in this browser. Purchase-check photos stay only in the open tab and are cleared when you leave or sign out.": "Το Firebase διαχειρίζεται τη σύνδεση, το ιδιωτικό προφίλ, τις προαιρετικές φωτογραφίες αναφοράς και τα σχόλιά σου. Κατά τη δοκιμαστική περίοδο, ο διαχειριστής του DayWear μπορεί να εξετάσει τα στοιχεία προφίλ και τα σχόλια που υποβάλλεις. Η κατοχή ρούχων και οι ψήφοι για τα σύνολα παραμένουν σε αυτόν τον περιηγητή. Οι φωτογραφίες ελέγχου αγοράς παραμένουν μόνο στην ανοιχτή καρτέλα και διαγράφονται όταν φύγεις ή αποσυνδεθείς."});

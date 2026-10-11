@@ -6,7 +6,7 @@ export function accountIdentity(user,profileName=''){
  return {name,initials,photo};
 }
 export function accountButtonMarkup(user,profileName=''){
- if(!user)return 'Sign in / Register';
+ if(!user)return 'Sign in';
  const {name,initials,photo}=accountIdentity(user,profileName);
  return `<span class="account-avatar" aria-hidden="true"><span>${esc(initials)}</span>${photo?`<img src="${esc(photo)}" alt="" referrerpolicy="no-referrer" width="34" height="34">`:''}</span><span class="account-label"><strong data-i18n-skip>${esc(name)}</strong><small>My account</small></span>`;
 }

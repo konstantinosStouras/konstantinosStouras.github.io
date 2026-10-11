@@ -1,0 +1,37 @@
+name: DayWear website checks
+
+on:
+  push:
+    paths:
+      - 'daywear/**'
+      - '.github/scripts/check-daywear.mjs'
+      - '.github/workflows/daywear-checks.yml'
+  pull_request:
+    paths:
+      - 'daywear/**'
+      - '.github/scripts/check-daywear.mjs'
+      - '.github/workflows/daywear-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daywear-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  daywear:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            daywear
+            .github/scripts
+          filter: blob:none
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: node --experimental-default-type=module .github/scripts/check-daywear.mjs

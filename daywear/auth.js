@@ -1,8 +1,8 @@
-import {deleteAccountFeedback} from './account-data.js?v=20261011-direct-login';
-import {getLanguage} from './i18n.js?v=20261011-direct-login';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-direct-login';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-direct-login';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-direct-login';
+import {deleteAccountFeedback} from './account-data.js?v=20261011-welcome-v2';
+import {getLanguage} from './i18n.js?v=20261011-welcome-v2';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-welcome-v2';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-welcome-v2';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-welcome-v2';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
@@ -25,7 +25,7 @@ function openSignIn(){closeMenu();view='signin';notice='';if(!modal.open)modal.s
 document.addEventListener('click',event=>{if(!wrapper.contains(event.target))closeMenu();if(event.target.closest('[data-open-signin]'))openSignIn();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!menu.hidden)closeMenu(true);});
 wrapper.addEventListener('focusout',event=>{if(!wrapper.contains(event.relatedTarget))closeMenu();});
-menu.addEventListener('click',event=>{const target=event.target.closest('a,button');if(!target)return;closeMenu();if(target.dataset.menu==='signout'){openSignIn();run(async()=>{await sdk.signOut(auth);modal.close();location.hash='today';});}});
+menu.addEventListener('click',event=>{const target=event.target.closest('a,button');if(!target)return;closeMenu();if(target.dataset.menu==='signout'){openSignIn();run(async()=>{await sdk.signOut(auth);modal.close();location.hash='home';});}});
 let profileName='',admin=false;
 export const isAccountAdmin=()=>admin;
 async function refreshAdmin(){const current=user;admin=false;if(current){try{const token=await current.getIdTokenResult(true);if(user?.uid===current.uid)admin=token.claims.daywearAdmin===true;}catch{}}renderAccountButton();document.dispatchEvent(new Event('wardrobe:admin'));}
@@ -88,6 +88,7 @@ async function initialize(){
   sdk.onAuthStateChanged(auth,next=>{const signedIn=!!next&&next.uid!==user?.uid;user=next;if(signedIn){modal.close();closeMenu();}profileName='';admin=false;ready=true;notify();render();refreshAdmin();},()=>{initializationError=true;render();});
  }catch{initializationError=true;render();}
 }
+document.addEventListener('wardrobe:open-auth',event=>{closeMenu();view=event.detail?.view==='register'?'register':'signin';notice='';if(!modal.open)modal.showModal();render();});
 trigger.addEventListener('click',()=>{if(!user){openSignIn();return;}menu.hidden=!menu.hidden;trigger.setAttribute('aria-expanded',String(!menu.hidden));if(!menu.hidden)menu.querySelector('a')?.focus();});
 modal.addEventListener('click',e=>{
  const el=e.target.closest('button');if(!el)return;
@@ -142,7 +143,7 @@ document.addEventListener('submit',async event=>{
   await deleteAccountFeedback(current.uid);
   await sdk.deleteUser(current);
   try{localStorage.removeItem(`wardrobe.account.${current.uid}`);}catch{}
-  location.hash='today';
+  location.hash='home';
   notice='Your account has been deleted.';view='signin';if(!modal.open)modal.showModal();render();
  }catch(error){
   feedback.textContent=error.code?.startsWith('auth/')?authMessage(error):'Account deletion could not finish. Please retry. Some feedback may already have been removed.';

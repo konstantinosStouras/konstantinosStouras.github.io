@@ -1,6 +1,6 @@
-import {getAccountUser} from './auth.js?v=20261011-direct-login';
-import {sendFeedback} from './account-data.js?v=20261011-direct-login';
-import {translateText,getLanguage} from './i18n.js?v=20261011-direct-login';
+import {getAccountUser} from './auth.js?v=20261011-welcome-v2';
+import {sendFeedback} from './account-data.js?v=20261011-welcome-v2';
+import {translateText,getLanguage} from './i18n.js?v=20261011-welcome-v2';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let attachments=[],busy=false,uploading=false,attemptId=null,version=0;
 export function feedbackPage(){

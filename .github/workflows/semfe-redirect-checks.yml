@@ -1,0 +1,33 @@
+name: SEMFE legacy redirects
+
+on:
+  push:
+    paths:
+      - 'semfealumni/**'
+      - 'tools/semfealumni-forwards.mjs'
+      - '.github/workflows/semfe-redirect-checks.yml'
+  pull_request:
+    paths:
+      - 'semfealumni/**'
+      - 'tools/semfealumni-forwards.mjs'
+      - '.github/workflows/semfe-redirect-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redirects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            semfealumni
+            tools
+          filter: blob:none
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: node tools/semfealumni-forwards.mjs --check
