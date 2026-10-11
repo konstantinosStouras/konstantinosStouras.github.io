@@ -1,4 +1,4 @@
-import {getLanguage} from './i18n.js?v=20261011-style-feedback';
+import {getLanguage} from './i18n.js?v=20261011-account-pages';
 export function locationPreference(saved={}){
  return saved.locationMode==='travel'&&saved.location?'travel':'current';
 }

@@ -1,0 +1,1 @@
+{"firestore":{"rules":"firestore.rules","predeploy":["node check-project.mjs"]},"functions":{"source":"functions","runtime":"nodejs22","codebase":"daywear","predeploy":["node check-project.mjs","node prepare-functions.cjs"]}}

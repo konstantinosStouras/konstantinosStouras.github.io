@@ -1,10 +1,12 @@
-import {getLanguage} from './i18n.js?v=20261011-style-feedback';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-style-feedback';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-style-feedback';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-style-feedback';
+import {deleteAccountFeedback} from './account-data.js?v=20261011-account-pages';
+import {getLanguage} from './i18n.js?v=20261011-account-pages';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-account-pages';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-account-pages';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-account-pages';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
+export const getAccountUser=()=>user;
 export async function getAccountToken(expectedUid){
  const current=user;
  if(!current||current.uid!==expectedUid)throw Error('Please sign in again.');
@@ -16,10 +18,24 @@ const modal=document.createElement('dialog');
 modal.id='account-modal';modal.className='account-modal';modal.setAttribute('aria-label','Your account');modal.tabIndex=-1;
 document.body.append(modal);
 const trigger=document.querySelector('#account-button');
-let profileName='';
+const menu=document.createElement('div');menu.id='account-menu';menu.className='account-menu';menu.hidden=true;
+const wrapper=document.createElement('div');wrapper.className='account-control';trigger.before(wrapper);wrapper.append(trigger,menu);
+function closeMenu(focus=false){menu.hidden=true;trigger.setAttribute('aria-expanded','false');if(focus)trigger.focus();}
+function openSignIn(){closeMenu();view='signin';notice='';if(!modal.open)modal.showModal();render();}
+document.addEventListener('click',event=>{if(!wrapper.contains(event.target))closeMenu();if(event.target.closest('[data-open-signin]'))openSignIn();});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!menu.hidden)closeMenu(true);});
+wrapper.addEventListener('focusout',event=>{if(!wrapper.contains(event.relatedTarget))closeMenu();});
+menu.addEventListener('click',event=>{const target=event.target.closest('a,button');if(!target)return;closeMenu();if(target.dataset.menu==='signout'){openSignIn();run(async()=>{await sdk.signOut(auth);modal.close();location.hash='today';});}});
+let profileName='',admin=false;
+export const isAccountAdmin=()=>admin;
+async function refreshAdmin(){const current=user;admin=false;if(current){try{const token=await current.getIdTokenResult(true);if(user?.uid===current.uid)admin=token.claims.daywearAdmin===true;}catch{}}renderAccountButton();document.dispatchEvent(new Event('wardrobe:admin'));}
+
 function renderAccountButton(){
  trigger.innerHTML=accountButtonMarkup(user,profileName);
- trigger.classList.toggle('signed-in',!!user);trigger.setAttribute('aria-haspopup','dialog');
+ trigger.classList.toggle('signed-in',!!user);trigger.setAttribute('aria-haspopup',user?'true':'dialog');
+ trigger.setAttribute('aria-expanded',String(!menu.hidden));trigger.setAttribute('aria-controls',user?'account-menu':'account-modal');
+ menu.innerHTML=user?`<div class="account-menu-identity"><small>Signed in as</small><strong data-i18n-skip>${esc(accountIdentity(user,profileName).name)}</strong><span data-i18n-skip>${esc(user.email)}</span></div><a href="#profile">My Profile <span aria-hidden="true">↗</span></a><a href="#feedback">Send feedback <span aria-hidden="true">↗</span></a>${admin?'<a href="#review">Tester feedback <span aria-hidden="true">↗</span></a>':''}<button type="button" data-menu="signout">Sign out</button>`:'';
+ if(!user)closeMenu();
  if(user)trigger.setAttribute('aria-label','Your account: '+accountIdentity(user,profileName).name);else trigger.removeAttribute('aria-label');
  trigger.querySelector('img')?.addEventListener('error',event=>event.target.remove(),{once:true});
 }
@@ -39,8 +55,8 @@ function render(){
   const verified=user.emailVerified;
   modal.innerHTML=close+intro+'<h2>Welcome'+(user.displayName?', '+esc(user.displayName):' back')+'.</h2><p data-i18n-skip>'+esc(user.email)+'</p><span class="tag">'+(verified?'Email verified':'Email verification pending')+'</span>'+status+
    (!verified?'<div class="callout"><p>Check your inbox for a verification email.</p><div class="actions"><button data-account="verify">Resend email</button><button data-account="check-verification">I’ve verified my email</button></div></div>':'')+
-   '<section class="section"><h3>Your account & data</h3><p class="form-note">Firebase securely manages your sign-in. Your wardrobe choices are saved separately for this account in this browser. Cross-device wardrobe sync is not enabled yet.</p><div class="actions"><button data-account="profile">Wardrobe profile</button><button data-account="signout">Sign out</button></div></section>'+
-   '<details class="section"><summary>Delete account</summary><p class="form-note">Deletes your Firebase account and this account’s saved wardrobe on this device. Backups and data on other devices are not removed.</p><button data-account="delete-confirm">Delete my account…</button></details>';
+   '<section class="section"><h3>Your account & data</h3><p class="form-note">Firebase securely manages your sign-in, profile, reference photos and feedback. Your wardrobe ownership choices and checklists still stay in this browser.</p><div class="actions"><button data-account="profile">Wardrobe profile</button><button data-account="signout">Sign out</button></div></section>'+
+   '';
   modal.scrollTop=0;return;
  }
  const register=view==='register',reset=view==='reset';
@@ -53,7 +69,7 @@ function render(){
   (!reset?'<label class="remember"><input name="remember" type="checkbox"> Keep me signed in on this device</label>':'')+status+
   '<button class="primary auth-submit">'+(reset?'Send reset link':register?'Create account':'Sign in')+'</button></form>'+
   (!register&&!reset?'<button class="text-button auth-forgot" data-account="reset">Forgot password?</button>':'')+
-  '<div class="auth-switch">'+(reset?'<button class="text-button" data-account="signin">Back to sign in</button>':register?'Already have an account? <button class="text-button" data-account="signin">Sign in</button>':'New here? <button class="text-button" data-account="register">Create an account</button>')+'</div><p class="caption muted">Your name, email and sign-in details are processed by Firebase. Passwords are never saved by this website. Wardrobe preferences stay on this device.</p>';
+  '<div class="auth-switch">'+(reset?'<button class="text-button" data-account="signin">Back to sign in</button>':register?'Already have an account? <button class="text-button" data-account="signin">Sign in</button>':'New here? <button class="text-button" data-account="register">Create an account</button>')+'</div><p class="caption muted">Firebase manages your sign-in. Your profile, reference photos and feedback are private account data. Wardrobe ownership choices and checklists stay in this browser.</p>';
  modal.scrollTop=0;modal.focus({preventScroll:true});
 }
 async function run(task,waitingText='Still connecting. Check your internet connection if this takes a while.'){
@@ -69,10 +85,10 @@ async function initialize(){
   const [app,authSdk]=await Promise.all([import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')]);
   sdk=authSdk;auth=sdk.initializeAuth(app.initializeApp(firebaseConfig),{persistence:[sdk.browserSessionPersistence,sdk.browserLocalPersistence],popupRedirectResolver:sdk.browserPopupRedirectResolver});
   auth.languageCode=getLanguage();
-  sdk.onAuthStateChanged(auth,next=>{user=next;profileName='';ready=true;notify();render();},()=>{initializationError=true;render();});
+  sdk.onAuthStateChanged(auth,next=>{user=next;profileName='';admin=false;ready=true;notify();render();refreshAdmin();},()=>{initializationError=true;render();});
  }catch{initializationError=true;render();}
 }
-trigger.addEventListener('click',()=>{view='signin';notice='';modal.showModal();render();});
+trigger.addEventListener('click',()=>{if(!user){openSignIn();return;}menu.hidden=!menu.hidden;trigger.setAttribute('aria-expanded',String(!menu.hidden));if(!menu.hidden)menu.querySelector('a')?.focus();});
 modal.addEventListener('click',e=>{
  const el=e.target.closest('button');if(!el)return;
  const action=el.dataset.account;
@@ -80,14 +96,12 @@ modal.addEventListener('click',e=>{
  if(action==='retry'){initialize();return;}
  if(['signin','register','reset'].includes(action)){view=action;notice='';render();return;}
  if(action==='show-password'){const field=modal.querySelector('[name=password]');field.type=field.type==='password'?'text':'password';el.textContent=field.type==='password'?'Show':'Hide';el.setAttribute('aria-label',field.type==='password'?'Show password':'Hide password');return;}
- if(action==='profile'){modal.close();document.querySelector('[data-action=settings]').click();return;}
+ if(action==='profile'){modal.close();location.hash='profile';return;}
  if(el.dataset.provider){const p=provider(el.dataset.provider),remember=!!modal.querySelector('[name=remember]')?.checked;run(async()=>{await persistence(remember);await sdk.signInWithPopup(auth,p);notice='';render();},'Complete sign-in in the Google window. If it did not open, allow pop-ups for this website or use email sign-in.');}
  if(action==='signout')run(async()=>{await sdk.signOut(auth);notice='You’re signed out.';view='signin';render();});
  if(action==='verify')run(async()=>{await sdk.sendEmailVerification(user);message('Verification email sent. Check your inbox and spam folder.');});
  if(action==='check-verification')run(async()=>{await sdk.reload(user);user=auth.currentUser;notice=user.emailVerified?'Your email is verified.':'Not verified yet. Open the link in your email, then try again.';render();});
- if(action==='delete-confirm'){notice='';modal.innerHTML='<h2>Delete your account?</h2><p>This permanently deletes your sign-in account and its wardrobe preferences on this device.</p><div class="actions"><button data-account="cancel-delete">Keep my account</button><button class="primary" data-account="delete">Permanently delete</button></div><p id="auth-message" role="status"></p>';}
- if(action==='cancel-delete')render();
- if(action==='delete')run(async()=>{const uid=user.uid;await sdk.deleteUser(user);localStorage.removeItem(`wardrobe.account.${uid}`);view='signin';notice='Your account has been deleted.';render();});
+
 });
 modal.addEventListener('submit',e=>{
  if(e.target.id!=='auth-form')return;e.preventDefault();
@@ -108,3 +122,29 @@ modal.addEventListener('submit',e=>{
 initialize();
 
 document.addEventListener('wardrobe:language',()=>{if(auth)auth.languageCode=getLanguage();});
+
+let deleting=false;
+document.addEventListener('input',event=>{
+ if(event.target.id==='delete-confirmation')document.querySelector('#delete-permanently').disabled=event.target.value!=='DELETE';
+});
+document.addEventListener('submit',async event=>{
+ if(event.target.id!=='delete-account-form')return;event.preventDefault();
+ const form=event.target,current=user,feedback=form.querySelector('[role=status]');
+ if(deleting||!current||new FormData(form).get('confirmation')!=='DELETE')return;
+ deleting=true;form.querySelectorAll('input,button').forEach(el=>el.disabled=true);feedback.textContent='Deleting account…';
+ try{
+  if(current.providerData.some(p=>p.providerId==='password')){
+   await sdk.reauthenticateWithCredential(current,sdk.EmailAuthProvider.credential(current.email,form.querySelector('[name=password]').value));
+  }else if(current.providerData.some(p=>p.providerId==='google.com')){
+   await sdk.reauthenticateWithPopup(current,provider('google.com'));
+  }else throw {code:'auth/requires-recent-login'};
+  if(user?.uid!==current.uid)throw {code:'auth/requires-recent-login'};
+  await deleteAccountFeedback(current.uid);
+  await sdk.deleteUser(current);
+  try{localStorage.removeItem(`wardrobe.account.${current.uid}`);}catch{}
+  location.hash='today';
+  notice='Your account has been deleted.';view='signin';if(!modal.open)modal.showModal();render();
+ }catch(error){
+  feedback.textContent=error.code?.startsWith('auth/')?authMessage(error):'Account deletion could not finish. Please retry. Some feedback may already have been removed.';
+ }finally{deleting=false;form.querySelectorAll('input,button').forEach(el=>el.disabled=false);const button=form.querySelector('#delete-permanently');if(button)button.disabled=form.querySelector('[name=confirmation]').value!=='DELETE';}
+});
