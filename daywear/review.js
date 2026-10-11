@@ -1,7 +1,7 @@
-import {getAccountUser,isAccountAdmin} from './auth.js?v=20261011-account-pages';
-import {database,loadCloudProfile,getPhotos} from './account-data.js?v=20261011-account-pages';
-import {validPhoto} from './profile-photos.js?v=20261011-account-pages';
-import {measurements} from './profile.js?v=20261011-account-pages';
+import {getAccountUser,isAccountAdmin} from './auth.js?v=20261011-direct-login';
+import {database,loadCloudProfile,getPhotos} from './account-data.js?v=20261011-direct-login';
+import {validPhoto} from './profile-photos.js?v=20261011-direct-login';
+import {measurements} from './profile.js?v=20261011-direct-login';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let generation=0,records=[],profiles=[],active=null;
 export function clearAdmin(){generation++;records=[];profiles=[];active=null;document.querySelector('#review-detail')?.replaceChildren();}

@@ -1,8 +1,8 @@
-import {deleteAccountFeedback} from './account-data.js?v=20261011-account-pages';
-import {getLanguage} from './i18n.js?v=20261011-account-pages';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-account-pages';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-account-pages';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-account-pages';
+import {deleteAccountFeedback} from './account-data.js?v=20261011-direct-login';
+import {getLanguage} from './i18n.js?v=20261011-direct-login';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-direct-login';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-direct-login';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-direct-login';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
@@ -85,7 +85,7 @@ async function initialize(){
   const [app,authSdk]=await Promise.all([import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')]);
   sdk=authSdk;auth=sdk.initializeAuth(app.initializeApp(firebaseConfig),{persistence:[sdk.browserSessionPersistence,sdk.browserLocalPersistence],popupRedirectResolver:sdk.browserPopupRedirectResolver});
   auth.languageCode=getLanguage();
-  sdk.onAuthStateChanged(auth,next=>{user=next;profileName='';admin=false;ready=true;notify();render();refreshAdmin();},()=>{initializationError=true;render();});
+  sdk.onAuthStateChanged(auth,next=>{const signedIn=!!next&&next.uid!==user?.uid;user=next;if(signedIn){modal.close();closeMenu();}profileName='';admin=false;ready=true;notify();render();refreshAdmin();},()=>{initializationError=true;render();});
  }catch{initializationError=true;render();}
 }
 trigger.addEventListener('click',()=>{if(!user){openSignIn();return;}menu.hidden=!menu.hidden;trigger.setAttribute('aria-expanded',String(!menu.hidden));if(!menu.hidden)menu.querySelector('a')?.focus();});

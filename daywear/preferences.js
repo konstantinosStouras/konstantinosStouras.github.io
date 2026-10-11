@@ -1,4 +1,4 @@
-import {looks, pieceById} from './data.js?v=20261011-account-pages';
+import {looks, pieceById} from './data.js?v=20261011-direct-login';
 
 export function cleanRatings(value) {
   return Object.fromEntries(looks.filter(l => value && [1, -1].includes(value[l.id])).map(l => [l.id, value[l.id]]));

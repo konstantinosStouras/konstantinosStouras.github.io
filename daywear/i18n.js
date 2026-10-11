@@ -1,4 +1,4 @@
-import {greek} from './translations-el.js?v=20261011-account-pages';
+import {greek} from './translations-el.js?v=20261011-direct-login';
 const preferenceKey='daywear.language';
 let language='en';
 try{if(globalThis.localStorage?.getItem(preferenceKey)==='el')language='el';}catch{}

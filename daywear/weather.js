@@ -1,5 +1,5 @@
-import {preferenceScore} from './preferences.js?v=20261011-account-pages';
-import {looks} from './data.js?v=20261011-account-pages';
+import {preferenceScore} from './preferences.js?v=20261011-direct-login';
+import {looks} from './data.js?v=20261011-direct-login';
 export function seasonPool(temp,month,latitude=51){
  if(!Number.isFinite(temp))throw new Error('A valid apparent temperature is required');
  const m=latitude<0?(month+5)%12+1:month;
