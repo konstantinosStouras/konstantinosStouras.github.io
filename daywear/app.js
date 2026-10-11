@@ -105,6 +105,13 @@ function chooseTravel(city){if(!city)return;++locationRequest;state.locating=fal
 async function useCurrentLocation(){const request=++locationRequest;++weatherRequest;controller?.abort();state.loading=false;state.locating=true;state.locationError=null;state.locationMode='current';state.location=null;state.weather=null;persist();$('#modal').close();render();try{const place=await detectLocation();if(request!==locationRequest)return;state.location=place;applyLocationLanguage(place);state.locating=false;persist();await refresh();}catch(error){if(request!==locationRequest)return;state.locating=false;state.locationError=error.code?locationError(error):error.message;applyLocationLanguage(null);render();}}
 function renderWeatherUpdate(){
  // Background weather must not replace forms, search fields or open checklists.
+ // Keep the outfit being reviewed in place while feedback has focus; readings
+ // continue to update, and the next ordinary render applies the new ranking.
+ if(route().split('/')[0]==='today'&&document.activeElement?.closest('[data-feedback-look]')){
+  $('#header-weather').innerHTML=headerWeather(state);
+  const card=$('.weather-card');if(card)card.outerHTML=weatherStrip();
+  return;
+ }
  if(route().split('/')[0]==='today')render();
  else $('#header-weather').innerHTML=headerWeather(state);
 }
