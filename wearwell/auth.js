@@ -1,8 +1,8 @@
-import {deleteAccountFeedback} from './account-data.js?v=20261011-news-v1';
-import {getLanguage,serviceLanguage} from './i18n.js?v=20261011-news-v1';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-news-v1';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-news-v1';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-news-v1';
+import {deleteAccountFeedback} from './account-data.js?v=20261011-de-ru-v1';
+import {getLanguage,serviceLanguage} from './i18n.js?v=20261011-de-ru-v1';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-de-ru-v1';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-de-ru-v1';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-de-ru-v1';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';

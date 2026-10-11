@@ -1,5 +1,5 @@
-import {pieces} from './data.js?v=20261011-news-v1';
-import {checkPurchase, purchaseColours} from './purchase-check.js?v=20261011-news-v1';
+import {pieces} from './data.js?v=20261011-de-ru-v1';
+import {checkPurchase, purchaseColours} from './purchase-check.js?v=20261011-de-ru-v1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let photoURL = '', revision = 0;
