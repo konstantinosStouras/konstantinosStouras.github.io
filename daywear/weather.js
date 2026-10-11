@@ -26,7 +26,7 @@ export function recommend(weather,{mode='everyday',month=10,latitude=51,day=0,se
 export function condition(code){if(code===0)return 'Clear sky';if(code===1)return 'Mainly clear';if(code===2)return 'Partly cloudy';if(code===3)return 'Overcast';if([45,48].includes(code))return 'Fog';if([51,53,55,56,57].includes(code))return 'Drizzle';if([61,63,65,66,67].includes(code))return 'Rain';if([71,73,75,77].includes(code))return 'Snow';if([80,81,82].includes(code))return 'Rain showers';if([85,86].includes(code))return 'Snow showers';if([95,96,99].includes(code))return 'Thunderstorms';return 'Conditions unavailable';}
 export async function fetchWeather(location,signal){
  const query=new URLSearchParams({latitude:location.latitude,longitude:location.longitude,timezone:location.timezone||'auto',current:'temperature_2m,relative_humidity_2m,is_day,apparent_temperature,precipitation,weather_code,wind_speed_10m',daily:'temperature_2m_max,temperature_2m_min,precipitation_sum',forecast_days:'1'});
- const response=await fetch(`https://api.open-meteo.com/v1/forecast?${query}`,{signal});
+ const response=await fetch(`https://api.open-meteo.com/v1/forecast?${query}`,{signal,cache:'no-store'});
  if(!response.ok)throw new Error('The weather service is unavailable. Please try again.');
  const d=await response.json(),c=d.current;
  if(!c||![c.apparent_temperature,c.precipitation,c.wind_speed_10m,c.weather_code,d.daily?.temperature_2m_max?.[0],d.daily?.temperature_2m_min?.[0],d.daily?.precipitation_sum?.[0]].every(Number.isFinite)||typeof c.time!=='string')throw new Error('The weather service returned incomplete data.');
