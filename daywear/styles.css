@@ -22,3 +22,16 @@
 .look-feedback{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:18px 0;margin:20px 0}.look-feedback.compact{margin:14px 0 0;padding:13px 0}.look-feedback .actions{margin:8px 0;gap:8px;flex-wrap:wrap}.look-feedback button[aria-pressed=true]{background:#e8efe5;border-color:#627a61;color:#29472c}.look-feedback .caption{max-width:52ch}.purchase-invitation{display:flex;justify-content:space-between;align-items:center;gap:25px}.purchase-layout{display:grid;grid-template-columns:minmax(270px,.8fr) minmax(0,1.2fr);gap:48px;align-items:start}.purchase-card{background:#f5f6f3;padding:28px;border:1px solid var(--line)}.purchase-card h2{font-size:29px}.purchase-card input,.purchase-card select{width:100%;min-width:0}.purchase-card input[type=file]{font-size:12px}.purchase-preview:empty{display:none}.purchase-preview img{display:block;width:100%;max-height:400px;object-fit:contain;background:white;margin:20px 0}.purchase-results h2{font-size:32px}.purchase-match{display:grid;grid-template-columns:140px minmax(0,1fr);gap:22px;border-top:1px solid var(--line);padding:24px 0}.purchase-match .look-photo{width:100%;height:auto;aspect-ratio:2/3;object-fit:cover}.purchase-match h3{font-size:24px}.purchase-match h4{font-size:12px;margin:14px 0 5px}.purchase-match ul{padding-left:17px;font-size:12px}.purchase-match summary{cursor:pointer;font-size:12px}.purchase-results .callout{margin:22px 0}.purchase-results .empty{padding:28px 16px}.purchase-results:focus{outline:none}#purchase-status{font-size:12px;color:#36533a;overflow-wrap:anywhere}
 @media(max-width:800px){.purchase-layout{grid-template-columns:1fr;gap:28px}.purchase-invitation{align-items:flex-start;flex-direction:column}.purchase-card{padding:22px}.purchase-match{grid-template-columns:100px minmax(0,1fr);gap:16px}}
 .purchase-upload{position:relative}.purchase-upload .button{display:block;margin-top:8px;text-align:center;cursor:pointer;border:1px solid #cfd4cc;background:white;padding:11px}.purchase-card input.purchase-file{position:absolute;width:1px;height:1px;opacity:0;padding:0;bottom:0;left:0}.purchase-upload:focus-within .button{outline:2px solid #526653;outline-offset:4px}
+
+/* Align reading text along both edges in English and Greek. */
+:where(main, dialog) p:not(.eyebrow):not([role="status"]), .disclosure li {
+  text-align: justify;
+  text-align-last: start;
+  text-justify: inter-word;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+:where(main, dialog) :is(button, .weather .source) p {
+  text-align: inherit;
+  text-align-last: auto;
+}
