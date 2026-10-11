@@ -156,7 +156,7 @@ export const MANAGED = [
     file: 'fun/index.html', url: '/fun/',
     ogTitle: 'Fun Projects — games & interactive tools',
     siteName: 'stouras.com',
-    description: 'Games and interactive tools built for fun: The Lit paper browser, the PortfolioFit packing game, a world capitals quiz, a Greek prefectures map, strategy puzzles, Sudoku and Snake.',
+    description: 'Games and interactive tools built for fun: Speak communication and negotiation training, The Lit paper browser, PortfolioFit, geography quizzes, strategy puzzles, Sudoku and Snake.',
     ogDescription: 'A small collection of games and interactive tools I have been building for fun.',
     card: '/fun/og-image.jpg', square: '/fun/share-square.jpg',
     alt: 'Fun Projects — games and interactive tools by Konstantinos Stouras',
