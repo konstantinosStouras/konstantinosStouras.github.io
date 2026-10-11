@@ -6,3 +6,5 @@
 @media(max-width:900px){.lesson-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.trainer{grid-template-columns:minmax(0,1fr) 280px}}@media(max-width:760px){.course-intro{align-items:flex-start;flex-direction:column}.lesson-body{padding:24px}.lesson-body h2{font-size:25px}.example-grid{grid-template-columns:1fr}.trainer{grid-template-columns:minmax(0,1fr)}.route-actions{width:100%;flex-shrink:1}.route-actions button{flex:1;min-width:0}.lesson-controls button{width:100%}.try-it{padding:18px}.try-it button{width:100%}.practice-plan{padding:20px}.lesson-steps li{padding-left:0}.lesson-card{padding:18px}}@media(max-width:440px){.lesson-grid{grid-template-columns:1fr}.lesson-card{min-height:130px}.lesson-body{padding:19px}.example-grid section{padding:18px}}
 
 .example-grid>section{min-width:0}.example-grid p{overflow-wrap:anywhere}
+
+.brand .mark{display:block;flex-shrink:0;width:37px;height:37px;background:transparent;border-radius:0}
