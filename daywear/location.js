@@ -1,4 +1,4 @@
-import {getLanguage} from './i18n.js?v=20261011-welcome-v2';
+import {serviceLanguage} from './i18n.js?v=20261011-languages-v1';
 export function locationPreference(saved={}){
  return saved.locationMode==='travel'&&saved.location?'travel':'current';
 }
@@ -6,7 +6,7 @@ export function rememberCity(cities,city){
  return [city,...cities.filter(c=>c.latitude!==city.latitude||c.longitude!==city.longitude)].slice(0,8);
 }
 export function locationError(error){
- if(error?.code===1)return 'This browser did not share your device location. Open Daywear in your usual browser and allow location access, or choose a city.';
+ if(error?.code===1)return 'This browser did not share your device location. Open WearWell in your usual browser and allow location access, or choose a city.';
  if(error?.code===3)return 'Finding your location took too long. Try again or choose a city.';
  return 'Your current location is unavailable. Try again or choose a city.';
 }
@@ -28,19 +28,19 @@ export async function detectLocation({geolocation=globalThis.navigator?.geolocat
  // City-level coordinates are sufficient for a wardrobe forecast. Never store a precise fix.
  const location={latitude:Number(latitude.toFixed(2)),longitude:Number(longitude.toFixed(2)),name:'your current location',country:'',timezone:'auto',source:'device'};
  try{
-  const query=new URLSearchParams({latitude:location.latitude,longitude:location.longitude,localityLanguage:getLanguage()});
+  const query=new URLSearchParams({latitude:location.latitude,longitude:location.longitude,localityLanguage:serviceLanguage()});
   const response=await fetcher(`https://api.bigdatacloud.net/data/reverse-geocode-client?${query}`,{signal:AbortSignal.timeout(6000)});
-  if(response.ok){const city=await response.json();location.name=city.city||city.locality||location.name;location.country=city.countryName||'';}
+  if(response.ok){const city=await response.json();location.name=city.city||city.locality||location.name;location.country=city.countryName||'';location.countryCode=city.countryCode||'';location.principalSubdivisionCode=city.principalSubdivisionCode||'';}
  }catch{/* The coordinates still work for weather if the city-name service is unavailable. */}
  return location;
 }
 export async function detectApproximateLocation(fetcher=globalThis.fetch){
  // The provider's documented client-side fallback resolves the calling device's IP.
  // No device coordinates are sent and the result is never labelled as a GPS fix.
- const response=await fetcher(`https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=${getLanguage()}`,{signal:AbortSignal.timeout(8000)});
+ const response=await fetcher(`https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=${serviceLanguage()}`,{signal:AbortSignal.timeout(8000)});
  if(!response.ok)throw new Error('Automatic city detection is unavailable. Choose a city.');
  const data=await response.json();
  const {latitude,longitude}=data,name=data.city||data.locality||data.localityName;
  if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||Math.abs(latitude)>90||Math.abs(longitude)>180||typeof name!=='string'||!name.trim())throw new Error('Automatic city detection returned no usable city. Choose a city.');
- return {latitude:Number(latitude.toFixed(2)),longitude:Number(longitude.toFixed(2)),name,country:data.countryName||'',timezone:'auto',source:'approximate'};
+ return {latitude:Number(latitude.toFixed(2)),longitude:Number(longitude.toFixed(2)),name,country:data.countryName||'',countryCode:data.countryCode||'',principalSubdivisionCode:data.principalSubdivisionCode||'',timezone:'auto',source:'approximate'};
 }

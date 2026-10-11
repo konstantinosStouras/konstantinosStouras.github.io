@@ -1,5 +1,5 @@
-import {pieces} from './data.js?v=20261011-welcome-v2';
-import {checkPurchase, purchaseColours} from './purchase-check.js?v=20261011-welcome-v2';
+import {pieces} from './data.js?v=20261011-languages-v1';
+import {checkPurchase, purchaseColours} from './purchase-check.js?v=20261011-languages-v1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let photoURL = '', revision = 0;
@@ -76,7 +76,7 @@ export function installPurchase({uid, ownership, image}) {
     target.innerHTML = `<h2>Your wardrobe check</h2><p class="caption">Based on your selected garment type, colour and confirmed ownership. Catalog photos show the original looks, not your uploaded item.</p>
       ${result.duplicates.length ? `<div class="callout"><h3>You may already have something similar</h3><ul>${list(result.duplicates)}</ul><p>Could one of these do the same job? Compare condition and fit before buying another.</p></div>` : '<p>No similar owned capsule piece was found for this garment type and colour. That alone is not a reason to buy.</p>'}
       ${!result.ownedCount ? '<div class="empty"><h3>Confirm your wardrobe first</h3><p>No pieces are marked Owned yet. We cannot claim matches with clothes you own.</p><a href="#pieces">Review your pieces ↗</a></div>' : !result.matches.length ? '<div class="empty"><h3>No connections yet</h3><p>No confirmed owned companions were found in the existing looks for this piece. Review ownership or try another comparable piece.</p><a href="#pieces">Review your pieces ↗</a></div>' : result.matches.map(m => `<article class="purchase-match"><a href="#look/${m.look.id}">${image(m.look)}</a><div><p class="eyebrow">${m.complete ? 'All companion pieces owned' : 'Some companion pieces still unconfirmed'}</p><h3><a href="#look/${m.look.id}">${esc(m.look.name)}</a></h3><p class="caption">Compare your photo with this existing look.</p><h4>Already in your wardrobe</h4><ul>${list(m.owned)}</ul>${m.missing.length ? `<details><summary>Other pieces to review</summary><ul>${list(m.missing)}</ul></details>` : ''}<p class="caption">${m.palette === 'easy' ? 'The selected colour has a simple palette connection with your owned companions.' : 'Compare the colours and pattern carefully; this pairing needs a visual check.'}</p></div></article>`).join('')}
-      <div class="callout"><h3>Worth a second thought</h3><p>Can you wear it with what you own, and would you choose it often? Check the actual cut, fabric, warmth, rain protection and measurements. This is styling guidance, not a fit or weather guarantee.</p><p class="caption">Your 30-look collection stays unchanged. Nothing is added to your wardrobe or shopping list.</p></div>`;
+      <div class="callout"><h3>Worth a second thought</h3><p>Can you wear it with what you own, and would you choose it often? Check the actual cut, fabric, warmth, rain protection and measurements. This is styling guidance, not a fit or weather guarantee.</p><p class="caption">Your collection stays unchanged. Nothing is added to your wardrobe or shopping list.</p></div>`;
     message('Wardrobe check ready.');
     target.setAttribute('tabindex','-1'); target.focus({preventScroll:true});
   });

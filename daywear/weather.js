@@ -1,5 +1,5 @@
-import {preferenceScore} from './preferences.js?v=20261011-welcome-v2';
-import {looks} from './data.js?v=20261011-welcome-v2';
+import {preferenceScore} from './preferences.js?v=20261011-languages-v1';
+import {looks} from './data.js?v=20261011-languages-v1';
 export function seasonPool(temp,month,latitude=51){
  if(!Number.isFinite(temp))throw new Error('A valid apparent temperature is required');
  const m=latitude<0?(month+5)%12+1:month;
@@ -21,7 +21,7 @@ export function recommend(weather,{mode='everyday',month=10,latitude=51,day=0,se
  const preferred=[...weatherBest].sort((a,b)=>preferenceScore(b,ratings)-preferenceScore(a,ratings));
  const best=preferred.filter(l=>Math.abs(preferenceScore(l,ratings)-preferenceScore(preferred[0],ratings))<0.000001);
  const look=best[((day%best.length)+best.length)%best.length];
- return {look,wet,layer:null,reason:`Feels like ${weather.temp.toFixed(1)}°C, so ${pool} is your temperature pool. ${wet?'Rain calls for a protective jacket and dark closed shoes. ':''}${weather.wind>=25?'A layer covers the wind. ':''}${weather.temp>=8&&weather.temp<15?'A mid-layer gets preference in cooler weather. ':''}A complete look from your existing thirty.`};
+ return {look,wet,layer:null,reason:`Feels like ${weather.temp.toFixed(1)}°C, so ${pool} is your temperature pool. ${wet?'Rain calls for a protective jacket and dark closed shoes. ':''}${weather.wind>=25?'A layer covers the wind. ':''}${weather.temp>=8&&weather.temp<15?'A mid-layer gets preference in cooler weather. ':''}A complete look from your collection.`};
 }
 export function condition(code){if(code===0)return 'Clear sky';if(code===1)return 'Mainly clear';if(code===2)return 'Partly cloudy';if(code===3)return 'Overcast';if([45,48].includes(code))return 'Fog';if([51,53,55,56,57].includes(code))return 'Drizzle';if([61,63,65,66,67].includes(code))return 'Rain';if([71,73,75,77].includes(code))return 'Snow';if([80,81,82].includes(code))return 'Rain showers';if([85,86].includes(code))return 'Snow showers';if([95,96,99].includes(code))return 'Thunderstorms';return 'Conditions unavailable';}
 export async function fetchWeather(location,signal){

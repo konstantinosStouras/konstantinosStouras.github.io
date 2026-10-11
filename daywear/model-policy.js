@@ -5,7 +5,7 @@ export function modelImageSource(look,uid,catalog){
  return hasPersonalModel(uid)?catalog?.get(look.id,uid):`assets/${look.id}.webp?v=guest-v1`;
 }
 export function modelCaption(uid){
- return hasPersonalModel(uid)?'Your photo-based AI model · Visual styling study, not a measured fitting.':'Daywear’s slim male catalog model · Example styling, not your personal likeness.';
+ return hasPersonalModel(uid)?'Your photo-based AI model · Visual styling study, not a measured fitting.':'WearWell’s slim male catalog model · Example styling, not your personal likeness.';
 }
 export function modelFitNotes(uid,sizes={}){
  if(sizes.bodyNotes)return sizes.bodyNotes;

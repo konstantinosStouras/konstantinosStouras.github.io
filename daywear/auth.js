@@ -1,8 +1,8 @@
-import {deleteAccountFeedback} from './account-data.js?v=20261011-welcome-v2';
-import {getLanguage} from './i18n.js?v=20261011-welcome-v2';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-welcome-v2';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-welcome-v2';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-welcome-v2';
+import {deleteAccountFeedback} from './account-data.js?v=20261011-languages-v1';
+import {getLanguage,serviceLanguage} from './i18n.js?v=20261011-languages-v1';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-languages-v1';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-languages-v1';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-languages-v1';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
@@ -84,7 +84,7 @@ async function initialize(){
  try{
   const [app,authSdk]=await Promise.all([import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')]);
   sdk=authSdk;auth=sdk.initializeAuth(app.initializeApp(firebaseConfig),{persistence:[sdk.browserSessionPersistence,sdk.browserLocalPersistence],popupRedirectResolver:sdk.browserPopupRedirectResolver});
-  auth.languageCode=getLanguage();
+  auth.languageCode=serviceLanguage();
   sdk.onAuthStateChanged(auth,next=>{const signedIn=!!next&&next.uid!==user?.uid;user=next;if(signedIn){modal.close();closeMenu();}profileName='';admin=false;ready=true;notify();render();refreshAdmin();},()=>{initializationError=true;render();});
  }catch{initializationError=true;render();}
 }
@@ -122,7 +122,7 @@ modal.addEventListener('submit',e=>{
 });
 initialize();
 
-document.addEventListener('wardrobe:language',()=>{if(auth)auth.languageCode=getLanguage();});
+document.addEventListener('wardrobe:language',()=>{if(auth)auth.languageCode=serviceLanguage();});
 
 let deleting=false;
 document.addEventListener('input',event=>{

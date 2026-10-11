@@ -1,9 +1,27 @@
-import {greek} from './translations-el.js?v=20261011-welcome-v2';
+import {greek} from './translations-el.js?v=20261011-languages-v1';
+import greekExtras from './translations-extra-el.js';
+import {translateOther} from './translation-engine.js';
+import {languages,languageForLocation,readLanguagePreference} from './language-policy.js';
+Object.assign(greek,greekExtras);
 const preferenceKey='daywear.language';
-let language='en';
-try{if(globalThis.localStorage?.getItem(preferenceKey)==='el')language='el';}catch{}
+let preference='auto';try{preference=readLanguagePreference(globalThis.localStorage);}catch{}
+let automaticLanguage='en',language=preference==='auto'?'en':preference;
 export const getLanguage=()=>language;
-export const locale=()=>language==='el'?'el-GR':'en-GB';
+export const getLanguagePreference=()=>preference;
+export const locale=()=>languages[language].locale;
+export const serviceLanguage=()=>languages[language].service;
+function announceLanguage(){if(typeof document!=='undefined')document.dispatchEvent(new CustomEvent('wardrobe:language',{detail:{language}}));}
+export function applyLocationLanguage(place){
+ automaticLanguage=languageForLocation(place,globalThis.navigator?.languages||[]);
+ if(preference==='auto'){language=automaticLanguage;announceLanguage();}
+}
+export function setLanguagePreference(value){
+ if(value!=='auto'&&!Object.hasOwn(languages,value))return;
+ preference=value;language=value==='auto'?automaticLanguage:value;
+ try{localStorage.setItem(preferenceKey,value);}catch{}
+ announceLanguage();
+ if(value==='auto'&&typeof document!=='undefined')document.dispatchEvent(new CustomEvent('wardrobe:automatic-language'));
+}
 const dictionary=new Map();
 for(const [en,el] of Object.entries(greek)){
  dictionary.set(en,el);
@@ -14,7 +32,7 @@ const escape=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const phrasePattern=new RegExp('(?<![A-Za-z])(?:'+[...dictionary.keys()].sort((a,b)=>b.length-a.length).map(escape).join('|')+')(?![A-Za-z])','g');
 const seasonAdjectives={summer:'καλοκαιρινά',fall:'φθινοπωρινά',winter:'χειμερινά',spring:'ανοιξιάτικα'};
 export function translateText(value,target=language){
- const text=String(value??'');if(target!=='el'||!text.trim())return text;
+ const text=String(value??'');if(target!=='el')return translateOther(text,target);if(!text.trim())return text;
  const core=text.trim(),leading=text.slice(0,text.indexOf(core)),trailing=text.slice(text.indexOf(core)+core.length);
  if(dictionary.has(core))return leading+dictionary.get(core)+trailing;
  // Preserve interpolated personal names and city names verbatim.
@@ -77,24 +95,35 @@ export function installLanguages(){
   record.output=translateText(record.source);records[name]=record;if(current!==record.output)el.setAttribute(name,record.output);
  };
  const refresh=()=>{
-  scheduled=false;document.documentElement.lang=language;
+  scheduled=false;document.documentElement.lang=language;document.documentElement.dir=languages[language].dir||'ltr';
+  document.querySelectorAll('[data-local-date]').forEach(el=>{
+   const options=el.dataset.dateFormat==='full'?{weekday:'long',day:'numeric',month:'long',year:'numeric'}:{day:'numeric',month:'short'};
+   if(el.dataset.timeZone)options.timeZone=el.dataset.timeZone;
+   const value=new Intl.DateTimeFormat(locale(),options).format(new Date(Number(el.dataset.localDate)));
+   if(el.textContent!==value)el.textContent=value;
+  });
   const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;while((node=walker.nextNode()))updateText(node);
   document.querySelectorAll('[aria-label],[placeholder],[title],[alt]').forEach(el=>{
    if(el.closest('[data-i18n-skip]'))return;
    for(const attr of ['aria-label','placeholder','title','alt'])updateAttribute(el,attr);
   });
-  document.title=language==='el'?'Daywear — Η προσωπική σου γκαρνταρόμπα':'Daywear — Your personal wardrobe';
-  document.querySelector('meta[name=description]')?.setAttribute('content',language==='el'?'Τριάντα προσεγμένα σύνολα. Μία προσωπική γκαρνταρόμπα. Ντύσου για την ημέρα με τον τρέχοντα καιρό και μια απλή εναλλαγή.':'Thirty considered looks. One personal wardrobe. Dress for the day with live weather, a shared capsule and a simple rotation.');
-  document.querySelectorAll('[data-language]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.language===language)));
+  document.title='WearWell — '+translateText('Your style. Every occasion.');
+  document.querySelector('meta[name=description]')?.setAttribute('content',translateText('Make more of what you own. Discover outfit ideas for your weather, your plans and your personal style.'));
+  const selector=document.querySelector('#language-select');
+  if(selector){const autoLabel=translateText('Automatic')+' · '+languages[automaticLanguage].label;if(selector.options[0].textContent!==autoLabel)selector.options[0].textContent=autoLabel;selector.value=preference;}
   // Only this generated, readonly preview is localized; editable user notes stay untouched.
   const brief=document.querySelector('#model-brief');if(brief&&brief.readOnly){let record=originals.get(brief);if(!record||brief.value!==record.output)record={source:brief.value,output:brief.value};record.output=translateBrief(record.source);originals.set(brief,record);if(brief.value!==record.output)brief.value=record.output;}
  };
  const schedule=()=>{if(!scheduled){scheduled=true;queueMicrotask(refresh);}};
- const switchLanguage=value=>{
-  if(!['en','el'].includes(value))return;language=value;try{localStorage.setItem(preferenceKey,language);}catch{}
-  refresh();document.dispatchEvent(new CustomEvent('wardrobe:language',{detail:{language}}));
- };
- document.addEventListener('click',event=>{const button=event.target.closest('[data-language]');if(button)switchLanguage(button.dataset.language);});
+ const selector=document.querySelector('#language-select');
+ if(selector){
+  selector.dataset.i18nSkip='';
+  selector.title=translateText('Choose a language, or use your location automatically.');
+  selector.setAttribute('aria-label',translateText('Language'));
+  selector.innerHTML='<option value="auto">Automatic</option>'+Object.entries(languages).map(([code,info])=>`<option value="${code}" lang="${code}">${info.label}</option>`).join('');
+  selector.addEventListener('change',()=>setLanguagePreference(selector.value));
+ }
+ document.addEventListener('wardrobe:language',()=>{if(selector){selector.setAttribute('aria-label',translateText('Language'));selector.title=translateText('Choose a language, or use your location automatically.');}refresh();});
  new MutationObserver(schedule).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['aria-label','placeholder','title','alt']});
  document.addEventListener('wardrobe:profile',schedule);
  refresh();

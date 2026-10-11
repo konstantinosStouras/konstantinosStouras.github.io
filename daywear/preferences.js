@@ -1,4 +1,4 @@
-import {looks, pieceById} from './data.js?v=20261011-welcome-v2';
+import {looks, pieceById} from './data.js?v=20261011-languages-v1';
 
 export function cleanRatings(value) {
   return Object.fromEntries(looks.filter(l => value && [1, -1].includes(value[l.id])).map(l => [l.id, value[l.id]]));
