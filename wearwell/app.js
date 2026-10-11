@@ -1,6 +1,6 @@
 import {installWeatherRefresh} from './weather-refresh.js?v=20261011-news-v1';
 import {usersPage,loadUsers} from './admin-users.js?v=20261011-news-v1';
-import {updatesPage,loadUpdates} from './updates.js?v=20261011-news-v1';
+import {updatesPage,loadUpdates} from './updates.js?v=20261011-news-v2';
 import {welcomePage} from './welcome.js?v=20261011-news-v1';
 import {headerWeather,currentWeatherCard} from './weather-view.js?v=20261011-news-v1';
 import {cleanRatings,cleanPieceFeedback,dislikeReasons} from './preferences.js?v=20261011-news-v1';
