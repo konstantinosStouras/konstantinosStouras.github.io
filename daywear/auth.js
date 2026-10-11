@@ -1,7 +1,7 @@
-import {getLanguage} from './i18n.js?v=20261009-public-languages';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261009-public-languages';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261009-public-languages';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261009-public-languages';
+import {getLanguage} from './i18n.js?v=20261011-style-feedback';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-style-feedback';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-style-feedback';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-style-feedback';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';

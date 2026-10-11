@@ -1,4 +1,4 @@
-import {greek} from './translations-el.js?v=20261009-public-languages';
+import {greek} from './translations-el.js?v=20261011-style-feedback';
 const preferenceKey='daywear.language';
 let language='en';
 try{if(globalThis.localStorage?.getItem(preferenceKey)==='el')language='el';}catch{}
