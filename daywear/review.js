@@ -1,7 +1,7 @@
-import {getAccountUser,isAccountAdmin} from './auth.js?v=20261011-piece-feedback-v1';
-import {database,loadCloudProfile,getPhotos} from './account-data.js?v=20261011-piece-feedback-v1';
-import {validPhoto} from './profile-photos.js?v=20261011-piece-feedback-v1';
-import {measurements} from './profile.js?v=20261011-piece-feedback-v1';
+import {getAccountUser,isAccountAdmin} from './auth.js?v=20261011-piece-feedback-v2';
+import {database,loadCloudProfile,getPhotos} from './account-data.js?v=20261011-piece-feedback-v2';
+import {validPhoto} from './profile-photos.js?v=20261011-piece-feedback-v2';
+import {measurements} from './profile.js?v=20261011-piece-feedback-v2';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let generation=0,records=[],profiles=[],active=null;
 export function clearAdmin(){generation++;records=[];profiles=[];active=null;document.querySelector('#review-detail')?.replaceChildren();}
@@ -10,7 +10,7 @@ const time=value=>value?.toDate?.().toLocaleString()||'';
 function profileDetails(sizes){const rows=[['Top size',sizes.top],['Trouser size',sizes.bottom],['Trouser sizing system',sizes.bottomSystem],['Shoe size',sizes.shoe],...measurements.map(([key,title,unit])=>[title,sizes.measurements?.[key]===undefined?'':sizes.measurements[key]+' '+unit]),['Face, body & fit notes (optional)',sizes.bodyNotes],...[['city','Home city'],['work','Work dress code'],['weekend','Weekend activities'],['style','My style'],['fit','Preferred fit'],['colors','Colours I like'],['avoid','Colours or clothes I avoid'],['budget','Shopping budget and currency'],['constraints','Practical needs and constraints']].map(([key,title])=>[title,sizes.preferences?.[key]])];return '<dl class="profile-details">'+rows.filter(([,value])=>value!==undefined&&value!=='').map(([title,value])=>`<div><dt>${title}</dt><dd data-i18n-skip>${esc(value)}</dd></div>`).join('')+'</dl>';}
 export async function loadAdmin(){
  const host=document.querySelector('#review-inbox'),current=++generation;if(!host)return;
- if(!getAccountUser()||!isAccountAdmin()){host.innerHTML='<p>Only the DayWear administrator can open this page.</p>';return;}
+ if(!getAccountUser()||!isAccountAdmin()){host.innerHTML='<p>Only the WearWell administrator can open this page.</p>';return;}
  host.innerHTML='<p role="status">Loading private feedback…</p>';
  try{const {s,db}=await database();const [tickets,people]=await Promise.all([s.getDocsFromServer(s.query(s.collection(db,'daywearFeedback'),s.orderBy('createdAt','desc'),s.limit(100))),s.getDocsFromServer(s.query(s.collection(db,'daywearProfiles'),s.limit(100)))]);
   if(current!==generation||!isAccountAdmin()||!host.isConnected)return;
