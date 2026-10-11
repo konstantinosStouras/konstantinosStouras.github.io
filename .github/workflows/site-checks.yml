@@ -49,6 +49,7 @@ on:
       - '.github/workflows/site-checks.yml'
       # DayWear has its own checks and must not trigger unrelated site checks.
       - '!daywear/**'
+      - '!wearwell/**'
   pull_request:
     paths:
       - '**/*.html'
@@ -64,6 +65,7 @@ on:
       - 'fun/capitals/**'
       - '.github/workflows/site-checks.yml'
       - '!daywear/**'
+      - '!wearwell/**'
   workflow_dispatch:
 
 permissions:

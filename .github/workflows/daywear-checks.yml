@@ -1,13 +1,15 @@
-name: DayWear website checks
+name: WearWell website checks
 
 on:
   push:
     paths:
+      - 'wearwell/**'
       - 'daywear/**'
       - '.github/scripts/check-daywear.mjs'
       - '.github/workflows/daywear-checks.yml'
   pull_request:
     paths:
+      - 'wearwell/**'
       - 'daywear/**'
       - '.github/scripts/check-daywear.mjs'
       - '.github/workflows/daywear-checks.yml'
@@ -28,6 +30,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           sparse-checkout: |
+            wearwell
             daywear
             .github/scripts
           filter: blob:none
