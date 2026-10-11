@@ -885,5 +885,8 @@ export default {
   "Winter collection": "Зимняя коллекция",
   "Spring collection": "Весенняя коллекция",
   "Gym collection": "Коллекция для спорта",
-  "Lounge collection": "Коллекция для дома"
+  "Lounge collection": "Коллекция для дома",
+  "Like": "Нравится",
+  "Opening Google…": "Открываем Google…",
+  "This browser could not prepare sign-in. Please try again.": "Не удалось подготовить вход в этом браузере. Попробуйте ещё раз."
 };

@@ -154,7 +154,7 @@ render();if(state.locationMode==='current')useCurrentLocation();else refresh();
 
 
 // Switch storage namespaces before accepting any wardrobe edits after an account change.
-document.addEventListener('wardrobe:account',event=>{
+function handleAccountChange(event){
  const {uid,name}=event.detail;
  resetFeedback();clearAdmin();
  if(uid===accountUid){if(uid&&name&&state.name==='Your'){state.name=name;persist();render();}notifyProfile();return;}
@@ -165,7 +165,9 @@ document.addEventListener('wardrobe:account',event=>{
  Object.assign(state,{name:typeof data.name==='string'?data.name:(uid?(name||'Your'):'Your'),locationMode:locationPreference(data),location:locationPreference(data)==='travel'?data.location:null,travelCities:Array.isArray(data.travelCities)?data.travelCities:[],ownership:data.ownership||{},checks:data.checks||{},purge:Array.isArray(data.purge)?data.purge:[],ratings:cleanRatings(data.ratings),pieceFeedback:cleanPieceFeedback(data.pieceFeedback,cleanRatings(data.ratings)),sizes:data.sizes||{},mode:'everyday',filter:'All',search:'',offset:0,weather:null,weatherError:null,locationError:null,locating:false,loading:false});
  cloudStatus=uid?'loading':'idle';notifyProfile();$('#modal').close();render();if(uid)syncProfile();if(hasPersonalModel(uid))loadPersonalModel();
  if(state.locationMode==='travel')refresh();else useCurrentLocation();
-});
+}
+document.addEventListener('wardrobe:account',handleAccountChange);
+queueMicrotask(()=>{const initialAccount=getAccountUser();if(initialAccount&&initialAccount.uid!==accountUid)handleAccountChange({detail:{uid:initialAccount.uid,name:initialAccount.displayName||'',email:initialAccount.email||''}});});
 
 
 function ratingControls(l,compact=false){if(compact&&!accountUid)return '';return lookFeedbackControls(l,{uid:accountUid,ratings:state.ratings,pieceFeedback:state.pieceFeedback},compact);}

@@ -64,3 +64,5 @@ html[lang=zh-Hans] :is(h1,h2,h3),html[lang=yue] :is(h1,h2,h3){letter-spacing:0;l
 .wordmark{min-width:0}
 .wordmark small{display:block;font:12px/1.45 Arial,Helvetica,sans-serif;color:#526653;letter-spacing:.15px;white-space:normal;max-width:24em;margin-top:7px}
 @media(max-width:760px){.wordmark small{font-size:11px;max-width:17em;margin-top:5px;text-wrap:balance}}
+
+.like-heart{color:var(--muted);font-size:1.2em;line-height:1}button[aria-pressed="true"][data-value="1"] .like-heart{color:#c62828}

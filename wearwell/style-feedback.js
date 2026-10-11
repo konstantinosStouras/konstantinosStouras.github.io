@@ -11,7 +11,7 @@ export function pieceFeedbackControls(look, feedback = {}) {
     ${look.pieces.map(id => {
       const entry = feedback[id];
       return `<fieldset class="piece-feedback-row"><legend>${esc(pieceById[id].name)}</legend>
-        <div class="actions"><button type="button" data-piece-rate="${id}" data-look="${look.id}" data-value="1" aria-pressed="${entry?.rating === 1}">♡ Like</button><button type="button" data-piece-rate="${id}" data-look="${look.id}" data-value="-1" aria-pressed="${entry?.rating === -1}">Not for me</button></div>
+        <div class="actions"><button type="button" data-piece-rate="${id}" data-look="${look.id}" data-value="1" aria-pressed="${entry?.rating === 1}"><span class="like-heart" aria-hidden="true" data-i18n-skip>♥</span> <span>Like</span></button><button type="button" data-piece-rate="${id}" data-look="${look.id}" data-value="-1" aria-pressed="${entry?.rating === -1}">Not for me</button></div>
         ${entry?.rating === -1 ? `<details class="reason-dropdown"><summary><span>Choose reasons (optional)</span> · <span data-reason-count>${entry.reasons.length}</span></summary><p class="caption">Select all that apply.</p><div class="reason-options">${dislikeReasons.map(([reason, text]) => `<label><input type="checkbox" data-piece-reason="${reason}" data-piece="${id}" data-look="${look.id}" ${entry.reasons.includes(reason) ? 'checked' : ''}><span>${esc(text)}</span></label>`).join('')}</div></details>` : ''}
       </fieldset>`;
     }).join('')}
@@ -21,7 +21,7 @@ export function pieceFeedbackControls(look, feedback = {}) {
 export function lookFeedbackControls(look, {uid, ratings, pieceFeedback}, compact = false) {
   return `<div class="look-feedback ${compact ? 'compact' : ''}" data-feedback-look="${look.id}">
     <p class="eyebrow">Do you like this combination?</p>
-    ${uid ? `<div class="actions" role="group" aria-label="Outfit combination preference"><button type="button" data-rate="${look.id}" data-value="1" aria-pressed="${ratings[look.id] === 1}">♡ Like</button><button type="button" data-rate="${look.id}" data-value="-1" aria-pressed="${ratings[look.id] === -1}">Not for me</button></div>
+    ${uid ? `<div class="actions" role="group" aria-label="Outfit combination preference"><button type="button" data-rate="${look.id}" data-value="1" aria-pressed="${ratings[look.id] === 1}"><span class="like-heart" aria-hidden="true" data-i18n-skip>♥</span> <span>Like</span></button><button type="button" data-rate="${look.id}" data-value="-1" aria-pressed="${ratings[look.id] === -1}">Not for me</button></div>
     <p class="caption">Your vote is about how the pieces work together.</p>
     ${ratings[look.id] === -1 ? pieceFeedbackControls(look, pieceFeedback[look.id]) : ''}
     <p class="caption">Saved for your account in this browser. Weather needs come first.</p>

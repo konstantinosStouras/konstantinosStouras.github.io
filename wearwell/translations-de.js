@@ -885,5 +885,8 @@ export default {
   "Winter collection": "Winterkollektion",
   "Spring collection": "Frühlingskollektion",
   "Gym collection": "Sportkollektion",
-  "Lounge collection": "Kollektion für zu Hause"
+  "Lounge collection": "Kollektion für zu Hause",
+  "Like": "Gefällt mir",
+  "Opening Google…": "Google wird geöffnet…",
+  "This browser could not prepare sign-in. Please try again.": "Dieser Browser konnte die Anmeldung nicht vorbereiten. Bitte versuchen Sie es erneut."
 };
