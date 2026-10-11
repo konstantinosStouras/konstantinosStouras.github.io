@@ -1,4 +1,4 @@
-import {pieces, looks, pieceById} from './data.js?v=20261011-welcome-v2';
+import {pieces, looks, pieceById} from './data.js?v=20261011-piece-feedback-v1';
 
 export const purchaseColours = ['white','ecru','navy','black','grey','charcoal','stone','oatmeal','blue','light blue','indigo','forest','olive','brown','chocolate','tobacco','oxblood','bright / patterned'];
 const neutral = new Set(['white','ecru','navy','black','grey','charcoal','stone','oatmeal','indigo']);

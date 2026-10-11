@@ -1,9 +1,11 @@
-import {greek} from './translations-el.js?v=20261011-welcome-v2';
+import feedbackGreek from './style-feedback-el.js?v=20261011-piece-feedback-v1';
+import {greek} from './translations-el.js?v=20261011-piece-feedback-v1';
 const preferenceKey='daywear.language';
 let language='en';
 try{if(globalThis.localStorage?.getItem(preferenceKey)==='el')language='el';}catch{}
 export const getLanguage=()=>language;
 export const locale=()=>language==='el'?'el-GR':'en-GB';
+Object.assign(greek,feedbackGreek);
 const dictionary=new Map();
 for(const [en,el] of Object.entries(greek)){
  dictionary.set(en,el);

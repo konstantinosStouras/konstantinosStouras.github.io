@@ -1,21 +1,22 @@
-import {welcomePage} from './welcome.js?v=20261011-welcome-v2';
-import {headerWeather,currentWeatherCard} from './weather-view.js?v=20261011-welcome-v2';
-import {cleanRatings} from './preferences.js?v=20261011-welcome-v2';
-import {purchasePage,installPurchase,clearPurchase} from './purchase-ui.js?v=20261011-welcome-v2';
-import {loadCloudProfile,saveCloudProfile} from './account-data.js?v=20261011-welcome-v2';
-import {photosSection,refreshPhotos} from './profile-photos.js?v=20261011-welcome-v2';
-import {adminPage,loadAdmin,clearAdmin} from './review.js?v=20261011-welcome-v2';
-import {installLanguages,getLanguage,translateText,translateBrief,searchKey} from './i18n.js?v=20261011-welcome-v2';
-import {installMeasurementGuides} from './measurement-guides.js?v=20261011-welcome-v2';
-import {createPrivateCatalog} from './private-models.js?v=20261011-welcome-v2';
-import {feedbackPage,resetFeedback} from './feedback.js?v=20261011-welcome-v2';
-import {getAccountToken,getAccountUser} from './auth.js?v=20261011-welcome-v2';
-import {hasPersonalModel,modelImageSource,modelCaption,modelFitNotes} from './model-policy.js?v=20261011-welcome-v2';
-import {profileFields,styleFields,readProfile,saveProfile,modelBrief} from './profile.js?v=20261011-welcome-v2';
-import {accountStorageKey} from './auth-policy.js?v=20261011-welcome-v2';
-import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js?v=20261011-welcome-v2';
-import {fetchWeather,recommend,condition} from './weather.js?v=20261011-welcome-v2';
-import {detectLocation,locationPreference,rememberCity,locationError} from './location.js?v=20261011-welcome-v2';
+import {welcomePage} from './welcome.js?v=20261011-piece-feedback-v1';
+import {headerWeather,currentWeatherCard} from './weather-view.js?v=20261011-piece-feedback-v1';
+import {cleanRatings,cleanPieceFeedback,dislikeReasons} from './preferences.js?v=20261011-piece-feedback-v1';
+import {lookFeedbackControls} from './style-feedback.js?v=20261011-piece-feedback-v1';
+import {purchasePage,installPurchase,clearPurchase} from './purchase-ui.js?v=20261011-piece-feedback-v1';
+import {loadCloudProfile,saveCloudProfile} from './account-data.js?v=20261011-piece-feedback-v1';
+import {photosSection,refreshPhotos} from './profile-photos.js?v=20261011-piece-feedback-v1';
+import {adminPage,loadAdmin,clearAdmin} from './review.js?v=20261011-piece-feedback-v1';
+import {installLanguages,getLanguage,translateText,translateBrief,searchKey} from './i18n.js?v=20261011-piece-feedback-v1';
+import {installMeasurementGuides} from './measurement-guides.js?v=20261011-piece-feedback-v1';
+import {createPrivateCatalog} from './private-models.js?v=20261011-piece-feedback-v1';
+import {feedbackPage,resetFeedback} from './feedback.js?v=20261011-piece-feedback-v1';
+import {getAccountToken,getAccountUser} from './auth.js?v=20261011-piece-feedback-v1';
+import {hasPersonalModel,modelImageSource,modelCaption,modelFitNotes} from './model-policy.js?v=20261011-piece-feedback-v1';
+import {profileFields,styleFields,readProfile,saveProfile,modelBrief} from './profile.js?v=20261011-piece-feedback-v1';
+import {accountStorageKey} from './auth-policy.js?v=20261011-piece-feedback-v1';
+import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js?v=20261011-piece-feedback-v1';
+import {fetchWeather,recommend,condition} from './weather.js?v=20261011-piece-feedback-v1';
+import {detectLocation,locationPreference,rememberCity,locationError} from './location.js?v=20261011-piece-feedback-v1';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let key=accountStorageKey(null),accountUid=null,cloudStatus='idle',profileSaving=false;
 async function syncProfile(){const uid=accountUid;if(!uid)return;cloudStatus='loading';if(route().split('/')[0]==='profile')renderedRoute='';render();try{const cloud=await loadCloudProfile(uid);if(accountUid!==uid)return;if(cloud){state.name=cloud.name;state.sizes=JSON.parse(cloud.sizes);persist();notifyProfile();}cloudStatus='ready';}catch{if(accountUid!==uid)return;cloudStatus='error';}if(route().split('/')[0]==='profile')renderedRoute='';render();}
@@ -23,9 +24,9 @@ const privateCatalog=createPrivateCatalog();let modelState='default',modelError=
 async function loadPersonalModel(){const uid=accountUid;if(!hasPersonalModel(uid))return;const request=++modelRequest;modelState='loading';modelError='';render();try{const loaded=await privateCatalog.load(uid,()=>getAccountToken(uid),looks.map(l=>l.id));if(request!==modelRequest||accountUid!==uid)return;if(loaded)modelState='ready';}catch(error){if(request!==modelRequest||accountUid!==uid)return;modelState='error';modelError=error.message;}render();}
 
 let saved={};try{saved=JSON.parse(localStorage.getItem(key)||'{}')||{};}catch{}
-const state={name:typeof saved.name==='string'?saved.name:'Your',location:locationPreference(saved)==='travel'?saved.location:null,locationMode:locationPreference(saved),travelCities:Array.isArray(saved.travelCities)?saved.travelCities:(saved.location?[saved.location]:[]),locating:false,locationError:null,ownership:saved.ownership||{},checks:saved.checks||{},purge:Array.isArray(saved.purge)?saved.purge:[],ratings:cleanRatings(saved.ratings),sizes:saved.sizes||{},mode:'everyday',filter:'All',search:'',season:'fall',offset:0,weather:null,weatherError:null,loading:false};
+const state={name:typeof saved.name==='string'?saved.name:'Your',location:locationPreference(saved)==='travel'?saved.location:null,locationMode:locationPreference(saved),travelCities:Array.isArray(saved.travelCities)?saved.travelCities:(saved.location?[saved.location]:[]),locating:false,locationError:null,ownership:saved.ownership||{},checks:saved.checks||{},purge:Array.isArray(saved.purge)?saved.purge:[],ratings:cleanRatings(saved.ratings),pieceFeedback:cleanPieceFeedback(saved.pieceFeedback,cleanRatings(saved.ratings)),sizes:saved.sizes||{},mode:'everyday',filter:'All',search:'',season:'fall',offset:0,weather:null,weatherError:null,loading:false};
 let cities=[],weatherRequest=0,locationRequest=0,controller;
-function persist(){try{localStorage.setItem(key,JSON.stringify({name:state.name,location:state.locationMode==='travel'?state.location:null,locationMode:state.locationMode,travelCities:state.travelCities,ownership:state.ownership,checks:state.checks,purge:state.purge,sizes:state.sizes,ratings:state.ratings}));return true;}catch{toast('Your browser could not save changes. Export a backup in your profile.');return false;}}
+function persist(){try{localStorage.setItem(key,JSON.stringify({name:state.name,location:state.locationMode==='travel'?state.location:null,locationMode:state.locationMode,travelCities:state.travelCities,ownership:state.ownership,checks:state.checks,purge:state.purge,sizes:state.sizes,ratings:state.ratings,pieceFeedback:state.pieceFeedback}));return true;}catch{toast('Your browser could not save changes. Export a backup in your profile.');return false;}}
 function notifyProfile(){document.dispatchEvent(new CustomEvent('wardrobe:profile',{detail:{uid:accountUid,name:state.name}}));}
 function profileFeedback(kind,text){const message=$('#profile-status'),button=$('#profile-form button[type=submit]');if(!message||!button)return;message.textContent=text;message.dataset.saved=kind==='saved'?'true':kind==='error'?'false':'';message.closest('.profile-save').dataset.feedback=kind;button.textContent=kind==='saved'?'✓ Saved':'Save profile';}
 function profileEdited(e){if(!e.target.closest('#profile-form'))return;profileFeedback('dirty','Unsaved changes — select Save profile to keep them.');}
@@ -41,7 +42,7 @@ function tags(l){return `<div class="tags"><span class="tag">${{summer:'warm',fa
 function card(l){const owned=l.pieces.filter(id=>status(id)==='owned').length;return `<article class="card"><a href="#look/${l.id}">${image(l)}<div class="row-between card-meta"><span>${label(l.season)} ${String(l.number).padStart(2,'0')}</span><span>${owned} / ${l.pieces.length} owned</span></div><h3>${l.name}</h3><p class="muted">${l.pieces.map(id=>pieceById[id].name).join(' · ')}</p>${tags(l)}</a>${ratingControls(l,true)}</article>`;}
 function head(eyebrow,title,aside=''){return `<div class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1></div>${aside}</div>`;}
 function currentDate(){return state.weather?.time?.slice(0,10)||new Date().toLocaleDateString('en-CA');}
-function options(extra={}){const date=currentDate();return {mode:state.mode,month:Number(date.slice(5,7)),ratings:accountUid?state.ratings:{},latitude:state.location?.latitude??51,day:Math.floor(Date.parse(date)/86400000),...extra};}
+function options(extra={}){const date=currentDate();return {mode:state.mode,month:Number(date.slice(5,7)),ratings:accountUid?state.ratings:{},pieceFeedback:accountUid?state.pieceFeedback:{},latitude:state.location?.latitude??51,day:Math.floor(Date.parse(date)/86400000),...extra};}
 function checklist(l,extra=null){const ids=extra?[...l.pieces,extra]:l.pieces;return `<div class="checklist"><div class="row-between"><span>Wear this</span><span class="caption" id="ready-count">${ids.filter(id=>state.checks[`${currentDate()}:${l.id}:${id}`]).length} / ${ids.length} ready</span></div>${ids.map(id=>`<div class="piece-row"><input type="checkbox" id="check-${id}" data-check="${currentDate()}:${l.id}:${id}" ${state.checks[`${currentDate()}:${l.id}:${id}`]?'checked':''}><label for="check-${id}">${pieceById[id].name}<small>${id} · ${esc(fit(pieceById[id]))}</small></label><span class="status">${statusLabel(id)}</span></div>`).join('')}</div>`;}
 function locationNotice(){if(state.location?.source==='approximate'&&!state.locationError)return '<div class="callout" role="status"><p>Using an approximate city from your internet connection.</p><p class="caption">Your browser did not share device location. VPNs and mobile networks can place you in another city.</p><button class="text-button" data-action="location">Correct city / travel ↗</button></div>';return state.locationError?'<div class="callout" role="status"><p>'+esc(state.locationError)+'</p><button class="text-button" data-action="location">Choose a city ↗</button></div>':'';}
 function weatherStrip(){if(state.locating)return '<div class="weather" role="status"><div class="temperature">—<sup>°C</sup><small>FINDING YOUR LOCATION</small></div><div><p>Checking device location, then an approximate city if needed.</p><p class="caption">BigDataCloud resolves your city from device coordinates or, if unavailable, your internet connection. Open-Meteo receives city-level coordinates for weather.</p><button class="text-button" data-action="location">Choose a travel city instead ↗</button></div></div>';if(state.loading)return `<div class="weather"><div class="temperature">—<sup>°C</sup><small>FETCHING LIVE WEATHER</small></div><p>Checking today’s forecast…</p></div>`;
@@ -70,6 +71,7 @@ function wardrobeToolbar(r){
 function wardrobe(){return head('THIRTY LOOKS. ONE WARDROBE.','Your wardrobe')+'<p class="intro muted">Find a look for the season, or review the pieces you own.</p>'+`<div class="grid">${looks.map(card).join('')}</div>`;}
 function render(){
  const r=route().split('/')[0];
+ const feedbackView=$('#main').dataset.feedbackRoute===route()&&renderedAccount===accountUid?captureFeedbackView():null;
  const keepAccount=['profile','feedback','review'].includes(r)&&r===renderedRoute&&renderedAccount===accountUid&&$('#main').children.length;
  if(renderedRoute==='feedback'&&r!=='feedback')resetFeedback();
  const keepPurchase=r==='consider'&&renderedRoute===r&&renderedAccount===accountUid;
@@ -85,6 +87,7 @@ function render(){
  const page=r==='profile'?profilePage():r==='feedback'?feedbackPage():r==='review'?adminPage():r==='home'?welcomePage():r==='consider'?'<a class="section-back" href="#shopping">← Back to shopping</a>'+purchasePage(accountUid):r==='wardrobe'?wardrobe():r==='pieces'?piecePage():r==='rotation'?rotation():r==='shopping'?shopping():r==='purge'?purge():[...seasons,'gym','lounge'].includes(r)?collection(r):r==='look'?lookPage(route().split('/')[1]):today();
  $('#main').classList.toggle('welcome-page',r==='home');
  $('#main').innerHTML=(wardrobeRoutes.includes(r)&&r!=='look'?wardrobeToolbar(r):'')+page;
+ $('#main').dataset.feedbackRoute=route();restoreFeedbackView(feedbackView);
  if(!['home','profile','feedback','review'].includes(r)&&hasPersonalModel(accountUid)&&modelState!=='ready')$('#main').insertAdjacentHTML('afterbegin',`<div class="callout" role="status"><p>${modelState==='error'?esc(modelError):'Loading your private collection securely…'}</p>${modelState==='error'?'<button data-action="retry-model">Try again</button>':''}</div>`);
  if(r==='profile'&&cloudStatus==='ready')refreshPhotos();if(r==='review')loadAdmin();
 }
@@ -99,8 +102,8 @@ function locationSettings(){ $('#modal-body').innerHTML='<p class="eyebrow">DRES
 function chooseTravel(city){if(!city)return;++locationRequest;state.locating=false;state.locationError=null;state.locationMode='travel';state.location=city;state.travelCities=rememberCity(state.travelCities,city);persist();$('#modal').close();refresh();}
 async function useCurrentLocation(){const request=++locationRequest;++weatherRequest;controller?.abort();state.loading=false;state.locating=true;state.locationError=null;state.locationMode='current';state.location=null;state.weather=null;persist();$('#modal').close();render();try{const place=await detectLocation();if(request!==locationRequest)return;state.location=place;state.locating=false;persist();await refresh();}catch(error){if(request!==locationRequest)return;state.locating=false;state.locationError=error.code?locationError(error):error.message;render();}}
 async function refresh(){if(!state.location)return;const request=++weatherRequest;controller?.abort();controller=new AbortController();const activeController=controller;const signal=activeController.signal;state.weather=null;state.loading=true;state.weatherError=null;render();const timeout=setTimeout(()=>activeController.abort(),15000);try{const w=await fetchWeather(state.location,signal);if(request===weatherRequest)state.weather=w;}catch(e){if(request===weatherRequest)state.weatherError=e.name==='AbortError'?'The request timed out. Please try again.':e.message;}finally{clearTimeout(timeout);if(request===weatherRequest){state.loading=false;render();}}}
-document.addEventListener('click',e=>{const el=e.target.closest('button,a');if(!el)return;const d=el.dataset;if(d.startRegister!==undefined)document.dispatchEvent(new CustomEvent('wardrobe:open-auth',{detail:{view:'register'}}));if(d.action==='retry-profile')syncProfile();if(d.action==='retry-model')loadPersonalModel();if(d.action==='settings')settings();if(d.action==='location')locationSettings();if(d.action==='current-location')useCurrentLocation();if(d.travel!==undefined)chooseTravel(state.travelCities[Number(d.travel)]);if(d.action==='close')$('#modal').close();if(d.action==='refresh'){if(state.location)refresh();else useCurrentLocation();}if(d.mode){state.mode=d.mode;render();}if(d.filter){state.filter=d.filter;render();}if(d.offset){state.offset+=Number(d.offset);render();}if(d.city!==undefined)chooseTravel(cities[Number(d.city)]);if(d.remove){state.purge=state.purge.filter(p=>p.id!==d.remove);persist();render();}if(d.action==='model-brief'){const blob=new Blob([translateBrief(modelBrief(state.name,state.sizes))],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='daywear-model-brief.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}if(d.action==='export'){const blob=new Blob([JSON.stringify({version:1,name:state.name,location:state.locationMode==='travel'?state.location:null,locationMode:state.locationMode,travelCities:state.travelCities,ownership:state.ownership,checks:state.checks,purge:state.purge,sizes:state.sizes,ratings:state.ratings},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='wardrobe-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}});
-document.addEventListener('change',async e=>{const el=e.target,d=el.dataset;if(el.id==='collection-select'){location.hash=el.value;return;}if(el.matches('[data-size-select]')){const custom=el.closest('div').querySelector('[data-custom-for]');custom.hidden=el.value!=='__custom';custom.querySelector('input').disabled=custom.hidden;custom.querySelector('input').required=!custom.hidden;}if(d.check){state.checks[d.check]=el.checked;persist();const checks=[...document.querySelectorAll('[data-check]')];$('#ready-count').textContent=`${checks.filter(x=>x.checked).length} / ${checks.length} ready`;}if(d.own){state.ownership[d.own]=el.value;persist();render();toast('Wardrobe updated');}if(el.id==='rotation-season'){state.season=el.value;render();}if(d.purge){state.purge.find(p=>p.id===d.purge).decision=el.value;persist();}if(el.id==='import'&&el.files[0]){try{if(el.files[0].size>1000000)throw Error();const data=JSON.parse(await el.files[0].text());if(data.version!==1||typeof data.name!=='string'||!data.ownership||!Array.isArray(data.purge))throw Error();const loc=data.location;if(loc&&(!Number.isFinite(loc.latitude)||!Number.isFinite(loc.longitude)||Math.abs(loc.latitude)>90||Math.abs(loc.longitude)>180||typeof loc.name!=='string'))throw Error();++locationRequest;state.locating=false;state.locationError=null;state.name=data.name.slice(0,50);state.locationMode=locationPreference(data);state.location=state.locationMode==='travel'?loc:null;state.travelCities=(Array.isArray(data.travelCities)?data.travelCities:(loc?[loc]:[])).filter(c=>c&&typeof c.name==='string'&&Number.isFinite(c.latitude)&&Number.isFinite(c.longitude)&&Math.abs(c.latitude)<=90&&Math.abs(c.longitude)<=180).slice(0,8);state.ownership=Object.fromEntries(pieces.map(p=>[p.id,['buy','owned'].includes(data.ownership[p.id])?data.ownership[p.id]:'review']));state.checks=data.checks&&typeof data.checks==='object'?data.checks:{};state.purge=data.purge.filter(p=>typeof p.name==='string'&&typeof p.id==='string').slice(0,500);state.sizes=data.sizes||{};state.ratings=cleanRatings(data.ratings);clearPurchase();renderedRoute='';state.weather=null;persist();$('#modal').close();render();if(state.locationMode==='current')useCurrentLocation();else refresh();renderedRoute='';render();notifyProfile();toast('Backup restored');}catch{toast('That file is not a valid wardrobe backup.');}}});
+document.addEventListener('click',e=>{const el=e.target.closest('button,a');if(!el)return;const d=el.dataset;if(d.startRegister!==undefined)document.dispatchEvent(new CustomEvent('wardrobe:open-auth',{detail:{view:'register'}}));if(d.action==='retry-profile')syncProfile();if(d.action==='retry-model')loadPersonalModel();if(d.action==='settings')settings();if(d.action==='location')locationSettings();if(d.action==='current-location')useCurrentLocation();if(d.travel!==undefined)chooseTravel(state.travelCities[Number(d.travel)]);if(d.action==='close')$('#modal').close();if(d.action==='refresh'){if(state.location)refresh();else useCurrentLocation();}if(d.mode){state.mode=d.mode;render();}if(d.filter){state.filter=d.filter;render();}if(d.offset){state.offset+=Number(d.offset);render();}if(d.city!==undefined)chooseTravel(cities[Number(d.city)]);if(d.remove){state.purge=state.purge.filter(p=>p.id!==d.remove);persist();render();}if(d.action==='model-brief'){const blob=new Blob([translateBrief(modelBrief(state.name,state.sizes))],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='daywear-model-brief.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}if(d.action==='export'){const blob=new Blob([JSON.stringify({version:1,name:state.name,location:state.locationMode==='travel'?state.location:null,locationMode:state.locationMode,travelCities:state.travelCities,ownership:state.ownership,checks:state.checks,purge:state.purge,sizes:state.sizes,ratings:state.ratings,pieceFeedback:state.pieceFeedback},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='wardrobe-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}});
+document.addEventListener('change',async e=>{const el=e.target,d=el.dataset;if(el.id==='collection-select'){location.hash=el.value;return;}if(el.matches('[data-size-select]')){const custom=el.closest('div').querySelector('[data-custom-for]');custom.hidden=el.value!=='__custom';custom.querySelector('input').disabled=custom.hidden;custom.querySelector('input').required=!custom.hidden;}if(d.check){state.checks[d.check]=el.checked;persist();const checks=[...document.querySelectorAll('[data-check]')];$('#ready-count').textContent=`${checks.filter(x=>x.checked).length} / ${checks.length} ready`;}if(d.own){state.ownership[d.own]=el.value;persist();render();toast('Wardrobe updated');}if(el.id==='rotation-season'){state.season=el.value;render();}if(d.purge){state.purge.find(p=>p.id===d.purge).decision=el.value;persist();}if(el.id==='import'&&el.files[0]){try{if(el.files[0].size>1000000)throw Error();const data=JSON.parse(await el.files[0].text());if(data.version!==1||typeof data.name!=='string'||!data.ownership||!Array.isArray(data.purge))throw Error();const loc=data.location;if(loc&&(!Number.isFinite(loc.latitude)||!Number.isFinite(loc.longitude)||Math.abs(loc.latitude)>90||Math.abs(loc.longitude)>180||typeof loc.name!=='string'))throw Error();++locationRequest;state.locating=false;state.locationError=null;state.name=data.name.slice(0,50);state.locationMode=locationPreference(data);state.location=state.locationMode==='travel'?loc:null;state.travelCities=(Array.isArray(data.travelCities)?data.travelCities:(loc?[loc]:[])).filter(c=>c&&typeof c.name==='string'&&Number.isFinite(c.latitude)&&Number.isFinite(c.longitude)&&Math.abs(c.latitude)<=90&&Math.abs(c.longitude)<=180).slice(0,8);state.ownership=Object.fromEntries(pieces.map(p=>[p.id,['buy','owned'].includes(data.ownership[p.id])?data.ownership[p.id]:'review']));state.checks=data.checks&&typeof data.checks==='object'?data.checks:{};state.purge=data.purge.filter(p=>typeof p.name==='string'&&typeof p.id==='string').slice(0,500);state.sizes=data.sizes||{};state.ratings=cleanRatings(data.ratings);state.pieceFeedback=cleanPieceFeedback(data.pieceFeedback,state.ratings);clearPurchase();renderedRoute='';state.weather=null;persist();$('#modal').close();render();if(state.locationMode==='current')useCurrentLocation();else refresh();renderedRoute='';render();notifyProfile();toast('Backup restored');}catch{toast('That file is not a valid wardrobe backup.');}}});
 document.addEventListener('input',e=>{profileEdited(e);if(e.target.id==='piece-search'){const start=e.target.selectionStart;state.search=e.target.value;render();$('#piece-search').focus();$('#piece-search').setSelectionRange(start,start);}});
 document.addEventListener('submit',async e=>{const form=e.target;if(!['city-form','profile-form','purge-form'].includes(form.id))return;e.preventDefault();const data=new FormData(form);if(form.id==='profile-form'){
  if(profileSaving||!accountUid||cloudStatus!=='ready')return;
@@ -127,23 +130,68 @@ document.addEventListener('wardrobe:account',event=>{
  ++modelRequest;privateCatalog.clear();modelState=hasPersonalModel(uid)?'loading':'default';modelError='';
  clearPurchase();accountUid=uid;if(uid&&location.hash==='#home')location.hash='today';if(!uid)location.hash='home';key=accountStorageKey(uid);
  let data={};try{data=JSON.parse(localStorage.getItem(key)||'{}')||{};}catch{}
- Object.assign(state,{name:typeof data.name==='string'?data.name:(uid?(name||'Your'):'Your'),locationMode:locationPreference(data),location:locationPreference(data)==='travel'?data.location:null,travelCities:Array.isArray(data.travelCities)?data.travelCities:[],ownership:data.ownership||{},checks:data.checks||{},purge:Array.isArray(data.purge)?data.purge:[],ratings:cleanRatings(data.ratings),sizes:data.sizes||{},mode:'everyday',filter:'All',search:'',offset:0,weather:null,weatherError:null,locationError:null,locating:false,loading:false});
+ Object.assign(state,{name:typeof data.name==='string'?data.name:(uid?(name||'Your'):'Your'),locationMode:locationPreference(data),location:locationPreference(data)==='travel'?data.location:null,travelCities:Array.isArray(data.travelCities)?data.travelCities:[],ownership:data.ownership||{},checks:data.checks||{},purge:Array.isArray(data.purge)?data.purge:[],ratings:cleanRatings(data.ratings),pieceFeedback:cleanPieceFeedback(data.pieceFeedback,cleanRatings(data.ratings)),sizes:data.sizes||{},mode:'everyday',filter:'All',search:'',offset:0,weather:null,weatherError:null,locationError:null,locating:false,loading:false});
  cloudStatus=uid?'loading':'idle';notifyProfile();$('#modal').close();render();if(uid)syncProfile();if(hasPersonalModel(uid))loadPersonalModel();
  if(state.locationMode==='travel')refresh();else useCurrentLocation();
 });
 
 
-function ratingControls(l,compact=false){return `<div class="look-feedback ${compact?'compact':''}" data-feedback-look="${l.id}"><p class="eyebrow">Is this your style?</p>${accountUid?`<div class="actions" role="group" aria-label="Outfit preference"><button type="button" data-rate="${l.id}" data-value="1" aria-pressed="${state.ratings[l.id]===1}">♡ Like</button><button type="button" data-rate="${l.id}" data-value="-1" aria-pressed="${state.ratings[l.id]===-1}">Not for me</button></div>${compact?'':'<p class="caption">Your votes shape future recommendations, with weather needs first. Tap a selected vote to undo. Saved for your account in this browser.</p>'}`:'<p class="caption">Sign in to save your style preferences.</p><button class="text-button" data-style-signin>Sign in / Register</button>'}</div>`;}
+function ratingControls(l,compact=false){return lookFeedbackControls(l,{uid:accountUid,ratings:state.ratings,pieceFeedback:state.pieceFeedback},compact);}
+function feedbackSelector(el){
+ if(!el?.closest('[data-feedback-look]'))return null;
+ return ['data-rate','data-piece-rate','data-value','data-piece-reason','data-look','data-piece'].filter(name=>el.hasAttribute(name)).map(name=>'['+name+'="'+el.getAttribute(name)+'"]').join('')||null;
+}
+function captureFeedbackView(){
+ return {focus:feedbackSelector(document.activeElement),open:[...document.querySelectorAll('.reason-dropdown[open]')].map(details=>({selector:feedbackSelector(details.querySelector('input')),scroll:details.querySelector('.reason-options').scrollTop}))};
+}
+function restoreFeedbackView(view){
+ if(!view)return;
+ view.open.forEach(({selector,scroll})=>{const details=document.querySelector(selector)?.closest('details');if(details){details.open=true;details.querySelector('.reason-options').scrollTop=scroll;}});
+ if(view.focus)document.querySelector(view.focus)?.focus({preventScroll:true});
+}
+function refreshRatingControls(id,focusSelector){
+ const view=captureFeedbackView();
+ document.querySelectorAll('[data-feedback-look="'+id+'"]').forEach(container=>{
+  const compact=container.classList.contains('compact');
+  const wrapper=document.createElement('div');wrapper.innerHTML=ratingControls(lookById[id],compact);
+  container.replaceWith(wrapper.firstElementChild);
+ });
+ restoreFeedbackView(view);
+ if(focusSelector)document.querySelector(focusSelector)?.focus({preventScroll:true});
+}
 document.addEventListener('click',event=>{
- const button=event.target.closest('[data-rate]');
  if(event.target.closest('[data-style-signin]'))$('#account-button').click();
+ const button=event.target.closest('[data-rate],[data-piece-rate]');
  if(!button||!accountUid)return;
- const id=button.dataset.rate,value=Number(button.dataset.value);if(!lookById[id]||![1,-1].includes(value))return;
- const previous={...state.ratings};
- if(state.ratings[id]===value)delete state.ratings[id];else state.ratings[id]=value;
- if(!persist()){state.ratings=previous;return;}
- document.querySelectorAll(`[data-rate="${id}"]`).forEach(el=>el.setAttribute('aria-pressed',String(state.ratings[id]===Number(el.dataset.value))));
- toast(state.ratings[id]?'Preference saved. It will shape your next recommendation.':'Preference removed.');
+ const id=button.dataset.rate||button.dataset.look,value=Number(button.dataset.value),piece=button.dataset.pieceRate;
+ if(!lookById[id]||![1,-1].includes(value))return;
+ if(piece&&(!lookById[id].pieces.includes(piece)||state.ratings[id]!==-1))return;
+ const previousRatings={...state.ratings},previousFeedback=structuredClone(state.pieceFeedback);
+ if(piece){
+  const entries=state.pieceFeedback[id]||={};
+  if(entries[piece]?.rating===value)delete entries[piece];else entries[piece]={rating:value,reasons:[]};
+ }else{
+  if(state.ratings[id]===value)delete state.ratings[id];else state.ratings[id]=value;
+  delete state.pieceFeedback[id];
+ }
+ state.pieceFeedback=cleanPieceFeedback(state.pieceFeedback,state.ratings);
+ if(!persist()){state.ratings=previousRatings;state.pieceFeedback=previousFeedback;return;}
+ const selector=piece?'[data-piece-rate="'+piece+'"][data-look="'+id+'"][data-value="'+value+'"]':'[data-rate="'+id+'"][data-value="'+value+'"]';
+ refreshRatingControls(id,selector);
+ toast(piece?'Piece feedback saved.':state.ratings[id]?'Preference saved. It will shape your next recommendation.':'Preference removed.');
+});
+document.addEventListener('change',event=>{
+ const input=event.target.closest('[data-piece-reason]');if(!input||!accountUid)return;
+ const {look:id,piece,pieceReason:reason}=input.dataset,entry=state.pieceFeedback[id]?.[piece];
+ if(state.ratings[id]!==-1||entry?.rating!==-1||!dislikeReasons.some(([key])=>key===reason))return;
+ const previous=[...entry.reasons];
+ entry.reasons=input.checked?[...new Set([...previous,reason])]:previous.filter(value=>value!==reason);
+ if(!persist()){entry.reasons=previous;input.checked=previous.includes(reason);return;}
+ document.querySelectorAll('[data-piece-reason][data-look="'+id+'"][data-piece="'+piece+'"]').forEach(el=>{
+  el.checked=entry.reasons.includes(el.dataset.pieceReason);
+  el.closest('details').querySelector('[data-reason-count]').textContent=entry.reasons.length;
+ });
+ toast('Piece feedback saved.');
 });
 installPurchase({uid:()=>accountUid,ownership:()=>state.ownership,image});
 

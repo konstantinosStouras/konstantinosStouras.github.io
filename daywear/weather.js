@@ -1,5 +1,5 @@
-import {preferenceScore} from './preferences.js?v=20261011-welcome-v2';
-import {looks} from './data.js?v=20261011-welcome-v2';
+import {preferenceScore} from './preferences.js?v=20261011-piece-feedback-v1';
+import {looks} from './data.js?v=20261011-piece-feedback-v1';
 export function seasonPool(temp,month,latitude=51){
  if(!Number.isFinite(temp))throw new Error('A valid apparent temperature is required');
  const m=latitude<0?(month+5)%12+1:month;
@@ -8,7 +8,7 @@ export function seasonPool(temp,month,latitude=51){
  if(temp<15)return 'fall';
  return m>=1&&m<=7?'spring':'fall';
 }
-export function recommend(weather,{mode='everyday',month=10,latitude=51,day=0,season,ratings={}}={}){
+export function recommend(weather,{mode='everyday',month=10,latitude=51,day=0,season,ratings={},pieceFeedback={}}={}){
  const pool=mode==='everyday'?(season||seasonPool(weather.temp,month,latitude)):mode;
  const candidates=looks.filter(l=>l.season===pool);
  if(!candidates.length)throw new Error('Unknown look pool');
@@ -18,8 +18,8 @@ export function recommend(weather,{mode='everyday',month=10,latitude=51,day=0,se
  const score=l=>(weather.wind>=25&&l.layer?8:0)+(weather.temp>=8&&weather.temp<15&&l.midlayer?5:0)+(!wet&&!l.rain?1:0);
  const ranked=[...(eligible.length?eligible:candidates)].sort((a,b)=>score(b)-score(a));
  const weatherBest=ranked.filter(l=>score(l)===score(ranked[0]));
- const preferred=[...weatherBest].sort((a,b)=>preferenceScore(b,ratings)-preferenceScore(a,ratings));
- const best=preferred.filter(l=>Math.abs(preferenceScore(l,ratings)-preferenceScore(preferred[0],ratings))<0.000001);
+ const preferred=[...weatherBest].sort((a,b)=>preferenceScore(b,ratings,pieceFeedback)-preferenceScore(a,ratings,pieceFeedback));
+ const best=preferred.filter(l=>Math.abs(preferenceScore(l,ratings,pieceFeedback)-preferenceScore(preferred[0],ratings,pieceFeedback))<0.000001);
  const look=best[((day%best.length)+best.length)%best.length];
  return {look,wet,layer:null,reason:`Feels like ${weather.temp.toFixed(1)}°C, so ${pool} is your temperature pool. ${wet?'Rain calls for a protective jacket and dark closed shoes. ':''}${weather.wind>=25?'A layer covers the wind. ':''}${weather.temp>=8&&weather.temp<15?'A mid-layer gets preference in cooler weather. ':''}A complete look from your existing thirty.`};
 }

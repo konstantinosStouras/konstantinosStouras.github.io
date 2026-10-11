@@ -1,4 +1,4 @@
-import {getLanguage} from './i18n.js?v=20261011-welcome-v2';
+import {getLanguage} from './i18n.js?v=20261011-piece-feedback-v1';
 export function locationPreference(saved={}){
  return saved.locationMode==='travel'&&saved.location?'travel':'current';
 }
