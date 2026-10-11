@@ -60,3 +60,7 @@ html[lang=zh-Hans] :is(h1,h2,h3),html[lang=yue] :is(h1,h2,h3){letter-spacing:0;l
 @media(max-width:380px){header{padding-inline:12px;column-gap:8px}.wordmark{font-size:25px}.header-actions{gap:6px}.language-picker select{width:83px}.language-picker{padding-inline:4px}.language-picker>svg{display:none}.header-actions .account-button{padding-inline:8px;font-size:11px}.weather-mini-condition{font-size:10px}.weather-city{max-width:110px}.weather-mini-top{gap:6px}.weather-mini-metrics{font-size:9px}.card-meta{font-size:8px;gap:4px}.tags{gap:4px}.tag{font-size:9px;padding:3px 6px}}
 
 .brand-lockup{display:flex;align-items:center;gap:10px;direction:ltr}.brand-mark{width:31px;height:31px;flex:none}.wordmark small{text-transform:none;letter-spacing:1px}.wordmark{white-space:nowrap;font-size:33px}@media(max-width:1100px){.brand-mark{display:none}}@media(max-width:650px){.wordmark{font-size:27px}}@media(max-width:380px){.wordmark{font-size:25px}}
+/* Keep the brand promise visible below the logo at every screen size. */
+.wordmark{min-width:0}
+.wordmark small{display:block;font:12px/1.45 Arial,Helvetica,sans-serif;color:#526653;letter-spacing:.15px;white-space:normal;max-width:24em;margin-top:7px}
+@media(max-width:760px){.wordmark small{font-size:11px;max-width:17em;margin-top:5px;text-wrap:balance}}
