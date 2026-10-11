@@ -1,25 +1,25 @@
-import {installWeatherRefresh} from './weather-refresh.js?v=20261011-news-v1';
-import {usersPage,loadUsers} from './admin-users.js?v=20261011-news-v1';
-import {updatesPage,loadUpdates} from './updates.js?v=20261011-news-v2';
-import {welcomePage} from './welcome.js?v=20261011-news-v1';
-import {headerWeather,currentWeatherCard} from './weather-view.js?v=20261011-feels-heart-v1';
-import {cleanRatings,cleanPieceFeedback,dislikeReasons} from './preferences.js?v=20261011-news-v1';
-import {lookFeedbackControls} from './style-feedback.js?v=20261011-feels-heart-v1';
-import {purchasePage,installPurchase,clearPurchase} from './purchase-ui.js?v=20261011-news-v1';
-import {loadCloudProfile,saveCloudProfile} from './account-data.js?v=20261011-news-v1';
-import {photosSection,refreshPhotos} from './profile-photos.js?v=20261011-news-v1';
-import {adminPage,loadAdmin,clearAdmin} from './review.js?v=20261011-news-v1';
-import {installLanguages,getLanguage,serviceLanguage,getLanguagePreference,applyLocationLanguage,translateText,translateBrief,searchKey} from './i18n.js?v=20261011-news-v1';
-import {installMeasurementGuides} from './measurement-guides.js?v=20261011-news-v1';
-import {createPrivateCatalog} from './private-models.js?v=20261011-news-v1';
-import {feedbackPage,resetFeedback} from './feedback.js?v=20261011-news-v1';
-import {getAccountToken,getAccountUser} from './auth.js?v=20261011-news-v1';
-import {hasPersonalModel,modelImageSource,modelCaption,modelFitNotes} from './model-policy.js?v=20261011-news-v1';
-import {profileFields,styleFields,readProfile,saveProfile,modelBrief} from './profile.js?v=20261011-news-v1';
-import {accountStorageKey} from './auth-policy.js?v=20261011-news-v1';
-import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js?v=20261011-news-v1';
-import {fetchWeather,recommend,condition} from './weather.js?v=20261011-news-v1';
-import {detectLocation,detectApproximateLocation,locationPreference,rememberCity,locationError} from './location.js?v=20261011-news-v1';
+import {installWeatherRefresh} from './weather-refresh.js?v=20261011-authfast-v1';
+import {usersPage,loadUsers} from './admin-users.js?v=20261011-authfast-v1';
+import {updatesPage,loadUpdates} from './updates.js?v=20261011-authfast-v1';
+import {welcomePage} from './welcome.js?v=20261011-authfast-v1';
+import {headerWeather,currentWeatherCard} from './weather-view.js?v=20261011-authfast-v1';
+import {cleanRatings,cleanPieceFeedback,dislikeReasons} from './preferences.js?v=20261011-authfast-v1';
+import {lookFeedbackControls} from './style-feedback.js?v=20261011-authfast-v1';
+import {purchasePage,installPurchase,clearPurchase} from './purchase-ui.js?v=20261011-authfast-v1';
+import {loadCloudProfile,saveCloudProfile} from './account-data.js?v=20261011-authfast-v1';
+import {photosSection,refreshPhotos} from './profile-photos.js?v=20261011-authfast-v1';
+import {adminPage,loadAdmin,clearAdmin} from './review.js?v=20261011-authfast-v1';
+import {installLanguages,getLanguage,serviceLanguage,getLanguagePreference,applyLocationLanguage,translateText,translateBrief,searchKey} from './i18n.js?v=20261011-authfast-v1';
+import {installMeasurementGuides} from './measurement-guides.js?v=20261011-authfast-v1';
+import {createPrivateCatalog} from './private-models.js?v=20261011-authfast-v1';
+import {feedbackPage,resetFeedback} from './feedback.js?v=20261011-authfast-v1';
+import {getAccountToken,getAccountUser} from './auth.js?v=20261011-authfast-v1';
+import {hasPersonalModel,modelImageSource,modelCaption,modelFitNotes} from './model-policy.js?v=20261011-authfast-v1';
+import {profileFields,styleFields,readProfile,saveProfile,modelBrief} from './profile.js?v=20261011-authfast-v1';
+import {accountStorageKey} from './auth-policy.js?v=20261011-authfast-v1';
+import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js?v=20261011-authfast-v1';
+import {fetchWeather,recommend,condition} from './weather.js?v=20261011-authfast-v1';
+import {detectLocation,detectApproximateLocation,locationPreference,rememberCity,locationError} from './location.js?v=20261011-authfast-v1';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let key=accountStorageKey(null),accountUid=null,cloudStatus='idle',profileSaving=false;
 async function syncProfile(){const uid=accountUid;if(!uid)return;cloudStatus='loading';if(route().split('/')[0]==='profile')renderedRoute='';render();try{const cloud=await loadCloudProfile(uid);if(accountUid!==uid)return;if(cloud){state.name=cloud.name;state.sizes=JSON.parse(cloud.sizes);persist();notifyProfile();}cloudStatus='ready';}catch{if(accountUid!==uid)return;cloudStatus='error';}if(route().split('/')[0]==='profile')renderedRoute='';render();}
@@ -154,7 +154,7 @@ render();if(state.locationMode==='current')useCurrentLocation();else refresh();
 
 
 // Switch storage namespaces before accepting any wardrobe edits after an account change.
-document.addEventListener('wardrobe:account',event=>{
+function handleAccountChange(event){
  const {uid,name}=event.detail;
  resetFeedback();clearAdmin();
  if(uid===accountUid){if(uid&&name&&state.name==='Your'){state.name=name;persist();render();}notifyProfile();return;}
@@ -165,7 +165,9 @@ document.addEventListener('wardrobe:account',event=>{
  Object.assign(state,{name:typeof data.name==='string'?data.name:(uid?(name||'Your'):'Your'),locationMode:locationPreference(data),location:locationPreference(data)==='travel'?data.location:null,travelCities:Array.isArray(data.travelCities)?data.travelCities:[],ownership:data.ownership||{},checks:data.checks||{},purge:Array.isArray(data.purge)?data.purge:[],ratings:cleanRatings(data.ratings),pieceFeedback:cleanPieceFeedback(data.pieceFeedback,cleanRatings(data.ratings)),sizes:data.sizes||{},mode:'everyday',filter:'All',search:'',offset:0,weather:null,weatherError:null,locationError:null,locating:false,loading:false});
  cloudStatus=uid?'loading':'idle';notifyProfile();$('#modal').close();render();if(uid)syncProfile();if(hasPersonalModel(uid))loadPersonalModel();
  if(state.locationMode==='travel')refresh();else useCurrentLocation();
-});
+}
+document.addEventListener('wardrobe:account',handleAccountChange);
+queueMicrotask(()=>{const initialAccount=getAccountUser();if(initialAccount&&initialAccount.uid!==accountUid)handleAccountChange({detail:{uid:initialAccount.uid,name:initialAccount.displayName||'',email:initialAccount.email||''}});});
 
 
 function ratingControls(l,compact=false){if(compact&&!accountUid)return '';return lookFeedbackControls(l,{uid:accountUid,ratings:state.ratings,pieceFeedback:state.pieceFeedback},compact);}

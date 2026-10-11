@@ -1,4 +1,4 @@
-export default {"Registered users":"Εγγεγραμμένοι χρήστες","What's new":"Τι νέο υπάρχει","Manage updates":"Διαχείριση ενημερώσεων",
+export default {"Opening Google…":"Άνοιγμα Google…","This browser could not prepare sign-in. Please try again.":"Δεν ήταν δυνατή η προετοιμασία της σύνδεσης. Δοκιμάστε ξανά.","Registered users":"Εγγεγραμμένοι χρήστες","What's new":"Τι νέο υπάρχει","Manage updates":"Διαχείριση ενημερώσεων",
   "Language": "Γλώσσα",
   "Automatic": "Αυτόματα",
   "Choose a language, or use your location automatically.": "Επίλεξε γλώσσα ή αυτόματη επιλογή βάσει τοποθεσίας.",

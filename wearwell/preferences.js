@@ -1,4 +1,4 @@
-import {looks} from './data.js?v=20261011-news-v1';
+import {looks} from './data.js?v=20261011-authfast-v1';
 
 export const dislikeReasons = [
   ['colour', 'Wrong colour for me'],

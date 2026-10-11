@@ -1,11 +1,20 @@
-import {deleteAccountFeedback} from './account-data.js?v=20261011-news-v1';
-import {getLanguage,serviceLanguage} from './i18n.js?v=20261011-news-v1';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-news-v1';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-news-v1';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-news-v1';
+import {languages} from './language-policy.js';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261011-authfast-v1';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261011-authfast-v1';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261011-authfast-v1';
 
+const serviceLanguage=()=>languages[document.documentElement.lang]?.service||'en';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sdk,auth,user=null,ready=false,initializationError=false,busy=false,view='signin',notice='';
+let rememberChoice=false,persistenceReady=false,persistenceVersion=0,initializing=null,unsubscribeAuth;
+try{rememberChoice=localStorage.getItem('wearwell.auth.remember')==='true';}catch{}
+function updateControls(){modal.querySelectorAll('button:not([data-account="close"]),input').forEach(el=>el.disabled=busy);modal.querySelectorAll('[data-provider]').forEach(el=>el.disabled=busy||!persistenceReady);}
+async function preparePersistence(){
+ if(!auth||user)return;const version=++persistenceVersion;persistenceReady=false;updateControls();
+ try{await persistence(rememberChoice);if(version===persistenceVersion)persistenceReady=true;}
+ catch{if(version===persistenceVersion){message('This browser could not prepare sign-in. Please try again.');const retry=document.createElement('button');retry.type='button';retry.dataset.account='retry-persistence';retry.textContent='Try again';modal.querySelector('#auth-message')?.append(retry);}}
+ finally{if(version===persistenceVersion)updateControls();}
+}
 export const getAccountUser=()=>user;
 export async function getAccountToken(expectedUid){
  const current=user;
@@ -21,14 +30,14 @@ const trigger=document.querySelector('#account-button');
 const menu=document.createElement('div');menu.id='account-menu';menu.className='account-menu';menu.hidden=true;
 const wrapper=document.createElement('div');wrapper.className='account-control';trigger.before(wrapper);wrapper.append(trigger,menu);
 function closeMenu(focus=false){menu.hidden=true;trigger.setAttribute('aria-expanded','false');if(focus)trigger.focus();}
-function openSignIn(){closeMenu();view='signin';notice='';if(!modal.open)modal.showModal();render();}
+function openSignIn(){closeMenu();view='signin';notice='';if(!modal.open)modal.showModal();render();if(ready&&!user)preparePersistence();}
 document.addEventListener('click',event=>{if(!wrapper.contains(event.target))closeMenu();if(event.target.closest('[data-open-signin]'))openSignIn();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!menu.hidden)closeMenu(true);});
 wrapper.addEventListener('focusout',event=>{if(!wrapper.contains(event.relatedTarget))closeMenu();});
 menu.addEventListener('click',event=>{const target=event.target.closest('a,button');if(!target)return;closeMenu();if(target.dataset.menu==='signout'){openSignIn();run(async()=>{await sdk.signOut(auth);modal.close();location.hash='home';});}});
 let profileName='',admin=false;
 export const isAccountAdmin=()=>admin;
-async function refreshAdmin(){const current=user;admin=false;if(current){try{const token=await current.getIdTokenResult(true);if(user?.uid===current.uid)admin=token.claims.daywearAdmin===true;}catch{}}renderAccountButton();document.dispatchEvent(new Event('wardrobe:admin'));}
+async function refreshAdmin(){const current=user;admin=false;if(current){try{const token=await current.getIdTokenResult();if(user?.uid===current.uid)admin=token.claims.daywearAdmin===true;}catch{}}renderAccountButton();document.dispatchEvent(new Event('wardrobe:admin'));}
 
 function renderAccountButton(){
  trigger.innerHTML=accountButtonMarkup(user,profileName);
@@ -61,33 +70,44 @@ function render(){
  }
  const register=view==='register',reset=view==='reset';
  modal.innerHTML=close+intro+'<h2>'+(reset?'A fresh start.':register?'Make room for better days.':'Welcome back.')+'</h2><p class="muted">'+(reset?'We’ll send a link to reset your password.':register?'Create your personal wardrobe account.':'Sign in to your wardrobe account.')+'</p>'+
-  (!reset?'<div class="auth-providers">'+enabledProviders.map(id=>'<button type="button" class="social-button" data-provider="'+id+'">'+(id==='google.com'?'<svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.8 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.5a4.7 4.7 0 0 1-2 3.1v2.6h3.3c1.9-1.8 3-4.4 3-7.6Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.8-2.5l-3.3-2.6c-.9.6-2.1 1-3.5 1-2.6 0-4.8-1.8-5.6-4.2H3v2.7A10.2 10.2 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.7a6 6 0 0 1 0-3.4V7.6H3a10 10 0 0 0 0 8.8l3.4-2.7Z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.9-2.9A9.6 9.6 0 0 0 12 2a10.2 10.2 0 0 0-9 5.6l3.4 2.7C7.2 7.9 9.4 6.1 12 6.1Z"/></svg>':'')+'Continue with '+providerNames[id]+'</button>').join('')+'</div><div class="auth-divider"><span>or use your email</span></div>':'')+
+  (!reset?'<div class="auth-providers">'+enabledProviders.map(id=>'<button type="button" class="social-button" data-provider="'+id+'">'+(id==='google.com'?'<svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.8 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.5a4.7 4.7 0 0 1-2 3.1v2.6h3.3c1.9-1.8 3-4.4 3-7.6Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.8-2.5l-3.3-2.6c-.9.6-2.1 1-3.5 1-2.6 0-4.8-1.8-5.6-4.2H3v2.7A10.2 10.2 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.7a6 6 0 0 1 0-3.4V7.6H3a10 10 0 0 0 0 8.8l3.4-2.7Z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.9-2.9A9.6 9.6 0 0 0 12 2a10.2 10.2 0 0 0-9 5.6l3.4 2.7C7.2 7.9 9.4 6.1 12 6.1Z"/></svg>':'')+'Continue with '+providerNames[id]+'</button>').join('')+'</div><label class="remember"><input name="remember" form="auth-form" type="checkbox" '+(rememberChoice?'checked':'')+'> Keep me signed in on this device</label><div class="auth-divider"><span>or use your email</span></div>':'')+
   '<form id="auth-form">'+(register?'<label class="field">Your name<input name="name" autocomplete="given-name" maxlength="50" required></label>':'')+
   '<label class="field">Email address<input name="email" type="email" autocomplete="email" maxlength="254" required></label>'+
   (!reset?'<div class="field"><label for="auth-password">Password</label><span class="password-field"><input id="auth-password" name="password" type="password" autocomplete="'+(register?'new-password':'current-password')+'" '+(register?'minlength="10" maxlength="128"':'')+' required><button type="button" data-account="show-password" aria-label="Show password">Show</button></span></div>':'')+
   (register?'<p class="caption">Use 10–128 characters. A long, unique passphrase works well.</p><label class="field">Confirm password<input name="confirmation" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>':'')+
-  (!reset?'<label class="remember"><input name="remember" type="checkbox"> Keep me signed in on this device</label>':'')+status+
+  status+
   '<button class="primary auth-submit">'+(reset?'Send reset link':register?'Create account':'Sign in')+'</button></form>'+
   (!register&&!reset?'<button class="text-button auth-forgot" data-account="reset">Forgot password?</button>':'')+
   '<div class="auth-switch">'+(reset?'<button class="text-button" data-account="signin">Back to sign in</button>':register?'Already have an account? <button class="text-button" data-account="signin">Sign in</button>':'New here? <button class="text-button" data-account="register">Create an account</button>')+'</div><p class="caption muted">Firebase manages your sign-in. Your profile, reference photos and feedback are private account data. Wardrobe ownership choices and checklists stay in this browser.</p>';
- modal.scrollTop=0;modal.focus({preventScroll:true});
+ modal.scrollTop=0;modal.focus({preventScroll:true});updateControls();
 }
-async function run(task,waitingText='Still connecting. Check your internet connection if this takes a while.'){
- if(busy)return;busy=true;modal.setAttribute('aria-busy','true');modal.querySelectorAll('button:not([data-account="close"]),input').forEach(el=>el.disabled=true);message('Please wait…');
+async function run(task,waitingText='Still connecting. Check your internet connection if this takes a while.',initialText='Please wait…'){
+ if(busy)return;busy=true;modal.setAttribute('aria-busy','true');updateControls();message(initialText);
  const waiting=setTimeout(()=>message(waitingText),12000);
- try{await task();}catch(error){message(authMessage(error));}finally{clearTimeout(waiting);busy=false;modal.removeAttribute('aria-busy');modal.querySelectorAll('button,input').forEach(el=>el.disabled=false);}
+ try{await task();}catch(error){message(authMessage(error));}finally{clearTimeout(waiting);busy=false;modal.removeAttribute('aria-busy');updateControls();}
 }
 async function persistence(remember){await sdk.setPersistence(auth,remember?sdk.browserLocalPersistence:sdk.browserSessionPersistence);}
-function provider(id){if(!enabledProviders.includes(id))throw {code:'auth/operation-not-allowed'};if(id==='google.com'){const p=new sdk.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});return p;}if(id==='facebook.com')return new sdk.FacebookAuthProvider();return new sdk.OAuthProvider(id);}
-async function initialize(){
+function provider(id){if(!enabledProviders.includes(id))throw {code:'auth/operation-not-allowed'};if(id==='google.com'){return new sdk.GoogleAuthProvider();}if(id==='facebook.com')return new sdk.FacebookAuthProvider();return new sdk.OAuthProvider(id);}
+function initialize(){
+ if(initializing)return initializing;
  initializationError=false;render();
- try{
-  const [app,authSdk]=await Promise.all([import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')]);
-  sdk=authSdk;auth=sdk.initializeAuth(app.initializeApp(firebaseConfig),{persistence:[sdk.browserSessionPersistence,sdk.browserLocalPersistence],popupRedirectResolver:sdk.browserPopupRedirectResolver});
-  auth.languageCode=serviceLanguage();
-  sdk.onAuthStateChanged(auth,next=>{const signedIn=!!next&&next.uid!==user?.uid;user=next;if(signedIn){modal.close();closeMenu();}profileName='';admin=false;ready=true;notify();render();refreshAdmin();},()=>{initializationError=true;render();});
- }catch{initializationError=true;render();}
+ initializing=(async()=>{
+  try{
+   const [app,authSdk]=await Promise.all([import('https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js')]);
+   sdk=authSdk;auth=sdk.initializeAuth(app.initializeApp(firebaseConfig),{persistence:[sdk.browserSessionPersistence,sdk.browserLocalPersistence],popupRedirectResolver:sdk.browserPopupRedirectResolver});
+   auth.languageCode=serviceLanguage();unsubscribeAuth?.();
+   unsubscribeAuth=sdk.onIdTokenChanged(auth,next=>{
+    if(ready&&next?.uid===user?.uid){user=next;refreshAdmin();return;}
+    const signedIn=!!next&&next.uid!==user?.uid;user=next;
+    if(signedIn){modal.close();closeMenu();}
+    profileName='';admin=false;ready=true;render();notify();refreshAdmin();
+    if(!next)preparePersistence();
+   },()=>{initializationError=true;render();});
+  }catch{initializationError=true;render();}
+ })().finally(()=>{initializing=null;});
+ return initializing;
 }
+
 document.addEventListener('wardrobe:open-auth',event=>{closeMenu();view=event.detail?.view==='register'?'register':'signin';notice='';if(!modal.open)modal.showModal();render();});
 trigger.addEventListener('click',()=>{if(!user){openSignIn();return;}menu.hidden=!menu.hidden;trigger.setAttribute('aria-expanded',String(!menu.hidden));if(!menu.hidden)menu.querySelector('a')?.focus();});
 modal.addEventListener('click',e=>{
@@ -95,10 +115,11 @@ modal.addEventListener('click',e=>{
  const action=el.dataset.account;
  if(action==='close'){modal.close();return;}
  if(action==='retry'){initialize();return;}
+ if(action==='retry-persistence'){preparePersistence();return;}
  if(['signin','register','reset'].includes(action)){view=action;notice='';render();return;}
  if(action==='show-password'){const field=modal.querySelector('[name=password]');field.type=field.type==='password'?'text':'password';el.textContent=field.type==='password'?'Show':'Hide';el.setAttribute('aria-label',field.type==='password'?'Show password':'Hide password');return;}
  if(action==='profile'){modal.close();location.hash='profile';return;}
- if(el.dataset.provider){const p=provider(el.dataset.provider),remember=!!modal.querySelector('[name=remember]')?.checked;run(async()=>{await persistence(remember);await sdk.signInWithPopup(auth,p);notice='';render();},'Complete sign-in in the Google window. If it did not open, allow pop-ups for this website or use email sign-in.');}
+ if(el.dataset.provider){if(!persistenceReady)return;const p=provider(el.dataset.provider);auth.languageCode=serviceLanguage();run(async()=>{await sdk.signInWithPopup(auth,p);notice='';render();},'Complete sign-in in the Google window. If it did not open, allow pop-ups for this website or use email sign-in.','Opening Google…');}
  if(action==='signout')run(async()=>{await sdk.signOut(auth);notice='You’re signed out.';view='signin';render();});
  if(action==='verify')run(async()=>{await sdk.sendEmailVerification(user);message('Verification email sent. Check your inbox and spam folder.');});
  if(action==='check-verification')run(async()=>{await sdk.reload(user);user=auth.currentUser;notice=user.emailVerified?'Your email is verified.':'Not verified yet. Open the link in your email, then try again.';render();});
@@ -122,7 +143,8 @@ modal.addEventListener('submit',e=>{
 });
 initialize();
 
-document.addEventListener('wardrobe:language',()=>{if(auth)auth.languageCode=serviceLanguage();});
+document.addEventListener('wardrobe:language',event=>{if(auth)auth.languageCode=languages[event.detail?.language]?.service||serviceLanguage();});
+modal.addEventListener('change',event=>{if(event.target.name!=='remember')return;rememberChoice=event.target.checked;try{localStorage.setItem('wearwell.auth.remember',String(rememberChoice));}catch{}preparePersistence();});
 
 let deleting=false;
 document.addEventListener('input',event=>{
@@ -140,6 +162,7 @@ document.addEventListener('submit',async event=>{
    await sdk.reauthenticateWithPopup(current,provider('google.com'));
   }else throw {code:'auth/requires-recent-login'};
   if(user?.uid!==current.uid)throw {code:'auth/requires-recent-login'};
+  const {deleteAccountFeedback}=await import('./account-data.js?v=20261011-authfast-v1');
   await deleteAccountFeedback(current.uid);
   await sdk.deleteUser(current);
   try{localStorage.removeItem(`wardrobe.account.${current.uid}`);}catch{}

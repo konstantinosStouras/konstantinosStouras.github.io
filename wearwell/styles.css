@@ -54,3 +54,5 @@ header{display:grid;grid-template-columns:minmax(150px,1fr) auto auto;gap:32px}.
   text-align: inherit;
   text-align-last: auto;
 }
+
+.account-modal[aria-busy="true"] .social-button::after{content:"";width:14px;height:14px;border:2px solid #cfd4cc;border-top-color:#263d30;border-radius:50%;animation:auth-spin .7s linear infinite}.auth-message button{margin:8px 0;display:block}@keyframes auth-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.account-modal[aria-busy="true"] .social-button::after{animation:none}}
