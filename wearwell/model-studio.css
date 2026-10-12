@@ -2,4 +2,4 @@
 
 .headshot-choice{display:block;width:160px;height:190px;object-fit:contain;margin:16px 0}.headshot-choice[hidden]{display:none}.posture-choice{display:block;width:100%;max-width:360px;max-height:540px;object-fit:contain;margin:16px 0}#model-posture-review{margin:36px 0;padding:24px;background:#f4f6f2;border-radius:12px}.model-studio .actions{gap:12px;margin:18px 0}.model-studio h3{margin-top:24px}#model-settings form+p{margin-top:24px}
 
-.photo-tips{padding-left:20px;margin:18px 0 24px;line-height:1.65}.photo-tips li+li{margin-top:12px}
+.photo-tips{padding-inline-start:20px;margin:18px 0 24px;line-height:1.65}.photo-tips li+li{margin-top:12px}

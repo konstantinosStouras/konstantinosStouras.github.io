@@ -6,6 +6,11 @@ import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 
 const root=resolve('wearwell');
+const {languages}=await import(pathToFileURL(resolve(root,'language-policy.js')));
+const {default:photoGuidance}=await import(pathToFileURL(resolve(root,'photo-guidance-languages.js')));
+const {checkPhotoGuidance}=await import(pathToFileURL(resolve(root,'photo-guidance-coverage.js')));
+checkPhotoGuidance(languages,photoGuidance,readFileSync(resolve(root,'profile-photos.js'),'utf8'));
+console.log(`Photo guidance covers every registered language (${Object.keys(languages).length}).`);
 for(const name of readdirSync(root).filter(name=>name.endsWith('.js'))) {
   const file=resolve(root,name),text=readFileSync(file,'utf8');
   execFileSync(process.execPath,['--check',file]);

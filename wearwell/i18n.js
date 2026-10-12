@@ -1,10 +1,11 @@
-import familyGreek from './family-el.js?v=20261012-family-v1';
-import modelGreek from './model-studio-el.js?v=20261012-family-v1';
-import feedbackGreek from './style-feedback-el.js?v=20261012-family-v1';
-import {greek} from './translations-el.js?v=20261012-family-v1';
-import greekExtras from './translations-extra-el.js?v=20261012-family-v1';
-import {translateOther} from './translation-engine.js?v=20261012-family-v1';
-import {languages,languageForLocation,readLanguagePreference} from './language-policy.js?v=20261012-family-v1';
+import photoGuidance from './photo-guidance-languages.js?v=20261012-photo-languages-v1';
+import familyGreek from './family-el.js?v=20261012-photo-languages-v1';
+import modelGreek from './model-studio-el.js?v=20261012-photo-languages-v1';
+import feedbackGreek from './style-feedback-el.js?v=20261012-photo-languages-v1';
+import {greek} from './translations-el.js?v=20261012-photo-languages-v1';
+import greekExtras from './translations-extra-el.js?v=20261012-photo-languages-v1';
+import {translateOther} from './translation-engine.js?v=20261012-photo-languages-v1';
+import {languages,languageForLocation,readLanguagePreference} from './language-policy.js?v=20261012-photo-languages-v1';
 Object.assign(greek,greekExtras,modelGreek,familyGreek);
 const preferenceKey='daywear.language';
 let preference='auto';try{preference=readLanguagePreference(globalThis.localStorage);}catch{}
@@ -36,7 +37,9 @@ const escape=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const phrasePattern=new RegExp('(?<![A-Za-z])(?:'+[...dictionary.keys()].sort((a,b)=>b.length-a.length).map(escape).join('|')+')(?![A-Za-z])','g');
 const seasonAdjectives={summer:'καλοκαιρινά',fall:'φθινοπωρινά',winter:'χειμερινά',spring:'ανοιξιάτικα'};
 export function translateText(value,target=language){
- const text=String(value??'');if(target!=='el')return translateOther(text,target);if(!text.trim())return text;
+ const text=String(value??''),photoCopy=photoGuidance[target];
+ const trimmed=text.trim();if(photoCopy&&Object.hasOwn(photoCopy,trimmed))return text.replace(trimmed,()=>photoCopy[trimmed]);
+ if(target!=='el')return translateOther(text,target);if(!text.trim())return text;
  const core=text.trim(),leading=text.slice(0,text.indexOf(core)),trailing=text.slice(text.indexOf(core)+core.length);
  if(dictionary.has(core))return leading+dictionary.get(core)+trailing;
  // Preserve interpolated personal names and city names verbatim.
