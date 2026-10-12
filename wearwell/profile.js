@@ -46,7 +46,7 @@ export function modelBrief(name,sizes={}){
  if(sizes.bottom)lines.push(`Trouser size: ${sizes.bottom}${sizes.bottomSystem?' ('+sizes.bottomSystem+')':''}`);
  if(sizes.shoe)lines.push(`Shoe size: ${sizes.shoe}`);
  if(sizes.bodyNotes)lines.push(`Appearance and fit notes: ${sizes.bodyNotes}`);
- lines.push('Use my supplied reference photos for facial likeness. Preserve my stated proportions. Do not invent missing measurements. This is a styling visualization, not a measured garment fitting.');
+ lines.push('Edit my actual headshots while preserving my recognisable facial identity and real skin texture. Do not invent a new face or use a synthetic avatar. Apply only the natural refinements I request. Use my dressed full-body references and supplied measurements to preserve my proportions. Do not invent missing measurements or guarantee fit. Every generated image must be reviewed and approved by me before use in my wardrobe.');
  return lines.join('\n');
 }
 // Commit the profile only after storage succeeds; failure leaves the form available to retry.

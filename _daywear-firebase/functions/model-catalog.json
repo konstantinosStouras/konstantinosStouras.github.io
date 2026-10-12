@@ -1,0 +1,270 @@
+{
+  "summer-1": {
+    "name": "Forest & linen",
+    "garments": [
+      "Forest linen camp shirt",
+      "Navy linen trousers",
+      "Brown leather loafers"
+    ]
+  },
+  "summer-2": {
+    "name": "The white tee",
+    "garments": [
+      "White heavyweight T-shirt",
+      "Navy tailored shorts",
+      "White leather trainers"
+    ]
+  },
+  "summer-3": {
+    "name": "Linen at lunch",
+    "garments": [
+      "Ecru linen shirt",
+      "Stone cotton chinos",
+      "Brown leather loafers",
+      "Black leather belt"
+    ]
+  },
+  "summer-4": {
+    "name": "Stone & navy",
+    "garments": [
+      "Navy heavyweight T-shirt",
+      "Stone linen shorts",
+      "White leather trainers"
+    ]
+  },
+  "summer-5": {
+    "name": "A little blue",
+    "garments": [
+      "Blue long-sleeve Henley",
+      "Navy linen trousers",
+      "Dark waterproof trainers"
+    ]
+  },
+  "summer-6": {
+    "name": "Evening ease",
+    "garments": [
+      "Chocolate merino polo",
+      "Stone cotton chinos",
+      "Brown leather loafers"
+    ]
+  },
+  "summer-7": {
+    "name": "Summer showers",
+    "garments": [
+      "White heavyweight T-shirt",
+      "Navy linen trousers",
+      "Dark waterproof trainers",
+      "Navy lightweight rain shell"
+    ]
+  },
+  "fall-1": {
+    "name": "City, off duty",
+    "garments": [
+      "White heavyweight T-shirt",
+      "Stone cotton chinos",
+      "White leather trainers",
+      "Navy zip jacket"
+    ]
+  },
+  "fall-2": {
+    "name": "Blue & washed olive",
+    "garments": [
+      "Blue long-sleeve Henley",
+      "Olive fatigue trousers",
+      "Dark waterproof trainers",
+      "Forest cotton overshirt"
+    ]
+  },
+  "fall-3": {
+    "name": "Corduroy season",
+    "garments": [
+      "Grey merino crewneck",
+      "Tobacco corduroy trousers",
+      "Black Chelsea boots",
+      "Oxblood work jacket"
+    ]
+  },
+  "fall-4": {
+    "name": "The country day",
+    "garments": [
+      "Navy merino crewneck",
+      "Olive fatigue trousers",
+      "Black waterproof walking boots",
+      "Olive insulated waterproof field jacket"
+    ]
+  },
+  "fall-5": {
+    "name": "A table after eight",
+    "garments": [
+      "Ecru linen shirt",
+      "Dark indigo straight jeans",
+      "Black Chelsea boots",
+      "Oxblood work jacket"
+    ]
+  },
+  "fall-6": {
+    "name": "Trail forecast",
+    "garments": [
+      "Navy heavyweight T-shirt",
+      "Olive fatigue trousers",
+      "Black waterproof walking boots",
+      "Navy lightweight rain shell"
+    ]
+  },
+  "fall-7": {
+    "name": "Chocolate in the rain",
+    "garments": [
+      "Chocolate merino polo",
+      "Charcoal wool trousers",
+      "Dark waterproof trainers",
+      "Navy lightweight rain shell"
+    ]
+  },
+  "winter-1": {
+    "name": "Chocolate & tobacco",
+    "garments": [
+      "Chocolate merino polo",
+      "Tobacco corduroy trousers",
+      "Black Chelsea boots",
+      "Navy wool overcoat",
+      "Charcoal wool scarf"
+    ]
+  },
+  "winter-2": {
+    "name": "Country layers",
+    "garments": [
+      "Oatmeal chunky knit",
+      "Dark indigo straight jeans",
+      "Black waterproof walking boots",
+      "Olive insulated waterproof field jacket",
+      "Black merino beanie"
+    ]
+  },
+  "winter-3": {
+    "name": "Navy, loosened up",
+    "garments": [
+      "Navy merino crewneck",
+      "Charcoal wool trousers",
+      "Black Chelsea boots",
+      "Navy wool overcoat",
+      "Charcoal wool scarf"
+    ]
+  },
+  "winter-4": {
+    "name": "Wet winter walk",
+    "garments": [
+      "Charcoal thermal top",
+      "Olive fatigue trousers",
+      "Black waterproof walking boots",
+      "Olive insulated waterproof field jacket",
+      "Oatmeal chunky knit"
+    ]
+  },
+  "winter-5": {
+    "name": "Oatmeal & charcoal",
+    "garments": [
+      "Oatmeal chunky knit",
+      "Charcoal wool trousers",
+      "Black Chelsea boots",
+      "Navy wool overcoat",
+      "Charcoal wool scarf"
+    ]
+  },
+  "winter-6": {
+    "name": "The cold commute",
+    "garments": [
+      "Grey merino crewneck",
+      "Dark indigo straight jeans",
+      "Black waterproof walking boots",
+      "Olive insulated waterproof field jacket",
+      "Black merino beanie"
+    ]
+  },
+  "winter-7": {
+    "name": "Winter rain",
+    "garments": [
+      "Navy merino crewneck",
+      "Charcoal wool trousers",
+      "Dark waterproof trainers",
+      "Olive insulated waterproof field jacket",
+      "Charcoal wool scarf"
+    ]
+  },
+  "spring-1": {
+    "name": "Blue hour",
+    "garments": [
+      "Blue long-sleeve Henley",
+      "Light straight-leg jeans",
+      "White leather trainers"
+    ]
+  },
+  "spring-2": {
+    "name": "Fresh start",
+    "garments": [
+      "White heavyweight T-shirt",
+      "Stone cotton chinos",
+      "White leather trainers",
+      "Forest cotton overshirt"
+    ]
+  },
+  "spring-3": {
+    "name": "Forest afternoon",
+    "garments": [
+      "Forest linen camp shirt",
+      "Navy linen trousers",
+      "Brown leather loafers",
+      "Navy zip jacket"
+    ]
+  },
+  "spring-4": {
+    "name": "Light denim days",
+    "garments": [
+      "Grey sweatshirt",
+      "Light straight-leg jeans",
+      "White leather trainers"
+    ]
+  },
+  "spring-5": {
+    "name": "Soft structure",
+    "garments": [
+      "Ecru linen shirt",
+      "Olive fatigue trousers",
+      "Black Chelsea boots",
+      "Oxblood work jacket"
+    ]
+  },
+  "spring-6": {
+    "name": "Between seasons",
+    "garments": [
+      "Grey merino crewneck",
+      "Stone cotton chinos",
+      "Dark waterproof trainers",
+      "Forest cotton overshirt"
+    ]
+  },
+  "spring-7": {
+    "name": "April showers",
+    "garments": [
+      "Navy heavyweight T-shirt",
+      "Dark indigo straight jeans",
+      "Dark waterproof trainers",
+      "Navy lightweight rain shell"
+    ]
+  },
+  "gym-1": {
+    "name": "The training uniform",
+    "garments": [
+      "Black technical T-shirt",
+      "Black training shorts",
+      "Black training shoes"
+    ]
+  },
+  "lounge-1": {
+    "name": "Slow mornings",
+    "garments": [
+      "Oatmeal lounge T-shirt",
+      "Charcoal lounge joggers",
+      "Charcoal house slippers"
+    ]
+  }
+}

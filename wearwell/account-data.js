@@ -1,5 +1,5 @@
 // Private testing data is in Firebase. Ownership/checklists/rotation remain local.
-import {getAccountUser} from './auth.js?v=20261011-de-ru-v1';
+import {getAccountUser} from './auth.js?v=20261012-likeness-v1';
 let services;
 export async function database(){
  if(!services)services=import('https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js').then(s=>({s,db:s.getFirestore()})).catch(e=>{services=null;throw e;});
@@ -28,6 +28,8 @@ export async function deleteAccountFeedback(uid){
   const batch=s.writeBatch(db);records.forEach(record=>batch.delete(record.ref));await batch.commit();
  }
  await s.deleteDoc(s.doc(db,'daywearUpdateSubscriptions',uid));
+ for(const group of ['models','modelPreviews','modelPreferences','selectedPosture']){const records=await s.getDocsFromServer(s.collection(db,'daywearProfiles',uid,group));const cleanup=s.writeBatch(db);records.forEach(r=>cleanup.delete(r.ref));await cleanup.commit();}
+ const requests=await s.getDocsFromServer(s.query(s.collection(db,'daywearModelRequests'),s.where('uid','==',uid)));const cleanup=s.writeBatch(db);requests.forEach(r=>cleanup.delete(r.ref));await cleanup.commit();
  const photos=await s.getDocsFromServer(s.collection(db,'daywearProfiles',uid,'photos'));
  const batch=s.writeBatch(db);photos.forEach(photo=>batch.delete(photo.ref));batch.delete(s.doc(db,'daywearProfiles',uid));await batch.commit();
  // Keep the rate-limit receipt: it contains no profile, email, message or image.

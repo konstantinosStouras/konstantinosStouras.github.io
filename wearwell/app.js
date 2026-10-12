@@ -1,25 +1,26 @@
-import {installWeatherRefresh} from './weather-refresh.js?v=20261011-de-ru-v1';
-import {usersPage,loadUsers} from './admin-users.js?v=20261011-de-ru-v1';
-import {updatesPage,loadUpdates} from './updates.js?v=20261011-de-ru-v1';
-import {welcomePage} from './welcome.js?v=20261011-de-ru-v1';
-import {headerWeather,currentWeatherCard} from './weather-view.js?v=20261011-de-ru-v1';
-import {cleanRatings,cleanPieceFeedback,dislikeReasons} from './preferences.js?v=20261011-de-ru-v1';
-import {lookFeedbackControls} from './style-feedback.js?v=20261011-de-ru-v1';
-import {purchasePage,installPurchase,clearPurchase} from './purchase-ui.js?v=20261011-de-ru-v1';
-import {loadCloudProfile,saveCloudProfile} from './account-data.js?v=20261011-de-ru-v1';
-import {photosSection,refreshPhotos} from './profile-photos.js?v=20261011-de-ru-v1';
-import {adminPage,loadAdmin,clearAdmin} from './review.js?v=20261011-de-ru-v1';
-import {installLanguages,getLanguage,serviceLanguage,getLanguagePreference,applyLocationLanguage,translateText,translateBrief,searchKey} from './i18n.js?v=20261011-de-ru-v1';
-import {installMeasurementGuides} from './measurement-guides.js?v=20261011-de-ru-v1';
-import {createPrivateCatalog} from './private-models.js?v=20261011-de-ru-v1';
-import {feedbackPage,resetFeedback} from './feedback.js?v=20261011-de-ru-v1';
-import {getAccountToken,getAccountUser} from './auth.js?v=20261011-de-ru-v1';
-import {hasPersonalModel,modelImageSource,modelCaption,modelFitNotes} from './model-policy.js?v=20261011-de-ru-v1';
-import {profileFields,styleFields,readProfile,saveProfile,modelBrief} from './profile.js?v=20261011-de-ru-v1';
-import {accountStorageKey} from './auth-policy.js?v=20261011-de-ru-v1';
-import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js?v=20261011-de-ru-v1';
-import {fetchWeather,recommend,condition} from './weather.js?v=20261011-de-ru-v1';
-import {detectLocation,detectApproximateLocation,locationPreference,rememberCity,locationError} from './location.js?v=20261011-de-ru-v1';
+import {studioAdminPage,loadStudioAdmin} from './model-studio.js?v=20261012-likeness-v1';
+import {installWeatherRefresh} from './weather-refresh.js?v=20261012-likeness-v1';
+import {usersPage,loadUsers} from './admin-users.js?v=20261012-likeness-v1';
+import {updatesPage,loadUpdates} from './updates.js?v=20261012-likeness-v1';
+import {welcomePage} from './welcome.js?v=20261012-likeness-v1';
+import {headerWeather,currentWeatherCard} from './weather-view.js?v=20261012-likeness-v1';
+import {cleanRatings,cleanPieceFeedback,dislikeReasons} from './preferences.js?v=20261012-likeness-v1';
+import {lookFeedbackControls} from './style-feedback.js?v=20261012-likeness-v1';
+import {purchasePage,installPurchase,clearPurchase} from './purchase-ui.js?v=20261012-likeness-v1';
+import {loadCloudProfile,saveCloudProfile} from './account-data.js?v=20261012-likeness-v1';
+import {photosSection,refreshPhotos} from './profile-photos.js?v=20261012-likeness-v1';
+import {adminPage,loadAdmin,clearAdmin} from './review.js?v=20261012-likeness-v1';
+import {installLanguages,getLanguage,serviceLanguage,getLanguagePreference,applyLocationLanguage,translateText,translateBrief,searchKey} from './i18n.js?v=20261012-likeness-v1';
+import {installMeasurementGuides} from './measurement-guides.js?v=20261012-likeness-v1';
+import {createPrivateCatalog} from './private-models.js?v=20261012-likeness-v1';
+import {feedbackPage,resetFeedback} from './feedback.js?v=20261012-likeness-v1';
+import {getAccountToken,getAccountUser} from './auth.js?v=20261012-likeness-v1';
+import {hasPersonalModel,modelImageSource,modelCaption,modelFitNotes} from './model-policy.js?v=20261012-likeness-v1';
+import {profileFields,styleFields,readProfile,saveProfile,modelBrief} from './profile.js?v=20261012-likeness-v1';
+import {accountStorageKey} from './auth-policy.js?v=20261012-likeness-v1';
+import {profile,pieces,looks,pieceById,lookById,seasons,label} from './data.js?v=20261012-likeness-v1';
+import {fetchWeather,recommend,condition} from './weather.js?v=20261012-likeness-v1';
+import {detectLocation,detectApproximateLocation,locationPreference,rememberCity,locationError} from './location.js?v=20261012-likeness-v1';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let key=accountStorageKey(null),accountUid=null,cloudStatus='idle',profileSaving=false;
 async function syncProfile(){const uid=accountUid;if(!uid)return;cloudStatus='loading';if(route().split('/')[0]==='profile')renderedRoute='';render();try{const cloud=await loadCloudProfile(uid);if(accountUid!==uid)return;if(cloud){state.name=cloud.name;state.sizes=JSON.parse(cloud.sizes);persist();notifyProfile();}cloudStatus='ready';}catch{if(accountUid!==uid)return;cloudStatus='error';}if(route().split('/')[0]==='profile')renderedRoute='';render();}
@@ -39,7 +40,7 @@ function route(){return location.hash.slice(1)||(accountUid?'today':'home');}
 function status(id){return ['owned','buy'].includes(state.ownership[id])?state.ownership[id]:'review';}
 function statusLabel(id){return {owned:'Owned',buy:'Buy',review:'To confirm'}[status(id)];}
 function fit(p){const size=p.category==='Shoes'?state.sizes.shoe:p.category==='Bottoms'?[state.sizes.bottom,state.sizes.bottomSystem].filter(Boolean).join(' · '):['Tops','Layers'].includes(p.category)?state.sizes.top:'';return size?`${size} · ${p.fit}`:p.fit;}
-function image(l,cls='look-photo'){const src=modelImageSource(l,accountUid,privateCatalog);if(!src)return `<div class="${cls} model-placeholder" role="img" aria-label="Private model ${modelState==='error'?'unavailable':'loading'}"><span>${modelState==='error'?'Your private model is unavailable.':'Loading your private model…'}</span></div>`;return `<img class="${cls}" src="${src}" alt="${hasPersonalModel(accountUid)?'Your photo-based AI model':'WearWell slim male catalog model'} wearing ${esc(l.name)}" loading="lazy" width="800" height="1200">`;}
+function image(l,cls='look-photo'){const src=modelImageSource(l,accountUid,privateCatalog);if(!src)return `<div class="${cls} model-placeholder" role="img" aria-label="Private model ${modelState==='error'?'unavailable':'loading'}"><span>${modelState==='error'?'Your private model is unavailable.':'Loading your private model…'}</span></div>`;return `<img class="${cls}" src="${src}" alt="${privateCatalog.get(l.id,accountUid)?'Your approved photo-based model':'WearWell slim male catalog model'} wearing ${esc(l.name)}" loading="lazy" width="800" height="1200">`;}
 
 function tags(l){return `<div class="tags"><span class="tag">${{summer:'warm',fall:'mild',winter:'cold',spring:'mild',gym:'training',lounge:'at home'}[l.season]}</span>${l.rain?'<span class="tag">rain-ready</span>':''}${l.layer?'<span class="tag">layered</span>':''}</div>`;}
 function card(l){const owned=l.pieces.filter(id=>status(id)==='owned').length;return `<article class="card outfit-card"><a href="#look/${l.id}">${image(l)}<div class="row-between card-meta"><span>${label(l.season)} ${String(l.number).padStart(2,'0')}</span><span>${owned} / ${l.pieces.length} owned</span></div><h3>${l.name}</h3><p class="muted outfit-pieces">${l.pieces.map(id=>pieceById[id].name).join(' · ')}</p>${tags(l)}</a>${ratingControls(l,true)}</article>`;}
@@ -76,7 +77,7 @@ function wardrobe(){return head('MORE WAYS TO WEAR WHAT YOU OWN','Your wardrobe'
 function render(){
  const r=route().split('/')[0];
  const feedbackView=$('#main').dataset.feedbackRoute===route()&&renderedAccount===accountUid?captureFeedbackView():null;
- const keepAccount=['profile','feedback','review','users','whats-new','updates-admin'].includes(r)&&r===renderedRoute&&renderedAccount===accountUid&&$('#main').children.length;
+ const keepAccount=['model-studio','profile','feedback','review','users','whats-new','updates-admin'].includes(r)&&r===renderedRoute&&renderedAccount===accountUid&&$('#main').children.length;
  if(renderedRoute==='feedback'&&r!=='feedback')resetFeedback();
  const keepPurchase=r==='consider'&&renderedRoute===r&&renderedAccount===accountUid;
  if(renderedRoute==='consider'&&!keepPurchase)clearPurchase();
@@ -88,14 +89,14 @@ function render(){
  $('#header-weather').innerHTML=headerWeather(state);
  $('#nav').innerHTML=[[accountUid?'today':'home',accountUid?'Today':'Discover'],['wardrobe','Wardrobe'],['rotation','Calendar'],['shopping','Shopping'],['whats-new',"What's new"]].map(([id,text])=>`<a href="#${id}" ${active===id?'class="active" aria-current="page"':''}>${text}</a>`).join('');
  if(keepPurchase||keepAccount)return;
- const page=r==='users'?usersPage():r==='whats-new'?updatesPage():r==='updates-admin'?updatesPage(true):r==='profile'?profilePage():r==='feedback'?feedbackPage():r==='review'?adminPage():r==='home'?welcomePage():r==='consider'?'<a class="section-back" href="#shopping">← Back to shopping</a>'+purchasePage(accountUid):r==='wardrobe'?wardrobe():r==='pieces'?piecePage():r==='rotation'?rotation():r==='shopping'?shopping():r==='purge'?purge():[...seasons,'gym','lounge'].includes(r)?collection(r):r==='look'?lookPage(route().split('/')[1]):today();
+ const page=r==='model-studio'?studioAdminPage():r==='users'?usersPage():r==='whats-new'?updatesPage():r==='updates-admin'?updatesPage(true):r==='profile'?profilePage():r==='feedback'?feedbackPage():r==='review'?adminPage():r==='home'?welcomePage():r==='consider'?'<a class="section-back" href="#shopping">← Back to shopping</a>'+purchasePage(accountUid):r==='wardrobe'?wardrobe():r==='pieces'?piecePage():r==='rotation'?rotation():r==='shopping'?shopping():r==='purge'?purge():[...seasons,'gym','lounge'].includes(r)?collection(r):r==='look'?lookPage(route().split('/')[1]):today();
  $('#main').classList.toggle('welcome-page',r==='home');
  $('#main').innerHTML=(wardrobeRoutes.includes(r)&&r!=='look'?wardrobeToolbar(r):'')+page;
  $('#main').dataset.feedbackRoute=route();restoreFeedbackView(feedbackView);
- if(!['home','profile','feedback','review','whats-new','updates-admin','users'].includes(r)&&hasPersonalModel(accountUid)&&modelState!=='ready')$('#main').insertAdjacentHTML('afterbegin',`<div class="callout" role="status"><p>${modelState==='error'?esc(modelError):'Loading your private collection securely…'}</p>${modelState==='error'?'<button data-action="retry-model">Try again</button>':''}</div>`);
+ if(!['model-studio','home','profile','feedback','review','whats-new','updates-admin','users'].includes(r)&&hasPersonalModel(accountUid)&&modelState!=='ready')$('#main').insertAdjacentHTML('afterbegin',`<div class="callout" role="status"><p>${modelState==='error'?esc(modelError):'Loading your private collection securely…'}</p>${modelState==='error'?'<button data-action="retry-model">Try again</button>':''}</div>`);
  if(r==='users')loadUsers();
  if(['whats-new','updates-admin'].includes(r))loadUpdates(r==='updates-admin');
- if(r==='profile'&&cloudStatus==='ready')refreshPhotos();if(r==='review')loadAdmin();
+ if(r==='profile'&&cloudStatus==='ready')refreshPhotos();if(r==='review')loadAdmin();if(r==='model-studio')loadStudioAdmin();
 }
 
 function lookPage(id){const l=lookById[id];if(!l)return head('THE COLLECTION','Look not found')+'<a href="#today">Return to today</a>';return head(`${label(l.season)} ${String(l.number).padStart(2,'0')}`,l.name,`<a href="#${l.season}" class="caption">← ${label(l.season)} collection</a>`)+`<section class="hero"><div class="hero-photo">${image(l)}</div><div class="hero-copy">${tags(l)}<p class="rationale"${state.sizes.bodyNotes?' data-i18n-skip':''}>${esc(modelFitNotes(accountUid,state.sizes))}</p>${ratingControls(l)}${checklist(l)}<p class="caption">Fit is a visual study. Check your actual measurements before buying.</p><div class="actions"><a class="button primary" href="#pieces">Review ownership</a><a class="button" href="#shopping">Shopping list ↗</a></div></div></section>${disclosure()}`;}
@@ -243,3 +244,5 @@ async function detectLanguageLocation(){
 }
 document.addEventListener('wardrobe:automatic-language',detectLanguageLocation);
 if(state.locationMode==='travel')detectLanguageLocation();
+
+document.addEventListener('wardrobe:models',()=>{if(accountUid)loadPersonalModel();});
