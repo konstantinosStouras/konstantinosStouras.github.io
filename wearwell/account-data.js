@@ -1,5 +1,6 @@
+import {profilePath,activeMemberId} from './family-context.js?v=20261012-family-v1';
 // Private testing data is in Firebase. Ownership/checklists/rotation remain local.
-import {getAccountUser} from './auth.js?v=20261012-photo-guidance-v1';
+import {getAccountUser} from './auth.js?v=20261012-family-v1';
 let services;
 export async function database(){
  if(!services)services=import('https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js').then(s=>({s,db:s.getFirestore()})).catch(e=>{services=null;throw e;});
@@ -27,6 +28,8 @@ export async function deleteAccountFeedback(uid){
   if(records.empty)break;
   const batch=s.writeBatch(db);records.forEach(record=>batch.delete(record.ref));await batch.commit();
  }
+ const family=await s.getDocsFromServer(s.collection(db,'daywearProfiles',uid,'members'));
+ for(const member of family.docs){const batch=s.writeBatch(db);for(let i=1;i<=9;i++)batch.delete(s.doc(db,'daywearProfiles',uid,'members',member.id,'photos',String(i)));batch.delete(member.ref);await batch.commit();}
  await s.deleteDoc(s.doc(db,'daywearUpdateSubscriptions',uid));
  for(const group of ['models','modelPreviews','modelPreferences','selectedPosture']){const records=await s.getDocsFromServer(s.collection(db,'daywearProfiles',uid,group));const cleanup=s.writeBatch(db);records.forEach(r=>cleanup.delete(r.ref));await cleanup.commit();}
  const requests=await s.getDocsFromServer(s.query(s.collection(db,'daywearModelRequests'),s.where('uid','==',uid)));const cleanup=s.writeBatch(db);requests.forEach(r=>cleanup.delete(r.ref));await cleanup.commit();
@@ -34,11 +37,11 @@ export async function deleteAccountFeedback(uid){
  const batch=s.writeBatch(db);photos.forEach(photo=>batch.delete(photo.ref));batch.delete(s.doc(db,'daywearProfiles',uid));await batch.commit();
  // Keep the rate-limit receipt: it contains no profile, email, message or image.
 }
-export async function loadCloudProfile(uid){const {s,db}=await database();const doc=await s.getDocFromServer(s.doc(db,'daywearProfiles',uid));return doc.exists()?doc.data():null;}
-export async function saveCloudProfile(uid,profile){
+export async function loadCloudProfile(uid,memberId=activeMemberId()){const {s,db}=await database();const doc=await s.getDocFromServer(s.doc(db,...profilePath(uid,memberId)));return doc.exists()?doc.data():null;}
+export async function saveCloudProfile(uid,profile,memberId=activeMemberId()){
  const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');
- await s.setDoc(s.doc(db,'daywearProfiles',uid),{name:profile.name,sizes:JSON.stringify(profile.sizes),updatedAt:s.serverTimestamp()});
+ await s.setDoc(s.doc(db,...profilePath(uid,memberId)),{name:profile.name,sizes:JSON.stringify(profile.sizes),updatedAt:s.serverTimestamp()},{merge:memberId!=='self'});
 }
-export async function getPhotos(uid){const {s,db}=await database();const docs=await s.getDocsFromServer(s.collection(db,'daywearProfiles',uid,'photos'));return docs.docs.map(d=>({id:d.id,...d.data()}));}
-export async function savePhoto(uid,id,photo){const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');await s.setDoc(s.doc(db,'daywearProfiles',uid,'photos',id),{...photo,consentVersion:'daywear-testing-1',updatedAt:s.serverTimestamp()});}
-export async function removePhoto(uid,id){const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');await s.deleteDoc(s.doc(db,'daywearProfiles',uid,'photos',id));}
+export async function getPhotos(uid,memberId=activeMemberId()){const {s,db}=await database();const docs=await s.getDocsFromServer(s.collection(db,...profilePath(uid,memberId),'photos'));return docs.docs.map(d=>({id:d.id,...d.data()}));}
+export async function savePhoto(uid,id,photo,memberId=activeMemberId()){const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');await s.setDoc(s.doc(db,...profilePath(uid,memberId),'photos',id),{...photo,consentVersion:memberId==='self'?'daywear-testing-1':'family-1',updatedAt:s.serverTimestamp()});}
+export async function removePhoto(uid,id,memberId=activeMemberId()){const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');await s.deleteDoc(s.doc(db,...profilePath(uid,memberId),'photos',id));}
