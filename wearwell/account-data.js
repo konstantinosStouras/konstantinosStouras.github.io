@@ -1,4 +1,4 @@
-import {profilePath,activeMemberId} from './family-context.js?v=20261012-family-v1';
+import {profilePath} from './family-context.js?v=20261012-family-v1';
 // Private testing data is in Firebase. Ownership/checklists/rotation remain local.
 import {getAccountUser} from './auth.js?v=20261012-family-v1';
 let services;
@@ -37,11 +37,11 @@ export async function deleteAccountFeedback(uid){
  const batch=s.writeBatch(db);photos.forEach(photo=>batch.delete(photo.ref));batch.delete(s.doc(db,'daywearProfiles',uid));await batch.commit();
  // Keep the rate-limit receipt: it contains no profile, email, message or image.
 }
-export async function loadCloudProfile(uid,memberId=activeMemberId()){const {s,db}=await database();const doc=await s.getDocFromServer(s.doc(db,...profilePath(uid,memberId)));return doc.exists()?doc.data():null;}
-export async function saveCloudProfile(uid,profile,memberId=activeMemberId()){
+export async function loadCloudProfile(uid,memberId='self'){const {s,db}=await database();const doc=await s.getDocFromServer(s.doc(db,...profilePath(uid,memberId)));return doc.exists()?doc.data():null;}
+export async function saveCloudProfile(uid,profile,memberId='self'){
  const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');
  await s.setDoc(s.doc(db,...profilePath(uid,memberId)),{name:profile.name,sizes:JSON.stringify(profile.sizes),updatedAt:s.serverTimestamp()},{merge:memberId!=='self'});
 }
-export async function getPhotos(uid,memberId=activeMemberId()){const {s,db}=await database();const docs=await s.getDocsFromServer(s.collection(db,...profilePath(uid,memberId),'photos'));return docs.docs.map(d=>({id:d.id,...d.data()}));}
-export async function savePhoto(uid,id,photo,memberId=activeMemberId()){const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');await s.setDoc(s.doc(db,...profilePath(uid,memberId),'photos',id),{...photo,consentVersion:memberId==='self'?'daywear-testing-1':'family-1',updatedAt:s.serverTimestamp()});}
-export async function removePhoto(uid,id,memberId=activeMemberId()){const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');await s.deleteDoc(s.doc(db,...profilePath(uid,memberId),'photos',id));}
+export async function getPhotos(uid,memberId='self'){const {s,db}=await database();const docs=await s.getDocsFromServer(s.collection(db,...profilePath(uid,memberId),'photos'));return docs.docs.map(d=>({id:d.id,...d.data()}));}
+export async function savePhoto(uid,id,photo,memberId='self'){const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');await s.setDoc(s.doc(db,...profilePath(uid,memberId),'photos',id),{...photo,consentVersion:memberId==='self'?'daywear-testing-1':'family-1',updatedAt:s.serverTimestamp()});}
+export async function removePhoto(uid,id,memberId='self'){const {s,db}=await database();if(getAccountUser()?.uid!==uid)throw Error('Your account changed. Please retry.');await s.deleteDoc(s.doc(db,...profilePath(uid,memberId),'photos',id));}
