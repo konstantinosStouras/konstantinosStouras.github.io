@@ -52,3 +52,10 @@
   .use-story { display:flex; gap:16px; padding:24px 0 12px; }
   .use-story-copy .use-story-action { align-self:flex-start; }
 }
+/* Introductory copy shares the cards' right edge, including its final line. */
+body .use-page > .resource-intro,
+body .use-page > .use-source {
+  max-width:none;
+  text-align:justify;
+  text-align-last:right;
+}
