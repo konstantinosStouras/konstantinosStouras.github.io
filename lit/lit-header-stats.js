@@ -28,7 +28,9 @@
     if (value.lastPull < pull.getAttribute('data-snapshot-date')) return false;
     total.textContent = value.papers.toLocaleString('en-US') + ' papers from ' + value.authors.toLocaleString('en-US') + ' authors';
     range.textContent = value.year + '–present';
-    pull.textContent = 'Last publication data pull: ' + value.lastPull;
+    var parts = value.lastPull.split('-');
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    pull.textContent = 'Last publication data pull: ' + Number(parts[2]) + ' ' + months[Number(parts[1]) - 1] + ' ' + parts[0];
     return true;
   }
   var cached;
