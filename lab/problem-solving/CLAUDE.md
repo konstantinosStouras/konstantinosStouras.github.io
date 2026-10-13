@@ -1,3 +1,7 @@
+# Current implementation
+
+See [ANALYSIS.md](ANALYSIS.md) for the independent storage, reviewed answer grader, evidence benchmarks and shared screen/PDF model. The documentation below describes the retired Sheets implementation.
+
 # The Problem-Solving Trap — Technical Documentation
 
 **Author:** Prof. Kostas Stouras, UCD Smurfit Graduate Business School  

@@ -1,0 +1,24 @@
+// Insert inside /databases/{database}/documents, preserving existing rules.
+// The private migration archive has no client allow rule.
+match /problemSolvingLegacy/{id} {
+  allow read: if true;
+  allow write: if false;
+}
+match /problemSolvingResponses/{id} {
+  allow read: if true;
+  allow create: if request.auth != null
+    && id.matches('[a-zA-Z0-9-]{20,80}')
+    && request.resource.data.keys().hasOnly(['owner','rule','confidence','eventsJson','analysisVersion'])
+    && request.resource.data.owner == request.auth.uid
+    && request.resource.data.rule is string
+    && request.resource.data.rule.size() > 0
+    && request.resource.data.rule.size() <= 5000
+    && request.resource.data.confidence is int
+    && request.resource.data.confidence >= 1
+    && request.resource.data.confidence <= 5
+    && request.resource.data.eventsJson is string
+    && request.resource.data.eventsJson.size() > 2
+    && request.resource.data.eventsJson.size() <= 40000
+    && request.resource.data.analysisVersion == 'evidence-2026-10-13';
+  allow update, delete: if false;
+}
