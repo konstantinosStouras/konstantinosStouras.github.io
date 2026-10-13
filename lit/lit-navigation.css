@@ -48,3 +48,20 @@
 @media(max-width:800px) { .header .lit-site-nav { gap:18px; } .lit-resource-links { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:640px) { .header .header-right { justify-content:flex-start; } .lit-site-nav details { position:static; } .header .header-inner { position:relative; } .lit-resource-links { left:16px; right:16px; top:100%; width:auto; padding:14px; } }
 @media(pointer:coarse) { .lit-site-nav > a, .lit-site-nav summary, .lit-resource-links a { min-height:44px; } }
+
+/* Consistent prose alignment throughout The Lit, including narrow screens. */
+body :is(main, .wrap, .acct-modal) p,
+body :is(main, .wrap) figcaption,
+body .about-body li,
+body .about-note,
+body .wn-sum,
+body .paper-abstract,
+body .tabs-desc,
+body .footer-inner > div {
+  text-align: justify;
+  text-align-last: start;
+  text-justify: inter-word;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
