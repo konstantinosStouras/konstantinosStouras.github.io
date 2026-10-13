@@ -1,5 +1,15 @@
 # Analysis and grading, October 2026
 
+## Presentation rollback requested by the owner
+
+The original insights, eight plots, personal scorecard, explanatory text and PDF
+were restored on 13 October 2026. Their implementations match the saved previous
+version. Independent storage and all imported data remain in place; the old
+Google Sheet and script remain retired. Historical and new data are adapted to
+the original report's columns, including its original creativity calculation.
+The redesigned presentation described below is retained as implementation history
+and is no longer loaded by the game.
+
 The current analysis replaces the earlier creativity/bias dashboard documented
 in the historical sections of CLAUDE.md.
 
