@@ -833,15 +833,16 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication","name":"The Lit — Research Paper Browser","description":"Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, the ACM EC conference, and all 50 journals of the Financial Times FT50 rank (with FT50 and ABS/AJG journal-type filters).","url":"https://www.stouras.com/lit/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://www.stouras.com"}}
 </script>
-<link rel="stylesheet" href="/lit/lit-navigation.css">
+<link rel="stylesheet" href="/lit/lit-navigation.css?v=20261013-header">
 <script src="/lit/lit-navigation.js" defer></script>
+<script src="/lit/lit-header-stats.js" defer></script>
 </head>
 <body>
 
 <div class="topbar">
-<header class="header">
+<header class="header lit-shared-header">
   <div class="header-inner">
-    <h1><a href="https://www.stouras.com/lit/" title="The Lit — a fresh start"><em>The Lit</em>: A research paper browser</a></h1>
+    <a class="lit-brand" href="/lit/" aria-label="The Lit — browse research papers">The <em>Lit</em></a>
     <div class="header-right">
       <nav class="lit-site-nav" aria-label="The Lit sections">
         <a href="/lit/" aria-current="page">Browse</a>
@@ -855,13 +856,13 @@
           </div>
         </details>
       </nav>
-      <div style="text-align:right;line-height:1.35">
-        <div class="header-meta"><strong id="corpusStat" title="Merged across every catalog this page loads; authors are de-duplicated within each catalog">579,980 papers from 482,735 authors</strong> via Crossref · <span id="yearRange">1886–present</span></div>
-        <div class="header-meta" id="lastPull" style="font-size:12px;opacity:0.75;margin-top:1px"></div>
-      </div>
-      <div id="acctControl" class="acct-control"></div>
+      <div id="acctControl" class="acct-control"><a class="acct-btn" href="/lit/#lit-signin">Sign in</a></div>
     </div>
   </div>
+  <div class="lit-catalog-bar"><div class="lit-catalog-inner">
+    <p class="lit-catalog-count"><strong id="litCorpusStat" title="Published papers across the catalog; authors are de-duplicated within each dataset">593,707 papers from 551,298 authors</strong><span>via Crossref · <span id="litYearRange">1869–present</span></span></p>
+    <p id="litLastPull" data-snapshot-date="2026-10-13">Last publication data pull: 2026-10-13</p>
+  </div></div>
 </header>
 
 <div id="litFiltersHome">

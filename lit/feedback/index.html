@@ -312,14 +312,15 @@
     .fb-when { margin-left: 0; }
   }
 </style>
-<link rel="stylesheet" href="/lit/lit-navigation.css">
+<link rel="stylesheet" href="/lit/lit-navigation.css?v=20261013-header">
 <script src="/lit/lit-navigation.js" defer></script>
+<script src="/lit/lit-header-stats.js" defer></script>
 </head>
 <body>
 
-<header class="header">
+<header class="header lit-shared-header">
   <div class="header-inner">
-    <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — Feedback<span class="sub">Tell me what to improve</span></h1></a>
+    <a class="lit-brand" href="/lit/" aria-label="The Lit — browse research papers">The <em>Lit</em></a>
     <div class="header-right">
       <nav class="lit-site-nav" aria-label="The Lit sections">
         <a href="/lit/">Browse</a>
@@ -333,11 +334,13 @@
           </div>
         </details>
       </nav>
-      <!-- Shared sign-in / account control (same as the main browser's header);
-           populated by ../lit-acct-nav.js once Firebase auth resolves. -->
-      <div id="acctControl" class="acct-control"></div>
+      <div id="acctControl" class="acct-control"><a class="acct-btn" href="/lit/#lit-signin">Sign in</a></div>
     </div>
   </div>
+  <div class="lit-catalog-bar"><div class="lit-catalog-inner">
+    <p class="lit-catalog-count"><strong id="litCorpusStat" title="Published papers across the catalog; authors are de-duplicated within each dataset">593,707 papers from 551,298 authors</strong><span>via Crossref · <span id="litYearRange">1869–present</span></span></p>
+    <p id="litLastPull" data-snapshot-date="2026-10-13">Last publication data pull: 2026-10-13</p>
+  </div></div>
 </header>
 
 <main class="wrap">

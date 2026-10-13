@@ -158,14 +158,15 @@
   }
 </style>
 <link rel="stylesheet" href="/lit/lit-resources.css">
-<link rel="stylesheet" href="/lit/lit-navigation.css">
+<link rel="stylesheet" href="/lit/lit-navigation.css?v=20261013-header">
 <script src="/lit/lit-navigation.js" defer></script>
+<script src="/lit/lit-header-stats.js" defer></script>
 </head>
 <body>
 
-<header class="header">
+<header class="header lit-shared-header">
   <div class="header-inner">
-    <a class="brand" href="/lit/" title="Back to The Lit"><h1>The <em>Lit</em></h1></a>
+    <a class="lit-brand" href="/lit/" aria-label="The Lit — browse research papers">The <em>Lit</em></a>
     <div class="header-right">
       <nav class="lit-site-nav" aria-label="The Lit sections">
         <a href="/lit/">Browse</a>
@@ -179,11 +180,13 @@
           </div>
         </details>
       </nav>
-      <!-- Shared sign-in / account control (same as the main browser's header);
-           populated by ../lit-acct-nav.js once Firebase auth resolves. -->
-      <div id="acctControl" class="acct-control"></div>
+      <div id="acctControl" class="acct-control"><a class="acct-btn" href="/lit/#lit-signin">Sign in</a></div>
     </div>
   </div>
+  <div class="lit-catalog-bar"><div class="lit-catalog-inner">
+    <p class="lit-catalog-count"><strong id="litCorpusStat" title="Published papers across the catalog; authors are de-duplicated within each dataset">593,707 papers from 551,298 authors</strong><span>via Crossref · <span id="litYearRange">1869–present</span></span></p>
+    <p id="litLastPull" data-snapshot-date="2026-10-13">Last publication data pull: 2026-10-13</p>
+  </div></div>
 </header>
 
 <main class="wrap"><div class="about-body"><h1>Privacy</h1><h2>Your library</h2><p>Your starred papers, notes, tags and lists are private to your account. The maintainer does not have access to your private library through the website.</p><h2>Sharing a list</h2><p>If you make a list public, people with its link can see the paper titles, authors, years and links without signing in. Private notes and tags are not shared. Making the list private again disables its public link.</p><h2>Account information and activity</h2><p>The Lit records your display name, sign-in e-mail address, and first- and last-seen account timestamps. The maintainer can read this account directory and use it to report registration growth and recent account activity. It does not provide your search history or private reading notes. A separate publicly readable account marker contains an account identifier and a coarse last-seen timestamp, but no name or e-mail address.</p><h2>Messages and feedback</h2><p>Account messages are private between you and the maintainer. Removing a message from your view does not remove the maintainer’s copy. Feedback and paper suggestions are sent to the maintainer; e-mail is used for receipts and follow-up where applicable.</p><h2>Questions or removal requests</h2><p>Use <a href="/lit/feedback/">Feedback</a> to ask about your account information or request its removal.</p></div></main>

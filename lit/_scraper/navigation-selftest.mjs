@@ -4,12 +4,16 @@ import vm from 'node:vm';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { summarise, isAdmin } = require('../lit-website-analytics.js');
+const { summarise: catalogStats } = require('../lit-header-stats.js');
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const pages = ['index.html','about/index.html','analytics/index.html','feedback/index.html','use-cases/index.html','whats-new/index.html','privacy/index.html','admin/website-analytics/index.html'];
 for (const page of pages) {
   const html = read(page);
   const nav = html.match(/<nav class="lit-site-nav"[\s\S]*?<\/nav>/)?.[0];
   assert(nav, page + ': shared navigation');
+  assert(html.includes('class="header lit-shared-header"'), page + ': consistent header');
+  assert(html.includes('id="litCorpusStat"') && html.includes('id="litLastPull"'), page + ': catalog status');
+  assert(!html.includes('id="corpusStat"'), page + ': no competing legacy header total');
   for (const route of ['/lit/','/lit/analytics/','/lit/use-cases/','/lit/whats-new/','/lit/feedback/','/lit/about/']) assert(nav.includes('href="' + route + '"'), page + ': ' + route);
   assert(!nav.includes('/privacy/'), 'Privacy belongs in the footer');
   assert(/<footer[\s\S]*?href="\/lit\/privacy\/"/.test(html), page + ': privacy footer');
@@ -38,6 +42,11 @@ assert.equal(result.dated,2);
 assert.equal(result.months.at(-1).total,2);
 assert.equal(result.months.at(-1).added,1);
 assert.equal(result.months.length,12);
+assert.deepEqual(catalogStats([
+  {sources:[{key:'a',count:10},{key:'pointer'}],meta:{authorCount:7,lastPull:'2026-10-12'}},
+  {sources:[{key:'a',count:12,firstYear:1950},{key:'b',count:5,firstYear:1900}],meta:{authorCount:100,authorCountExtras:3,lastPull:'2026-10-13'}},
+  {sources:[{key:'pointer',count:8,firstYear:1869}],meta:{authorCount:4,lastPull:'2026-10-11'}}
+]),{papers:23,authors:14,year:1869,lastPull:'2026-10-13'});
 // No private reads for signed-out, ordinary or unverified accounts.
 for (const user of [null,{email:'reader@example.com',emailVerified:true},{email:'kstouras@gmail.com',emailVerified:false}]) {
   let reads = 0;
