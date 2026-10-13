@@ -19,3 +19,12 @@
 .use-page a:focus-visible { outline:3px solid #c9a24b; outline-offset:4px; }
 @media(max-width:760px) { .use-story { grid-template-columns:1fr; gap:18px; } .use-account { padding:22px; } }
 @media(max-width:450px) { .use-account-grid { grid-template-columns:1fr; } }
+/* Representative screenshots lead every feature card. */
+.use-stories { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:32px 28px; }
+.use-story { display:flex; flex-direction:column; align-items:stretch; gap:18px; padding:20px 0 12px; }
+.use-story figure { width:100%; }
+.use-story-copy h2 { font-size:23px; }
+.use-story-copy p { font-size:14px; }
+.use-story figcaption { font-size:11px; }
+@media(max-width:900px) { .use-stories { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:560px) { .use-stories { grid-template-columns:1fr; } }
