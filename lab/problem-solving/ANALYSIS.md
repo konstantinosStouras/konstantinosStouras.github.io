@@ -93,8 +93,10 @@ all 386 historical records were imported and read back exactly, and the private
 workbook archive's SHA-256 was verified. Live checks passed for saving, receipts,
 duplicate prevention, invalid writes, private archives and the existing roster.
 The single labeled verification response and anonymous account were removed.
-The original Apps Script draft was restored exactly; the old storage is retired
-only after the public independent version is verified.
+The independent game was verified live on 13 October 2026. A final CSV check
+matched the imported snapshot exactly. The old Sheet was moved to recoverable
+Trash, and the bound Apps Script confirmed "Project is in the trash". The full
+private workbook and original script archive remain preserved independently.
 
 `tools/import-history.py` extracts all response-bearing blocks, excludes names
 from analytical records, uses stable import IDs and writes a SHA-256 manifest.
@@ -103,9 +105,10 @@ checks every imported row and the private workbook archive against the source.
 It uses the existing Firebase CLI login without writing or printing credentials.
 The private source workbook and migration artifacts are outside the public repo.
 
-Final cutover: publish only the game changes on current GitHub master,
-verify the public test page and PDF, recheck the old Sheet for late arrivals,
-import any late responses, and only then trash the old Sheet/bound script.
+The public game shows 386 historical responses and 359 eligible test histories.
+The same report code passed browser/PDF integration checks and all 17 unit tests.
+Publishing used an isolated Git index and preserved unrelated website changes
+and the user's local staging area.
 
 ## Tests and links
 

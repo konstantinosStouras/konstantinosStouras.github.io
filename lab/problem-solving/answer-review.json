@@ -3006,7 +3006,7 @@
       ],
       "text": "Number in asending order",
       "status": "correct",
-      "reason": "Expresses increasing order without an extra restriction; ordinary wording and the spelling error in ascending are accepted."
+      "reason": "Expresses increasing order without an extra numerical restriction. Equivalent wording for increasing order is accepted."
     },
     {
       "row": "Copy A:H:3",
@@ -3024,7 +3024,7 @@
       ],
       "text": "each number is higher than the last. ",
       "status": "correct",
-      "reason": "Expresses increasing order without an extra restriction; ordinary wording and the spelling error in ascending are accepted."
+      "reason": "Expresses increasing order without an extra numerical restriction. Equivalent wording for increasing order is accepted."
     },
     {
       "row": "Copy A:H:4",
@@ -3087,7 +3087,7 @@
       ],
       "text": "Strictly increasing",
       "status": "correct",
-      "reason": "Expresses increasing order without an extra restriction; ordinary wording and the spelling error in ascending are accepted."
+      "reason": "Expresses increasing order without an extra numerical restriction. Equivalent wording for increasing order is accepted."
     },
     {
       "row": "Copy J:O:7",
@@ -3096,7 +3096,7 @@
       ],
       "text": "the next number is higher than the last ",
       "status": "correct",
-      "reason": "Expresses increasing order without an extra restriction; ordinary wording and the spelling error in ascending are accepted."
+      "reason": "Expresses increasing order without an extra numerical restriction. Equivalent wording for increasing order is accepted."
     },
     {
       "row": "Copy A:H:8",
@@ -3123,7 +3123,7 @@
       ],
       "text": "Any number that is increasing is correct.",
       "status": "correct",
-      "reason": "Expresses increasing order without an extra restriction; ordinary wording and the spelling error in ascending are accepted."
+      "reason": "Expresses increasing order without an extra numerical restriction. Equivalent wording for increasing order is accepted."
     },
     {
       "row": "Copy J:O:10",
@@ -3186,7 +3186,7 @@
       ],
       "text": "Any three numbers in strictly increasing order.",
       "status": "correct",
-      "reason": "Expresses increasing order without an extra restriction; ordinary wording and the spelling error in ascending are accepted."
+      "reason": "Expresses increasing order without an extra numerical restriction. Equivalent wording for increasing order is accepted."
     },
     {
       "row": "Copy J:O:17",
@@ -3195,7 +3195,7 @@
       ],
       "text": "You need to input a larger number than the one before",
       "status": "correct",
-      "reason": "Expresses increasing order without an extra restriction; ordinary wording and the spelling error in ascending are accepted."
+      "reason": "Expresses increasing order without an extra numerical restriction. Equivalent wording for increasing order is accepted."
     },
     {
       "row": "Copy J:O:18",
@@ -3222,7 +3222,7 @@
       ],
       "text": "The number should be bigger ie 1,2,3, or 4,5,6 not the power of 2 My first guess",
       "status": "correct",
-      "reason": "Expresses increasing order without an extra restriction; ordinary wording and the spelling error in ascending are accepted."
+      "reason": "Expresses increasing order without an extra numerical restriction. Equivalent wording for increasing order is accepted."
     }
   ]
 }
