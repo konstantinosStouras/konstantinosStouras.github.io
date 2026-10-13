@@ -28,3 +28,27 @@
 .use-story figcaption { font-size:11px; }
 @media(max-width:900px) { .use-stories { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:560px) { .use-stories { grid-template-columns:1fr; } }
+/* Share row tracks so captions cannot stagger the neighbouring summaries. */
+.use-stories { row-gap:16px; }
+.use-story {
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:subgrid;
+  grid-row:span 7;
+  gap:16px;
+  padding:24px 0 44px;
+}
+.use-story figure, .use-story-copy { display:contents; }
+.use-story .use-screenshot { grid-row:1; }
+.use-story figcaption { grid-row:2; margin:0; }
+.use-story-copy .resource-eyebrow { grid-row:3; margin:0; }
+.use-story-copy h2 { grid-row:4; margin:0; }
+.use-story-copy p { grid-row:5; margin:0; }
+.use-story-copy .use-limit { grid-row:6; }
+.use-story-copy .use-story-action { grid-row:7; align-self:end; justify-self:start; }
+.use-account { margin-top:48px; }
+@media(max-width:560px) {
+  .use-stories { row-gap:32px; }
+  .use-story { display:flex; gap:16px; padding:24px 0 12px; }
+  .use-story-copy .use-story-action { align-self:flex-start; }
+}
