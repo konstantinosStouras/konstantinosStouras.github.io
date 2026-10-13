@@ -1,0 +1,621 @@
+{
+  "10.1287/mnsc.2020.01547": {
+    "title": "Too Much Information: When Does Additional Testing Benefit Schools?",
+    "count": 13,
+    "checked": "2026-10-13",
+    "cluster": "13987205804766814296",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2020.01547",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2021.02813": {
+    "title": "Learning Optimal Prescriptive Trees from Observational Data",
+    "count": 29,
+    "checked": "2026-10-13",
+    "cluster": "8355446235758920115",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2021.02813",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2021.03426": {
+    "matchedUrl": "https://pubsonline.informs.org/doi/10.1287/mnsc.2021.03426",
+    "checked": "2026-10-13",
+    "title": "Spatial Information Sharing on On-Demand Service Platforms",
+    "cluster": "8482798350646636319",
+    "count": 1,
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2022.01332": {
+    "title": "Public Signals, Default Risk, and Voluntary Disclosure",
+    "count": 2,
+    "checked": "2026-10-13",
+    "cluster": "545498143785977049",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2022.01332",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2022.01874": {
+    "title": "Private Equity Buyouts and Employee Health",
+    "count": 43,
+    "checked": "2026-10-13",
+    "cluster": "11122239189697297172",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2022.01874",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2022.02435": {
+    "title": "How and When Are High-Frequency Stock Returns Predictable?",
+    "count": 55,
+    "checked": "2026-10-13",
+    "cluster": "16376605275709034251",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2022.02435",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2022.03132": {
+    "title": "Deep Learning Statistical Arbitrage",
+    "count": 100,
+    "checked": "2026-10-13",
+    "cluster": "9837427521252305248",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2022.03132",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2023.00442": {
+    "title": "Consider or Choose? The Role and Power of Consideration Sets",
+    "count": 18,
+    "checked": "2026-10-13",
+    "cluster": "5446370793629007134",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.00442",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.00608": {
+    "title": "Predictive Production-and-Service Planning: Ambiguity Aversion with Performance Guarantees",
+    "count": 2,
+    "checked": "2026-10-13",
+    "cluster": "4219897867801067000",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.00608",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2023.01108": {
+    "title": "Predicted Incrementality by Experimentation for Ad Measurement",
+    "count": 32,
+    "checked": "2026-10-13",
+    "cluster": "8941902457654536527",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.01108",
+    "method": "browser-verified-versions"
+  },
+  "10.1287/mnsc.2023.01401": {
+    "title": "Stripping the Discount Curve—A Robust Machine Learning Approach",
+    "count": 53,
+    "checked": "2026-10-13",
+    "cluster": "13400568645921685962",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.01401",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2023.01668": {
+    "title": "Constant Regret Primal-Dual Policy for Multiway Dynamic Matching",
+    "count": 34,
+    "checked": "2026-10-13",
+    "cluster": "1378802387790404475",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2023.01823": {
+    "title": "The Nonstationary Newsvendor: Data-Driven Nonparametric Learning",
+    "count": 41,
+    "checked": "2026-10-13",
+    "cluster": "11184267985553878861",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.01823",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.01987": {
+    "title": "Measurement for Dummies? Exploring the Role of Regulatory Metrics and Firm Strategy",
+    "count": 3,
+    "checked": "2026-10-13",
+    "cluster": "14262795877234960673",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.01987",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.02189": {
+    "title": "Representing Random Utility Choice Models with Neural Networks",
+    "count": 71,
+    "checked": "2026-10-13",
+    "cluster": "13963094643639706137",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.02189",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2023.02505": {
+    "title": "Realized Illiquidity",
+    "count": 18,
+    "checked": "2026-10-13",
+    "cluster": "2555944353321237244",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.02505",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.02636": {
+    "title": "Cooking or Clicking: The Impact of Online Food Delivery Platforms on Domestic Food Preparation",
+    "count": 34,
+    "checked": "2026-10-13",
+    "cluster": "18361012244516015416",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.02636",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.02674": {
+    "title": "A Flash in the Pan(Demic)? Migration Risks and Municipal Bonds",
+    "count": 21,
+    "checked": "2026-10-13",
+    "cluster": "11631890485622750512",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.02674",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.02789": {
+    "title": "Political Consumerism and the Emergence of Rare Information on User-Generated Content Platforms",
+    "count": 6,
+    "checked": "2026-10-13",
+    "cluster": "15625177518666804438",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.02789",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.02887": {
+    "title": "Squeezing Shorts Through Social Media Platforms",
+    "count": 78,
+    "checked": "2026-10-13",
+    "cluster": "17968974757501451266",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.02887",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2023.03181": {
+    "title": "Who Falls Prey to the Wolf of Wall Street? Investor Participation in Market Manipulation",
+    "count": 48,
+    "checked": "2026-10-13",
+    "cluster": "1728704179359426872",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.03181",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.03238": {
+    "matchedUrl": "https://pubsonline.informs.org/doi/10.1287/mnsc.2023.03238",
+    "checked": "2026-10-13",
+    "title": "Fifty Years of Anchoring Effects: A Theoretical Reintegration and Meta-Analysis",
+    "cluster": "15913912586343035446",
+    "count": 5,
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2023.03801": {
+    "title": "Managing Perishable Inventory Systems with Positive Lead Times: Inventory Position vs. Projected Inventory Level",
+    "count": 14,
+    "checked": "2026-10-13",
+    "cluster": "1662788801629563663",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.03801",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.03880": {
+    "title": "Data-Pooling Reinforcement Learning for Preventative Healthcare Intervention",
+    "count": 3,
+    "checked": "2026-10-13",
+    "cluster": "4894739597229266650",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.03880",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2023.04294": {
+    "title": "Bad-Drug Ads or Killer Ads: The Effects of Drug Injury Advertising on Public Health",
+    "count": 4,
+    "checked": "2026-10-13",
+    "cluster": "5289733987866535443",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2023.04294",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.04423": {
+    "title": "Financial Inclusion via FinTech: From Digital Payments to Platform Investments",
+    "count": 31,
+    "checked": "2026-10-13",
+    "cluster": "1946758748478988350",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.04423",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.04482": {
+    "title": "On the Impossibility of Statistically Improving Empirical Optimization: A Second Order Stochastic Dominance Perspective",
+    "count": 30,
+    "checked": "2026-10-13",
+    "cluster": "8724540631429445379",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.04482",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.04789": {
+    "title": "Trading Off Business and Family Investments: Evidence from U.S. Entrepreneurial Households",
+    "count": 1,
+    "checked": "2026-10-13",
+    "cluster": "11659903557514225836",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2024.05008": {
+    "title": "Index-Based Yield Protection for Smallholder Farmers",
+    "count": 10,
+    "checked": "2026-10-13",
+    "cluster": "12784398880656160234",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2024.05125": {
+    "title": "Misreporting of Mandatory ESG Disclosures: Evidence from Gender Pay Gap Information",
+    "count": 52,
+    "checked": "2026-10-13",
+    "cluster": "7685617431959936355",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.05125",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.05424": {
+    "title": "A Nonparametric Framework for Online Stochastic Matching with Correlated Arrivals",
+    "count": 40,
+    "checked": "2026-10-13",
+    "cluster": "9204097878488693929",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.05424",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.05834": {
+    "title": "Algorithmic Precision and Human Decision: A Study of Interactive Optimization for School Schedules",
+    "count": 18,
+    "checked": "2026-10-13",
+    "cluster": "1299636303957140740",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.05834",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.05913": {
+    "title": "Dynamic Portfolio Choice with Intertemporal Hedging and Transaction Costs",
+    "count": 13,
+    "checked": "2026-10-13",
+    "cluster": "240865166198231598",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.05913",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.06051": {
+    "title": "Waiting or Acting: The Effects of Environmental Regulatory Uncertainty on Green Innovation",
+    "count": 1,
+    "checked": "2026-10-13",
+    "cluster": "6836010147883759674",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.06051",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.06161": {
+    "title": "Combining Forecasts from Multiple Experts for Multiple Variables",
+    "count": 8,
+    "checked": "2026-10-13",
+    "cluster": "2194318622831185252",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.06161",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.06298": {
+    "title": "Personalization, Engagement, and Content Quality on Social Media: An Evaluation of Reddit’s News Feed",
+    "count": 4,
+    "checked": "2026-10-13",
+    "cluster": "7814274167811932762",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2024.06335": {
+    "title": "Harvesting Ratings",
+    "count": 8,
+    "checked": "2026-10-13",
+    "cluster": "9845343363649886032",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.06335",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.06402": {
+    "title": "Managing Inventory and Pricing with Contextual Robust Optimization",
+    "count": 2,
+    "checked": "2026-10-13",
+    "cluster": "13980135855338617502",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2024.06477": {
+    "title": "Harmonizing Safety and Speed: A Human-Algorithm Approach to Enhance the FDA’s Medical Device Clearance Policy",
+    "count": 8,
+    "checked": "2026-10-13",
+    "cluster": "12756113430067390871",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.06477",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.06479": {
+    "title": "Costly Rewards Sustain Cooperation with Imperfect Monitoring",
+    "count": 4,
+    "checked": "2026-10-13",
+    "cluster": "10262013250737010436",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.06479",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.06600": {
+    "title": "Evaluating the Impact of Privacy Regulation on E-Commerce Firms: Evidence from Apple’s App Tracking Transparency",
+    "count": 71,
+    "checked": "2026-10-13",
+    "cluster": "1577047086786097978",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.06600",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.06771": {
+    "title": "Deep Reinforcement Learning for Equilibrium Computation in Multistage Auctions and Contests",
+    "count": 13,
+    "checked": "2026-10-13",
+    "cluster": "5436590853879702369",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.06771",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.07258": {
+    "title": "Do Employees Have Useful Information About Firms’ ESG Practices?",
+    "count": 35,
+    "checked": "2026-10-13",
+    "cluster": "2775575580518841136",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.07258",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.07272": {
+    "title": "Communicating Corporate Culture in Labor Markets: Evidence from Job Postings",
+    "count": 22,
+    "checked": "2026-10-13",
+    "cluster": "6454836302464454973",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.07272",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.07315": {
+    "title": "The Zombie Lending Channel of Monetary Policy",
+    "count": 29,
+    "checked": "2026-10-13",
+    "cluster": "16424969932612087632",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.07315",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.07399": {
+    "title": "The Welfare Effects of Selling Leads in a Two-Sided Marketplace",
+    "count": 5,
+    "checked": "2026-10-13",
+    "cluster": "8543750015654875900",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2024.07450": {
+    "title": "Beyond the Black Box: Unraveling the Role of Explainability in Human-Artificial Intelligence Collaboration",
+    "count": 8,
+    "checked": "2026-10-13",
+    "cluster": "3341405417314622362",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.07450",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.07584": {
+    "title": "Tweeting for Money: Social Media and Mutual Fund Flows",
+    "count": 22,
+    "checked": "2026-10-13",
+    "cluster": "12092595755273836315",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.07584",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.07615": {
+    "matchedUrl": "https://pubsonline.informs.org/doi/10.1287/mnsc.2024.07615",
+    "checked": "2026-10-13",
+    "title": "Immigrants in Finance: Evidence from Hedge Funds",
+    "cluster": "9245514010655751991",
+    "count": 1,
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2024.07703": {
+    "title": "On the Quality of Cryptocurrency Markets: Centralized vs. Decentralized Exchanges",
+    "count": 182,
+    "checked": "2026-10-13",
+    "cluster": "521699507744668291",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.07703",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.07730": {
+    "title": "The Eco-Gender Gap in Boardrooms",
+    "count": 38,
+    "checked": "2026-10-13",
+    "cluster": "9845423179601545038",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.07730",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.08235": {
+    "title": "Design-Based Confidence Sequences: A General Approach to Risk Mitigation in Panel Experiments",
+    "count": 3,
+    "checked": "2026-10-13",
+    "cluster": "14640070595270788729",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.08235",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.08260": {
+    "title": "Impact of Short-Form Videos on Screentime and Sleep: Evidence from TikTok",
+    "count": 1,
+    "checked": "2026-10-13",
+    "cluster": "18406580043017279057",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2024.08304": {
+    "title": "Escaping Product Market Rivalry Through Innovation",
+    "count": 12,
+    "checked": "2026-10-13",
+    "cluster": "18439198114164665297",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.08304",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.08306": {
+    "title": "Experimenting Under Stochastic Congestion",
+    "count": 34,
+    "checked": "2026-10-13",
+    "cluster": "14027043434153051385",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.08306",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2024.08449": {
+    "matchedUrl": "https://pubsonline.informs.org/doi/10.1287/mnsc.2024.08449",
+    "checked": "2026-10-13",
+    "title": "Beyond Value: On the Role of Symmetry in Demand for Information",
+    "cluster": "12255982554133216250",
+    "count": 2,
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2024.08465": {
+    "title": "Effects of Financial Constraints on Supply Chain Financing Choices and Operational Decisions",
+    "count": 10,
+    "checked": "2026-10-13",
+    "cluster": "411939894542809200",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.08465",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.08524": {
+    "title": "Electric Vehicle Fleet and Charging Infrastructure Planning",
+    "count": 21,
+    "checked": "2026-10-13",
+    "cluster": "13513615092131643853",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.08524",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.08526": {
+    "title": "How Important Is Internal Information Asymmetry for Firm-Level Productivity?",
+    "count": 1,
+    "checked": "2026-10-13",
+    "cluster": "3897464535861095720",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.08526",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2024.08994": {
+    "title": "The ABCs of Who Benefits from Working with AI: Ability, Beliefs, and Calibration",
+    "count": 54,
+    "checked": "2026-10-13",
+    "cluster": "11821326094824342872",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2024.08994",
+    "export": "pilot-2026.json"
+  },
+  "10.1287/mnsc.2025.00300": {
+    "title": "Quality-Variety Tradeoffs in Recommendation Systems on Content Platforms",
+    "count": 12,
+    "checked": "2026-10-13",
+    "cluster": "16015395381723356920",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2025.00300",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2025.00669": {
+    "title": "An Analysis of Heritability in Preferences Using Behavioral Models of Decision Making",
+    "count": 1,
+    "checked": "2026-10-13",
+    "cluster": "1648519287349300204",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2025.00669",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2025.00782": {
+    "title": "Trade-Offs Between Ranking Objectives: Descriptive Evidence and Structural Estimation",
+    "count": 1,
+    "checked": "2026-10-13",
+    "cluster": "3802591227140478261",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2025.00782",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2025.00819": {
+    "title": "Political Polarization and Nonmarket Strategy over the Policy Life Cycle",
+    "count": 4,
+    "checked": "2026-10-13",
+    "cluster": "5302389165381515105",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2025.00819",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2025.01449": {
+    "title": "Superstition Everywhere",
+    "count": 1,
+    "checked": "2026-10-13",
+    "cluster": "12262812211754694034",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2025.01859": {
+    "title": "Skill Deprioritization: Reorganizing in the Age of Generative Artificial Intelligence",
+    "count": 6,
+    "checked": "2026-10-13",
+    "cluster": "10297149141726216698",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2025.01859",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2025.02137": {
+    "title": "Who Directs the Control Tower? Customer vs. Supplier-Managed Inventory in Supply Chains",
+    "count": 1,
+    "checked": "2026-10-13",
+    "cluster": "16983884417556459823",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2025.02150": {
+    "title": "Platform Disintermediation with Repeated Transactions",
+    "count": 8,
+    "checked": "2026-10-13",
+    "cluster": "5980102939975662760",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2025.02150",
+    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+  },
+  "10.1287/mnsc.2025.02458": {
+    "title": "Generative Search: Evidence from a Large-Scale Field Experiment",
+    "count": 7,
+    "checked": "2026-10-13",
+    "cluster": "6415251917766549283",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2025.02975": {
+    "title": "Collective Activism",
+    "count": 13,
+    "checked": "2026-10-13",
+    "cluster": "5116747771888621267",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2025.02975",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2025.05353": {
+    "title": "Motivated Procrastination",
+    "count": 6,
+    "checked": "2026-10-13",
+    "cluster": "1852975287408277488",
+    "method": "browser-verified"
+  },
+  "10.1287/mnsc.2026.00184": {
+    "title": "Fighting Fire with Fire: Infusing Artificial Intelligence into Peer Review to Sustain Quality Scholarship",
+    "count": 5,
+    "checked": "2026-10-13",
+    "cluster": "12445934272082051222",
+    "method": "publish-or-perish-doi-match",
+    "matchedUrl": "https://pubsonline.informs.org/doi/full/10.1287/mnsc.2026.00184",
+    "export": "pilot-2026.json"
+  }
+}

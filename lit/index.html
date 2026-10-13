@@ -1085,6 +1085,14 @@ const RECENT_COUNTS_FILE = 'recent-counts.json';
 const RECENT_COUNTS_URL = './data/' + RECENT_COUNTS_FILE;
 const DATA_BASE = './data/';
 
+// Verified Scholar observations are kept separately from API-generated shards
+// so daily Crossref/OpenAlex/Semantic Scholar builds cannot overwrite them.
+let scholarCitations = {};
+const scholarCitationsReady = fetch(DATA_BASE + 'scholar-citations.json', { cache: 'no-cache', signal: AbortSignal.timeout(8000) })
+  .then(function(r) { return r.ok ? r.json() : {}; })
+  .then(function(data) { scholarCitations = data && !Array.isArray(data) && typeof data === 'object' ? data : {}; })
+  .catch(function() { scholarCitations = {}; });
+
 // This app maintains its OWN dataset for all 50 journals of the Financial
 // Times FT50 research rank, in lit/data-ft50/ — seeded from the retired
 // fun/ft50 app's data and independently refreshed daily by
@@ -2325,6 +2333,7 @@ const nativeState = {};    // key -> 'pending' | 'loading' | 'done' | 'missing'
 const nativePromise = {};  // key -> in-flight fetch promise (idempotence)
 
 async function loadData() {
+  await scholarCitationsReady;
   try {
     const resp = await fetch(SOURCES_URL, { cache: 'no-cache' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -4050,6 +4059,14 @@ function scholarSearchUrl(title) {
 // (Crossref / OpenAlex / Semantic Scholar) is named in the hover tooltip only.
 const CITED_SRC = { oa: 'OpenAlex', s2: 'Semantic Scholar' };
 function citedByTagHTML(p) {
+  const doi = String(p.DOI || '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '').trim().toLowerCase();
+  const scholar = scholarCitations[doi];
+  if (scholar && Number.isSafeInteger(scholar.count) && scholar.count >= 0 &&
+      /^\d{4}-\d{2}-\d{2}$/.test(scholar.checked) && /^\d+$/.test(scholar.cluster)) {
+    const href = 'https://scholar.google.com/scholar?hl=en&cites=' + scholar.cluster;
+    const tip = 'Google Scholar citation count, checked ' + scholar.checked + '. Click to see the citing papers on Google Scholar. Counts may have changed since this check.';
+    return `<a class="tag tag-cited" href="${escAttr(href)}" target="_blank" rel="noopener" title="${escAttr(tip)}">Cited by ${scholar.count} ↗</a>`;
+  }
   if (!(Number(p['CitedBy']) > 0)) return '';
   const src = CITED_SRC[p['CitedBySrc']] || 'Crossref';
   return `<a class="tag tag-cited" href="${scholarSearchUrl(p['Title'])}" target="_blank" rel="noopener" title="${src} citation count — the highest of the Crossref, OpenAlex and Semantic Scholar tallies for this paper. Close to, but not exactly, Google Scholar's number (Scholar also counts theses and other unindexed work). Click to look this paper up on Google Scholar for its live 'Cited by' count and the citing works.">Cited by ${esc(String(p['CitedBy']))} ↗</a>`;
