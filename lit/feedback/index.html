@@ -312,6 +312,8 @@
     .fb-when { margin-left: 0; }
   }
 </style>
+<link rel="stylesheet" href="/lit/lit-navigation.css">
+<script src="/lit/lit-navigation.js" defer></script>
 </head>
 <body>
 
@@ -319,10 +321,17 @@
   <div class="header-inner">
     <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — Feedback<span class="sub">Tell me what to improve</span></h1></a>
     <div class="header-right">
-      <nav class="pnav">
-        <a class="pnav-btn" href="/lit/about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
-        <a class="pnav-btn" href="/lit/analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
-        <a class="pnav-btn is-active" href="/lit/" title="Close Feedback — back to the database"><span class="ico">💬</span>Feedback</a>
+      <nav class="lit-site-nav" aria-label="The Lit sections">
+        <a href="/lit/">Browse</a>
+        <a href="/lit/analytics/">Analytics</a>
+        <details><summary class="lit-resource-current">Resources</summary>
+          <div class="lit-resource-links">
+            <a href="/lit/use-cases/">Use cases<small>Practical ways to use The Lit</small></a>
+            <a href="/lit/whats-new/">What’s new<small>Latest features & improvements</small></a>
+            <a href="/lit/feedback/" aria-current="page">Feedback<small>Report an issue or suggest a paper</small></a>
+            <a href="/lit/about/">About<small>The project, its coverage & data</small></a>
+          </div>
+        </details>
       </nav>
       <!-- Shared sign-in / account control (same as the main browser's header);
            populated by ../lit-acct-nav.js once Firebase auth resolves. -->
@@ -1788,5 +1797,6 @@
      Loaded after the block above so it reuses the default Firebase app that
      script already initialised. -->
 <script src="../lit-acct-nav.js"></script>
+<footer class="lit-privacy-footer"><a href="/lit/privacy/">Privacy</a></footer>
 </body>
 </html>

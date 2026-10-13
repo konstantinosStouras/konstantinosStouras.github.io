@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>About · The Lit — Research Paper Browser</title>
-<meta name="description" content="What The Lit covers and where its data come from — the journal lists, the filters, the citation graph, the sign-in library and e-mail alerts, and what changed most recently.">
+<meta name="description" content="What The Lit covers and where its data come from — the journal lists, the filters, the citation graph, the sign-in library and e-mail alerts.">
 <link rel="canonical" href="https://www.stouras.com/lit/about/">
 
 <!-- LINK PREVIEWS — what a card looks like when somebody shares this page.
@@ -21,7 +21,7 @@
 <meta property="og:site_name" content="The Lit">
 <meta property="og:locale" content="en_GB">
 <meta property="og:title" content="About The Lit">
-<meta property="og:description" content="What The Lit covers and where its data come from — the journal lists, the filters, the citation graph, the sign-in library and e-mail alerts, and what changed most recently.">
+<meta property="og:description" content="What The Lit covers and where its data come from — the journal lists, the filters, the citation graph, the sign-in library and e-mail alerts.">
 <meta property="og:url" content="https://www.stouras.com/lit/about/">
 <meta property="og:image" content="https://www.stouras.com/lit/og-image.jpg">
 <meta property="og:image:secure_url" content="https://www.stouras.com/lit/og-image.jpg">
@@ -31,12 +31,12 @@
 <meta property="og:image:alt" content="The Lit — a research paper browser over the UTD24, FT50 and ABS journals">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="About The Lit">
-<meta name="twitter:description" content="What The Lit covers and where its data come from — the journal lists, the filters, the citation graph, the sign-in library and e-mail alerts, and what changed most recently.">
+<meta name="twitter:description" content="What The Lit covers and where its data come from — the journal lists, the filters, the citation graph, the sign-in library and e-mail alerts.">
 <meta name="twitter:image" content="https://www.stouras.com/lit/og-image.jpg">
 <meta name="twitter:image:alt" content="The Lit — a research paper browser over the UTD24, FT50 and ABS journals">
 <link rel="image_src" href="https://www.stouras.com/lit/share-square.jpg">
 <meta itemprop="name" content="About The Lit">
-<meta itemprop="description" content="What The Lit covers and where its data come from — the journal lists, the filters, the citation graph, the sign-in library and e-mail alerts, and what changed most recently.">
+<meta itemprop="description" content="What The Lit covers and where its data come from — the journal lists, the filters, the citation graph, the sign-in library and e-mail alerts.">
 <meta itemprop="image" content="https://www.stouras.com/lit/share-square.jpg">
 
 
@@ -157,6 +157,8 @@
     .about-body p, .about-body ul li, .about-body .lead, .about-note { text-align: left; }
   }
 </style>
+<link rel="stylesheet" href="/lit/lit-navigation.css">
+<script src="/lit/lit-navigation.js" defer></script>
 </head>
 <body>
 
@@ -164,10 +166,17 @@
   <div class="header-inner">
     <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — About<span class="sub">What it is and how it works</span></h1></a>
     <div class="header-right">
-      <nav class="pnav">
-        <a class="pnav-btn is-active" href="/lit/" title="Close About — back to the database"><span class="ico">ⓘ</span>About</a>
-        <a class="pnav-btn" href="/lit/analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
-        <a class="pnav-btn" href="/lit/feedback/" title="Send feedback, screenshots and suggestions"><span class="ico">💬</span>Feedback</a>
+      <nav class="lit-site-nav" aria-label="The Lit sections">
+        <a href="/lit/">Browse</a>
+        <a href="/lit/analytics/">Analytics</a>
+        <details><summary class="lit-resource-current">Resources</summary>
+          <div class="lit-resource-links">
+            <a href="/lit/use-cases/">Use cases<small>Practical ways to use The Lit</small></a>
+            <a href="/lit/whats-new/">What’s new<small>Latest features & improvements</small></a>
+            <a href="/lit/feedback/">Feedback<small>Report an issue or suggest a paper</small></a>
+            <a href="/lit/about/" aria-current="page">About<small>The project, its coverage & data</small></a>
+          </div>
+        </details>
       </nav>
       <!-- Shared sign-in / account control (same as the main browser's header);
            populated by ../lit-acct-nav.js once Firebase auth resolves. -->
@@ -219,10 +228,6 @@
     <p>Each paper carries a small badge for the most selective list its journal is on (UTD24, then FT50, then ABS 4/4*, then ABS 3). You also get one-click BibTeX, a link to a free open-access pre-print whenever I could find one (arXiv, SSRN, NBER, OSF, bioRxiv or medRxiv), and a "cited by" count that links through to the paper on Google Scholar. PNAS papers show their Significance statement too.</p>
     <p>Many papers also carry a "Citing references in this catalog" toggle, with a count of how many, listing the other papers they cite that are themselves in The Lit. Its mirror image, "Cited by … references in this catalog", lists the papers in The Lit that cite <em>them</em>. Both show each paper's authors and link straight through, so you can walk the citation graph within these journals in either direction. These lists are built <em>slowly</em>, by combining several reference sources (Crossref, OpenAlex and Semantic Scholar), so their coverage grows over time; I expect it to be complete for every paper crawled so far by around October 2026.</p>
 
-    <h2 id="litWhatsNewHead">What's new</h2>
-    <p>The Lit keeps growing. Recent additions are logged below. You can also get them by e-mail: on <a href="/lit/">The Lit</a>, sign in and open <strong>E-mail alerts</strong> from your account menu, then turn on <em>New features &amp; updates to the website</em>. Daily sends each update as it lands; weekly and monthly batch them.</p>
-    <div id="litWhatsNew" class="whats-new"><p style="color:var(--text-muted);font-size:13px;margin:0">Loading the latest updates…</p></div>
-
     <h2>Where the data come from</h2>
     <p>Editors and editorial areas are shown for <em>Management Science</em> papers from 2011 onwards. The other sources contribute their published papers and Articles in Advance. Every journal's Articles in Advance, Forthcoming and Accepted papers count toward its listing, and when you sort by newest year they sit at the top, newest additions first, ahead of that year's published issues. ACM EC papers link out to an arXiv, SSRN or open-access PDF wherever one exists.</p>
     <p><strong>How fresh it is.</strong> Alongside a full daily rebuild, The Lit checks the eight Articles-in-Advance journals (<em>Management Science</em>, <em>Operations Research</em>, <em>Marketing Science</em>, <em>M&amp;SOM</em>, <em>Information Systems Research</em>, <em>Strategy Science</em>, <em>INFORMS Transactions on Education</em> and <em>Production &amp; Operations Management</em>) for freshly-published papers on a <strong>15-minute schedule</strong> (GitHub's runners fire it every few hours in practice). A new Article in Advance usually appears, and joins the <em>Recently added</em> view, within hours of Crossref indexing it rather than the next day. <em>Econometrica</em> and the <em>European Journal of Operational Research</em> are checked the same way on a <strong>20-minute schedule</strong> — EJOR is the busiest journal here, around 700 papers a year plus a steady stream of Articles in Press, so its new work now lands within hours instead of waiting for the nightly rebuild. <em>Econometrica</em>'s <a href="https://www.econometricsociety.org/publications/econometrica/forthcoming-papers" target="_blank" rel="noopener">Forthcoming Papers</a> list is followed too, so accepted papers can show up before they reach an issue. Each new paper is enriched on arrival, so its open-access pre-print link and citation count are there from the start; a paper whose abstract the publisher deposits a few days later (common for EJOR) picks it up on the next check rather than at the nightly rebuild. (Pre-print links and citation counts across the whole back-catalogue keep refreshing in the background too.)</p>
@@ -235,16 +240,6 @@
   </div>
 </main>
 
-<!-- "What's new" — rendered by ../lit-news.js from the shared changelog
-     (../changelog.json), the same single source the main page's alert preview
-     and the mailer use, with the maintainer's decisions from Firestore laid
-     over it: an entry nobody has reviewed is shown to the maintainer alone,
-     one they have removed leaves the list, and signed in as the maintainer
-     each entry carries Publish / Edit / Remove. Loaded after the Firebase SDK
-     and lit-acct-nav.js below, which is what initialises the app it reads
-     through; without either it still renders the log, minus anything since the
-     review gate. -->
-
 <!-- Shared sign-in / account control in the header (mirrors the main browser).
      Needs the Firebase compat SDK (app + auth + firestore — the latter lets
      the account card show the same badges/ORCID links as the main page);
@@ -254,7 +249,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="../lit-acct-nav.js"></script>
-<script src="../lit-news.js"></script>
-<script>LitNews.mount({ list: '#litWhatsNew', head: '#litWhatsNewHead', limit: 8 });</script>
+
+
+<footer class="lit-privacy-footer"><a href="/lit/privacy/">Privacy</a></footer>
 </body>
 </html>

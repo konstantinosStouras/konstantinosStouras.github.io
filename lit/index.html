@@ -833,6 +833,8 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication","name":"The Lit — Research Paper Browser","description":"Search and filter research papers across Management Science, Operations Research, Marketing Science, M&SOM, POM, Information Systems Research, five PNAS sections, the ACM EC conference, and all 50 journals of the Financial Times FT50 rank (with FT50 and ABS/AJG journal-type filters).","url":"https://www.stouras.com/lit/","applicationCategory":"ReferenceApplication","author":{"@type":"Person","name":"Konstantinos Stouras","url":"https://www.stouras.com"}}
 </script>
+<link rel="stylesheet" href="/lit/lit-navigation.css">
+<script src="/lit/lit-navigation.js" defer></script>
 </head>
 <body>
 
@@ -841,10 +843,17 @@
   <div class="header-inner">
     <h1><a href="https://www.stouras.com/lit/" title="The Lit — a fresh start"><em>The Lit</em>: A research paper browser</a></h1>
     <div class="header-right">
-      <nav class="lit-nav" aria-label="The Lit — sections">
-        <a class="lit-nav-btn" href="about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
-        <a class="lit-nav-btn" href="analytics/" title="Summary statistics for the database"><span class="ico">📊</span>Data Analytics</a>
-        <a class="lit-nav-btn" href="feedback/" title="Send feedback, screenshots and suggestions"><span class="ico">💬</span>Feedback</a>
+      <nav class="lit-site-nav" aria-label="The Lit sections">
+        <a href="/lit/" aria-current="page">Browse</a>
+        <a href="/lit/analytics/">Analytics</a>
+        <details><summary>Resources</summary>
+          <div class="lit-resource-links">
+            <a href="/lit/use-cases/">Use cases<small>Practical ways to use The Lit</small></a>
+            <a href="/lit/whats-new/">What’s new<small>Latest features & improvements</small></a>
+            <a href="/lit/feedback/">Feedback<small>Report an issue or suggest a paper</small></a>
+            <a href="/lit/about/">About<small>The project, its coverage & data</small></a>
+          </div>
+        </details>
       </nav>
       <div style="text-align:right;line-height:1.35">
         <div class="header-meta"><strong id="corpusStat" title="Merged across every catalog this page loads; authors are de-duplicated within each catalog">579,980 papers from 482,735 authors</strong> via Crossref · <span id="yearRange">1886–present</span></div>
@@ -1046,6 +1055,7 @@
          from the top nav) to avoid duplicating them here. -->
     <div>See <a class="acct-link" href="about/">About</a> for what this covers and how the data are collected. <a class="acct-link" href="feedback/">Feedback</a> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></span></div>
   </div>
+<p style="text-align:center;margin-top:12px"><a class="lit-footer-privacy" href="/lit/privacy/">Privacy</a></p>
 </footer>
 
 <!-- The abstract a card shows and the Abstracts search matches: ONE definition,
@@ -5512,6 +5522,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
           '<div class="acct-menu-item" title="Messages between you and The Lit&#39;s maintainer." onclick="acctOpenMessages()">💬 Messages' + (msgUnread ? ' <span class="acct-badge">' + msgUnread + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" title="A set of journals or types applied automatically each time you sign in." onclick="acctOpenDefaults()">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</div>' +
           '<div class="acct-menu-item" title="Edit your name, affiliation and account details." onclick="acctOpenProfile()">👤 Edit profile</div>' +
+          (u.email === 'kstouras@gmail.com' && u.emailVerified === true ? '<a class="acct-menu-item" href="/lit/admin/website-analytics/">Website analytics</a>' : '') +
           '<div class="acct-menu-sep"></div>' +
           '<div class="acct-menu-item danger" title="Sign out of your account on this device." onclick="acctSignOut()">Sign out</div>' +
         '</div>' +

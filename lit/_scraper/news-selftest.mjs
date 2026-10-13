@@ -168,9 +168,9 @@ const js = read('lit-news.js');
 ok('lit-news.js is dual-mode, so the pages and the mailer cannot drift apart',
   js.includes('module.exports = factory()'));
 
-const about = read('about', 'index.html');
-ok("the About page loads the What's-new module", about.includes('../lit-news.js'));
-ok('and renders its list through it', about.includes("LitNews.mount({ list: '#litWhatsNew'"));
+const about = read('whats-new', 'index.html');
+ok("the What's-new page loads the What's-new module", about.includes('/lit/lit-news.js'));
+ok('and renders its list through it', about.includes('LitNews.mount({ list: "#litWhatsNew"'));
 ok('with no renderer of its own left — that is what would drift',
   !about.includes('changelog.json') || !/box\.innerHTML\s*=\s*'<ul/.test(about));
 

@@ -1,0 +1,21 @@
+/* Shared site navigation. Research workspaces keep their existing styles. */
+.header .lit-site-nav { display:flex; align-items:center; gap:24px; flex-wrap:wrap; font:500 14px/1.4 'Work Sans',sans-serif; }
+.lit-site-nav > a, .lit-site-nav summary { color:#f3e8ec; text-decoration:none; padding:10px 0; border-bottom:2px solid transparent; cursor:pointer; }
+.lit-site-nav > a:hover, .lit-site-nav summary:hover { color:#fff; }
+.lit-site-nav > a[aria-current="page"], .lit-site-nav .lit-resource-current { color:#fff; border-bottom-color:#c9a24b; }
+.header .header-inner { position:relative; }
+.lit-site-nav details { position:static; }
+.lit-site-nav summary { list-style:none; display:flex; align-items:center; gap:9px; }
+.lit-site-nav summary::-webkit-details-marker { display:none; }
+.lit-site-nav summary::after { content:'▾'; font-size:11px; }
+.lit-resource-links { position:absolute; z-index:1100; left:20px; right:20px; top:100%; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; padding:24px; background:#fff; color:#241a1e; border:1px solid #e3d9dc; border-radius:10px; box-shadow:0 12px 32px rgba(55,16,31,.18); }
+.lit-resource-links a { display:block; padding:10px; color:#7d1d3f; text-decoration:none; border-radius:6px; }
+.lit-resource-links a:hover, .lit-resource-links a:focus-visible { background:#f4e6ea; }
+.lit-resource-links a[aria-current="page"] { color:#7d1d3f; background:#f4e6ea; }
+.lit-resource-links small { display:block; margin-top:6px; color:#6a5a60; font-size:12px; font-weight:400; line-height:1.5; }
+.lit-site-nav a:focus-visible, .lit-site-nav summary:focus-visible { outline:2px solid #c9a24b; outline-offset:4px; }
+.lit-privacy-footer { max-width:1160px; margin:auto; padding:24px 32px; text-align:center; font:12px/1.6 'Work Sans',sans-serif; color:#6a5a60; }
+.lit-privacy-footer a, .lit-footer-privacy { color:#7d1d3f; }
+@media(max-width:800px) { .header .lit-site-nav { gap:18px; } .lit-resource-links { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:640px) { .header .header-right { justify-content:flex-start; } .lit-site-nav details { position:static; } .header .header-inner { position:relative; } .lit-resource-links { left:16px; right:16px; top:100%; width:auto; padding:14px; } }
+@media(pointer:coarse) { .lit-site-nav > a, .lit-site-nav summary, .lit-resource-links a { min-height:44px; } }

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>What’s new · The Lit</title>
+<meta name="description" content="The latest features and improvements to The Lit, with release notes and ways to follow future updates.">
+<link rel="canonical" href="https://www.stouras.com/lit/whats-new/">
+
+<!-- LINK PREVIEWS — what a card looks like when somebody shares this page.
+     og:* is read by Facebook, Messenger, WhatsApp, LinkedIn, Telegram,
+     Slack, Discord, Signal, Viber and iMessage; twitter:* by X, whose
+     twitter:card is the one preview tag with no Open Graph equivalent.
+     The image_src / itemprop trio offers the SQUARE thumbnail to the
+     clients that centre-crop a card to 1:1 and would otherwise keep only
+     the middle of the wide one. There is EXACTLY ONE og:image on purpose:
+     several are legal Open Graph and WhatsApp handles them badly.
+     Kept honest by tools/share-check.mjs; the pictures are drawn by
+     tools/make-share-images.mjs. Read both headers before editing. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="The Lit">
+<meta property="og:locale" content="en_GB">
+<meta property="og:title" content="What’s new · The Lit">
+<meta property="og:description" content="The latest features and improvements to The Lit, with release notes and ways to follow future updates.">
+<meta property="og:url" content="https://www.stouras.com/lit/whats-new/">
+<meta property="og:image" content="https://www.stouras.com/lit/og-image.jpg">
+<meta property="og:image:secure_url" content="https://www.stouras.com/lit/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="2400">
+<meta property="og:image:height" content="1260">
+<meta property="og:image:alt" content="The Lit — a research paper browser over the UTD24, FT50 and ABS journals">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="What’s new · The Lit">
+<meta name="twitter:description" content="The latest features and improvements to The Lit, with release notes and ways to follow future updates.">
+<meta name="twitter:image" content="https://www.stouras.com/lit/og-image.jpg">
+<meta name="twitter:image:alt" content="The Lit — a research paper browser over the UTD24, FT50 and ABS journals">
+<link rel="image_src" href="https://www.stouras.com/lit/share-square.jpg">
+<meta itemprop="name" content="What’s new · The Lit">
+<meta itemprop="description" content="The latest features and improvements to The Lit, with release notes and ways to follow future updates.">
+<meta itemprop="image" content="https://www.stouras.com/lit/share-square.jpg">
+
+
+<!-- The user-facing "About" for The Lit. Static page (promoted from the old
+     in-app modal) that shares its header with the Data Analytics page; the
+     "What's new" list is read from ../changelog.json, the same single source
+     the main page and the alert mailer use. -->
+<meta name="robots" content="index, follow">
+<meta name="author" content="Konstantinos Stouras">
+<meta name="theme-color" content="#7d1d3f">
+
+<!-- Favicon: the same inline "Lit" monogram as the main browser. -->
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20rx='22'%20fill='%237d1d3f'/%3E%3Ctext%20x='50'%20y='66'%20font-family='Georgia,serif'%20font-size='46'%20font-style='italic'%20font-weight='bold'%20fill='%23c9a24b'%20text-anchor='middle'%3ELit%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Fonts load ASYNC (media-swap): the font CSS was this page's only
+     render-blocking external resource — on a saturated connection (e.g.
+     navigating here while the main browser is mid-download) it alone
+     could hold first paint at a blank screen for seconds. -->
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Work+Sans:ital,wght@0,300..700;1,300..600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Work+Sans:ital,wght@0,300..700;1,300..600&display=swap" rel="stylesheet"></noscript>
+<style>
+  :root {
+    --navy: #7d1d3f;
+    --navy-dark: #591428;
+    --navy-light: #f4e6ea;
+    --accent: #c9a24b;
+    --accent-light: #f6edda;
+    --text: #241a1e;
+    --text-muted: #6a5a60;
+    --bg: #f7f4ef;
+    --white: #ffffff;
+    --border: #dce1ea;
+    --shadow-sm: 0 1px 3px rgba(125,29,63,0.06);
+    --shadow-lg: 0 8px 32px rgba(125,29,63,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body { font-family: 'Work Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; min-height: 100dvh; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+  /* ── Shared header (identical to the Data Analytics page) ─────────────────
+     The logo returns to the database; the active page's own nav button also
+     returns (toggles the section off), per the top-nav on the main browser. */
+  .header { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); box-shadow: var(--shadow-lg); }
+  .header-inner { max-width: 1160px; margin: 0 auto; padding: 22px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px 20px; flex-wrap: wrap; }
+  .brand { text-decoration: none; display: inline-block; }
+  .brand h1 { font-family: 'Fraunces', serif; color: #fff; font-size: 26px; font-weight: 400; letter-spacing: -0.5px; }
+  .brand h1 em { font-style: italic; color: var(--accent); }
+  .brand .sub { display: block; font-family: 'Work Sans', sans-serif; font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.7); letter-spacing: 0; margin-top: 3px; }
+  .pnav { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pnav-btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #fff; text-decoration: none; border: 1.5px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); border-radius: 8px; padding: 9px 15px; transition: all .15s; white-space: nowrap; }
+  .pnav-btn:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
+  .pnav-btn.is-active { background: #fff; color: var(--navy); border-color: #fff; }
+  .pnav-btn .ico { font-size: 14px; line-height: 1; }
+
+  /* ── About prose ─────────────────────────────────────────────────────────── */
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 30px 32px 64px; }
+  .about-body { background: var(--white); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); padding: 30px 34px 34px; }
+  .about-body .lead { font-size: 17px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px; }
+  .about-body h2 { font-family: 'Fraunces', serif; font-weight: 500; color: var(--navy); font-size: 21px; margin: 28px 0 8px; }
+  .about-body h2:first-of-type { margin-top: 18px; }
+  .about-body p { margin-bottom: 13px; font-size: 15px; line-height: 1.75; text-align: justify; text-justify: inter-word; -webkit-hyphens: auto; hyphens: auto; }
+  .about-body a { color: var(--navy); font-weight: 500; }
+  .about-body ul { list-style: none; margin: 4px 0 14px; padding: 0; }
+  .about-body ul li { position: relative; padding-left: 22px; margin-bottom: 9px; font-size: 15px; line-height: 1.7; text-align: justify; text-justify: inter-word; -webkit-hyphens: auto; hyphens: auto; }
+  .about-body ul li::before { content: '›'; position: absolute; left: 5px; top: 0; color: var(--accent); font-weight: 700; }
+  .about-body .whats-new { margin: 6px 0 6px; }
+  .about-body .whats-new ul li { padding-left: 12px; margin-bottom: 12px; }
+  .about-body .whats-new ul li::before { content: none; }
+
+  /* ── What's new: one entry, and the maintainer's controls over it ─────────
+     Rendered by ../lit-news.js, which also decides who may see which entry.
+     changelog.json says what was announced; Firestore says what has been done
+     about it — published, reworded or taken down — and an entry nobody has
+     reviewed is shown to the maintainer alone. */
+  .wn-list { list-style: none; margin: 0; padding: 0; }
+  .about-body .wn-list .wn-item { padding-left: 12px; margin-bottom: 12px; border-left: 3px solid var(--accent); }
+  .wn-date { font-size: 11.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+  .wn-title { font-weight: 600; color: var(--text); font-size: 15px; }
+  .wn-title a { color: var(--navy); text-decoration: none; }
+  .wn-sum { color: var(--text); font-size: 13.5px; margin-top: 1px; line-height: 1.55; }
+
+  /* AN ENTRY WAITING FOR REVIEW — nobody but the maintainer can see it, so it
+     reads as a draft rather than as something that has been announced. */
+  .about-body .wn-list .wn-item.is-pending { border-left-color: #b6862a; background: var(--accent-light); border-radius: 0 6px 6px 0; padding: 6px 10px 8px 12px; }
+  .wn-flag { margin-left: 8px; color: #8a6318; font-weight: 700; }
+  /* AN ENTRY THAT WAS REMOVED. It is off the list entirely — that is what
+     Remove now means — so this is only ever seen inside "Removed updates". */
+  .about-body .wn-list .wn-item.is-removed { border-left-color: var(--border); opacity: .75; }
+  .wn-item.is-removed .wn-title { text-decoration: line-through; }
+
+  .wn-admin { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }
+  .wn-admin button { font: inherit; font-size: 12px; font-weight: 600; color: var(--navy); background: var(--white); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+  .wn-admin button:hover { border-color: var(--navy); }
+  .wn-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; padding: 11px 14px; font-size: 13.5px; color: var(--text); background: var(--accent-light); border: 1px solid #e2cf9e; border-radius: 8px; }
+  .wn-note button { font: inherit; font-size: 12px; font-weight: 600; color: var(--white); background: var(--navy); border: 1px solid var(--navy); border-radius: 999px; padding: 5px 13px; cursor: pointer; }
+  .wn-note button:hover { background: var(--navy-dark); border-color: var(--navy-dark); }
+  .wn-msg { margin: 0 0 12px; font-size: 13px; color: var(--text-muted); }
+  .wn-msg.is-err { color: #9b2c2c; }
+  /* The way back. A removed entry leaves the list, so the only thing that can
+     make Remove reversible is somewhere else to find it: collapsed, out of the
+     way, and drawn for the maintainer alone. */
+  .wn-bin { margin: 16px 0 0; border: 1px solid var(--border); border-radius: 8px; background: var(--white); padding: 4px 14px; }
+  .wn-bin summary { cursor: pointer; font-weight: 600; font-size: 13.5px; color: var(--navy); padding: 9px 0; }
+  .wn-bin .wn-list { margin-top: 8px; padding-bottom: 10px; }
+  .wn-panel:empty { display: none; }
+  .wn-edit { display: grid; gap: 7px; margin-top: 8px; }
+  .wn-edit input, .wn-edit textarea { font: inherit; font-size: 13.5px; color: var(--text); background: var(--white); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; width: 100%; resize: vertical; }
+  .wn-edit input:focus, .wn-edit textarea:focus { outline: none; border-color: var(--navy); }
+  .about-note { font-size: 13px; color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 24px; padding-top: 16px; line-height: 1.6; text-align: justify; text-justify: inter-word; -webkit-hyphens: auto; hyphens: auto; }
+  .about-note a { color: var(--navy); }
+
+  @media (max-width: 640px) {
+    .header-inner, .wrap { padding-left: 18px; padding-right: 18px; }
+    .brand h1 { font-size: 22px; }
+    .about-body { padding: 22px 18px 24px; }
+    .about-body p, .about-body ul li, .about-body .lead, .about-note { text-align: left; }
+  }
+</style>
+<link rel="stylesheet" href="/lit/lit-resources.css">
+<link rel="stylesheet" href="/lit/lit-navigation.css">
+<script src="/lit/lit-navigation.js" defer></script>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <a class="brand" href="/lit/" title="Back to The Lit"><h1>The <em>Lit</em></h1></a>
+    <div class="header-right">
+      <nav class="lit-site-nav" aria-label="The Lit sections">
+        <a href="/lit/">Browse</a>
+        <a href="/lit/analytics/">Analytics</a>
+        <details><summary class="lit-resource-current">Resources</summary>
+          <div class="lit-resource-links">
+            <a href="/lit/use-cases/">Use cases<small>Practical ways to use The Lit</small></a>
+            <a href="/lit/whats-new/" aria-current="page">What’s new<small>Latest features & improvements</small></a>
+            <a href="/lit/feedback/">Feedback<small>Report an issue or suggest a paper</small></a>
+            <a href="/lit/about/">About<small>The project, its coverage & data</small></a>
+          </div>
+        </details>
+      </nav>
+      <!-- Shared sign-in / account control (same as the main browser's header);
+           populated by ../lit-acct-nav.js once Firebase auth resolves. -->
+      <div id="acctControl" class="acct-control"></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap"><div class="about-body">    <h2 id="litWhatsNewHead">What's new</h2>
+    <p>The Lit keeps growing. Recent additions are logged below. You can also get them by e-mail: on <a href="/lit/">The Lit</a>, sign in and open <strong>E-mail alerts</strong> from your account menu, then turn on <em>New features &amp; updates to the website</em>. Daily sends each update as it lands; weekly and monthly batch them.</p>
+    <div id="litWhatsNew" class="whats-new"><p style="color:var(--text-muted);font-size:13px;margin:0">Loading the latest updates…</p></div>
+
+</div></main>
+
+<!-- Shared sign-in / account control in the header (mirrors the main browser).
+     Needs the Firebase compat SDK (app + auth + firestore — the latter lets
+     the account card show the same badges/ORCID links as the main page);
+     lit-acct-nav.js reuses the signed-in session that persists per-project
+     across stouras.com. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="/lit/lit-acct-nav.js"></script>
+
+
+<script src="/lit/lit-news.js"></script>
+<script>LitNews.mount({ list: "#litWhatsNew", head: "#litWhatsNewHead", src: "/lit/changelog.json", limit: 0 });</script>
+<footer class="lit-privacy-footer"><a href="/lit/privacy/">Privacy</a></footer>
+</body>
+</html>

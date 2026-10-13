@@ -176,6 +176,7 @@
           '<a class="acct-menu-item" title="Messages between you and The Lit&#39;s maintainer." href="' + MAIN + '#lit-messages">💬 Messages' + (msgUnread ? ' <span class="acct-badge">' + msgUnread + '</span>' : '') + '</a>' +
           '<a class="acct-menu-item" title="A set of journals or types applied automatically each time you sign in." href="' + MAIN + '#lit-defaults">⚙️ Default filters' + (defCount ? ' <span class="acct-badge">' + defCount + '</span>' : '') + '</a>' +
           '<a class="acct-menu-item" title="Edit your name, affiliation and account details." href="' + MAIN + '#lit-profile">👤 Edit profile</a>' +
+          (user.email === 'kstouras@gmail.com' && user.emailVerified === true ? '<a class="acct-menu-item" href="/lit/admin/website-analytics/">Website analytics</a>' : '') +
           '<div class="acct-menu-sep"></div>' +
           '<button class="acct-menu-item danger" type="button" title="Sign out of your account on this device." data-acct-signout>Sign out</button>' +
         '</div>' +

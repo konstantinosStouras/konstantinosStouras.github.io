@@ -384,6 +384,8 @@
   .disr-two .disr-subhead { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin: 2px 0 6px; }
   @media (max-width: 720px) { .disr-two { grid-template-columns: 1fr; } }
 </style>
+<link rel="stylesheet" href="/lit/lit-navigation.css">
+<script src="/lit/lit-navigation.js" defer></script>
 </head>
 <body>
 
@@ -391,10 +393,17 @@
   <div class="header-inner">
     <a class="brand" href="/lit/" title="Back to The Lit"><h1><em>The Lit</em> — Data Analytics<span class="sub">Summary statistics for the research paper database</span></h1></a>
     <div class="header-right">
-      <nav class="pnav">
-        <a class="pnav-btn" href="/lit/about/" title="What The Lit is and how it works"><span class="ico">ⓘ</span>About</a>
-        <a class="pnav-btn is-active" href="/lit/" title="Close Data Analytics — back to the database"><span class="ico">📊</span>Data Analytics</a>
-        <a class="pnav-btn" href="/lit/feedback/" title="Send feedback, screenshots and suggestions"><span class="ico">💬</span>Feedback</a>
+      <nav class="lit-site-nav" aria-label="The Lit sections">
+        <a href="/lit/">Browse</a>
+        <a href="/lit/analytics/" aria-current="page">Analytics</a>
+        <details><summary>Resources</summary>
+          <div class="lit-resource-links">
+            <a href="/lit/use-cases/">Use cases<small>Practical ways to use The Lit</small></a>
+            <a href="/lit/whats-new/">What’s new<small>Latest features & improvements</small></a>
+            <a href="/lit/feedback/">Feedback<small>Report an issue or suggest a paper</small></a>
+            <a href="/lit/about/">About<small>The project, its coverage & data</small></a>
+          </div>
+        </details>
       </nav>
       <!-- Shared sign-in / account control (same as the main browser's header);
            populated by ../lit-acct-nav.js once Firebase auth resolves. -->
@@ -405,30 +414,7 @@
 
 <div class="wrap">
 
-  <!-- Live community figures, populated by the Firebase script at the foot of the
-       page and independent of the corpus dashboard's own data load below. Each
-       card is revealed only once its own read succeeds, so nothing ever shows a
-       broken state: "Registered users" = a count() over the public
-       `registeredUsers` collection; "Exploring now" = a live Realtime Database
-       presence count (hidden entirely until presence is configured). -->
-  <section class="community" id="community" style="display:none">
-    <div class="cstat" id="usersStat" style="display:none">
-      <div class="cnum" id="statUsers" data-state="loading">—</div>
-      <div>
-        <div class="clabel">Registered users<span class="dot" title="Updated live from The Lit's sign-in database"></span></div>
-        <div class="cdesc">People who have created an account to star papers, keep private notes &amp; lists, and set up e-mail alerts on The Lit.</div>
-      </div>
-    </div>
-    <div class="cstat online" id="onlineStat" style="display:none">
-      <div class="cnum" id="statOnline">—</div>
-      <div>
-        <div class="clabel">Exploring now<span class="dot"></span></div>
-        <div class="cdesc">Visitors browsing The Lit right now, updated live.</div>
-      </div>
-    </div>
-  </section>
-
-  <div id="boot" class="loading"><span class="spinner"></span>Loading the database summary…</div>
+<div id="boot" class="loading"><span class="spinner"></span>Loading the database summary…</div>
 
   <div id="app" style="display:none">
 
@@ -742,6 +728,7 @@
     <div>See <a href="/lit/about/">About</a> for what this covers and how the data are collected. <a href="/lit/feedback/">Feedback</a> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank" rel="noopener">Konstantinos I. Stouras</a></span></div>
     <div class="footer-note" id="genline"></div>
   </div>
+<p style="text-align:center;margin-top:12px"><a class="lit-footer-privacy" href="/lit/privacy/">Privacy</a></p>
 </footer>
 
 <script>
@@ -3403,123 +3390,9 @@
 })();
 </script>
 
-<!-- Firebase (compat), wholly separate from the corpus dashboard above:
-       • app + Firestore  → count the PUBLIC registeredUsers collection (no sign-in).
-       • auth + database   → the live "Exploring now" presence figure (anonymous
-                             auth in a separate 'presence' app; inert until a
-                             Realtime Database URL is set — see _PRESENCE-SETUP.md). -->
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
-<script>
-(function () {
-  "use strict";
-
-  // Same PUBLIC web config as lit/index.html (these values are not secrets;
-  // access is governed by lit/_firestore.rules). Keep in sync with that file.
-  var FB_CONFIG = {
-    apiKey: "AIzaSyDUh6qKU42CiJf6yCsQ-znmH8Y9zo95u04",
-    authDomain: "lit-paper-browser.firebaseapp.com",
-    projectId: "lit-paper-browser",
-    storageBucket: "lit-paper-browser.firebasestorage.app",
-    messagingSenderId: "336217663944",
-    appId: "1:336217663944:web:219da7d213d1005625f8fd",
-    measurementId: "G-2E1BTF9SSD"
-  };
-
-  var section = document.getElementById('community');
-  var usersStat = document.getElementById('usersStat');
-  var elValue = document.getElementById('statUsers');
-  function revealBand() { if (section) section.style.display = ''; }
-  function show(n) {
-    if (!elValue || !usersStat) return;
-    elValue.textContent = Number(n).toLocaleString();
-    elValue.setAttribute('data-state', 'ok');
-    usersStat.style.display = '';   // reveal this card only once we have a real number
-    revealBand();
-  }
-
-  if (!window.firebase || !firebase.firestore || FB_CONFIG.apiKey.indexOf('PASTE_') !== -1) return;
-
-  var db;
-  try { firebase.initializeApp(FB_CONFIG); db = firebase.firestore(); }
-  catch (e) { return; }
-
-  var col = db.collection('registeredUsers');
-
-  // Read all docs and use snapshot.size (one read per user) — fallback for any
-  // SDK without the count() aggregation.
-  function fallbackGet() {
-    col.get()
-      .then(function (snap) { show(snap.size); })
-      .catch(function (err) { console.warn('registeredUsers get:', err && err.code); });
-  }
-
-  // Preferred: a server-side count() aggregation — one billed read regardless of
-  // how many accounts exist, downloading no per-user documents.
-  try {
-    if (typeof col.count === 'function') {
-      col.count().get()
-        .then(function (agg) { show(agg.data().count); })
-        .catch(function (err) { console.warn('registeredUsers count():', err && err.code); fallbackGet(); });
-    } else {
-      fallbackGet();
-    }
-  } catch (e) { fallbackGet(); }
-
-  // ── Live "Exploring now": real-time visitor presence ────────────────────
-  // Runs in a SEPARATE Firebase app ('presence') with anonymous auth (isolated
-  // from the count above). It both REGISTERS this page's visitor and COUNTS the
-  // distinct visitors currently online across the whole site (main browser
-  // included — every page writes presence). The card is revealed only when a
-  // count arrives, so it stays hidden until a Realtime Database is configured
-  // (RTDB_URL below) and its rules are deployed. See lit/_PRESENCE-SETUP.md.
-  var RTDB_URL = "PASTE_DATABASE_URL";
-  // e.g. "https://lit-paper-browser-default-rtdb.europe-west1.firebasedatabase.app"
-  (function initPresence() {
-    var onlineStat = document.getElementById('onlineStat');
-    var elOnline = document.getElementById('statOnline');
-    if (!onlineStat || !elOnline || !firebase.database || !firebase.auth
-        || RTDB_URL.indexOf('PASTE_') !== -1) return;
-
-    var app;
-    try {
-      app = firebase.initializeApp({
-        apiKey: FB_CONFIG.apiKey, authDomain: FB_CONFIG.authDomain,
-        projectId: FB_CONFIG.projectId, databaseURL: RTDB_URL
-      }, 'presence');
-    } catch (e) { return; }
-    var pAuth = app.auth(), pDb = app.database();
-
-    pAuth.signInAnonymously().catch(function (err) { console.warn('presence auth:', err && err.code); });
-    pAuth.onAuthStateChanged(function (u) {
-      if (!u) return;
-      // Register this tab under our uid (see lit/index.html for the same
-      // register pattern) so this viewer is included in the count too.
-      var connectedRef = pDb.ref('.info/connected');
-      var userRef = pDb.ref('presence/' + u.uid);
-      connectedRef.on('value', function (snap) {
-        if (snap.val() !== true) return;
-        var con = userRef.push();
-        con.onDisconnect().remove();
-        con.set(true);
-      });
-      // Count DISTINCT visitors online (children of /presence are uids), live.
-      pDb.ref('presence').on('value', function (snap) {
-        elOnline.textContent = Number(snap.numChildren()).toLocaleString();
-        onlineStat.style.display = '';
-        revealBand();
-      }, function (err) { console.warn('presence count:', err && err.code); });
-    });
-  })();
-})();
-</script>
-
-<!-- Shared sign-in / account control in the header (mirrors the main browser).
-     Loaded after the block above so it reuses the default Firebase app that
-     script already initialised (the registered-users count). -->
 <script src="../lit-acct-nav.js"></script>
-
 </body>
 </html>
