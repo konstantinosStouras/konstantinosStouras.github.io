@@ -421,7 +421,7 @@
       font-size: 13px; color: #a06800; line-height: 1.5;
     }
 
-    /* ========== ADMIN PANEL (?admin) ========== */
+    /* ========== INSTRUCTOR PANEL ========== */
     body.admin-mode { padding-top: 64px; }
     body.admin-mode .container { max-width: 720px; }
     .admin-banner {
@@ -484,7 +484,26 @@
       font-size: 12px; font-weight: 700; color: #666; cursor: pointer;
     }
     .admin-refresh:hover { border-color: #999; color: #333; }
-  </style>
+  
+    .instructor-tabs { display:flex; gap:8px; margin:20px 0; flex-wrap:wrap; }
+    .instructor-tabs button { padding:12px 18px; background:white; border:1px solid #ccc; border-radius:5px; font:inherit; cursor:pointer; }
+    .instructor-tabs button[aria-selected="true"] { background:#2e7d32; color:white; border-color:#2e7d32; }
+    [hidden] { display:none !important; }
+    .guide-panel { line-height:1.6; }
+    .guide-panel h2 { font-size:24px; line-height:1.3; }
+    .guide-panel li { margin-bottom:12px; }
+    .guide-images { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    .guide-images figure { margin:0; }
+    .guide-images figcaption { font-size:14px; line-height:1.4; margin-top:8px; }
+    .guide-image { width:100%; padding:0; border:1px solid #ddd; background:white; cursor:zoom-in; }
+    .guide-image img { display:block; width:100%; height:auto; }
+    #guide-lightbox { max-width:90vw; max-height:90vh; border:0; border-radius:8px; padding:16px; }
+    #guide-lightbox::backdrop { background:rgba(0,0,0,.75); }
+    #guide-lightbox img { display:block; max-width:80vw; max-height:75vh; margin:12px auto 0; }
+    #guide-close { font:inherit; padding:8px 16px; cursor:pointer; }
+    @media(max-width:560px) { .guide-images { grid-template-columns:1fr; } .guide-image { max-width:280px; } }
+
+</style>
 </head>
 <body>
 
@@ -571,7 +590,7 @@
 
 <!-- Simulation Platform (stouras.com/simulation): completion marker only —
      this game has no registration form to prefill. Inert standalone. -->
-<script>window.SIMP_EXPECT = (/[?&]admin\b/.test(location.search) || /[?&]preview=1\b/.test(location.search)) ? '__off__' : 'problem-solving';</script>
+<script>window.SIMP_EXPECT = (location.hash === '#admin' || /[?&]admin\b/.test(location.search) || /[?&]preview=1\b/.test(location.search)) ? '__off__' : 'problem-solving';</script>
 <script src="/simulation/prefill.js" defer></script>
 
 <script>
@@ -2722,7 +2741,7 @@ function initAdmin() {
   // Banner
   const banner = document.createElement('div');
   banner.className = 'admin-banner';
-  banner.innerHTML = '🔐 ADMIN VIEW — private data &amp; analytics <a href="./">open the game →</a>';
+  banner.innerHTML = 'INSTRUCTOR VIEW <a href="./">open the game →</a>';
   document.body.prepend(banner);
 
   // Hide the game UI (same approach as preview mode)
@@ -2733,15 +2752,38 @@ function initAdmin() {
     el.style.display = 'none';
   });
   document.querySelector('.desc').textContent =
-    'Admin panel — download the collected data and explore the class analytics for any date range.';
+    'Classroom guide and collected responses. Test rounds do not save data.';
 
   // Build the admin layout
   const el = document.getElementById('outcome-section');
   el.classList.remove('hidden');
   el.innerHTML = `
+    <div class="instructor-tabs" role="tablist" aria-label="Instructor resources">
+      <button type="button" id="guide-tab" role="tab" aria-selected="true" aria-controls="guide-panel" tabindex="0">How to use it</button>
+      <button type="button" id="data-tab" role="tab" aria-selected="false" aria-controls="data-panel" tabindex="-1">Data collected (view only)</button>
+    </div>
+    <section id="guide-panel" role="tabpanel" aria-labelledby="guide-tab" class="admin-panel guide-panel">
+      <h2>The Problem-Solving Game: a classroom game about testing ideas</h2>
+      <p>By Konstantinos (Kostas) Stouras, University College Dublin</p>
+      <p>This interactive puzzle asks players to discover a secret rule by testing sequences of three numbers. The game answers “Yes” or “No”. Students test their ideas, submit a rule and confidence level, then receive a personal scorecard and see the live class results.</p>
+      <div class="guide-images">
+        <figure><button type="button" class="guide-image" aria-label="Enlarge sequence testing example"><img src="assets/guide-testing.png" alt="Game example showing sequences with Yes and No responses"></button><figcaption>1. Players test their own sequences</figcaption></figure>
+        <figure><button type="button" class="guide-image" aria-label="Enlarge personal scorecard example"><img src="assets/guide-scorecard.png" alt="Personal scorecard with strengths and bias indicators"></button><figcaption>2. Each player gets a personal scorecard</figcaption></figure>
+        <figure><button type="button" class="guide-image" aria-label="Enlarge class results example"><img src="assets/guide-results.png" alt="Class results chart showing how many players heard No"></button><figcaption>3. The class sees the live results</figcaption></figure>
+      </div>
+      <h3>How to use it in your class</h3>
+      <ul>
+        <li><strong>Before class:</strong> nothing to set up. No sign-up or app is needed; the game runs in a browser on a phone or laptop. Use <a href="?preview=1&amp;key=stouras" target="_blank" rel="noopener">the test round</a> to demonstrate it without saving responses.</li>
+        <li><strong>In class:</strong> share <a href="https://www.stouras.com/lab/problem-solving/">the student link</a> and give students a few minutes. Each submits a guess of the rule and how sure they are. Responses through this regular link are saved and update the live feedback.</li>
+        <li><strong>Debrief:</strong> students see the answer, a personal scorecard and a PDF report. Walk the class through the live dashboard shown after playing.</li>
+        <li><strong>Where it fits:</strong> confirmation bias, hypothesis testing, experimentation, and testing a business idea before investing in it.</li>
+      </ul>
+    </section>
+    <dialog id="guide-lightbox" aria-label="Enlarged classroom example"><button type="button" id="guide-close" autofocus>Close</button><img id="guide-enlarged" alt=""></dialog>
+    <section id="data-panel" role="tabpanel" aria-labelledby="data-tab" hidden>
     <div class="admin-panel">
       <div class="admin-panel-title">Data download &amp; date filter</div>
-      <div class="admin-panel-sub">Choose a date range (or keep "All data"), then download the raw responses as CSV. Every chart and insight below updates to the selected range.</div>
+      <div class="admin-panel-sub">Choose a date range (or keep "All data"), then download the raw responses as CSV. Downloads include only responses in the selected range. This view cannot edit or delete collected data.</div>
       <div class="admin-presets">
         <button type="button" class="admin-preset active" data-preset="all">All data</button>
         <button type="button" class="admin-preset" data-preset="today">Today</button>
@@ -2760,22 +2802,34 @@ function initAdmin() {
       </div>
     </div>
 
-    <div class="insights-card" style="margin-top:26px">
-      <div class="insights-card-title">Key insights across participants</div>
-      <div id="insights-container">
-        <div class="loading-results"><div class="loading-spinner"></div>Loading insights…</div>
-      </div>
-    </div>
+    </section>`;
 
-    <div class="class-results">
-      <h2 class="class-results-title">How players performed</h2>
-      <p class="class-results-sub" id="admin-charts-sub">Every chart below reflects the selected date range</p>
-      <div id="charts-loading">
-        <div class="loading-results"><div class="loading-spinner"></div>Loading results…</div>
-      </div>
-      <div id="charts-content" class="hidden"></div>
-    </div>`;
-
+  const tabs = [...el.querySelectorAll('[role="tab"]')];
+  function selectTab(tab) {
+    tabs.forEach(t => {
+      const active = t === tab;
+      t.setAttribute('aria-selected', String(active));
+      t.tabIndex = active ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !active;
+    });
+  }
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => selectTab(tab));
+    tab.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const next = tabs[event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (i + 1) % tabs.length];
+      selectTab(next); next.focus();
+    });
+  });
+  const lightbox = document.getElementById('guide-lightbox');
+  el.querySelectorAll('.guide-image').forEach(button => button.addEventListener('click', () => {
+    const image = button.querySelector('img');
+    const enlarged = document.getElementById('guide-enlarged');
+    enlarged.src = image.src; enlarged.alt = image.alt; lightbox.showModal();
+  }));
+  document.getElementById('guide-close').addEventListener('click', () => lightbox.close());
+  lightbox.addEventListener('click', event => { if (event.target === lightbox) lightbox.close(); });
   // Wire the controls
   document.querySelectorAll('.admin-preset').forEach(btn =>
     btn.addEventListener('click', () => adminSetPreset(btn.dataset.preset)));
@@ -2800,7 +2854,7 @@ function adminLoadData(isRefresh) {
     })
     .then(csv => {
       const lines = parseCSV(csv);
-      if (lines.length < 2) throw new Error('No data rows in the sheet');
+      if (!lines.length) throw new Error('No headers in the sheet');
       const headers = lines[0];
       const cols = detectColumns(headers);
       if (cols.attempts < 0 || cols.conf < 0) throw new Error('Could not detect columns');
@@ -2816,12 +2870,7 @@ function adminLoadData(isRefresh) {
     .catch(err => {
       console.error('Admin data load failed:', err);
       status.innerHTML = `<span style="color:#a04040">Could not load the data (${err.message}).</span> Check that the sheet is still published to the web, then <a href="#" onclick="adminLoadData(true);return false">try again</a>.`;
-      if (!ADMIN.loaded) {
-        document.getElementById('charts-loading').innerHTML =
-          '<div class="results-error">Could not load results.</div>';
-        document.getElementById('insights-container').innerHTML =
-          '<div class="results-error">Could not load insights.</div>';
-      }
+
     });
 }
 
@@ -2897,29 +2946,12 @@ function adminRender() {
   }
   document.getElementById('admin-status').innerHTML = statusHTML;
 
-  document.getElementById('admin-charts-sub').textContent = filtered
-    ? `Every chart below covers the selected range (${rows.length} response${rows.length !== 1 ? 's' : ''})`
-    : `Every chart below covers all ${total} response${total !== 1 ? 's' : ''}`;
-
   const dl = document.getElementById('admin-download');
   dl.disabled = rows.length === 0;
   document.getElementById('admin-download-label').textContent =
     `Download CSV (${rows.length} response${rows.length !== 1 ? 's' : ''})`;
 
-  // Re-render the analytics for the filtered rows
-  adminDestroyCharts();
-  const analytics = rows.length > 0 ? computeAnalytics(rows, ADMIN.cols) : null;
-  if (!analytics) {
-    document.getElementById('charts-loading').classList.add('hidden');
-    const wrap = document.getElementById('charts-content');
-    wrap.classList.remove('hidden');
-    wrap.innerHTML = '<div class="results-error">No responses in the selected date range.</div>';
-    document.getElementById('insights-container').innerHTML =
-      '<div class="results-error">No responses in the selected date range.</div>';
-    return;
-  }
-  renderDynamicCharts(analytics);
-  renderInsightsTable(analytics);
+
 }
 
 function adminDownloadCSV() {
@@ -2953,7 +2985,7 @@ function adminDownloadCSV() {
 
 // Init
 const URL_PARAMS = new URLSearchParams(window.location.search);
-const IS_ADMIN = URL_PARAMS.has('admin');
+const IS_ADMIN = location.hash === '#admin' || URL_PARAMS.has('admin');
 // TEST ROUND (the admin's 🧪 button): play the game for real, but log NOTHING —
 // no row reaches the Google Sheet and the Simulation Platform is never told the
 // run completed (SIMP_EXPECT is switched off above). Distinct from the older
