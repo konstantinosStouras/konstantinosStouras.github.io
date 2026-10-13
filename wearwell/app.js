@@ -2,7 +2,7 @@ import {activeMemberId,isFamily,memberStorageKey,contextVersion} from './family-
 import {resetFamily,loadFamily,familyBar,familyPage,familyNotice,familyToday,chooseMember,loadPortrait,currentMember,updateMemberName} from './family.js?v=20261012-photo-languages-v1';
 import {studioAdminPage,loadStudioAdmin} from './model-studio.js?v=20261012-photo-languages-v1';
 import {installWeatherRefresh} from './weather-refresh.js?v=20261012-photo-languages-v1';
-import {usersPage,loadUsers} from './admin-users.js?v=20261012-photo-languages-v1';
+import {usersPage,loadUsers} from './admin-users.js?v=20261013-users-v1';
 import {updatesPage,loadUpdates} from './updates.js?v=20261012-photo-languages-v1';
 import {welcomePage} from './welcome.js?v=20261012-photo-languages-v1';
 import {headerWeather,currentWeatherCard} from './weather-view.js?v=20261012-photo-languages-v1';

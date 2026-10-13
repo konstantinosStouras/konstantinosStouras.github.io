@@ -6,7 +6,13 @@ const admin=async context=>{if(context.auth?.token.daywearAdmin!==true)throw new
 exports.listUsers=functions.region('europe-west1').runWith({maxInstances:1}).https.onCall(async(data,context)=>{
  await admin(context);if(data?.pageToken!==undefined&&(typeof data.pageToken!=='string'||data.pageToken.length>2000))throw new functions.https.HttpsError('invalid-argument','Invalid page.');
  const result=await getAuth().listUsers(100,data?.pageToken||undefined),db=getFirestore();
- const users=await Promise.all(result.users.map(async user=>{const [profile,sub]=await Promise.all([db.collection('daywearProfiles').doc(user.uid).get(),db.collection('daywearUpdateSubscriptions').doc(user.uid).get()]);return {uid:user.uid,name:profile.data()?.name||user.displayName||'',email:user.email||'',emailVerified:user.emailVerified,disabled:user.disabled,admin:user.customClaims?.daywearAdmin===true,createdAt:user.metadata.creationTime,subscribed:sub.data()?.enabled===true};}));
+ // Two batched reads replace two individual network requests per account.
+ // Read only the fields displayed in the directory, excluding measurements/photos.
+ const [profiles,subscriptions]=result.users.length?await Promise.all([
+  db.getAll(...result.users.map(user=>db.collection('daywearProfiles').doc(user.uid)),{fieldMask:['name']}),
+  db.getAll(...result.users.map(user=>db.collection('daywearUpdateSubscriptions').doc(user.uid)),{fieldMask:['enabled']})
+ ]):[[],[]];
+ const users=result.users.map((user,index)=>({uid:user.uid,name:profiles[index].data()?.name||user.displayName||'',email:user.email||'',emailVerified:user.emailVerified,disabled:user.disabled,admin:user.customClaims?.daywearAdmin===true,createdAt:user.metadata.creationTime,subscribed:subscriptions[index].data()?.enabled===true}));
  return {users,pageToken:result.pageToken||null};
 });
 exports.saveMessage=functions.region('europe-west1').runWith({maxInstances:1}).https.onCall(async(data,context)=>{
