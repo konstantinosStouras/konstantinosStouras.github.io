@@ -108,3 +108,13 @@ is mechanical:
 Everything else — the runtime merge, the journal type, the opt-in lazy load —
 is unchanged, because the page already fetches an extra source from whatever
 `base` its manifest entry carries.
+
+## Reconcile published versions across the full Lit catalog
+
+Run `node --max-old-space-size=8192 lit/_scraper-workingpapers/reconcile.mjs` for a read-only audit of all working-paper parts against the native, FT50, ABS4, ABS3 and Nature/Science catalogs. Live satellite downloads must succeed before any cleanup is attempted. The internal `data-workingpapers/_reconciliation-audit.json` records every proposed transfer and uncertain candidate.
+
+Run the same command with `--apply-report` to apply the saved audit: save DOI-keyed access links first, remove the matched working-paper entries, then rebuild the manifest, totals and recent feeds. Existing supplement links are preserved. Uncertain candidates remain in the archive.
+
+Exact title matches require shared authors and plausible years. Title variants require the complete surname set on both versions (at least two authors), a long title, at least 90% word overlap, and a unique candidate with a clear lead. Substantially renamed titles require further review; word overlap alone does not establish identity. The regular crawl uses the same matcher on its local catalogs and now passes newly crawled title matches through reconciliation before removing them.
+
+Matching regression checks: `node lit/_scraper-workingpapers/reconcile-selftest.mjs`.

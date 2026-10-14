@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { matchPublished } from './build-data.mjs';
+import { normTitle } from '../_scraper/ec-pages.mjs';
+const title='Learning from Many: Partner Exposure and Team Familiarity in Fluid Teams';
+const record={Title:'Learning from Many: Partner Diversity and Team Familiarity in Fluid Teams',Authors:'O. Zeynep Aksin, Sarang Deo, Jonas Oddur Jonasson, Kamalini Ramdas',Year:2015};
+const paper={title,doi:'10.test/published',last:new Set(['aksin','deo','jonasson','ramdas']),year:2021};
+let index=new Map([[normTitle(title),[paper]]]);
+assert.equal(matchPublished(record,index)?.doi,paper.doi);
+assert.equal(matchPublished({...record,Authors:'Other Person, Unrelated Author'},index),null);
+assert.equal(matchPublished({...record,Year:2025},index),null);
+assert.equal(matchPublished({...record,Title:'Fluid Teams and Knowledge Retrieval: Scaling Service Operations'},index),null);
+index=new Map([[normTitle(title),[paper,{...paper,doi:'10.test/ambiguous'}]]]);
+assert.equal(matchPublished(record,index),null);
+index=new Map([[normTitle(title),[paper]]]);
+assert.equal(matchPublished({...record,Title:title},index)?.doi,paper.doi);
+console.log('Reconciliation checks passed: renamed title, exact title, different authors, year, unrelated title, ambiguity.');

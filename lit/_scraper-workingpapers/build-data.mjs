@@ -181,7 +181,10 @@ export async function loadCatalog(dirs, opts = {}) {
     const sources = await loadJson(join(dir, 'sources.json'), []);
     if (!Array.isArray(sources)) continue;
     for (const s of sources) {
-      const rows = await loadJson(join(dir, s.file || `papers-${s.key}.json`), []);
+      const rows = [];
+      for (const file of s.files || [s.file || `papers-${s.key}.json`]) {
+        rows.push(...JSON.parse(await readFile(join(dir, file), 'utf8')));
+      }
       if (!Array.isArray(rows)) continue;
       const jkey = s.key;
       for (const p of rows) {
@@ -209,7 +212,7 @@ export async function loadCatalog(dirs, opts = {}) {
           for (const name of names) { const np = nameParts(name); if (np && np.last) lasts.add(np.last); }
           let arr = byTitle.get(nt);
           if (!arr) { arr = []; byTitle.set(nt, arr); }
-          arr.push({ doi, last: lasts, year });
+          arr.push({ doi, last: lasts, year, title: p.Title, authors: p.Authors });
         }
       }
       if (opts.log) console.log(`  catalog: ${dir.split('/').pop()}/${s.key}: ${rows.length} papers`);
@@ -221,30 +224,82 @@ export async function loadCatalog(dirs, opts = {}) {
 // Does a working-paper record correspond to a PUBLISHED paper in the catalog?
 // Returns the matched published paper's { doi, last, year } or null. Mirrors the
 // pre-print matcher's discipline so a same-title different paper isn't linked:
-// an EXACT normalized-title match + shared author surnames (two, or one when
+// an exact normalized-title match + shared author surnames (two, or one when
 // either side is single-author) + a plausible year (the published version is
 // same-year-or-later than the working paper, within a sane window). `byTitle`
-// comes from loadCatalog(dirs, {index:true}).
+// comes from loadCatalog(dirs, {index:true}). Renamed titles additionally need
+// the complete author set and high overlap; ambiguous candidates are retained.
+// Index title variants by author once, so reconciliation scales to the full archive.
+export function titleWords(title) {
+  return new Set(stripAccents(cleanTitle(title)).toLowerCase().match(/[a-z0-9]+/g) || []);
+}
+export function titleSimilarity(a, b) {
+  const x = titleWords(a), y = titleWords(b);
+  let shared = 0;
+  for (const w of x) if (y.has(w)) shared++;
+  return x.size + y.size ? 2 * shared / (x.size + y.size) : 0;
+}
+export function publishedCandidates(rec, byTitle) {
+  if (!byTitle.authorIndex) {
+    const index = new Map();
+    for (const list of byTitle.values()) for (const c of list) {
+      for (const last of c.last) {
+        if (!index.has(last)) index.set(last, []);
+        index.get(last).push(c);
+      }
+    }
+    byTitle.authorIndex = index;
+  }
+  const lasts = new Set(String(rec.Authors || '').split(/[,;]/).map(n => nameParts(n)?.last).filter(Boolean));
+  const candidates = new Map();
+  const recNorm = normTitle(rec.Title);
+  const recWords = titleWords(rec.Title);
+  const year = parseInt(rec.Year, 10) || 0;
+  const rarest = [...lasts].sort((a,b) => (byTitle.authorIndex.get(a)?.length || 0) - (byTitle.authorIndex.get(b)?.length || 0))[0];
+  const pool = [...(byTitle.get(recNorm) || []), ...(byTitle.authorIndex.get(rarest) || [])];
+  for (const c of pool) {
+    if (candidates.has(c.doi)) continue;
+    if (year && c.year && (c.year < year - 1 || c.year - year > 15)) continue;
+    let shared = 0;
+    for (const l of lasts) if (c.last.has(l)) shared++;
+    const exact = recNorm === (c.normalizedTitle ??= normTitle(c.title));
+    const need = lasts.size <= 1 || c.last.size <= 1 ? 1 : 2;
+    if (shared < need) continue;
+    // Renamed titles require the complete author surname set on both versions.
+    const sameAuthors = shared === lasts.size && shared === c.last.size;
+    if (!exact && !sameAuthors) continue;
+    const words = c.words ??= titleWords(c.title);
+    let commonWords = 0;
+    for (const w of recWords) if (words.has(w)) commonWords++;
+    const score = exact ? 1 : 2 * commonWords / (recWords.size + words.size || 1);
+    if (exact || (sameAuthors && lasts.size >= 2 && recNorm.length >= 30 && score >= 0.65))
+      candidates.set(c.doi, { ...c, score, exact });
+  }
+  return [...candidates.values()].sort((a,b) => b.score - a.score);
+}
+export function isSupportingDocument(title) {
+  return /\b(appendix|appendices|supplement|supplementary|slides|presentation|correction|corrigendum|erratum|retraction|retracted|reply|comment on)\b/i.test(title || '');
+}
+// Verified renamed version; the SSRN author metadata corrupts Jonasson's name.
+const VERIFIED_VERSIONS = new Map([['10.2139/ssrn.2672133', {
+  doi: '10.1287/mnsc.2019.3576',
+  title: 'Learning from Many: Partner Exposure and Team Familiarity in Fluid Teams'
+}]]);
 export function matchPublished(rec, byTitle) {
   if (!rec || !byTitle) return null;
-  const nt = normTitle(rec.Title || '');
-  const cands = nt && byTitle.get(nt);
-  if (!cands || !cands.length) return null;
-  const recLasts = [];
-  for (const name of String(rec.Authors || '').split(',')) {
-    const np = nameParts(name.trim());
-    if (np && np.last) recLasts.push(np.last);
+  const verified = VERIFIED_VERSIONS.get(String(rec.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase());
+  if (verified) {
+    const p = byTitle.get(normTitle(verified.title))?.find(c => c.doi === verified.doi);
+    if (p) return { ...p, score: titleSimilarity(rec.Title, p.title), exact: false, verified: true };
   }
-  const recYear = parseInt(rec.Year, 10) || 0;
-  for (const c of cands) {
-    let shared = 0;
-    for (const l of recLasts) if (c.last.has(l)) shared++;
-    const need = (recLasts.length <= 1 || c.last.size <= 1) ? 1 : 2;
-    if (shared < need) continue;
-    if (recYear && c.year && (c.year < recYear - 1 || c.year - recYear > 15)) continue; // implausible gap
-    return c;
-  }
-  return null;
+  if (isSupportingDocument(rec.Title)) return null;
+  const candidates = publishedCandidates(rec, byTitle).filter(c => !isSupportingDocument(c.title)
+    && !(/\bunsupervised\b/i.test(rec.Title) && /\bsupervised\b/i.test(c.title))
+    && !(/\bsupervised\b/i.test(rec.Title) && /\bunsupervised\b/i.test(c.title)));
+  const confident = candidates.filter(c => c.exact || c.score >= 0.9);
+  // Never choose arbitrarily between multiple published articles.
+  return confident.length === 1 && (!candidates[1] || candidates[0].score - candidates[1].score >= 0.05)
+    ? confident[0] : null;
 }
 
 // Crawl order: never-crawled priority authors first, then never-crawled
@@ -583,7 +638,8 @@ async function main() {
       if (works === null) { stopped = true; break; } // OpenAlex out mid-enumeration
       let found = 0;
       for (const w of works) {
-        const rec = wpRecordFromWork(w, publishedTitles);
+        // Keep catalog-title versions until reconciliation transfers their access link.
+        const rec = wpRecordFromWork(w, null);
         if (!rec) continue;
         const k = recKey(rec);
         // "Date Added" = the day a row first entered the archive: stamped on a
