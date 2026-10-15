@@ -283,10 +283,30 @@ export function isSupportingDocument(title) {
 // Verified renamed version; the SSRN author metadata corrupts Jonasson's name.
 const VERIFIED_VERSIONS = new Map(Object.entries(JSON.parse(await readFile(join(__dirname, 'verified-versions.json'), 'utf8'))));
 
+// Repository URLs identify the source manuscript even when an imported DOI is wrong.
+function sourceVersionDOI(rec) {
+  try {
+    const u = new URL(rec.Preprint), host = u.hostname.toLowerCase();
+    if (/(^|\.)ssrn\.com$/.test(host)) {
+      const id = u.searchParams.get('abstract_id') || u.searchParams.get('abstractid') || u.searchParams.get('abstract') || u.pathname.match(/\/abstract=(\d+)/i)?.[1];
+      return /^\d+$/.test(id || '') ? '10.2139/ssrn.' + id : '';
+    }
+    if (/(^|\.)nber\.org$/.test(host)) {
+      const id = u.pathname.match(/\/papers\/(w\d+)/i)?.[1];
+      return id ? '10.3386/' + id.toLowerCase() : '';
+    }
+    if (/(^|\.)arxiv\.org$/.test(host)) {
+      const id = u.pathname.match(/^\/(?:abs|pdf)\/(.+)$/i)?.[1]?.replace(/\.pdf$/i, '').replace(/v\d+$/i, '');
+      return id ? '10.48550/arxiv.' + id.toLowerCase() : '';
+    }
+  } catch {}
+  return String(rec.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+}
+
 export function matchPublished(rec, byTitle) {
   if (!rec || !byTitle || isSupportingDocument(rec.Title)) return null;
   const verified = VERIFIED_VERSIONS.get('url:' + canonPreprint(rec.Preprint || ''))
-    || VERIFIED_VERSIONS.get(String(rec.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase());
+    || VERIFIED_VERSIONS.get(sourceVersionDOI(rec));
   // Reviewed satellite publications need not be in the crawler's local catalogs.
   if (verified) return { ...verified, score: titleSimilarity(rec.Title, verified.title), exact: false, verified: true };
   if (isSupportingDocument(rec.Title)) return null;
