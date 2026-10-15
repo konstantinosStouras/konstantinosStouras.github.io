@@ -278,7 +278,7 @@ export function publishedCandidates(rec, byTitle) {
   return [...candidates.values()].sort((a,b) => b.score - a.score);
 }
 export function isSupportingDocument(title) {
-  return /\b(appendix|appendices|supplement|supplementary|slides|presentation|correction|corrigendum|erratum|retraction|retracted|reply|comment on)\b/i.test(title || '');
+  return /\b(appendix|appendices|supplement|supplementary|slides|presentation|correction|corrigendum|erratum|retraction|retracted|reply|comment on|additional (?:results|proofs|material)(?: and extensions)? (?:for|to) (?:the )?paper|(?:online|electronic) companion|e-companion)\b/i.test(title || '');
 }
 // Verified renamed version; the SSRN author metadata corrupts Jonasson's name.
 const VERIFIED_VERSIONS = new Map(Object.entries(JSON.parse(await readFile(join(__dirname, 'verified-versions.json'), 'utf8'))));

@@ -20,7 +20,7 @@ export function substantialPaperMatch(overlap) {
     && overlap.sharedSevenWordPassages >= 500 && overlap.containment >= 0.5 && overlap.dice >= 0.4;
 }
 export function conferenceBook(front) {
-  return /conference program(?:me)?|book of abstracts|abstract book|meeting program(?:me)?|program and abstracts|curriculum vitae|e.companion to|supporting information for|supplementary material for/i.test(String(front).slice(0, 1500));
+  return /conference program(?:me)?|book of abstracts|abstract book|meeting program(?:me)?|program and abstracts|curriculum vitae|e.companion to|supporting information for|supplementary material for|additional (?:results|proofs|material)(?: and extensions)? (?:for|to) (?:the )?paper/i.test(String(front).slice(0, 1500));
 }
 export function frontMatterPublication(front, doi) {
   const text = String(front || '').toLowerCase().slice(0, 10000), needle = String(doi || '').toLowerCase();
