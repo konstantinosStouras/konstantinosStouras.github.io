@@ -1,0 +1,17 @@
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {substantiveText,comparePapers,substantialPaperMatch,frontMatterPublication,earlierTitleStatement,conferenceBook} from './deep-evidence.mjs';
+const a=Array.from({length:2200},(_,i)=>'alpha'+i).join(' '),b=Array.from({length:2200},(_,i)=>'beta'+i).join(' '),refs=Array.from({length:6000},(_,i)=>'reference'+i).join(' ');
+assert(substantialPaperMatch(comparePapers(a,a.replace(/ /g,' \n'))));
+assert(!substantialPaperMatch(comparePapers(a+'\nReferences\n'+refs,b+'\nReferences\n'+refs)),'Identical reference lists must not establish a match');
+assert(!substantialPaperMatch(comparePapers('A short related abstract','A short related abstract')));
+assert(frontMatterPublication('Accepted version of this paper. DOI: 10.1000/verified','10.1000/verified'));
+assert(!frontMatterPublication('We extend the related paper https://doi.org/10.1000/other','10.1000/other'));
+assert(!frontMatterPublication('Article body\nReferences\n10.1000/other','10.1000/other'));
+const title='An Earlier Name for This Specific Research Study';
+assert(earlierTitleStatement('This paper previously circulated under the title "'+title+'".',title));
+assert(!earlierTitleStatement(title+'\nWe thank colleagues for comments on an earlier version.',title),'An acknowledgement alone does not identify an earlier title');
+assert(conferenceBook('Conference Programme: annual meeting'));
+assert(conferenceBook('Curriculum Vitae: Selected publications'));
+assert(conferenceBook('e-companion to A Research Paper'));
+console.log('Full-paper evidence regression checks passed.');
