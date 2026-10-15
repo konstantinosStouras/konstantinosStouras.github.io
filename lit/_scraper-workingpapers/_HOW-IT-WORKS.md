@@ -118,3 +118,13 @@ Run the same command with `--apply-report` to apply the saved audit: save DOI-ke
 Exact title matches require shared authors and plausible years. Title variants require the complete surname set on both versions (at least two authors), a long title, at least 90% word overlap, and a unique candidate with a clear lead. Substantially renamed titles require further review; word overlap alone does not establish identity. The regular crawl uses the same matcher on its local catalogs and now passes newly crawled title matches through reconciliation before removing them.
 
 Matching regression checks: `node lit/_scraper-workingpapers/reconcile-selftest.mjs`.
+
+## Evidence review of uncertain versions (2026-10-15)
+
+The follow-up review checked all 7,527 retained candidates against repository and publisher Crossref deposits, arXiv's journal DOI metadata, NBER's Published Versions sections, current repository titles, existing catalog preprint URLs, and shared abstract passages. Every outcome and its evidence are retained in `data-workingpapers/_uncertain-review-audit.json`; no abstract text is duplicated in that audit.
+
+The review confirmed 2,387 versions. Three were already retired by scheduled crawls; 2,384 further archive entries were consolidated into 2,360 published records. Supporting documents (254) and unconfirmed candidates (4,886) remain separate. `_reconciliation-audit.json` records the applied transfers and supports the existing integrity verifier.
+
+`verified-versions.json` persists reviewed repository URLs and primary repository DOIs, together with their published target and evidence source. The daily crawler uses these mappings even for papers in remotely hosted satellite catalogs. Exact repository URLs take precedence over potentially incorrect imported DOI fields; supporting-document titles never inherit a main-paper mapping. Add mappings only after evidence review, and never infer a new target from a similar title alone.
+
+Run `node lit/_scraper-workingpapers/review-selftest.mjs` to check every reviewed mapping, satellite-catalog independence, supporting-document exclusion, unknown identifiers, and conflicting imported DOI fields. Run `node lit/_scraper-workingpapers/verify-reconciliation.mjs` from any directory for archive and link integrity checks.

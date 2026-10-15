@@ -281,17 +281,14 @@ export function isSupportingDocument(title) {
   return /\b(appendix|appendices|supplement|supplementary|slides|presentation|correction|corrigendum|erratum|retraction|retracted|reply|comment on)\b/i.test(title || '');
 }
 // Verified renamed version; the SSRN author metadata corrupts Jonasson's name.
-const VERIFIED_VERSIONS = new Map([['10.2139/ssrn.2672133', {
-  doi: '10.1287/mnsc.2019.3576',
-  title: 'Learning from Many: Partner Exposure and Team Familiarity in Fluid Teams'
-}]]);
+const VERIFIED_VERSIONS = new Map(Object.entries(JSON.parse(await readFile(join(__dirname, 'verified-versions.json'), 'utf8'))));
+
 export function matchPublished(rec, byTitle) {
-  if (!rec || !byTitle) return null;
-  const verified = VERIFIED_VERSIONS.get(String(rec.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase());
-  if (verified) {
-    const p = byTitle.get(normTitle(verified.title))?.find(c => c.doi === verified.doi);
-    if (p) return { ...p, score: titleSimilarity(rec.Title, p.title), exact: false, verified: true };
-  }
+  if (!rec || !byTitle || isSupportingDocument(rec.Title)) return null;
+  const verified = VERIFIED_VERSIONS.get('url:' + canonPreprint(rec.Preprint || ''))
+    || VERIFIED_VERSIONS.get(String(rec.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase());
+  // Reviewed satellite publications need not be in the crawler's local catalogs.
+  if (verified) return { ...verified, score: titleSimilarity(rec.Title, verified.title), exact: false, verified: true };
   if (isSupportingDocument(rec.Title)) return null;
   const candidates = publishedCandidates(rec, byTitle).filter(c => !isSupportingDocument(c.title)
     && !(/\bunsupervised\b/i.test(rec.Title) && /\bsupervised\b/i.test(c.title))

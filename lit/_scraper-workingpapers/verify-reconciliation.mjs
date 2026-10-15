@@ -1,7 +1,8 @@
+import {fileURLToPath} from 'node:url';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {loadWpRows,buildWpRecentCounts} from './build-data.mjs';
-const d='data-workingpapers';const read=async f=>JSON.parse(await fs.readFile(d+'/'+f,'utf8'));
+const d=fileURLToPath(new URL('../data-workingpapers',import.meta.url));const read=async f=>JSON.parse(await fs.readFile(d+'/'+f,'utf8'));
 const a=await read('_reconciliation-audit.json'),s=await read('sources.json'),m=await read('meta.json'),links=await read('submitted-preprints.json');
 const retired=new Set(a.matches.map(x=>x.workingDOI+'|'+x.url));let total=0;const all=[];
 for(const src of s){const rows=await loadWpRows(d,src.key);assert.equal(rows.length,src.count);assert.equal(rows.length,m.perSource[src.key]);for(const r of rows)assert(!retired.has(r.DOI+'|'+r.Preprint));total+=rows.length;for(const r of rows) all.push(r);}
