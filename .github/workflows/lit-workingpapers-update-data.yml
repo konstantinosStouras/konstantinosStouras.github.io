@@ -110,6 +110,12 @@ jobs:
             fi
             echo "Push rejected (concurrent commit?) — replaying our archive on the new tip…"
             git fetch origin "$GITHUB_REF_NAME"
+            # A curator or a newer matcher may have retired versions while we crawled.
+            # Replaying an old directory would resurrect them and delete new audits.
+            if ! git diff --quiet "$GITHUB_SHA" "origin/$GITHUB_REF_NAME" -- lit/data-workingpapers lit/_scraper-workingpapers; then
+              echo "::error::Working-paper data or matching rules changed during this crawl. Refusing to overwrite the newer archive; rerun from the current tip."
+              exit 1
+            fi
             git reset --hard "origin/$GITHUB_REF_NAME"
             rm -rf lit/data-workingpapers
             cp -r /tmp/wp-ours lit/data-workingpapers

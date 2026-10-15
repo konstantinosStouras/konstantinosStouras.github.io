@@ -62,10 +62,8 @@ jobs:
             exit 0
           fi
           git commit -m "lit: backfill working-papers archive"
-          # Only these two workflows ever write lit/data-workingpapers, and
-          # they share this concurrency group, so our copy of that directory is
-          # authoritative. On a rejected push (a concurrent commit to master
-          # touching OTHER files), replay our directory onto the new tip and retry.
+          # Replay our directory only when concurrent commits touched other files.
+          # Curated reconciliations and newer matching rules take precedence.
           cp -r lit/data-workingpapers /tmp/wp-ours
           for i in 1 2 3; do
             if git push origin "HEAD:$GITHUB_REF_NAME"; then
@@ -74,6 +72,10 @@ jobs:
             fi
             echo "Push rejected (concurrent commit?) — replaying our archive on the new tip…"
             git fetch origin "$GITHUB_REF_NAME"
+            if ! git diff --quiet "$GITHUB_SHA" "origin/$GITHUB_REF_NAME" -- lit/data-workingpapers lit/_scraper-workingpapers; then
+              echo "::error::Working-paper data or matching rules changed during this crawl. Refusing to overwrite the newer archive; rerun from the current tip."
+              exit 1
+            fi
             git reset --hard "origin/$GITHUB_REF_NAME"
             rm -rf lit/data-workingpapers
             cp -r /tmp/wp-ours lit/data-workingpapers
