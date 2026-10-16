@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-16T10:47:27.435Z",
+  "updated": "2026-10-16",
   "entries": [
     {
       "id": "american-time-use-survey-atus",
@@ -2190,30 +2190,67 @@
     },
     {
       "id": "business-dynamic-statistics",
-      "title": "Business Dynamic Statistics",
+      "title": "Business Dynamics Statistics (BDS)",
       "topic": "Businesses",
-      "description": "Annual measures of business dynamics - job creation and destruction, establishment births and deaths, firm startups and shutdowns by establishment and firm characteristics. Also available for specific types of firms/measures: Patenting Firms, High Growth Firms, Goods Traders, High Tech Industries, Single-Unit Firms with Revenue, Human Capital, Coastal Counties.",
-      "years": "",
-      "access": "Not specified",
-      "geography": "Other / not specified",
+      "description": "Public annual statistics on firm startups, establishment entry and exit, employment and job flows, with breakdowns by firm age, size, industry and geography.",
+      "years": "1978-2023",
+      "access": "Public",
+      "geography": "United States",
       "types": [
         "Administrative records"
       ],
       "units": [
-        "Places & geographic areas",
-        "Firms & institutions"
+        "Firms & institutions",
+        "Places & geographic areas"
       ],
-      "tools": [],
-      "designs": [],
+      "tools": [
+        "API"
+      ],
+      "designs": [
+        "Panel / longitudinal"
+      ],
       "features": [
+        "Demographics",
         "Employment"
       ],
-      "period": "Not specified",
-      "ranges": [],
-      "paper": false,
-      "details": [],
-      "papers": [],
-      "search": "business dynamic statistics businesses annual measures of business dynamics - job creation and destruction, establishment births and deaths, firm startups and shutdowns by establishment and firm characteristics. also available for specific types of firms/measures: patenting firms, high growth firms, goods traders, high tech industries, single-unit firms with revenue, human capital, coastal counties."
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1978,
+          2023
+        ]
+      ],
+      "paper": true,
+      "research": true,
+      "tags": [
+        "Entrepreneurship",
+        "Startups",
+        "Technology management",
+        "Business dynamics",
+        "Innovation"
+      ],
+      "dateAdded": "2026-10-16",
+      "verifiedAt": "2026-10-16",
+      "details": [
+        "Existing library entry enriched with a verified research citation and tags on 16 October 2026.",
+        "The cited paper uses public BDS statistics for Figure 1, drawn from the 2019 release. Its main analysis uses restricted Annual Survey of Manufactures and Longitudinal Business Database records; those are not included here.",
+        "This link provides the 2023 release, covering 1978–2023. Release coverage differs from the historical extract used in the paper.",
+        "Official BDS data portal",
+        "Firm-age statistics CSV, 2023 release",
+        "Official data portal and release directory opened successfully. The firm-age CSV returned HTTP 200 and text/csv; its header and first data row were inspected. Publisher Figure 1 explicitly names this dataset."
+      ],
+      "papers": [
+        {
+          "title": "Economies Before Scale: I.T. Strategy and Performance Dynamics of Young U.S. Businesses",
+          "authors": "Wang Jin; Kristina McElheran",
+          "journal": "Management Science",
+          "year": 2025,
+          "volume": "71",
+          "issue": "9",
+          "evidenceSection": "Section 3.7, Figure 1 source note"
+        }
+      ],
+      "search": "business dynamics statistics (bds) businesses public annual statistics on firm startups, establishment entry and exit, employment and job flows, with breakdowns by firm age, size, industry and geography. existing library entry enriched with a verified research citation and tags on 16 october 2026. the cited paper uses public bds statistics for figure 1, drawn from the 2019 release. its main analysis uses restricted annual survey of manufactures and longitudinal business database records; those are not included here. this link provides the 2023 release, covering 1978–2023. release coverage differs from the historical extract used in the paper. official bds data portal firm-age statistics csv, 2023 release official data portal and release directory opened successfully. the firm-age csv returned http 200 and text/csv; its header and first data row were inspected. publisher figure 1 explicitly names this dataset. entrepreneurship startups technology management business dynamics innovation economies before scale: i.t. strategy and performance dynamics of young u.s. businesses wang jin; kristina mcelheran management science 2025"
     },
     {
       "id": "dispersion-statistics-on-productivity-disp",
@@ -3203,7 +3240,8 @@
         "Technology management",
         "Patents",
         "Knowledge spillovers",
-        "R&D"
+        "R&D",
+        "Business model innovation"
       ],
       "dateAdded": "2026-10-16",
       "verifiedAt": "2026-10-16",
@@ -3224,9 +3262,18 @@
           "volume": "72",
           "issue": "9",
           "evidenceSection": "Section 3.2, Dependent Variables Capturing Technologically Significant Inventions"
+        },
+        {
+          "title": "Business Method Innovation in U.S. Manufacturing and Trade",
+          "authors": "Tian Heong Chan; Anandhi Bharadwaj; Deepa Varadarajan",
+          "journal": "Manufacturing & Service Operations Management",
+          "year": 2023,
+          "volume": "25",
+          "issue": "1",
+          "evidenceSection": "Business Method Patents in the United States: Data and Trends"
         }
       ],
-      "search": "nber patent data project — patents and citations patents historical u.s. patent records, citations, technology classifications and assignee identifiers for studying innovation and knowledge flows. the author-hosted page provides historical files and cautions that some are interim or not completely cleaned. follow its project link for documentation and later releases. the public patent files are not the cited paper's complete replication package: the study also combines other sources, including restricted financial data. patent records zip (stata) citation pairs zip (stata) patent data project provider documentation read; both zip endpoints returned http 200 to head requests on 2026-10-16. full archives were not downloaded. innovation technology management patents knowledge spillovers r&d the changing nature of firm innovation: short-termism and influential innovation in u.s. public firms yuan shi; rachelle c. sampson; brent goldfarb; rafael a. corredoira management science 2026"
+      "search": "nber patent data project — patents and citations patents historical u.s. patent records, citations, technology classifications and assignee identifiers for studying innovation and knowledge flows. the author-hosted page provides historical files and cautions that some are interim or not completely cleaned. follow its project link for documentation and later releases. the public patent files are not the cited paper's complete replication package: the study also combines other sources, including restricted financial data. patent records zip (stata) citation pairs zip (stata) patent data project provider documentation read; both zip endpoints returned http 200 to head requests on 2026-10-16. full archives were not downloaded. innovation technology management patents knowledge spillovers r&d business model innovation the changing nature of firm innovation: short-termism and influential innovation in u.s. public firms yuan shi; rachelle c. sampson; brent goldfarb; rafael a. corredoira management science 2026 business method innovation in u.s. manufacturing and trade tian heong chan; anandhi bharadwaj; deepa varadarajan manufacturing & service operations management 2023"
     },
     {
       "id": "patentsview-disambiguated-patents",
@@ -3257,7 +3304,8 @@
         "Technology management",
         "Patents",
         "Inventors",
-        "R&D"
+        "R&D",
+        "Regional innovation"
       ],
       "dateAdded": "2026-10-16",
       "verifiedAt": "2026-10-16",
@@ -3278,9 +3326,18 @@
           "volume": "72",
           "issue": "9",
           "evidenceSection": "Section 3.2, Dependent Variables Capturing Technologically Significant Inventions"
+        },
+        {
+          "title": "“High” innovators? Marijuana legalization and regional innovation",
+          "authors": "Stephanie Cheng; Pengkai Lin; Yinliang Tan; Yuchen Zhang",
+          "journal": "Production and Operations Management",
+          "year": 2023,
+          "volume": "32",
+          "issue": "3",
+          "evidenceSection": "Section 4.1, Sample construction"
         }
       ],
-      "search": "patentsview — disambiguated u.s. patent data patents research-ready u.s. patent data linking inventors, organizations and locations for studying invention, technological change and firm innovation. patentsview migrated to the uspto open data portal in march 2026. the current portal requires a uspto.gov account; api access requires a key. official documentation lists releases through december 2025. coverage depends on the chosen table; inspect its release notes and data dictionary. this specific research-ready collection is distinct from the existing general uspto portal listing. other sources used in the paper may require subscriptions. granted patent disambiguated data registration and api requirements official uspto documentation read; the product page returned http 200 on 2026-10-16. registration-gated files were not downloaded. innovation technology management patents inventors r&d the changing nature of firm innovation: short-termism and influential innovation in u.s. public firms yuan shi; rachelle c. sampson; brent goldfarb; rafael a. corredoira management science 2026"
+      "search": "patentsview — disambiguated u.s. patent data patents research-ready u.s. patent data linking inventors, organizations and locations for studying invention, technological change and firm innovation. patentsview migrated to the uspto open data portal in march 2026. the current portal requires a uspto.gov account; api access requires a key. official documentation lists releases through december 2025. coverage depends on the chosen table; inspect its release notes and data dictionary. this specific research-ready collection is distinct from the existing general uspto portal listing. other sources used in the paper may require subscriptions. granted patent disambiguated data registration and api requirements official uspto documentation read; the product page returned http 200 on 2026-10-16. registration-gated files were not downloaded. innovation technology management patents inventors r&d regional innovation the changing nature of firm innovation: short-termism and influential innovation in u.s. public firms yuan shi; rachelle c. sampson; brent goldfarb; rafael a. corredoira management science 2026 “high” innovators? marijuana legalization and regional innovation stephanie cheng; pengkai lin; yinliang tan; yuchen zhang production and operations management 2023"
     },
     {
       "id": "uspto-trademark-case-files",

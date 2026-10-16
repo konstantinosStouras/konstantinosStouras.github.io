@@ -13,7 +13,7 @@ test('every research addition has dated evidence, paper identifiers, and valid U
   }
 });
 test('live upstream reload preserves research additions without duplicating them',()=>{
-  const merged=mergeResearch(base,catalog);assert.equal(merged.length,base.length+catalog.datasets.length);
+  const merged=mergeResearch(base,catalog);assert.equal(merged.length,base.length+catalog.datasets.filter(d=>!base.some(e=>e.id===d.id||e.url===d.url)).length);
   assert.equal(mergeResearch(merged,catalog).length,merged.length);
   assert.ok(merged.filter(e=>e.research).every(e=>e.paper&&e.papers.length&&e.search.includes('innovation')));
   assert.equal(new Set(merged.map(e=>e.id)).size,merged.length);
