@@ -1,0 +1,14 @@
+{
+  "name": "The Dataset Library",
+  "short_name": "Dataset Library",
+  "id": "/datasets/",
+  "start_url": "/datasets/",
+  "scope": "/datasets/",
+  "display": "browser",
+  "background_color": "#f7f7f0",
+  "theme_color": "#164f46",
+  "icons": [
+    {"src": "/datasets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/datasets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
+  ]
+}
