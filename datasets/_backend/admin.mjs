@@ -16,12 +16,26 @@ if(process.env.GOOGLE_APPLICATION_CREDENTIALS){
 }
 const project='stouras-dataset-library';
 async function api(url,method='GET',body){
-  const response=await fetch(url,{method,headers:{Authorization:'Bearer '+credentials.access_token,'Content-Type':'application/json','x-goog-user-project':project},...(body?{body:JSON.stringify(body)}:{})});
+  const response=await fetch(url,{method,headers:{Authorization:'Bearer '+credentials.access_token,'Content-Type':'application/json',...(!process.env.GOOGLE_APPLICATION_CREDENTIALS?{'x-goog-user-project':project}:{})},...(body?{body:JSON.stringify(body)}:{})});
   const result=await response.json();if(!response.ok)throw new Error(JSON.stringify(result.error||result));return result;
 }
 if(process.argv.includes('enable')){
   await api(`https://serviceusage.googleapis.com/v1/projects/${project}/services/firestore.googleapis.com:enable`,'POST',{});
   console.log('Firestore API enable requested.');
+}
+if(process.argv.includes('github')){
+  const number='430353187364',sa=`dataset-publisher@${project}.iam.gserviceaccount.com`;
+  const pool=`projects/${number}/locations/global/workloadIdentityPools/github-datasets`;
+  await api(`https://serviceusage.googleapis.com/v1/projects/${project}/services:batchEnable`,'POST',{serviceIds:['iam.googleapis.com','iamcredentials.googleapis.com','sts.googleapis.com']});
+  async function create(url,body){try{return await api(url,'POST',body);}catch(e){if(!/ALREADY_EXISTS/.test(e.message))throw e;}}
+  await create(`https://iam.googleapis.com/v1/projects/${project}/serviceAccounts`,{accountId:'dataset-publisher',serviceAccount:{displayName:'Dataset catalog publisher'}});
+  await create(`https://iam.googleapis.com/v1/projects/${number}/locations/global/workloadIdentityPools?workloadIdentityPoolId=github-datasets`,{displayName:'Dataset repository workflows'});
+  await create(`https://iam.googleapis.com/v1/${pool}/providers?workloadIdentityPoolProviderId=github`,{displayName:'Dataset catalog workflow',oidc:{issuerUri:'https://token.actions.githubusercontent.com'},attributeMapping:{'google.subject':'assertion.sub','attribute.repository':'assertion.repository'},attributeCondition:"assertion.repository == 'konstantinosStouras/datasets' && assertion.ref == 'refs/heads/main' && assertion.workflow_ref == 'konstantinosStouras/datasets/.github/workflows/publish-catalog.yml@refs/heads/main'"});
+  await api(`https://iam.googleapis.com/v1/projects/${project}/serviceAccounts/${sa}:setIamPolicy`,'POST',{policy:{bindings:[{role:'roles/iam.workloadIdentityUser',members:[`principalSet://iam.googleapis.com/${pool}/attribute.repository/konstantinosStouras/datasets`]}]}});
+  const policy=await api(`https://cloudresourcemanager.googleapis.com/v1/projects/${project}:getIamPolicy`,'POST',{});
+  const member='serviceAccount:'+sa;let binding=policy.bindings.find(b=>b.role==='roles/datastore.user');if(!binding){binding={role:'roles/datastore.user',members:[]};policy.bindings.push(binding);}if(!binding.members.includes(member))binding.members.push(member);
+  await api(`https://cloudresourcemanager.googleapis.com/v1/projects/${project}:setIamPolicy`,'POST',{policy});
+  console.log('Keyless GitHub publisher configured for the main-branch catalog workflow only.');
 }
 if(process.argv.includes('configure')){
   const config=await api(`https://firebase.googleapis.com/v1beta1/projects/${project}/webApps/1:430353187364:web:87ae550fec264189ca8eb1/config`);

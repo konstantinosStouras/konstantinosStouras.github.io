@@ -94,6 +94,8 @@ $('export').onclick=()=>{
 };
 onSession(state=>{saved=state.bookmarks;privateLinks=state.links;applyCatalog();});
 try{
-  const response=await fetch('catalog-public.json',{cache:'no-cache'});if(!response.ok)throw new Error();
+  let response;
+  try{response=await fetch('https://raw.githubusercontent.com/konstantinosStouras/datasets/main/catalog-public.json',{cache:'no-cache',signal:AbortSignal.timeout(10000)});if(!response.ok)throw new Error();}catch{response=await fetch('catalog-public.json',{cache:'no-cache'});}
+  if(!response.ok)throw new Error();
   const catalog=await response.json();publicEntries=catalog.entries;applyCatalog();$('source-status').textContent='✓ Research library';
 }catch{$('results-count').textContent='The library could not load. Please refresh.';$('source-status').textContent='Library unavailable';}
