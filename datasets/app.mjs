@@ -91,9 +91,10 @@ $('export').onclick=()=>{
   const csv=[['Dataset','Topic','Description','Years','Access','Geographic focus (inferred)','Source URL'],...visible.map(e=>[e.title,e.topic,e.description,e.years,e.access,e.geography,e.url])].map(row=>row.map(cell).join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));const a=el('a');a.href=url;a.download='dataset-library.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
-try{const response=await fetch('research-additions.json',{cache:'no-cache'});if(!response.ok)throw new Error();research=await response.json();}catch{
-  document.querySelector('.source-note').textContent='Research additions unavailable; showing the base collection.';
+for(const source of ['https://raw.githubusercontent.com/konstantinosStouras/datasets/main/research-additions.json','research-additions.json']){
+  try{const response=await fetch(source,{cache:'no-cache',signal:AbortSignal.timeout(10000)});if(!response.ok)throw new Error();const candidate=await response.json();if(candidate.schemaVersion!==1||!Array.isArray(candidate.datasets)||!candidate.papers)throw new Error();research=candidate;break;}catch{}
 }
+if(!research.datasets.length)document.querySelector('.source-note').textContent='Research additions unavailable; showing the base collection.';
 try{const fallback=await fetch('source.md');if(!fallback.ok)throw new Error();load(await fallback.text());$('source-status').textContent='Saved collection';}catch{$('source-status').textContent='Loading live source…';}
 try{
   const response=await fetch('https://raw.githubusercontent.com/konstantinosStouras/datasets/main/README.md',{cache:'no-cache',signal:AbortSignal.timeout(10000)});
