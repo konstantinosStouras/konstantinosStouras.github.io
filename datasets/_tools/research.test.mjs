@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {parseCatalog} from '../catalog.mjs';
 import {mergeResearch} from '../research.mjs';
-const catalog=JSON.parse(readFileSync(new URL('../research-additions.json',import.meta.url)));
-const base=parseCatalog(readFileSync(new URL('../source.md',import.meta.url),'utf8'));
+const catalog=JSON.parse(readFileSync(new URL('./research-additions.json',import.meta.url)));
+const base=parseCatalog(readFileSync(new URL('./source.md',import.meta.url),'utf8'));
 test('every research addition has dated evidence, paper identifiers, and valid URLs',()=>{
   for(const d of catalog.datasets){
     assert.match(d.dateAdded,/^\d{4}-\d{2}-\d{2}$/);assert.ok(d.tags.length&&d.paperDois.length&&d.verification);

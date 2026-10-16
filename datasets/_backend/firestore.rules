@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function member() { return request.auth != null && request.auth.token.email_verified == true; }
+    match /datasetLinks/{id} { allow read: if member(); allow write: if false; }
+    match /users/{uid}/bookmarks/{id} {
+      allow read, delete: if member() && request.auth.uid == uid;
+      allow create, update: if member() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['datasetId', 'createdAt'])
+        && request.resource.data.datasetId == id && request.resource.data.createdAt == request.time;
+    }
+    match /submissions/{id} {
+      allow create: if member()
+        && request.resource.data.keys().hasOnly(['uid','kind','datasetId','title','url','description','tags','status','createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.kind in ['addition','edit']
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200
+        && request.resource.data.url is string && request.resource.data.url.size() <= 2000
+        && request.resource.data.url.matches('https://.*')
+        && request.resource.data.description is string && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 5000
+        && request.resource.data.tags is string && request.resource.data.tags.size() <= 500
+        && request.resource.data.datasetId is string && request.resource.data.datasetId.size() <= 250;
+      allow read: if member() && request.auth.uid == resource.data.uid;
+      allow update, delete: if false;
+    }
+  }
+}

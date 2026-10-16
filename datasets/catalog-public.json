@@ -1,0 +1,3344 @@
+{
+  "updated": "2026-10-16T10:47:27.435Z",
+  "entries": [
+    {
+      "id": "american-time-use-survey-atus",
+      "title": "American Time Use Survey (ATUS)",
+      "topic": "Time Use",
+      "description": "24-hour US time diaries",
+      "years": "2003-present",
+      "access": "Public",
+      "geography": "United States",
+      "types": [
+        "Survey",
+        "Research & publications"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          2003,
+          2026
+        ]
+      ],
+      "paper": true,
+      "details": [
+        "Years: 2003-present; Access: Public; There is also an IPUMS version",
+        "Includes minute-by-minute information on which  of hundreds of activities the person is doing. For most activities, there is also information on where and with whom the activity occurred.",
+        "The ATUS is a sample of the Current Population Survey (CPS), to which it can be linked.",
+        "Sample paper: Parental and Student Time Use Around the Academic Year"
+      ],
+      "papers": [],
+      "search": "american time use survey (atus) time use 24-hour us time diaries years: 2003-present; access: public; there is also an ipums version includes minute-by-minute information on which  of hundreds of activities the person is doing. for most activities, there is also information on where and with whom the activity occurred. the atus is a sample of the current population survey (cps), to which it can be linked. sample paper: parental and student time use around the academic year"
+    },
+    {
+      "id": "multinational-time-use-study",
+      "title": "Multinational Time Use Study",
+      "topic": "Time Use",
+      "description": "Time diaries from a number of countries",
+      "years": "varies",
+      "access": "Agreement or mixed",
+      "geography": "International",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Years: varies. Access: Requires IPUMS data agreement."
+      ],
+      "papers": [],
+      "search": "multinational time use study time use time diaries from a number of countries years: varies. access: requires ipums data agreement."
+    },
+    {
+      "id": "national-incident-based-reporting-system-nibrs",
+      "title": "National Incident-based Reporting System (NIBRS)",
+      "topic": "Crime",
+      "description": "Individual-level crime data covering much of the US",
+      "years": "1991-present",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Administrative records",
+        "Geospatial data"
+      ],
+      "units": [
+        "Individuals",
+        "Places & geographic areas",
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial",
+        "Demographics"
+      ],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1991,
+          2026
+        ]
+      ],
+      "paper": true,
+      "details": [
+        "Years: 1991-present. This version was standardized and compiled by Jacob Kaplan.",
+        "Includes information like offender age, sex, and race; victim age, sex, and race; type of offense; time of offense; location of offense; and relationship between victim and offender.",
+        "The geography is police agency, so the individual crimes are not geocoded.",
+        "Useful crosswalk to get more information about the police agencies",
+        "Sample paper: School and Crime"
+      ],
+      "papers": [],
+      "search": "national incident-based reporting system (nibrs) crime individual-level crime data covering much of the us years: 1991-present. this version was standardized and compiled by jacob kaplan. includes information like offender age, sex, and race; victim age, sex, and race; type of offense; time of offense; location of offense; and relationship between victim and offender. the geography is police agency, so the individual crimes are not geocoded. useful crosswalk to get more information about the police agencies sample paper: school and crime"
+    },
+    {
+      "id": "national-crime-victimization-survey-ncvs",
+      "title": "National Crime Victimization Survey (NCVS)",
+      "topic": "Crime",
+      "description": "Self-reported victimization data",
+      "years": "1992-present",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1992,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1992-present. This version is from ICPSR."
+      ],
+      "papers": [],
+      "search": "national crime victimization survey (ncvs) crime self-reported victimization data years: 1992-present. this version is from icpsr."
+    },
+    {
+      "id": "city-level-crime-data",
+      "title": "City-level crime data",
+      "topic": "Crime",
+      "description": "many cities have individual-level, geocoded crime data. A small number of examples:",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Administrative records",
+        "Geospatial data"
+      ],
+      "units": [
+        "Individuals",
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial"
+      ],
+      "period": "Ongoing",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "New York City",
+        "Chicago",
+        "Los Angeles",
+        "Seattle",
+        "See also this site, this site, and this older site each of which detail availability for many cities",
+        "And OpenPoliceData, which compiles data from many sources"
+      ],
+      "papers": [],
+      "search": "city-level crime data crime many cities have individual-level, geocoded crime data. a small number of examples: new york city chicago los angeles seattle see also this site, this site, and this older site each of which detail availability for many cities and openpolicedata, which compiles data from many sources"
+    },
+    {
+      "id": "911-calls",
+      "title": "911 calls",
+      "topic": "Crime",
+      "description": "many cities have data on 911 calls. A small number of examples:",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "New York",
+        "Los Angeles",
+        "Seattle"
+      ],
+      "papers": [],
+      "search": "911 calls crime many cities have data on 911 calls. a small number of examples: new york los angeles seattle"
+    },
+    {
+      "id": "stanford-open-policing-project",
+      "title": "Stanford Open Policing Project",
+      "topic": "Crime",
+      "description": "Data on millions of police traffic stops across locations",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "stanford open policing project crime data on millions of police traffic stops across locations"
+    },
+    {
+      "id": "justice-outcomes-explorer",
+      "title": "Justice Outcomes Explorer",
+      "topic": "Crime",
+      "description": "Collaboration between University of Michigan's Criminal Justices Administrative Records System and the U.S. Census Bureau. Years covered: 2000-2020 (varies by jurisdiction). Criminal justice involvement includes criminal charges, prison releases, and probation and parole sentences. Outcomes: employment, earnings, government program participation, and mortality.",
+      "years": "2000-2020 (varies by jurisdiction)",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Census",
+        "Administrative records"
+      ],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Income / earnings",
+        "Employment"
+      ],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          2000,
+          2020
+        ]
+      ],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "justice outcomes explorer crime collaboration between university of michigan's criminal justices administrative records system and the u.s. census bureau. years covered: 2000-2020 (varies by jurisdiction). criminal justice involvement includes criminal charges, prison releases, and probation and parole sentences. outcomes: employment, earnings, government program participation, and mortality."
+    },
+    {
+      "id": "1850-1880-and-1900-1950-individual-level-full-count-us-censuses",
+      "title": "1850-1880 and 1900-1950 individual-level full count US Censuses",
+      "topic": "US Censuses and Economic History",
+      "description": "",
+      "years": "",
+      "access": "Agreement or mixed",
+      "geography": "United States",
+      "types": [
+        "Census"
+      ],
+      "units": [
+        "Individuals",
+        "Households"
+      ],
+      "tools": [],
+      "designs": [
+        "Full count / universe"
+      ],
+      "features": [
+        "Demographics",
+        "Income / earnings",
+        "Names / addresses",
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "This version is from IPUMS, which requires an agreement.",
+        "IPUMS also has samples of some of the later Censuses",
+        "Information varies by year, but includes fields like age, sex, race, occupation, household structure, etc. Sometimes earnings and years of education.",
+        "It does not include name or address."
+      ],
+      "papers": [],
+      "search": "1850-1880 and 1900-1950 individual-level full count us censuses us censuses and economic history  this version is from ipums, which requires an agreement. ipums also has samples of some of the later censuses information varies by year, but includes fields like age, sex, race, occupation, household structure, etc. sometimes earnings and years of education. it does not include name or address."
+    },
+    {
+      "id": "opencensus",
+      "title": "OpenCensus",
+      "topic": "US Censuses and Economic History",
+      "description": "",
+      "years": "",
+      "access": "Public",
+      "geography": "United States",
+      "types": [
+        "Census"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Names / addresses"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "A project that is initially working to make the 1940 Census publicly available, so it includes name, address, etc."
+      ],
+      "papers": [],
+      "search": "opencensus us censuses and economic history  a project that is initially working to make the 1940 census publicly available, so it includes name, address, etc."
+    },
+    {
+      "id": "individual-level-links-between-censuses",
+      "title": "Individual-level links between Censuses",
+      "topic": "US Censuses and Economic History",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Census"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Census Tree - The largest set of links and good coverage for women. It uses information from the world's largest family tree, FamilySearch, to create the links. ",
+        "IPUMS has its own links",
+        "Another option is the Census Linking Project "
+      ],
+      "papers": [],
+      "search": "individual-level links between censuses us censuses and economic history  census tree - the largest set of links and good coverage for women. it uses information from the world's largest family tree, familysearch, to create the links.  ipums has its own links another option is the census linking project "
+    },
+    {
+      "id": "census-place-project",
+      "title": "Census Place Project",
+      "topic": "US Censuses and Economic History",
+      "description": "Census links to standardized and geocoded place names.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Census",
+        "Geospatial data"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial",
+        "Names / addresses"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "census place project us censuses and economic history census links to standardized and geocoded place names."
+    },
+    {
+      "id": "censoc",
+      "title": "CenSoc",
+      "topic": "US Censuses and Economic History",
+      "description": "Links between the 1940 Census and death records.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Census",
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "censoc us censuses and economic history links between the 1940 census and death records."
+    },
+    {
+      "id": "american-community-survey-acs",
+      "title": "American Community Survey (ACS)",
+      "topic": "Household Surveys",
+      "description": "Like a more-detailed version of the US Census, but only a sample of the population participates",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Survey",
+        "Census"
+      ],
+      "units": [
+        "Households",
+        "Firms & institutions"
+      ],
+      "tools": [
+        "API",
+        "R"
+      ],
+      "designs": [
+        "Repeated cross-section"
+      ],
+      "features": [
+        "Demographics",
+        "Income / earnings"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Repeated cross-section. You can access it, e.g., via IPUMS (above link) or the tidycensus R package (requires a Census API key).",
+        "Depending on the geography, you can get a large number of variables like demographics, income, travel time to work, college major, industry, home value, and primary heating source."
+      ],
+      "papers": [],
+      "search": "american community survey (acs) household surveys like a more-detailed version of the us census, but only a sample of the population participates repeated cross-section. you can access it, e.g., via ipums (above link) or the tidycensus r package (requires a census api key). depending on the geography, you can get a large number of variables like demographics, income, travel time to work, college major, industry, home value, and primary heating source."
+    },
+    {
+      "id": "current-population-survey-cps",
+      "title": "Current Population Survey (CPS)",
+      "topic": "Household Surveys",
+      "description": "Large US labor force survey",
+      "years": "1962-present",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Individuals",
+        "Households"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Employment"
+      ],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1962,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1962-present. This version is via IPUMS.",
+        "A person participates every month for four months, takes eight months off, then does four more months.",
+        "A subset of the CPS participates in the ATUS (see above)."
+      ],
+      "papers": [],
+      "search": "current population survey (cps) household surveys large us labor force survey years: 1962-present. this version is via ipums. a person participates every month for four months, takes eight months off, then does four more months. a subset of the cps participates in the atus (see above)."
+    },
+    {
+      "id": "panel-study-of-income-dynamics-psid",
+      "title": "Panel Study of Income Dynamics (PSID)",
+      "topic": "Household Surveys",
+      "description": "long-running panel household survey",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Households"
+      ],
+      "tools": [],
+      "designs": [
+        "Panel / longitudinal"
+      ],
+      "features": [
+        "Income / earnings"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "panel study of income dynamics (psid) household surveys long-running panel household survey"
+    },
+    {
+      "id": "national-longitudinal-study-of-youth-nlsy79-and-nlsy97",
+      "title": "National Longitudinal Study of Youth (NLSY79 and NLSY97)",
+      "topic": "Household Surveys",
+      "description": "detailed, long-running panel surveys",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Individuals",
+        "Households"
+      ],
+      "tools": [],
+      "designs": [
+        "Panel / longitudinal"
+      ],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "NLSY79 follows people born 1957-64, with the first interview in 1979",
+        "NLSY97 follows people born 1980-84, with the first interview in 1997"
+      ],
+      "papers": [],
+      "search": "national longitudinal study of youth (nlsy79 and nlsy97) household surveys detailed, long-running panel surveys nlsy79 follows people born 1957-64, with the first interview in 1979 nlsy97 follows people born 1980-84, with the first interview in 1997"
+    },
+    {
+      "id": "ipums-international",
+      "title": "IPUMS International",
+      "topic": "Household Surveys",
+      "description": "100+ countries, 650+ surveys, 1B+ records",
+      "years": "",
+      "access": "Not specified",
+      "geography": "International",
+      "types": [
+        "Survey",
+        "Census"
+      ],
+      "units": [
+        "Households",
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Massive, standardized compilation of censuses and surveys"
+      ],
+      "papers": [],
+      "search": "ipums international household surveys 100+ countries, 650+ surveys, 1b+ records massive, standardized compilation of censuses and surveys"
+    },
+    {
+      "id": "household-pulse-survey-household-trends-and-outlook-pulse-survey",
+      "title": "Household Pulse Survey/Household Trends and Outlook Pulse Survey",
+      "topic": "Household Surveys",
+      "description": "Collected starting April 23, 2020 to measure timely issues affecting U.S. households. Household Pulse Survey ended on September 16, 2024 and was relaunched as Household Trends and Outlook Survey in early October 2024.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Households"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "household pulse survey/household trends and outlook pulse survey household surveys collected starting april 23, 2020 to measure timely issues affecting u.s. households. household pulse survey ended on september 16, 2024 and was relaunched as household trends and outlook survey in early october 2024."
+    },
+    {
+      "id": "migrate",
+      "title": "MIGRATE",
+      "topic": "Mobility and Migration",
+      "description": "yearly migration patterns between US Census Blocks",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Census",
+        "Geospatial data"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "From Inferring fine-grained migration patterns across the United States"
+      ],
+      "papers": [],
+      "search": "migrate mobility and migration yearly migration patterns between us census blocks from inferring fine-grained migration patterns across the united states"
+    },
+    {
+      "id": "opportunity-atlas",
+      "title": "Opportunity Atlas",
+      "topic": "Mobility and Migration",
+      "description": "many adult outcomes of children at very fine-grained geographies",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Demographics"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "From The Opportunity Atlas: Mapping the Childhood Roots of Social Mobility and Changing Opportunity: Sociological Mechanisms Underlying Growing Class Gaps and Shrinking Race Gaps in Economic Mobility"
+      ],
+      "papers": [],
+      "search": "opportunity atlas mobility and migration many adult outcomes of children at very fine-grained geographies from the opportunity atlas: mapping the childhood roots of social mobility and changing opportunity: sociological mechanisms underlying growing class gaps and shrinking race gaps in economic mobility"
+    },
+    {
+      "id": "migration-patterns",
+      "title": "Migration Patterns",
+      "topic": "Mobility and Migration",
+      "description": "Counts of children commuting zone to adult commuting zone migration patterns, split by race and parental income",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Demographics",
+        "Income / earnings",
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "From The Radius of Economic Opportunity: Evidence from Migration and Local Labor Markets"
+      ],
+      "papers": [],
+      "search": "migration patterns mobility and migration counts of children commuting zone to adult commuting zone migration patterns, split by race and parental income from the radius of economic opportunity: evidence from migration and local labor markets"
+    },
+    {
+      "id": "ssa-baby-names",
+      "title": "SSA baby names",
+      "topic": "Names",
+      "description": "Frequencies of baby names by year from the Social Security Administration",
+      "years": "1880–present",
+      "access": "Public",
+      "geography": "United States",
+      "types": [],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Names / addresses"
+      ],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1880,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1880–present; Access: Public",
+        "Data presented separately by male and female and by state. Minimum 5 names.",
+        "Fun article about the origins of these data."
+      ],
+      "papers": [],
+      "search": "ssa baby names names frequencies of baby names by year from the social security administration years: 1880–present; access: public data presented separately by male and female and by state. minimum 5 names. fun article about the origins of these data."
+    },
+    {
+      "id": "england-and-wales-names",
+      "title": "England and Wales names",
+      "topic": "Names",
+      "description": "Baby names from the Office of National Statistics",
+      "years": "1996-present",
+      "access": "Not specified",
+      "geography": "United Kingdom",
+      "types": [],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Names / addresses"
+      ],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1996,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1996-present",
+        "Minimum 3 names."
+      ],
+      "papers": [],
+      "search": "england and wales names names baby names from the office of national statistics years: 1996-present minimum 3 names."
+    },
+    {
+      "id": "us-census-names",
+      "title": "US Census names",
+      "topic": "Names",
+      "description": "Most commonly-occurring first and last names in the US",
+      "years": "1990, 2000, 2010, 2020",
+      "access": "Public",
+      "geography": "United States",
+      "types": [
+        "Census"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Names / addresses"
+      ],
+      "period": "Not specified",
+      "ranges": [
+        [
+          1990,
+          1990
+        ],
+        [
+          2000,
+          2000
+        ],
+        [
+          2010,
+          2010
+        ],
+        [
+          2020,
+          2020
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1990, 2000, 2010, 2020. Access: Public"
+      ],
+      "papers": [],
+      "search": "us census names names most commonly-occurring first and last names in the us years: 1990, 2000, 2010, 2020. access: public"
+    },
+    {
+      "id": "facebook-name-list",
+      "title": "Facebook Name List",
+      "topic": "Names",
+      "description": "How often names are male and female",
+      "years": "",
+      "access": "Public",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Names / addresses"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Access: Public"
+      ],
+      "papers": [],
+      "search": "facebook name list names how often names are male and female access: public"
+    },
+    {
+      "id": "nchs-multiple-cause-of-death",
+      "title": "NCHS Multiple Cause of Death",
+      "topic": "Injury and death",
+      "description": "Individual-level US mortality data",
+      "years": "1959-present",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1959,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1959-present. Only years before 2005 have geographical information.",
+        "This version is cleaned by the NBER."
+      ],
+      "papers": [],
+      "search": "nchs multiple cause of death injury and death individual-level us mortality data years: 1959-present. only years before 2005 have geographical information. this version is cleaned by the nber."
+    },
+    {
+      "id": "cdc-mortality-data",
+      "title": "CDC Mortality Data",
+      "topic": "Injury and death",
+      "description": "County-level mortality data",
+      "years": "1969-present",
+      "access": "Agreement or mixed",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Demographics"
+      ],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1969,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1969-present. Requires agreement.",
+        "Depending on the year, splits by age, race, sex, and cause of death."
+      ],
+      "papers": [],
+      "search": "cdc mortality data injury and death county-level mortality data years: 1969-present. requires agreement. depending on the year, splits by age, race, sex, and cause of death."
+    },
+    {
+      "id": "national-electronic-injury-surveillance-system",
+      "title": "National Electronic Injury Surveillance System",
+      "topic": "Injury and death",
+      "description": "Individual-level data on injuries involving consumer products.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": true,
+      "details": [
+        "Sample paper: Smartphones and child injuries"
+      ],
+      "papers": [],
+      "search": "national electronic injury surveillance system injury and death individual-level data on injuries involving consumer products. sample paper: smartphones and child injuries"
+    },
+    {
+      "id": "fatal-accident-reporting-system-fars",
+      "title": "Fatal Accident Reporting System (FARS)",
+      "topic": "Crashes and traffic",
+      "description": "Individual-level data on virtually the universe of US fatal car crashes",
+      "years": "1975-present",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [
+        "Full count / universe"
+      ],
+      "features": [
+        "Demographics"
+      ],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1975,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1975-present. Includes drive and passenger demographics, car characteristics, location, and other circumstances regarding the crash."
+      ],
+      "papers": [],
+      "search": "fatal accident reporting system (fars) crashes and traffic individual-level data on virtually the universe of us fatal car crashes years: 1975-present. includes drive and passenger demographics, car characteristics, location, and other circumstances regarding the crash."
+    },
+    {
+      "id": "state-level-crash-data",
+      "title": "State-level crash data",
+      "topic": "Crashes and traffic",
+      "description": "some states (and cities) have individual-level, geocoded car crash data. A small number of examples:",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Geospatial data"
+      ],
+      "units": [
+        "Individuals",
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "California",
+        "Massachusetts and then search for \"Crashes\"",
+        "See also this site and this other site, which both detail data availability for each state. "
+      ],
+      "papers": [],
+      "search": "state-level crash data crashes and traffic some states (and cities) have individual-level, geocoded car crash data. a small number of examples: california massachusetts and then search for \"crashes\" see also this site and this other site, which both detail data availability for each state. "
+    },
+    {
+      "id": "utd19",
+      "title": "UTD19",
+      "topic": "Crashes and traffic",
+      "description": "Traffic data from 20k+ stations across 40 cities",
+      "years": "2017-2019",
+      "access": "Public",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          2017,
+          2019
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 2017-2019. Access: public. "
+      ],
+      "papers": [],
+      "search": "utd19 crashes and traffic traffic data from 20k+ stations across 40 cities years: 2017-2019. access: public. "
+    },
+    {
+      "id": "ipeds",
+      "title": "IPEDS",
+      "topic": "Education",
+      "description": "Data on college enrollments, faculty/staff, expenditures, incoming test scores, graduation, etc.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Research & publications"
+      ],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "ipeds education data on college enrollments, faculty/staff, expenditures, incoming test scores, graduation, etc."
+    },
+    {
+      "id": "seda",
+      "title": "SEDA",
+      "topic": "Education",
+      "description": "K-12 district-, county-, and state-level test scores, by race and gender",
+      "years": "2009-2019",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Demographics"
+      ],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          2009,
+          2019
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 2009-2019"
+      ],
+      "papers": [],
+      "search": "seda education k-12 district-, county-, and state-level test scores, by race and gender years: 2009-2019"
+    },
+    {
+      "id": "common-core-of-data",
+      "title": "Common Core of Data",
+      "topic": "Education",
+      "description": "K-12 school- and district-level data",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Places & geographic areas",
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "common core of data education k-12 school- and district-level data"
+    },
+    {
+      "id": "educationdata",
+      "title": "educationdata",
+      "topic": "Education",
+      "description": "You can access a lot of different datasets, such as IPEDS and CCD, using Urban Institute's educationdata, including R and Stata packages.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [
+        "R",
+        "Stata"
+      ],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "educationdata education you can access a lot of different datasets, such as ipeds and ccd, using urban institute's educationdata, including r and stata packages."
+    },
+    {
+      "id": "heri",
+      "title": "HERI",
+      "topic": "Education",
+      "description": "Detailed college freshman, senior, and faculty surveys",
+      "years": "",
+      "access": "Agreement or mixed",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey",
+        "Research & publications"
+      ],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Years vary.  Some of data is publicly available; rest requires agreement."
+      ],
+      "papers": [],
+      "search": "heri education detailed college freshman, senior, and faculty surveys years vary.  some of data is publicly available; rest requires agreement."
+    },
+    {
+      "id": "data-on-where-colleges-graduates-go-after-graduating",
+      "title": "Data on where colleges graduates go after graduating",
+      "topic": "Education",
+      "description": "",
+      "years": "2010-2018",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Individuals",
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Employment"
+      ],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          2010,
+          2018
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 2010-2018. From Grads on the Go: Measuring College-Specific Labor Markets for Graduates"
+      ],
+      "papers": [],
+      "search": "data on where colleges graduates go after graduating education  years: 2010-2018. from grads on the go: measuring college-specific labor markets for graduates"
+    },
+    {
+      "id": "pisa",
+      "title": "PISA",
+      "topic": "Education",
+      "description": "Data allowing cross-county comparisons on educational progress",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "pisa education data allowing cross-county comparisons on educational progress"
+    },
+    {
+      "id": "median-earnings-four-years-after-graduation-by-university-major",
+      "title": "Median earnings four years after graduation by university-major",
+      "topic": "Education",
+      "description": "",
+      "years": "",
+      "access": "Public",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Individuals",
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Income / earnings"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Graduates from 2017-18 and 2018-19. Access: public. A university-major is only included if there are at least 16 graduates.",
+        "From the Department of Education; this version is made available by the HEA Group."
+      ],
+      "papers": [],
+      "search": "median earnings four years after graduation by university-major education  graduates from 2017-18 and 2018-19. access: public. a university-major is only included if there are at least 16 graduates. from the department of education; this version is made available by the hea group."
+    },
+    {
+      "id": "post-secondary-employment-outcomes-pseo",
+      "title": "Post-Secondary Employment Outcomes (PSEO)",
+      "topic": "Education",
+      "description": "Earnings and employment outcomes for college and university graduates by degree level, degree major, post-secondary institution, and state of institution.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Individuals",
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Income / earnings",
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "post-secondary employment outcomes (pseo) education earnings and employment outcomes for college and university graduates by degree level, degree major, post-secondary institution, and state of institution."
+    },
+    {
+      "id": "educator-compensation-dashboard",
+      "title": "Educator Compensation Dashboard",
+      "topic": "Education",
+      "description": "Southern state regional database of annual educator compensation and workforce data on K-12 education",
+      "years": "2016 - present",
+      "access": "Public",
+      "geography": "Other / not specified",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          2016,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 2016 - present; Access: Public",
+        "This dashboard is compiled by scraping and pulling publicly available administrative data from state and national sources"
+      ],
+      "papers": [],
+      "search": "educator compensation dashboard education southern state regional database of annual educator compensation and workforce data on k-12 education years: 2016 - present; access: public this dashboard is compiled by scraping and pulling publicly available administrative data from state and national sources"
+    },
+    {
+      "id": "openalex",
+      "title": "Openalex",
+      "topic": "Academia",
+      "description": "over half a billion academic papers",
+      "years": "",
+      "access": "Public",
+      "geography": "Other / not specified",
+      "types": [
+        "Research & publications"
+      ],
+      "units": [],
+      "tools": [
+        "API"
+      ],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Free to download the full data, but it is really big! Limited number of free API pulls per day"
+      ],
+      "papers": [],
+      "search": "openalex academia over half a billion academic papers free to download the full data, but it is really big! limited number of free api pulls per day"
+    },
+    {
+      "id": "metadata-on-nber-articles",
+      "title": "Metadata on NBER articles",
+      "topic": "Academia",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Text / transcripts"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Includes information like authors, affiliations, and abstracts"
+      ],
+      "papers": [],
+      "search": "metadata on nber articles academia  includes information like authors, affiliations, and abstracts"
+    },
+    {
+      "id": "economics-phd-placements",
+      "title": "Economics PhD Placements",
+      "topic": "Academia",
+      "description": "placements of 18k+ economics PhDs from 82 programs over 1990-2026",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Research & publications"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "economics phd placements academia placements of 18k+ economics phds from 82 programs over 1990-2026"
+    },
+    {
+      "id": "economics-graduates-north-america-1997-2017-with-repec-handles-and-scopus-ids",
+      "title": "Economics Graduates North-America 1997-2017 with RePEc handles and Scopus IDs",
+      "topic": "Academia",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Research & publications"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "economics graduates north-america 1997-2017 with repec handles and scopus ids academia "
+    },
+    {
+      "id": "gender-composition-by-academic-field",
+      "title": "Gender composition by academic field",
+      "topic": "Academia",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Research & publications"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Demographics",
+        "Names / addresses"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Since 1950, based on estimated name from publications"
+      ],
+      "papers": [],
+      "search": "gender composition by academic field academia  since 1950, based on estimated name from publications"
+    },
+    {
+      "id": "phd-origins-of-academic-faculty",
+      "title": "PhD origins of academic faculty",
+      "topic": "Academia",
+      "description": "where hundreds of thousands of professors got their PhDs, by university and field",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Research & publications"
+      ],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "From Quantifying hierarchy and dynamics in US faculty hiring and retention"
+      ],
+      "papers": [],
+      "search": "phd origins of academic faculty academia where hundreds of thousands of professors got their phds, by university and field from quantifying hierarchy and dynamics in us faculty hiring and retention"
+    },
+    {
+      "id": "prism",
+      "title": "PRISM",
+      "topic": "Temperature",
+      "description": "Gridded weather data, including temperature and precipitation",
+      "years": "1981-present (daily), 1895-present (monthly)",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Geospatial data"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial"
+      ],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1981,
+          2026
+        ],
+        [
+          1895,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1981-present (daily), 1895-present (monthly)"
+      ],
+      "papers": [],
+      "search": "prism temperature gridded weather data, including temperature and precipitation years: 1981-present (daily), 1895-present (monthly)"
+    },
+    {
+      "id": "noaa",
+      "title": "NOAA",
+      "topic": "Temperature",
+      "description": "Weather station data",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "noaa temperature weather station data"
+    },
+    {
+      "id": "open-meteo",
+      "title": "Open-Meteo",
+      "topic": "Temperature",
+      "description": "weather API",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [
+        "API"
+      ],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Some of data goes back to 1940. Forecast data from 2021. Free version of API is rate limited (300k/month)"
+      ],
+      "papers": [],
+      "search": "open-meteo temperature weather api some of data goes back to 1940. forecast data from 2021. free version of api is rate limited (300k/month)"
+    },
+    {
+      "id": "nvss-natality-data",
+      "title": "NVSS Natality data",
+      "topic": "Family",
+      "description": "Individual-level data on births",
+      "years": "1968-present",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1968,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1968-present. Provided by NBER. Only years before 2005 have geographical information."
+      ],
+      "papers": [],
+      "search": "nvss natality data family individual-level data on births years: 1968-present. provided by nber. only years before 2005 have geographical information."
+    },
+    {
+      "id": "national-survey-of-family-growth",
+      "title": "National Survey of Family Growth",
+      "topic": "Family",
+      "description": "Survey on things like pregnancy, infertility, births, and marriage",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey",
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "national survey of family growth family survey on things like pregnancy, infertility, births, and marriage"
+    },
+    {
+      "id": "cdc-and-ssa-birthdates",
+      "title": "CDC and SSA Birthdates",
+      "topic": "Family",
+      "description": "Counts of birth by calendar day",
+      "years": "1994-2003 (CDC) and 2000-2014 (Social Security Administration)",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1994,
+          2003
+        ],
+        [
+          2000,
+          2014
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1994-2003 (CDC) and 2000-2014 (Social Security Administration)",
+        "From FiveThirtyEight. See Some People Are Too Superstitious To Have A Baby On Friday The 13th"
+      ],
+      "papers": [],
+      "search": "cdc and ssa birthdates family counts of birth by calendar day years: 1994-2003 (cdc) and 2000-2014 (social security administration) from fivethirtyeight. see some people are too superstitious to have a baby on friday the 13th"
+    },
+    {
+      "id": "marriages-and-divorces-in-texas",
+      "title": "Marriages and Divorces in Texas",
+      "topic": "Family",
+      "description": "Individual-level data on marriages and divorces",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Names / addresses"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Years vary. Some of the years are missing data.",
+        "Both files have names and dates. The divorce file has number of children and date of marriage."
+      ],
+      "papers": [],
+      "search": "marriages and divorces in texas family individual-level data on marriages and divorces years vary. some of the years are missing data. both files have names and dates. the divorce file has number of children and date of marriage."
+    },
+    {
+      "id": "marriages-in-england-and-wales",
+      "title": "Marriages in England and Wales",
+      "topic": "Family",
+      "description": "Counts of marriages by day",
+      "years": "1999-present for the data with day of marriage",
+      "access": "Not specified",
+      "geography": "United Kingdom",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1999,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1999-present for the data with day of marriage. "
+      ],
+      "papers": [],
+      "search": "marriages in england and wales family counts of marriages by day years: 1999-present for the data with day of marriage. "
+    },
+    {
+      "id": "mlb",
+      "title": "MLB",
+      "topic": "Sports",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Income / earnings",
+        "Text / transcripts"
+      ],
+      "period": "Ongoing",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Pitch-level data from Baseball Savant's Statcast. You can get the location of the pitch, the distance a batted ball was estimated to travel, etc.",
+        "Cot's salary data",
+        "Lahman Baseball Database - Season-level player statistics, 1871-present",
+        "10,000 baseball scouting reports",
+        "From Trouble with the Curve: Predicting Future MLB Players Using Scouting Reports"
+      ],
+      "papers": [],
+      "search": "mlb sports  pitch-level data from baseball savant's statcast. you can get the location of the pitch, the distance a batted ball was estimated to travel, etc. cot's salary data lahman baseball database - season-level player statistics, 1871-present 10,000 baseball scouting reports from trouble with the curve: predicting future mlb players using scouting reports"
+    },
+    {
+      "id": "nba",
+      "title": "NBA",
+      "topic": "Sports",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Box score data, 1947-present, from Kaggle",
+        "Play-by-play data, 1997-present, from Kaggle"
+      ],
+      "papers": [],
+      "search": "nba sports  box score data, 1947-present, from kaggle play-by-play data, 1997-present, from kaggle"
+    },
+    {
+      "id": "nfl",
+      "title": "NFL",
+      "topic": "Sports",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [],
+      "tools": [
+        "R"
+      ],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "nflverse - R package that you can use to get lots of data, including play-by-play"
+      ],
+      "papers": [],
+      "search": "nfl sports  nflverse - r package that you can use to get lots of data, including play-by-play"
+    },
+    {
+      "id": "marathons",
+      "title": "Marathons",
+      "topic": "Sports",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Marathon times"
+      ],
+      "papers": [],
+      "search": "marathons sports  marathon times"
+    },
+    {
+      "id": "2020-us-religion-census",
+      "title": "2020 US Religion Census",
+      "topic": "Religion",
+      "description": "Estimates of the number of adherents by faith at the county and state level",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Census"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "2020 us religion census religion estimates of the number of adherents by faith at the county and state level"
+    },
+    {
+      "id": "pew-s-religious-landscape-study-rls",
+      "title": "Pew's Religious Landscape Study (RLS)",
+      "topic": "Religion",
+      "description": "large survey about religion",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "pew's religious landscape study (rls) religion large survey about religion"
+    },
+    {
+      "id": "lds-hymn-stats",
+      "title": "LDS Hymn Stats",
+      "topic": "Religion",
+      "description": "the hymns sung at over 100,000 (non-representative) Latter-day Saint Sacrament Meetings",
+      "years": "",
+      "access": "Agreement or mixed",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "The microdata is not available, but counts by hymn are, overall and separately by before and since June 2024"
+      ],
+      "papers": [],
+      "search": "lds hymn stats religion the hymns sung at over 100,000 (non-representative) latter-day saint sacrament meetings the microdata is not available, but counts by hymn are, overall and separately by before and since june 2024"
+    },
+    {
+      "id": "the-arda",
+      "title": "The ARDA",
+      "topic": "Religion",
+      "description": "compiles many datasets on religion",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "the arda religion compiles many datasets on religion"
+    },
+    {
+      "id": "localview",
+      "title": "LocalView",
+      "topic": "Government",
+      "description": "transcripts of local government meetings that were uploaded to YouTube",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Text / transcripts"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "localview government transcripts of local government meetings that were uploaded to youtube"
+    },
+    {
+      "id": "voteview",
+      "title": "Voteview",
+      "topic": "Government",
+      "description": "how everyone in Congress has voted throughout all of US history as well as an ideology score for everyone",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "voteview government how everyone in congress has voted throughout all of us history as well as an ideology score for everyone"
+    },
+    {
+      "id": "visits-by-foreign-leaders-and-heads-of-state",
+      "title": "Visits by Foreign Leaders and Heads of State",
+      "topic": "Government",
+      "description": "Every visit of a foreign head of state to the US President (or VP if President was indisposed/abroad) from 1874-2020",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "visits by foreign leaders and heads of state government every visit of a foreign head of state to the us president (or vp if president was indisposed/abroad) from 1874-2020"
+    },
+    {
+      "id": "congressindata",
+      "title": "CongressInData",
+      "topic": "Government",
+      "description": "For Congress members between 2005-2015, it provides information on social networks, voting, etc.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "congressindata government for congress members between 2005-2015, it provides information on social networks, voting, etc."
+    },
+    {
+      "id": "quality-of-government-expert-survey",
+      "title": "Quality of Government Expert Survey",
+      "topic": "Government",
+      "description": "survey of around 1k experts on 117 countries about government quality",
+      "years": "",
+      "access": "Not specified",
+      "geography": "International",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "quality of government expert survey government survey of around 1k experts on 117 countries about government quality"
+    },
+    {
+      "id": "cpi-u",
+      "title": "CPI-U",
+      "topic": "Inflation and cost of living",
+      "description": "you can use this to adjust for inflation",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "To use, click on \"Edit Graph\" and adjust the frequency to \"Annual\" with \"Average aggregation\" method. "
+      ],
+      "papers": [],
+      "search": "cpi-u inflation and cost of living you can use this to adjust for inflation to use, click on \"edit graph\" and adjust the frequency to \"annual\" with \"average aggregation\" method. "
+    },
+    {
+      "id": "cost-of-living",
+      "title": "Cost of living",
+      "topic": "Inflation and cost of living",
+      "description": "County-level cost of living estimates",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "cost of living inflation and cost of living county-level cost of living estimates"
+    },
+    {
+      "id": "o-net",
+      "title": "O*NET",
+      "topic": "Working",
+      "description": "Data on occupational tasks",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "o*net working data on occupational tasks"
+    },
+    {
+      "id": "quarterly-census-of-employment-and-wages-qcew",
+      "title": "Quarterly Census of Employment and Wages (QCEW)",
+      "topic": "Working",
+      "description": "county-level data on employment and wages",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Census"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Income / earnings",
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "quarterly census of employment and wages (qcew) working county-level data on employment and wages"
+    },
+    {
+      "id": "quarterly-workforce-indicators-qwi",
+      "title": "Quarterly Workforce Indicators (QWI)",
+      "topic": "Working",
+      "description": "employment, jobs creation, earnings and other measures of employment flows by detailed firm characteristics and worker demographics. Downloadable via Census API",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Census"
+      ],
+      "units": [
+        "Individuals",
+        "Firms & institutions"
+      ],
+      "tools": [
+        "API"
+      ],
+      "designs": [],
+      "features": [
+        "Demographics",
+        "Income / earnings",
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "quarterly workforce indicators (qwi) working employment, jobs creation, earnings and other measures of employment flows by detailed firm characteristics and worker demographics. downloadable via census api"
+    },
+    {
+      "id": "job-to-job-flows-j2j",
+      "title": "Job to Job Flows (J2J)",
+      "topic": "Working",
+      "description": "statistics on job mobility in the United States, including the job-to-job transition rate, hires and separation rates, earnings changes due to job change, and characteristics of the origin and destination job.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Income / earnings",
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "job to job flows (j2j) working statistics on job mobility in the united states, including the job-to-job transition rate, hires and separation rates, earnings changes due to job change, and characteristics of the origin and destination job."
+    },
+    {
+      "id": "lehd-origin-destination-employment-statistics-lodes",
+      "title": "LEHD Origin-Destination Employment Statistics (LODES)",
+      "topic": "Working",
+      "description": "source data for the Census OnTheMap data tool, providing statistics at the Census block level at both residential and workplace locations and flows between the two (origin-destination).",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Census",
+        "Geospatial data"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial",
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "lehd origin-destination employment statistics (lodes) working source data for the census onthemap data tool, providing statistics at the census block level at both residential and workplace locations and flows between the two (origin-destination)."
+    },
+    {
+      "id": "veteran-employment-outcomes-veo",
+      "title": "Veteran Employment Outcomes (VEO)",
+      "topic": "Working",
+      "description": "labor market outcomes for discharged veterans from five branches of the military - Air Force, Army, Coast Guard, Marine Corps, and Navy. Tabulated by military specialization, service characteristics, employer industry, and veteran demographics.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Demographics",
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "veteran employment outcomes (veo) working labor market outcomes for discharged veterans from five branches of the military - air force, army, coast guard, marine corps, and navy. tabulated by military specialization, service characteristics, employer industry, and veteran demographics."
+    },
+    {
+      "id": "mobility-opportunity-and-volatility-statistics-movs",
+      "title": "Mobility, Opportunity, and Volatility Statistics (MOVS)",
+      "topic": "Working",
+      "description": "a dataset that tracts the income changes of a 2005 cohort of U.S. adults from 2005 to 2019 by initial income decile, sex, and race/ethnicity.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Demographics",
+        "Income / earnings"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "mobility, opportunity, and volatility statistics (movs) working a dataset that tracts the income changes of a 2005 cohort of u.s. adults from 2005 to 2019 by initial income decile, sex, and race/ethnicity."
+    },
+    {
+      "id": "county-business-patterns",
+      "title": "County Business Patterns",
+      "topic": "Businesses",
+      "description": "county-level data on employment and payroll",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Places & geographic areas",
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "county business patterns businesses county-level data on employment and payroll"
+    },
+    {
+      "id": "chicago-business-registrations",
+      "title": "Chicago Business Registrations",
+      "topic": "Businesses",
+      "description": "geocoded business licenses with business name, date of expiration, etc.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Administrative records",
+        "Geospatial data"
+      ],
+      "units": [
+        "Places & geographic areas",
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial",
+        "Names / addresses"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "chicago business registrations businesses geocoded business licenses with business name, date of expiration, etc."
+    },
+    {
+      "id": "business-dynamic-statistics",
+      "title": "Business Dynamic Statistics",
+      "topic": "Businesses",
+      "description": "Annual measures of business dynamics - job creation and destruction, establishment births and deaths, firm startups and shutdowns by establishment and firm characteristics. Also available for specific types of firms/measures: Patenting Firms, High Growth Firms, Goods Traders, High Tech Industries, Single-Unit Firms with Revenue, Human Capital, Coastal Counties.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [
+        "Places & geographic areas",
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Employment"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "business dynamic statistics businesses annual measures of business dynamics - job creation and destruction, establishment births and deaths, firm startups and shutdowns by establishment and firm characteristics. also available for specific types of firms/measures: patenting firms, high growth firms, goods traders, high tech industries, single-unit firms with revenue, human capital, coastal counties."
+    },
+    {
+      "id": "dispersion-statistics-on-productivity-disp",
+      "title": "Dispersion Statistics on Productivity (DiSP)",
+      "topic": "Businesses",
+      "description": "within-industry measures of productivity dispersion. Covers every five years from 1987-2017 by 4-digit NAICS for manufacturing and retail sectors.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "dispersion statistics on productivity (disp) businesses within-industry measures of productivity dispersion. covers every five years from 1987-2017 by 4-digit naics for manufacturing and retail sectors."
+    },
+    {
+      "id": "business-trends-and-outlook-survey-btos",
+      "title": "Business Trends and Outlook Survey (BTOS)",
+      "topic": "Businesses",
+      "description": "high-frequency, nationally representative data on U.S. employer businesses. Collected starting September 11, 2023. Data released every 2 weeks by NAICS sector, state, and 25 most populous MSAs.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Employment"
+      ],
+      "period": "Ongoing",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "business trends and outlook survey (btos) businesses high-frequency, nationally representative data on u.s. employer businesses. collected starting september 11, 2023. data released every 2 weeks by naics sector, state, and 25 most populous msas."
+    },
+    {
+      "id": "small-area-global-elections-sage-dataset",
+      "title": "Small-Area Global Elections (SAGE) Dataset",
+      "topic": "Politics and voting",
+      "description": "Granular, geocoded voting returns for 134 countries",
+      "years": "",
+      "access": "Not specified",
+      "geography": "International",
+      "types": [
+        "Administrative records",
+        "Geospatial data"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "small-area global elections (sage) dataset politics and voting granular, geocoded voting returns for 134 countries"
+    },
+    {
+      "id": "mit-election-lab",
+      "title": "MIT Election Lab",
+      "topic": "Politics and voting",
+      "description": "Collection of various US election results",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "mit election lab politics and voting collection of various us election results"
+    },
+    {
+      "id": "nyt-s-presidential-precinct-data-for-the-2024-u-s-general-election",
+      "title": "NYT's Presidential precinct data for the 2024 U.S. general election",
+      "topic": "Politics and voting",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "See also this map"
+      ],
+      "papers": [],
+      "search": "nyt's presidential precinct data for the 2024 u.s. general election politics and voting  see also this map"
+    },
+    {
+      "id": "north-carolina-voter-registration-data",
+      "title": "North Carolina voter registration data",
+      "topic": "Politics and voting",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "north carolina voter registration data politics and voting "
+    },
+    {
+      "id": "national-health-and-nutrition-examination-survey-nhanes",
+      "title": "National Health and Nutrition Examination Survey (NHANES)",
+      "topic": "Health, public health, and epidemiology",
+      "description": "National survey for adults and children with various health-related questions",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "national health and nutrition examination survey (nhanes) health, public health, and epidemiology national survey for adults and children with various health-related questions"
+    },
+    {
+      "id": "national-health-interview-survey",
+      "title": "National Health Interview Survey",
+      "topic": "Health, public health, and epidemiology",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "national health interview survey health, public health, and epidemiology "
+    },
+    {
+      "id": "medical-expenditure-panel-survey",
+      "title": "Medical Expenditure Panel Survey",
+      "topic": "Health, public health, and epidemiology",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [
+        "Panel / longitudinal"
+      ],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "medical expenditure panel survey health, public health, and epidemiology "
+    },
+    {
+      "id": "global-health-surveys",
+      "title": "Global Health Surveys",
+      "topic": "Health, public health, and epidemiology",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "International",
+      "types": [
+        "Survey"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "global health surveys health, public health, and epidemiology "
+    },
+    {
+      "id": "national-immunization-survey",
+      "title": "National Immunization Survey",
+      "topic": "Health, public health, and epidemiology",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "national immunization survey health, public health, and epidemiology "
+    },
+    {
+      "id": "national-survey-of-children-s-health",
+      "title": "National Survey of Children's Health",
+      "topic": "Health, public health, and epidemiology",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "national survey of children's health health, public health, and epidemiology "
+    },
+    {
+      "id": "behavioral-risk-factor-surveillance-system",
+      "title": "Behavioral Risk Factor Surveillance System",
+      "topic": "Health, public health, and epidemiology",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "behavioral risk factor surveillance system health, public health, and epidemiology "
+    },
+    {
+      "id": "health-and-retirement-survey",
+      "title": "Health and Retirement Survey",
+      "topic": "Health, public health, and epidemiology",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Survey"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "health and retirement survey health, public health, and epidemiology "
+    },
+    {
+      "id": "youth-risk-behavioral-surveillance-system",
+      "title": "Youth Risk Behavioral Surveillance System",
+      "topic": "Health, public health, and epidemiology",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "youth risk behavioral surveillance system health, public health, and epidemiology "
+    },
+    {
+      "id": "national-health-and-aging-trends-study-nhats",
+      "title": "National Health and Aging Trends Study (NHATS)",
+      "topic": "Health, public health, and epidemiology",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "national health and aging trends study (nhats) health, public health, and epidemiology "
+    },
+    {
+      "id": "global-survey-of-school-meal-programs",
+      "title": "Global Survey of School Meal Programs",
+      "topic": "Health, public health, and epidemiology",
+      "description": "school meals survey across many countries",
+      "years": "2019-present",
+      "access": "Public",
+      "geography": "International",
+      "types": [
+        "Survey"
+      ],
+      "units": [
+        "Individuals",
+        "Places & geographic areas",
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          2019,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 2019-present; Access: Public",
+        "Geography: Global (167 countries); Units of observation: Country and school meal program; Frequency: Every 2-3 years; Implementer: Global Child Nutrition Foundation",
+        "See A comprehensive and standardized dataset on school feeding activities worldwide: The Global Survey of School Meal Programs "
+      ],
+      "papers": [],
+      "search": "global survey of school meal programs health, public health, and epidemiology school meals survey across many countries years: 2019-present; access: public geography: global (167 countries); units of observation: country and school meal program; frequency: every 2-3 years; implementer: global child nutrition foundation see a comprehensive and standardized dataset on school feeding activities worldwide: the global survey of school meal programs "
+    },
+    {
+      "id": "prices-paid-dataset",
+      "title": "Prices paid dataset",
+      "topic": "Real estate",
+      "description": "All residential property sales in England and Wales (that are sold for value and registered)",
+      "years": "2018-present",
+      "access": "Not specified",
+      "geography": "United Kingdom",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Names / addresses"
+      ],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          2018,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 2018-present. Has address and price paid."
+      ],
+      "papers": [],
+      "search": "prices paid dataset real estate all residential property sales in england and wales (that are sold for value and registered) years: 2018-present. has address and price paid."
+    },
+    {
+      "id": "tract-level-home-price-indices",
+      "title": "Tract-level home price indices",
+      "topic": "Real estate",
+      "description": "",
+      "years": "1989-2021",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Geospatial data"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1989,
+          2021
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1989-2021",
+        "From A Flexible Method of House Price Index Construction using Repeat-Sales Aggregates"
+      ],
+      "papers": [],
+      "search": "tract-level home price indices real estate  years: 1989-2021 from a flexible method of house price index construction using repeat-sales aggregates"
+    },
+    {
+      "id": "worldwide-patent-data",
+      "title": "Worldwide patent data",
+      "topic": "Patents",
+      "description": "Geocoded, 1980-2014, 46 countries",
+      "years": "",
+      "access": "Not specified",
+      "geography": "International",
+      "types": [
+        "Administrative records",
+        "Geospatial data"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial"
+      ],
+      "period": "Historical / fixed period",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "From Geocoding of Worldwide Patent Data"
+      ],
+      "papers": [],
+      "search": "worldwide patent data patents geocoded, 1980-2014, 46 countries from geocoding of worldwide patent data"
+    },
+    {
+      "id": "us-patent-data",
+      "title": "US patent data",
+      "topic": "Patents",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "us patent data patents "
+    },
+    {
+      "id": "facebook-social-connectedness-index-sci",
+      "title": "Facebook Social Connectedness Index (SCI)",
+      "topic": "Social networks",
+      "description": "county-to-county connectedness",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Based on Facebook friendships. Also country-to-country and other subnational links."
+      ],
+      "papers": [],
+      "search": "facebook social connectedness index (sci) social networks county-to-county connectedness based on facebook friendships. also country-to-country and other subnational links."
+    },
+    {
+      "id": "world-values-survey",
+      "title": "World Values Survey",
+      "topic": "Beliefs and values",
+      "description": "Worldwide survey on beliefs and values",
+      "years": "",
+      "access": "Not specified",
+      "geography": "International",
+      "types": [
+        "Survey"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "world values survey beliefs and values worldwide survey on beliefs and values"
+    },
+    {
+      "id": "european-social-survey",
+      "title": "European Social Survey",
+      "topic": "Beliefs and values",
+      "description": "European survey on attitudes, values, etc.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Europe",
+      "types": [
+        "Survey"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "european social survey beliefs and values european survey on attitudes, values, etc."
+    },
+    {
+      "id": "a-list-of-all-federal-laws",
+      "title": "A list of all federal laws",
+      "topic": "Law",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "From A comprehensive dataset of U.S. federal laws (1789–2022)"
+      ],
+      "papers": [],
+      "search": "a list of all federal laws law  from a comprehensive dataset of u.s. federal laws (1789–2022)"
+    },
+    {
+      "id": "lawatlas",
+      "title": "LawAtlas",
+      "topic": "Law",
+      "description": "Coded laws from Temple University's Public Health Law Review",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "lawatlas law coded laws from temple university's public health law review"
+    },
+    {
+      "id": "ercot",
+      "title": "ERCOT",
+      "topic": "Environment and energy",
+      "description": "hourly electricity load data in Texas",
+      "years": "",
+      "access": "Not specified",
+      "geography": "United States",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "1995-present. ERCOT is the largest provider in the state"
+      ],
+      "papers": [],
+      "search": "ercot environment and energy hourly electricity load data in texas 1995-present. ercot is the largest provider in the state"
+    },
+    {
+      "id": "gridded-environmental-impacts-frame-gridded-eif",
+      "title": "Gridded Environmental Impacts Frame (Gridded EIF)",
+      "topic": "Environment and energy",
+      "description": "detailed demographic counts by age, sex, race and ethnicity and data for environmental hazards on a 0.01 degree grid of the United States.",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Geospatial data"
+      ],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial",
+        "Demographics"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "gridded environmental impacts frame (gridded eif) environment and energy detailed demographic counts by age, sex, race and ethnicity and data for environmental hazards on a 0.01 degree grid of the united states."
+    },
+    {
+      "id": "1-8-million-amazon-purchases-from-5000-people",
+      "title": "1.8 million Amazon purchases from 5000 people",
+      "topic": "Shopping",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Demographics"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "From Open e-commerce 1.0, five years of crowdsourced U.S. Amazon purchase histories with user demographics"
+      ],
+      "papers": [],
+      "search": "1.8 million amazon purchases from 5000 people shopping  from open e-commerce 1.0, five years of crowdsourced u.s. amazon purchase histories with user demographics"
+    },
+    {
+      "id": "historical-topographic-maps",
+      "title": "Historical Topographic Maps",
+      "topic": "Maps and geography",
+      "description": "",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Geospatial data"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial"
+      ],
+      "period": "Historical / fixed period",
+      "ranges": [],
+      "paper": false,
+      "details": [
+        "Maps from 1884-2006"
+      ],
+      "papers": [],
+      "search": "historical topographic maps maps and geography  maps from 1884-2006"
+    },
+    {
+      "id": "elevation-data",
+      "title": "Elevation data",
+      "topic": "Maps and geography",
+      "description": "R package to get elevation data from a variety of sources",
+      "years": "",
+      "access": "Not specified",
+      "geography": "Other / not specified",
+      "types": [
+        "Geospatial data"
+      ],
+      "units": [],
+      "tools": [
+        "R"
+      ],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial"
+      ],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": false,
+      "details": [],
+      "papers": [],
+      "search": "elevation data maps and geography r package to get elevation data from a variety of sources"
+    },
+    {
+      "id": "interstate-system-dataset-isd-version-2-1",
+      "title": "Interstate System Dataset (ISD), version 2.1",
+      "topic": "States, conflict, and regimes",
+      "description": "All independent states since 1816, a wider list than the Correlates of War one",
+      "years": "1816-2016",
+      "access": "Public",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1816,
+          2016
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1816-2016; Access: Public (CC0)",
+        "One row per state, with entry and exit dates and how the state ended (conquest, unification, dissolution, etc.)"
+      ],
+      "papers": [],
+      "search": "interstate system dataset (isd), version 2.1 states, conflict, and regimes all independent states since 1816, a wider list than the correlates of war one years: 1816-2016; access: public (cc0) one row per state, with entry and exit dates and how the state ended (conquest, unification, dissolution, etc.)"
+    },
+    {
+      "id": "abramson-2017-replication-data",
+      "title": "Abramson (2017) replication data",
+      "topic": "States, conflict, and regimes",
+      "description": "European states from 1100 to 1790, with their territory and when they ended",
+      "years": "1100-1790",
+      "access": "Public",
+      "geography": "Europe",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1100,
+          1790
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1100-1790; Access: Public (CC0)",
+        "From The Economic Origins of the Territorial State"
+      ],
+      "papers": [],
+      "search": "abramson (2017) replication data states, conflict, and regimes european states from 1100 to 1790, with their territory and when they ended years: 1100-1790; access: public (cc0) from the economic origins of the territorial state"
+    },
+    {
+      "id": "political-instability-task-force-pitf-state-failure-problem-set",
+      "title": "Political Instability Task Force (PITF) State Failure Problem Set",
+      "topic": "States, conflict, and regimes",
+      "description": "Onsets and ends of ethnic wars, revolutionary wars, adverse regime changes and genocides",
+      "years": "1955-2018",
+      "access": "Agreement or mixed",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Demographics"
+      ],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1955,
+          2018
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1955-2018; Access: Free download, cite the source, no redistribution without permission"
+      ],
+      "papers": [],
+      "search": "political instability task force (pitf) state failure problem set states, conflict, and regimes onsets and ends of ethnic wars, revolutionary wars, adverse regime changes and genocides years: 1955-2018; access: free download, cite the source, no redistribution without permission"
+    },
+    {
+      "id": "polity5",
+      "title": "Polity5",
+      "topic": "States, conflict, and regimes",
+      "description": "Regime scores for independent states with more than 500,000 people",
+      "years": "1800-2018",
+      "access": "Public",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Individuals"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1800,
+          2018
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1800-2018; Access: Free download"
+      ],
+      "papers": [],
+      "search": "polity5 states, conflict, and regimes regime scores for independent states with more than 500,000 people years: 1800-2018; access: free download"
+    },
+    {
+      "id": "v-dem",
+      "title": "V-Dem",
+      "topic": "States, conflict, and regimes",
+      "description": "Hundreds of indicators of democracy and regime characteristics, by country and year",
+      "years": "1789-present",
+      "access": "Public",
+      "geography": "Other / not specified",
+      "types": [],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Ongoing",
+      "ranges": [
+        [
+          1789,
+          2026
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1789-present; Access: Public"
+      ],
+      "papers": [],
+      "search": "v-dem states, conflict, and regimes hundreds of indicators of democracy and regime characteristics, by country and year years: 1789-present; access: public"
+    },
+    {
+      "id": "cshapes-2-0",
+      "title": "CShapes 2.0",
+      "topic": "States, conflict, and regimes",
+      "description": "Borders and capitals of states and dependent territories, as maps",
+      "years": "1886-2019 (Europe from 1816)",
+      "access": "Public",
+      "geography": "Europe",
+      "types": [
+        "Geospatial data"
+      ],
+      "units": [],
+      "tools": [],
+      "designs": [],
+      "features": [
+        "Geocoded / spatial"
+      ],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1886,
+          2019
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1886-2019 (Europe from 1816); Access: Public (CC BY-NC-SA 4.0)"
+      ],
+      "papers": [],
+      "search": "cshapes 2.0 states, conflict, and regimes borders and capitals of states and dependent territories, as maps years: 1886-2019 (europe from 1816); access: public (cc by-nc-sa 4.0)"
+    },
+    {
+      "id": "world-macro-financial-dataset",
+      "title": "World Macro-Financial Dataset",
+      "topic": "Macroeconomics",
+      "description": "Data for many countries on credit, GDP, equity prices, bond yields and consumer prices",
+      "years": "1950-2025",
+      "access": "Not specified",
+      "geography": "International",
+      "types": [],
+      "units": [
+        "Places & geographic areas"
+      ],
+      "tools": [],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1950,
+          2025
+        ]
+      ],
+      "paper": false,
+      "details": [
+        "Years: 1950-2025; 49 countries; Frequency: quarterly",
+        "From World Cycles Revisited: Diverging Trends in Prices and Quantities"
+      ],
+      "papers": [],
+      "search": "world macro-financial dataset macroeconomics data for many countries on credit, gdp, equity prices, bond yields and consumer prices years: 1950-2025; 49 countries; frequency: quarterly from world cycles revisited: diverging trends in prices and quantities"
+    },
+    {
+      "id": "nber-patent-data-project",
+      "title": "NBER Patent Data Project — patents and citations",
+      "topic": "Patents",
+      "description": "Historical U.S. patent records, citations, technology classifications and assignee identifiers for studying innovation and knowledge flows.",
+      "years": "1976-2006",
+      "access": "Public",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [
+        "Stata"
+      ],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1976,
+          2006
+        ]
+      ],
+      "paper": true,
+      "research": true,
+      "tags": [
+        "Innovation",
+        "Technology management",
+        "Patents",
+        "Knowledge spillovers",
+        "R&D"
+      ],
+      "dateAdded": "2026-10-16",
+      "verifiedAt": "2026-10-16",
+      "details": [
+        "The author-hosted page provides historical files and cautions that some are interim or not completely cleaned. Follow its project link for documentation and later releases.",
+        "The public patent files are not the cited paper's complete replication package: the study also combines other sources, including restricted financial data.",
+        "Patent records ZIP (Stata)",
+        "Citation pairs ZIP (Stata)",
+        "Patent Data Project",
+        "Provider documentation read; both ZIP endpoints returned HTTP 200 to HEAD requests on 2026-10-16. Full archives were not downloaded."
+      ],
+      "papers": [
+        {
+          "title": "The Changing Nature of Firm Innovation: Short-Termism and Influential Innovation in U.S. Public Firms",
+          "authors": "Yuan Shi; Rachelle C. Sampson; Brent Goldfarb; Rafael A. Corredoira",
+          "journal": "Management Science",
+          "year": 2026,
+          "volume": "72",
+          "issue": "9",
+          "evidenceSection": "Section 3.2, Dependent Variables Capturing Technologically Significant Inventions"
+        }
+      ],
+      "search": "nber patent data project — patents and citations patents historical u.s. patent records, citations, technology classifications and assignee identifiers for studying innovation and knowledge flows. the author-hosted page provides historical files and cautions that some are interim or not completely cleaned. follow its project link for documentation and later releases. the public patent files are not the cited paper's complete replication package: the study also combines other sources, including restricted financial data. patent records zip (stata) citation pairs zip (stata) patent data project provider documentation read; both zip endpoints returned http 200 to head requests on 2026-10-16. full archives were not downloaded. innovation technology management patents knowledge spillovers r&d the changing nature of firm innovation: short-termism and influential innovation in u.s. public firms yuan shi; rachelle c. sampson; brent goldfarb; rafael a. corredoira management science 2026"
+    },
+    {
+      "id": "patentsview-disambiguated-patents",
+      "title": "PatentsView — disambiguated U.S. patent data",
+      "topic": "Patents",
+      "description": "Research-ready U.S. patent data linking inventors, organizations and locations for studying invention, technological change and firm innovation.",
+      "years": "",
+      "access": "Public · registration required",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [
+        "Individuals",
+        "Firms & institutions"
+      ],
+      "tools": [
+        "API"
+      ],
+      "designs": [],
+      "features": [],
+      "period": "Not specified",
+      "ranges": [],
+      "paper": true,
+      "research": true,
+      "tags": [
+        "Innovation",
+        "Technology management",
+        "Patents",
+        "Inventors",
+        "R&D"
+      ],
+      "dateAdded": "2026-10-16",
+      "verifiedAt": "2026-10-16",
+      "details": [
+        "PatentsView migrated to the USPTO Open Data Portal in March 2026. The current portal requires a USPTO.gov account; API access requires a key.",
+        "Official documentation lists releases through December 2025. Coverage depends on the chosen table; inspect its release notes and data dictionary.",
+        "This specific research-ready collection is distinct from the existing general USPTO portal listing. Other sources used in the paper may require subscriptions.",
+        "Granted Patent Disambiguated Data",
+        "Registration and API requirements",
+        "Official USPTO documentation read; the product page returned HTTP 200 on 2026-10-16. Registration-gated files were not downloaded."
+      ],
+      "papers": [
+        {
+          "title": "The Changing Nature of Firm Innovation: Short-Termism and Influential Innovation in U.S. Public Firms",
+          "authors": "Yuan Shi; Rachelle C. Sampson; Brent Goldfarb; Rafael A. Corredoira",
+          "journal": "Management Science",
+          "year": 2026,
+          "volume": "72",
+          "issue": "9",
+          "evidenceSection": "Section 3.2, Dependent Variables Capturing Technologically Significant Inventions"
+        }
+      ],
+      "search": "patentsview — disambiguated u.s. patent data patents research-ready u.s. patent data linking inventors, organizations and locations for studying invention, technological change and firm innovation. patentsview migrated to the uspto open data portal in march 2026. the current portal requires a uspto.gov account; api access requires a key. official documentation lists releases through december 2025. coverage depends on the chosen table; inspect its release notes and data dictionary. this specific research-ready collection is distinct from the existing general uspto portal listing. other sources used in the paper may require subscriptions. granted patent disambiguated data registration and api requirements official uspto documentation read; the product page returned http 200 on 2026-10-16. registration-gated files were not downloaded. innovation technology management patents inventors r&d the changing nature of firm innovation: short-termism and influential innovation in u.s. public firms yuan shi; rachelle c. sampson; brent goldfarb; rafael a. corredoira management science 2026"
+    },
+    {
+      "id": "uspto-trademark-case-files",
+      "title": "USPTO Trademark Case Files",
+      "topic": "Intellectual property",
+      "description": "Trademark applications and registrations with ownership, product classes and prosecution and renewal histories, useful for studying product introductions and innovation.",
+      "years": "1870-2024",
+      "access": "Public · registration required",
+      "geography": "United States",
+      "types": [
+        "Administrative records"
+      ],
+      "units": [
+        "Firms & institutions"
+      ],
+      "tools": [
+        "Stata"
+      ],
+      "designs": [],
+      "features": [],
+      "period": "Historical / fixed period",
+      "ranges": [
+        [
+          1870,
+          2024
+        ]
+      ],
+      "paper": true,
+      "research": true,
+      "tags": [
+        "New product development",
+        "Innovation",
+        "Technology management",
+        "Trademarks",
+        "Brands"
+      ],
+      "dateAdded": "2026-10-16",
+      "verifiedAt": "2026-10-16",
+      "details": [
+        "The paper explicitly uses the 1970–2015 trademark files. The current provider release extends through March 2024; it is not the identical historical extract.",
+        "The paper also uses subscription financial databases; this entry covers its public trademark component.",
+        "USPTO downloads use temporary signed URLs through the Open Data Portal. Account requirements apply; full archives were not downloaded.",
+        "Official download product",
+        "Independent paper replication report",
+        "Official dataset documentation and its linked download product opened successfully on 2026-10-16. Publisher PDF Section 3.1 explicitly identifies the dataset. No claim of unrestricted access to the complete study data."
+      ],
+      "papers": [
+        {
+          "title": "Valuation of New Trademarks",
+          "authors": "Po-Hsuan Hsu; Dongmei Li; Qin Li; Siew Hong Teoh; Kevin Tseng",
+          "journal": "Management Science",
+          "year": 2022,
+          "volume": "68",
+          "issue": "1",
+          "evidenceSection": "Section 3.1, Trademark Data and Measure of New Trademark Intensity"
+        }
+      ],
+      "search": "uspto trademark case files intellectual property trademark applications and registrations with ownership, product classes and prosecution and renewal histories, useful for studying product introductions and innovation. the paper explicitly uses the 1970–2015 trademark files. the current provider release extends through march 2024; it is not the identical historical extract. the paper also uses subscription financial databases; this entry covers its public trademark component. uspto downloads use temporary signed urls through the open data portal. account requirements apply; full archives were not downloaded. official download product independent paper replication report official dataset documentation and its linked download product opened successfully on 2026-10-16. publisher pdf section 3.1 explicitly identifies the dataset. no claim of unrestricted access to the complete study data. new product development innovation technology management trademarks brands valuation of new trademarks po-hsuan hsu; dongmei li; qin li; siew hong teoh; kevin tseng management science 2022"
+    }
+  ]
+}

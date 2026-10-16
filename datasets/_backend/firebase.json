@@ -1,0 +1,4 @@
+{
+  "auth": {"providers": {"emailPassword": true, "googleSignIn": {"oAuthBrandDisplayName": "The Dataset Library", "supportEmail": "kstouras@gmail.com", "authorizedRedirectUris": ["https://stouras-dataset-library.firebaseapp.com/__/auth/handler"]}}},
+  "firestore": {"rules": "firestore.rules"}
+}

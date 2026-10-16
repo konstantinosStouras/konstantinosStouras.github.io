@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {parseCatalog,filterEntries} from '../catalog.mjs';
-const source=readFileSync(new URL('../source.md',import.meta.url),'utf8');
+const source=readFileSync(new URL('./source.md',import.meta.url),'utf8');
 const rows=parseCatalog(source);
 test('keeps real entries including uneven indentation, excludes drafts and source-paper bullets',()=>{
   assert.equal(rows.length,119);assert.equal(new Set(rows.map(e=>e.topic)).size,30);

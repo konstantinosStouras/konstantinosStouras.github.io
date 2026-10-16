@@ -1,12 +1,11 @@
 import {parseCatalog, filterEntries, plain} from './catalog.mjs';
-import {mergeResearch} from './research.mjs';
+import {isMember,onSession,requireMember,toggleBookmark,openContribution,openAccount} from './membership.mjs';
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const filterKeys=['topic','access','geo','type','unit','design','year','period','tool','feature','paper','tag','journal'];
 const filters = Object.fromEntries(['q',...filterKeys,'view','sort'].map(k=>[k,params.get(k)||({view:'all',sort:'source'}[k]||'')]));
 if (!['all','topics','saved','research'].includes(filters.view)) filters.view='all';
-let entries=[], visible=[], saved=[], research={datasets:[],papers:{}};
-try { saved=JSON.parse(localStorage.getItem('dataset-library-saved') || '[]'); if (!Array.isArray(saved)) saved=[]; } catch {}
+let entries=[], publicEntries=[], visible=[], saved=[], privateLinks=new Map();
 const bookmark = '<svg viewBox="0 0 18 23" aria-hidden="true"><path d="M3 2h12v18l-6-4-6 4z"/></svg>';
 function el(tag, className, text) { const node=document.createElement(tag); if(className) node.className=className; if(text) node.textContent=text; return node; }
 function link(text,url) { const a=el('a','',text); a.href=url; a.target='_blank';a.rel='noopener noreferrer';return a; }
@@ -26,7 +25,7 @@ function card(e) {
   const top=el('div','card-top'),topic=el('button','topic-badge',e.topic),save=el('button','save');
   topic.onclick=()=>{filters.topic=e.topic;filters.view='all';syncControls();render();};
   save.innerHTML=bookmark;save.setAttribute('aria-label',`${saved.includes(e.id)?'Unsave':'Save'} ${e.title}`);save.setAttribute('aria-pressed',String(saved.includes(e.id)));
-  save.onclick=()=>{saved=saved.includes(e.id)?saved.filter(id=>id!==e.id):[...saved,e.id];try{localStorage.setItem('dataset-library-saved',JSON.stringify(saved));}catch{}render();};
+  save.onclick=()=>toggleBookmark(e.id);
   top.append(topic,save);article.append(top);
   const heading=el('h3');heading.append(e.url?link(e.title,e.url):document.createTextNode(e.title));article.append(heading);
   const description=e.description || (e.details.length ? plain(e.details.find(d=>!/^years:|^access:/i.test(d))||e.details[0]) : 'Explore source links and notes for this dataset collection.');
@@ -40,9 +39,9 @@ function card(e) {
     article.append(el('p','date-added',`Added ${new Date(e.dateAdded+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} · source checked ${e.verifiedAt}`));
     const tags=el('div','research-tags');for(const tag of e.tags){const b=el('button','',tag);b.onclick=()=>{filters.tag=tag;filters.view='research';syncControls();render();};tags.append(b);}article.append(tags);
     const citations=el('section','paper-citations');citations.append(el('h4','','Used in published research'));
-    for(const paper of e.papers){const citation=el('div','paper-citation');citation.append(link(paper.title,paper.url),el('p','',`${paper.authors} · ${paper.journal} ${paper.volume||''}${paper.issue?'('+paper.issue+')':''} (${paper.year})`),el('p','evidence-note',`Dataset use verified: ${paper.evidenceSection}.`));citations.append(citation);}article.append(citations);
+    for(const paper of e.papers){const citation=el('div','paper-citation');citation.append(paper.url?link(paper.title,paper.url):el('span','paper-title',paper.title),el('p','',`${paper.authors} · ${paper.journal} ${paper.volume||''}${paper.issue?'('+paper.issue+')':''} (${paper.year})`),el('p','evidence-note',`Dataset use verified: ${paper.evidenceSection}.`));citations.append(citation);}article.append(citations);
   }
-  details.append(summary,list);bottom.append(details);if(e.url)bottom.append(link('Explore data ↗',e.url));article.append(bottom);return article;
+  details.append(summary,list);bottom.append(details);if(isMember()&&e.url)bottom.append(link('Explore data ↗',e.url));else{const access=el('button','member-access',isMember()?'Loading source…':'Sign in to access data');access.onclick=()=>openAccount();bottom.append(access);}const edit=el('button','suggest-edit','Suggest an edit');edit.onclick=()=>openContribution(e);article.append(edit,bottom);return article;
 }
 function render(){
   visible=filterEntries(entries,filters,saved).filter(e=>(filters.view!=='research'||e.research)&&(!filters.tag||e.tags?.includes(filters.tag))&&(!filters.journal||e.papers?.some(p=>p.journal===filters.journal)));
@@ -52,7 +51,7 @@ function render(){
   $('saved-count').textContent=saved.filter(id=>entries.some(e=>e.id===id)).length;
   document.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('active',b.dataset.view===filters.view);if(b.dataset.view===filters.view)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
   $('results-title').textContent=filters.view==='research'?'Verified research additions':filters.view==='saved'?'Your saved datasets':filters.view==='topics'?'Follow your curiosity':filters.topic||'All datasets';
-  $('results-count').textContent=`${visible.length} of ${entries.length} dataset collections${filters.view==='saved'?' · saved on this browser':''}`;
+  $('results-count').textContent=`${visible.length} of ${entries.length} dataset collections${filters.view==='saved'?' · saved to your account':''}`;
   $('section-label').textContent=filters.view==='topics'?'RESEARCH TOPICS':filters.view==='saved'?'YOUR RESEARCH SHELF':'THE COLLECTION';
   const chips=$('active-filters');chips.replaceChildren();
   for(const key of ['q',...filterKeys])if(filters[key]){const label=key==='paper'?(filters[key]==='yes'?'Linked research paper':'No linked paper'):key==='year'?'Coverage: '+filters[key]:filters[key];const b=el('button','',`${label} ×`);b.setAttribute('aria-label',`Remove ${key} filter: ${label}`);b.onclick=()=>{filters[key]='';syncControls();render();};chips.append(b);}
@@ -65,11 +64,11 @@ function render(){
   }
   $('export').disabled=!visible.length;persist();
 }
-function load(text){
-  const parsed=parseCatalog(text);if(parsed.length<50)throw new Error('Source collection is incomplete.');
-  entries=mergeResearch(parsed,research);const topics=[...new Set(entries.map(e=>e.topic))];
+function applyCatalog(){
+  entries=publicEntries.map(e=>({...e,...(isMember()?privateLinks.get(e.id)||{}:{}),details:isMember()&&privateLinks.has(e.id)?privateLinks.get(e.id).details:e.details}));
+  const topics=[...new Set(entries.map(e=>e.topic))];
   $('research-count').textContent=entries.filter(e=>e.research).length;
-  for(const [id,values]of [['tag',[...new Set(research.datasets.flatMap(d=>d.tags))]],['journal',[...new Set(Object.values(research.papers).map(p=>p.journal))]]])$(id).replaceChildren(new Option('Any',''),...values.sort().map(v=>new Option(v,v)));
+  for(const [id,values]of [['tag',[...new Set(entries.flatMap(d=>d.tags||[]))]],['journal',[...new Set(entries.flatMap(d=>(d.papers||[]).map(p=>p.journal)))]]])$(id).replaceChildren(new Option('Any',''),...values.sort().map(v=>new Option(v,v)));
   $('total').textContent=entries.length;$('all-count').textContent=entries.length;$('topics-total').textContent=topics.length;
   $('topic').replaceChildren(new Option('All topics',''),...topics.sort().map(t=>new Option(t,t)));
   syncControls();render();
@@ -86,17 +85,15 @@ document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{filters.view=
 document.querySelectorAll('[data-query]').forEach(b=>b.onclick=()=>{filters.q=b.dataset.query;filters.view='all';syncControls();render();});
 $('clear').onclick=reset;$('empty-reset').onclick=reset;
 document.addEventListener('keydown',e=>{if(e.key==='/'&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$('query').focus();}});
+$('add-dataset').onclick=()=>openContribution();
 $('export').onclick=()=>{
+  if(!requireMember())return;
   const cell=v=>'"'+String(v??'').replace(/^[=+@-]/,"'").replaceAll('"','""')+'"';
   const csv=[['Dataset','Topic','Description','Years','Access','Geographic focus (inferred)','Source URL'],...visible.map(e=>[e.title,e.topic,e.description,e.years,e.access,e.geography,e.url])].map(row=>row.map(cell).join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));const a=el('a');a.href=url;a.download='dataset-library.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
-for(const source of ['https://raw.githubusercontent.com/konstantinosStouras/datasets/main/research-additions.json','research-additions.json']){
-  try{const response=await fetch(source,{cache:'no-cache',signal:AbortSignal.timeout(10000)});if(!response.ok)throw new Error();const candidate=await response.json();if(candidate.schemaVersion!==1||!Array.isArray(candidate.datasets)||!candidate.papers)throw new Error();research=candidate;break;}catch{}
-}
-if(!research.datasets.length)document.querySelector('.source-note').textContent='Research additions unavailable; showing the base collection.';
-try{const fallback=await fetch('source.md');if(!fallback.ok)throw new Error();load(await fallback.text());$('source-status').textContent='Saved collection';}catch{$('source-status').textContent='Loading live source…';}
+onSession(state=>{saved=state.bookmarks;privateLinks=state.links;applyCatalog();});
 try{
-  const response=await fetch('https://raw.githubusercontent.com/konstantinosStouras/datasets/main/README.md',{cache:'no-cache',signal:AbortSignal.timeout(10000)});
-  if(!response.ok)throw new Error();load(await response.text());$('source-status').textContent='✓ Live GitHub collection';
-}catch{if(entries.length)$('source-status').textContent='Saved collection · live source unavailable';else{$('results-count').textContent='The collection could not load. Please refresh or browse it on GitHub.';$('source-status').textContent='Source unavailable';}}
+  const response=await fetch('catalog-public.json',{cache:'no-cache'});if(!response.ok)throw new Error();
+  const catalog=await response.json();publicEntries=catalog.entries;applyCatalog();$('source-status').textContent='✓ Research library';
+}catch{$('results-count').textContent='The library could not load. Please refresh.';$('source-status').textContent='Library unavailable';}
