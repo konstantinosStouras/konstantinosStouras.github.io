@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-10-16",
+  "papers": {
+    "10.1287/mnsc.2022.00857": {
+      "title": "The Changing Nature of Firm Innovation: Short-Termism and Influential Innovation in U.S. Public Firms",
+      "authors": "Yuan Shi; Rachelle C. Sampson; Brent Goldfarb; Rafael A. Corredoira",
+      "journal": "Management Science", "year": 2026,
+      "volume": "72", "issue": "9", "pages": "7970–7996", "onlineDate": "2025-12-18",
+      "doi": "10.1287/mnsc.2022.00857", "url": "https://doi.org/10.1287/mnsc.2022.00857",
+      "evidenceUrl": "https://pubsonline.informs.org/doi/10.1287/mnsc.2022.00857",
+      "evidenceSection": "Section 3.2, Dependent Variables Capturing Technologically Significant Inventions",
+      "verifiedAt": "2026-10-16",
+      "verification": "Publisher full text explicitly names both the NBER patent dataset and PatentsView. Crossref independently confirms the exact title, journal, issue date, volume and article type."
+    }
+  },
+  "datasets": [
+    {
+      "id": "nber-patent-data-project", "title": "NBER Patent Data Project — patents and citations", "topic": "Patents",
+      "url": "https://eml.berkeley.edu/~bhhall/NBER06.html",
+      "description": "Historical U.S. patent records, citations, technology classifications and assignee identifiers for studying innovation and knowledge flows.",
+      "years": "1976-2006", "access": "Public", "geography": "United States",
+      "types": ["Administrative records"], "units": ["Firms & institutions"], "tools": ["Stata"],
+      "tags": ["Innovation", "Technology management", "Patents", "Knowledge spillovers", "R&D"],
+      "dateAdded": "2026-10-16", "verifiedAt": "2026-10-16",
+      "notes": [
+        "The author-hosted page provides historical files and cautions that some are interim or not completely cleaned. Follow its project link for documentation and later releases.",
+        "The public patent files are not the cited paper's complete replication package: the study also combines other sources, including restricted financial data."
+      ],
+      "links": [
+        {"title": "Patent records ZIP (Stata)", "url": "https://eml.berkeley.edu/~bhhall/pubdata/patsic06_mar09_ipc.zip", "checkedStatus": 200},
+        {"title": "Citation pairs ZIP (Stata)", "url": "https://eml.berkeley.edu/~bhhall/pubdata/cite76_06.zip", "checkedStatus": 200},
+        {"title": "Patent Data Project", "url": "https://sites.google.com/site/patentdataproject/"}
+      ],
+      "verification": "Provider documentation read; both ZIP endpoints returned HTTP 200 to HEAD requests on 2026-10-16. Full archives were not downloaded.",
+      "paperDois": ["10.1287/mnsc.2022.00857"]
+    },
+    {
+      "id": "patentsview-disambiguated-patents", "title": "PatentsView — disambiguated U.S. patent data", "topic": "Patents",
+      "url": "https://www.uspto.gov/ip-policy/economic-research/patentsview",
+      "description": "Research-ready U.S. patent data linking inventors, organizations and locations for studying invention, technological change and firm innovation.",
+      "years": "", "access": "Public · registration required", "geography": "United States",
+      "types": ["Administrative records"], "units": ["Individuals", "Firms & institutions"], "tools": ["API"],
+      "tags": ["Innovation", "Technology management", "Patents", "Inventors", "R&D"],
+      "dateAdded": "2026-10-16", "verifiedAt": "2026-10-16",
+      "notes": [
+        "PatentsView migrated to the USPTO Open Data Portal in March 2026. The current portal requires a USPTO.gov account; API access requires a key.",
+        "Official documentation lists releases through December 2025. Coverage depends on the chosen table; inspect its release notes and data dictionary.",
+        "This specific research-ready collection is distinct from the existing general USPTO portal listing. Other sources used in the paper may require subscriptions."
+      ],
+      "links": [
+        {"title": "Granted Patent Disambiguated Data", "url": "https://data.uspto.gov/bulkdata/datasets/pvgpatdis", "checkedStatus": 200},
+        {"title": "Registration and API requirements", "url": "https://data.uspto.gov/apis/bulk-data/search"}
+      ],
+      "verification": "Official USPTO documentation read; the product page returned HTTP 200 on 2026-10-16. Registration-gated files were not downloaded.",
+      "paperDois": ["10.1287/mnsc.2022.00857"]
+    }
+  ]
+}
