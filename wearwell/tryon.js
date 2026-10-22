@@ -1,9 +1,9 @@
-import {getAccountUser} from './auth.js?v=20261022-tryon-v1';
-import {activeMemberId,contextVersion} from './family-context.js?v=20261022-tryon-v1';
-import {currentMember} from './family.js?v=20261022-tryon-v1';
-import {modelCall} from './model-studio.js?v=20261022-tryon-v1';
-import {looks} from './data.js?v=20261022-tryon-v1';
-import {tryOnPage,tryOnView} from './tryon-view.js?v=20261022-tryon-v1';
+import {getAccountUser} from './auth.js?v=20261022-tryon-v2';
+import {activeMemberId,contextVersion} from './family-context.js?v=20261022-tryon-v2';
+import {currentMember} from './family.js?v=20261022-tryon-v2';
+import {modelCall} from './model-studio.js?v=20261022-tryon-v2';
+import {looks} from './data.js?v=20261022-tryon-v2';
+import {tryOnPage,tryOnView} from './tryon-view.js?v=20261022-tryon-v2';
 export {tryOnPage};
 let state=null,busy=false,epoch=0,upload=null,units='cm';
 const host=()=>document.querySelector('#tryon-content');

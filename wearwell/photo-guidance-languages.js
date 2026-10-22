@@ -27,7 +27,8 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.",
     "A clear headshot is used as this person’s profile picture.": "A clear headshot is used as this person’s profile picture.",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos."
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent."
   },
   "el": {
     "Your face. Your proportions.": "Το πρόσωπό σου. Οι αναλογίες σου.",
@@ -56,7 +57,8 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "Πρόσθεσε ένα πορτρέτο, μια ολόσωμη φωτογραφία με ρούχα ή και τα δύο. Οι φωτογραφίες ανήκουν μόνο στο επιλεγμένο οικογενειακό προφίλ.",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "Έχω άδεια να ανεβάσω αυτές τις φωτογραφίες ως γονέας, νόμιμος κηδεμόνας ή με τη συγκατάθεση αυτού του ενηλίκου.",
     "A clear headshot is used as this person’s profile picture.": "Ένα καθαρό πορτρέτο χρησιμοποιείται ως εικόνα προφίλ αυτού του ατόμου.",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG ή JPG, έως 10 MB η καθεμία. Το μέγεθος μειώνεται και τα μεταδεδομένα αφαιρούνται. Μόνο ο λογαριασμός σου έχει πρόσβαση. Δεν δημιουργούνται εικόνες τεχνητής νοημοσύνης από οικογενειακές φωτογραφίες."
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG ή JPG, έως 10 MB η καθεμία. Το μέγεθος μειώνεται και τα μεταδεδομένα αφαιρούνται. Μόνο ο λογαριασμός σου έχει πρόσβαση. Δεν δημιουργούνται εικόνες τεχνητής νοημοσύνης από οικογενειακές φωτογραφίες.",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "PNG ή JPG, έως 10 MB η καθεμία. Το μέγεθος μειώνεται και τα μεταδεδομένα αφαιρούνται. Μόνο ο λογαριασμός σου έχει πρόσβαση. Η δημιουργία εικόνων με τεχνητή νοημοσύνη είναι προαιρετική στην εικονική δοκιμή ρούχων και απαιτεί ξεχωριστή συγκατάθεσή σου για τον πάροχο."
   },
   "de": {
     "Your face. Your proportions.": "Dein Gesicht. Deine Proportionen.",
@@ -85,7 +87,8 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "Füge ein Porträt, ein Ganzkörperfoto mit Kleidung oder beides hinzu. Die Fotos gehören ausschließlich zum ausgewählten Familienprofil.",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "Ich darf diese Fotos als Elternteil, erziehungsberechtigte Person oder mit Einwilligung dieser erwachsenen Person hochladen.",
     "A clear headshot is used as this person’s profile picture.": "Ein klares Porträt wird als Profilbild dieser Person verwendet.",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG oder JPG, bis zu 10 MB pro Bild. Fotos werden verkleinert und Metadaten entfernt. Nur dein Konto hat Zugriff darauf. Aus Familienfotos werden keine KI-Bilder erzeugt."
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG oder JPG, bis zu 10 MB pro Bild. Fotos werden verkleinert und Metadaten entfernt. Nur dein Konto hat Zugriff darauf. Aus Familienfotos werden keine KI-Bilder erzeugt.",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "PNG oder JPG, bis zu 10 MB pro Bild. Fotos werden verkleinert und Metadaten entfernt. Nur dein Konto hat Zugriff darauf. Die KI-Bilderstellung in der virtuellen Anprobe ist optional und erfordert deine gesonderte Zustimmung zum Anbieter."
   },
   "ru": {
     "Your face. Your proportions.": "Ваше лицо. Ваши пропорции.",
@@ -114,7 +117,8 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "Добавьте портрет, фото в полный рост в одежде или оба варианта. Фотографии относятся только к выбранному семейному профилю.",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "У меня есть разрешение на загрузку этих фотографий как у родителя, законного опекуна или с согласия этого совершеннолетнего человека.",
     "A clear headshot is used as this person’s profile picture.": "Чёткий портрет используется как фото профиля этого человека.",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG или JPG, до 10 МБ каждый. Размер фотографий уменьшается, метаданные удаляются. Доступ к ним есть только у вашего аккаунта. По семейным фотографиям изображения с помощью ИИ не создаются."
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG или JPG, до 10 МБ каждый. Размер фотографий уменьшается, метаданные удаляются. Доступ к ним есть только у вашего аккаунта. По семейным фотографиям изображения с помощью ИИ не создаются.",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "PNG или JPG, до 10 МБ каждый. Размер фотографий уменьшается, метаданные удаляются. Доступ к ним есть только у вашего аккаунта. Генерация ИИ в виртуальной примерочной необязательна и требует отдельного согласия на обработку выбранным поставщиком."
   },
   "es": {
     "Your face. Your proportions.": "Tu rostro. Tus proporciones.",
@@ -143,7 +147,8 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "Añade un retrato, una foto de cuerpo entero con ropa o ambas. Las fotos pertenecen solo al perfil familiar seleccionado.",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "Tengo permiso para subir estas fotos por ser su madre, padre o representante legal, o con el consentimiento de esta persona adulta.",
     "A clear headshot is used as this person’s profile picture.": "Se utiliza un retrato nítido como foto de perfil de esta persona.",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG o JPG, hasta 10 MB por foto. Se reduce el tamaño y se eliminan los metadatos. Solo tu cuenta puede acceder a ellas. No se generan imágenes con IA a partir de las fotos familiares."
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG o JPG, hasta 10 MB por foto. Se reduce el tamaño y se eliminan los metadatos. Solo tu cuenta puede acceder a ellas. No se generan imágenes con IA a partir de las fotos familiares.",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "PNG o JPG, hasta 10 MB por foto. Se reduce el tamaño y se eliminan los metadatos. Solo tu cuenta puede acceder a ellas. La generación con IA en el probador virtual es opcional y requiere tu consentimiento específico para el proveedor."
   },
   "fr": {
     "Your face. Your proportions.": "Votre visage. Vos proportions.",
@@ -172,7 +177,8 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "Ajoutez un portrait, une photo en pied avec vêtements, ou les deux. Les photos appartiennent uniquement au profil familial sélectionné.",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "J’ai l’autorisation d’importer ces photos en tant que parent, représentant légal ou avec le consentement de cette personne adulte.",
     "A clear headshot is used as this person’s profile picture.": "Un portrait net est utilisé comme photo de profil de cette personne.",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG ou JPG, jusqu’à 10 Mo par photo. Les photos sont redimensionnées et leurs métadonnées supprimées. Seul votre compte peut y accéder. Aucune image IA n’est générée à partir des photos familiales."
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG ou JPG, jusqu’à 10 Mo par photo. Les photos sont redimensionnées et leurs métadonnées supprimées. Seul votre compte peut y accéder. Aucune image IA n’est générée à partir des photos familiales.",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "PNG ou JPG, jusqu’à 10 Mo par photo. Les photos sont redimensionnées et leurs métadonnées supprimées. Seul votre compte peut y accéder. La génération par IA dans l’essayage virtuel est facultative et nécessite votre consentement distinct pour le fournisseur."
   },
   "pt": {
     "Your face. Your proportions.": "O teu rosto. As tuas proporções.",
@@ -201,7 +207,8 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "Adiciona um retrato, uma fotografia de corpo inteiro com roupa, ou ambos. As fotografias pertencem apenas ao perfil familiar selecionado.",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "Tenho autorização para carregar estas fotografias enquanto mãe, pai ou representante legal, ou com o consentimento desta pessoa adulta.",
     "A clear headshot is used as this person’s profile picture.": "É usado um retrato nítido como fotografia de perfil desta pessoa.",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG ou JPG, até 10 MB por fotografia. As fotografias são redimensionadas e os metadados removidos. Apenas a tua conta lhes pode aceder. Não são geradas imagens com IA a partir das fotografias da família."
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG ou JPG, até 10 MB por fotografia. As fotografias são redimensionadas e os metadados removidos. Apenas a tua conta lhes pode aceder. Não são geradas imagens com IA a partir das fotografias da família.",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "PNG ou JPG, até 10 MB por fotografia. As fotografias são redimensionadas e os metadados removidos. Apenas a tua conta lhes pode aceder. A geração com IA na prova virtual é opcional e exige o teu consentimento separado para o fornecedor."
   },
   "ar": {
     "Your face. Your proportions.": "وجهك. نسب جسمك.",
@@ -230,7 +237,8 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "يمكن إضافة صورة للوجه أو صورة لكامل الجسم مع الملابس، أو كلتيهما. تخصّ الصور الملف العائلي المحدّد فقط.",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "لديّ إذن لرفع هذه الصور بصفتي أحد الوالدين أو الوصيّ القانوني، أو بموافقة هذا الشخص البالغ.",
     "A clear headshot is used as this person’s profile picture.": "تُستخدم صورة واضحة للوجه كصورة للملف الشخصي لهذا الشخص.",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "بصيغة PNG أو JPG، وبحد أقصى 10 ميغابايت لكل صورة. يُقلَّص حجم الصور وتُزال بياناتها الوصفية. لا يمكن الوصول إليها إلا من حسابك. لا تُولَّد صور بالذكاء الاصطناعي من الصور العائلية."
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "بصيغة PNG أو JPG، وبحد أقصى 10 ميغابايت لكل صورة. يُقلَّص حجم الصور وتُزال بياناتها الوصفية. لا يمكن الوصول إليها إلا من حسابك. لا تُولَّد صور بالذكاء الاصطناعي من الصور العائلية.",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "بصيغة PNG أو JPG، وبحد أقصى 10 ميغابايت لكل صورة. يُقلَّص حجم الصور وتُزال بياناتها الوصفية. لا يمكن الوصول إليها إلا من حسابك. توليد الصور بالذكاء الاصطناعي في التجربة الافتراضية اختياري ويتطلب موافقتك المنفصلة على مزوّد الخدمة."
   },
   "zh-Hans": {
     "Your face. Your proportions.": "你的面容。你的身材比例。",
@@ -259,7 +267,8 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "可添加头像照、穿着完整服装的全身照，或两者都添加。照片仅属于当前选中的家庭成员资料。",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "我有权以父母或法定监护人的身份上传这些照片，或已获得这位成年人的同意。",
     "A clear headshot is used as this person’s profile picture.": "一张清晰的头像照会用作此人的个人资料头像。",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "支持 PNG 或 JPG，每张不超过 10 MB。照片会缩小尺寸并移除元数据，仅能通过你的账户访问。不会使用家庭成员照片生成 AI 图片。"
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "支持 PNG 或 JPG，每张不超过 10 MB。照片会缩小尺寸并移除元数据，仅能通过你的账户访问。不会使用家庭成员照片生成 AI 图片。",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "支持 PNG 或 JPG，每张不超过 10 MB。照片会缩小尺寸并移除元数据，仅能通过你的账户访问。虚拟试衣中的 AI 图像生成是可选功能，需要你另行同意由所选服务商处理。"
   },
   "yue": {
     "Your face. Your proportions.": "你嘅樣貌。你嘅身形比例。",
@@ -288,6 +297,7 @@ export default {
     "Add a headshot, a dressed full-body photo, or both. Photos belong only to the selected family profile.": "可以加入頭像相、着齊衫嘅全身相，或者兩樣都加。相片只屬於目前揀選嘅家庭成員檔案。",
     "I have permission to upload these photos as a parent, legal guardian or with this adult’s consent.": "我有權以父母或法定監護人身份上載呢啲相片，或者已經得到呢位成年人同意。",
     "A clear headshot is used as this person’s profile picture.": "會用一張清晰嘅頭像相做呢個人嘅個人檔案相。",
-    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG 或 JPG，每張最多 10 MB。相片會縮細尺寸同移除中繼資料，只有你嘅帳戶可以存取。唔會用家庭成員嘅相片生成 AI 圖片。"
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. No AI images are generated from family photos.": "PNG 或 JPG，每張最多 10 MB。相片會縮細尺寸同移除中繼資料，只有你嘅帳戶可以存取。唔會用家庭成員嘅相片生成 AI 圖片。",
+    "PNG or JPG, up to 10 MB each. Photos are resized and metadata removed. Only your account can access them. AI generation is optional in Virtual try-on and requires your separate provider consent.": "PNG 或 JPG，每張最多 10 MB。相片會縮細尺寸同移除中繼資料，只有你嘅帳戶可以存取。虛擬試衫嘅 AI 圖片生成功能係自選嘅，需要你另外同意由所選服務供應商處理。"
   }
 };
