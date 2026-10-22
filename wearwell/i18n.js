@@ -1,11 +1,11 @@
-import photoGuidance from './photo-guidance-languages.js?v=20261022-admin-v4';
-import familyGreek from './family-el.js?v=20261022-admin-v4';
-import modelGreek from './model-studio-el.js?v=20261022-admin-v4';
-import feedbackGreek from './style-feedback-el.js?v=20261022-admin-v4';
-import {greek} from './translations-el.js?v=20261022-admin-v4';
-import greekExtras from './translations-extra-el.js?v=20261022-admin-v4';
-import {translateOther} from './translation-engine.js?v=20261022-admin-v4';
-import {languages,languageForLocation,readLanguagePreference} from './language-policy.js?v=20261022-admin-v4';
+import photoGuidance from './photo-guidance-languages.js?v=20261022-tryon-v1';
+import familyGreek from './family-el.js?v=20261022-tryon-v1';
+import modelGreek from './model-studio-el.js?v=20261022-tryon-v1';
+import feedbackGreek from './style-feedback-el.js?v=20261022-tryon-v1';
+import {greek} from './translations-el.js?v=20261022-tryon-v1';
+import greekExtras from './translations-extra-el.js?v=20261022-tryon-v1';
+import {translateOther} from './translation-engine.js?v=20261022-tryon-v1';
+import {languages,languageForLocation,readLanguagePreference} from './language-policy.js?v=20261022-tryon-v1';
 Object.assign(greek,greekExtras,modelGreek,familyGreek);
 const preferenceKey='daywear.language';
 let preference='auto';try{preference=readLanguagePreference(globalThis.localStorage);}catch{}

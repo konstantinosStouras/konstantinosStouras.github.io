@@ -1,7 +1,7 @@
-import {languages} from './language-policy.js?v=20261022-admin-v4';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261022-admin-v4';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261022-admin-v4';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261022-admin-v4';
+import {languages} from './language-policy.js?v=20261022-tryon-v1';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261022-tryon-v1';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261022-tryon-v1';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261022-tryon-v1';
 
 const serviceLanguage=()=>languages[document.documentElement.lang]?.service||'en';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -43,7 +43,7 @@ function renderAccountButton(){
  trigger.innerHTML=accountButtonMarkup(user,profileName);
  trigger.classList.toggle('signed-in',!!user);trigger.setAttribute('aria-haspopup',user?'true':'dialog');
  trigger.setAttribute('aria-expanded',String(!menu.hidden));trigger.setAttribute('aria-controls',user?'account-menu':'account-modal');
- menu.innerHTML=user?`<div class="account-menu-identity"><small>Signed in as</small><strong data-i18n-skip>${esc(accountIdentity(user,profileName).name)}</strong><span data-i18n-skip>${esc(user.email)}</span></div>${admin?'<a class="account-admin-entry" href="#admin"><span>Admin area</span><span aria-hidden="true">↗</span></a>':''}<span class="account-menu-label">My personal area</span><a href="#profile">My Profile <span aria-hidden="true">↗</span></a><a href="#family">Family profiles <span aria-hidden="true">↗</span></a><a href="#feedback">Send feedback <span aria-hidden="true">↗</span></a><button type="button" data-menu="signout">Sign out</button>`:'';
+ menu.innerHTML=user?`<div class="account-menu-identity"><small>Signed in as</small><strong data-i18n-skip>${esc(accountIdentity(user,profileName).name)}</strong><span data-i18n-skip>${esc(user.email)}</span></div>${admin?'<a class="account-admin-entry" href="#admin"><span>Admin area</span><span aria-hidden="true">↗</span></a>':''}<span class="account-menu-label">My personal area</span><a href="#profile">My Profile <span aria-hidden="true">↗</span></a><a href="#try-on">Virtual try-on <span aria-hidden="true">↗</span></a><a href="#family">Family profiles <span aria-hidden="true">↗</span></a><a href="#feedback">Send feedback <span aria-hidden="true">↗</span></a><button type="button" data-menu="signout">Sign out</button>`:'';
  if(!user)closeMenu();
  if(user)trigger.setAttribute('aria-label','Your account: '+accountIdentity(user,profileName).name);else trigger.removeAttribute('aria-label');
  trigger.querySelector('img')?.addEventListener('error',event=>event.target.remove(),{once:true});
@@ -162,10 +162,10 @@ document.addEventListener('submit',async event=>{
    await sdk.reauthenticateWithPopup(current,provider('google.com'));
   }else throw {code:'auth/requires-recent-login'};
   if(user?.uid!==current.uid)throw {code:'auth/requires-recent-login'};
-  const {deleteAccountFeedback}=await import('./account-data.js?v=20261022-admin-v4');
+  const {deleteAccountFeedback}=await import('./account-data.js?v=20261022-tryon-v1');
   await deleteAccountFeedback(current.uid);
   await sdk.deleteUser(current);
-  try{const {clearFamilyStorage}=await import('./family-context.js?v=20261022-admin-v4');clearFamilyStorage(current.uid);localStorage.removeItem(`wardrobe.account.${current.uid}`);}catch{}
+  try{const {clearFamilyStorage}=await import('./family-context.js?v=20261022-tryon-v1');clearFamilyStorage(current.uid);localStorage.removeItem(`wardrobe.account.${current.uid}`);}catch{}
   location.hash='home';
   notice='Your account has been deleted.';view='signin';if(!modal.open)modal.showModal();render();
  }catch(error){

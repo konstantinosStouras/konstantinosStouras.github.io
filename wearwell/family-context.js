@@ -1,5 +1,5 @@
 // Account identity and the person being dressed are deliberately separate.
-import {accountStorageKey} from './auth-policy.js?v=20261022-admin-v4';
+import {accountStorageKey} from './auth-policy.js?v=20261022-tryon-v1';
 let member='self',epoch=0;
 export const activeMemberId=()=>member;
 export const contextVersion=()=>epoch;

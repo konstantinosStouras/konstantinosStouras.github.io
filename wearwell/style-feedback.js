@@ -1,5 +1,5 @@
-import {pieceById} from './data.js?v=20261022-admin-v4';
-import {dislikeReasons} from './preferences.js?v=20261022-admin-v4';
+import {pieceById} from './data.js?v=20261022-tryon-v1';
+import {dislikeReasons} from './preferences.js?v=20261022-tryon-v1';
 
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 

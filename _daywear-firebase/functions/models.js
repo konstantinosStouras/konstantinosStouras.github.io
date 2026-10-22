@@ -11,7 +11,7 @@ const error=(code,message)=>new functions.https.HttpsError(code,message),stamp=(
 const defaults={mode:'manual',model:'gpt-image-2.5-sunburst',dailyLimit:10,keyConfigured:false};
 const configRef=()=>getFirestore().doc('daywearGeneration/config');
 const settings=async()=>{const raw={...defaults,...(await configRef().get()).data()};return {...raw,provider:raw.provider||'openai',providers:providers.normalize(raw)};};
-const publicSettings=c=>({mode:c.mode,provider:c.provider,model:c.providers[c.provider]?.model||c.model,dailyLimit:c.dailyLimit,keyConfigured:c.providers[c.provider]?.keyConfigured===true,providers:c.providers,catalog:providers.catalog,reviewedAt:'2026-10-22'});
+const publicSettings=c=>({tryOnEnabled:c.tryOnEnabled===true,mode:c.mode,provider:c.provider,model:c.providers[c.provider]?.model||c.model,dailyLimit:c.dailyLimit,keyConfigured:c.providers[c.provider]?.keyConfigured===true,providers:c.providers,catalog:providers.catalog,reviewedAt:'2026-10-22'});
 const prefRef=uid=>getFirestore().doc(`daywearProfiles/${uid}/modelPreferences/current`);
 const poseRef=uid=>getFirestore().doc(`daywearProfiles/${uid}/selectedPosture/current`);
 const validSlot=slot=>policy.validLook(slot)||/^pose-(front|turn|step)$/.test(slot||'');
@@ -25,6 +25,7 @@ async function storePreview(ref,r,data,source){const image=await compress(data);
 exports.modelStudio=functions.region('europe-west1').runWith({maxInstances:3,timeoutSeconds:540,memory:'1GB'}).https.onCall(async(data,context)=>{
  if(!context.auth)throw error('unauthenticated','Sign in to continue.');const actor=await account(context.auth.uid),isAdmin=context.auth.token.daywearAdmin===true&&actor.customClaims?.daywearAdmin===true,db=getFirestore(),action=data?.action;
  if(['status','settings','providerSettings','testConnection','queue','generate','reviewBrief','import','recover'].includes(action)&&!isAdmin)throw error('permission-denied','Administrator access required.');
+ if(action?.startsWith('tryOn'))return require('./tryon.cjs')(data,{db,actor,isAdmin,error,stamp,settings,readKey,compress,adapters,sharp});
  if(action==='status')return publicSettings(await settings());
  if(action==='testConnection'){
   const id=data.provider,c=await settings(),saved=c.providers[id];
@@ -57,7 +58,7 @@ exports.modelStudio=functions.region('europe-west1').runWith({maxInstances:3,tim
  }
  if(action==='settings'){
   const id=data.provider||'openai';if(!['manual','api'].includes(data.mode)||providers.definition(id)?.role!=='renderer'||!Number.isInteger(data.dailyLimit)||data.dailyLimit<1||data.dailyLimit>100)throw error('invalid-argument','Invalid generation settings.');
-  await db.runTransaction(async tx=>{const snapshot=await tx.get(configRef()),raw={...defaults,...snapshot.data()},all=providers.normalize(raw);if(data.mode==='api'&&!all[id].keyConfigured)throw error('failed-precondition','Save this provider’s API key before enabling API generation.');tx.set(configRef(),{...raw,providers:all,provider:id,mode:data.mode,dailyLimit:data.dailyLimit,model:all[id].model,updatedAt:stamp()});});return {saved:true};
+  await db.runTransaction(async tx=>{const snapshot=await tx.get(configRef()),raw={...defaults,...snapshot.data()},all=providers.normalize(raw);if(data.mode==='api'&&!all[id].keyConfigured)throw error('failed-precondition','Save this provider’s API key before enabling API generation.');tx.set(configRef(),{...raw,providers:all,tryOnEnabled:data.tryOnEnabled===true,provider:id,mode:data.mode,dailyLimit:data.dailyLimit,model:all[id].model,updatedAt:stamp()});});return {saved:true};
  }
  if(action==='queue'){const rows=await db.collection('daywearModelRequests').orderBy('updatedAt','desc').limit(100).get();return {requests:rows.docs.map(d=>{const {sizes,...r}=d.data();return {id:d.id,...r};})};}
  if(action==='postureFeedback'){

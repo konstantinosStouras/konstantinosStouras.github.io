@@ -1,6 +1,6 @@
-import {getAccountUser} from './auth.js?v=20261022-admin-v4';
-import {sendFeedback} from './account-data.js?v=20261022-admin-v4';
-import {translateText,getLanguage} from './i18n.js?v=20261022-admin-v4';
+import {getAccountUser} from './auth.js?v=20261022-tryon-v1';
+import {sendFeedback} from './account-data.js?v=20261022-tryon-v1';
+import {translateText,getLanguage} from './i18n.js?v=20261022-tryon-v1';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let attachments=[],busy=false,uploading=false,attemptId=null,version=0;
 export function feedbackPage(){
