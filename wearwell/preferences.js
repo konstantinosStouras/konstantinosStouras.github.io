@@ -1,4 +1,4 @@
-import {looks} from './data.js?v=20261012-photo-languages-v1';
+import {looks} from './data.js?v=20261022-admin-v1';
 
 export const dislikeReasons = [
   ['colour', 'Wrong colour for me'],

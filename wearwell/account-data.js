@@ -1,6 +1,6 @@
-import {profilePath} from './family-context.js?v=20261012-photo-languages-v1';
+import {profilePath} from './family-context.js?v=20261022-admin-v1';
 // Private testing data is in Firebase. Ownership/checklists/rotation remain local.
-import {getAccountUser} from './auth.js?v=20261012-photo-languages-v1';
+import {getAccountUser} from './auth.js?v=20261022-admin-v1';
 let services;
 export async function database(){
  if(!services)services=import('https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js').then(s=>({s,db:s.getFirestore()})).catch(e=>{services=null;throw e;});

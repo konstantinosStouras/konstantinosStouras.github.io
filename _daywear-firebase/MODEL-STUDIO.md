@@ -1,5 +1,46 @@
 # Private model studio
 
+## Admin workspace (22 October 2026)
+
+WearWell's account menu opens **Admin area** first for administrators. The admin
+workspace groups Image studio (admin), Registered users, Manage updates and Tester
+feedback. All routes retain server-side permission checks; the client also gates
+the entire admin workspace on the administrator claim.
+
+Image studio separates workflow settings from provider configuration. Anthropic
+and OpenAI are pinned first; Google, Black Forest Labs, Ideogram, xAI, Adobe and
+Stability follow in a wardrobe-specific suitability order, not a benchmark ranking.
+The model catalog and supported parameter allowlists live in
+`functions/image-providers.cjs`; official documentation links accompany each card.
+
+OpenAI, Google, BFL, Ideogram and xAI have server-side image-edit adapters.
+Anthropic reviews the text brief through a separate explicit action, never as an
+image renderer. Adobe and Stability credentials can be saved but their cards are
+explicitly setup-only and cannot be selected as renderers. Adobe's enterprise
+credential exchange and a suitable Stability wardrobe workflow remain unimplemented.
+
+Each provider stores a separate secret; the original OpenAI secret is retained.
+Run `node provision-image-secret.cjs` to create containers and grant the existing
+runtime service account accessor/version-adder permissions on those containers.
+This script never retrieves or adds key material. A saved key is not proof of
+provider authorization or billing. Keys are not returned by the callable, written
+to Firestore or persisted by the frontend. Replacement keys create secret versions.
+
+The global daily attempt limit and each provider limit are enforced atomically,
+including failed calls and Claude reviews, using UTC days. These are request caps,
+not currency budgets. Generation remains one image per explicit admin action with
+no automatic retries or fallback. Reference limits are checked before spending;
+references are never silently discarded. Outputs retain provider/model provenance.
+
+New requests record explicit `apiProviders` consent. Legacy consent authorizes
+only OpenAI. Switching providers does not extend consent. Users must submit a new
+request to change consent. Existing reference, revision, approval and private image
+storage checks remain in effect.
+
+Validation: provider/authorization tests use mocked APIs; no paid generation calls
+were made. Live model access, output quality and provider response variations must
+be verified with the administrator's own keys and consenting test requests.
+
 The profile collects 1–4 headshots and 1–3 dressed body references, with a total
 storage limit of nine including older uploads. Existing photos remain intact and
 can be labelled using their photo-type selector. The favourite headshot is chosen
