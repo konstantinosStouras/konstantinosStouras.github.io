@@ -1,9 +1,9 @@
-import {providerSettings} from './provider-settings.js?v=20261022-admin-v3';
-import {getAccountUser,isAccountAdmin} from './auth.js?v=20261022-admin-v3';
-import {database} from './account-data.js?v=20261022-admin-v3';
-import {looks} from './data.js?v=20261022-admin-v3';
-import {getLanguage,translateText} from './i18n.js?v=20261022-admin-v3';
-import greek from './model-studio-el.js?v=20261022-admin-v3';
+import {providerSettings} from './provider-settings.js?v=20261022-admin-v4';
+import {getAccountUser,isAccountAdmin} from './auth.js?v=20261022-admin-v4';
+import {database} from './account-data.js?v=20261022-admin-v4';
+import {looks} from './data.js?v=20261022-admin-v4';
+import {getLanguage,translateText} from './i18n.js?v=20261022-admin-v4';
+import greek from './model-studio-el.js?v=20261022-admin-v4';
 export const modelText=s=>s;
 const t=modelText,esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const validImage=s=>typeof s==='string'&&s.length<=650000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(s);

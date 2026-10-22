@@ -1,7 +1,7 @@
-import {languages} from './language-policy.js?v=20261022-admin-v3';
-import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261022-admin-v3';
-import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261022-admin-v3';
-import {passwordProblem,authMessage} from './auth-policy.js?v=20261022-admin-v3';
+import {languages} from './language-policy.js?v=20261022-admin-v4';
+import {accountIdentity,accountButtonMarkup} from './account-ui.js?v=20261022-admin-v4';
+import {firebaseConfig,enabledProviders} from './firebase-config.js?v=20261022-admin-v4';
+import {passwordProblem,authMessage} from './auth-policy.js?v=20261022-admin-v4';
 
 const serviceLanguage=()=>languages[document.documentElement.lang]?.service||'en';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -162,10 +162,10 @@ document.addEventListener('submit',async event=>{
    await sdk.reauthenticateWithPopup(current,provider('google.com'));
   }else throw {code:'auth/requires-recent-login'};
   if(user?.uid!==current.uid)throw {code:'auth/requires-recent-login'};
-  const {deleteAccountFeedback}=await import('./account-data.js?v=20261022-admin-v3');
+  const {deleteAccountFeedback}=await import('./account-data.js?v=20261022-admin-v4');
   await deleteAccountFeedback(current.uid);
   await sdk.deleteUser(current);
-  try{const {clearFamilyStorage}=await import('./family-context.js?v=20261022-admin-v3');clearFamilyStorage(current.uid);localStorage.removeItem(`wardrobe.account.${current.uid}`);}catch{}
+  try{const {clearFamilyStorage}=await import('./family-context.js?v=20261022-admin-v4');clearFamilyStorage(current.uid);localStorage.removeItem(`wardrobe.account.${current.uid}`);}catch{}
   location.hash='home';
   notice='Your account has been deleted.';view='signin';if(!modal.open)modal.showModal();render();
  }catch(error){

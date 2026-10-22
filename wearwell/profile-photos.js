@@ -1,7 +1,7 @@
-import {activeMemberId,isFamily,contextVersion} from './family-context.js?v=20261022-admin-v3';
-import {getAccountUser} from './auth.js?v=20261022-admin-v3';
-import {getPhotos,savePhoto,removePhoto} from './account-data.js?v=20261022-admin-v3';
-import {studioSection,loadStudio,modelText as t} from './model-studio.js?v=20261022-admin-v3';
+import {activeMemberId,isFamily,contextVersion} from './family-context.js?v=20261022-admin-v4';
+import {getAccountUser} from './auth.js?v=20261022-admin-v4';
+import {getPhotos,savePhoto,removePhoto} from './account-data.js?v=20261022-admin-v4';
+import {studioSection,loadStudio,modelText as t} from './model-studio.js?v=20261022-admin-v4';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let loading=false,generation=0,photos=[];
 export const validPhoto=data=>typeof data==='string'&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(data);

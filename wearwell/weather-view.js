@@ -1,4 +1,4 @@
-import {condition} from './weather.js?v=20261022-admin-v3';
+import {condition} from './weather.js?v=20261022-admin-v4';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=value=>Number.isFinite(value)?Math.round(value):'—';
 
