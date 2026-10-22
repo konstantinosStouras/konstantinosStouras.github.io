@@ -13,11 +13,29 @@ Stability follow in a wardrobe-specific suitability order, not a benchmark ranki
 The model catalog and supported parameter allowlists live in
 `functions/image-providers.cjs`; official documentation links accompany each card.
 
-OpenAI, Google, BFL, Ideogram and xAI have server-side image-edit adapters.
+OpenAI, Google, BFL, Ideogram, xAI, Adobe and Stability have server-side image adapters.
 Anthropic reviews the text brief through a separate explicit action, never as an
-image renderer. Adobe and Stability credentials can be saved but their cards are
-explicitly setup-only and cannot be selected as renderers. Adobe's enterprise
-credential exchange and a suitable Stability wardrobe workflow remain unimplemented.
+image renderer. Adobe uses Firefly Image 5 instruct editing, including server-side
+OAuth, reference upload, asynchronous polling and private result download. Enter
+both the Adobe Client ID and Client Secret; they are stored together in one Secret
+Manager version, never Firestore. The server obtains a fresh token for each request.
+An older standalone Adobe key is not treated as complete OAuth credentials.
+Stability uses the Stable Image Structure endpoint with source influence and output
+format controls. Both providers are available in the generation provider selector.
+
+Adobe and Stability accept one source image for these operations. Posture requests
+use the first dressed body reference; outfit requests use the approved posture.
+Separate headshots and catalog images are not sent to these providers. The compact
+brief retains identity instructions, exact catalog garments and optional refinements
+within Adobe's 1500-character limit. Profile notes and freeform feedback are not
+included in this compact brief. Provider cards and consent choices describe the
+single-image workflow; likeness and garment fidelity still require owner review.
+
+Official contracts:
+- https://github.com/AdobeDocs/ffs-firefly-api/blob/main/static/firefly-api.json
+- https://developer.adobe.com/firefly-services/docs/firefly-api/getting-started/
+- https://developer.adobe.com/firefly-services/docs/firefly-api/guides/concepts/image-upload/
+- https://docs.stability.ai/api-reference/control/structure
 
 Each provider stores a separate secret; the original OpenAI secret is retained.
 Run `node provision-image-secret.cjs` to create containers and grant the existing

@@ -4,6 +4,7 @@ const {getAuth}=require('firebase-admin/auth');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {GoogleAuth}=require('google-auth-library');
 const sharp=require('sharp'),crypto=require('node:crypto'),policy=require('./model-policy.cjs');
+const single=require('./single-image-providers.cjs');
 const providers=require('./image-providers.cjs'),adapters=require('./image-adapters.cjs');
 const project='stouras-personal-wardrobe',secret=`projects/${project}/secrets/daywear-image-api-key`;
 const error=(code,message)=>new functions.https.HttpsError(code,message),stamp=()=>FieldValue.serverTimestamp();
@@ -27,7 +28,15 @@ exports.modelStudio=functions.region('europe-west1').runWith({maxInstances:3,tim
  if(action==='status')return publicSettings(await settings());
  if(action==='providerSettings'){
   const id=data.provider;let saved;try{saved=providers.validate(id,data);}catch(e){throw error('invalid-argument',e.message);}
-  if(data.apiKey){if(typeof data.apiKey!=='string'||data.apiKey.length<20||data.apiKey.length>4096||/\s/.test(data.apiKey))throw error('invalid-argument','Check the API key.');try{await secretCall(':addVersion',{payload:{data:Buffer.from(data.apiKey).toString('base64')}},id);}catch{throw error('failed-precondition','Secure key storage is unavailable for this provider. Please retry.');}saved.keyConfigured=true;}
+  if(id==='adobe'){
+   if(data.apiKey)throw error('invalid-argument','Adobe requires a Client ID and Client Secret.');
+   if(data.clientId||data.clientSecret){
+    if(typeof data.clientId!=='string'||!/^[A-Za-z0-9_-]{8,256}$/.test(data.clientId)||typeof data.clientSecret!=='string'||data.clientSecret.length<8||data.clientSecret.length>4096||/\s/.test(data.clientSecret))throw error('invalid-argument','Enter both the Adobe Client ID and Client Secret.');
+    try{await secretCall(':addVersion',{payload:{data:Buffer.from(JSON.stringify({clientId:data.clientId,clientSecret:data.clientSecret})).toString('base64')}},id);}catch{throw error('failed-precondition','Secure Adobe credential storage is unavailable. Please retry.');}
+    saved.keyConfigured=true;saved.credentialType='oauth-client-pair';
+   }
+  }
+  if(id!=='adobe'&&data.apiKey){if(typeof data.apiKey!=='string'||data.apiKey.length<20||data.apiKey.length>4096||/\s/.test(data.apiKey))throw error('invalid-argument','Check the API key.');try{await secretCall(':addVersion',{payload:{data:Buffer.from(data.apiKey).toString('base64')}},id);}catch{throw error('failed-precondition','Secure key storage is unavailable for this provider. Please retry.');}saved.keyConfigured=true;}
   await db.runTransaction(async tx=>{const snapshot=await tx.get(configRef()),current=snapshot.data()||{},all=providers.normalize(current);all[id]={...all[id],...saved};tx.set(configRef(),{...current,providers:all,updatedAt:stamp()});});return {saved:true};
  }
  if(action==='settings'){
@@ -73,9 +82,9 @@ exports.modelStudio=functions.region('europe-west1').runWith({maxInstances:3,tim
  if(action==='generate'){
   const c=await settings(),provider=c.provider,pc=c.providers[provider];if(c.mode!=='api'||!pc?.keyConfigured)throw error('failed-precondition','Enable API mode and save a key first.');if(!providers.hasConsent(request,provider))throw error('failed-precondition','The user has not agreed to this provider. Request new consent or use desktop review.');await account(uid);const refs=await checkedReferences(request),lock=db.doc(`daywearModelLimits/${uid}`),budget=db.doc(`daywearGenerationUsage/${new Date().toISOString().slice(0,10)}`);
   const currentPrefs=(await prefRef(uid).get()).data(),pose=(await poseRef(uid).get()).data();if(currentPrefs?.headshotId!==request.headshotId||(request.purpose!=='posture'&&(currentPrefs?.revision!==request.revision||!pose?.data)))throw error('failed-precondition','Your preferred headshot or posture changed. Request a new preview.');
-  const count=refs.length+(request.purpose==='posture'?0:1)+1;if(count>providers.referenceLimit(provider,pc.model))throw error('failed-precondition','This provider supports fewer reference images. Choose a provider with a higher reference limit; no photos will be silently dropped.');
+  const prepared=single.singleImage(provider)?single.inputFor(request,refs,pose):null;const count=prepared?1:refs.length+(request.purpose==='posture'?0:1)+1;if(count>providers.referenceLimit(provider,pc.model))throw error('failed-precondition','This provider supports fewer reference images. Choose a provider with a higher reference limit; no photos will be silently dropped.');
   await db.runTransaction(async tx=>{const [r,l,b]=await Promise.all([tx.get(ref),tx.get(lock),tx.get(budget)]);if(r.data()?.requestId!==request.requestId||!['requested','failed'].includes(r.data()?.status)||l.data()?.until>Date.now())throw error('failed-precondition','This request is already being processed.');if((b.data()?.count||0)>=c.dailyLimit||(b.data()?.[provider]||0)>=pc.dailyLimit)throw error('resource-exhausted','The daily image limit has been reached.');tx.set(lock,{until:Date.now()+10*60*1000,requestId:request.requestId});tx.set(budget,{...b.data(),count:(b.data()?.count||0)+1,[provider]:(b.data()?.[provider]||0)+1});tx.update(ref,{status:'generating',updatedAt:stamp()});});
-  try{const images=refs.map(p=>p.data);if(request.purpose!=='posture')images.push(pose.data);const outfit=await fetch(`https://www.stouras.com/wearwell/assets/${request.lookId}.webp`,{signal:AbortSignal.timeout(15000)});if(!outfit.ok)throw Error('Outfit unavailable');images.push('data:image/webp;base64,'+Buffer.from(await outfit.arrayBuffer()).toString('base64'));const result=await adapters.render(provider,pc,await readKey(provider),policy.promptFor(request),images);await storePreview(ref,request,result,'api:'+provider+':'+pc.model);return {saved:true};}catch(e){await ref.update({status:'failed',error:'Generation failed. Check API access, billing and references before retrying.',updatedAt:stamp()});throw error('unavailable','Generation failed. Check API access, billing and references before retrying.');}finally{await lock.delete();}
+  try{const images=prepared?prepared.images:refs.map(p=>p.data);if(!prepared&&request.purpose!=='posture')images.push(pose.data);if(!prepared){const outfit=await fetch(`https://www.stouras.com/wearwell/assets/${request.lookId}.webp`,{signal:AbortSignal.timeout(15000)});if(!outfit.ok)throw Error('Outfit unavailable');images.push('data:image/webp;base64,'+Buffer.from(await outfit.arrayBuffer()).toString('base64'));}const result=await adapters.render(provider,pc,await readKey(provider),prepared?prepared.prompt:policy.promptFor(request),images);await storePreview(ref,request,result,'api:'+provider+':'+pc.model);return {saved:true};}catch(e){const message=e.publicMessage||'Generation failed. Check API access, billing and references before retrying.';await ref.update({status:'failed',error:message,updatedAt:stamp()});throw error('unavailable',message);}finally{await lock.delete();}
  }
  throw error('invalid-argument','Unknown action.');
 });
