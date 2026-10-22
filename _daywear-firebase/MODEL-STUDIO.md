@@ -156,3 +156,6 @@ performs validated transitions. The account cleanup removes these records. Priva
 catalog images are fetched with bearer tokens and held in revocable blob URLs.
 They are never included in a browser backup or public deployment. Wardrobe
 ownership and checklists remain local to the browser; this does not add wardrobe sync.
+
+## Connection tests
+Each provider has an admin-only Test connection action. Save credentials first; tests use the currently selected model and controls without changing saved settings. A test makes one paid inference request, counts against both saved daily limits (including failures), and uses a per-provider ten-minute lock. Claude returns a short text response with a 128-token test cap; image providers edit a generated 1024px synthetic shirt. No personal references are used, no test output is stored in a profile, and no retries are automatic. Results display returned text or a compressed sample image. HTTP errors use safe actionable messages; upstream response bodies and secrets are never returned.

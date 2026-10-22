@@ -1,12 +1,12 @@
-import feedbackCopy from './style-feedback-languages.js?v=20261022-admin-v2';
+import feedbackCopy from './style-feedback-languages.js?v=20261022-admin-v3';
 import es from './translations-es.js';
 import fr from './translations-fr.js';
 import pt from './translations-pt.js';
 import ar from './translations-ar.js';
 import zh from './translations-zh-Hans.js';
 import yue from './translations-yue.js';
-import de from './translations-de.js?v=20261022-admin-v2';
-import ru from './translations-ru.js?v=20261022-admin-v2';
+import de from './translations-de.js?v=20261022-admin-v3';
+import ru from './translations-ru.js?v=20261022-admin-v3';
 export const translations={de,ru,es,fr,pt,ar,'zh-Hans':zh,yue};
 for(const [code,copy] of Object.entries(feedbackCopy))Object.assign(translations[code],copy);
 const escape=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');

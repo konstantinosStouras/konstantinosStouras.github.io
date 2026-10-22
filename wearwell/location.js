@@ -1,4 +1,4 @@
-import {serviceLanguage} from './i18n.js?v=20261022-admin-v2';
+import {serviceLanguage} from './i18n.js?v=20261022-admin-v3';
 export function locationPreference(saved={}){
  return saved.locationMode==='travel'&&saved.location?'travel':'current';
 }

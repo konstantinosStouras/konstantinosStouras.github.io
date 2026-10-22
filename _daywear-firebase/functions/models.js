@@ -24,8 +24,24 @@ async function compress(data){if(typeof data!=='string'||data.length>14000000||!
 async function storePreview(ref,r,data,source){const image=await compress(data);await account(r.uid);await checkedReferences(r);const db=getFirestore();await db.runTransaction(async tx=>{const [now,removed,prefs]=await Promise.all([tx.get(ref),tx.get(db.doc(`daywearRemovedUsers/${r.uid}`)),tx.get(prefRef(r.uid))]);if(removed.exists||now.data()?.requestId!==r.requestId||!['requested','generating','failed'].includes(now.data()?.status)||prefs.data()?.headshotId!==r.headshotId||(r.purpose!=='posture'&&prefs.data()?.revision!==r.revision))throw error('failed-precondition','Your preferred headshot or posture changed. Request a new preview.');tx.set(db.doc(`daywearProfiles/${r.uid}/modelPreviews/${r.slot}`),{data:image,requestId:r.requestId,source,headshotId:r.headshotId,referenceHash:r.referenceHash,revision:r.revision,purpose:r.purpose,postureId:r.postureId,lookId:r.lookId,updatedAt:stamp()});tx.update(ref,{status:'preview',updatedAt:stamp(),error:''});});}
 exports.modelStudio=functions.region('europe-west1').runWith({maxInstances:3,timeoutSeconds:540,memory:'1GB'}).https.onCall(async(data,context)=>{
  if(!context.auth)throw error('unauthenticated','Sign in to continue.');const actor=await account(context.auth.uid),isAdmin=context.auth.token.daywearAdmin===true&&actor.customClaims?.daywearAdmin===true,db=getFirestore(),action=data?.action;
- if(['status','settings','providerSettings','queue','generate','reviewBrief','import','recover'].includes(action)&&!isAdmin)throw error('permission-denied','Administrator access required.');
+ if(['status','settings','providerSettings','testConnection','queue','generate','reviewBrief','import','recover'].includes(action)&&!isAdmin)throw error('permission-denied','Administrator access required.');
  if(action==='status')return publicSettings(await settings());
+ if(action==='testConnection'){
+  const id=data.provider,c=await settings(),saved=c.providers[id];
+  if(!providers.definition(id))throw error('invalid-argument','Choose a supported provider.');
+  if(!saved?.keyConfigured)throw error('failed-precondition','Save this provider’s credentials before testing.');
+  let pc;try{pc=providers.validate(id,{...data,dailyLimit:saved.dailyLimit});}catch(e){throw error('invalid-argument',e.message);}
+  const lock=db.doc(`daywearConnectionTests/${id}`),budget=db.doc(`daywearGenerationUsage/${new Date().toISOString().slice(0,10)}`);
+  await db.runTransaction(async tx=>{const [l,b]=await Promise.all([tx.get(lock),tx.get(budget)]);if(l.data()?.until>Date.now())throw error('resource-exhausted','A test is already running for this provider. Wait up to 10 minutes before trying again.');if((b.data()?.count||0)>=c.dailyLimit||(b.data()?.[id]||0)>=saved.dailyLimit)throw error('resource-exhausted','The daily API attempt limit has been reached. Increase the saved limit or test after midnight UTC.');tx.set(lock,{until:Date.now()+600000});tx.set(budget,{...b.data(),count:(b.data()?.count||0)+1,[id]:(b.data()?.[id]||0)+1});});
+  try{
+   let key;try{key=await readKey(id);}catch{throw error('failed-precondition','The saved credentials could not be read. Save them again or check Secret Manager access.');}
+   let preview,text;
+   if(id==='anthropic'){text=await adapters.review({...pc,parameters:{...pc.parameters,maxTokens:128}},key,'Connection test: describe a plain blue cotton shirt on a white background in one short sentence.');if(!text?.trim())throw Error('No text response');}
+   else{const svg='<svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg"><rect width="1024" height="1024" fill="white"/><path d="M340 220 L440 180 L584 180 L684 220 L800 420 L680 480 L640 400 L640 820 L384 820 L384 400 L344 480 L224 420 Z" fill="#325fa0"/></svg>';const sample='data:image/png;base64,'+(await sharp(Buffer.from(svg)).png().toBuffer()).toString('base64');preview=await compress(await adapters.render(id,pc,key,'Create a product photograph of this plain blue cotton shirt on a white background. No people, lettering or logos.',[sample]));}
+   return {ok:true,model:pc.model,message:id==='anthropic'?'Connection verified: the selected Claude model returned text. This tests brief review, not image generation.':'Connection verified: the selected model generated an image using these settings.',...(preview?{preview}:{}),...(text?{text}:{})};
+  }catch(e){if(e.code==='failed-precondition')throw e;return {ok:false,model:pc.model,message:e.publicMessage||((e.name==='TimeoutError'||e.name==='AbortError')?'The provider timed out. It may still complete and charge the request. Check its dashboard before retrying.':'The test did not return a usable result. Check model access and supported settings in the provider dashboard. The attempt may have been billed.')};}
+  finally{await lock.set({until:0});}
+ }
  if(action==='providerSettings'){
   const id=data.provider;let saved;try{saved=providers.validate(id,data);}catch(e){throw error('invalid-argument',e.message);}
   if(id==='adobe'){

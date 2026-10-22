@@ -2,7 +2,7 @@
 const {referenceLimit}=require('./image-providers.cjs');
 const {renderAdobe,renderStability}=require('./adobe-stability.cjs');
 const signal=()=>AbortSignal.timeout(420000);
-async function json(url,options){const r=await fetch(url,{...options,signal:signal()});if(!r.ok)throw Error('Provider rejected request');return r.json();}
+async function json(url,options){const r=await fetch(url,{...options,signal:signal()});if(!r.ok){const e=new Error('Provider rejected request');e.publicMessage=({400:'The provider rejected the model or settings. Check that the selected model supports this operation.',401:'Authentication failed. Save a valid API key for this provider and try again.',402:'The API account has insufficient credits. Add funds in the provider dashboard.',403:'Access denied. Check API permissions, model entitlement and any account verification requirements.',404:'The selected model or API endpoint is unavailable to this account. Select another model or check provider availability.',422:'The provider rejected the test image or selected settings. Check the supported model parameters.',429:'The provider rate limit or account quota was reached. Check billing and quota, then wait before retrying.'})[r.status]||(r.status>=500?'The provider is temporarily unavailable. Try again later.':'The provider rejected the request. Check API access and billing.');throw e;}return r.json();}
 const bytes=image=>Buffer.from(image.split(',')[1],'base64');
 const mime=image=>image.slice(5,image.indexOf(';'));
 function attach(body,name,image,i){body.append(name,new Blob([bytes(image)],{type:mime(image)}),`reference-${i}.${mime(image)==='image/webp'?'webp':'jpg'}`);}
