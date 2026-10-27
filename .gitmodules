@@ -28,51 +28,6 @@
 	url = https://github.com/konstantinosStouras/dataset-library.git
 	branch = main
 
-[submodule "site-archives"]
-	path = _backups
-	url = https://github.com/konstantinosStouras/site-archives.git
-	branch = main
-
-[submodule "chinese-learning-source"]
-	path = _chinese-prototype
-	url = https://github.com/konstantinosStouras/chinese-learning-source.git
-	branch = main
-
-[submodule "wearwell-backend"]
-	path = _daywear-firebase
-	url = https://github.com/konstantinosStouras/wearwell-backend.git
-	branch = main
-
-[submodule "idea-kpi-script"]
-	path = _idea-kpi-script
-	url = https://github.com/konstantinosStouras/idea-kpi-script.git
-	branch = main
-
-[submodule "ideasearchlab-source"]
-	path = _ideasearchlab-src
-	url = https://github.com/konstantinosStouras/ideasearchlab-source.git
-	branch = main
-
-[submodule "answerarena-backend"]
-	path = _lab-arena-firebase
-	url = https://github.com/konstantinosStouras/answerarena-backend.git
-	branch = main
-
-[submodule "portfoliofit-game-backend"]
-	path = _portfoliofit-firebase
-	url = https://github.com/konstantinosStouras/portfoliofit-game-backend.git
-	branch = main
-
-[submodule "portfoliofit-lab-backend"]
-	path = _portfoliofit-lab-firebase
-	url = https://github.com/konstantinosStouras/portfoliofit-lab-backend.git
-	branch = main
-
-[submodule "prototypicality-research"]
-	path = _prototypicality
-	url = https://github.com/konstantinosStouras/prototypicality-research.git
-	branch = main
-
 [submodule "fun-capitals"]
 	path = fun/capitals
 	url = https://github.com/konstantinosStouras/fun-capitals.git
@@ -136,11 +91,6 @@
 [submodule "fun-sudoku"]
 	path = fun/sudoku
 	url = https://github.com/konstantinosStouras/fun-sudoku.git
-	branch = main
-
-[submodule "lab-archives"]
-	path = lab/_backup
-	url = https://github.com/konstantinosStouras/lab-archives.git
 	branch = main
 
 [submodule "lab-answerarena"]

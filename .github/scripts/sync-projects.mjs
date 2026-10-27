@@ -1,7 +1,7 @@
 import {execFileSync} from 'node:child_process';
 import {readFileSync,appendFileSync} from 'node:fs';
 const git=(...args)=>execFileSync('git',args,{encoding:'utf8',maxBuffer:10_000_000}).trim();
-const projects=JSON.parse(readFileSync('.github/projects.json','utf8')).projects;
+const projects=JSON.parse(readFileSync('.github/projects.json','utf8')).projects.filter(project=>project.publishes!==false);
 let changed=0;
 for(const project of projects){
   if(!/^[a-zA-Z0-9_/-]+$/.test(project.path)||project.path.split('/').includes('..'))throw Error('Invalid project path');

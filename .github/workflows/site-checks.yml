@@ -97,11 +97,40 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.revision || github.sha }}
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/lit/data*/
+            !/lit/analytics/
+            /lit/analytics/
+            !/lit/analytics/*
+            /lit/analytics/index.html
+            /lit/data/
+            !/lit/data/*
+            /lit/data/papers-ms.json
+            /lit/data/papers-msom.json
+            /lit/data/papers-opre.json
+            /lit/data/papers-mksc.json
+            /lit/data/papers-isre.json
+            /lit/data/papers-stsc.json
+            /lit/data/papers-ited.json
+            /lit/data-ft50/
+            !/lit/data-ft50/*
+            /lit/data-ft50/papers-ms.json
+            /lit/data-ft50/papers-msom.json
+            /lit/data-ft50/papers-opre.json
+            /lit/data-ft50/papers-mksc.json
+            /lit/data-ft50/papers-isre.json
+            /lit/data-ft50/papers-ijoc.json
           submodules: recursive
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
+
+      - name: Load backend source only for deployment-safety checks
+        run: node .github/scripts/load-check-sources.mjs
 
       - name: Every page previews properly when somebody shares it
         run: node tools/share-check.mjs --verbose
