@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed(){return request.auth != null;}
+  function owner(){return signed() && request.auth.token.email == 'kstouras@gmail.com' && request.auth.token.email_verified == true && request.auth.token.firebase.sign_in_provider == 'google.com';}
+  function admin(){return owner() || (signed() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));}
+  function lessonValid(){let d=request.resource.data;return d.keys().hasOnly(['moduleId','week','title','intro','repetitions','vocabulary','showPinyin','showMeaning','writing','speaking','pinyin','randomize','sample','published','updatedAt','updatedBy'])
+   && d.moduleId in ['beginner','business','hsk5'] && d.week is int && d.week >= 1 && d.week <= 12
+   && d.title is string && d.title.size() > 0 && d.title.size() <= 100
+   && d.intro is string && d.intro.size() <= 2000
+   && d.repetitions is int && d.repetitions >= 1 && d.repetitions <= 10
+   && d.vocabulary is list && d.vocabulary.size() <= 80
+   && d.published is bool && d.showPinyin is bool && d.showMeaning is bool && d.writing is bool && d.speaking is bool && d.pinyin is bool && d.randomize is bool && d.sample is bool
+   && (!d.published || (d.vocabulary.size() > 0 && (d.writing || d.speaking || d.pinyin)))
+   && d.updatedBy == request.auth.uid && d.updatedAt == request.time;}
+  match /modules/{id} {allow read: if true; allow write: if false;}
+  match /lessons/{id} {allow read: if resource.data.published == true || admin(); allow create,update: if admin() && lessonValid() && request.resource.data.published; allow delete: if admin();}
+  match /drafts/{id} {allow read: if admin(); allow create,update: if admin() && lessonValid(); allow delete: if false;}
+  match /settings/public {allow read: if true; allow write: if false;}
+  match /admins/{uid} {
+   allow read: if admin() || (signed() && request.auth.uid == uid);
+   allow create,update: if owner() && exists(/databases/$(database)/documents/users/$(uid))
+    && request.resource.data.keys().hasOnly(['email','createdBy','updatedAt'])
+    && request.resource.data.email == get(/databases/$(database)/documents/users/$(uid)).data.email
+    && request.resource.data.createdBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+   allow delete: if owner();
+  }
+  match /access/{uid} {
+   allow read: if admin() || (signed() && request.auth.uid == uid);
+   allow create,update: if admin() && exists(/databases/$(database)/documents/users/$(uid))
+    && request.resource.data.keys().hasOnly(['approved','updatedAt']) && request.resource.data.approved is bool && request.resource.data.updatedAt == request.time;
+   allow delete: if false;
+  }
+  match /users/{uid} {
+   allow read: if admin() || (signed() && request.auth.uid == uid);
+   allow create, update: if signed() && request.auth.uid == uid
+    && request.resource.data.keys().hasOnly(['name','email','moduleId','updatedAt'])
+    && request.resource.data.email == request.auth.token.email
+    && request.resource.data.name is string && request.resource.data.name.size() <= 120
+    && request.resource.data.moduleId in ['beginner','business','hsk5']
+    && request.resource.data.updatedAt == request.time;
+   allow delete: if false;
+  }
+  match /attempts/{id} {
+   allow read: if admin() || (signed() && resource.data.uid == request.auth.uid);
+   allow create: if signed() && request.resource.data.keys().hasOnly(['uid','moduleId','lessonId','hanzi','kind','correct','mistakes','createdAt'])
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.moduleId in ['beginner','business','hsk5']
+    && request.resource.data.lessonId is string && request.resource.data.lessonId.size() < 60
+    && request.resource.data.hanzi is string && request.resource.data.hanzi.size() <= 40
+    && request.resource.data.kind in ['writing','pinyin','speaking']
+    && request.resource.data.correct is bool
+    && request.resource.data.mistakes is int && request.resource.data.mistakes >= 0 && request.resource.data.mistakes <= 10000
+    && request.resource.data.createdAt == request.time;
+   allow update, delete: if false;
+  }
+  match /speechFeedback/{id} {allow read: if admin() || (signed() && resource.data.uid == request.auth.uid); allow write: if false;}
+  match /{document=**} {allow read,write: if false;}
+ }
+}

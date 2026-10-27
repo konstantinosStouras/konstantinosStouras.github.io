@@ -1,0 +1,9 @@
+import {build} from 'esbuild';
+import {mkdir,copyFile,writeFile} from 'node:fs/promises';
+await mkdir('site/chinese/admin',{recursive:true});
+await build({entryPoints:['src/app.mjs'],outfile:'site/chinese/app.js',bundle:true,minify:true,format:'esm',target:['es2020'],legalComments:'eof'});
+await copyFile('src/style.css','site/chinese/style.css');
+const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#163f35"><meta name="description" content="A little Chinese practice, every week. Character writing, pinyin and speaking with Lucy Liu."><meta name="referrer" content="strict-origin-when-cross-origin"><title>Chinese Practice · SATLE</title><link rel="icon" type="image/svg+xml" href="/chinese/icon.svg"><link rel="stylesheet" href="/chinese/style.css?v=1"><script type="module" src="/chinese/app.js?v=1"></script></head><body><a class="skip" href="#main">Skip to content</a><div id="app"><main class="loading"><span class="brand-mark">中</span><p>Opening your practice space…</p></main></div><div id="toast" role="status" aria-live="polite"></div><dialog id="dialog"></dialog><noscript>This practice space needs JavaScript enabled.</noscript></body></html>`;
+await writeFile('site/chinese/index.html',html);await writeFile('site/chinese/admin/index.html',html);
+await writeFile('site/chinese/icon.svg','<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="17" fill="#163f35"/><text x="32" y="46" text-anchor="middle" fill="#faf7ef" font-size="43" font-family="serif">中</text></svg>');
+console.log('Built student and admin pages.');
