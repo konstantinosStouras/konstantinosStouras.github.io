@@ -67,6 +67,11 @@ on:
       - '!daywear/**'
       - '!wearwell/**'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      revision:
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -86,10 +91,13 @@ jobs:
     # shallow fetch of that measured 8m20s on a runner — which, under the 8
     # minutes this used to allow, cancelled the job inside the checkout and
     # reported the whole run as `cancelled` with nothing having been checked.
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       # Pinned by commit SHA, like every other workflow in this repository.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.revision || github.sha }}
+          submodules: recursive
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:

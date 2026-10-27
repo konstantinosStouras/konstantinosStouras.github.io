@@ -37,7 +37,7 @@ const ok = (c, m) => { checks++; if (!c) fails++; console.log((c ? '  ok — ' :
 console.log('1. Every copy of the widget is the same, and offers Google');
 const scripts = [];
 for (const p of PAGES) {
-  const s = readFileSync(join(ROOT, p), 'utf8');
+  const s = readFileSync(join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
   const a = s.indexOf('<!-- ============================================================\n     Account widget');
   const b = s.indexOf('<!-- ===== end Account widget ===== -->');
   ok(a >= 0 && b > a, p + ': has the account widget');
@@ -60,7 +60,7 @@ for (const p of PAGES) {
 ok(scripts.length === PAGES.length && scripts.every(([, x]) => x === scripts[0][1]), 'all ' + PAGES.length + ' copies of the widget script are byte-identical');
 // The <style> copies too. Only the bar-chip look (.acct-chip / .acct-ghost / .acct-solid, and the
 // chip line of the phone media query) is allowed to differ: snake and sudoku restyle their bar.
-const styleOf = (p) => { const s = readFileSync(join(ROOT, p), 'utf8'); const blk = s.slice(s.indexOf('<!-- ============================================================\n     Account widget'), s.indexOf('<!-- ===== end Account widget ===== -->')); return (blk.match(/<style>[\s\S]*?<\/style>/) || [''])[0]; };
+const styleOf = (p) => { const s = readFileSync(join(ROOT, p), 'utf8').replace(/\r\n/g, '\n'); const blk = s.slice(s.indexOf('<!-- ============================================================\n     Account widget'), s.indexOf('<!-- ===== end Account widget ===== -->')); return (blk.match(/<style>[\s\S]*?<\/style>/) || [''])[0]; };
 const normCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map((r) => r.trim()).filter((r) => r && !/^\.acct-(chip|ghost|solid)\b/.test(r) && !/^@media[^{]*\{\s*\.acct-chip/.test(r)).join('}');
 const css0 = normCss(styleOf(PAGES[0]));
 for (const p of PAGES) {

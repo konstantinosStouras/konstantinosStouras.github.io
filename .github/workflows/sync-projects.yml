@@ -1,0 +1,58 @@
+name: Publish independent projects
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17,47 * * * *'
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: independent-project-publication
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      changed: ${{ steps.sync.outputs.changed }}
+      revision: ${{ steps.sync.outputs.revision }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: master
+          sparse-checkout: .github
+          filter: blob:none
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - id: sync
+        run: node .github/scripts/sync-projects.mjs
+
+  site-checks:
+    needs: update
+    if: needs.update.outputs.changed == 'true'
+    uses: ./.github/workflows/site-checks.yml
+    with:
+      revision: ${{ needs.update.outputs.revision }}
+
+  wearwell-checks:
+    needs: update
+    if: needs.update.outputs.changed == 'true'
+    uses: ./.github/workflows/daywear-checks.yml
+    with:
+      revision: ${{ needs.update.outputs.revision }}
+
+  publish:
+    needs: [update, site-checks, wearwell-checks]
+    if: needs.update.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Rebuild the existing website after checks pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/pages/builds"

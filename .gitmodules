@@ -1,0 +1,219 @@
+[submodule "wearwell"]
+	path = wearwell
+	url = https://github.com/konstantinosStouras/wearwell.git
+	branch = main
+
+[submodule "daywear-legacy"]
+	path = daywear
+	url = https://github.com/konstantinosStouras/daywear-legacy.git
+	branch = main
+
+[submodule "simulation-platform"]
+	path = simulation
+	url = https://github.com/konstantinosStouras/simulation-platform.git
+	branch = main
+
+[submodule "sustainable-supply-chains"]
+	path = sustainable-supply-chains
+	url = https://github.com/konstantinosStouras/sustainable-supply-chains.git
+	branch = main
+
+[submodule "chinese-learning"]
+	path = chinese
+	url = https://github.com/konstantinosStouras/chinese-learning.git
+	branch = main
+
+[submodule "dataset-library"]
+	path = datasets
+	url = https://github.com/konstantinosStouras/dataset-library.git
+	branch = main
+
+[submodule "site-archives"]
+	path = _backups
+	url = https://github.com/konstantinosStouras/site-archives.git
+	branch = main
+
+[submodule "chinese-learning-source"]
+	path = _chinese-prototype
+	url = https://github.com/konstantinosStouras/chinese-learning-source.git
+	branch = main
+
+[submodule "wearwell-backend"]
+	path = _daywear-firebase
+	url = https://github.com/konstantinosStouras/wearwell-backend.git
+	branch = main
+
+[submodule "idea-kpi-script"]
+	path = _idea-kpi-script
+	url = https://github.com/konstantinosStouras/idea-kpi-script.git
+	branch = main
+
+[submodule "ideasearchlab-source"]
+	path = _ideasearchlab-src
+	url = https://github.com/konstantinosStouras/ideasearchlab-source.git
+	branch = main
+
+[submodule "answerarena-backend"]
+	path = _lab-arena-firebase
+	url = https://github.com/konstantinosStouras/answerarena-backend.git
+	branch = main
+
+[submodule "portfoliofit-game-backend"]
+	path = _portfoliofit-firebase
+	url = https://github.com/konstantinosStouras/portfoliofit-game-backend.git
+	branch = main
+
+[submodule "portfoliofit-lab-backend"]
+	path = _portfoliofit-lab-firebase
+	url = https://github.com/konstantinosStouras/portfoliofit-lab-backend.git
+	branch = main
+
+[submodule "prototypicality-research"]
+	path = _prototypicality
+	url = https://github.com/konstantinosStouras/prototypicality-research.git
+	branch = main
+
+[submodule "fun-capitals"]
+	path = fun/capitals
+	url = https://github.com/konstantinosStouras/fun-capitals.git
+	branch = main
+
+[submodule "fun-ft50"]
+	path = fun/ft50
+	url = https://github.com/konstantinosStouras/fun-ft50.git
+	branch = main
+
+[submodule "fun-lit"]
+	path = fun/lit
+	url = https://github.com/konstantinosStouras/fun-lit.git
+	branch = main
+
+[submodule "fun-mnsc-scraper-to-use-locally"]
+	path = fun/mnsc_scraper-to-use-locally
+	url = https://github.com/konstantinosStouras/fun-mnsc-scraper-to-use-locally.git
+	branch = main
+
+[submodule "fun-ms-old"]
+	path = fun/ms-old
+	url = https://github.com/konstantinosStouras/fun-ms-old.git
+	branch = main
+
+[submodule "fun-ms"]
+	path = fun/ms
+	url = https://github.com/konstantinosStouras/fun-ms.git
+	branch = main
+
+[submodule "fun-ms2"]
+	path = fun/ms2
+	url = https://github.com/konstantinosStouras/fun-ms2.git
+	branch = main
+
+[submodule "fun-nomoi"]
+	path = fun/nomoi
+	url = https://github.com/konstantinosStouras/fun-nomoi.git
+	branch = main
+
+[submodule "fun-portfoliofitgame"]
+	path = fun/portfoliofitgame
+	url = https://github.com/konstantinosStouras/fun-portfoliofitgame.git
+	branch = main
+
+[submodule "fun-rooks"]
+	path = fun/rooks
+	url = https://github.com/konstantinosStouras/fun-rooks.git
+	branch = main
+
+[submodule "fun-snake"]
+	path = fun/snake
+	url = https://github.com/konstantinosStouras/fun-snake.git
+	branch = main
+
+[submodule "speak"]
+	path = fun/speak
+	url = https://github.com/konstantinosStouras/speak.git
+	branch = main
+
+[submodule "fun-sudoku"]
+	path = fun/sudoku
+	url = https://github.com/konstantinosStouras/fun-sudoku.git
+	branch = main
+
+[submodule "lab-archives"]
+	path = lab/_backup
+	url = https://github.com/konstantinosStouras/lab-archives.git
+	branch = main
+
+[submodule "lab-answerarena"]
+	path = lab/answerarena
+	url = https://github.com/konstantinosStouras/lab-answerarena.git
+	branch = main
+
+[submodule "lab-ideasearchlab"]
+	path = lab/ideasearchlab
+	url = https://github.com/konstantinosStouras/lab-ideasearchlab.git
+	branch = main
+
+[submodule "lab-interpolation"]
+	path = lab/interpolation
+	url = https://github.com/konstantinosStouras/lab-interpolation.git
+	branch = main
+
+[submodule "lab-jagged"]
+	path = lab/jagged
+	url = https://github.com/konstantinosStouras/lab-jagged.git
+	branch = main
+
+[submodule "lab-knapsack-calculator"]
+	path = lab/knapsack-calculator
+	url = https://github.com/konstantinosStouras/lab-knapsack-calculator.git
+	branch = main
+
+[submodule "lab-knapsack-game"]
+	path = lab/knapsack-game
+	url = https://github.com/konstantinosStouras/lab-knapsack-game.git
+	branch = main
+
+[submodule "lab-knapsack-with-dependencies"]
+	path = lab/knapsack-with-dependencies
+	url = https://github.com/konstantinosStouras/lab-knapsack-with-dependencies.git
+	branch = main
+
+[submodule "lab-newsvendor"]
+	path = lab/newsvendor
+	url = https://github.com/konstantinosStouras/lab-newsvendor.git
+	branch = main
+
+[submodule "lab-portfoliofit-testing"]
+	path = lab/portfoliofit-testing
+	url = https://github.com/konstantinosStouras/lab-portfoliofit-testing.git
+	branch = main
+
+[submodule "lab-portfoliofit"]
+	path = lab/portfoliofit
+	url = https://github.com/konstantinosStouras/lab-portfoliofit.git
+	branch = main
+
+[submodule "lab-problem-solving"]
+	path = lab/problem-solving
+	url = https://github.com/konstantinosStouras/lab-problem-solving.git
+	branch = main
+
+[submodule "lab-search-v2"]
+	path = lab/search-v2
+	url = https://github.com/konstantinosStouras/lab-search-v2.git
+	branch = main
+
+[submodule "lab-search"]
+	path = lab/search
+	url = https://github.com/konstantinosStouras/lab-search.git
+	branch = main
+
+[submodule "lab-tetris"]
+	path = lab/tetris
+	url = https://github.com/konstantinosStouras/lab-tetris.git
+	branch = main
+
+[submodule "lab-ubongo"]
+	path = lab/ubongo
+	url = https://github.com/konstantinosStouras/lab-ubongo.git
+	branch = main

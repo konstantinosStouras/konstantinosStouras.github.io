@@ -1,0 +1,317 @@
+{
+  "version": 1,
+  "extractedFrom": {
+    "repository": "konstantinosStouras/konstantinosStouras.github.io",
+    "revision": "7ce9e6cd012dc76b5a8714851f86971725fc518b"
+  },
+  "projects": [
+    {
+      "name": "wearwell",
+      "path": "wearwell",
+      "url": "https://github.com/konstantinosStouras/wearwell.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "daywear-legacy",
+      "path": "daywear",
+      "url": "https://github.com/konstantinosStouras/daywear-legacy.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "simulation-platform",
+      "path": "simulation",
+      "url": "https://github.com/konstantinosStouras/simulation-platform.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "sustainable-supply-chains",
+      "path": "sustainable-supply-chains",
+      "url": "https://github.com/konstantinosStouras/sustainable-supply-chains.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "chinese-learning",
+      "path": "chinese",
+      "url": "https://github.com/konstantinosStouras/chinese-learning.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "dataset-library",
+      "path": "datasets",
+      "url": "https://github.com/konstantinosStouras/dataset-library.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "site-archives",
+      "path": "_backups",
+      "url": "https://github.com/konstantinosStouras/site-archives.git",
+      "branch": "main",
+      "kind": "archive"
+    },
+    {
+      "name": "chinese-learning-source",
+      "path": "_chinese-prototype",
+      "url": "https://github.com/konstantinosStouras/chinese-learning-source.git",
+      "branch": "main",
+      "kind": "source"
+    },
+    {
+      "name": "wearwell-backend",
+      "path": "_daywear-firebase",
+      "url": "https://github.com/konstantinosStouras/wearwell-backend.git",
+      "branch": "main",
+      "kind": "backend"
+    },
+    {
+      "name": "idea-kpi-script",
+      "path": "_idea-kpi-script",
+      "url": "https://github.com/konstantinosStouras/idea-kpi-script.git",
+      "branch": "main",
+      "kind": "source"
+    },
+    {
+      "name": "ideasearchlab-source",
+      "path": "_ideasearchlab-src",
+      "url": "https://github.com/konstantinosStouras/ideasearchlab-source.git",
+      "branch": "main",
+      "kind": "source"
+    },
+    {
+      "name": "answerarena-backend",
+      "path": "_lab-arena-firebase",
+      "url": "https://github.com/konstantinosStouras/answerarena-backend.git",
+      "branch": "main",
+      "kind": "backend"
+    },
+    {
+      "name": "portfoliofit-game-backend",
+      "path": "_portfoliofit-firebase",
+      "url": "https://github.com/konstantinosStouras/portfoliofit-game-backend.git",
+      "branch": "main",
+      "kind": "backend"
+    },
+    {
+      "name": "portfoliofit-lab-backend",
+      "path": "_portfoliofit-lab-firebase",
+      "url": "https://github.com/konstantinosStouras/portfoliofit-lab-backend.git",
+      "branch": "main",
+      "kind": "backend"
+    },
+    {
+      "name": "prototypicality-research",
+      "path": "_prototypicality",
+      "url": "https://github.com/konstantinosStouras/prototypicality-research.git",
+      "branch": "main",
+      "kind": "source"
+    },
+    {
+      "name": "fun-capitals",
+      "path": "fun/capitals",
+      "url": "https://github.com/konstantinosStouras/fun-capitals.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-ft50",
+      "path": "fun/ft50",
+      "url": "https://github.com/konstantinosStouras/fun-ft50.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-lit",
+      "path": "fun/lit",
+      "url": "https://github.com/konstantinosStouras/fun-lit.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-mnsc-scraper-to-use-locally",
+      "path": "fun/mnsc_scraper-to-use-locally",
+      "url": "https://github.com/konstantinosStouras/fun-mnsc-scraper-to-use-locally.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-ms-old",
+      "path": "fun/ms-old",
+      "url": "https://github.com/konstantinosStouras/fun-ms-old.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-ms",
+      "path": "fun/ms",
+      "url": "https://github.com/konstantinosStouras/fun-ms.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-ms2",
+      "path": "fun/ms2",
+      "url": "https://github.com/konstantinosStouras/fun-ms2.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-nomoi",
+      "path": "fun/nomoi",
+      "url": "https://github.com/konstantinosStouras/fun-nomoi.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-portfoliofitgame",
+      "path": "fun/portfoliofitgame",
+      "url": "https://github.com/konstantinosStouras/fun-portfoliofitgame.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-rooks",
+      "path": "fun/rooks",
+      "url": "https://github.com/konstantinosStouras/fun-rooks.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-snake",
+      "path": "fun/snake",
+      "url": "https://github.com/konstantinosStouras/fun-snake.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "speak",
+      "path": "fun/speak",
+      "url": "https://github.com/konstantinosStouras/speak.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "fun-sudoku",
+      "path": "fun/sudoku",
+      "url": "https://github.com/konstantinosStouras/fun-sudoku.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-archives",
+      "path": "lab/_backup",
+      "url": "https://github.com/konstantinosStouras/lab-archives.git",
+      "branch": "main",
+      "kind": "archive"
+    },
+    {
+      "name": "lab-answerarena",
+      "path": "lab/answerarena",
+      "url": "https://github.com/konstantinosStouras/lab-answerarena.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-ideasearchlab",
+      "path": "lab/ideasearchlab",
+      "url": "https://github.com/konstantinosStouras/lab-ideasearchlab.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-interpolation",
+      "path": "lab/interpolation",
+      "url": "https://github.com/konstantinosStouras/lab-interpolation.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-jagged",
+      "path": "lab/jagged",
+      "url": "https://github.com/konstantinosStouras/lab-jagged.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-knapsack-calculator",
+      "path": "lab/knapsack-calculator",
+      "url": "https://github.com/konstantinosStouras/lab-knapsack-calculator.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-knapsack-game",
+      "path": "lab/knapsack-game",
+      "url": "https://github.com/konstantinosStouras/lab-knapsack-game.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-knapsack-with-dependencies",
+      "path": "lab/knapsack-with-dependencies",
+      "url": "https://github.com/konstantinosStouras/lab-knapsack-with-dependencies.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-newsvendor",
+      "path": "lab/newsvendor",
+      "url": "https://github.com/konstantinosStouras/lab-newsvendor.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-portfoliofit-testing",
+      "path": "lab/portfoliofit-testing",
+      "url": "https://github.com/konstantinosStouras/lab-portfoliofit-testing.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-portfoliofit",
+      "path": "lab/portfoliofit",
+      "url": "https://github.com/konstantinosStouras/lab-portfoliofit.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-problem-solving",
+      "path": "lab/problem-solving",
+      "url": "https://github.com/konstantinosStouras/lab-problem-solving.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-search-v2",
+      "path": "lab/search-v2",
+      "url": "https://github.com/konstantinosStouras/lab-search-v2.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-search",
+      "path": "lab/search",
+      "url": "https://github.com/konstantinosStouras/lab-search.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-tetris",
+      "path": "lab/tetris",
+      "url": "https://github.com/konstantinosStouras/lab-tetris.git",
+      "branch": "main",
+      "kind": "website"
+    },
+    {
+      "name": "lab-ubongo",
+      "path": "lab/ubongo",
+      "url": "https://github.com/konstantinosStouras/lab-ubongo.git",
+      "branch": "main",
+      "kind": "website"
+    }
+  ]
+}

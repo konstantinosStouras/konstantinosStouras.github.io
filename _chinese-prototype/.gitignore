@@ -1,7 +1,0 @@
-node_modules/
-firebase-debug.log
-*-debug.log
-.firebase/
-.env*
-tmp/
-tools/local-*.json

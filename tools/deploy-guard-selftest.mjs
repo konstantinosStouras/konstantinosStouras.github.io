@@ -114,9 +114,11 @@ for (const unit of found) {
   const hookRel = path.relative(unit, guard).split(path.sep).join('/');
   for (const section of DEPLOYABLE) {
     if (!cfg[section] || typeof cfg[section] !== 'object') continue;
-    const pre = [].concat(cfg[section].predeploy || []);
-    ok(pre.some((c) => String(c).includes(hookRel)),
-      `${rel}: its ${section} deploy runs the guard first`);
+    for (const entry of [].concat(cfg[section])) {
+      const pre = [].concat(entry.predeploy || []);
+      ok(pre.some((c) => String(c).includes(hookRel)),
+        `${rel}: its ${section} deploy runs the guard first`);
+    }
   }
 
   /* THE RUNTIME THE DEPLOY WOULD ACTUALLY USE. The CLI resolves it as
@@ -127,8 +129,8 @@ for (const unit of found) {
      "Deploy complete!" and shipped Node 20 with engines reading 22, and only
      `firebase functions:list` would ever have said so. Two files stating one
      fact are pinned against each other here, both ways. */
-  if (cfg.functions && typeof cfg.functions === 'object') {
-    const srcDir = path.join(unit, cfg.functions.source || 'functions');
+  for (const functions of cfg.functions ? [].concat(cfg.functions) : []) {
+    const srcDir = path.join(unit, functions.source || 'functions');
     const pkgPath = path.join(srcDir, 'package.json');
     ok(existsSync(pkgPath), `${rel}: its functions source carries a package.json`);
     if (existsSync(pkgPath)) {
@@ -137,7 +139,7 @@ for (const unit of found) {
         engines = (JSON.parse(readFileSync(pkgPath, 'utf8')).engines || {}).node || '';
       } catch { /* reported below */ }
       ok(!!engines, `${rel}: its functions package.json declares engines.node`);
-      const pinned = cfg.functions.runtime || '';
+      const pinned = functions.runtime || '';
       if (pinned && engines) {
         ok(pinned === `nodejs${engines}`,
           `${rel}: firebase.json pins runtime ${pinned} while its package.json` +

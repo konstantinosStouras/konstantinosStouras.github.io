@@ -14,6 +14,11 @@ on:
       - '.github/scripts/check-daywear.mjs'
       - '.github/workflows/daywear-checks.yml'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      revision:
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -29,11 +34,14 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: ${{ inputs.revision || github.sha }}
           sparse-checkout: |
             wearwell
             daywear
             .github/scripts
           filter: blob:none
+      - name: Load the independent WearWell sources at their published paths
+        run: git submodule update --init --depth 1 -- wearwell daywear
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'

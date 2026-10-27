@@ -1,5 +1,9 @@
 # Repository conventions
 
+## Independent project repositories — 27 October 2026
+
+The owner requested separate repositories and sibling local folders for independent applications, preserving all public URL paths and removing app source copies from the homepage checkout. Read `PROJECTS.md` and `.github/projects.json` first. App paths are now pinned public Git submodules. Edit the corresponding source repository, then run the **Publish independent projects** workflow here (also scheduled twice per hour). Integration checks must initialize submodules; do not recreate source copies in the homepage repository. Existing Firebase project guards, Jekyll underscore exclusions, account integration, URL paths, branch posture, and all other rules below remain applicable to the assembled site. The literature service and its data-writing workflows stay together here until their eight secrets and scheduled jobs can be transferred safely.
+
 This repo is the source of **stouras.com** (Konstantinos Stouras' homepage),
 served as a static site via GitHub Pages from the `master` branch. There is no
 build step — HTML/CSS/JS are committed and served as-is.
