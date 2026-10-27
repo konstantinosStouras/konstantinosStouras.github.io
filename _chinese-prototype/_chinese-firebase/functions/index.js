@@ -79,7 +79,7 @@ exports.chineseApi=onCall({region:'europe-west1',maxInstances:2,minInstances:0,m
    if(!lesson?.published||!lesson.speaking||!word)fail('failed-precondition','This speaking exercise is no longer available.');
    if(typeof d.audio!=='string'||d.audio.length>1400000||!/^[A-Za-z0-9+/]*={0,2}$/.test(d.audio))fail('invalid-argument','Record a short clip of up to 20 seconds.');
    const wav=Buffer.from(d.audio,'base64');
-   if(wav.length<1000||wav.toString('ascii',0,4)!=='RIFF'||wav.toString('ascii',8,12)!=='WAVE'||wav.readUInt32LE(24)!==16000||wav.readUInt16LE(22)!==1||wav.readUInt16LE(34)!==16)fail('invalid-argument','Use a mono 16 kHz WAV recording.');
+   if(wav.length<1000||wav.length>640044||wav.toString('ascii',0,4)!=='RIFF'||wav.toString('ascii',8,12)!=='WAVE'||wav.readUInt32LE(24)!==16000||wav.readUInt16LE(22)!==1||wav.readUInt16LE(34)!==16)fail('invalid-argument','Use a mono 16 kHz WAV recording of up to 20 seconds.');
    const settings=(await db.doc('settings/public').get()).data()||{},provider=settings.speechProvider;
    if(!['azure','openai'].includes(provider))fail('failed-precondition','AI feedback is not connected yet. You can record, listen, and practise with the pronunciation guide.');
    const credentials=await secret(provider);await limits(req.auth.uid);

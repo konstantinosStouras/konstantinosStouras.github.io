@@ -1,18 +1,21 @@
-let recorder,stream,timer,blob,url,started,context;
+let recorder,stream,timer,blob,url,started,context,generation=0;
 export function supported(){return !!(navigator.mediaDevices?.getUserMedia&&window.MediaRecorder&&(window.AudioContext||window.webkitAudioContext));}
 export async function startRecording(onStop){
  if(!supported())throw Error('Recording is not supported in this browser. Try a current version of Chrome, Safari, Firefox or Edge.');
- stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
+ const current=++generation;
+ const captured=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
+ if(current!==generation){captured.getTracks().forEach(t=>t.stop());return false;}
+ stream=captured;
  try{
  const type=['audio/webm;codecs=opus','audio/mp4','audio/webm','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
  recorder=new MediaRecorder(stream,type?{mimeType:type}:undefined);const chunks=[];started=Date.now();
  recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
  recorder.onstop=()=>{clearTimeout(timer);stream?.getTracks().forEach(t=>t.stop());blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(blob);onStop({url,duration:(Date.now()-started)/1000});};
- recorder.start();timer=setTimeout(stopRecording,20000);
+ recorder.start();timer=setTimeout(stopRecording,20000);return true;
  }catch(e){stream.getTracks().forEach(t=>t.stop());throw e;}
 }
 export function stopRecording(){if(recorder?.state==='recording')recorder.stop();}
-export function disposeRecording(){clearTimeout(timer);if(recorder)recorder.onstop=null;stopRecording();stream?.getTracks().forEach(t=>t.stop());if(url)URL.revokeObjectURL(url);blob=null;url=null;context?.close().catch(()=>{});context=null;}
+export function disposeRecording(){generation++;clearTimeout(timer);if(recorder)recorder.onstop=null;stopRecording();stream?.getTracks().forEach(t=>t.stop());if(url)URL.revokeObjectURL(url);blob=null;url=null;context?.close().catch(()=>{});context=null;}
 export async function wavBase64(){
  if(!blob)throw Error('Record your voice first.');
  const AudioCtx=window.AudioContext||window.webkitAudioContext;
