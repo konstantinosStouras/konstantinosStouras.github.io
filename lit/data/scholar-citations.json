@@ -2,45 +2,42 @@
   "10.1287/mnsc.2020.01547": {
     "title": "Too Much Information: When Does Additional Testing Benefit Schools?",
     "count": 13,
-    "checked": "2026-10-13",
+    "checked": "2026-10-25",
     "cluster": "13987205804766814296",
-    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2020.01547",
-    "method": "browser-verified"
+    "method": "browser-verified-versions",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2020.01547"
   },
   "10.1287/mnsc.2021.02813": {
     "title": "Learning Optimal Prescriptive Trees from Observational Data",
-    "count": 29,
-    "checked": "2026-10-13",
+    "count": 30,
+    "checked": "2026-10-25",
     "cluster": "8355446235758920115",
-    "method": "publish-or-perish-doi-match",
-    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2021.02813",
-    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+    "method": "browser-verified-versions",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2021.02813"
   },
   "10.1287/mnsc.2021.03426": {
-    "matchedUrl": "https://pubsonline.informs.org/doi/10.1287/mnsc.2021.03426",
-    "checked": "2026-10-13",
     "title": "Spatial Information Sharing on On-Demand Service Platforms",
-    "cluster": "8482798350646636319",
     "count": 1,
-    "method": "browser-verified"
+    "checked": "2026-10-25",
+    "cluster": "8482798350646636319",
+    "method": "browser-verified-versions",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2021.03426"
   },
   "10.1287/mnsc.2022.01332": {
     "title": "Public Signals, Default Risk, and Voluntary Disclosure",
     "count": 2,
-    "checked": "2026-10-13",
+    "checked": "2026-10-25",
     "cluster": "545498143785977049",
-    "method": "publish-or-perish-doi-match",
-    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2022.01332",
-    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+    "method": "browser-verified-versions",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2022.01332"
   },
   "10.1287/mnsc.2022.01874": {
     "title": "Private Equity Buyouts and Employee Health",
     "count": 43,
-    "checked": "2026-10-13",
+    "checked": "2026-10-25",
     "cluster": "11122239189697297172",
-    "method": "publish-or-perish-doi-match",
-    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2022.01874",
-    "export": "2026-10-13T08-32-54-457Z-2026-0.json"
+    "method": "browser-verified-versions",
+    "matchedUrl": "https://pubsonline.informs.org/doi/abs/10.1287/mnsc.2022.01874"
   },
   "10.1287/mnsc.2022.02435": {
     "title": "How and When Are High-Frequency Stock Returns Predictable?",
