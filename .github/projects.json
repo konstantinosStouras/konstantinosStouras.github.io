@@ -400,6 +400,15 @@
       "kind": "website",
       "publishes": true,
       "checkDeployment": false
+    },
+    {
+      "name": "blog-posting",
+      "path": "ucd-blog",
+      "url": "https://github.com/konstantinosStouras/blog-posting.git",
+      "branch": "main",
+      "kind": "website",
+      "publishes": true,
+      "checkDeployment": false
     }
   ]
 }
