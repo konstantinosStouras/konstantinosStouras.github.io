@@ -167,3 +167,7 @@
 	path = lab/ubongo
 	url = https://github.com/konstantinosStouras/lab-ubongo.git
 	branch = main
+[submodule "ucd-blog"]
+	path = ucd-blog
+	url = https://github.com/konstantinosStouras/blog-posting.git
+	branch = main
