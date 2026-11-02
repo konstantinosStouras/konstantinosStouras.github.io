@@ -32,6 +32,15 @@
 
     <script>
       var path = window.location.pathname;
+      // UCD blog (/ucd-blog/, repo konstantinosStouras/blog-posting) uses clean
+      // URLs with no server: a deep link such as /ucd-blog/blog/project-management
+      // has no file of its own, so it arrives here. Hand the address to the app
+      // (router.js reads ?redirect= and restores the path before the app starts).
+      if (path.indexOf('/ucd-blog/') === 0) {
+        window.location.replace(
+          '/ucd-blog/?redirect=' + encodeURIComponent(path + window.location.search + window.location.hash) + '&_=' + Date.now()
+        );
+      }
       if (path.indexOf('/lab/ideasearchlab') === 0) {
         // Append a cache-buster so the SPA entry (index.html) is always fetched
         // fresh. Without it, the redirect URL is identical for a given deep link
