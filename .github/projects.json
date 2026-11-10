@@ -409,6 +409,15 @@
       "kind": "website",
       "publishes": true,
       "checkDeployment": false
+    },
+    {
+      "name": "agentlab-web",
+      "path": "agentlab",
+      "url": "https://github.com/konstantinosStouras/agentlab-web.git",
+      "branch": "main",
+      "kind": "website",
+      "publishes": true,
+      "checkDeployment": false
     }
   ]
 }

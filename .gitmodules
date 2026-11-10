@@ -171,3 +171,8 @@
 	path = ucd-blog
 	url = https://github.com/konstantinosStouras/blog-posting.git
 	branch = main
+
+[submodule "agentlab-web"]
+	path = agentlab
+	url = https://github.com/konstantinosStouras/agentlab-web.git
+	branch = main
