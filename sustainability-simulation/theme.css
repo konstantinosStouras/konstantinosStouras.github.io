@@ -1,0 +1,236 @@
+/* Theme state survives workspace renders; the shared control follows its header slot. */
+:root{--dialog-surface:#fff}
+.theme-bar{position:sticky;top:0;z-index:30;min-height:52px;display:flex;justify-content:flex-end;align-items:center;padding:4px clamp(12px,3vw,38px);background:var(--paper);border-bottom:1px solid var(--line)}
+.theme-toggle{min-height:44px;font-size:1rem;white-space:nowrap}
+.workspace-nav{top:53px}
+.sidebar{top:53px;height:calc(100vh - 53px)}
+#dialog>.theme-toggle{position:sticky;top:0;z-index:2;display:flex;margin:0 44px 18px 0;box-shadow:0 0 0 6px var(--paper)}
+.dialog-toolbar{position:sticky;top:-28px;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-28px -28px 18px;padding:12px 18px;background:var(--dialog-surface);border-bottom:1px solid var(--line)}
+.dialog-toolbar [data-dialog-theme-slot]{display:flex}
+dialog .dialog-toolbar .close{position:static;min-width:44px;flex-shrink:0}
+[data-theme="dark"]{--dialog-surface:#222e27}
+:root[data-theme="dark"]{color-scheme:dark;--paper:#161f1b;--ink:#e1eddc;--text:#d4e0d7;--muted:#a7b9ad;--line:#3d5145;--green:#b5d893;--lime:#d0e6a5;--soft:#2b3c30;--red:#ffa58e;--chart-0:#b5d893;--chart-1:#8caf51;--chart-2:#b79061;--chart-label:var(--muted)}
+[data-theme="dark"] :is(button,.button,.skip,.timebox,.metric,.panel,.student-pane,dialog){background:#222e27;color:var(--text)}
+[data-theme="dark"] :is(button,.button):hover{background:#344b39;border-color:#819d70}
+[data-theme="dark"] :is(button.primary,.button.primary){background:#c4dda0;border-color:#c4dda0;color:#17291e}
+[data-theme="dark"] :is(button.primary,.button.primary):hover{background:#d5edb0}
+[data-theme="dark"] :is(.sidebar,.workspace-nav,.workspace-tool-label){background:#10291f;color:#e1eddc}
+[data-theme="dark"] :is(.brand-mark,.nav button.active,.workspace-tools button[aria-current="page"],.workspace-tools button[aria-pressed="true"]){background:var(--lime);color:#17291e}
+[data-theme="dark"] .workspace-tools button{background:transparent;color:#e4eee7}
+[data-theme="dark"] .workspace-tools > button.active{background:var(--lime);color:#17291e}
+[data-theme="dark"] .workspace-tools > :is(button,a):focus-visible{outline-color:var(--green)}
+[data-theme="dark"] .workspace-tools > button.active:focus-visible{outline-color:#17291e}
+@media(hover:hover){[data-theme="dark"] .workspace-tools > :is(button,a):hover{background:#344b39;color:#e4eee7}[data-theme="dark"] .workspace-tools > button.active:hover{background:#d5edb0;color:#17291e}}
+[data-theme="dark"] .topbar{background:#1c2821}
+[data-theme="dark"] .avatar{background:#3c5034;color:var(--ink)}
+[data-theme="dark"] .badge.amber{background:#493b21;color:#f3d28b}
+[data-theme="dark"] .badge.red{background:#4a2d27;color:var(--red)}
+[data-theme="dark"] .mode-banner{background:#293a2b;border-color:var(--line)}
+[data-theme="dark"] :is(td,.value-list div){border-color:var(--line)}
+[data-theme="dark"] .advice{background:#293a2b;border-color:#49603e}
+[data-theme="dark"] .advice.warning{background:#3d3423;border-color:#6c5834}
+[data-theme="dark"] .timeline-item{border-color:var(--line)}
+[data-theme="dark"] .timeline-item:before{border-color:#222e27;background:#b5d893}
+[data-theme="dark"] .chart .gridline{stroke:var(--line)}
+[data-theme="dark"] label{color:#becfbd}
+[data-theme="dark"] :is(input,select,textarea){background:#19251e;color:var(--text);border-color:#536951}
+[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:#9aada0}
+[data-theme="dark"] .message.teacher{background:#2b3c30}
+[data-theme="dark"] dialog::backdrop{background:#060e0bc9}
+[data-theme="dark"] #toast{background:#d0e6a5;color:#17291e}
+[data-theme="dark"] .pane-content th{background:#2b3c30}
+[data-theme="dark"] .pane-content tbody tr:nth-child(even){background:#26342b}
+[data-theme="dark"] .pane-title{background:#315f3c}
+[data-theme="dark"] .pane-title button{background:transparent;color:white}
+[data-theme="dark"] .stock-kind{background:#d0e6a5;color:#17291e}
+[data-theme="dark"] .stock-kind.component{background:#3c5034;color:#e1eddc}
+[data-theme="dark"] .danger{color:var(--red)}
+/* One shared appearance control, beside the account on every signed-in screen. */
+.theme-bar[hidden]{display:none}
+.theme-toggle{width:44px;height:44px;flex-shrink:0;border-radius:50%;padding:0;font-size:1.25rem;display:inline-grid;place-items:center}
+.workspace-nav{top:0}
+.admin-home{max-width:1180px;margin:auto;padding:0 28px 64px}
+.admin-header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 0;border-bottom:1px solid var(--line);margin-bottom:42px}
+.admin-header .brand{color:var(--ink);margin:0}
+.admin-columns{display:grid;grid-template-columns:minmax(220px, .75fr) minmax(0, 2fr);gap:24px}
+.admin-columns>*,.account-name{min-width:0}
+.admin-columns .panel{margin-bottom:20px}
+.admin-columns summary{font-weight:600;cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none;min-height:44px}
+.admin-columns summary::-webkit-details-marker{display:none}
+.admin-columns summary::after{content:"+";margin-left:auto;flex:0 0 24px;text-align:center;font-size:1.5rem;font-weight:400;color:var(--green)}
+.admin-columns details[open]>summary::after{content:"−"}
+.admin-columns summary:focus-visible{outline:2px solid var(--green);outline-offset:6px;border-radius:4px}
+.admin-columns summary span{margin-left:auto;font-size:1rem;font-weight:400;color:var(--muted);white-space:nowrap}
+.admin-columns summary:has(span)::after{margin-left:0}
+.session-card{border:1px solid var(--line);border-radius:12px;padding:20px;margin-top:16px;background:var(--paper)}
+.session-card-heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.session-card code{overflow-wrap:anywhere}
+.session-card h3{margin:16px 0 6px}
+.session-card .toolbar{margin-bottom:0;flex-wrap:wrap}
+.account-controls{display:flex;align-items:center;gap:10px;min-width:0}
+.account-menu{position:relative;margin:0}
+.account-menu summary{display:flex;align-items:center;gap:10px;cursor:pointer;border:1px solid var(--line);border-radius:32px;padding:5px 12px 5px 5px;list-style:none;margin:0}
+.account-menu summary::-webkit-details-marker{display:none}
+.account-menu summary:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+.account-name{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-dropdown{position:absolute;right:0;top:calc(100% + 12px);width:300px;max-width:calc(100vw - 32px);padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--paper);box-shadow:0 12px 36px #0002;z-index:60}
+.account-dropdown>strong,.account-dropdown>small{display:block;overflow-wrap:anywhere}
+.account-dropdown button{display:block;width:100%;text-align:left;border:0;margin:4px 0;padding:12px}
+.topbar{gap:12px;flex-wrap:wrap}
+.top-actions{min-width:0;flex-wrap:wrap}
+@media(max-width:700px){.admin-home{padding:0 16px 32px}.admin-header{flex-wrap:wrap;margin-bottom:24px;gap:14px}.admin-header .account-controls{margin-left:auto}.admin-columns{grid-template-columns:minmax(0,1fr);gap:0}.account-name{max-width:155px}.admin-home h1{font-size:1.875rem}.topbar{padding:12px 16px}.top-actions{width:100%;justify-content:space-between}.account-dropdown{max-height:70vh;overflow:auto}.session-card{padding:14px}}
+@media(max-width:380px){.account-name{max-width:120px}.account-controls{gap:6px}.top-actions{gap:8px}.account-menu summary{gap:6px}}
+
+[data-theme="dark"] .studio-intro{color:#e1eddc}
+
+/* Session action hierarchy and responsive touch targets. */
+.session-card-heading h3{margin:0;font-size:1.125rem;line-height:1.4;overflow-wrap:anywhere}
+.session-status{text-transform:uppercase;letter-spacing:.06em;border-radius:30px;font-size:0.875rem}
+.session-meta{color:var(--muted);font-size:1rem;margin:10px 0 18px}
+.session-actions{display:flex;flex-wrap:wrap;gap:8px}
+.session-actions button,.session-bulk{min-height:40px;padding:9px 13px;border-radius:8px;font-size:1rem;font-weight:600;display:inline-flex;justify-content:center;align-items:center;gap:6px}
+.session-actions .session-open{background:#214f41;color:#fff;border-color:#214f41}
+.session-actions .session-export{background:#218345;color:#fff;border-color:#218345}
+.admin-home .session-danger{background:#fff1ec;color:#a52c15;border-color:#efbbae}
+.session-actions button:hover,.session-bulk:hover{filter:brightness(.94)}
+.session-actions button:focus-visible,.session-access-button:focus-visible,.session-bulk:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+.session-actions button[aria-busy=true]{opacity:.6;cursor:wait}
+.session-access{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
+.session-access .session-access-button{min-height:44px;max-width:100%;padding:11px 16px;border:1px solid #bccfba;border-radius:10px;background:#f0f5eb;color:#28513c;font-family:Inter,"Segoe UI",Arial,sans-serif;font-size:14px;font-weight:600;line-height:1.4;letter-spacing:.01em;text-align:left;white-space:normal;box-shadow:0 1px 2px #173a3108}
+.session-access .session-access-button:hover{background:#e3edd8;border-color:#86a278;color:#173a31}
+.session-access .session-access-button:active{box-shadow:inset 0 1px 3px #173a311a}
+[data-theme=dark] .session-access .session-access-button{background:#23382b;border-color:#4d6951;color:#d8ebc4;box-shadow:0 1px 2px #0002}
+[data-theme=dark] .session-access .session-access-button:hover{background:#304a36;border-color:#92b37b;color:#eff8e4}
+.session-access .session-access-button:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+.session-access small{font-size:0.875rem;overflow-wrap:anywhere;color:var(--muted)}
+[data-theme=dark] .session-actions .session-open{background:#c8dfa7;color:#15261d;border-color:#c8dfa7}
+[data-theme=dark] .session-actions .session-export{background:#287c48;color:#fff;border-color:#439c65}
+[data-theme=dark] .admin-home .session-danger{background:#3b2422;color:#ffb7a6;border-color:#855046}
+@media(max-width:480px){.session-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.session-actions button{min-height:44px;padding:9px 10px}.session-access{align-items:flex-start;flex-direction:column}}
+.session-action-hint{position:relative;display:inline-flex;min-width:0}
+.session-tooltip{position:absolute;bottom:calc(100% + 8px);left:0;width:280px;max-width:calc(100vw - 48px);padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--text);box-shadow:0 6px 24px #0003;font-size:1rem;line-height:1.5;font-weight:400;z-index:80;visibility:hidden;opacity:0;transition:opacity .12s;pointer-events:none}
+.session-action-hint:hover>.session-tooltip,.session-action-hint:focus-within>.session-tooltip{visibility:visible;opacity:1;pointer-events:auto}
+.session-actions .session-action-hint:nth-last-child(-n+2)>.session-tooltip{left:auto;right:0}
+@media(max-width:480px){.session-actions .session-action-hint>button{width:100%}.session-actions .session-action-hint:nth-child(even)>.session-tooltip{left:auto;right:0}.session-actions .session-action-hint:nth-child(odd)>.session-tooltip{left:0;right:auto}}
+
+/* Give setup controls room alongside session cards, then stack before they pinch. */
+@media(min-width:901px) { .admin-columns { grid-template-columns: minmax(320px, 1fr) minmax(0, 1.8fr); } }
+@media(min-width:701px) and (max-width:900px) { .admin-columns { grid-template-columns: minmax(0,1fr); gap: 0; } }
+
+/* Instructor home uses the same reading scale as the classroom. */
+.admin-columns > details > summary, .admin-columns .panel > summary { font-size: 1.125rem; }
+.admin-columns summary { flex-wrap: wrap; }
+.admin-columns summary span { white-space: normal; }
+.account-menu summary { font-size: 1rem; min-height: 48px; }
+.session-card-heading h3 { font-size: 1.375rem; }
+.session-actions button, .session-bulk { min-height: 44px; line-height: 1.4; }
+.session-meta, .session-tooltip { line-height: 1.6; }
+@media (max-width: 480px) {
+  .session-actions { grid-template-columns: 1fr; }
+  .session-actions .session-action-hint > .session-tooltip { left: 0; right: auto; }
+}
+/* Account disclosure: quiet list rows, independent of general action buttons. */
+.account-controls { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.account-menu > summary { min-height:44px; padding:5px 12px 5px 5px; gap:10px; font-size:14px; font-weight:500; line-height:1.4; color:var(--text); background:transparent; transition:background .15s,border-color .15s; }
+.account-menu > summary:hover, .account-menu[open] > summary { background:var(--soft); border-color:var(--green); }
+.account-menu .avatar { width:34px; height:34px; flex-shrink:0; font-size:12px; font-weight:650; letter-spacing:.02em; }
+.account-chevron { width:16px; height:16px; flex-shrink:0; fill:none; stroke:currentColor; stroke-width:1.5; transition:transform .15s; }
+.account-menu[open] .account-chevron { transform:rotate(180deg); }
+.account-dropdown { position:absolute; right:0; top:calc(100% + 10px); width:320px; max-width:calc(100vw - 32px); max-height:min(70dvh,560px); overflow:auto; padding:8px; border:1px solid var(--line); border-radius:14px; background:#fff; box-shadow:0 16px 48px #173a311a,0 3px 8px #173a3108; z-index:60; }
+.account-heading { padding:14px 12px 16px; margin-bottom:6px; border-bottom:1px solid var(--line); }
+.account-heading strong { display:block; font-size:16px; font-weight:650; line-height:1.5; color:var(--text); overflow-wrap:anywhere; }
+.account-heading small { display:block; margin-top:3px; font-size:14px; line-height:1.5; color:var(--muted); }
+.account-dropdown button { display:flex; justify-content:flex-start; width:100%; min-height:44px; margin:0; padding:11px 12px; border:0; border-radius:6px; background:transparent; color:var(--text); font-family:inherit; font-size:16px; font-weight:500; line-height:1.5; text-align:left; box-shadow:none; }
+.account-dropdown button:hover:not(:disabled), .account-dropdown button:focus-visible { background:var(--soft); color:var(--ink); }
+.account-dropdown button:focus-visible { outline:2px solid var(--green); outline-offset:-2px; }
+.account-footer { border-top:1px solid var(--line); margin-top:6px; padding-top:6px; }
+.account-footer button.danger { color:var(--red); }
+[data-theme="dark"] .account-dropdown { background:#222e27; box-shadow:0 16px 48px #0005; }
+[data-theme="dark"] .account-dropdown button { background:transparent; }
+[data-theme="dark"] .account-dropdown button:hover:not(:disabled), [data-theme="dark"] .account-dropdown button:focus-visible { background:var(--soft); }
+@media (max-width:480px) { .account-menu > summary { font-size:13px; } .account-name { max-width:140px; } }
+@media (prefers-reduced-motion:reduce) { .account-chevron,.account-menu > summary { transition:none; } }
+
+/* Align session setup and actions after removing the unused Options panel. */
+.admin-columns { align-items: start; }
+.session-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.session-actions .session-action-hint { min-width: 0; }
+.session-actions .session-action-hint > button { width: 100%; height: 100%; }
+@media (max-width: 480px) { .session-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 360px) { .session-actions { grid-template-columns: minmax(0, 1fr); } }
+
+/* Shared action buttons. Navigation, menu rows and branded sign-in retain their layout. */
+:root {
+  --action-bg:#f0f5eb; --action-border:#bccfba; --action-text:#28513c;
+  --action-hover:#e3edd8; --action-hover-border:#86a278; --action-hover-text:#173a31;
+  --action-primary:#28513c; --action-primary-text:#fff; --action-primary-hover:#1d4030;
+  --action-danger:#fff1ec; --action-danger-border:#e6b7ab; --action-danger-text:#a52c15; --action-danger-hover:#fbe1d8;
+  --action-shadow:0 1px 2px #173a3108;
+}
+:root[data-theme="dark"] {
+  --action-bg:#23382b; --action-border:#4d6951; --action-text:#d8ebc4;
+  --action-hover:#304a36; --action-hover-border:#92b37b; --action-hover-text:#eff8e4;
+  --action-primary:#c4dda0; --action-primary-text:#17291e; --action-primary-hover:#d5edb0;
+  --action-danger:#3b2422; --action-danger-border:#855046; --action-danger-text:#ffb7a6; --action-danger-hover:#50302b;
+  --action-shadow:0 1px 2px #0002;
+}
+/* Specificity matches legacy theme rules so all action surfaces use these tokens. */
+:is(:root[data-theme],:root:not([data-theme])) body :is(button,.button):not(:where(.workspace-tools *, .nav *, .pane-title *, .account-dropdown *, .studio-google, .studio-reset, .theme-toggle, .close)) {
+  min-height:44px; max-width:100%; padding:11px 16px;
+  border:1px solid var(--action-border); border-radius:10px;
+  background:var(--action-bg); color:var(--action-text);
+  font-family:Inter,"Segoe UI",Arial,sans-serif; font-size:14px; font-weight:600;
+  line-height:1.4; letter-spacing:.01em; white-space:normal; overflow-wrap:anywhere;
+  gap:8px; box-shadow:var(--action-shadow); text-decoration:none; filter:none;
+}
+:is(:root[data-theme],:root:not([data-theme])) body :is(button,.button):not(:where(.workspace-tools *, .nav *, .pane-title *, .account-dropdown *, .studio-google, .studio-reset, .theme-toggle, .close)):hover:not(:disabled):not([aria-disabled="true"]) {
+  background:var(--action-hover); border-color:var(--action-hover-border); color:var(--action-hover-text);
+}
+:is(:root[data-theme],:root:not([data-theme])) body :is(button.primary,.button.primary,.session-open) {
+  background:var(--action-primary); border-color:var(--action-primary); color:var(--action-primary-text);
+}
+:is(:root[data-theme],:root:not([data-theme])) body :is(button.primary,.button.primary,.session-open):hover:not(:disabled):not([aria-disabled="true"]) {
+  background:var(--action-primary-hover); border-color:var(--action-primary-hover); color:var(--action-primary-text);
+}
+:is(:root[data-theme],:root:not([data-theme])) body :is(button.danger,.button.danger,.session-danger):not(:where(.account-dropdown *)) {
+  background:var(--action-danger); border-color:var(--action-danger-border); color:var(--action-danger-text);
+}
+:is(:root[data-theme],:root:not([data-theme])) body :is(button.danger,.button.danger,.session-danger):not(:where(.account-dropdown *)):hover:not(:disabled):not([aria-disabled="true"]) {
+  background:var(--action-danger-hover); border-color:var(--action-danger-text); color:var(--action-danger-text);
+}
+:is(:root[data-theme],:root:not([data-theme])) body .theme-toggle {
+  width:44px; height:44px; min-height:44px; border-radius:10px;
+  border:1px solid var(--action-border); background:var(--action-bg); color:var(--action-text); box-shadow:var(--action-shadow);
+}
+:is(:root[data-theme],:root:not([data-theme])) body .theme-toggle:hover { background:var(--action-hover); border-color:var(--action-hover-border); }
+:is(:root[data-theme],:root:not([data-theme])) body :is(button,.button):focus-visible { outline:3px solid var(--green); outline-offset:3px; }
+:is(:root[data-theme],:root:not([data-theme])) body :is(.workspace-tools,.nav,.account-dropdown) :focus-visible { outline-offset:-3px; }
+:is(:root[data-theme],:root:not([data-theme])) body :is(button,.button):disabled,
+:is(:root[data-theme],:root:not([data-theme])) body .button[aria-disabled="true"] { opacity:.5; cursor:not-allowed; filter:none; box-shadow:none; }
+@media (prefers-reduced-motion:no-preference) {
+  button,.button { transition:background .15s,border-color .15s,color .15s,box-shadow .15s; }
+}
+@media (prefers-reduced-motion:reduce) { button,.button { transition:none; } }
+
+/* Keep action help inside the viewport at every button-grid breakpoint. */
+.session-actions .session-tooltip, .session-access .session-tooltip { max-width: min(280px, calc(100vw - 112px)); }
+@media (min-width: 481px) {
+  .session-actions .session-action-hint:nth-child(3n) > .session-tooltip { left: auto; right: 0; }
+}
+@media (max-width: 360px) {
+  .session-actions .session-action-hint:nth-child(n) > .session-tooltip { left: 0; right: auto; }
+}
+/* Size the phone dropdown against its available header width, not 100vw,
+   which includes the scrollbar and can push a right-aligned menu off-screen. */
+@media (max-width: 480px) {
+  .account-controls { position: relative; width: 100%; justify-content: flex-end; }
+  .account-menu { position: static; }
+  .account-dropdown { max-width: 100%; }
+}
+/* Hide mobile scrollbars in both themes without changing scroll behaviour. */
+@media (max-width: 700px) {
+  html, body, .account-dropdown { scrollbar-width: none; }
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  .account-dropdown::-webkit-scrollbar { display: none; width: 0; height: 0; }
+}
