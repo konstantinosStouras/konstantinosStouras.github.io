@@ -3842,19 +3842,18 @@ function renderRecent() {
   // dataset's recent rows (fetched separately) ride along with the native tab,
   // kept in their own group so the count can be reconciled per dataset.
   var usePrecomputed = recentData !== null;
-  var groups = usePrecomputed
-    ? [{ base: 'native', rows: recentData }].concat(recentExtraSets)
-    : [{ base: null, rows: allPapers }];
-
-  // No pre-computed tab (missing/404, or retries exhausted): fall back to
-  // scanning the papers themselves — with lazy loading that means kicking off
-  // the native downloads first (rare path; recent.json normally exists).
-  if (!usePrecomputed && !allPapers.length) {
-    sourcesManifest.forEach(function(src) { loadNativeSource(src.key); });
-    countEl.innerHTML = '';
-    list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
-    return;
+  var fallbackKeys = [], fallbackPending = false, fallbackMissing = false;
+  if (!usePrecomputed) {
+    // Re-evaluate on every scope change, even after another journal has loaded.
+    fallbackKeys = journalScope ? neededNativeKeys() : sourcesManifest.map(function(src) { return src.key; });
+    fallbackKeys.forEach(function(key) { loadNativeSource(key); });
+    fallbackPending = fallbackKeys.some(function(key) { return nativeState[key] === 'loading' || nativeState[key] === 'pending'; });
+    fallbackMissing = fallbackKeys.some(function(key) { return nativeState[key] === 'missing'; });
   }
+  // A missing native feed must never hide healthy satellite recent feeds or
+  // duplicate rows from satellite files already loaded by an earlier search.
+  var groups = [{ base: 'native', rows: usePrecomputed ? recentData : allPapers.filter(function(p) { return isNativeJournalKey(p.JKey); }) }]
+    .concat(recentExtraSets);
 
   var cutoff = new Date();
   cutoff.setHours(0, 0, 0, 0);
@@ -3879,7 +3878,7 @@ function renderRecent() {
     // is stale or does not know a key we are rendering (a journal registered
     // from a manifest newer than the tally), in which case the rows we actually
     // hold stay the better answer, exactly as before this file existed.
-    var exact = usePrecomputed ? recentExactCount(g.base, cutoffDay) : null;
+    var exact = (usePrecomputed || g.base !== 'native') ? recentExactCount(g.base, cutoffDay) : null;
     if (exact && (exact.papers + exact.wp) > (seen.papers + seen.wp)) sliceTruncated = true;
     if (exact && (exact.papers + exact.wp) >= (seen.papers + seen.wp)) {
       tally.papers += exact.papers; tally.wp += exact.wp;
@@ -3936,11 +3935,21 @@ function renderRecent() {
   // of it. Say so rather than letting the count and the list disagree.
   var truncated = total > recent.length;
   countEl.innerHTML = phrases.join(' and ') + ' added in the last ' + weeks + ' weeks' + scopeTxt +
+    (fallbackPending ? ' · loading journal data…' : '') +
+    (fallbackMissing ? ' · some journal data unavailable' : '') +
     (refined && sliceTruncated ? ' · matches in the newest available slice' : '') +
     (truncated ? ' · <span title="The recently-added list is capped so it can be fetched with the page; the count above it is the full number.">showing the newest <strong>' +
       recent.length.toLocaleString() + '</strong></span>' : '');
 
   if (!recent.length) {
+    if (fallbackPending) {
+      list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading recently added papers…</div>';
+      return;
+    }
+    if (fallbackMissing) {
+      list.innerHTML = '<div class="empty-state"><h3>Recent data unavailable</h3><p>Some recent papers could not be loaded. Reload the page to retry.</p></div>';
+      return;
+    }
     list.innerHTML = '<div class="empty-state"><h3>No recently added papers</h3><p>' +
       (total
         ? 'The ' + total.toLocaleString() + ' paper' + (total === 1 ? '' : 's') + ' added in the last ' + weeks + ' weeks' + scopeTxt +
@@ -7353,7 +7362,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var out = { preprintOnly: !!d.preprintOnly, allPapers: !!d.allPapers, features: !!d.features,
       authorIdentity: JSON.parse(JSON.stringify(d.authorIdentity || {})) };
     CRIT_KEYS.forEach(function (k) {
-      var seen = {}, list = [];
+      var seen = Object.create(null), list = [];
       (d[k] || []).forEach(function (v) { v = ('' + v).trim(); if (v && !seen[v]) { seen[v] = 1; list.push(v); } });
       out[k] = list;
     });
@@ -7432,6 +7441,35 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var r = document.getElementById('litAlertRecipient'); if (r) alertForm.recipient = r.value;
     var f = document.getElementById('litAlertFreq'); if (f) alertForm.freq = f.value;
   }
+  // A click on Save/Test must not silently discard text still in the inputs.
+  // Validate the complete draft before committing any of those pending values.
+  function commitAlertInputs() {
+    var pending = [], invalid = null;
+    ['author','title','abstract','affiliation','year','journal'].forEach(function (key) {
+      var input = document.getElementById(key === 'journal' ? 'litAlertJournalInput' : 'litAlertInput-' + key);
+      var value = input && input.value.trim();
+      if (!value) return;
+      if (key === 'journal') {
+        value = journalKeyByLabel(value);
+        if (!value) invalid = { input: input, message: 'Choose a journal from the suggestions before saving or sending a test.' };
+      } else if (key === 'year' && !/^\d{4}$/.test(value)) {
+        invalid = { input: input, message: 'Enter a four-digit year, then add additional years separately.' };
+      } else value = value.toLowerCase();
+      pending.push({ key: key, input: input, value: value });
+    });
+    if (invalid) {
+      var status = document.getElementById('litAlertSaveStatus');
+      if (status) { status.style.color = 'var(--red)'; status.textContent = invalid.message; }
+      invalid.input.focus(); return false;
+    }
+    pending.forEach(function (item) {
+      if (alertDraft[item.key].indexOf(item.value) < 0) alertDraft[item.key].push(item.value);
+      item.input.value = ''; renderAlertChips(item.key);
+    });
+    if (pending.some(function (item) { return item.key === 'journal'; })) renderAlertEditorial();
+    if (pending.length) renderAlertPreview();
+    return true;
+  }
 
   window.litAlertRemove = function (key, v) {
     if (!alertDraft) return;
@@ -7473,7 +7511,14 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.litAlertToggleFeatures = function (on) { if (alertDraft) alertDraft.features = !!on; renderAlertPreview(); };
   // "Any new paper": hides the paper-filter editor (criteria become moot), so
   // re-render the whole form; readAlertForm first so name/frequency/recipient survive.
-  window.litAlertToggleAll = function (on) { if (!alertDraft) return; alertDraft.allPapers = !!on; readAlertForm(); litAlertsRenderForm(); };
+  window.litAlertToggleAll = function (on) {
+    if (!alertDraft) return;
+    if (!commitAlertInputs()) {
+      var input = document.getElementById('litAlertAll'); if (input) input.checked = !!alertDraft.allPapers;
+      return;
+    }
+    alertDraft.allPapers = !!on; readAlertForm(); litAlertsRenderForm();
+  };
   window.litAlertReload = function () { readAlertForm(); alertDraft = captureCurrentFilters(); alertEdOpen = {}; litAlertsRenderForm(); };
   window.litAlertCancelEdit = function () {
     alertEditId = null; alertForm = { name: '', recipient: (state.user && state.user.email) || '', freq: 'weekly' };
@@ -7502,6 +7547,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.litAlertSave = function () {
     if (!state.user) { acctOpenAuth(); return; }
     readAlertForm();
+    if (!commitAlertInputs()) return;
     var statusEl = document.getElementById('litAlertSaveStatus');
     var setStatus = function (msg, color) { if (statusEl) { statusEl.style.color = color; statusEl.textContent = msg; } };
     if (!alertHasIntent(alertDraft)) { setStatus('Pick what to be e-mailed about — new site features, any new paper, or a filter.', 'var(--red)'); return; }
@@ -7510,14 +7556,16 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) { setStatus('Enter a valid recipient e-mail address.', 'var(--red)'); return; }
     var payload = {
       name: name, recipient: recipient, from: (state.user.email || ''),
-      frequency: alertForm.freq || 'weekly', enabled: true,
+      frequency: alertForm.freq || 'weekly',
       criteria: normalizeCriteria(alertDraft), updatedAt: serverTime()
     };
     var btn = document.getElementById('litAlertSaveBtn'); if (btn) btn.disabled = true;
     setStatus('Saving…', 'var(--text-muted)');
     var editing = !!alertEditId;
-    var p = editing ? alertsCol().doc(alertEditId).set(payload, { merge: true })
-                    : alertsCol().add(Object.assign({ createdAt: serverTime() }, payload));
+    // Replace criteria as one map: recursive merge would retain removed author
+    // identities. Leave enabled and delivery state alone when editing.
+    var p = editing ? alertsCol().doc(alertEditId).update(payload)
+                    : alertsCol().add(Object.assign({ createdAt: serverTime(), enabled: true }, payload));
     p.then(function () {
       alertEditId = null; alertDraft = emptyCriteria(); alertEdOpen = {};
       alertForm = { name: '', recipient: recipient, freq: alertForm.freq || 'weekly' };
@@ -7536,6 +7584,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.litAlertSendTest = function () {
     if (!state.user) { acctOpenAuth(); return; }
     readAlertForm();
+    if (!commitAlertInputs()) return;
     var statusEl = document.getElementById('litAlertSaveStatus');
     var setStatus = function (msg, color) { if (statusEl) { statusEl.style.color = color; statusEl.textContent = msg; } };
     var recipient = (alertForm.recipient || '').trim();

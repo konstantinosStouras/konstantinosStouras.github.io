@@ -101,11 +101,34 @@ const stubJs = (profile) => `
     // No handler on the page reads docChanges()/metadata, so the merged
     // doc/query shape suffices.
     q.onSnapshot = function (cb) {
+      if (/\\/alerts$/.test(path)) window.guardSeedAlert = function (value) {
+        window.guardSavedAlert = value;
+        var doc = {id:'edit-guard',data:function(){return value;}};
+        cb({empty:false,size:1,docs:[doc],forEach:function(fn){fn(doc);}});
+      };
       setTimeout(function () { try { cb(snapFor(path)); } catch (e) {} }, 0);
       return noop;
     };
     q.get = function () { return Promise.resolve(snapFor(path)); };
-    q.set = q.update = q.delete = function () { return Promise.resolve(); };
+    function save(value, merge) {
+      if (/\\/alerts\\/edit-guard$/.test(path)) {
+        function deepMerge(old, patch) {
+          var result = Object.assign({},old);
+          Object.keys(patch).forEach(function(k) {
+            var v = patch[k];
+            result[k] = v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length
+              ? deepMerge(result[k],v) : v;
+          });
+          return result;
+        }
+        window.guardSavedAlert = merge ? deepMerge(window.guardSavedAlert,value) : Object.assign({},window.guardSavedAlert,value);
+        window.guardLastWrite = {path:path,value:value};
+      }
+      return Promise.resolve();
+    }
+    q.set = function(value,options){return save(value,options && options.merge);};
+    q.update = function(value){return save(value,false);};
+    q.delete = function () { return Promise.resolve(); };
     q.add = function (value) { window.guardLastWrite = {path:path,value:value}; return Promise.resolve({ id: 'stub' }); };
     q.id = 'stub';
     return q;
@@ -305,7 +328,57 @@ try {
   });
   await page.waitForFunction(()=>window.guardLastWrite && !window.guardLastWrite.value.criteria.authorIdentity['jane doe']);
   ok(true,'removing an author chip removes its identity constraint too');
-  await page.evaluate(()=>window.litAlertReload());
+
+  // Saving or testing must include text still in the alert form's inputs.
+  await page.evaluate(()=>{
+    window.litAlertCancelEdit(); clearFilters(); window.litAlertReload();
+    document.getElementById('litAlertInput-title').value = 'constructor';
+    document.getElementById('litAlertInput-author').value = 'Jane Doe';
+    window.guardLastWrite = null; window.litAlertSave();
+  });
+  await page.waitForTimeout(100);
+  const pending = await page.evaluate(()=>window.guardLastWrite?.value.criteria);
+  ok(pending?.title.includes('constructor') && pending?.author.includes('jane doe'),
+    'Save includes pending alert-form text without requiring Add or Enter');
+
+  await page.evaluate(()=>{
+    window.litAlertCancelEdit(); clearFilters(); window.litAlertReload();
+    document.getElementById('litAlertInput-title').value = 'Allocation';
+    document.getElementById('litAlertJournalInput').value = 'Not a real journal';
+    window.guardLastWrite = null; window.litAlertSave();
+  });
+  ok(await page.evaluate(()=>window.guardLastWrite === null && document.getElementById('litAlertInput-title').value === 'Allocation'),
+    'an unrecognized pending journal blocks saving without discarding other input');
+  await page.fill('#litAlertJournalInput','Management Science');
+  await page.evaluate(()=>{window.litAlertToggleAll(true);window.litAlertToggleAll(false);window.litAlertSave();});
+  await page.waitForTimeout(100);
+  const toggled = await page.evaluate(()=>window.guardLastWrite?.value);
+  ok(toggled?.criteria.title.includes('allocation') && toggled?.criteria.journal.includes('ms') && toggled.enabled === true,
+    'pending criteria survive toggling Any new paper and new alerts start enabled');
+
+  await page.evaluate(()=>{
+    window.litAlertCancelEdit(); clearFilters(); window.litAlertReload();
+    document.getElementById('litAlertInput-abstract').value = 'Demand learning';
+    window.guardLastWrite = null; window.litAlertSendTest();
+  });
+  await page.waitForTimeout(100);
+  const testCriteria = await page.evaluate(()=>window.guardLastWrite?.value.criteria);
+  ok(testCriteria?.abstract.includes('demand learning'), 'test requests include pending alert-form text');
+
+  await page.evaluate(()=>{
+    window.guardSeedAlert({name:'Paused identities',recipient:'guard@example.com',frequency:'weekly',enabled:false,
+      createdAt:'2026-11-01',lastCheckedAt:'2026-11-13',lastCheckedPaperIds:['receipt'],
+      criteria:{author:['jane doe','john doe'],authorIdentity:{'jane doe':['jane doe','j. doe'],'john doe':['john doe']}}});
+    window.litAlertEdit('edit-guard'); window.litAlertRemove('author','jane doe'); window.litAlertSave();
+  });
+  await page.waitForTimeout(100);
+  const edited = await page.evaluate(()=>window.guardSavedAlert);
+  ok(edited.enabled === false, 'editing a paused alert keeps it paused');
+  ok(!edited.criteria.authorIdentity['jane doe'] && !!edited.criteria.authorIdentity['john doe'],
+    'editing replaces the criteria map, so a removed identity cannot survive a nested merge');
+  ok(edited.lastCheckedAt === '2026-11-13' && edited.lastCheckedPaperIds[0] === 'receipt',
+    'editing preserves delivery checkpoints and receipts');
+  await page.evaluate(()=>{sel.journal.add('ms'); window.litAlertReload();});
 
   // 8. The Default-filters modal — whose prefEd* functions now delegate to the
   //    SAME shared edDim* helpers — still reveals its own pickers: ticking MS

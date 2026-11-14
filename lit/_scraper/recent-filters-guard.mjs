@@ -10,7 +10,7 @@ try {
   const context = await browser.newContext();
   const page = await context.newPage();
   const errors = [], paperRequests = [];
-  let recentDelay = 0;
+  let recentDelay = 0, recentMissing = false, paperMissing = false;
   page.on('pageerror', e => errors.push(e.message));
   const today = new Date();
   const day = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -36,6 +36,11 @@ try {
     } else if (/\/lit-(abstract|filter-url|news|search-scope|search-ui)\.js$/.test(path)) {
       body = fs.readFileSync(root + path.split('/').pop(), 'utf8'); contentType = 'text/javascript';
     } else if (url.hostname !== 'lit.test') { body = ''; contentType = 'text/javascript'; }
+    else if (recentMissing && path === '/lit/data/recent.json' || paperMissing && path === '/lit/data/papers-ms.json') {
+      await route.fulfill({status:404,body:'not found'}); return;
+    }
+    else if (recentMissing && path === '/lit/data-ft50/sources.json') body = JSON.stringify([{key:'extra',name:'Extra Journal',file:'papers-extra.json',count:1}]);
+    else if (recentMissing && path === '/lit/data-ft50/recent.json') body = JSON.stringify([row('extra-feed','','',today,'extra')]);
     else if (path === '/lit/data/sources.json') body = JSON.stringify(['ms', 'opre', 'isre', 'mksc'].map(key => ({ key, file: `papers-${key}.json`, count: 5 })));
     else if (path === '/lit/data/recent.json') {
       if (recentDelay) await new Promise(resolve => setTimeout(resolve, recentDelay));
@@ -133,4 +138,23 @@ try {
   assert.deepEqual(await ids(),['b','c','isr-a','marketing-a','other-journal']);
   assert.deepEqual(errors,[]);
   console.log('PASS ISR SE+AE, Marketing Science SE, recent/all toggles, reloads and mixed-journal editorial scope');
+
+  recentMissing = true;
+  await page.goto('https://lit.test/lit/?journal=ms&journal=extra&recent=1');
+  await page.waitForFunction(()=>!recentLoading && nativeState.ms==='done' && recentExtraSets.length);
+  await page.waitForTimeout(800);
+  assert((await ids()).includes('extra-feed'), 'native recent-file outage must preserve other datasets');
+  await page.evaluate(()=>{sel.journal.clear();sel.journal.add('opre');renderRecent();});
+  await page.waitForFunction(()=>nativeState.opre==='done' && filtered.length===1);
+  assert.deepEqual(await ids(),['other-journal']);
+  console.log('PASS missing native recent feed preserves satellite rows and loads newly selected journals');
+
+  paperMissing = true;
+  await page.goto('https://lit.test/lit/?journal=ms&recent=1');
+  await page.waitForFunction(()=>nativeState.ms==='missing');
+  await page.waitForTimeout(800);
+  assert.doesNotMatch(await page.locator('#papersList').innerText(), /Loading recently added/);
+  assert.match(await page.locator('#papersList').innerText(), /could not be loaded/);
+  assert.deepEqual(errors,[]);
+  console.log('PASS missing fallback files report unavailable data instead of an endless spinner');
 } finally { await browser.close(); }
