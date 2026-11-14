@@ -106,7 +106,7 @@ const stubJs = (profile) => `
     };
     q.get = function () { return Promise.resolve(snapFor(path)); };
     q.set = q.update = q.delete = function () { return Promise.resolve(); };
-    q.add = function () { return Promise.resolve({ id: 'stub' }); };
+    q.add = function (value) { window.guardLastWrite = {path:path,value:value}; return Promise.resolve({ id: 'stub' }); };
     q.id = 'stub';
     return q;
   }
@@ -283,6 +283,29 @@ try {
   await page.waitForFunction(() => /Senior Editor/.test(document.getElementById('litAlertEditorial').textContent));
   ok(!/Associate Editor/.test(await page.$eval('#litAlertEditorial', el => el.textContent)),
     'Marketing Science alone offers Senior Editor and not Associate Editor');
+
+  // Copy live uncommitted text and identity variants, then inspect the actual
+  // persisted payload rather than only the preview's labels.
+  await page.evaluate(() => {
+    clearFilters();
+    sel.jtype.add('wp');
+    sel.authorIdentity['Jane Doe'] = ['jane doe','j. doe'];
+    document.getElementById('filterSearch').value = 'Uncommitted title';
+    document.getElementById('filterAuthors').value = 'COAUTHOR';
+    window.litAlertReload();
+    window.litAlertSave();
+  });
+  await page.waitForFunction(()=>window.guardLastWrite && /alerts$/.test(window.guardLastWrite.path));
+  const saved = await page.evaluate(()=>window.guardLastWrite.value.criteria);
+  ok(saved.title.includes('uncommitted title') && saved.author.includes('coauthor'), 'live search input is included without pressing Enter');
+  ok(saved.authorIdentity['jane doe'].includes('j. doe'), 'ORCID-resolved author variants survive saving');
+  ok(saved.jtype.includes('wp'), 'Working Papers remains available and survives saving');
+  await page.evaluate(()=>{
+    window.litAlertReload(); window.litAlertRemove('author','jane doe'); window.litAlertSave();
+  });
+  await page.waitForFunction(()=>window.guardLastWrite && !window.guardLastWrite.value.criteria.authorIdentity['jane doe']);
+  ok(true,'removing an author chip removes its identity constraint too');
+  await page.evaluate(()=>window.litAlertReload());
 
   // 8. The Default-filters modal — whose prefEd* functions now delegate to the
   //    SAME shared edDim* helpers — still reveals its own pickers: ticking MS

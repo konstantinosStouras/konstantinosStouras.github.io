@@ -4979,7 +4979,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     <button class="acct-modal-x" onclick="litAlertsClose()" aria-label="Close">×</button>
     <div class="acct-modal-head">
       <h2>E-mail alerts</h2>
-      <p>Get an e-mail when new papers matching your filters are added to The Lit — or about any new paper, or about new features and updates to the site. Every search filter on the page is available here, including accepting editors and areas (Management Science) and senior/associate editors (ISR, Marketing Science) once their journal is among your journal chips. Alerts are private to your account; sent from and to your own e-mail (or any address you choose), at the frequency you choose.</p>
+      <p>Get an e-mail when new papers matching your filters are added to The Lit — or about any new paper, or about new features and updates to the site. Choose journals, authors, title or abstract terms, affiliations, years, and editorial filters. Management Science editors and areas narrow only Management Science; senior/associate editors narrow their relevant journals. Other selected journals stay eligible. Alerts are private to your account and delivered by The Lit to the address you choose.</p>
     </div>
     <div class="alerts-body" id="litAlertsBody"></div>
   </div>
@@ -7299,10 +7299,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   var CRIT_KEYS = ['jtype','journal','author','title','abstract','affiliation','year','editor','area','se','ae'];
   var JL  = (typeof JOURNAL_LABEL !== 'undefined') ? JOURNAL_LABEL : {};
   var JTL = (typeof JTYPE_LABEL   !== 'undefined') ? JTYPE_LABEL   : {};
-  // Exclude the Working Papers type from alert composing: the mailer reads
-  // recent.json (which never carries working papers) and jtypeKeys('wp') is empty
-  // server-side, so a wp alert can never deliver — don't offer it as a chip.
-  var JTY = (typeof JOURNAL_TYPES !== 'undefined') ? JOURNAL_TYPES.filter(function (t) { return t.key !== 'wp'; }) : [];
+  var JTY = (typeof JOURNAL_TYPES !== 'undefined') ? JOURNAL_TYPES : [];
   var alertDraft = null;                                   // criteria being edited
   var alertEditId = null;                                  // id when editing, else null
   var alertForm = { name: '', recipient: '', freq: 'weekly' }; // delivery inputs
@@ -7318,15 +7315,24 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var g = (typeof sel !== 'undefined' && sel) ? sel : {};
     var arr = function (s) { return (s && typeof s.forEach === 'function') ? Array.from(s) : []; };
     var d = emptyCriteria();
-    d.jtype = arr(g.jtype).filter(function (k) { return k !== 'wp'; }); d.journal = arr(g.journal);
+    d.jtype = arr(g.jtype); d.journal = arr(g.journal);
     // authorIdentity keys are the human display labels (e.g. "Konstantinos I.
     // Stouras"); lowercase them like every other captured author term so the
     // mailer's authorMatch (which lower-cases the haystack but not the query)
     // can match — otherwise the saved alert silently never delivers.
     d.author = arr(g.author).concat(Object.keys(g.authorIdentity || {}).map(function (s) { return String(s).trim().toLowerCase(); }));
+    d.authorIdentity = {};
+    Object.keys(g.authorIdentity || {}).forEach(function(label) {
+      d.authorIdentity[label.trim().toLowerCase()] = g.authorIdentity[label].slice();
+    });
     d.title = arr(g.title); d.abstract = arr(g.abstract);
     d.affiliation = arr(g.affiliation); d.year = arr(g.year);
     d.editor = arr(g.editor); d.area = arr(g.area); d.se = arr(g.se); d.ae = arr(g.ae);
+    [['author','filterAuthors'], ['title','filterSearch'], ['abstract','filterAbstracts'], ['affiliation','filterAffiliations']].forEach(function(pair) {
+      var input = document.getElementById(pair[1]);
+      var value = input && input.value.trim().toLowerCase();
+      if (value && d[pair[0]].indexOf(value) === -1) d[pair[0]].push(value);
+    });
     d.preprintOnly = (typeof preprintOnly !== 'undefined') ? !!preprintOnly : false;
     return d;
   }
@@ -7336,10 +7342,12 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     d.preprintOnly = !!c.preprintOnly;
     d.allPapers = !!c.allPapers;
     d.features = !!c.features;
+    d.authorIdentity = JSON.parse(JSON.stringify(c.authorIdentity || {}));
     return d;
   }
   function normalizeCriteria(d) {
-    var out = { preprintOnly: !!d.preprintOnly, allPapers: !!d.allPapers, features: !!d.features };
+    var out = { preprintOnly: !!d.preprintOnly, allPapers: !!d.allPapers, features: !!d.features,
+      authorIdentity: JSON.parse(JSON.stringify(d.authorIdentity || {})) };
     CRIT_KEYS.forEach(function (k) {
       var seen = {}, list = [];
       (d[k] || []).forEach(function (v) { v = ('' + v).trim(); if (v && !seen[v]) { seen[v] = 1; list.push(v); } });
@@ -7424,6 +7432,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
   window.litAlertRemove = function (key, v) {
     if (!alertDraft) return;
     alertDraft[key] = (alertDraft[key] || []).filter(function (x) { return x !== v; });
+    if (key === 'author' && alertDraft.authorIdentity) delete alertDraft.authorIdentity[v.toLowerCase()];
     renderAlertChips(key);
     // A journal chip reveals/hides editorial pickers; a dimension chip changes
     // its picker's ticks and "N chosen" count — re-render the section for both.
@@ -7537,7 +7546,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
     var btn = document.getElementById('litAlertTestBtn'); if (btn) btn.disabled = true;
     setStatus('Sending a test e-mail…', 'var(--text-muted)');
     testEmailsCol().add(payload).then(function () {
-      setStatus('Test e-mail on its way to ' + recipient + ' ✓ — it usually arrives within a few minutes.', 'var(--green)');
+      setStatus('Test e-mail queued for ' + recipient + ' ✓ — it will be sent when the mailer next runs. Scheduled jobs can be delayed.', 'var(--green)');
     }).catch(function (e) {
       setStatus(friendly(e), 'var(--red)');
     }).then(function () { if (btn) btn.disabled = false; });
@@ -7708,7 +7717,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       '<div class="alert-delivery">' +
         '<div class="acct-field"><label for="litAlertName">Alert name <span style="text-transform:none;font-weight:400;color:var(--text-muted)">— the subject line of your e-mails</span></label><input id="litAlertName" type="text" placeholder="' + escHtmlAttr(defaultAlertName(d)) + '" value="' + escHtmlAttr(alertForm.name || '') + '" oninput="litAlertNameInput()"></div>' +
         '<div class="acct-field"><label for="litAlertFreq">Frequency</label><select id="litAlertFreq">' +
-          freqOpt('immediate', 'As papers are added') + freqOpt('daily', 'Daily digest') + freqOpt('weekly', 'Weekly digest') + freqOpt('monthly', 'Monthly digest') +
+          freqOpt('immediate', 'After data updates') + freqOpt('daily', 'Daily digest') + freqOpt('weekly', 'Weekly digest') + freqOpt('monthly', 'Monthly digest') +
         '</select></div>' +
         '<div class="acct-field full"><label for="litAlertRecipient">Send to</label><input id="litAlertRecipient" type="email" placeholder="you@example.com" value="' + escHtmlAttr(alertForm.recipient || '') + '"></div>' +
       '</div>' +
@@ -7716,7 +7725,7 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
         (editing ? '<button type="button" class="alert-icon-btn" onclick="litAlertCancelEdit()">Cancel</button>' : '') +
         '<button type="button" class="alert-icon-btn" id="litAlertTestBtn" onclick="litAlertSendTest()" title="E-mail a one-off sample of this alert to your address so you can see how it looks in your inbox">✉ Send me a test e-mail</button>' +
         '<span class="alert-save-status" id="litAlertSaveStatus"></span></div>' +
-      '<div class="info-note" style="margin-top:8px">Sent from your account e-mail (<strong>' + esc(state.user.email || '') + '</strong>) to the address above. New papers are matched when the database refreshes — delivery is handled by the alert mailer (see the setup notes). No e-mail is sent from your browser. Use <strong>Send me a test e-mail</strong> to receive a one-off sample of this alert (it usually arrives within a few minutes).</div>' +
+      '<div class="info-note" style="margin-top:8px">Delivered by <strong>The Lit</strong> to the address above; replies use your account e-mail. “After data updates” checks when the main data pipelines finish, with an hourly scheduled fallback. Scheduled jobs can be delayed. Daily, weekly and monthly digests batch matching papers. Citation-graph searches are not supported as alert criteria. Test e-mails are queued for the next test-mailer run.</div>' +
       '<div class="alert-preview" id="litAlertPreview"></div>';
     renderAlertEditorial();          // creates the litAlertChips-<dim> containers
     CRIT_KEYS.forEach(renderAlertChips);
@@ -7838,7 +7847,11 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
       var ma = ca && ca.toMillis ? ca.toMillis() : 0, mb = cb && cb.toMillis ? cb.toMillis() : 0;
       return mb - ma;
     });
-    var FREQ = { immediate: 'As added', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+    var FREQ = { immediate: 'After data updates', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+    function alertTime(value) {
+      var date = value && value.toDate ? value.toDate() : value ? new Date(value) : null;
+      return date && !isNaN(date.getTime()) ? date.toLocaleString() : 'Not yet';
+    }
     var html = '<div class="alert-block-label">Your alerts <span class="hint">' + ids.length + '</span></div>';
     html += ids.map(function (id) {
       var a = state.alerts[id], on = a.enabled !== false;
@@ -7848,6 +7861,9 @@ loadRecent(); // pre-fetch the small recent.json so the "Recently added" view op
             '<div class="alert-card-name">' + esc(a.name || 'Alert') + '</div>' +
             '<div class="alert-card-sum">' + esc(describeCriteria(a.criteria || {})) + '</div>' +
             '<div class="alert-card-meta">' + esc(FREQ[a.frequency] || 'Weekly') + ' · to ' + esc(a.recipient || (state.user && state.user.email) || '') + '</div>' +
+            '<div class="alert-card-meta">Last checked: ' + esc(alertTime(a.lastCheckedAt || a.lastFeatureCheckedAt)) +
+              ' · Last e-mail: ' + esc(alertTime(a.lastSentAt || a.lastFeatureSentAt)) + '</div>' +
+            (a.lastDeliveryError || a.lastFeatureDeliveryError ? '<div class="alert-card-meta" style="color:var(--red)">' + esc(a.lastDeliveryError || a.lastFeatureDeliveryError) + '</div>' : '') +
           '</div>' +
           '<div class="alert-card-actions">' +
             '<label class="alert-switch" title="' + (on ? 'Enabled — click to pause' : 'Paused — click to enable') + '"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="litAlertToggle(\'' + escAttr(id) + '\',this.checked)"><span class="track"></span><span class="knob"></span></label>' +

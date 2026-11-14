@@ -144,6 +144,15 @@ function litCompileSearch() {
 
 // Results and all five cascading facets share one pass. A facet ignores only
 // its own selection: a row failing two dimensions cannot contribute anywhere.
+function litEditorialApplies(p, field, scope) {
+  var keys = field === 'editor' || field === 'area' ? ['ms'] : field === 'se' ? ['isre', 'mksc'] : ['isre'];
+  // An explicit multi-journal scope keeps unrelated journals eligible. With
+  // no relevant journal in scope, retain a standalone editorial search's
+  // restrictive meaning (including older saved alerts with no journal chips).
+  if (!scope || !keys.some(function(k) { return scope.has(k); })) return true;
+  return keys.indexOf(p.JKey) !== -1 || (p._jkeys || []).some(function(k) { return keys.indexOf(k) !== -1; });
+}
+
 function litCollectSearch(includeOtherJournals, recentRows) {
   var drop = document.querySelector('#csJournal .custom-select-dropdown');
   var journals = !journalScope || includeOtherJournals || (drop && drop.classList.contains('open'));
@@ -162,10 +171,10 @@ function litCollectSearch(includeOtherJournals, recentRows) {
     var p = rows[i], inScope = (!recentRows && !journals) || matchesJournal(p);
     if (inScope) out.scope++;
     var failed = 0;
-    if (sel.editor.size && !(p._editors || []).some(function (v) { return sel.editor.has(v); })) failed |= 1;
-    if (sel.area.size && !sel.area.has(p._area)) failed |= 2;
-    if (sel.se.size && !(p._se || []).some(function (v) { return sel.se.has(v); })) failed |= 4;
-    if (sel.ae.size && !(p._ae || []).some(function (v) { return sel.ae.has(v); })) failed |= 8;
+    if (sel.editor.size && litEditorialApplies(p, 'editor', journalScope) && !(p._editors || []).some(function (v) { return sel.editor.has(v); })) failed |= 1;
+    if (sel.area.size && litEditorialApplies(p, 'area', journalScope) && !sel.area.has(p._area)) failed |= 2;
+    if (sel.se.size && litEditorialApplies(p, 'se', journalScope) && !(p._se || []).some(function (v) { return sel.se.has(v); })) failed |= 4;
+    if (sel.ae.size && litEditorialApplies(p, 'ae', journalScope) && !(p._ae || []).some(function (v) { return sel.ae.has(v); })) failed |= 8;
     if (sel.year.size && !sel.year.has(p.Year)) failed |= 16;
     if ((!inScope && (!journals || failed)) || (failed && (failed & (failed - 1)))) continue;
     if (!common(p)) continue;
@@ -191,3 +200,6 @@ function litRememberSearchOrder(result) {
     litSearchOrder = null;
   }
 }
+
+// The alert mailer uses this same journal-specific editorial rule.
+if (typeof module !== 'undefined' && module.exports) module.exports = { litEditorialApplies: litEditorialApplies };
