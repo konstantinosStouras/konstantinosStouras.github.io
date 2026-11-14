@@ -85,6 +85,7 @@ try {
   await page.evaluate(() => { sel.area.add('accounting'); renderChips('area'); applyFilters(); });
   assert.deepEqual(await ids(), []);
   assert.match(await page.locator('#papersList').innerText(), /No papers match these filters/);
+  assert.match(await page.locator('#csEditor .custom-select-empty').innerText(), /No matching editor information/);
   await page.locator('#recentBtn').click();
   await page.waitForFunction(() => nativeState.ms === 'done' && filtered.length === 1);
   assert.deepEqual(await ids(), ['old']);

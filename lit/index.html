@@ -3359,6 +3359,10 @@ function fillCustomSelect(csId, items, counts) {
     const on = sel[type] && sel[type].has(i);
     return `<div class="custom-select-item${on ? ' is-selected' : ''}" onclick="selectItem('${csId}','${type}','${escAttr(i)}')">${on ? '✓ ' : ''}${esc(i)}${counts ? ' <span style="opacity:0.45">('+counts[i]+')</span>' : ''}</div>`;
   }).join('');
+  if (!items.length) {
+    var label = type === 'year' ? 'years' : type === 'area' ? 'area information' : 'editor information';
+    container.innerHTML = '<div class="custom-select-empty" style="padding:12px 14px;color:var(--text-muted);font-size:13px">No matching ' + label + ' in this view.</div>';
+  }
   // Reapply search filter if dropdown is open
   var searchInput = cs.querySelector('.custom-select-search');
   if (searchInput && searchInput.value) filterDrop(csId, searchInput.value);
