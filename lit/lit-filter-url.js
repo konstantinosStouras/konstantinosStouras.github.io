@@ -103,13 +103,12 @@ function litRestoreFilterUrl() {
     var sort = document.getElementById('sortBy');
     sort.value = Array.from(sort.options).some(function (o) { return o.value === sp.get('sort'); }) ? sp.get('sort') : 'year-desc';
     recentMode = sp.get('recent') === '1';
-    if (recentMode) resetFilterState(true); // recent view only uses journal scope
     updateRecentButton();
     Object.keys(litUrlSets).forEach(function (type) { renderChips(type); });
     renderAuthorChips();
     var d = sp.get('citedby'), a = sp.get('citedbyauthor');
     var query = (d || a || '').trim();
-    litUrlPendingCitation = !recentMode && query ? { key: d ? 'citedby' : 'citedbyauthor', query: query } : null;
+    litUrlPendingCitation = query ? { key: d ? 'citedby' : 'citedbyauthor', query: query } : null;
     window.LIT_CITEDBY_DEEPLINK = !!litUrlPendingCitation;
   } finally { litUrlRestoring = false; }
   if (!ownsSearch) { window.litSiteDefaultApplied = false; applyLitSiteDefault(); return; }

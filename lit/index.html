@@ -2366,9 +2366,9 @@ async function loadData() {
     .catch(function() { affiliationData = []; });
 
   // A filter set before the manifest arrived (unlikely but possible) starts
-  // its downloads now.
+  // its downloads now. Recent views have their own small datasets.
   refreshJournalScope();
-  ensureScopeSources();
+  if (recentMode) renderRecent(); else ensureScopeSources();
 
   // Land new visitors on the site default filters. When accounts are ON, the
   // auth flow decides (anonymous → site default; signed-in → their own defaults
@@ -3324,7 +3324,10 @@ function closeSummaryTabs() {
 
 // Cascading filters: update dropdown options based on cross-filtered results
 function updateDropdownOptions(includeOtherJournals, result) {
-  if (!result) { refreshJournalScope(); result = litCollectSearch(includeOtherJournals); }
+  if (!result) {
+    if (recentMode) { renderRecent(); return; }
+    refreshJournalScope(); result = litCollectSearch(includeOtherJournals);
+  }
   if (result.journal) buildJournalSelect(result.journal);
   fillCustomSelect('csEditor', Object.keys(result.editor).sort(), result.editor);
   fillCustomSelect('csSE', Object.keys(result.se).sort(), result.se);
@@ -3434,8 +3437,8 @@ document.addEventListener('keydown', function(e) {
 function statusRank(p) { var s = p['Status']; return (s && s !== 'Other' && s !== 'Working paper') ? 1 : 0; }
 
 function applyFilters() {
-  // Any normal filter interaction exits the "Recently added papers" view.
-  if (recentMode) { recentMode = false; updateRecentButton(); }
+  // Refinements stay within the selected recent window until it is toggled off.
+  if (recentMode) { renderRecent(); return; }
   // A text search typed over the untouched SITE default drops the default's
   // chips first: a first-time visitor typing an author (or title/abstract/
   // affiliation) means to search the catalog, not the pre-applied Management
@@ -3522,6 +3525,8 @@ function resetFilterState(keepJournals) {
 }
 
 function clearFilters() {
+  recentMode = false;
+  updateRecentButton();
   resetFilterState();
   clearAuthorDeepLink();   // Clear wipes the author chip too — the ?person= URL and flag go with it
   litSyncCitedByUrl();     // …and the ?citedby=/?citedbyauthor= deep-link with the cited-by chip
@@ -3670,10 +3675,7 @@ function toggleRecent() {
     // nothing was being added). A journal scope the user chose themselves
     // (which retires the default at selection time) is still honoured below.
     litRetireSiteDefault();
-    // Standalone view scoped to the selected journal(s): keep the journal
-    // chips (renderRecent filters by them; no selection = all journals) but
-    // drop every other filter, and close summary panels.
-    resetFilterState(true);
+    // Keep the user's refinements when narrowing to recently added papers.
     closeSummaryTabs();
     if (!recentFetched) loadRecent(); // fast pre-computed tab; re-renders when ready
     renderRecent();                   // immediate (spinner, fallback, or data)
@@ -3855,24 +3857,26 @@ function renderRecent() {
   cutoff.setDate(cutoff.getDate() - RECENT_DAYS);
   var cutoffDay = isoDay(cutoff);
 
+  var refined = broadFilterActive() || preprintOnly || !!citedByFilter ||
+    sel.editor.size || sel.area.size || sel.se.size || sel.ae.size;
   // Scoped to the selected journal(s); with no selection, all journals show.
   // Counted per dataset, so each one's rows can be measured against its own
   // uncapped tally below.
-  var dated = [], tally = { papers: 0, wp: 0 };
+  var dated = [], tally = { papers: 0, wp: 0 }, sliceTruncated = false;
   groups.forEach(function(g) {
     var rows = g.rows
-      .filter(matchesJournal)
       .map(function(p) { return { p: p, d: getAddedDate(p), w: isWorkingPaperRow(p) ? 1 : 0 }; })
       .filter(function(x) { return x.d && x.d >= cutoff; });
     rows.forEach(function(x) { x.day = isoDay(x.d); });
     var seen = { papers: 0, wp: 0 };
-    rows.forEach(function(x) { if (x.w) seen.wp++; else seen.papers++; });
+    rows.forEach(function(x) { if (matchesJournal(x.p)) { if (x.w) seen.wp++; else seen.papers++; } });
     // The uncapped tally wins whenever it is available AND at least as large as
     // what we can see — it is the true number, and it can only be smaller if it
     // is stale or does not know a key we are rendering (a journal registered
     // from a manifest newer than the tally), in which case the rows we actually
     // hold stay the better answer, exactly as before this file existed.
     var exact = usePrecomputed ? recentExactCount(g.base, cutoffDay) : null;
+    if (exact && (exact.papers + exact.wp) > (seen.papers + seen.wp)) sliceTruncated = true;
     if (exact && (exact.papers + exact.wp) >= (seen.papers + seen.wp)) {
       tally.papers += exact.papers; tally.wp += exact.wp;
     } else {
@@ -3880,6 +3884,15 @@ function renderRecent() {
     }
     dated = dated.concat(rows);
   });
+  var searchResult = litCollectSearch(true, dated.map(function(x) { return x.p; }));
+  var matching = new Set(searchResult.rows);
+  dated = dated.filter(function(x) { return matching.has(x.p); });
+  // Per-journal tallies cannot answer editor, area, or other refinements.
+  if (refined) {
+    tally = { papers: 0, wp: 0 };
+    dated.forEach(function(x) { if (x.w) tally.wp++; else tally.papers++; });
+  }
+  updateDropdownOptions(false, searchResult);
   // Ordered by the DAY each paper entered the database (newest day first),
   // and WITHIN a day published papers lead, working papers follow (per the
   // owner, 2026-08-10): the view reads as a day-by-day feed — today's journal
@@ -3919,6 +3932,7 @@ function renderRecent() {
   // of it. Say so rather than letting the count and the list disagree.
   var truncated = total > recent.length;
   countEl.innerHTML = phrases.join(' and ') + ' added in the last ' + weeks + ' weeks' + scopeTxt +
+    (refined && sliceTruncated ? ' · matches in the newest available slice' : '') +
     (truncated ? ' · <span title="The recently-added list is capped so it can be fetched with the page; the count above it is the full number.">showing the newest <strong>' +
       recent.length.toLocaleString() + '</strong></span>' : '');
 
@@ -3927,7 +3941,8 @@ function renderRecent() {
       (total
         ? 'The ' + total.toLocaleString() + ' paper' + (total === 1 ? '' : 's') + ' added in the last ' + weeks + ' weeks' + scopeTxt +
           ' fall outside the newest-first slice of the list this page carries. They are all in the database — search for them, or pick a narrower journal scope.'
-        : 'No papers were added to the database in the last ' + weeks + ' weeks' + scopeTxt + '.') +
+        : (refined ? 'No papers match these filters in the last ' : 'No papers were added to the database in the last ') + weeks + ' weeks' + scopeTxt +
+          (refined && sliceTruncated ? ' within the newest available slice.' : '.')) +
       '</p></div>';
     return;
   }

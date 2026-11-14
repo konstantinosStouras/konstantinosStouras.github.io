@@ -144,10 +144,11 @@ function litCompileSearch() {
 
 // Results and all five cascading facets share one pass. A facet ignores only
 // its own selection: a row failing two dimensions cannot contribute anywhere.
-function litCollectSearch(includeOtherJournals) {
+function litCollectSearch(includeOtherJournals, recentRows) {
   var drop = document.querySelector('#csJournal .custom-select-dropdown');
   var journals = !journalScope || includeOtherJournals || (drop && drop.classList.contains('open'));
-  var basis = journals ? allPapers : litPapersInScope();
+  // Recent rows are a separate, date-windowed dataset, not indexed allPapers.
+  var basis = recentRows || (journals ? allPapers : litPapersInScope());
   var sort = document.getElementById('sortBy').value;
   var ordered = litSearchOrder && litSearchOrder.basis === basis && litSearchOrder.sort === sort;
   var rows = ordered ? litSearchOrder.rows : basis;
@@ -158,7 +159,7 @@ function litCollectSearch(includeOtherJournals) {
   function count(counts, value) { if (value) counts[value] = (counts[value] || 0) + 1; }
   function countNames(counts, values) { (values || []).forEach(function (v) { count(counts, v); }); }
   for (var i = 0; i < rows.length; i++) {
-    var p = rows[i], inScope = !journals || matchesJournal(p);
+    var p = rows[i], inScope = (!recentRows && !journals) || matchesJournal(p);
     if (inScope) out.scope++;
     var failed = 0;
     if (sel.editor.size && !(p._editors || []).some(function (v) { return sel.editor.has(v); })) failed |= 1;
