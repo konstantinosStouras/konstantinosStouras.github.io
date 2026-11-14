@@ -41,7 +41,7 @@ import vm from 'node:vm';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LIT = path.join(HERE, '..');
-const read = (p) => readFileSync(path.join(LIT, p), 'utf8');
+const read = (p) => readFileSync(path.join(LIT, p), 'utf8').replace(/\r\n/g, '\n');
 
 let pass = 0;
 const fails = [];
