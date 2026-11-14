@@ -62,6 +62,7 @@ await assert.rejects(()=>loadAlertDatasets([{ds:'missing',dir:'/a-directory-that
 const originalFetch = globalThis.fetch;
 try {
   globalThis.fetch = async()=>({ok:false,status:503});
+  assert.equal(await fetchDatasetJson('https://example.test/counts.json',true),null);
   await assert.rejects(()=>fetchDatasetJson('https://example.test/recent.json'),/503/);
   globalThis.fetch = async()=>({ok:false,status:404});
   assert.equal(await fetchDatasetJson('https://example.test/counts.json',true),null);

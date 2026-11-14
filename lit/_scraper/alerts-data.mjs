@@ -11,10 +11,19 @@ function rows(value, label) {
   return value;
 }
 export async function fetchDatasetJson(url, optional = false) {
-  const response = await fetch(url, {signal: AbortSignal.timeout(30000)});
-  if (optional && response.status === 404) return null;
-  if (!response.ok) throw new Error(`Alert data unavailable: ${url} (${response.status})`);
-  return response.json();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(url, {signal: AbortSignal.timeout(30000)});
+      if (!response.ok) throw new Error(`Alert data unavailable: ${url} (${response.status})`);
+      return await response.json();
+    } catch (error) {
+      // Tallies are an optimization only: without one we read full journal
+      // files. A missing required manifest/recent file must never look empty.
+      if (optional) return null;
+      if (attempt === 2) throw error;
+      await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 500));
+    }
+  }
 }
 export async function loadAlertDatasets(specs) {
   return Promise.all(specs.map(async spec => {

@@ -107,7 +107,7 @@ ok(main.indexOf('function absSearchText(') > 0 && /_absq/.test(main.slice(main.i
 const mailer = read('_scraper/alerts-mailer.mjs');
 ok(/createRequire\(import\.meta\.url\)\(path\.join\(__dirname, '\.\.', 'lit-abstract\.js'\)\)/.test(mailer),
   'alerts-mailer.mjs requires lit/lit-abstract.js');
-const mc = mailer.slice(mailer.indexOf('function matchesCriteria('), mailer.indexOf('function matchesCriteria(') + 3000);
+const mc = mailer.slice(mailer.indexOf('function matchesCriteria('), mailer.indexOf('function describeCriteria('));
 ok(mc.length > 500, 'matchesCriteria is where this thinks it is');
 ok(/LitAbstract\.cleanAbstract\(p\.Abstract/.test(mc) && !/(?<!cleanAbstract)\(p\.Abstract \|\| ''\)\.toLowerCase\(\)/.test(mc),
   'the mailer\'s abstract criterion matches the shown abstract, not the raw field');
