@@ -6,14 +6,15 @@
  * Marketing Science (SE), read from each article's "History:" line on
  * pubsonline.informs.org.
  *
- * Why local-first? Crossref does not carry the History line for these
- * journals, and pubsonline (an Atypon site, like pnas.org) blocks most
+ * Crossref sometimes carries the History line; incomplete recently added
+ * papers are rechecked there daily before trying publisher HTML.
+ * pubsonline (an Atypon site, like pnas.org) blocks most
  * cloud/datacenter IPs. From a normal home or university connection the pages
  * load fine. CI still ATTEMPTS the crawl on a schedule
  * (.github/workflows/lit-editors-backfill.yml — bounded slices, MkSc first):
  * when the runner is blocked the very first page trips the Cloudflare check
- * and the run exits cleanly in seconds with nothing committed, and if
- * pubsonline ever answers, the backlog burns down online on its own. CI knobs
+ * and the publisher pass stops with a warning, preserving Crossref progress.
+ * If pubsonline answers, the backlog burns down online on its own. CI knobs
  * (all optional): LIT_EDITORS_BUDGET_MS time-boxes a sitting,
  * LIT_EDITORS_MAX_FAILS (default 12) aborts after that many CONSECUTIVE
  * failed pages (a dead/blocked host must not burn a 45-min budget at one
@@ -59,20 +60,10 @@
  * this after the first data build has landed (or pass --from-crossref to pull
  * the DOI lists directly).
  *
- * If your connection is challenged by Cloudflare, follow the instructions
- * printed on failure: pass the check once in your browser, then re-run with
- * BOTH the clearance cookie and that browser's exact User-Agent —
- *   set LIT_CF_COOKIE=<cf_clearance value>      (Windows cmd; bare value ok)
- *   set LIT_UA=<your navigator.userAgent>
- * The cookie is bound to your IP + User-Agent, so LIT_CF_COOKIE alone (with
- * the script's default UA) will NOT pass. Cookies expire after a while; the
- * run is resume-safe, so grab a fresh value and re-run as needed.
- *
- * STILL BLOCKED? Cloudflare also fingerprints the TLS handshake, which Node
- * cannot imitate — use informs-editors-console.js instead: paste it into the
- * DevTools console ON pubsonline.informs.org and the harvest runs inside your
- * real browser (same-origin, nothing to block), producing the same
- * _informs-editors.json. The two caches merge safely.
+ * Publisher access failures are reported explicitly. They are not evidence
+ * that a paper has no editors. Verify names on accessible publisher pages
+ * and import the resulting DOI records with --merge-cache and --apply-only.
+ * Incomplete records are rechecked after seven days; Crossref after one day.
  * ===========================================================================
  */
 
@@ -96,10 +87,17 @@ import { fileURLToPath } from 'node:url';
 import { editorsFromPageHtml, healEditorNames } from './informs-editors.mjs';
 import { isNonArticle } from './_nonarticle.mjs';
 import { isChallenged } from './pnas-crawl.mjs';
+import { editorialDoi, mergeEditors, refreshDue, editorsFromCrossref, applyEditors } from './editorial-refresh.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = resolve(__dirname, '..', 'data');
 const CACHE_PATH = join(DATA_DIR, '_informs-editors.json');
+const registryPath = join(DATA_DIR, '_registry.json');
+const recentPath = join(DATA_DIR, 'recent.json');
+// Journal files omit Date Added; the complete registry is authoritative.
+// The recent feed is a fallback for sparse/local checkouts only.
+const addedDates = existsSync(registryPath) ? JSON.parse(await readFile(registryPath, 'utf8'))
+  : existsSync(recentPath) ? Object.fromEntries(JSON.parse(await readFile(recentPath, 'utf8')).map(p => [editorialDoi(p.DOI), p['Date Added']])) : {};
 const MAILTO = process.env.LIT_MAILTO || 'kstouras@gmail.com';
 // Cloudflare clearance: LIT_CF_COOKIE accepts either the bare cf_clearance
 // VALUE or a full Cookie header ("cf_clearance=…" / "a=1; cf_clearance=…").
@@ -169,7 +167,8 @@ async function doiList(src) {
     // _nonarticle.mjs): an acknowledgment editorial's own text names the
     // editor board and would be mis-read as a History line.
     rows = rows.filter(r => !isNonArticle(r.Title));
-    // newest first, published-or-advance alike; rows are already rank-sorted
+    // Recent additions first, including older papers only just discovered.
+    rows.sort((a, b) => String(addedDates[editorialDoi(b.DOI)] || '').localeCompare(String(addedDates[editorialDoi(a.DOI)] || '')));
     return rows.map(r => (r.DOI || '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase()).filter(Boolean);
   }
   console.log(`  ${src.key}: pulling DOI list from Crossref (${src.issn})…`);
@@ -198,6 +197,7 @@ async function fetchArticle(doi) {
       ...(COOKIE ? { Cookie: COOKIE } : {}),
     },
     redirect: 'follow',
+    signal: AbortSignal.timeout(30000),
   });
   return { status: res.status, body: await res.text() };
 }
@@ -222,7 +222,8 @@ if (MERGE_CACHE) {
   for (const [k, v] of Object.entries(other)) {
     if (!v || typeof v !== 'object') continue;
     const cur = cache[k];
-    if (!cur || ((v.se || v.ae) && !(cur.se || cur.ae))) { cache[k] = v; took++; }
+    const merged = mergeEditors(cur, v);
+    if (JSON.stringify(cur) !== JSON.stringify(merged)) { cache[k] = merged; took++; }
   }
   console.log(`  merge-cache: took ${took} entries from ${MERGE_CACHE}`);
 }
@@ -238,7 +239,7 @@ for (const [k, v] of Object.entries(cache)) {
   const se = healEditorNames(v.se), ae = healEditorNames(v.ae);
   if (se !== v.se || ae !== v.ae) {
     healedCache++;
-    if (!se && !ae) cache[k] = { none: true };
+    if (!se && !ae) cache[k] = { ...v, se: '', ae: '', none: true };
     else { v.se = se || ''; v.ae = ae || ''; }
   }
 }
@@ -299,8 +300,21 @@ async function applyToPapers() {
       total += filled;
     }
   }
+  // The recent view and FT50 browse each serve independent copies of rows.
+  // Publish enrichment to all of them in this same commit.
+  for (const file of ['recent.json', '../data-ft50/recent.json', '../data-ft50/papers-isre.json', '../data-ft50/papers-mksc.json']) {
+    const path = join(DATA_DIR, file);
+    if (!existsSync(path)) continue;
+    const rows = JSON.parse(await readFile(path, 'utf8'));
+    const filled = applyEditors(rows, cache);
+    if (filled) {
+      await awrite(path, JSON.stringify(rows));
+      console.log(`  ${file}: refreshed ${filled} SE/AE fields`);
+      total += filled;
+    }
+  }
   console.log(total
-    ? `✓ Applied the cache to the served papers files (${total} fields) — commit lit/data/ and the site updates on push.`
+    ? `✓ Applied the cache to the served papers files (${total} fields) — commit lit/data/ and lit/data-ft50/ to publish.`
     : '  papers files already carry every cached SE/AE name — nothing to apply.');
 }
 
@@ -311,6 +325,63 @@ if (APPLY_ONLY) {
   process.exit(0);
 }
 
+// Publisher HTML is often unavailable on hosted runners. Crossref is a
+// separate, public metadata source and sometimes receives History later.
+// Refresh incomplete records daily, rotating by last check so an unpublished
+// newest paper cannot starve the rest. Never overwrite the actual paper data
+// with a potentially stale Crossref record: merge only verified editor roles.
+async function refreshCrossref() {
+  const candidates = [];
+  const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+  for (const src of SOURCES) {
+    if (JOURNAL && src.key !== JOURNAL) continue;
+    const path = join(DATA_DIR, src.file);
+    if (!existsSync(path)) continue;
+    for (const row of JSON.parse(await readFile(path, 'utf8'))) {
+      const doi = editorialDoi(row.DOI);
+      const added = addedDates[doi];
+      if (isNonArticle(row.Title) || !added || added < cutoff) continue;
+      const known = mergeEditors(cache[doi], { se: row['Senior Editor'], ae: src.ae ? row['Associate Editor'] : '' });
+      if (doi && refreshDue(known, src.ae, Date.now(), 'crossrefCheckedAt', 1)) candidates.push({ doi, src });
+    }
+  }
+  candidates.sort((a, b) => String(cache[a.doi]?.crossrefCheckedAt || '').localeCompare(String(cache[b.doi]?.crossrefCheckedAt || '')));
+  let checked = 0, enriched = 0;
+  for (const { doi, src } of candidates.slice(0, 100)) {
+    if (BUDGET_MS && Date.now() - T0 > BUDGET_MS) break;
+    try {
+      const response = await fetch(`https://api.crossref.org/works/${encodeURIComponent(doi)}?mailto=${encodeURIComponent(MAILTO)}`, {
+        headers: { 'User-Agent': `TheLit-editorial-refresh/1.0 (mailto:${MAILTO})` },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (response.status === 404) {
+        console.warn(`Crossref has not indexed ${doi}; continuing with other papers.`);
+        await sleep(1100);
+        continue;
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const { message: work } = await response.json();
+      if (editorialDoi(work?.DOI) !== doi) throw new Error('DOI mismatch');
+      const ed = editorsFromCrossref(work, src.ae);
+      const before = cache[doi];
+      cache[doi] = mergeEditors(before, { ...ed, crossrefCheckedAt: new Date().toISOString() });
+      if ((!before?.se && ed.se) || (!before?.ae && ed.ae)) enriched++;
+      checked++;
+      if (++dirty >= 25) {
+        await saveCache();
+        console.log(`  Crossref: checked ${checked}, enriched ${enriched} so far.`);
+      }
+    } catch (error) {
+      console.warn(`::warning::Crossref editorial refresh stopped at ${doi}: ${error.message}; records remain eligible for retry.`);
+      break;
+    }
+    await sleep(1100);
+  }
+  console.log(`Crossref editorial refresh: checked ${checked}, enriched ${enriched} records.`);
+  if (dirty) await saveCache();
+}
+
+await refreshCrossref();
 let consecFails = 0;
 outer:
 for (const src of SOURCES) {
@@ -324,32 +395,12 @@ for (const src of SOURCES) {
       break outer;
     }
     const cur = cache[doi];
-    if (cur && (cur.se || cur.ae)) continue;
-    if (cur && cur.none && !RETRY_MISSES) continue;
+    if (!refreshDue(cur, src.ae, Date.now(), 'checkedAt', RETRY_MISSES ? 0 : 7)) continue;
     processed++;
     try {
       const { status, body } = await fetchArticle(doi);
       if (isChallenged(body, status)) {
-        if (process.env.GITHUB_ACTIONS) {
-          // CI: the block is the EXPECTED outcome for a datacenter IP — say so
-          // briefly and exit cleanly (nothing cached for this page, so a later
-          // run — or a home sitting — retries it).
-          console.log(`✗ pubsonline blocked this runner (HTTP ${status} / Cloudflare) on ${doi} — expected for datacenter IPs.`);
-          console.log('  Exiting cleanly; nothing was mis-cached. A home run (crawl-mksc-editors.bat or informs-editors-console.js) still works.');
-        } else {
-          console.error('\n✗ Blocked by Cloudflare from this connection.');
-          console.error('  The clearance cookie is bound to your browser\'s IP AND User-Agent, so you need BOTH:');
-          console.error('   1. Open https://pubsonline.informs.org in your browser; wait until an article page loads normally.');
-          console.error('   2. DevTools (F12) → Application → Cookies → https://pubsonline.informs.org → copy the cf_clearance VALUE.');
-          console.error('   3. DevTools → Console → type  navigator.userAgent  → copy the exact string.');
-          console.error('  Then re-run — Windows cmd:');
-          console.error('    set LIT_CF_COOKIE=<cf_clearance value>');
-          console.error('    set LIT_UA=<your navigator.userAgent string>');
-          console.error('    node informs-editors-local.mjs');
-          console.error('  (PowerShell: $env:LIT_CF_COOKIE="…"; $env:LIT_UA="…"   ·   macOS/Linux: LIT_CF_COOKIE="…" LIT_UA="…" node …)');
-          console.error('  The cookie expires after a while; if the block returns mid-run, grab a fresh value and re-run —');
-          console.error('  progress is saved continuously, so it resumes where it stopped.');
-        }
+        console.warn(`::warning::Publisher access blocked (HTTP ${status}); Crossref refresh and cached editor updates still apply. No missing-editor result was cached for the blocked page.`);
         break outer;
       }
       if (status !== 200) {
@@ -364,10 +415,10 @@ for (const src of SOURCES) {
       consecFails = 0;
       const ed = editorsFromPage(body);
       if (ed && (ed.se || ed.ae)) {
-        cache[doi] = { se: healEditorNames(ed.se), ae: src.ae ? healEditorNames(ed.ae) : '' };
+        cache[doi] = mergeEditors(cur, { se: healEditorNames(ed.se), ae: src.ae ? healEditorNames(ed.ae) : '', checkedAt: new Date().toISOString(), source: `https://pubsonline.informs.org/doi/${doi}` });
         found++;
       } else {
-        cache[doi] = { none: true };
+        cache[doi] = mergeEditors(cur, { none: true, checkedAt: new Date().toISOString() });
       }
       if (++dirty >= 25) await saveCache();
       if (processed % 50 === 0) console.log(`  …${processed} pages fetched, ${found} with editors`);
@@ -393,7 +444,7 @@ console.log(`  Cache now maps ${Object.keys(cache).length} DOIs (${withEditors} 
 if (!NO_APPLY) await applyToPapers();
 if (cachePurged) await saveCache(); // persist non-article purges made by the apply
 console.log('\nNext: commit and push the updated files, e.g.');
-console.log('  git add lit/data');
+console.log('  git add lit/data lit/data-ft50');
 console.log('  git commit -m "lit: refresh ISR/Marketing Science editor index"');
 console.log('  git push');
 console.log('The site updates when the push deploys; the daily build keeps folding the cache in.');
