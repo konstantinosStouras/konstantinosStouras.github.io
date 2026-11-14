@@ -22,7 +22,11 @@ try {
   const rows = [row('a', 'Jane Editor', 'operations management'),
     row('b', 'John Editor', 'finance'), row('c', 'Jane Editor', 'finance'),
     row('unknown', '', ''), row('old', 'Historical Editor', 'accounting', old),
-    row('other-journal', 'Other Editor', 'marketing', today, 'opre')];
+    row('other-journal', 'Other Editor', 'marketing', today, 'opre'),
+    {...row('isr-a','','',today,'isre'), 'Senior Editor':'Senior One', 'Associate Editor':'Associate One'},
+    {...row('isr-b','','',today,'isre'), 'Senior Editor':'Senior Two', 'Associate Editor':'Associate Two'},
+    {...row('marketing-a','','',today,'mksc'), 'Senior Editor':'Senior One'},
+    {...row('marketing-b','','',today,'mksc'), 'Senior Editor':'Senior Two'}];
   await context.route('**/*', async route => {
     const url = new URL(route.request().url()), path = url.pathname;
     let body = '{}', contentType = 'application/json';
@@ -32,7 +36,7 @@ try {
     } else if (/\/lit-(abstract|filter-url|news|search-scope|search-ui)\.js$/.test(path)) {
       body = fs.readFileSync(root + path.split('/').pop(), 'utf8'); contentType = 'text/javascript';
     } else if (url.hostname !== 'lit.test') { body = ''; contentType = 'text/javascript'; }
-    else if (path === '/lit/data/sources.json') body = JSON.stringify(['ms', 'opre'].map(key => ({ key, file: `papers-${key}.json`, count: 5 })));
+    else if (path === '/lit/data/sources.json') body = JSON.stringify(['ms', 'opre', 'isre', 'mksc'].map(key => ({ key, file: `papers-${key}.json`, count: 5 })));
     else if (path === '/lit/data/recent.json') {
       if (recentDelay) await new Promise(resolve => setTimeout(resolve, recentDelay));
       body = JSON.stringify(rows);
@@ -102,4 +106,30 @@ try {
   assert.equal(new URL(page.url()).search, '');
   assert.deepEqual(errors, []);
   console.log('PASS text refinements reload, Clear exits recent mode, and no browser errors occur');
+
+  await page.goto('https://lit.test/lit/?journal=isre&recent=1');
+  await page.waitForFunction(() => recentData !== null && filtered.length === 2);
+  await page.locator('#csSE .custom-select-trigger').click();
+  await page.locator('#csSE .custom-select-item').filter({hasText:'Senior One'}).click();
+  await page.locator('#csAE .custom-select-trigger').click();
+  await page.locator('#csAE .custom-select-item').filter({hasText:'Associate One'}).click();
+  assert.deepEqual(await ids(),['isr-a']); assert.equal(await recent(),true);
+  await page.reload();
+  await page.waitForFunction(() => recentData !== null && filtered.length === 1);
+  assert.deepEqual(await ids(),['isr-a']);
+  await page.locator('#recentBtn').click();
+  await page.waitForFunction(() => nativeState.isre === 'done');
+  assert.deepEqual(await ids(),['isr-a']);
+  await page.goto('https://lit.test/lit/?journal=mksc&recent=1&se=Senior+Two');
+  await page.waitForFunction(() => recentData !== null && filtered.length === 1);
+  assert.deepEqual(await ids(),['marketing-b']);
+  assert.equal(await page.locator('#groupAE').isVisible(),false);
+  await page.goto('https://lit.test/lit/?journal=ms&journal=isre&journal=mksc&journal=opre&area=finance&se=Senior+One&ae=Associate+One&recent=1');
+  await page.waitForFunction(() => recentData !== null && filtered.length === 5);
+  assert.deepEqual(await ids(),['b','c','isr-a','marketing-a','other-journal']);
+  await page.locator('#recentBtn').click();
+  await page.waitForFunction(() => ['ms','isre','mksc','opre'].every(k=>nativeState[k]==='done') && filtered.length === 5);
+  assert.deepEqual(await ids(),['b','c','isr-a','marketing-a','other-journal']);
+  assert.deepEqual(errors,[]);
+  console.log('PASS ISR SE+AE, Marketing Science SE, recent/all toggles, reloads and mixed-journal editorial scope');
 } finally { await browser.close(); }

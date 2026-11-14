@@ -28,10 +28,9 @@
  *   5. Records a per-alert high-water mark (`lastCheckedAt` / `lastSentAt`) so a
  *      paper is never e-mailed twice.
  *
- * Frequencies: immediate (every run), daily (every run), weekly (>= ~7 days
- * since the last check), monthly (>= ~28 days). With the default once-a-day
- * cron, "immediate" and "daily" behave the same; run the cron more often to
- * make "immediate" closer to real time.
+ * Frequencies: immediate (after data workflows / hourly fallback), daily,
+ * weekly and four-weekly digests, gated independently of the job cadence.
+ * Boundary-day receipts prevent duplicates while admitting later harvests.
  *
  * MATCHING FIDELITY: the journal-list sets, the textMatch/authorMatch helpers
  * and the editorial-dimension normalizers (cleanEditorField/normalizeArea +
@@ -41,7 +40,9 @@
  * them in sync if the page's filtering changes. Coverage is the ten native
  * sources + the FT50 catalog (the two recent.json files in this repo) PLUS the
  * ABS satellite shards, whose recent.json + manifests are fetched over HTTP at
- * run time (loadShards) — missing shards 404 and are skipped.
+ * run time (loadMailDatasets), including Nature/Science. Required feed failures
+ * abort before delivery checkpoints advance; capped feeds are completed from
+ * their journal files for every due subscription's window.
  *
  * Env / secrets (all via the workflow):
  *   FIREBASE_SERVICE_ACCOUNT   JSON of a Firebase service-account key (or set
@@ -68,6 +69,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { paperWindowStart, unsentAtBoundary, paperReceiptUpdate, frequencyDue } from './alerts-delivery.mjs';
+import { loadAlertDatasets, mergeRecentDatasets, ensureAlertCoverage } from './alerts-data.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Who may see a What's-new entry — the SAME file lit/about/ and the main page's
@@ -80,6 +83,7 @@ const LitNews = createRequire(import.meta.url)(path.join(__dirname, '..', 'lit-n
 // sentence and trailers on it (owner, 2026-09-15: "this commentary was" must
 // not find papers whose cards no longer say it).
 const LitAbstract = createRequire(import.meta.url)(path.join(__dirname, '..', 'lit-abstract.js'));
+const { litEditorialApplies } = createRequire(import.meta.url)(path.join(__dirname, '..', 'lit-search-scope.js'));
 const DATA_DIR  = path.join(__dirname, '..', 'data');
 const FT50_DIR  = path.join(__dirname, '..', 'data-ft50');
 // The Working Papers archive (SSRN/NBER/arXiv/OSF pre-prints of the listed
@@ -102,7 +106,7 @@ const SITE_URL  = 'https://www.stouras.com/lit/';
 // are NOT in this checkout); missing shards 404 and are skipped, exactly like the
 // page's own runtime merge.
 const SHARD_BASE  = 'https://www.stouras.com/';
-const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest'];
+const SHARD_REPOS = ['lit-data-abs4', 'lit-data-abs3-omecon', 'lit-data-abs3-rest', 'lit-data-nature', 'lit-data-science'];
 // Maintainer contact surfaced in every alert e-mail (help / feedback, and the
 // List-Unsubscribe mailto). Keep in sync with the Feedback modal in index.html.
 const CONTACT_EMAIL = 'kostas.stouras@ucd.ie';
@@ -456,7 +460,7 @@ function makeCtx() {
     for (const t of (c.jtype || [])) for (const k of jtypeKeys(t)) s.add(k);
     return s;
   };
-  // abs4/abs3/ft50 are exposed (not just closed over) so loadShards() can extend
+  // abs4/abs3/ft50 are exposed so loadMailDatasets() can extend
   // them at runtime with the ABS grades the satellite shards publish.
   return { jtypeKeys, scopeFor, abs4: abs.abs4, abs3: abs.abs3, ft50, wpKeys };
 }
@@ -469,7 +473,7 @@ function isWorkingPaper(p, ctx) {
   return (ctx && ctx.wpKeys && ctx.wpKeys.has(k)) || k.startsWith('wp-');
 }
 const TEXT_CRIT_KEYS = ['author', 'title', 'abstract', 'affiliation'];
-function hasTextFilter(c) { return TEXT_CRIT_KEYS.some(k => ((c || {})[k] || []).length); }
+function hasTextFilter(c) { return Object.keys((c || {}).authorIdentity || {}).length > 0 || TEXT_CRIT_KEYS.some(k => ((c || {})[k] || []).length); }
 
 // True if a paper satisfies an alert's criteria. Mirrors applyFilters():
 // journal scope + pre-print + year/editor/area/se/ae (OR within field) +
@@ -482,6 +486,7 @@ function hasPaperIntent(c) {
   if (!c) return false;
   if (c.allPapers) return true;
   if (c.preprintOnly) return true;
+  if (Object.keys(c.authorIdentity || {}).length) return true;
   return PAPER_CRIT_KEYS.some(k => (c[k] || []).length);
 }
 
@@ -507,23 +512,30 @@ function matchesCriteria(p, c, ctx) {
   // acceptance sentence — clean the row's fields with the vendored normalizers
   // before comparing (the raw field is kept as a fallback so a dataset that
   // deposits a clean name still matches). See the vendored block above.
-  if ((c.editor || []).length &&
+  if ((c.editor || []).length && litEditorialApplies(p, 'editor', scope) &&
       !ciAny(c.editor, cleanEditorField(p['Accepting Editor'] || '')) &&
       !ciEq(c.editor, p['Accepting Editor'])) return false;
-  if ((c.area   || []).length &&
+  if ((c.area   || []).length && litEditorialApplies(p, 'area', scope) &&
       !ciEq(c.area, normalizeArea(p['Area'] || '')) &&
       !ciEq(c.area, p['Area'])) return false;
-  if ((c.se     || []).length && !ciAny(c.se, splitList(p['Senior Editor']))) return false;
-  if ((c.ae     || []).length && !ciAny(c.ae, splitList(p['Associate Editor']))) return false;
+  if ((c.se     || []).length && litEditorialApplies(p, 'se', scope) && !ciAny(c.se, splitList(p['Senior Editor']))) return false;
+  if ((c.ae     || []).length && litEditorialApplies(p, 'ae', scope) && !ciAny(c.ae, splitList(p['Associate Editor']))) return false;
 
   const title = (p.Title || '').toLowerCase();
-  for (const t of (c.title || [])) if (!textMatch(title, t)) return false;
+  for (const t of (c.title || [])) if (!textMatch(title, String(t).toLowerCase())) return false;
   const auth = (p.Authors || '').toLowerCase();
-  for (const a of (c.author || [])) if (!authorMatch(auth, a)) return false;
+  for (const a of (c.author || [])) {
+    if (Object.prototype.hasOwnProperty.call(c.authorIdentity || {}, String(a).toLowerCase())) continue;
+    if (!authorMatch(auth, String(a).toLowerCase())) return false;
+  }
+  for (const variants of Object.values(c.authorIdentity || {})) {
+    const names = auth.split(',').map(n => nameFold(n).trim());
+    if (!Array.isArray(variants) || !variants.some(v => names.includes(nameFold(String(v).toLowerCase()).trim()))) return false;
+  }
   const aff = (p.Affiliations || '').toLowerCase();
-  for (const af of (c.affiliation || [])) if (!textMatch(aff, af)) return false;
+  for (const af of (c.affiliation || [])) if (!textMatch(aff, String(af).toLowerCase())) return false;
   const abs = LitAbstract.cleanAbstract(p.Abstract || '').toLowerCase();
-  for (const ab of (c.abstract || [])) if (!textMatch(abs, ab)) return false;
+  for (const ab of (c.abstract || [])) if (!textMatch(abs, String(ab).toLowerCase())) return false;
   return true;
 }
 
@@ -733,40 +745,20 @@ function loadChangelog() {
   return out;
 }
 
-// Fetch the ABS satellite shards' recent papers over HTTP, and extend the ctx's
-// ABS grade sets from each shard's own manifest so an abs4/abs3 jtype alert can
-// match shard journals too. Best-effort: any shard that is missing (404) or
-// errors is silently skipped, so a run never breaks when a shard is offline or
-// not yet deployed. Needs network (GitHub Actions runners have it); the offline
-// --selftest / --scan paths never call it.
-async function fetchJson(url) {
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!res.ok) throw new Error(url + ' -> ' + res.status);
-  return res.json();
-}
-async function loadShards(ctx) {
-  const rows = [], tallies = [];
-  for (const repo of SHARD_REPOS) {
-    const ds = 'shard:' + repo;
-    try {
-      const man = await fetchJson(SHARD_BASE + repo + '/data/sources.json');
-      for (const s of (Array.isArray(man) ? man : [])) {
-        if (!s || !s.key) continue;
-        const g = String(s.abs || '');
-        if (g === '4' || g === '4*') ctx.abs4.add(s.key);
-        else if (g === '3') ctx.abs3.add(s.key);
-      }
-    } catch { /* no shard manifest → its jtype grades just won't extend */ }
-    try {
-      const arr = await fetchJson(SHARD_BASE + repo + '/data/recent.json');
-      if (Array.isArray(arr)) for (const p of arr) { p._added = parseAdded(p['Date Added']); p._ds = ds; if (p._added) rows.push(p); }
-    } catch { /* no shard recent.json → skip this shard */ }
-    try {
-      const j = await fetchJson(SHARD_BASE + repo + '/data/' + RECENT_COUNTS_FILE);
-      if (j && j.days && typeof j.days === 'object') tallies.push({ ds, days: j.days });
-    } catch { /* no shard tally yet → its rows are counted as before */ }
+// Load all active datasets, extending journal names and ABS grades. Required
+// feed failures are retried by the next run, without advancing any checkpoint.
+async function loadMailDatasets(ctx) {
+  const datasets = await loadAlertDatasets([
+    {ds:'native', dir:DATA_DIR}, {ds:'ft50', dir:FT50_DIR}, {ds:'wp', dir:WP_DIR},
+    ...SHARD_REPOS.map(repo => ({ds:'shard:' + repo, url:SHARD_BASE + repo + '/data/'}))
+  ]);
+  for (const dataset of datasets) for (const s of dataset.sources) {
+    const grade = String(s.abs || '');
+    if (grade === '4' || grade === '4*') ctx.abs4.add(s.key);
+    if (grade === '3') ctx.abs3.add(s.key);
+    JOURNAL_NAMES[s.key] = s.name || s.short || s.key;
   }
-  return { rows, tallies };
+  return datasets;
 }
 
 // ── E-mail rendering ──────────────────────────────────────────────────────────
@@ -1183,14 +1175,13 @@ function windowStartFor(last, created, now) {
 // Compute what to do for one alert given `now` and the recent papers.
 // Returns { due, matches, windowStart }.
 function evaluateAlert(alert, papers, now, ctx) {
-  const freq = FREQ_MIN_DAYS[alert.frequency] != null ? alert.frequency : 'weekly';
-  const windowStart = windowStartFor(toDate(alert.lastCheckedAt), toDate(alert.createdAt), now);
-  const elapsedDays = (now - windowStart) / DAY_MS;
-  const due = elapsedDays >= (FREQ_MIN_DAYS[freq] - 0.05);   // small slack for cron jitter
+  const last = toDate(alert.lastCheckedAt), created = toDate(alert.createdAt);
+  const windowStart = paperWindowStart(alert, last, windowStartFor(last, created, now));
+  const due = frequencyDue(alert.frequency, last, created, now);
   if (!due) return { due: false, matches: [], windowStart };
   // A features-only subscription has no paper intent → never matches papers.
   const matches = hasPaperIntent(alert.criteria || {})
-    ? papers.filter(p => p._added > windowStart && p._added <= now && matchesCriteria(p, alert.criteria || {}, ctx))
+    ? papers.filter(p => p._added > windowStart && p._added <= now && unsentAtBoundary(p, alert, last) && matchesCriteria(p, alert.criteria || {}, ctx))
     : [];
   return { due: true, matches, windowStart };
 }
@@ -1216,12 +1207,12 @@ function evaluateFeatures(alert, changelog, now) {
   if (!c.features) return { active: false, due: false, features: [], windowStart: null };
   const freq = FREQ_MIN_DAYS[alert.frequency] != null ? alert.frequency : 'weekly';
   const last = toDate(alert.lastFeatureCheckedAt) || toDate(alert.lastCheckedAt);
-  const windowStart = windowStartFor(last, toDate(alert.createdAt), now);
-  const elapsedDays = (now - windowStart) / DAY_MS;
-  const due = elapsedDays >= (FREQ_MIN_DAYS[freq] - 0.05);   // small slack for cron jitter
+  const receipts = {paperReceiptVersion:alert.featureReceiptVersion, lastCheckedPaperIds:alert.lastCheckedFeatureIds};
+  const windowStart = paperWindowStart(receipts, last, windowStartFor(last, toDate(alert.createdAt), now));
+  const due = frequencyDue(freq, last, toDate(alert.createdAt), now);
   if (!due) return { active: true, due: false, features: [], windowStart };
   const features = (Array.isArray(changelog) ? changelog : [])
-    .filter(f => f._added > windowStart && f._added <= now)
+    .filter(f => f._added > windowStart && f._added <= now && unsentAtBoundary({...f,DOI:f.id},receipts,last))
     .sort((a, b) => b._added - a._added);
   return { active: true, due: true, features, windowStart };
 }
@@ -1325,14 +1316,12 @@ async function run({ dryRun }) {
   }
 
   const ctx = makeCtx();
-  const shards = await loadShards(ctx);      // best-effort HTTP; also extends ctx ABS grades
-  const shardRows = shards.rows;
-  const papers = loadRecentPapers(shardRows);
-  const tallies = loadRecentTallies(shards.tallies);   // uncapped counts for the digest's number
-  const nativeKeys = loadNativeKeys();
+  const datasets = await loadMailDatasets(ctx);
+  let papers = mergeRecentDatasets(datasets);
+  const tallies = datasets.filter(d => d.tally).map(d => ({ds:d.ds, days:d.tally.days}));
   let changelog = loadChangelog();           // drives the "new features & updates" alerts
   const now = new Date();
-  console.log(`Loaded ${papers.length} recently-added papers${shardRows.length ? ` (incl. ${shardRows.length} from ABS shards)` : ''}, ${tallies.length} recent-count tall${tallies.length === 1 ? 'y' : 'ies'} and ${changelog.length} changelog entr${changelog.length === 1 ? 'y' : 'ies'}. now=${now.toISOString()} dryRun=${dryRun}`);
+  console.log(`Loaded ${papers.length} recently-added papers from ${datasets.length} datasets, ${tallies.length} tallies and ${changelog.length} changelog entries. now=${now.toISOString()} dryRun=${dryRun}`);
 
   const { default: admin } = await import('firebase-admin');
   if (!admin.apps.length) {
@@ -1385,6 +1374,11 @@ async function run({ dryRun }) {
 
   const snap = await db.collectionGroup('alerts').get();
   console.log(`Found ${snap.size} alert(s) across all users.`);
+  const windows = snap.docs.map(doc => doc.data()).filter(a => a.enabled !== false && hasPaperIntent(a.criteria || {}))
+    .map(a => ({alert:a, evaluation:evaluateAlert(a, [], now, ctx)})).filter(x => x.evaluation.due)
+    .map(x => ({scope:x.alert.criteria?.allPapers ? null : ctx.scopeFor(x.alert.criteria || {}), start:x.evaluation.windowStart}));
+  papers = await ensureAlertCoverage(datasets, windows, now);
+  console.log(`Verified alert coverage: ${papers.length} dated papers available.`);
 
   const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   let sent = 0, matched = 0, features = 0, skipped = 0, errors = 0;
@@ -1423,7 +1417,8 @@ async function run({ dryRun }) {
         // The capped recent.json rows are the LIST; the count line comes from
         // the uncapped tallies whenever the criteria allow it (exactAlertCounts
         // → null keeps the row count, the pre-existing behaviour).
-        const exact = exactAlertCounts(criteria, papEval.matches, papEval.windowStart, now, ctx, tallies, nativeKeys);
+        // A same-day aggregate also counts papers already delivered.
+        const exact = null; // coverage was completed above; matches are now the exact count
         const em = renderEmail(alert, papEval.matches, { exactCounts: exact });
         if (dryRun) {
           console.log(`  [dry-run] would e-mail ${recipient}: "${em.subject}" (${papEval.matches.length} paper(s) listed${exact ? `, exact ${exact.papers}+${exact.wp}` : ''}, window since ${papEval.windowStart.toISOString()})`);
@@ -1439,7 +1434,11 @@ async function run({ dryRun }) {
       } else {
         console.log(`  no new paper matches for "${alert.name || describeCriteria(criteria)}" (${alert.frequency || 'weekly'})`);
       }
-      if (ok) update.lastCheckedAt = Timestamp.fromDate(now);   // advance only on success (or nothing to send)
+      if (ok) {
+        update.lastCheckedAt = Timestamp.fromDate(now);
+        Object.assign(update, paperReceiptUpdate(alert, papEval.matches, now, toDate(alert.lastCheckedAt)));
+        update.lastDeliveryError = null;
+      } else update.lastDeliveryError = 'Delivery failed; the mailer will retry.';
     }
 
     // ── Feature updates ──
@@ -1477,13 +1476,19 @@ async function run({ dryRun }) {
          checked yesterday — markCap is LATER than the stored mark, so the
          park applies and nothing is lost. */
       if (ok) {
-        update.lastFeatureCheckedAt = Timestamp.fromDate(featureMarkFor(featureMark,
-          toDate(alert.lastFeatureCheckedAt) || toDate(alert.lastCheckedAt)));
-      }
+        const last = toDate(alert.lastFeatureCheckedAt) || toDate(alert.lastCheckedAt);
+        const mark = featureMarkFor(featureMark, last);
+        update.lastFeatureCheckedAt = Timestamp.fromDate(mark);
+        const receipt = paperReceiptUpdate({lastCheckedPaperIds:alert.lastCheckedFeatureIds},
+          featEval.features.map(f => ({...f,DOI:f.id})), mark, last);
+        update.featureReceiptVersion = 1;
+        update.lastCheckedFeatureIds = receipt.lastCheckedPaperIds;
+        update.lastFeatureDeliveryError = null;
+      } else update.lastFeatureDeliveryError = 'Update e-mail delivery failed; the mailer will retry.';
     }
 
     if (!dryRun && Object.keys(update).length) {
-      try { await doc.ref.set(update, { merge: true }); } catch (e) { console.error('  state update failed:', e && e.message); }
+      try { await doc.ref.set(update, { merge: true }); } catch (e) { errors++; console.error('  state update failed:', e && e.message); }
     }
   }
   console.log(`Done. e-mails sent=${sent}, papers matched=${matched}, features sent=${features}, skipped=${skipped}, errors=${errors}.`);
@@ -1508,7 +1513,7 @@ async function sendTestEmails({ dryRun }) {
   }
 
   const ctx = makeCtx();
-  const papers = loadRecentPapers();
+  const papers = mergeRecentDatasets(await loadMailDatasets(ctx));
   let changelog = loadChangelog();
 
   const { default: admin } = await import('firebase-admin');
@@ -1757,7 +1762,7 @@ function selftest() {
   ok('weekly due after 8 days', evaluateAlert(mk({ frequency: 'weekly', lastCheckedAt: new Date('2026-07-05T06:00:00Z') }), recent, now, ctx).due);
   ok('monthly not due after 10 days', !evaluateAlert(mk({ frequency: 'monthly', lastCheckedAt: new Date('2026-07-03T06:00:00Z') }), recent, now, ctx).due);
   ok('monthly due after 30 days', evaluateAlert(mk({ frequency: 'monthly', lastCheckedAt: new Date('2026-06-13T06:00:00Z') }), recent, now, ctx).due);
-  ok('paper before window excluded', (() => { const r = evaluateAlert(mk({ lastCheckedAt: new Date('2026-07-13T03:00:00Z') }), recent, now, ctx); return r.due && r.matches.length === 0; })());
+  ok('daily alert is not due again three hours after a check', (() => { const r = evaluateAlert(mk({ lastCheckedAt: new Date('2026-07-13T03:00:00Z') }), recent, now, ctx); return !r.due && r.matches.length === 0; })());
 
   // ── Same-day window (regression test for the day-boundary bug) ──────────────
   // A day-only "Date Added" parses to midnight UTC, while createdAt/lastCheckedAt

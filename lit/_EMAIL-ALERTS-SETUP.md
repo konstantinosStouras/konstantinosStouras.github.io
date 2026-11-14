@@ -5,6 +5,28 @@ user subscribe to an e-mail when new papers matching a set of filters are added
 to the database. This document covers what ships in the page today and the one
 backend piece needed to actually deliver the e-mails.
 
+## Delivery reliability (14 November 2026)
+
+- Editorial criteria apply only to their relevant journals when those journals
+  are selected: MS accepting editor/area, ISR and Marketing Science senior
+  editor, ISR associate editor. Other selected journals remain eligible.
+- The mailer reads all eight datasets, including Nature and Science. A missing
+  required feed fails the run before any delivery checkpoint advances.
+- Capped recent feeds are completed from the relevant journal files whenever
+  their tallies show missing rows. Datasets without tallies use those full files.
+- Paper and feature checkpoints retain delivered IDs for the boundary day.
+  Later additions that day remain eligible, without repeating earlier sends.
+  Existing checkpoints migrate without automatically replaying old e-mails.
+- “After data updates” runs after successful ingestion workflows, with an
+  hourly fallback. Daily, weekly and monthly subscriptions retain their own
+  cadence. GitHub schedules may be delayed; this is not instant delivery.
+- Alert creation copies uncommitted search text and author identity variants,
+  and supports Working Papers. Citation-graph filters are not alert criteria.
+- Alert cards show last-checked/last-sent timestamps and delivery errors.
+
+Validation: `node lit/_scraper/alerts-reliability-selftest.mjs`, the mailer's
+`--selftest`, `recent-filters-guard.mjs`, and `alerts-ui-guard.mjs`.
+
 ## What is in the page (no backend needed)
 
 Everything the user sees and does is implemented client-side and needs nothing
@@ -124,8 +146,8 @@ writes subscriptions; the mailer reads them and sends. This is now implemented:
      `lastFeatureSentAt` for feature updates. The two advance **independently**
      (each only when its own send succeeds), so a partial failure retries only
      the side that failed.
-- **`.github/workflows/lit-alerts-mail.yml`** — runs it daily (08:30 UTC), after
-  the daily data build has committed a fresh `recent.json`.
+- **`.github/workflows/lit-alerts-mail.yml`** — runs after successful ingestion
+  workflows and on an hourly fallback schedule.
 
 ### Test e-mails ("Send me a test e-mail")
 

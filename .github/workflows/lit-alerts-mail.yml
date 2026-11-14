@@ -1,7 +1,7 @@
 name: lit — e-mail alerts mailer
 
 # Sends the digest e-mails behind the "E-mail alerts" panel on
-# stouras.com/lit/. Runs once a day, after the daily data build has
+# stouras.com/lit/. Runs after successful data workflows, with an hourly fallback,
 # committed a fresh recent.json, and e-mails each user the new papers that match
 # their saved alerts (per their chosen frequency: immediate / daily / weekly /
 # monthly). See lit/_scraper/alerts-mailer.mjs and
@@ -16,7 +16,16 @@ name: lit — e-mail alerts mailer
 
 on:
   schedule:
-    - cron: '30 8 * * *'      # daily 08:30 UTC, safely after the 05:30 lit build
+    - cron: '17 * * * *'      # fallback for satellite data updates; schedules may be delayed
+  workflow_run:
+    workflows:
+      - 'lit — check for newly-published papers (incremental)'
+      - 'lit — check for new FT50 catalog papers (incremental)'
+      - 'lit — update multi-journal data'
+      - 'lit — update FT50 (merged catalog) data'
+      - 'lit — update working-papers archive'
+    types: [completed]
+    branches: [master]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -37,6 +46,7 @@ concurrency:
 
 jobs:
   mail:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -44,11 +54,20 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || 'master' }}
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /lit/
+            !/lit/data-refs/
+            !/lit/data/db/
+            !/lit/analytics/
+            !/lit/sqlite/
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: '22'
 
       # BEFORE anything can be sent. Both are offline (no network, no
       # credentials, no npm dependency), and both guard what this job is about
@@ -60,6 +79,7 @@ jobs:
       - name: Offline checks
         run: |
           node lit/_scraper/alerts-mailer.mjs --selftest
+          node lit/_scraper/alerts-reliability-selftest.mjs
           node lit/_scraper/news-selftest.mjs
 
       - name: Install mailer dependencies
