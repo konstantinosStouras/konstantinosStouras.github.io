@@ -1,88 +1,55 @@
 name: lit — backfill pre-print links
-
-# Incrementally links free pre-prints (arXiv/SSRN/bioRxiv/medRxiv/NBER/OSF)
-# for stouras.com/lit/ by running lit/_scraper/preprints-ci.mjs every
-# couple of hours: each run does a bounded (~40 min) slice of title+author
-# searches across three engines — OpenAlex (bonus net; it cuts an identity
-# off after ~100 title searches/day), Crossref (which mints every non-arXiv
-# pre-print host's DOIs) and arXiv's own API — and commits the refreshed
-# lit/data/ back. The backlog clears over a few days; after that each run
-# is a cheap near-no-op that covers newly added papers. See the header of
-# preprints-ci.mjs.
-
 on:
   schedule:
-    # Twelve slices a day (even hours at :45), offset from the 05:00 ms and
-    # 05:30 lit daily builds — a slice that overlaps the 05:30 build simply
-    # queues behind it (same concurrency group).
-    - cron: '45 */2 * * *'
-  workflow_dispatch: {}      # run on demand from the Actions tab
-
-# SAME concurrency group as lit-update-data.yml — both workflows commit
-# lit/data, so they must queue behind each other, never race.
+    - cron: 45 */2 * * *
+  workflow_dispatch: {}
 concurrency:
-  group: lit-update-data-${{ github.ref }}
+  group: lit-cloud-core-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
-  contents: write            # needed to commit the refreshed data back
-
+  contents: write
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    # Hard backstop with real headroom: 6-min by-DOI seeding + 40-min search
-    # budget (whose last patient wait is deadline-capped) + apply/commit.
     timeout-minutes: 75
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: '20'
-
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: core
+          ssh-key: ${{ secrets.LIT_DATA_CORE_DEPLOY_KEY }}
+          datasets: core ft50
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
       - name: Backfill pre-print links (OpenAlex+Crossref+arXiv title-search, bounded)
         env:
-          LIT_MAILTO: kstouras@gmail.com   # the CI quota identity (local runs use their own)
+          LIT_MAILTO: kstouras@gmail.com
         run: node lit/_scraper/preprints-ci.mjs
-
-      - name: Commit refreshed data
-        # always(): if the search step is killed (timeout/transient), commit
-        # whatever the checkpointed cache already holds — finds are monotonic
-        # and losing a whole run's links to a late kill would waste the slot.
+      - name: Publish core data to its repository
         if: always() && github.ref == 'refs/heads/master'
-        # Same hardened push as lit-update-data.yml, with one difference: on a
-        # rejected push this run's tree may be STALER than what landed (e.g. a
-        # daily refresh with new papers), so instead of re-committing our tree
-        # we take the new tip's data and re-apply ONLY our cache finds onto it
-        # (preprints-ci.mjs --apply-only --merge-cache).
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/data
-          if git diff --cached --quiet; then
-            echo "No data changes — nothing to commit."
-            exit 0
-          fi
-          cp lit/data/_preprints.json /tmp/lit-preprints-ours.json
-          git commit -m "lit: backfill pre-print links"
-          for i in 1 2 3; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected (concurrent commit?) — re-applying our finds on the new tip…"
-            git fetch origin "$GITHUB_REF_NAME"
-            git reset --hard "origin/$GITHUB_REF_NAME"
-            node lit/_scraper/preprints-ci.mjs --apply-only --merge-cache=/tmp/lit-preprints-ours.json
-            git add lit/data
-            if git diff --cached --quiet; then
-              echo "The concurrent commit already contains these links — nothing left to push."
-              exit 0
-            fi
-            git commit -m "lit: backfill pre-print links"
-            sleep 5
-          done
-          echo "::error::Could not push the backfilled data after 3 attempts."
-          exit 1
+        run: node lit/_scraper/cloud-data.mjs publish core
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-core-${{ github.run_id }}
+          path: _lit-data/core/data/
+          retention-days: 14
+          if-no-files-found: ignore

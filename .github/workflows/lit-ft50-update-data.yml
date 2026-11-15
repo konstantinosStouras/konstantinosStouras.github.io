@@ -1,140 +1,62 @@
 name: lit — update FT50 (merged catalog) data
-
-# Builds lit's OWN FT50-and-friends dataset (the 50 journals on the
-# Financial Times FT50 research-rank list, plus notFT extras carried for other
-# lists — UTD24's INFORMS Journal on Computing, ABS 4's EJOR) by pulling from
-# the Crossref API, then commits the refreshed files in lit/data-ft50/
-# back to the branch.
-# This is the pipeline behind the lit page's FT50 merge / "Journal types"
-# filter (originally vendored from the retired fun/ft50 app).
-# The journal list itself lives in lit/_scraper-ft50/journals.json
-# and is checked against ft.com once a year by lit-ft50-check-list.yml.
-# See lit/_HOW-IT-WORKS.md.
-
 on:
   schedule:
-    # Daily, 07:15 UTC (offset from the ms build at 05:00, the lit build at
-    # 05:30 and the preprints backfill at 06:45 so no two data builds race a
-    # Pages deploy). Nothing is committed on days with no changes.
-    - cron: '15 7 * * *'
-  workflow_dispatch: {}      # run on demand from the Actions tab
+    - cron: 15 7 * * *
+  workflow_dispatch: {}
   push:
-    # Run once whenever the pipeline itself changes, so a new branch seeds its
-    # data immediately instead of waiting for the daily schedule.
     paths:
-      - '.github/workflows/lit-ft50-update-data.yml'
-      - 'lit/_scraper-ft50/build-data.mjs'
-      - 'lit/_scraper-ft50/informs-editors.mjs'
-      - 'lit/_scraper-ft50/journals.json'
-
-# Never let two data builds race; let a running one finish.
+      - .github/workflows/lit-ft50-update-data.yml
+      - lit/_scraper-ft50/build-data.mjs
+      - lit/_scraper-ft50/informs-editors.mjs
+      - lit/_scraper-ft50/journals.json
 concurrency:
-  group: lit-ft50-update-data-${{ github.ref }}
+  group: lit-cloud-ft50-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
-  contents: write            # needed to commit the refreshed data back
-  pages: write               # needed to request a Pages rebuild if a deploy fails
-
+  contents: write
+  pages: write
 jobs:
   build:
     runs-on: ubuntu-latest
-    # A full 50-journal Crossref walk is ~250k records; well under this, but
-    # leave room for Crossref throttling + the retry backoff.
     timeout-minutes: 300
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: '20'
-
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: ft50
+          ssh-key: ${{ secrets.LIT_DATA_FT50_DEPLOY_KEY }}
+          datasets: core ft50
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
       - name: Build data (Crossref, one pull per FT50 journal)
         env:
-          S2_API_KEY: ${{ secrets.S2_API_KEY }}   # optional — moves the S2 leg off the anonymous pool
-          FT50_MAILTO: kstouras+litft50@gmail.com   # Crossref contact + this dataset's OpenAlex quota identity
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}
+          FT50_MAILTO: kstouras+litft50@gmail.com
           NODE_OPTIONS: --max-old-space-size=6144
         run: node lit/_scraper-ft50/build-data.mjs
-
-      - name: Commit refreshed data
-        # If another run pushed data while this one was building, a plain
-        # rebase would conflict on the one-line JSON files and a naive push
-        # would silently no-op. Instead: on a rejected push, re-commit OUR
-        # tree (the freshest complete build) on top of whatever landed, and
-        # fail loudly if that still cannot push. (Same hardening as lit/ft50.)
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/data-ft50
-          if git diff --cached --quiet; then
-            echo "No data changes — nothing to commit."
-            exit 0
-          fi
-          git commit -m "lit: refresh FT50 (merged catalog) data"
-          for i in 1 2 3; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected (concurrent commit?) — merging the tip's pre-print links into our build so none are clobbered…"
-            git fetch origin "$GITHUB_REF_NAME"
-            # A concurrent commit is almost always a pre-print backfill that
-            # added free-pre-print links. Our freshly-harvested tree carries an
-            # OLDER _preprints.json, so re-committing it as-is would downgrade
-            # those links back to {none} (a published paper's pre-print never
-            # changes, so a found link must never be lost). Overlay the tip's
-            # _preprints.json onto our build — a found {u} is kept from whichever
-            # side has it — and re-apply it to our papers, so we keep BOTH our
-            # fresh harvest AND every pre-print link. Then MIXED-reset to the tip
-            # and re-add ONLY the data dir (a hard reset would drop code commits
-            # that landed on the branch; a soft reset would silently revert them).
-            git show "origin/$GITHUB_REF_NAME":lit/data-ft50/_preprints.json > /tmp/lit-ft50-tip-preprints.json || echo '{}' > /tmp/lit-ft50-tip-preprints.json
-            node lit/_scraper-ft50/preprints-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-tip-preprints.json
-            git reset "origin/$GITHUB_REF_NAME"
-            git add lit/data-ft50
-            if git diff --cached --quiet; then
-              echo "The concurrent commit already contains this dataset — nothing left to push."
-              exit 0
-            fi
-            git commit -m "lit: refresh FT50 (merged catalog) data"
-            sleep 5
-          done
-          echo "::error::Could not push the refreshed data after 3 attempts."
-          exit 1
-
-      # A committed dataset is not enough: the GitHub Pages deploy that follows
-      # the push can fail transiently, silently serving stale data. Poll the
-      # live site; if the deploy didn't land, request a rebuild and poll again.
-      - name: Verify the live site serves this dataset (self-heal a failed deploy)
+      - name: Publish ft50 data to its repository
         if: github.ref == 'refs/heads/master'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LIVE_META: https://www.stouras.com/lit/data-ft50/meta.json
-        run: |
-          want=$(jq -r .lastPull lit/data-ft50/meta.json)
-          echo "Committed dataset lastPull: $want"
-          poll() {  # poll <tries> — succeed once live lastPull >= committed lastPull
-            for i in $(seq 1 "$1"); do
-              live=$(curl -sf --max-time 20 "$LIVE_META?nc=${GITHUB_RUN_ID}-${RANDOM}" | jq -r .lastPull || echo "unreachable")
-              echo "  try $i/$1: live lastPull = $live"
-              if [ "$live" != "unreachable" ] && [ ! "$live" \< "$want" ]; then return 0; fi
-              sleep 60
-            done
-            return 1
-          }
-          if poll 8; then echo "Live site is serving the current dataset."; exit 0; fi
-          echo "Live site still stale — requesting a GitHub Pages rebuild..."
-          curl -sf -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" \
-            || echo "WARNING: Pages rebuild request failed (check token permissions)."
-          if poll 10; then echo "Live site recovered after the rebuild request."; exit 0; fi
-          echo "::error::Live site is still serving stale lit FT50 data (wanted lastPull >= $want). Re-run this workflow or the pages-build-deployment workflow."
-          exit 1
-
+        run: node lit/_scraper/cloud-data.mjs publish ft50
+      - name: Verify published data
+        if: github.ref == 'refs/heads/master'
+        run: node lit/_scraper/cloud-data.mjs verify ft50
       - name: Summary
         if: always()
         run: |
@@ -145,3 +67,11 @@ jobs:
             echo '' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-ft50-${{ github.run_id }}
+          path: _lit-data/ft50/data/
+          retention-days: 14
+          if-no-files-found: ignore

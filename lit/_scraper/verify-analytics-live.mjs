@@ -11,7 +11,7 @@ const args = process.argv.slice(2);
 const option = (name, fallback) => { const i = args.indexOf(name); return i < 0 ? fallback : args[i + 1]; };
 const attempts = Number(option('--attempts', 8));
 const delay = Number(option('--delay-ms', 60000));
-const base = option('--base', 'https://www.stouras.com/lit/analytics/');
+const base = option('--base', 'https://www.stouras.com/lit-data-analytics/data/');
 let matched = false;
 for (let attempt = 1; attempt <= attempts; attempt++) {
   const failed = [];

@@ -1,60 +1,54 @@
 name: lit — ingest suggested working papers
-
-# Reads user-suggested papers from the Firestore `paperSubmissions` collection
-# (written by the "Suggest a missing published Paper or a Working Paper" section
-# of /lit/feedback/), resolves each link's real metadata (OpenAlex / Crossref),
-# and routes by what the link actually is: a fitting working paper (an author
-# already in the database, and not already present) is added to the Working
-# Papers archive (lit/data-workingpapers/); a published-paper suggestion is
-# answered "already listed" or forwarded to the maintainer to review (status
-# 'review' — never auto-added). Then it marks the submission and e-mails the
-# submitter + maintainer. See lit/_scraper-workingpapers/ingest-submissions.mjs.
-#
-# A no-op until FIREBASE_SERVICE_ACCOUNT is set. SMTP_* are optional (skip the
-# notification e-mails without them). Full setup: lit/_PAPER-SUBMISSIONS-SETUP.md.
-
 on:
   schedule:
-    # Off-boundary minutes (GitHub throttles :00/:15/:30/:45 hardest). ~Every 10
-    # min so a suggested paper is added promptly. Need it now? Actions → this
-    # workflow → "Run workflow".
-    - cron: '4,14,24,34,44,54 * * * *'
+    - cron: 4,14,24,34,44,54 * * * *
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run — resolve + decide + print, but ingest nothing and mark nothing'
+        description: Dry run — resolve + decide + print, but ingest nothing and mark nothing
         type: boolean
         default: false
       scan:
-        description: 'List pending submissions and exit (ingests nothing)'
+        description: List pending submissions and exit (ingests nothing)
         type: boolean
         default: false
-
-# SAME concurrency group as the working-papers builds — this job commits
-# lit/data-workingpapers, so it must queue behind them, never race a commit.
 concurrency:
-  group: lit-workingpapers-${{ github.ref }}
+  group: lit-cloud-workingpapers-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
-  contents: write            # needed to commit the ingested submissions back
-
+  contents: write
 jobs:
   ingest:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: '20'
-
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: workingpapers
+          ssh-key: ${{ secrets.LIT_DATA_WORKINGPAPERS_DEPLOY_KEY }}
+          datasets: core ft50 workingpapers
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
       - name: Install dependencies
         run: npm install --no-save --ignore-scripts firebase-admin@12.7.0 nodemailer@6.10.1
-
       - name: Ingest suggested working papers
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -67,42 +61,15 @@ jobs:
           ALERTS_FROM_NAME: ${{ secrets.ALERTS_FROM_NAME }}
           FEEDBACK_TO: ${{ secrets.FEEDBACK_TO }}
           SUB_MAILTO: kstouras+litsub@gmail.com
-          # SUB_AUTHOR_MATCH: exact   # optional — tighten the author gate (default: fuzzy)
         run: node lit/_scraper-workingpapers/ingest-submissions.mjs ${{ github.ref != 'refs/heads/master' && '--dry-run' || '' }} ${{ (github.event_name == 'workflow_dispatch' && inputs.scan) && '--scan' || '' }} ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
-
-      - name: Commit ingested submissions
+      - name: Publish workingpapers data to its repository
         if: github.ref == 'refs/heads/master'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/data-workingpapers
-          if git diff --cached --quiet; then
-            echo "No submissions ingested — nothing to commit."
-            exit 0
-          fi
-          git commit -m "lit: ingest suggested working papers"
-          # Only the working-papers builds and this job write lit/data-workingpapers,
-          # and all three share the concurrency group, so our copy of that directory
-          # is authoritative. On a rejected push (a concurrent commit touching OTHER
-          # files), replay our directory onto the new tip and retry.
-          cp -r lit/data-workingpapers /tmp/sub-ours
-          for i in 1 2 3; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected (concurrent commit?) — replaying our archive on the new tip…"
-            git fetch origin "$GITHUB_REF_NAME"
-            git reset --hard "origin/$GITHUB_REF_NAME"
-            rm -rf lit/data-workingpapers
-            cp -r /tmp/sub-ours lit/data-workingpapers
-            git add lit/data-workingpapers
-            if git diff --cached --quiet; then
-              echo "The tip already carries this archive state — nothing left to push."
-              exit 0
-            fi
-            git commit -m "lit: ingest suggested working papers"
-            sleep 5
-          done
-          echo "::error::Could not push the ingested submissions after 3 attempts."
-          exit 1
+        run: node lit/_scraper/cloud-data.mjs publish workingpapers
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-workingpapers-${{ github.run_id }}
+          path: _lit-data/workingpapers/data/
+          retention-days: 14
+          if-no-files-found: ignore

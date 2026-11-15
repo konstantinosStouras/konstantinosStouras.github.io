@@ -1,4 +1,11 @@
 @echo off
+echo Literature datasets now live in separate GitHub repositories.
+echo Run a cloud job from the Actions tab of konstantinosStouras.github.io.
+echo See lit\_CLOUD-DATA.md for commands and specialist browser harvesting.
+exit /b 1
+
+REM Previous local-only implementation retained below for reference.
+@echo off
 REM ==========================================================================
 REM  run-local-crawlers.bat  -  Resilient, run-and-leave-it local crawler for
 REM  the two safe datasets: pre-print OA links (lit/data) + FT50 citation counts

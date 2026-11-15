@@ -1,168 +1,87 @@
 name: lit — update working-papers archive
-
-# Daily maintenance pass over the Working Papers archive for stouras.com/lit/
-# (lit/data-workingpapers/): crawls a modest slice of authors — new authors
-# first, then the stalest previously-crawled ones due a refresh (WP_REFRESH_DAYS)
-# so newly-posted working papers get picked up — commits the result, and
-# verifies the live site serves it. The heavy lifting of the initial fill is
-# done by lit-workingpapers-backfill.yml (every 3 h); this keeps the archive
-# fresh once it is built. See lit/_scraper-workingpapers/_HOW-IT-WORKS.md.
-
 on:
   schedule:
-    # Daily, 06:15 UTC (offset from the ms 05:00 / lit 05:30 / ft50 07:15 builds).
-    - cron: '15 6 * * *'
-  workflow_dispatch: {}      # run on demand from the Actions tab
+    - cron: 15 6 * * *
+  workflow_dispatch: {}
   push:
-    # Seed a new branch's archive as soon as the pipeline itself changes.
     paths:
-      - '.github/workflows/lit-workingpapers-update-data.yml'
-      - 'lit/_scraper-workingpapers/build-data.mjs'
-
-# Never let two working-papers passes race; let a running one finish.
+      - .github/workflows/lit-workingpapers-update-data.yml
+      - lit/_scraper-workingpapers/build-data.mjs
 concurrency:
-  group: lit-workingpapers-${{ github.ref }}
+  group: lit-cloud-workingpapers-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
-  contents: write            # needed to commit the refreshed archive back
-  pages: write               # needed to request a Pages rebuild if a deploy fails
-
+  contents: write
+  pages: write
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      # The retire-on-publish sweep re-checks every listed working paper against
-      # the WHOLE published catalog; the ABS shards live in sibling repos, so
-      # check them out read-only (like lit-analytics.yml) under _analytics-shards/
-      # — untracked, so the `git add lit/data-workingpapers` below can never
-      # commit them. A missing/failed shard is skipped by loadCatalog (no crash).
-      # Only the DAILY build does this (the 3-hourly backfill stays native+FT50,
-      # to avoid re-fetching the large shard repos every few hours).
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: workingpapers
+          ssh-key: ${{ secrets.LIT_DATA_WORKINGPAPERS_DEPLOY_KEY }}
+          datasets: core ft50 workingpapers
       - name: Checkout data shard — lit-data-abs4
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-abs4
           path: _analytics-shards/lit-data-abs4
       - name: Checkout data shard — lit-data-abs3-omecon
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-abs3-omecon
           path: _analytics-shards/lit-data-abs3-omecon
       - name: Checkout data shard — lit-data-abs3-rest
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-abs3-rest
           path: _analytics-shards/lit-data-abs3-rest
-
-      # The two topic-filtered shards (Nature portfolio / Science) — same
-      # read-only checkout as the ABS ones above; their journals are curated
-      # topical slices (GenAI/LLMs, innovation, science of science), not full
-      # catalogues.
       - name: Checkout data shard — lit-data-nature
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-nature
           path: _analytics-shards/lit-data-nature
-
       - name: Checkout data shard — lit-data-science
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-science
           path: _analytics-shards/lit-data-science
-
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '20'
-
+          node-version: "20"
       - name: Refresh the working-papers archive (OpenAlex, gently paced)
         env:
           WP_MAILTO: kstouras+litwp@gmail.com
-          WP_MAX_AUTHORS: '250'
-          WP_BUDGET_MS: '2100000'   # 35-min ceiling
-          WP_PACE_MS: '1500'
-          # Sweep against native + FT50 + every satellite shard (checked out above;
-          # a not-yet-bootstrapped shard's dir is simply absent and skipped).
+          WP_MAX_AUTHORS: "250"
+          WP_BUDGET_MS: "2100000"
+          WP_PACE_MS: "1500"
           WP_CATALOG_DIRS: lit/data,lit/data-ft50,_analytics-shards/lit-data-abs4/data,_analytics-shards/lit-data-abs3-omecon/data,_analytics-shards/lit-data-abs3-rest/data,_analytics-shards/lit-data-nature/data,_analytics-shards/lit-data-science/data
         run: node lit/_scraper-workingpapers/build-data.mjs
-
-      - name: Commit refreshed archive
+      - name: Publish workingpapers data to its repository
         if: github.ref == 'refs/heads/master'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/data-workingpapers
-          if git diff --cached --quiet; then
-            echo "No archive changes — nothing to commit."
-            exit 0
-          fi
-          git commit -m "lit: refresh working-papers archive"
-          cp -r lit/data-workingpapers /tmp/wp-ours
-          for i in 1 2 3; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected (concurrent commit?) — replaying our archive on the new tip…"
-            git fetch origin "$GITHUB_REF_NAME"
-            # A curator or a newer matcher may have retired versions while we crawled.
-            # Replaying an old directory would resurrect them and delete new audits.
-            if ! git diff --quiet "$GITHUB_SHA" "origin/$GITHUB_REF_NAME" -- lit/data-workingpapers lit/_scraper-workingpapers; then
-              echo "::error::Working-paper data or matching rules changed during this crawl. Refusing to overwrite the newer archive; rerun from the current tip."
-              exit 1
-            fi
-            git reset --hard "origin/$GITHUB_REF_NAME"
-            rm -rf lit/data-workingpapers
-            cp -r /tmp/wp-ours lit/data-workingpapers
-            git add lit/data-workingpapers
-            if git diff --cached --quiet; then
-              echo "The tip already carries this archive state — nothing left to push."
-              exit 0
-            fi
-            git commit -m "lit: refresh working-papers archive"
-            sleep 5
-          done
-          echo "::error::Could not push the working-papers archive after 3 attempts."
-          exit 1
-
-      # A committed archive is not enough: the Pages deploy that follows can fail
-      # transiently. Poll the live site; if it didn't land, request a rebuild.
-      # Skipped while the archive is still empty (nothing meaningful to verify).
-      - name: Verify the live site serves this archive (self-heal a failed deploy)
+        run: node lit/_scraper/cloud-data.mjs publish workingpapers
+      - name: Verify published data
         if: github.ref == 'refs/heads/master'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LIVE_META: https://www.stouras.com/lit/data-workingpapers/meta.json
-        run: |
-          count=$(jq -r '.paperCount // 0' lit/data-workingpapers/meta.json)
-          if [ "$count" = "0" ]; then echo "Archive still empty — skipping the live-site check."; exit 0; fi
-          want=$(jq -r .lastPull lit/data-workingpapers/meta.json)
-          echo "Committed archive lastPull: $want"
-          poll() {
-            for i in $(seq 1 "$1"); do
-              live=$(curl -sf --max-time 20 "$LIVE_META?nc=${GITHUB_RUN_ID}-${RANDOM}" | jq -r .lastPull || echo "unreachable")
-              echo "  try $i/$1: live lastPull = $live"
-              if [ "$live" != "unreachable" ] && [ ! "$live" \< "$want" ]; then return 0; fi
-              sleep 60
-            done
-            return 1
-          }
-          if poll 8; then echo "Live site is serving the current archive."; exit 0; fi
-          echo "Live site still stale — requesting a GitHub Pages rebuild..."
-          curl -sf -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" \
-            || echo "WARNING: Pages rebuild request failed (check token permissions)."
-          if poll 10; then echo "Live site recovered after the rebuild request."; exit 0; fi
-          echo "::error::Live site is still serving a stale working-papers archive (wanted lastPull >= $want)."
-          exit 1
-
+        run: node lit/_scraper/cloud-data.mjs verify workingpapers
       - name: Summary
         if: always()
         run: |
@@ -173,3 +92,11 @@ jobs:
             echo '' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-workingpapers-${{ github.run_id }}
+          path: _lit-data/workingpapers/data/
+          retention-days: 14
+          if-no-files-found: ignore

@@ -74,7 +74,7 @@ JTYPES.forEach(([k,l]) => { const c=document.createElement('span'); c.className=
 let DB = null, FILE_LEN = 0;
 
 async function makeWorker() {
-  const BASE = '/lit/data/';
+  const BASE = '/lit-data-core/data/';
   let cfg = null;
   // Prefer chunked mode (data/db/lit-db.json manifest) — required on Pages,
   // where a single > 100 MB .db can't be committed. Fall back to a single-file
@@ -96,7 +96,7 @@ async function makeWorker() {
 async function init() {
   const st = document.getElementById('status');
   try {
-    FILE_LEN = parseInt(await (await fetch('/lit/data/lit.db.length')).text()) || undefined;
+    FILE_LEN = parseInt(await (await fetch('/lit-data-core/data/lit.db.length')).text()) || undefined;
   } catch (e) { FILE_LEN = undefined; }
   const t0 = performance.now();
   const worker = await makeWorker();
@@ -249,7 +249,7 @@ window.__run = run;
 init().catch(e => {
   document.getElementById('status').innerHTML =
     'could not open <code>lit.db</code> — this prototype needs the database built and served at ' +
-    '<code>/lit/data/lit.db</code> (run <code>lit/_scraper/emit-db.mjs</code>; for &gt;100 MB use chunked mode). ' +
+    '<code>/lit-data-core/data/lit.db</code> (run <code>lit/_scraper/emit-db.mjs</code>; for &gt;100 MB use chunked mode). ' +
     '<br><small>' + (e && e.message ? e.message : e) + '</small>';
   console.error(e);
 });

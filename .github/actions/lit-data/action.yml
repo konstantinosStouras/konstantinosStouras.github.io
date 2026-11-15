@@ -1,0 +1,65 @@
+name: Materialize cloud literature data
+description: Temporary runner data only; code remains in the website repository.
+inputs:
+  write:
+    description: Dataset this job may publish; none for readers.
+    default: none
+  ssh-key:
+    description: Deploy key for the single writable dataset.
+    default: ""
+  datasets:
+    description: Space-separated dataset IDs needed by this job.
+    default: core ft50 refs workingpapers analytics
+runs:
+  using: composite
+  steps:
+    - name: Checkout core data
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        repository: konstantinosStouras/lit-data-core
+        ref: main
+        path: _lit-data/core
+        fetch-depth: 1
+        ssh-key: ${{ inputs.write == 'core' && github.ref == 'refs/heads/master' && inputs.ssh-key || '' }}
+      if: contains(format(' {0} ', inputs.datasets), ' core ')
+    - name: Checkout ft50 data
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        repository: konstantinosStouras/lit-data-ft50
+        ref: main
+        path: _lit-data/ft50
+        fetch-depth: 1
+        ssh-key: ${{ inputs.write == 'ft50' && github.ref == 'refs/heads/master' && inputs.ssh-key || '' }}
+      if: contains(format(' {0} ', inputs.datasets), ' ft50 ')
+    - name: Checkout refs data
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        repository: konstantinosStouras/lit-data-refs
+        ref: main
+        path: _lit-data/refs
+        fetch-depth: 1
+        ssh-key: ${{ inputs.write == 'refs' && github.ref == 'refs/heads/master' && inputs.ssh-key || '' }}
+      if: contains(format(' {0} ', inputs.datasets), ' refs ')
+    - name: Checkout workingpapers data
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        repository: konstantinosStouras/lit-data-workingpapers
+        ref: main
+        path: _lit-data/workingpapers
+        fetch-depth: 1
+        ssh-key: ${{ inputs.write == 'workingpapers' && github.ref == 'refs/heads/master' && inputs.ssh-key || '' }}
+      if: contains(format(' {0} ', inputs.datasets), ' workingpapers ')
+    - name: Checkout analytics data
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        repository: konstantinosStouras/lit-data-analytics
+        ref: main
+        path: _lit-data/analytics
+        fetch-depth: 1
+        ssh-key: ${{ inputs.write == 'analytics' && github.ref == 'refs/heads/master' && inputs.ssh-key || '' }}
+      if: contains(format(' {0} ', inputs.datasets), ' analytics ')
+    - name: Mount data at crawler paths
+      shell: bash
+      run: node lit/_scraper/cloud-data.mjs mount
+      env:
+        LIT_DATA_IDS: ${{ inputs.datasets }}

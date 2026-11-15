@@ -1,49 +1,33 @@
 name: lit — e-mail alerts mailer
-
-# Sends the digest e-mails behind the "E-mail alerts" panel on
-# stouras.com/lit/. Runs after successful data workflows, with an hourly fallback,
-# committed a fresh recent.json, and e-mails each user the new papers that match
-# their saved alerts (per their chosen frequency: immediate / daily / weekly /
-# monthly). See lit/_scraper/alerts-mailer.mjs and
-# lit/_EMAIL-ALERTS-SETUP.md.
-#
-# It stays a clean no-op until the secrets below are configured, so it does not
-# fail before you set things up. Required repo secrets:
-#   FIREBASE_SERVICE_ACCOUNT  – JSON of a Firebase service-account key
-#   SMTP_USER, SMTP_PASS      – SMTP login (e.g. a Gmail address + App Password)
-# Optional: SMTP_HOST (default smtp.gmail.com), SMTP_PORT (default 465),
-#   ALERTS_FROM (default SMTP_USER), ALERTS_FROM_NAME (default "The Lit").
-
 on:
   schedule:
-    - cron: '17 * * * *'      # fallback for satellite data updates; schedules may be delayed
+    - cron: 17 * * * *
   workflow_run:
     workflows:
-      - 'lit — check for newly-published papers (incremental)'
-      - 'lit — check for new FT50 catalog papers (incremental)'
-      - 'lit — update multi-journal data'
-      - 'lit — update FT50 (merged catalog) data'
-      - 'lit — update working-papers archive'
-    types: [completed]
-    branches: [master]
+      - lit — check for newly-published papers (incremental)
+      - lit — check for new FT50 catalog papers (incremental)
+      - lit — update multi-journal data
+      - lit — update FT50 (merged catalog) data
+      - lit — update working-papers archive
+    types:
+      - completed
+    branches:
+      - master
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run — read alerts and print, but send nothing'
+        description: Dry run — read alerts and print, but send nothing
         type: boolean
         default: false
       rewind:
-        description: 'Recovery: clear high-water marks on recently-created alerts (does not send). Run a normal dispatch afterwards to deliver.'
+        description: "Recovery: clear high-water marks on recently-created alerts (does not send). Run a normal dispatch afterwards to deliver."
         type: boolean
         default: false
-
 permissions:
-  contents: read              # reads the committed recent.json; never commits
-
+  contents: read
 concurrency:
   group: lit-alerts-mail
   cancel-in-progress: false
-
 jobs:
   mail:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
@@ -51,40 +35,38 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || 'master' }}
           filter: blob:none
           sparse-checkout-cone-mode: false
-          sparse-checkout: |
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
             /lit/
+            !/lit/data/
+            !/lit/data-ft50/
             !/lit/data-refs/
-            !/lit/data/db/
-            !/lit/analytics/
-            !/lit/sqlite/
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
         with:
-          node-version: '22'
-
-      # BEFORE anything can be sent. Both are offline (no network, no
-      # credentials, no npm dependency), and both guard what this job is about
-      # to put in somebody's inbox: the mailer's own matching and renderers,
-      # and the review gate — which entries may be announced at all, and that
-      # changelog.json is shaped so every entry can actually be reviewed. An
-      # entry with no id, or two sharing one, would otherwise hold every later
-      # announcement behind it with nothing on any screen to publish.
+          write: none
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
       - name: Offline checks
         run: |
           node lit/_scraper/alerts-mailer.mjs --selftest
           node lit/_scraper/alerts-reliability-selftest.mjs
           node lit/_scraper/news-selftest.mjs
-
       - name: Install mailer dependencies
         run: npm install --no-save --ignore-scripts firebase-admin@12.7.0 nodemailer@6.10.1
-
       - name: Send e-mail alerts
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

@@ -1,0 +1,46 @@
+name: lit — cloud storage checks
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - lit/_scraper/cloud-data*
+      - lit/data-storage.json
+      - .github/actions/lit-data/**
+      - .github/workflows/lit-cloud-storage-checks.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /lit/
+            /tools/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - uses: ./.github/actions/lit-data
+      - name: Verify cloud data and crawler inputs
+        run: |-
+          node lit/_scraper/cloud-data-selftest.mjs
+          node lit/_scraper/analytics-selftest.mjs
+          node lit/_scraper/navigation-selftest.mjs
+          node lit/_scraper/abstract-display-selftest.mjs
+          node lit/_scraper-refs/selftest.mjs
+          node lit/_scraper-refs/citedby-selftest.mjs
+          node lit/_scraper-workingpapers/selftest.mjs
+          node lit/_scraper/incremental-selftest.mjs
+          node lit/_scraper-ft50/incremental-selftest.mjs

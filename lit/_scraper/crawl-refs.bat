@@ -1,4 +1,11 @@
 @echo off
+echo Literature datasets now live in separate GitHub repositories.
+echo Run a cloud job from the Actions tab of konstantinosStouras.github.io.
+echo See lit\_CLOUD-DATA.md for commands and specialist browser harvesting.
+exit /b 1
+
+REM Previous local-only implementation retained below for reference.
+@echo off
 REM ==========================================================================
 REM  crawl-refs.bat  -  Resilient local crawl of the in-catalog CITATION GRAPH
 REM  (lit/data-refs). CI does this ~18% done over WEEKS; a continuous local run

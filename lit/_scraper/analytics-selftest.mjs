@@ -10,7 +10,7 @@ let count = 0;
 function check(label, fn) { fn(); count++; console.log('ok ' + label); }
 const html = fs.readFileSync(path.join(lit, 'analytics/index.html'), 'utf8');
 const start = html.indexOf('(function () {', html.indexOf('<script'));
-const stop = html.indexOf("  fetch('./data.json')", start);
+const stop = html.indexOf("  fetch('/lit-data-analytics/data/data.json')", start);
 assert(start >= 0 && stop > start);
 const nodes = {};
 const node = id => nodes[id] ||= { innerHTML: '', textContent: '', style: {}, querySelectorAll: () => [], setAttribute() {} };

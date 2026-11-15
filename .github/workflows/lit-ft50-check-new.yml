@@ -1,112 +1,56 @@
 name: lit — check for new FT50 catalog papers (incremental)
-
-# The daily lit-ft50-update-data.yml re-pulls all 50 FT50 journals' ENTIRE
-# Crossref back-catalogues, so it can only run once a day. This lighter job runs
-# the same pipeline in --incremental mode for a SMALL configured subset of
-# journals (FT50_INCR_JOURNALS; default: Econometrica + EJOR): it asks Crossref
-# for only the records it (re)indexed in the last few days
-# (filter=from-index-date), upserts them into the committed papers-<key>.json,
-# and rewrites only the small derived files (recent/meta/sources/registry).
-#
-# Why these journals: lit's own fast pass (lit-check-new.yml) already covers the
-# eight native INFORMS/SAGE Articles-in-Advance journals, so this job exists for
-# the ones that live ONLY in the FT50 catalog.
-#   * Econometrica — its publisher assigns an accepted paper straight to a future
-#     issue, so Crossref never lists it as a no-volume advance article, and the
-#     once-a-day build was otherwise the only thing that ever picked a new
-#     Econometrica paper up (up to a day late).
-#   * EJOR (European Journal of Operational Research, the ABS 4 notFT extra) —
-#     the catalog's highest-volume journal: ~700 papers/year across 24 issues
-#     plus a ~40/month Articles-in-Press stream, so 1-2 genuinely-new records
-#     land most days. Its back-catalogue is complete (see
-#     lit/_scraper/coverage-audit.mjs); it was FRESHNESS that lagged, with
-#     every day's new papers arriving in one nightly batch.
-# Polling them here surfaces new papers within minutes of Crossref indexing them,
-# and joins them to "Recently added", exactly like the native journals.
-#
-# It writes NOTHING when nothing new arrived, so it commits (and triggers a Pages
-# redeploy) ONLY on a genuine change — that is what lets it run frequently without
-# degrading. Enrichment (pre-prints, citations) and the heavy authors/affiliations
-# aggregates are left to the daily full build.
-
 on:
   schedule:
-    # Every 20 minutes. One Crossref call per polled journal per ISSN; the
-    # publishers' indexing lag is hours, so this is about the finest useful
-    # cadence. Most runs find nothing and exit without a commit.
-    - cron: '*/20 * * * *'
-  workflow_dispatch: {}      # run on demand from the Actions tab
+    - cron: "*/20 * * * *"
+  workflow_dispatch: {}
   push:
-    # Run once as a check whenever the pipeline itself changes.
     paths:
-      - '.github/workflows/lit-ft50-check-new.yml'
-      - 'lit/_scraper-ft50/build-data.mjs'
-
-# Share the daily FT50 build's concurrency group: this job must never run while
-# the daily full build, a pre-print backfill or the citations job is committing,
-# or the two could race a papers-<key>.json push / Pages deploy. Overlapping
-# fires simply queue (and coalesce) behind the running one.
+      - .github/workflows/lit-ft50-check-new.yml
+      - lit/_scraper-ft50/build-data.mjs
 concurrency:
-  group: lit-ft50-update-data-${{ github.ref }}
+  group: lit-cloud-ft50-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
-  contents: write            # needed to commit the refreshed data back
-
+  contents: write
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: '20'
-
-      # Always runs — on a feature branch / PR this validates the incremental
-      # pass end to end without committing.
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: ft50
+          ssh-key: ${{ secrets.LIT_DATA_FT50_DEPLOY_KEY }}
+          datasets: core ft50
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
       - name: Incremental check (Crossref from-index-date)
         env:
-          S2_API_KEY: ${{ secrets.S2_API_KEY }}   # optional — moves the S2 leg off the anonymous pool
-          FT50_MAILTO: kstouras+litft50@gmail.com   # Crossref "polite pool" contact
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}
+          FT50_MAILTO: kstouras+litft50@gmail.com
         run: node lit/_scraper-ft50/build-data.mjs --incremental
-
-      - name: Commit new/updated papers (master only)
-        # Only master carries the committed dataset. On a rejected push (master
-        # advanced meanwhile — almost always a human merge, since the concurrency
-        # group serializes the CI data writers) we discard our commit, hard-reset
-        # to the new tip and re-run the incremental pass against it: the pass is
-        # idempotent and additive, so this never mis-merges the one-line JSON files
-        # nor loses a concurrent commit's data.
+      - name: Publish ft50 data to its repository
         if: github.ref == 'refs/heads/master'
         env:
           FT50_MAILTO: kstouras+litft50@gmail.com
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for attempt in 1 2 3 4; do
-            git add lit/data-ft50
-            if git diff --cached --quiet; then
-              echo "No new papers this run — nothing to commit."
-              exit 0
-            fi
-            git commit -m "lit-ft50: incremental refresh (new papers in the polled journals)"
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $attempt."
-              exit 0
-            fi
-            echo "Push rejected — syncing to the new tip and re-running the incremental pass."
-            git reset --hard HEAD~1
-            git fetch origin "$GITHUB_REF_NAME"
-            git reset --hard "origin/$GITHUB_REF_NAME"
-            node lit/_scraper-ft50/build-data.mjs --incremental
-            sleep 3
-          done
-          echo "::error::Could not push the incremental update after 4 attempts."
-          exit 1
-
+        run: node lit/_scraper/cloud-data.mjs publish ft50
       - name: Summary
         if: always()
         run: |
@@ -117,3 +61,11 @@ jobs:
             echo '' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-ft50-${{ github.run_id }}
+          path: _lit-data/ft50/data/
+          retention-days: 14
+          if-no-files-found: ignore

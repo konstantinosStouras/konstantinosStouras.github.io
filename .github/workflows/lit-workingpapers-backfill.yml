@@ -1,91 +1,58 @@
 name: lit — backfill working-papers archive
-
-# Grows the Working Papers archive for stouras.com/lit/ — the UNPUBLISHED
-# working papers / pre-prints (SSRN, NBER, arXiv, OSF) of every listed author —
-# by running lit/_scraper-workingpapers/build-data.mjs on a small, gently
-# paced slice of authors every few hours, then committing lit/data-workingpapers/
-# back. This is a deliberately SLOW backfill: OpenAlex is queried ~1 request /
-# 1.5 s, each run does a bounded slice (WP_MAX_AUTHORS) and checkpoints after
-# every author, so the archive fills in over WEEKS without tripping the API's
-# rate limits. Management Science / M&SOM / POM authors (last 15 years) are
-# crawled first, then the rest of the catalog. See _HOW-IT-WORKS.md.
-
 on:
   schedule:
-    # Eight slices a day (every 3 h at :20), offset from the daily builds.
-    - cron: '20 */3 * * *'
-  workflow_dispatch: {}      # run on demand from the Actions tab
-
-# SAME concurrency group as the daily working-papers build — both commit
-# lit/data-workingpapers, so they must queue behind each other, never race.
+    - cron: 20 */3 * * *
+  workflow_dispatch: {}
 concurrency:
-  group: lit-workingpapers-${{ github.ref }}
+  group: lit-cloud-workingpapers-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
-  contents: write            # needed to commit the grown archive back
-
+  contents: write
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    # A generous slice + gentle pacing; the crawler's own wall-clock budget
-    # (WP_BUDGET_MS) stops it well before this hard backstop.
     timeout-minutes: 75
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: '20'
-
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: workingpapers
+          ssh-key: ${{ secrets.LIT_DATA_WORKINGPAPERS_DEPLOY_KEY }}
+          datasets: core ft50 workingpapers
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
       - name: Crawl a slice of authors' working papers (OpenAlex, gently paced)
         env:
-          WP_MAILTO: kstouras+litwp@gmail.com   # distinct OpenAlex quota identity
-          WP_MAX_AUTHORS: '600'                  # authors per run (resumable across runs)
-          WP_BUDGET_MS: '3000000'                # 50-min crawl ceiling
-          WP_PACE_MS: '1500'                     # ~1 request / 1.5 s — deliberately slow
+          WP_MAILTO: kstouras+litwp@gmail.com
+          WP_MAX_AUTHORS: "600"
+          WP_BUDGET_MS: "3000000"
+          WP_PACE_MS: "1500"
         run: node lit/_scraper-workingpapers/build-data.mjs
-
-      - name: Commit the grown archive
-        # always(): even if the crawl is killed mid-run, commit the checkpointed
-        # progress (the crawl cursor + any working papers found) so the slot's
-        # work is never lost. Only the default branch carries the committed data.
+      - name: Publish workingpapers data to its repository
         if: always() && github.ref == 'refs/heads/master'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/data-workingpapers
-          if git diff --cached --quiet; then
-            echo "No archive changes — nothing to commit."
-            exit 0
-          fi
-          git commit -m "lit: backfill working-papers archive"
-          # Replay our directory only when concurrent commits touched other files.
-          # Curated reconciliations and newer matching rules take precedence.
-          cp -r lit/data-workingpapers /tmp/wp-ours
-          for i in 1 2 3; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected (concurrent commit?) — replaying our archive on the new tip…"
-            git fetch origin "$GITHUB_REF_NAME"
-            if ! git diff --quiet "$GITHUB_SHA" "origin/$GITHUB_REF_NAME" -- lit/data-workingpapers lit/_scraper-workingpapers; then
-              echo "::error::Working-paper data or matching rules changed during this crawl. Refusing to overwrite the newer archive; rerun from the current tip."
-              exit 1
-            fi
-            git reset --hard "origin/$GITHUB_REF_NAME"
-            rm -rf lit/data-workingpapers
-            cp -r /tmp/wp-ours lit/data-workingpapers
-            git add lit/data-workingpapers
-            if git diff --cached --quiet; then
-              echo "The tip already carries this archive state — nothing left to push."
-              exit 0
-            fi
-            git commit -m "lit: backfill working-papers archive"
-            sleep 5
-          done
-          echo "::error::Could not push the working-papers archive after 3 attempts."
-          exit 1
+        run: node lit/_scraper/cloud-data.mjs publish workingpapers
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-workingpapers-${{ github.run_id }}
+          path: _lit-data/workingpapers/data/
+          retention-days: 14
+          if-no-files-found: ignore

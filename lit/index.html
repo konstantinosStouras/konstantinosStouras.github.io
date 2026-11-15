@@ -1073,17 +1073,17 @@
 // GitHub Pages serves them from its CDN, same origin as this page. To point
 // the page at a different dataset, change only these paths.
 // See lit/_HOW-IT-WORKS.md for the full picture.
-const SOURCES_URL = './data/sources.json';
-const AUTHORS_URL = './data/authors.json';
-const AFFILIATIONS_URL = './data/affiliations.json';
-const META_URL = './data/meta.json';
-const RECENT_URL = './data/recent.json';
+const SOURCES_URL = '/lit-data-core/data/sources.json';
+const AUTHORS_URL = '/lit-data-core/data/authors.json';
+const AFFILIATIONS_URL = '/lit-data-core/data/affiliations.json';
+const META_URL = '/lit-data-core/data/meta.json';
+const RECENT_URL = '/lit-data-core/data/recent.json';
 // Companion of recent.json: the uncapped per-journal x per-day tally of
 // additions (see loadRecentCounts). Every dataset publishes one beside its
 // recent.json under the same name.
 const RECENT_COUNTS_FILE = 'recent-counts.json';
-const RECENT_COUNTS_URL = './data/' + RECENT_COUNTS_FILE;
-const DATA_BASE = './data/';
+const RECENT_COUNTS_URL = '/lit-data-core/data/' + RECENT_COUNTS_FILE;
+const DATA_BASE = '/lit-data-core/data/';
 
 // Verified Scholar observations are kept separately from API-generated shards
 // so daily Crossref/OpenAlex/Semantic Scholar builds cannot overwrite them.
@@ -1101,9 +1101,9 @@ const scholarCitationsReady = fetch(DATA_BASE + 'scholar-citations.json', { cach
 // journals that are not among the ten native sources are added to the
 // journal filter, and their papers files are fetched lazily only when they
 // enter the view's scope.
-const FT50_SOURCES_URL = './data-ft50/sources.json';
-const FT50_DATA_BASE = './data-ft50/';
-const FT50_RECENT_URL = './data-ft50/recent.json';
+const FT50_SOURCES_URL = '/lit-data-ft50/data/sources.json';
+const FT50_DATA_BASE = '/lit-data-ft50/data/';
+const FT50_RECENT_URL = '/lit-data-ft50/data/recent.json';
 
 // The Working Papers archive — the UNPUBLISHED working papers / pre-prints
 // (SSRN, NBER, arXiv, OSF) of every listed author, in lit/data-workingpapers/,
@@ -1113,8 +1113,8 @@ const FT50_RECENT_URL = './data-ft50/recent.json';
 // neededExtraKeys), so a normal search stays published-only. Kept in its own
 // dataset so it can move to a dedicated lit-data-workingpapers Pages repo when
 // it nears the 1 GB limit — then WP_DATA_BASE becomes '/lit-data-workingpapers/data/'.
-const WP_SOURCES_URL = './data-workingpapers/sources.json';
-const WP_DATA_BASE = './data-workingpapers/';
+const WP_SOURCES_URL = '/lit-data-workingpapers/data/sources.json';
+const WP_DATA_BASE = '/lit-data-workingpapers/data/';
 // Journal keys that belong to the archive (populated from its manifest); backs
 // the 'wp' journal type (journalTypeKeys) and the opt-in lazy-load rule.
 const WP_KEYS = new Set();
@@ -1139,26 +1139,26 @@ function isWorkingPaperRow(p) {
 // REFS_DATA_BASE becomes '/lit-data-refs/data/'. The dataset ships empty
 // (manifest with no shards), so the toggles stay hidden until the backfill
 // populates it. See lit/_scraper-refs/_HOW-IT-WORKS.md.
-const REFS_DATA_BASE = './data-refs/';
+const REFS_DATA_BASE = '/lit-data-refs/data/';
 const REFS_MANIFEST_URL = REFS_DATA_BASE + 'manifest.json';
-let refsManifest = null;       // ./data-refs/manifest.json once fetched (null until then)
+let refsManifest = null;       // /lit-data-refs/data/manifest.json once fetched (null until then)
 const refsShardCache = {};     // jkey -> { citingDoi: [citedDoi,…] } (lazy, per journal)
 const refsShardPromise = {};   // jkey -> in-flight fetch promise (idempotence)
-let refsIndex = null;          // ./data-refs/refs-index.json once fetched
+let refsIndex = null;          // /lit-data-refs/data/refs-index.json once fetched
 let refsIndexPromise = null;   // in-flight index fetch (idempotence)
 // The per-paper cited-references count (citingDoi -> N) — a tiny companion file
 // so a card can show "(N)" on its toggle WITHOUT downloading the multi-MB
 // per-journal shard. Loaded once, lazily, in the background (never blocks first
 // paint); toggles are annotated in place when it arrives. Grows with the graph
 // and is shardable later like the shards themselves.
-let refsCounts = null;         // ./data-refs/refs-counts.json once fetched
+let refsCounts = null;         // /lit-data-refs/data/refs-counts.json once fetched
 let refsCountsPromise = null;  // in-flight counts fetch (idempotence)
 // The inverse direction — the catalog papers that CITE each paper, sharded by
 // the CITED paper's journal (cited-<jkey>.json) with its own tiny count
 // companion (cited-counts.json, citedDoi -> N). Same lazy discipline as above.
 const citedShardCache = {};    // jkey -> { citedDoi: [citingDoi,…] } (lazy, per journal)
 const citedShardPromise = {};  // jkey -> in-flight fetch promise (idempotence)
-let citedCounts = null;        // ./data-refs/cited-counts.json once fetched
+let citedCounts = null;        // /lit-data-refs/data/cited-counts.json once fetched
 let citedCountsPromise = null; // in-flight counts fetch (idempotence)
 // The "Citing papers of" FOCAL FILTER (the citation search): a focal paper
 // (DOI or title) or author is resolved — from the graph files above, never a
@@ -1618,7 +1618,7 @@ let sourcesLoaded = 0, sourcesTotal = 0;
 // loads that journal; filtering/searching with no journal scope loads
 // everything, progressively, with a note in the results bar. Once loaded, a
 // journal stays in memory for the session.
-let ft50Manifest = [];      // ./data-ft50/sources.json, once fetched
+let ft50Manifest = [];      // /lit-data-ft50/data/sources.json, once fetched
 const EXTRA_SRC = {};       // key -> manifest entry (journals not native here)
 const extraState = {};      // key -> 'pending' | 'loading' | 'done' | 'missing'
 const extraPromise = {};    // key -> in-flight fetch promise (idempotence)
@@ -4592,9 +4592,9 @@ async function initLitDb() {
   try {
     await load('/lit/sqlite/lit-query.js');
     await load('/lit/sqlite/index.js');
-    var mf = await (await fetch('/lit/data/db/lit-db.json')).json();
+    var mf = await (await fetch('/lit-data-core/data/db/lit-db.json')).json();
     var w = await createDbWorker(
-      [{ from: 'inline', config: { serverMode: 'chunked', urlPrefix: '/lit/data/db/' + mf.base, serverChunkSize: mf.serverChunkSize, databaseLengthBytes: mf.databaseLengthBytes, suffixLength: mf.suffixLength, requestChunkSize: 8192 } }],
+      [{ from: 'inline', config: { serverMode: 'chunked', urlPrefix: '/lit-data-core/data/db/' + mf.base, serverChunkSize: mf.serverChunkSize, databaseLengthBytes: mf.databaseLengthBytes, suffixLength: mf.suffixLength, requestChunkSize: 8192 } }],
       '/lit/sqlite/sqlite.worker.js', '/lit/sqlite/sql-wasm.wasm');
     litDb = w.db; litDbReady = true;
     if (!recentMode) applyFilters();   // re-render current view now the DB is open

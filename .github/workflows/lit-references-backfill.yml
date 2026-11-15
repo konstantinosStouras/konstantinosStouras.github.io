@@ -1,94 +1,59 @@
 name: lit — backfill citation graph
-
-# Grows the citation-graph dataset for stouras.com/lit/ — for every listed
-# paper, the references it cites that ALSO belong to the catalog — by running
-# lit/_scraper-refs/build-refs.mjs on a small, gently paced slice of papers
-# every few hours, then committing lit/data-refs/ back. This is a
-# deliberately SLOW backfill: Crossref is queried ~1 request / 0.4 s, each run
-# fetches a bounded slice (REFS_MAX_PAPERS) and checkpoints as it goes, so the
-# graph fills in over WEEKS without tripping the API's rate limits. Management
-# Science / M&SOM / POM / PNAS (all years) are fetched first, then the UTD24
-# and FT50 journals (newest years first), then the rest. A published paper's
-# reference list never changes, so once fetched a paper is frozen; every run
-# re-intersects the whole cache with the current catalog, so catalog growth
-# surfaces new edges for free. See lit/_scraper-refs/_HOW-IT-WORKS.md.
-
 on:
   schedule:
-    # Eight slices a day (every 3 h at :40), offset from the daily builds and
-    # the other backfills.
-    - cron: '40 */3 * * *'
-  workflow_dispatch: {}      # run on demand from the Actions tab
-
-# Own concurrency group — only this workflow writes lit/data-refs, so runs
-# just queue behind each other, never race a commit.
+    - cron: 40 */3 * * *
+  workflow_dispatch: {}
 concurrency:
-  group: lit-references-${{ github.ref }}
+  group: lit-cloud-refs-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
-  contents: write            # needed to commit the grown dataset back
-
+  contents: write
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    # A generous slice + gentle pacing; the builder's own wall-clock budget
-    # (REFS_BUDGET_MS) stops it well before this hard backstop.
     timeout-minutes: 55
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: '20'
-
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: refs
+          ssh-key: ${{ secrets.LIT_DATA_REFS_DEPLOY_KEY }}
+          datasets: core ft50 refs
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
       - name: Fetch a slice of papers' references (Crossref, gently paced)
         env:
-          S2_API_KEY: ${{ secrets.S2_API_KEY }}   # optional — moves the S2 leg off the anonymous pool
-          REFS_MAILTO: kstouras+litrefs@gmail.com   # distinct Crossref/OpenAlex quota identity
-          REFS_MAX_PAPERS: '6000'                    # papers per run (resumable across runs)
-          REFS_BUDGET_MS: '2700000'                  # 45-min fetch ceiling
-          REFS_PACE_MS: '400'                        # ~1 request / 0.4 s — deliberately slow
+          S2_API_KEY: ${{ secrets.S2_API_KEY }}
+          REFS_MAILTO: kstouras+litrefs@gmail.com
+          REFS_MAX_PAPERS: "6000"
+          REFS_BUDGET_MS: "2700000"
+          REFS_PACE_MS: "400"
         run: node lit/_scraper-refs/build-refs.mjs
-
-      - name: Commit the grown citation graph
-        # always(): even if the fetch is killed mid-run, commit the checkpointed
-        # progress (the crawl cursor + any edges found) so the slot's work is
-        # never lost. Only the default branch carries the committed data.
+      - name: Publish refs data to its repository
         if: always() && github.ref == 'refs/heads/master'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/data-refs
-          if git diff --cached --quiet; then
-            echo "No dataset changes — nothing to commit."
-            exit 0
-          fi
-          git commit -m "lit: backfill citation graph"
-          # Only this workflow writes lit/data-refs, so our copy of that
-          # directory is authoritative. On a rejected push (a concurrent commit
-          # to master touching OTHER files), replay our directory onto the new
-          # tip and retry.
-          cp -r lit/data-refs /tmp/refs-ours
-          for i in 1 2 3; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected (concurrent commit?) — replaying our dataset on the new tip…"
-            git fetch origin "$GITHUB_REF_NAME"
-            git reset --hard "origin/$GITHUB_REF_NAME"
-            rm -rf lit/data-refs
-            cp -r /tmp/refs-ours lit/data-refs
-            git add lit/data-refs
-            if git diff --cached --quiet; then
-              echo "The tip already carries this dataset state — nothing left to push."
-              exit 0
-            fi
-            git commit -m "lit: backfill citation graph"
-            sleep 5
-          done
-          echo "::error::Could not push the citation graph after 3 attempts."
-          exit 1
+        run: node lit/_scraper/cloud-data.mjs publish refs
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-refs-${{ github.run_id }}
+          path: _lit-data/refs/data/
+          retention-days: 14
+          if-no-files-found: ignore

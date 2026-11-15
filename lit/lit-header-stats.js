@@ -1,7 +1,7 @@
 /* One complete catalog snapshot for every page; no paper downloads required. */
 (function (root) {
   'use strict';
-  var BASES = ['/lit/data/', '/lit/data-ft50/', '/lit-data-abs4/data/', '/lit-data-abs3-omecon/data/', '/lit-data-abs3-rest/data/', '/lit-data-nature/data/', '/lit-data-science/data/'];
+  var BASES = ['/lit-data-core/data/', '/lit-data-ft50/data/', '/lit-data-abs4/data/', '/lit-data-abs3-omecon/data/', '/lit-data-abs3-rest/data/', '/lit-data-nature/data/', '/lit-data-science/data/'];
   function summarise(catalogs) {
     var counts = Object.create(null), authors = 0, year = Infinity, lastPull = '';
     catalogs.forEach(function (catalog) {

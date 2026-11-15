@@ -1,4 +1,11 @@
 @echo off
+echo Literature datasets now live in separate GitHub repositories.
+echo Run a cloud job from the Actions tab of konstantinosStouras.github.io.
+echo See lit\_CLOUD-DATA.md for commands and specialist browser harvesting.
+exit /b 1
+
+REM Previous local-only implementation retained below for reference.
+@echo off
 REM ==========================================================================
 REM  crawl-workingpapers.bat  -  Resilient local crawl of the WORKING PAPERS
 REM  archive (lit/data-workingpapers). CI does this ~3% done over 35-40 DAYS; a

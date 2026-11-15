@@ -1,4 +1,11 @@
 @echo off
+echo Literature datasets now live in separate GitHub repositories.
+echo Run a cloud job from the Actions tab of konstantinosStouras.github.io.
+echo See lit\_CLOUD-DATA.md for commands and specialist browser harvesting.
+exit /b 1
+
+REM Previous local-only implementation retained below for reference.
+@echo off
 REM ==========================================================================
 REM  crawl-mksc-editors.bat  -  MARKETING SCIENCE Senior Editors ONLY.
 REM  Crawls pubsonline.informs.org (blocked for cloud IPs, so this must run

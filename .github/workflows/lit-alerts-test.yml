@@ -1,52 +1,49 @@
 name: lit — e-mail alert test sends
-
-# Delivers the one-off TEST e-mails users request from the "E-mail alerts" panel
-# on stouras.com/lit/ ("Send me a test e-mail"). A static GitHub Pages site
-# can't send mail, so the page queues each request at users/{uid}/testEmails and
-# this job flushes the queue by running the mailer in --test-emails mode. It runs
-# often so a requested test arrives within a few minutes, separate from the daily
-# digest run (lit-alerts-mail.yml).
-#
-# Like the daily mailer it is a clean no-op until the SAME secrets are set
-# (FIREBASE_SERVICE_ACCOUNT + SMTP_USER/SMTP_PASS), so it never fails before
-# setup. Tune or lower the schedule below (or disable this workflow) if you would
-# rather deliver test e-mails less frequently. See lit/_EMAIL-ALERTS-SETUP.md.
-
 on:
   schedule:
-    - cron: '*/15 * * * *'     # every 15 minutes — a "test now"-ish cadence
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run — read requests and print, but send nothing'
+        description: Dry run — read requests and print, but send nothing
         type: boolean
         default: false
-
 permissions:
-  contents: read              # reads the committed recent.json; never commits
-
+  contents: read
 concurrency:
   group: lit-alerts-test
   cancel-in-progress: false
-
 jobs:
   test-mail:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
         with:
-          node-version: '20'
-
+          write: none
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
       - name: Install mailer dependencies
         run: npm install --no-save --ignore-scripts firebase-admin@12.7.0 nodemailer@6.10.1
-
       - name: Send test e-mails
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

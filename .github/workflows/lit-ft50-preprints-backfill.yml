@@ -1,92 +1,55 @@
 name: lit-ft50 — backfill pre-print links
-
-# Incrementally links free pre-prints (arXiv/SSRN/bioRxiv/medRxiv/NBER/OSF)
-# for lit's FT50 catalog (lit/data-ft50/) by running
-# lit/_scraper-ft50/preprints-ci.mjs every couple of hours: each run does
-# a bounded (~40 min) slice of title+author searches across three engines —
-# OpenAlex (bonus net; it cuts an identity off after ~100 title searches/day),
-# Crossref (which mints every non-arXiv pre-print host's DOIs) and arXiv's
-# own API — and commits the refreshed data back. The first-deploy backlog
-# (~150k papers) clears over a couple of weeks; after that each run is a
-# cheap near-no-op that covers newly added papers. Twin of
-# lit-preprints-backfill.yml (which covers lit's native eight sources) — see
-# the header of preprints-ci.mjs.
-
 on:
   schedule:
-    # Twelve slices a day (even hours at :15 — never the 07:15 daily catalog
-    # build, which is an odd hour; an overlap would only queue anyway, same
-    # concurrency group). Offset from lit-preprints-backfill.yml's even-hour
-    # :45 runs; this dataset also has its own OpenAlex quota identity
-    # (FT50_MAILTO below), so the parallel backfills never starve each other.
-    - cron: '15 */2 * * *'
-  workflow_dispatch: {}      # run on demand from the Actions tab
-
-# SAME concurrency group as lit-ft50-update-data.yml — both workflows commit
-# lit/data-ft50, so they must queue behind each other, never race.
+    - cron: 15 */2 * * *
+  workflow_dispatch: {}
 concurrency:
-  group: lit-ft50-update-data-${{ github.ref }}
+  group: lit-cloud-ft50-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
-  contents: write            # needed to commit the refreshed data back
-
+  contents: write
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    # Hard backstop with real headroom: 6-min by-DOI seeding + 40-min search
-    # budget (whose last patient wait is deadline-capped) + apply/commit.
     timeout-minutes: 75
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: '20'
-
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: ft50
+          ssh-key: ${{ secrets.LIT_DATA_FT50_DEPLOY_KEY }}
+          datasets: core ft50
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
       - name: Backfill pre-print links (OpenAlex+Crossref+arXiv title-search, bounded)
         env:
-          FT50_MAILTO: kstouras+litft50@gmail.com   # this dataset's own OpenAlex quota identity
+          FT50_MAILTO: kstouras+litft50@gmail.com
         run: node lit/_scraper-ft50/preprints-ci.mjs
-
-      - name: Commit refreshed data
-        # always(): if the search step is killed (timeout/transient), commit
-        # whatever the checkpointed cache already holds — finds are monotonic
-        # and losing a whole run's links to a late kill would waste the slot.
+      - name: Publish ft50 data to its repository
         if: always() && github.ref == 'refs/heads/master'
-        # Same hardened push as lit-ft50-update-data.yml, with one difference:
-        # on a rejected push this run's tree may be STALER than what landed
-        # (e.g. a daily refresh with new papers), so instead of re-committing
-        # our tree we take the new tip's data and re-apply ONLY our cache finds
-        # onto it (preprints-ci.mjs --apply-only --merge-cache).
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/data-ft50
-          if git diff --cached --quiet; then
-            echo "No data changes — nothing to commit."
-            exit 0
-          fi
-          cp lit/data-ft50/_preprints.json /tmp/lit-ft50-preprints-ours.json
-          git commit -m "lit-ft50: backfill pre-print links"
-          for i in 1 2 3; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected (concurrent commit?) — re-applying our finds on the new tip…"
-            git fetch origin "$GITHUB_REF_NAME"
-            git reset --hard "origin/$GITHUB_REF_NAME"
-            node lit/_scraper-ft50/preprints-ci.mjs --apply-only --merge-cache=/tmp/lit-ft50-preprints-ours.json
-            git add lit/data-ft50
-            if git diff --cached --quiet; then
-              echo "The concurrent commit already contains these links — nothing left to push."
-              exit 0
-            fi
-            git commit -m "lit-ft50: backfill pre-print links"
-            sleep 5
-          done
-          echo "::error::Could not push the backfilled data after 3 attempts."
-          exit 1
+        run: node lit/_scraper/cloud-data.mjs publish ft50
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-ft50-${{ github.run_id }}
+          path: _lit-data/ft50/data/
+          retention-days: 14
+          if-no-files-found: ignore

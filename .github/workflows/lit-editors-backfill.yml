@@ -1,100 +1,63 @@
 name: lit — refresh editors (Crossref + publisher) and INFORMS abstracts
-
-# Refresh incomplete recent ISR/MkSc records from public Crossref metadata,
-# then attempt publisher HTML. A publisher block emits a warning and never
-# suppresses Crossref progress. Missing and partial records are retried.
-# Cached names are applied to native and FT50 journal/recent feeds together.
-# All cache merges preserve already verified names, including partial ISR
-# records, when replaying results after a concurrent data commit.
-
 on:
   schedule:
-    # Eight slices a day, off the other jobs' minute slots (see the sibling
-    # workflows); an overlap with the 05:30 daily build simply queues behind
-    # it (same concurrency group).
-    - cron: '35 */3 * * *'
-  workflow_dispatch: {}      # run on demand from the Actions tab
-
-# SAME concurrency group as lit-update-data.yml — this job commits lit/data
-# (the editors cache AND the served papers files), so it must queue behind the
-# daily build / incremental / preprints / citations jobs, never race them.
+    - cron: 35 */3 * * *
+  workflow_dispatch: {}
 concurrency:
-  group: lit-update-data-${{ github.ref }}
+  group: lit-cloud-core-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
-  contents: write            # needed to commit the refreshed data back
-
+  contents: write
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    # 45-min crawl budget + DOI-list load + apply/commit headroom. A blocked
-    # run ends in ~1 minute (first challenged page aborts the crawl).
     timeout-minutes: 55
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: '20'
-
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: core
+          ssh-key: ${{ secrets.LIT_DATA_CORE_DEPLOY_KEY }}
+          datasets: core ft50
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
       - name: Check editorial refresh regressions
         run: node lit/_scraper/editorial-refresh-selftest.mjs
-
       - name: Refresh recent editors via Crossref, then try publisher HTML
         env:
-          LIT_EDITORS_BUDGET_MS: '1500000'   # 25-min slice, including Crossref
-          LIT_EDITORS_MAX_FAILS: '12'        # dead/blocked host aborts fast
+          LIT_EDITORS_BUDGET_MS: "1500000"
+          LIT_EDITORS_MAX_FAILS: "12"
         run: node lit/_scraper/informs-editors-local.mjs
-
       - name: Crawl INFORMS full abstracts (teaser rows only, bounded, resume-safe)
-        # Same blocked-fast behavior: on a blocked runner this ends within a
-        # minute; if pubsonline answers, it fixes teaser abstracts (MkSc first,
-        # then MS and the other INFORMS journals) journal by journal.
         env:
-          LIT_ABSTRACTS_BUDGET_MS: '1200000'  # 20-min slice; leave time to commit
-          LIT_ABSTRACTS_MAX_FAILS: '12'
+          LIT_ABSTRACTS_BUDGET_MS: "1200000"
+          LIT_ABSTRACTS_MAX_FAILS: "12"
         run: node lit/_scraper/informs-abstracts-local.mjs
-
-      - name: Commit refreshed data
-        # always(): if the crawl step is killed late (timeout/transient), the
-        # continuously-saved cache still holds this run's finds — commit them.
+      - name: Publish core data to its repository
         if: always() && github.ref == 'refs/heads/master'
-        # Same hardened push as lit-preprints-backfill.yml: on a rejected push
-        # this run's tree may be STALER than what landed (daily build, new
-        # papers), so take the new tip and replay ONLY our finds onto it —
-        # merge our saved cache in (editor records never downgraded), then
-        # re-apply onto the tip's papers files (--apply-only --merge-cache).
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/data lit/data-ft50
-          if git diff --cached --quiet; then
-            echo "No data changes — nothing to commit (blocked runner or fully-cached slice)."
-            exit 0
-          fi
-          cp lit/data/_informs-editors.json /tmp/lit-editors-ours.json
-          cp lit/data/_informs-abstracts.json /tmp/lit-abstracts-ours.json
-          git commit -m "lit: INFORMS editors/abstracts backfill (pubsonline crawl)"
-          for i in 1 2 3; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected (concurrent commit?) — replaying our finds on the new tip…"
-            git fetch origin "$GITHUB_REF_NAME"
-            git reset --hard "origin/$GITHUB_REF_NAME"
-            node lit/_scraper/informs-editors-local.mjs --apply-only --merge-cache=/tmp/lit-editors-ours.json
-            node lit/_scraper/informs-abstracts-local.mjs --apply-only --merge-cache=/tmp/lit-abstracts-ours.json
-            git add lit/data lit/data-ft50
-            if git diff --cached --quiet; then
-              echo "The concurrent commit already contains these editors — nothing left to push."
-              exit 0
-            fi
-            git commit -m "lit: ISR/MkSc editors backfill (pubsonline crawl)"
-            sleep 5
-          done
-          echo "::error::Could not push the editors data after 3 attempts."
-          exit 1
+        run: node lit/_scraper/cloud-data.mjs publish core
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-core-${{ github.run_id }}
+          path: _lit-data/core/data/
+          retention-days: 14
+          if-no-files-found: ignore

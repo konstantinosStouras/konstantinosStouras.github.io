@@ -26,3 +26,11 @@ __pycache__/
 lab/search-v2/_functions/functions/node_modules/
 lab/search-v2/*-debug.log
 lab/search-v2/.firebase/
+
+# Temporary cloud dataset checkouts; generated outputs live in data repositories.
+/_lit-data/
+/lit/data/
+/lit/data-ft50/
+/lit/data-refs/
+/lit/data-workingpapers/
+/lit/analytics/*.json

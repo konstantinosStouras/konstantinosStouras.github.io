@@ -1,208 +1,118 @@
 name: lit — update analytics summary
-
-# Pre-aggregates the whole Lit corpus — lit/data/ + lit/data-ft50/ PLUS the
-# three satellite ABS data shards (sibling repos lit-data-abs4,
-# lit-data-abs3-omecon, lit-data-abs3-rest, checked out read-only below), so
-# the dashboard's journal list matches the main browser's — into
-# the small, committed JSON files the analytics dashboard reads:
-#   lit/analytics/data.json        (per-journal × per-year aggregates, top-cited)
-#   lit/analytics/authors.json     (per-author aggregates)
-#   lit/analytics/disruption.json  (per-paper disruption index D over the
-#                                       in-catalog citation graph, lit/data-refs/)
-#   lit/analytics/citeflow.json    (journal-to-journal citation flows over the
-#                                       same graph — the two Sankey charts)
-# so stouras.com/lit/analytics/ can draw every chart client-side without
-# ever downloading the ~270 MB of raw papers. Purely offline: reads only the
-# static datasets already committed by the lit / lit-ft50 data + reference builds.
-# See lit/_scraper/build-analytics.mjs and build-disruption.mjs.
-
 on:
   schedule:
-    # Hourly catch-up also covers satellite repositories, whose events cannot
-    # trigger workflow_run in this repository.
-    - cron: '17 * * * *'
+    - cron: 17 * * * *
   workflow_run:
-    branches: [master]
-    types: [completed]
+    branches:
+      - master
+    types:
+      - completed
     workflows:
-      - 'lit — update multi-journal data'
-      - 'lit — check for newly-published papers (incremental)'
-      - 'lit — update FT50 (merged catalog) data'
-      - 'lit — check for new FT50 catalog papers (incremental)'
-      - 'lit — refresh citation counts'
-      - 'lit-ft50 — refresh citation counts'
-      - 'lit — backfill pre-print links'
-      - 'lit-ft50 — backfill pre-print links'
-      - 'lit — backfill FT50 abstracts (OpenAlex/S2)'
-      - 'lit — backfill ISR/MkSc editors + INFORMS abstracts (pubsonline attempt)'
-      - 'lit — backfill citation graph'
-  workflow_dispatch: {}      # run on demand from the Actions tab
+      - lit — update multi-journal data
+      - lit — check for newly-published papers (incremental)
+      - lit — update FT50 (merged catalog) data
+      - lit — check for new FT50 catalog papers (incremental)
+      - lit — refresh citation counts
+      - lit-ft50 — refresh citation counts
+      - lit — backfill pre-print links
+      - lit-ft50 — backfill pre-print links
+      - lit — backfill FT50 abstracts (OpenAlex/S2)
+      - lit — backfill ISR/MkSc editors + INFORMS abstracts (pubsonline attempt)
+      - lit — backfill citation graph
+  workflow_dispatch: {}
   push:
-    # Re-run whenever the aggregator or the page itself changes, so a merge
-    # seeds fresh figures immediately instead of waiting for the daily schedule.
     paths:
-      - '.github/workflows/lit-analytics.yml'
-      - 'lit/_scraper/build-analytics.mjs'
-      - 'lit/_scraper/build-disruption.mjs'
-      - 'lit/_scraper/build-citeflow.mjs'
-      - 'lit/_scraper/_analytics-inputs.mjs'
-      - 'lit/_scraper/analytics-selftest.mjs'
-      - 'lit/_scraper/verify-analytics-live.mjs'
-      - 'lit/analytics/index.html'
-      - 'lit/data/**'
-      - 'lit/data-ft50/**'
-      - 'lit/data-refs/**'
-
-# Never let two analytics builds race each other.
+      - .github/workflows/lit-analytics.yml
+      - lit/_scraper/build-analytics.mjs
+      - lit/_scraper/build-disruption.mjs
+      - lit/_scraper/build-citeflow.mjs
+      - lit/_scraper/_analytics-inputs.mjs
+      - lit/_scraper/analytics-selftest.mjs
+      - lit/_scraper/verify-analytics-live.mjs
+      - lit/analytics/index.html
+      - lit/data/**
+      - lit/data-ft50/**
+      - lit/data-refs/**
 concurrency:
-  group: lit-analytics-${{ github.ref }}
-  cancel-in-progress: true
-
+  group: lit-cloud-analytics-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
-  contents: write            # needed to commit the refreshed summary back
-  pages: write               # needed to request a Pages rebuild if a deploy fails
-
+  contents: write
+  pages: write
 jobs:
   build:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      # The satellite ABS data shards live in sibling repos (the SHARDS list in
-      # lit/index.html). The summary must cover their journals too, or the
-      # dashboard's journal picker drifts from the main browser's journal list.
-      # They are checked out read-only under _analytics-shards/ — untracked, so
-      # the explicit `git add` below can never commit them; build-analytics.mjs
-      # finds them there and skips (with a warning) any that are missing.
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |-
+            /*
+            !/*/
+            /.github/
+            /tools/
+            /lit/
+            !/lit/data/
+            !/lit/data-ft50/
+            !/lit/data-refs/
+            !/lit/data-workingpapers/
+            !/lit/analytics/*.json
+      - name: Load cloud datasets
+        uses: ./.github/actions/lit-data
+        with:
+          write: analytics
+          ssh-key: ${{ secrets.LIT_DATA_ANALYTICS_DEPLOY_KEY }}
+          datasets: core ft50 refs analytics
       - name: Checkout data shard — lit-data-abs4
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-abs4
           path: _analytics-shards/lit-data-abs4
-
       - name: Checkout data shard — lit-data-abs3-omecon
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-abs3-omecon
           path: _analytics-shards/lit-data-abs3-omecon
-
       - name: Checkout data shard — lit-data-abs3-rest
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-abs3-rest
           path: _analytics-shards/lit-data-abs3-rest
-
-      # The two topic-filtered shards (Nature portfolio / Science) — same
-      # read-only checkout as the ABS ones above; their journals are curated
-      # topical slices (GenAI/LLMs, innovation, science of science), not full
-      # catalogues.
       - name: Checkout data shard — lit-data-nature
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-nature
           path: _analytics-shards/lit-data-nature
-
       - name: Checkout data shard — lit-data-science
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: konstantinosStouras/lit-data-science
           path: _analytics-shards/lit-data-science
-
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '20'
-
+          node-version: "20"
       - name: Test analytics filters and calculations
         run: node lit/_scraper/analytics-selftest.mjs
-
       - name: Build analytics summary
         run: node lit/_scraper/build-analytics.mjs
-
-      # Every counter the pages print — the header's "N papers from M authors",
-      # the "N papers added in the last 4 weeks" tally, and the dashboard's own
-      # scope line + tiles — recomputed from the papers files and compared. This
-      # job is the only place all five shards are checked out, so it is the only
-      # place the audit sees the whole corpus. Report-only: a drift here must be
-      # visible without blocking the analytics commit below.
       - name: Audit the published counters
         continue-on-error: true
         run: node lit/_scraper/counters-selftest.mjs
-
       - name: Build disruption analysis
-        # Team-science measures (disruption index D) over the in-catalog citation
-        # graph (lit/data-refs/). Reads only committed files; grows with the
-        # reference graph. Harmless if data-refs/ is empty (writes 0 papers).
         run: node lit/_scraper/build-disruption.mjs
-
       - name: Build citation flows
-        # Journal-to-journal citation flows (the dashboard's two Sankey charts)
-        # over the same in-catalog graph. Offline like the steps above; harmless
-        # if data-refs/ is empty (writes empty maps, the page hides the charts).
         run: node lit/_scraper/build-citeflow.mjs
-
       - name: Validate the complete analytics snapshot
         run: node lit/_scraper/analytics-selftest.mjs --data
-
-      - name: Commit refreshed analytics
-        # Only master carries the committed summary. Feature branches (e.g. a PR
-        # that edits the aggregator) still run the build above as a check but do
-        # not commit generated JSON into their own diffs.
+      - name: Publish analytics data to its repository
         if: github.ref == 'refs/heads/master'
-        # This workflow only writes lit/analytics/*.json — a disjoint set of
-        # paths from the data builds (lit/data, lit/data-ft50) — so a
-        # concurrent commit never conflicts; a plain rebase-then-push suffices.
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lit/analytics/data.json lit/analytics/authors.json lit/analytics/disruption.json lit/analytics/citeflow.json lit/analytics/rankings.json
-          if git diff --cached --quiet; then
-            echo "No analytics changes — nothing to commit."
-            exit 0
-          fi
-          git commit -m "lit: refresh analytics summary"
-          for i in 1 2 3 4; do
-            if git push origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "Pushed on attempt $i."
-              exit 0
-            fi
-            echo "Push rejected (concurrent data commit?) — rebasing onto the tip and retrying…"
-            git fetch origin "$GITHUB_REF_NAME"
-            git rebase "origin/$GITHUB_REF_NAME" || { git rebase --abort; exit 1; }
-            # Rebase can advance input data; regenerate rather than attaching
-            # an older summary to a newer data commit.
-            node lit/_scraper/build-analytics.mjs
-            node lit/_scraper/build-disruption.mjs
-            node lit/_scraper/build-citeflow.mjs
-            node lit/_scraper/analytics-selftest.mjs --data
-            git add lit/analytics/*.json
-            git commit --amend --no-edit
-            sleep 5
-          done
-          echo "::error::Could not push the refreshed analytics after 4 attempts."
-          exit 1
-
-      # A committed summary is not enough: the GitHub Pages deploy that follows
-      # the push can lag or fail transiently, silently serving the OLD analytics
-      # page (missing new files like disruption.json). Poll the live site; if the
-      # fresh summary didn't land, request a rebuild and poll again — the same
-      # self-heal every lit/ms data workflow already does.
-      - name: Verify the live site serves the fresh analytics (self-heal a failed deploy)
+        run: node lit/_scraper/cloud-data.mjs publish analytics
+      - name: Verify published data
         if: github.ref == 'refs/heads/master'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if node lit/_scraper/verify-analytics-live.mjs --attempts 8; then exit 0; fi
-          echo "Live analytics is stale — requesting a GitHub Pages rebuild..."
-          curl -sf -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" \
-            || echo "WARNING: Pages rebuild request failed (check token permissions)."
-          node lit/_scraper/verify-analytics-live.mjs --attempts 10
-
+        run: node lit/_scraper/cloud-data.mjs verify analytics
       - name: Summary
         if: always()
         run: |
@@ -218,3 +128,11 @@ jobs:
             node -e 'const d=require("./lit/analytics/disruption.json");console.log(JSON.stringify(d.totals,null,2))' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Preserve unpublished data after failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unpublished-analytics-${{ github.run_id }}
+          path: _lit-data/analytics/data/
+          retention-days: 14
+          if-no-files-found: ignore

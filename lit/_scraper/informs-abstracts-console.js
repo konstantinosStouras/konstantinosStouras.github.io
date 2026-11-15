@@ -144,8 +144,8 @@
   }
   // ── end vendored extractor ────────────────────────────────────────────────
 
-  const SITE = 'https://www.stouras.com/lit/data/';
-  const RAW = 'https://raw.githubusercontent.com/konstantinosStouras/konstantinosStouras.github.io/master/lit/data/_informs-abstracts.json';
+  const SITE = 'https://www.stouras.com/lit-data-core/data/';
+  const RAW = 'https://raw.githubusercontent.com/konstantinosStouras/lit-data-core/main/data/_informs-abstracts.json';
   // mksc first — per the owner; then the other INFORMS journals, newest first.
   const SOURCES = [
     { key: 'mksc', file: 'papers-mksc.json' },

@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "datasets": [
+    {
+      "id": "core",
+      "local": "lit/data",
+      "repository": "konstantinosStouras/lit-data-core",
+      "base": "/lit-data-core/data/",
+      "files": null
+    },
+    {
+      "id": "ft50",
+      "local": "lit/data-ft50",
+      "repository": "konstantinosStouras/lit-data-ft50",
+      "base": "/lit-data-ft50/data/",
+      "files": null
+    },
+    {
+      "id": "refs",
+      "local": "lit/data-refs",
+      "repository": "konstantinosStouras/lit-data-refs",
+      "base": "/lit-data-refs/data/",
+      "files": null
+    },
+    {
+      "id": "workingpapers",
+      "local": "lit/data-workingpapers",
+      "repository": "konstantinosStouras/lit-data-workingpapers",
+      "base": "/lit-data-workingpapers/data/",
+      "files": null
+    },
+    {
+      "id": "analytics",
+      "local": "lit/analytics",
+      "repository": "konstantinosStouras/lit-data-analytics",
+      "base": "/lit-data-analytics/data/",
+      "files": [
+        "data.json",
+        "authors.json",
+        "rankings.json",
+        "disruption.json",
+        "citeflow.json"
+      ]
+    }
+  ]
+}

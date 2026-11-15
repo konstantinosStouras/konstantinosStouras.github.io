@@ -1,6 +1,6 @@
 # Independent projects and unchanged website addresses
 
-Application source now lives in separate repositories. This repository is the homepage, shared site assets, the literature service and its existing data automations, and the publishing map for the independent projects.
+Application source now lives in separate repositories. This repository is the homepage, shared site assets, literature page and scraper code, its data automations, and the publishing map for the independent projects. Generated literature data is published in separate `lit-data-*` repositories; see `lit/_CLOUD-DATA.md`.
 
 `.github/projects.json` maps each project to its own source repository. `.gitmodules` pins exact website-source commits at the original public paths. GitHub Pages pulls those public submodules when building the existing Jekyll website. Archives, backend code, and build-only sources are held only in their separate repositories; production does not download them. Do not add `.nojekyll`, change CNAME, or publish a second Pages site over any mounted path.
 
@@ -20,7 +20,7 @@ IdeaSearchLab is built in `ideasearchlab-source` and its compiled output is comm
 
 Public paths, relative imports, shared account widgets and Firebase project identities are preserved. Backend and build-source repositories are labelled separately in the map. Integration checks temporarily load the backend sources at their former paths to exercise the deployment guards; production never needs these directories. Deploy Firebase only with the explicitly named project and the existing project guards.
 
-The literature service has eight existing repository secrets and many data-writing schedules. It remains here until those credentials and jobs can be moved together; never turn its folder into a read-only reference while its workflows still write to it. Its private secret values cannot be read back from GitHub to copy to another repository.
+The literature API, Firebase and mail secrets remain in this repository with the existing schedules. Workflows materialize cloud datasets temporarily, then publish through one deploy key per data repository. The secrets do not need to be copied or recovered from GitHub. The page and crawler code stay here; generated data does not belong in code working copies.
 
 ## Migration and recovery
 
