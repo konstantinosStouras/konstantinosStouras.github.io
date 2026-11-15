@@ -305,8 +305,12 @@
   .empty-state { text-align: center; padding: 60px 32px; color: var(--text-muted); }
   .empty-state h3 { font-family: 'Fraunces', serif; font-size: 22px; color: var(--text); margin-bottom: 8px; font-weight: 400; }
 
-  .footer { padding: 28px 32px 36px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); background: var(--white); }
-  .footer-inner { max-width: 760px; margin: 0 auto; text-align: center; display: flex; flex-direction: column; gap: 11px; line-height: 1.65; }
+  .footer { padding: 24px 32px 36px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); background: var(--white); }
+  .footer-inner { max-width: 1216px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; line-height: 1.65; }
+  .footer .footer-inner > div { text-align: justify; text-align-last: start; }
+  @media (max-width: 640px) {
+    .footer .footer-inner > div { text-align: left; }
+  }
   .footer-inner .footer-lead { font-size: 13px; color: var(--text); }
   .footer a { color: var(--navy); }
 
@@ -1049,12 +1053,14 @@
 <div id="pagination" class="pagination" style="display:none"></div>
 -->
 
+<!-- Permanent project note: outside the results container so every search state
+     retains it immediately above the copyright divider. -->
 <footer class="footer">
   <div class="footer-inner">
     <div class="footer-lead">Built as a personal project to search papers efficiently across journals in Operations, Supply Chain, Economics, Computer Science, Project Management and Innovation — all in one place.</div>
     <!-- The data/provenance paragraphs live on the About page (/lit/about/, linked
          from the top nav) to avoid duplicating them here. -->
-    <div>See <a class="acct-link" href="about/">About</a> for what this covers and how the data are collected. <a class="acct-link" href="feedback/">Feedback</a> and suggestions are welcome. <span style="white-space:nowrap">Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></span></div>
+    <div>See <a class="acct-link" href="about/">About</a> for what this covers and how the data are collected. <a class="acct-link" href="feedback/">Feedback</a> and suggestions are welcome. Any errors are my own. <a href="https://www.stouras.com" target="_blank">Konstantinos I. Stouras</a></div>
   </div>
 <p style="text-align:center;margin-top:12px"><a class="lit-footer-privacy" href="/lit/privacy/">Privacy</a></p>
 </footer>
