@@ -1,6 +1,7 @@
-import { itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=5366cc14c565';
-import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=5366cc14c565';
-import { watchSession } from './src/session-updates.mjs?v=5366cc14c565';
+import { createMessageSounds } from './src/message-sounds.mjs?v=efd667f32675';
+import { itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=efd667f32675';
+import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=efd667f32675';
+import { watchSession } from './src/session-updates.mjs?v=efd667f32675';
 const root = document.querySelector('#app'), dialog = document.querySelector('#dialog');
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format((n || 0) / 100);
@@ -14,8 +15,18 @@ const localWorkspace = ['localhost', '127.0.0.1', '[::1]'].includes(location.hos
 const savedBackend = localStorage.getItem('studio-backend') || '';
 // Old loopback testing preferences must not strand returning public-site users.
 let backend = localWorkspace ? savedBackend : (/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(savedBackend) ? classroomBackend : savedBackend || classroomBackend), token = sessionStorage.getItem('studio-token') || '';
-let state, actor, user, sessions = [], sessionId, preview, page = 'overview', channel = 'announcements', report = 'profit', reportRange = 30, selectedCompanies = new Set(), solo = null, health = null, roster = null, busy = false, online = true, firebaseClient = null;
+let state, actor, user, sessions = [], sessionId, preview, page = 'overview', channel = 'all', report = 'profit', reportRange = 30, selectedCompanies = new Set(), solo = null, health = null, roster = null, busy = false, online = true, firebaseClient = null;
 let testRoom = null, testPending = null;
+function connectionScope() { return JSON.stringify([backend, sessionId, user?.id, firebaseClient?.user?.uid, !!testRoom, !!solo]); }
+let messageSounds;
+function sounds() { return messageSounds ||= createMessageSounds(); }
+function observeMessageSounds(view) {
+  const scope = JSON.stringify([connectionScope(), view.actor?.id, view.actor?.companyId, preview]);
+  sounds().observe(scope, view.state.messages, view.actor?.id);
+}
+function soundControl() { return `<button type="button" class="small" data-action="message-sounds" aria-pressed="${sounds().enabled}" aria-label="Message sounds">Sound: ${sounds().enabled ? 'on' : 'off'}</button>`; }
+document.addEventListener('pointerdown', () => sounds().arm(), { passive: true });
+document.addEventListener('keydown', () => sounds().arm(), { passive: true });
 let liveSession = null;
 function stopSessionUpdates() { liveSession?.watch.stop(); liveSession = null; }
 function clearClosedSession() {
@@ -90,6 +101,7 @@ async function load(force = true, afterCommand = false) {
   try {
     const data = await api(`/sessions/${sessionId}${preview ? `?company=${encodeURIComponent(preview)}` : ''}`);
     if (sessionId !== loadingSession || preview !== loadingPreview || sequence !== loadSequence || solo) return;
+    observeMessageSounds(data);
     const changed = !state || data.state.revision !== state.revision || !online;
     // Keep the version that the student actually reviewed while editing a decision.
     if (!force && !afterCommand && (submittingForms.size || dialog.open || document.activeElement?.closest('form'))) { online = true; return; }
@@ -132,7 +144,7 @@ async function signIn(result) {
   token = result.token; user = result.user; sessionStorage.setItem('studio-token', token); await enter();
 }
 function sessionLink(id) { const url = new URL(location.href); url.searchParams.delete('session'); if (id) url.searchParams.set('session', id); url.hash = ''; return url.href; }
-function selectSession(id) { history.replaceState(null, '', sessionLink(id)); sessionId = id || null; }
+function selectSession(id) { sounds().reset(); history.replaceState(null, '', sessionLink(id)); sessionId = id || null; }
 // Only navigation preferences are kept, scoped to this tab, account and classroom.
 // Simulation data and authorization always come from the server after refresh.
 function workspaceViewKey() {
@@ -223,6 +235,7 @@ function firebaseForm() {
     </div>`;
 }
 function renderWelcome() {
+  sounds().reset();
   stopSessionUpdates();
   renderLocalWelcome();
   if (!health || health.auth === 'firebase') {
@@ -231,7 +244,7 @@ function renderWelcome() {
   }
 }
 async function getFirebase() {
-  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=5366cc14c565')).firebase;
+  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=efd667f32675')).firebase;
   return firebaseClient;
 }
 async function enterFirebase() {
@@ -274,6 +287,7 @@ async function enterTest(client) {
   restoreWorkspaceView();
   // Fetch an authorized test instructor preview before the first render.
   if (preview) state = (await client.call('view', { preview })).state;
+  observeMessageSounds({state, actor});
   history.replaceState(null, '', testTabUrl(client.credentials.key));
   render();
   client.subscribe(event => {
@@ -300,7 +314,7 @@ async function startTestSetup(id) {
     // The first modal closes before its next form is opened.
     setTimeout(() => modal('Assign test students', '<p>Each student belongs to exactly one company. Choose 1–20 students per company (60 total maximum).</p>' + Array.from({length:count}, (_,i) => `<div class="form-grid">${field('company-'+i,'Company '+(i+1),template.companyNames[i] || 'Company '+(i+1),'text','maxlength="60"')}${field('students-'+i,'Test students', i === 0 ? 2 : 1,'number','min="1" max="20"')}</div>`).join(''), async f => {
       const groups = Array.from({length:count},(_,i) => ({name:f.get('company-'+i),students:value(f,'students-'+i)}));
-      const client = (await import('./src/test-client.mjs?v=5366cc14c565')).testClient();
+      const client = (await import('./src/test-client.mjs?v=efd667f32675')).testClient();
       try { await client.create(template,groups); await enterTest(client); } catch(e) {client.close();throw e;}
     }, 'Start test round'), 0);
   }, 'Choose students');
@@ -677,12 +691,88 @@ function reportsPage() {
   return `<div class="advice"><strong>Daily reports are frozen at each midnight close.</strong>Last close: ${state.snapshots.length ? simDate(state.snapshots.at(-1).hour) : 'none yet'}. Live operations: ${simDate(state.hour)}. Each close includes that hour’s arrivals, production, demand, automation, costs, and depreciation.</div><div class="toolbar">${select('report', 'Measure', Object.entries(reportTypes).map(([k, [n]]) => [k, n]), report)}${select('range', 'Time window', [['7', 'Last 7 days'], ['30', 'Last 30 days'], ['180', 'Full session']], String(reportRange))}${button('report-csv', 'Export CSV', '', 'small')}</div>${panel(title, `${unit} · daily snapshots`, `<div class="toolbar">${state.companies.map(c => check(`series-${c.id}`, c.name, !selectedCompanies.size || selectedCompanies.has(c.id))).join('')}</div>${chart(report, unit, { selected: true, range: reportRange })}`)}${panel('Exact daily values', 'Accessible data table · one row per company per completed day', `<details><summary>Show report values</summary>${table(['As of (simulation)', 'Company', `${esc(title)} (${unit})`], reportRows(snaps).map(row => [row[0], esc(row[1]), number(row[2])]))}</details>`)}`;
 }
 function reportRows(snaps = state.snapshots) { return snaps.flatMap(s => s.companies.filter(c => !selectedCompanies.size || selectedCompanies.has(c.id)).map(c => { const prev = state.snapshots.find(x => x.hour === s.hour - 24)?.companies.find(x => x.id === c.id); let n = report === 'dailySales' ? c.revenue - (prev?.revenue || 0) : report === 'dailyProduction' ? c.production - (prev?.production || 0) : c[report]; if (reportTypes[report][1] === 'EUR') n /= 100; return [simDate(s.hour), c.name, n]; })); }
-function channelOptions() { return [['announcements', 'Instructor announcements'], ...(isTeacher() ? state.companies.map(c => [`teacher:${c.id}`, `Teacher ↔ ${c.name}`]) : [[`team:${actor.companyId}`, 'My team · internal'], [`teacher:${actor.companyId}`, 'Ask the instructor']])]; }
+function channelOptions() { return [['announcements', 'Instructor announcements'], ...(isTeacher() ? state.companies.map(c => [`teacher:${c.id}`, `Teacher ↔ ${c.name}`]) : [[`team:${actor.companyId}`, 'My team'], [`teacher:${actor.companyId}`, 'Ask the instructor']])]; }
+function messageStyle(message) {
+  if (message.channel === 'announcements') return 'message-announcement';
+  if (message.channel.startsWith('team:')) return message.senderId === actor.id ? 'message-sent' : 'message-received';
+  return 'message-conversation';
+}
+let typingJob = null, typingInputAt = 0;
+function setTypingIndicator(notice, active) {
+  if (!notice || notice.dataset.typing === String(active)) return;
+  // Keep existing dots between polls so their animation never restarts.
+  notice.dataset.typing = String(active);
+  notice.innerHTML = active ? '<span class="typing-bubble" aria-hidden="true"><span></span><span></span><span></span></span><span class="typing-accessible">A teammate is typing</span>' : '';
+}
+function typingContext() {
+  if (!state || !sessionId || solo || preview || actor?.role !== 'student' || document.hidden
+      || state.status === 'completed' || state.studentAccess === false
+      || !state.features.messaging?.allowed || !state.features.messaging?.visible
+      || (!testRoom && !health?.typingPresence) || !root.querySelector('[data-team-typing]')) return null;
+  const textarea = root.querySelector('#message-form textarea');
+  const teamRecipient = root.querySelector('#message-form [name=recipient]')?.value === `team:${actor.companyId}`;
+  return { scope: JSON.stringify([connectionScope(), actor.id, actor.companyId, channel]),
+    active: !!(teamRecipient && textarea?.value.trim() && document.activeElement === textarea && Date.now() - typingInputAt < 4000) };
+}
+function stopTypingJob() {
+  const old = typingJob; typingJob = null; typingInputAt = 0;
+  if (old?.sent) void (old.pending || Promise.resolve()).then(() => old.request(false)).catch(() => {});
+}
+async function syncTyping(fromInput = false) {
+  const context = typingContext();
+  if (typingJob && typingJob.scope !== context?.scope) stopTypingJob();
+  if (!context) return;
+  if (!typingJob) {
+    const client = testRoom, path = `${backend}/api/sessions/${encodeURIComponent(sessionId)}/typing`;
+    const auth = firebaseClient, localToken = token;
+    typingJob = { scope: context.scope, active: false, sent: false, lastPost: 0, pending: null,
+      request: async active => {
+        if (client) return client.call('typing', active === undefined ? undefined : { active });
+        const authorization = auth?.user ? await auth.token() : localToken;
+        const response = await fetch(path, { method: active === undefined ? 'GET' : 'POST', cache: 'no-store',
+          headers: { Authorization: `Bearer ${authorization}`, ...(active === undefined ? {} : { 'Content-Type': 'application/json' }) },
+          ...(active === undefined ? {} : { body: JSON.stringify({ active }) }), signal: AbortSignal.timeout(5000) });
+        if (!response.ok) throw new Error('Typing status unavailable');
+        return response.json();
+      } };
+  }
+  const job = typingJob;
+  if (job.pending) return;
+  if (fromInput && context.active === job.active && (!context.active || Date.now() - job.lastPost < 2000)) return;
+  const update = context.active ? true : job.active ? false : undefined;
+  if (update !== undefined) { job.sent = true; job.active = update; job.lastPost = Date.now(); }
+  job.pending = (async () => {
+    try {
+      const result = await job.request(update);
+      if (typingJob === job && typingContext()?.scope === job.scope) {
+        const notice = root.querySelector('[data-team-typing]');
+        setTypingIndicator(notice, !!result.typing);
+      }
+    } catch {
+      if (typingJob === job) {
+        const notice = root.querySelector('[data-team-typing]');
+        setTypingIndicator(notice, false);
+      }
+    } finally { job.pending = null; }
+  })();
+  await job.pending;
+}
+document.addEventListener('input', event => {
+  if (event.target.matches?.('#message-form textarea')) { typingInputAt = Date.now(); void syncTyping(true); }
+});
+document.addEventListener('focusout', event => {
+  if (event.target.matches?.('#message-form textarea')) { typingInputAt = 0; void syncTyping(true); }
+});
 function messagesPage() {
-  const options = channelOptions(); if (!options.some(x => x[0] === channel)) channel = options[0][0];
-  const messages = state.messages.filter(m => m.channel === channel);
-  const canSend = (state.status !== 'completed' || isTeacher()) && state.features.messaging.allowed && (isTeacher() || channel !== 'announcements');
-  return `<div class="toolbar">${select('channel', 'Conversation', options, channel)}<span class="form-note">Students can message their team or the instructor. Announcements are read-only for students.</span></div>${panel(esc(options.find(x => x[0] === channel)?.[1]), 'Sender identity comes from the signed-in account. Both clocks are labelled.', `<div class="messages">${messages.map(m => `<article class="message ${m.role === 'instructor' ? 'teacher' : ''}"><div class="message-header">${esc(m.senderName)} · ${esc(m.role)}</div><p>${esc(m.text)}</p><small>Real time: ${new Date(m.realAt).toLocaleString('en-GB')} · Simulation: ${simDate(m.hour)}</small></article>`).join('') || '<p class="empty">Start a useful conversation. Messages are saved with this session.</p>'}</div>${canSend ? `<form id="message-form"><label>Your message<textarea name="text" maxlength="2000" placeholder="Share a decision, ask a question, or coordinate a next step…" required></textarea></label>${button('submit', channel === 'announcements' ? 'Post announcement' : 'Send message', '', 'primary')}<div class="error" role="alert"></div></form>` : '<p class="form-note">This conversation is read-only for your role or messaging is disabled.</p>'}`)}`;
+  const conversations = channelOptions(), options = [['all', 'All messages'], ...conversations];
+  if (!options.some(x => x[0] === channel)) channel = 'all';
+  const labels = new Map(conversations);
+  // The server already filters membership; also limit the feed to this role's channels.
+  const messages = state.messages.filter(m => labels.has(m.channel) && (channel === 'all' || m.channel === channel));
+  const recipients = conversations.filter(([id]) => isTeacher() || id !== 'announcements');
+  const recipient = recipients.some(([id]) => id === channel) ? channel : recipients[0]?.[0];
+  const canSend = (state.status !== 'completed' || isTeacher()) && state.features.messaging.allowed && !!recipient;
+  return `<div class="toolbar">${select('channel', 'Show messages', options, channel)}${soundControl()}<span class="form-note">Announcements and conversations appear together. Only messages available to your account are shown.</span></div>${panel(esc(options.find(x => x[0] === channel)?.[1]), 'Real and simulation times are shown separately.', `<div class="messages" data-view-key="messages">${messages.map(m => `<article class="message ${messageStyle(m)}"><div class="message-header">${m.channel === 'announcements' ? '<span>Instructor announcement</span>' : m.channel.startsWith('teacher:') ? `<span>${esc(labels.get(m.channel))}</span>` : ''}<span>${esc(m.senderName)}</span></div><p>${esc(m.text)}</p><small>Real time: ${new Date(m.realAt).toLocaleString('en-GB')} · Simulation: ${simDate(m.hour)}</small></article>`).join('') || '<p class="empty">No messages in this view yet.</p>'}</div>${actor.role === 'student' && (channel === 'all' || channel === `team:${actor.companyId}`) ? '<p class="team-typing" data-team-typing role="status" aria-live="polite" aria-label="Team typing status"></p>' : ''}${canSend ? `<form id="message-form">${select('recipient', 'Send to', recipients, recipient)}<p class="form-note">Your message goes only to the selected conversation. Only instructors can post announcements.</p><label>Your message<textarea name="text" maxlength="2000" placeholder="Share a decision, ask a question, or coordinate a next step…" required></textarea></label>${button('submit', 'Send message', '', 'primary')}<div class="error" role="alert"></div></form>` : '<p class="form-note">Messaging is read-only for your role or disabled.</p>'}`)}`;
 }
 function adminPage() {
   if (!isTeacher()) return '';
@@ -752,6 +842,13 @@ document.addEventListener('keydown', event => {
 });
 
 async function action(name, id) {
+  if (name === 'message-sounds') {
+    sounds().setEnabled(!sounds().enabled);
+    const control = root.querySelector('[data-action=message-sounds]');
+    if (control) { control.textContent = `Sound: ${sounds().enabled ? 'on' : 'off'}`; control.setAttribute('aria-pressed', String(sounds().enabled)); }
+    return;
+  }
+
   if (name === 'toggle-mobile-menu') {
     const toggle = root.querySelector('.mobile-menu-toggle');
     const open = toggle.getAttribute('aria-expanded') !== 'true';
@@ -826,7 +923,7 @@ async function action(name, id) {
     return;
   }
   if (name === 'nav') { page = id; if (id === 'admin' && preview) { preview = undefined; await load(); } else render(); return; }
-  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=5366cc14c565')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
+  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=efd667f32675')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
   if (name === 'switch-solo') { solo.switchRole(isTeacher() ? 'student' : 'instructor'); preview = undefined; page = isTeacher() ? 'overview' : 'admin'; await load(); return; }
   if (name === 'demo') { await signIn(await api('/demo', { username: id })); return; }
   if (name === 'logout') { if (!solo && token) { try { await api('/logout', {}); } catch {} } if (firebaseClient?.user) await firebaseClient.logout(); solo = null; state = null; actor = null; user = null; token = ''; sessionId = null; sessionStorage.removeItem('studio-token'); selectSession(null); renderWelcome(); return; }
@@ -930,11 +1027,12 @@ document.addEventListener('submit', async event => {
     if (form.id === 'shifts-form') { await command({ type: 'shifts', shifts: [0, 1, 2].map(i => f.has(`shift${i}`)) }); render(); }
     if (form.id === 'effects-form') { await command({ type: 'configure', carbonDemand: f.has('carbonDemand') }); render(); }
     if (form.dataset.feature) { await command({ type: 'configure', feature: form.dataset.feature, visible: f.has('visible'), allowed: f.has('allowed') }); render(); }
-    if (form.id === 'message-form') { await command({ type: 'message', channel, text: f.get('text') }); render(); }
+    if (form.id === 'message-form') { typingInputAt = 0; void syncTyping(true); await command({ type: 'message', channel: f.get('recipient') || channel, text: f.get('text') }); sounds().play('sent'); render(); }
   } catch (e) { reportFormError(form, e); }
   finally { submittingForms.delete(form); if (submit) submit.disabled = false; }
 });
 document.addEventListener('change', async event => {
+  if (event.target.name === 'recipient') { typingInputAt = 0; void syncTyping(true); }
   const target = event.target;
   if (target.name === 'sessionCity') {
     const label = target.form.querySelector('[data-custom-session]');
@@ -961,7 +1059,7 @@ document.addEventListener('change', async event => {
 async function startWorkspace() {
   if (location.hash?.startsWith('#test=')) {
     const testLink = new URLSearchParams(location.hash.slice(1));
-    try { const client = (await import('./src/test-client.mjs?v=5366cc14c565')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
+    try { const client = (await import('./src/test-client.mjs?v=efd667f32675')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
     catch(e) { root.innerHTML = '<main class="welcome"><h1>Test round unavailable</h1><p>' + esc(e.message) + '</p>' + button('test-leave','Return to classroom') + '</main>'; }
     return;
   }
@@ -996,3 +1094,7 @@ window.addEventListener('popstate', () => { if (user && !solo) enter().catch(e =
 document.addEventListener('visibilitychange', () => {
   if (!solo && sessionId && !document.hidden) void load(false);
 });
+
+setInterval(() => { void syncTyping(); }, 2000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopTypingJob(); else void syncTyping(); });
+window.addEventListener('pagehide', stopTypingJob);

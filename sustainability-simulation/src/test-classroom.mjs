@@ -1,4 +1,5 @@
-import { createSession, applyCommand, tick, publicView, assertInvariants, fail } from './engine.mjs?v=5366cc14c565';
+import { typingPresence } from './typing-presence.mjs?v=efd667f32675';
+import { createSession, applyCommand, tick, publicView, assertInvariants, fail } from './engine.mjs?v=efd667f32675';
 
 // This model is held only by a SharedWorker. No storage, network or Firebase APIs.
 export class TestClassroom {
@@ -17,6 +18,13 @@ export class TestClassroom {
   }
   actor(key) { const person = this.people.find(p => p.key === key); if (!person) fail('This test tab link is invalid.', 403); const { key: _, ...actor } = person; return actor; }
   roster(key) { if (this.actor(key).role !== 'instructor') fail('Instructor access required.', 403); return structuredClone(this.people); }
+  typing(key, active, now = Date.now()) {
+    const actor = this.actor(key);
+    this.typingEntries ||= new Map();
+    const result = typingPresence(this.typingEntries.get(actor.companyId), actor, this.state, active, now);
+    this.typingEntries.set(actor.companyId, result.entries);
+    return { typing: result.typing };
+  }
   view(key, preview) { const actor = this.actor(key); return { actor, state: publicView(this.state, actor, preview) }; }
   advance(now) {
     if (this.state.status !== 'running') { this.nextTick = null; return; }

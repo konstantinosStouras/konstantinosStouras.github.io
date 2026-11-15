@@ -1,4 +1,4 @@
-import { TestClassroom } from './test-classroom.mjs?v=5366cc14c565';
+import { TestClassroom } from './test-classroom.mjs?v=efd667f32675';
 
 const rooms = new Map();
 const subscriptions = new Map();
@@ -24,6 +24,7 @@ onconnect = event => {
         room.actor(key);
         subscriptions.set(port, roomId);
         if (action === 'view') result = room.view(key, payload?.preview);
+        else if (action === 'typing') result = room.typing(key, payload?.active);
         else if (action === 'command') result = room.command(key,payload);
         else if (action === 'roster') result = room.roster(key);
         else if (action === 'end') { room.roster(key); rooms.delete(roomId); result = {ok:true}; }
