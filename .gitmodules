@@ -176,3 +176,7 @@
 	path = agentlab
 	url = https://github.com/konstantinosStouras/agentlab-web.git
 	branch = main
+[submodule "marketplace"]
+	path = marketplace
+	url = https://github.com/konstantinosStouras/marketplace.git
+	branch = main

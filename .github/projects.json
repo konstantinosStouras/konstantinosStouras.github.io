@@ -418,6 +418,15 @@
       "kind": "website",
       "publishes": true,
       "checkDeployment": false
+    },
+    {
+      "name": "marketplace",
+      "path": "marketplace",
+      "url": "https://github.com/konstantinosStouras/marketplace.git",
+      "branch": "main",
+      "kind": "website",
+      "publishes": true,
+      "checkDeployment": false
     }
   ]
 }
