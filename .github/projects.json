@@ -420,9 +420,9 @@
       "checkDeployment": false
     },
     {
-      "name": "marketplace",
-      "path": "marketplace",
-      "url": "https://github.com/konstantinosStouras/marketplace.git",
+      "name": "platform",
+      "path": "platform",
+      "url": "https://github.com/konstantinosStouras/platform.git",
       "branch": "main",
       "kind": "website",
       "publishes": true,
