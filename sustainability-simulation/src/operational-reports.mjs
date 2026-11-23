@@ -1,3 +1,4 @@
+import { itemName } from './engine.mjs?v=dc55f1df16a9';
 // Original reports derived from the authorized company view. Never infer or
 // expose competitors' private orders, customers, contracts or purchase records.
 export const operationalReports = {
@@ -94,8 +95,8 @@ export function buildOperationalReport(state, id, filters = {}) {
   const c = state.company;
   const result = { title: operationalReports[id][1], columns: [], rows: [], note: '', chart: null };
   if (!c) return { ...result, note: 'Select a company preview to inspect its records.' };
-  const product = state.recipe ? 'Solar panel' : 'Solar module';
-  const item = key => ({ cell: state.recipe ? 'Photo cell' : 'PV cell', frame: 'Recycled frame', controller: state.recipe ? 'Junction box' : 'Controller', panel: product })[key] || key;
+  const product = itemName(state, 'panel');
+  const item = key => itemName(state, key) || key;
   const market = key => state.catalog.markets.find(m => m.id === key)?.name || key;
   const range = /7$/.test(id) ? 7 : /14$/.test(id) ? 14 : Number(filters.days) || 0;
   const since = range ? state.hour - range * 24 : -Infinity;

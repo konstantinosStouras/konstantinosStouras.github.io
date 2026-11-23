@@ -1,9 +1,44 @@
+// Keys identify products in saved sessions. Quantities are per sellable unit.
+export const products = {
+  earbuds: {
+    name: 'Wireless Earbuds',
+    unit: 'earbud set',
+    components: [
+      { name: 'Audio module pair', quantity: 1 },
+      { name: 'Earbud battery', quantity: 2 },
+      { name: 'Charging case', quantity: 1 }
+    ]
+  },
+  shoes: {
+    name: 'Running Shoes',
+    unit: 'pair of running shoes',
+    components: [
+      { name: 'Unlaced shoe body', quantity: 2 },
+      { name: 'Lace', quantity: 2 },
+      { name: 'Lace eyelet', quantity: 24 }
+    ]
+  },
+  ebike: {
+    name: 'E-bike',
+    unit: 'e-bike',
+    components: [
+      { name: 'Powered chassis kit', quantity: 1 },
+      { name: 'Tire', quantity: 2 },
+      { name: 'Wheel spoke', quantity: 64 }
+    ]
+  }
+};
+
 // Original economic model. Monetary values are integer EUR cents.
 export const VERSION = 1;
 export const ITEMS = { cell: 'PV cell', frame: 'Recycled frame', controller: 'Controller', panel: 'Solar module' };
 export const RECIPE = { cell: 32, frame: 1, controller: 2 };
 export const productionRecipe = session => session.recipe ?? { cell: 24, frame: 1, controller: 1 };
 export function itemName(session, item) {
+  if (session.productId) {
+    const product = products[session.productId];
+    return item === 'panel' ? product.unit : product.components[['cell','frame','controller'].indexOf(item)].name;
+  }
   if (!session.recipe) return ITEMS[item];
   return { cell: 'Photo cell', frame: 'Recycled frame', controller: 'Junction box', panel: 'Solar panel' }[item];
 }
@@ -60,7 +95,7 @@ function schedule(s, c, type, at, data, description) {
 }
 function takeStock(c, item, qty) {
   const stock = c.inventory[item];
-  if (stock.qty < qty) fail(`Insufficient ${ITEMS[item]} inventory: ${stock.qty} available, ${qty} requested.`);
+  if (stock.qty < qty) fail(`Insufficient inventory: ${stock.qty} available, ${qty} requested.`);
   const value = qty === stock.qty ? stock.value : Math.round(stock.value * qty / stock.qty);
   const carbon = stock.qty ? stock.carbon * qty / stock.qty : 0;
   stock.qty -= qty; stock.value -= value; stock.carbon -= carbon;
@@ -69,11 +104,16 @@ function takeStock(c, item, qty) {
 function addStock(c, item, qty, value, carbon) {
   const stock = c.inventory[item]; stock.qty += qty; stock.value += value; stock.carbon += carbon;
 }
-export function catalog() {
+export function catalog(productId = 'earbuds') {
   const suppliers = [];
-  for (const [item, price, carbon, lot] of [['cell', 310, 2.2, 24], ['frame', 1800, 9, 1], ['controller', 2400, 6, 1]]) {
-    suppliers.push({ id: `${item}-circular`, name: 'Circular Works · rail', item, price, carbon, freight: 0.3, fee: 4500, lead: 48, term: 120, reliability: 95, maxDelay: 6, stock: 1000 * lot, replenish: 150 * lot, min: 10 * lot, lot, enabled: true });
-    suppliers.push({ id: `${item}-express`, name: 'Atlas Components · road', item, price: Math.round(price * 1.24), carbon: carbon * 1.6, freight: 1.5, fee: 7500, lead: 18, term: 72, reliability: 90, maxDelay: 4, stock: 700 * lot, replenish: 100 * lot, min: lot, lot, enabled: true });
+  const inputs = {
+    earbuds: [['cell', 310, 2.2, 24], ['frame', 1800, 9, 1], ['controller', 2400, 6, 1]],
+    shoes: [['cell', 3500, 5, 2], ['frame', 75, 0.1, 2], ['controller', 10, 0.02, 24]],
+    ebike: [['cell', 125000, 110, 1], ['frame', 2500, 4, 2], ['controller', 60, 0.08, 64]]
+  };
+  for (const [item, price, carbon, lot] of inputs[productId]) {
+    suppliers.push({ id: `${item}-circular`, name: itemName({ productId }, item) + ' · rail', item, price, carbon, freight: 0.3, fee: 4500, lead: 48, term: 120, reliability: 95, maxDelay: 6, stock: 1000 * lot, replenish: 150 * lot, min: 10 * lot, lot, enabled: true });
+    suppliers.push({ id: `${item}-express`, name: itemName({ productId }, item) + ' · road', item, price: Math.round(price * 1.24), carbon: carbon * 1.6, freight: 1.5, fee: 7500, lead: 18, term: 72, reliability: 90, maxDelay: 4, stock: 700 * lot, replenish: 100 * lot, min: lot, lot, enabled: true });
   }
   return {
     suppliers,
@@ -88,12 +128,13 @@ export function catalog() {
       { id: 'solar', name: 'Solar cooperative', rates: [12, 24, 22], carbon: 0.055, fee: 30000, daily: 2400, delay: 24, enabled: true }
     ],
     markets: [
-      { id: 'local', name: 'Regional installers', lambda: 95 / 6, referencePrice: 28500, greenWeight: 25, enabled: true },
-      { id: 'export', name: 'International projects', lambda: 20, referencePrice: 30000, greenWeight: 40, enabled: true }
+      { id: 'local', name: 'Regional retailers', lambda: 95 / 6, referencePrice: productId === 'ebike' ? 195000 : 28500, greenWeight: 25, enabled: true },
+      { id: 'export', name: 'International projects', lambda: 20, referencePrice: productId === 'ebike' ? 210000 : 30000, greenWeight: 40, enabled: true }
     ]
   };
 }
-export function createSession({ id = 'session', name = 'The circular economy challenge', seed = 20261112, days = 30, companyNames = ['Helio Works', 'Northstar Solar', 'Verdant Energy'], revenueAt = 'receipt', dailyCorporateOverhead = 0, dailyEnergyOverhead = 0, dailyDepreciation = null, startingPrices = {}, inventoryStatement = 'cogs', openingUnitCosts = {} } = {}) {
+export function createSession({ productId = 'earbuds', id = 'session', name = 'The circular economy challenge', seed = 20261112, days = 30, companyNames = ['Helio Works', 'Northstar Works', 'Verdant Energy'], revenueAt = 'receipt', dailyCorporateOverhead = 0, dailyEnergyOverhead = 0, dailyDepreciation = null, startingPrices = {}, inventoryStatement = 'cogs', openingUnitCosts = {} } = {}) {
+  if (!Object.hasOwn(products, productId)) fail('Choose a supported product.');
   integer(seed, 'Seed', 0, 4294967295); integer(days, 'Duration in days', 1, 180);
   if (!['dispatch', 'receipt'].includes(revenueAt)) fail('Choose dispatch or customer receipt for revenue recognition.');
   integer(dailyCorporateOverhead, 'Daily corporate overhead (cents)', 0, 100000000);
@@ -111,8 +152,8 @@ export function createSession({ id = 'session', name = 'The circular economy cha
     }
   }
   if (!Array.isArray(companyNames) || companyNames.length < 1 || companyNames.length > 12) fail('Choose 1–12 companies.');
-  const s = { id, name: cleanText(name, 'Session name'), schema: VERSION, seed, rng: seed >>> 0, sequence: 0, revision: 0, hour: 0, startDate: '2026-01-01T00:00:00.000Z', endHour: days * 24, status: 'paused', secondsPerHour: 40, features: Object.fromEntries(FEATURES.map(f => [f, { visible: true, allowed: true }])), effects: { carbonDemand: true }, catalog: catalog(), companies: [], events: [], snapshots: [], messages: [], audit: [] };
-  s.recipe = { ...RECIPE };
+  const s = { id, name: cleanText(name, 'Session name'), schema: VERSION, seed, rng: seed >>> 0, sequence: 0, revision: 0, hour: 0, startDate: '2026-01-01T00:00:00.000Z', endHour: days * 24, status: 'paused', secondsPerHour: 40, features: Object.fromEntries(FEATURES.map(f => [f, { visible: true, allowed: true }])), effects: { carbonDemand: true }, productId, catalog: catalog(productId), companies: [], events: [], snapshots: [], messages: [], audit: [] };
+  s.recipe = Object.fromEntries(['cell','frame','controller'].map((key, i) => [key, products[productId].components[i].quantity]));
   s.accounting = { revenueAt, dailyCorporateOverhead };
   if (dailyEnergyOverhead) s.accounting.dailyEnergyOverhead = dailyEnergyOverhead;
   if (dailyDepreciation !== null) s.accounting.dailyDepreciation = dailyDepreciation;
@@ -122,6 +163,14 @@ export function createSession({ id = 'session', name = 'The circular economy cha
   companyNames.forEach((name, i) => {
     const c = { id: `company-${i + 1}`, name: cleanText(name, 'Company name', 60), accounts: {}, ledger: [], inventory: {}, offers: [], orders: [], shipments: [], purchases: [], loans: [], deposits: [], investments: [], notices: [], reorder: {}, autoStatus: {}, workers: 8, machines: 2, shifts: [true, false, false], energy: 'grid', efficiency: 1, satisfaction: 1, quality: 1, marketing: 0, research: 0, production: 0, energyKwh: 0, energyCost: 0, emissions: 0, dispatched: 0, received: 0, receivedValue: 0, demandUnits: 0, lastBottleneck: 'Waiting for the first production hour' };
     for (const [item, qty, cost, carbon, capacity] of [['cell', 14400, 310, 2.2, 36000], ['frame', 600, 1800, 9, 1500], ['controller', 600, 2400, 6, 1500], ['panel', 180, 13000, 72, 1200]]) c.inventory[item] = { qty, value: qty * (openingUnitCosts[item] ?? cost), carbon: qty * carbon, capacity };
+    if (productId !== 'earbuds') {
+      for (const supplier of s.catalog.suppliers.filter(row => row.id.endsWith('-circular'))) {
+        const key = supplier.item, qty = 300 * s.recipe[key];
+        c.inventory[key] = { qty, capacity: qty * 3, value: qty * (openingUnitCosts[key] ?? supplier.price), carbon: qty * supplier.carbon };
+      }
+      const finished = c.inventory.panel;
+      finished.value = finished.qty * (openingUnitCosts.panel ?? Math.round(Object.keys(s.recipe).reduce((v, key) => v + c.inventory[key].value / 300, 0)));
+    }
     const inventoryValue = sum(Object.values(c.inventory).map(x => x.value));
     post(s, c, 'Opening capital and assets', { cash: 18000000, inventory: inventoryValue, fixedAssets: 6000000, equity: -(24000000 + inventoryValue) });
     for (const market of s.catalog.markets) c.offers.push({ id: `${market.id}-standard`, marketId: market.id, price: startingPrices[market.id] ?? market.referencePrice, min: 1, max: 500, delivery: market.id === 'local' ? 60 : 96, payment: 72, enabled: true });
@@ -187,6 +236,7 @@ function requireCompany(s, actor, a) {
   if (!c) fail('Join a company first.', 403); return c;
 }
 export function applyCommand(s, actor, a, realAt = '2026-01-01T00:00:00.000Z', { replay = false } = {}) {
+  if (!s.productId) fail('Archived section is read-only.', 409);
   if (!a || typeof a.type !== 'string') fail('A command type is required.');
   if (s.status === 'deleted') fail('Session not found.', 404);
   if (s.status === 'completed' && actor.role !== 'instructor' && a.type === 'message' && !replay) fail('This session is closed and read-only.', 409);
@@ -540,6 +590,7 @@ function dailyClose(s) {
   s.snapshots.push({ hour: s.hour, companies: s.companies.map(c => ({ id: c.id, name: c.name, cash: balance(c, 'cash'), profit: profit(c), revenue: -balance(c, 'revenue'), production: c.production, inventory: c.inventory.panel.qty, energyKwh: c.energyKwh, energyCost: c.energyCost, emissions: c.emissions, dispatched: c.dispatched, received: c.received, demandUnits: c.demandUnits, marketShare: totalReceived ? c.received / totalReceived * 100 : 0 })) });
 }
 export function advance(s, hours) {
+  if (!s.productId) fail('Archived section is read-only.', 409);
   integer(hours, 'Hours', 1, 168);
   if (s.status === 'completed') fail('Session completed. Extend its duration to continue.');
   for (let i = 0; i < hours && s.hour < s.endHour; i++) {
@@ -556,7 +607,7 @@ export function advance(s, hours) {
   }
   if (s.hour >= s.endHour) s.status = 'completed';
 }
-export function tick(s) { if (s.status === 'running') { advance(s, 1); s.revision++; } }
+export function tick(s) { if (s.productId && s.status === 'running') { advance(s, 1); s.revision++; } }
 export function forecast(s, c) {
   return s.events.filter(e => e.companyId === c.id && e.status === 'pending').map(e => {
     let amount = 0;
@@ -587,7 +638,7 @@ export function assertInvariants(s) {
 function projectPublicView(s, actor, previewId) {
   // Select authorized data before cloning: every classroom poll should copy only
   // its response, not every company's growing private ledger and order history.
-  const view = { ...s }, isTeacher = actor.role === 'instructor';
+  const view = { ...s, status: s.productId ? s.status : 'archived' }, isTeacher = actor.role === 'instructor';
   const companyId = isTeacher ? previewId : actor.companyId;
   const company = s.companies.find(c => c.id === companyId);
   view.company = company ? { ...company, profit: profit(company), forecast: forecast(s, company) } : null;

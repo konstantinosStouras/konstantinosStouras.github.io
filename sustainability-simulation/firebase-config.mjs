@@ -6,4 +6,4 @@ export const firebaseConfig = {
   appId: '1:454257587327:web:d626353183a3ff11cd3b4a',
   messagingSenderId: '454257587327'
 };
-export const classroomBackend = 'https://stouras-sustainability-2026.web.app';
+export const classroomBackend = 'https://classroom-4wjxofkara-nw.a.run.app';
