@@ -1,4 +1,4 @@
-# Sustainability Studio: model and teaching guide
+# Sustainable Supply Chain Management: model and teaching guide
 
 The supplier data used in this simulation corresponds to real data collected from several suppliers. The guide below explains how the simulation uses that data and how its operating rules work.
 
@@ -112,9 +112,9 @@ Carbon includes newly received purchased components and their inbound transport,
 
 ### Classroom accounting settings
 
-For a new classroom, instructors can set the initial regional and international sales offers and the opening unit cost of each inventory item. Blank amounts use Studio defaults. Starting prices do not change the market reference prices or the terms of future offer edits. Opening unit costs set the initial weighted-average carrying values and opening equity without changing stock quantities, cash, or future supplier terms.
+For a new classroom, instructors can set the initial regional and international sales offers and the opening unit cost of each inventory item. Blank amounts use Sustainable Supply Chain Management defaults. Starting prices do not change the market reference prices or the terms of future offer edits. Opening unit costs set the initial weighted-average carrying values and opening equity without changing stock quantities, cash, or future supplier terms.
 
-The inventory statement can show cost of goods sold directly or show received material purchases and the change in inventory since opening. The latter includes goods in transit to customers until the configured sale recognition event. Purchases include the received acquisition cost carried by Studio. Purchases less the inventory change reconcile to the same cost of goods sold. Choosing a statement format changes presentation only.
+The inventory statement can show cost of goods sold directly or show received material purchases and the change in inventory since opening. The latter includes goods in transit to customers until the configured sale recognition event. Purchases include the received acquisition cost carried by Sustainable Supply Chain Management. Purchases less the inventory change reconcile to the same cost of goods sold. Choosing a statement format changes presentation only.
 
 When creating a classroom, the instructor can recognize sales at customer receipt (the default) or at dispatch. Dispatch accounting posts revenue and the associated cost of goods sold together. Customer receipts and their service effects still follow actual arrival, and the payment term still starts at receipt. Existing classrooms keep their original accounting policy.
 
