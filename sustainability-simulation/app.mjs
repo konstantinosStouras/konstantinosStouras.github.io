@@ -1,10 +1,11 @@
-import { supplierEvidence } from './src/supply-performance.mjs?v=6f29d502ed18';
-import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=6f29d502ed18';
-import { createMessageSounds } from './src/message-sounds.mjs?v=6f29d502ed18';
-import { phaseNames, defaultPhases } from './src/phases.mjs?v=6f29d502ed18';
-import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=6f29d502ed18';
-import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=6f29d502ed18';
-import { watchSession } from './src/session-updates.mjs?v=6f29d502ed18';
+import { modelLabel, availableChoices } from './src/model-choices.mjs?v=45131ea3ceb0';
+import { supplierEvidence } from './src/supply-performance.mjs?v=45131ea3ceb0';
+import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=45131ea3ceb0';
+import { createMessageSounds } from './src/message-sounds.mjs?v=45131ea3ceb0';
+import { phaseNames, defaultPhases } from './src/phases.mjs?v=45131ea3ceb0';
+import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=45131ea3ceb0';
+import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=45131ea3ceb0';
+import { watchSession } from './src/session-updates.mjs?v=45131ea3ceb0';
 const root = document.querySelector('#app'), dialog = document.querySelector('#dialog');
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format((n || 0) / 100);
@@ -407,7 +408,7 @@ function renderWelcome() {
   }
 }
 async function getFirebase() {
-  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=6f29d502ed18')).firebase;
+  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=45131ea3ceb0')).firebase;
   return firebaseClient;
 }
 async function enterFirebase() {
@@ -473,7 +474,7 @@ async function testStudents() {
 }
 function testOwner() { return JSON.stringify([backend, firebaseClient?.user?.uid || user.id]); }
 async function savedTests(source) {
-  const client = (await import('./src/test-client.mjs?v=6f29d502ed18')).testClient();
+  const client = (await import('./src/test-client.mjs?v=45131ea3ceb0')).testClient();
   let saved;
   try { saved = await client.call('list',{owner:testOwner(),source}); } finally { client.close(); }
   modal('Saved test sessions', '<p>Saved on this device in this browser profile. Clearing site data removes these tests. Each session retains its students, decisions and results. Open a session to resume or delete it.</p>' + (saved.length ? table(['Session','Hour','Students',''],saved.map(s => {
@@ -490,7 +491,7 @@ async function startTestSetup(id) {
     // The first modal closes before its next form is opened.
     setTimeout(() => modal('Assign test students', '<p>Each student belongs to exactly one company. Choose 1–20 students per company (60 total maximum).</p>' + Array.from({length:count}, (_,i) => `<div class="form-grid">${field('company-'+i,'Company '+(i+1),template.companyNames[i] || 'Company '+(i+1),'text','maxlength="60"')}${field('students-'+i,'Test students', i === 0 ? 2 : 1,'number','min="1" max="20"')}</div>`).join(''), async f => {
       const groups = Array.from({length:count},(_,i) => ({name:f.get('company-'+i),students:value(f,'students-'+i)}));
-      const client = (await import('./src/test-client.mjs?v=6f29d502ed18')).testClient();
+      const client = (await import('./src/test-client.mjs?v=45131ea3ceb0')).testClient();
       try { await navigator.storage?.persist?.().catch(() => false); await client.create(template,groups,{owner:testOwner(),source:id}); await enterTest(client); } catch(e) {client.close();throw e;}
     }, 'Start test round'), 0);
   }, 'Choose students');
@@ -521,8 +522,9 @@ const providers = [['','Built-in practice opponent'],['openai','OpenAI'],['anthr
 function providerFields(account = false) {
   const provider = aiSettings.defaultProvider || (account ? 'openai' : '');
   const model = aiSettings.models[provider];
+  const label = model && modelLabel(provider,model);
   return select('provider','AI provider',account ? providers.slice(1) : providers,provider) +
-    '<div data-provider-settings '+(provider?'':'hidden')+'><label>Provider API key<input name="providerKey" type="password" autocomplete="off" placeholder="'+(model?'Saved for your account':'Enter API key')+'"></label><button type="button" data-load-models>Load available models</button><label>Text-generation model<select name="providerModel">'+(model?'<option>'+esc(model)+'</option>':'')+'</select></label><p data-model-status role="status"></p></div>';
+    '<div data-provider-settings '+(provider?'':'hidden')+'><label>Provider API key<input name="providerKey" type="password" autocomplete="off" placeholder="'+(model?'Saved for your account':'Enter API key')+'"></label><button type="button" data-load-models>Load available models</button><label>Text-generation model<select name="providerModel">'+(label?'<option value="'+esc(model)+'">'+esc(label)+'</option>':'')+'</select></label><p data-model-status role="status"></p></div>';
 }
 function aiSettingsPanel() {
   if (health?.auth !== 'firebase') return '';
@@ -555,7 +557,7 @@ document.addEventListener('input', e => {
     if (e.target.name === 'provider') form.elements.providerKey.value = '';
     const saved = aiSettings.models[form.elements.provider.value];
     form.elements.providerKey.placeholder = saved ? 'Saved for your account' : 'Enter API key';
-    form.elements.providerModel.replaceChildren(...(saved ? [new Option(saved,saved)] : []));
+    form.elements.providerModel.replaceChildren(...(saved && modelLabel(form.elements.provider.value,saved) ? [new Option(modelLabel(form.elements.provider.value,saved),saved)] : []));
     form.querySelector('[data-model-status]').textContent = '';
   }
 });
@@ -575,8 +577,10 @@ async function loadProviderModels(e) {
   try {
     const data = await api('/opponents/models', { provider, key });
     if (provider !== form.elements.provider.value || key !== form.elements.providerKey.value) return;
-    form.elements.providerModel.replaceChildren(new Option('Select a text-generation model',''), ...data.models.map(id => new Option(id,id)));
-    status.textContent = data.models.length+' models available. Choose one that generates text.';
+    const options=availableChoices(provider,data.models);
+    form.elements.providerModel.replaceChildren(...options.map(id => new Option(modelLabel(provider,id),id)));
+    if (options.includes(aiSettings.models[provider])) form.elements.providerModel.value=aiSettings.models[provider];
+    status.textContent = options.length ? 'Cost labels indicate relative text-generation prices.' : 'This key has no available shortlisted models. Choose another provider or the built-in opponent.';
   } catch (err) { status.textContent = err.message; } finally { button.disabled = false; }
 }
 document.addEventListener('click', loadProviderModels);
@@ -1896,7 +1900,7 @@ async function action(name, id) {
     return;
   }
   if (name === 'nav') { page = id; if (id === 'admin' && preview) { preview = undefined; await load(); } else render(); return; }
-  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=6f29d502ed18')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
+  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=45131ea3ceb0')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
   if (name === 'switch-solo') { solo.switchRole(isTeacher() ? 'student' : 'instructor'); preview = undefined; page = isTeacher() ? 'overview' : 'admin'; await load(); return; }
   if (name === 'demo') { await signIn(await api('/demo', { username: id })); return; }
   if (name === 'logout') { if (!solo && token) { try { await api('/logout', {}); } catch {} } if (firebaseClient?.user) await firebaseClient.logout(); solo = null; state = null; actor = null; user = null; token = ''; sessionId = null; sessionStorage.removeItem('studio-token'); selectSession(null); renderWelcome(); return; }
@@ -2079,7 +2083,7 @@ document.addEventListener('change', async event => {
 async function startWorkspace() {
   if (location.hash?.startsWith('#test=')) {
     const testLink = new URLSearchParams(location.hash.slice(1));
-    try { const client = (await import('./src/test-client.mjs?v=6f29d502ed18')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
+    try { const client = (await import('./src/test-client.mjs?v=45131ea3ceb0')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
     catch(e) { root.innerHTML = '<main class="welcome"><h1>Test round unavailable</h1><p>' + esc(e.message) + '</p><div class="toolbar">' + (e.status === 403 ? button('retry-start', 'Try again', '', 'primary') : '') + button('test-leave','Return to classroom') + '</div></main>'; }
     return;
   }
