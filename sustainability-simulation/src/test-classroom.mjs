@@ -1,5 +1,6 @@
-import { createSession, applyCommand, tick, publicView, assertInvariants, fail } from './engine.mjs?v=78dc8abdd5d4';
-import { typingPresence } from './typing-presence.mjs?v=78dc8abdd5d4';
+import { teamVersions, sameTeamDecision } from './phases.mjs?v=bf0482d7502e';
+import { createSession, applyCommand, tick, publicView, assertInvariants, fail } from './engine.mjs?v=bf0482d7502e';
+import { typingPresence } from './typing-presence.mjs?v=bf0482d7502e';
 
 // Shared simulation model; durable snapshots are managed by the worker.
 export class TestClassroom {
@@ -11,7 +12,7 @@ export class TestClassroom {
     this.state.secondsPerHour = template.secondsPerHour ?? this.state.secondsPerHour;
     this.state.isTest = true;
     this.people = [{ id: uuid(), name: 'Test instructor', role: 'instructor', companyId: null, key: uuid() }];
-    this.state.companies.forEach((company, i) => {
+    this.state.companies.filter(c => !c.bot).forEach((company, i) => {
       for (let j = 0; j < groups[i].students; j++) this.people.push({ id: uuid(), name: `Test student ${i + 1}.${j + 1}`, role: 'student', companyId: company.id, key: uuid() });
     });
     this.receipts = new Map(); this.nextTick = null;
@@ -52,7 +53,7 @@ export class TestClassroom {
     if (typeof request.key !== 'string' || request.key.length < 8) fail('A request key is required.');
     const receiptKey = actor.id + ':' + request.key, payload = JSON.stringify(request.command), previous = this.receipts.get(receiptKey);
     if (previous) { if (previous.payload !== payload) fail('Request key already used for a different decision.',409); return previous.response; }
-    if (request.revision !== this.state.revision) fail('The test session changed. Review the refreshed state and try again.',409);
+    if (request.revision !== this.state.revision && !sameTeamDecision(actor, request, teamVersions(this.state))) fail('The test session changed. Review the refreshed state and try again.',409);
     if (['assignment','deleteSession'].includes(request.command?.type)) fail('This action is not available in a temporary test round.');
     const next = structuredClone(this.state), message = applyCommand(next, actor, request.command, new Date(now).toISOString());
     assertInvariants(next);

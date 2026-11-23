@@ -1,8 +1,10 @@
-import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=78dc8abdd5d4';
-import { createMessageSounds } from './src/message-sounds.mjs?v=78dc8abdd5d4';
-import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=78dc8abdd5d4';
-import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=78dc8abdd5d4';
-import { watchSession } from './src/session-updates.mjs?v=78dc8abdd5d4';
+import { supplierEvidence } from './src/supply-performance.mjs?v=bf0482d7502e';
+import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=bf0482d7502e';
+import { createMessageSounds } from './src/message-sounds.mjs?v=bf0482d7502e';
+import { phaseNames, defaultPhases } from './src/phases.mjs?v=bf0482d7502e';
+import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=bf0482d7502e';
+import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=bf0482d7502e';
+import { watchSession } from './src/session-updates.mjs?v=bf0482d7502e';
 const root = document.querySelector('#app'), dialog = document.querySelector('#dialog');
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format((n || 0) / 100);
@@ -207,7 +209,7 @@ async function api(path, body) {
   const scope = connectionScope(), requestSequence = loadSequence;
   if (firebaseClient?.user && health?.auth === 'firebase' && path !== '/health') token = await firebaseClient.token();
   let response;
-  try { response = await fetch(`${backend}/api${path}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(token && path !== '/health' ? { Authorization: `Bearer ${token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000) }); }
+  try { response = await fetch(`${backend}/api${path}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(token && path !== '/health' ? { Authorization: `Bearer ${token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(path.startsWith('/opponents/') ? 45000 : 15000) }); }
   catch {
     if (scope === connectionScope() && requestSequence === loadSequence) { online = false; updateConnectionNotice(); }
     throw new Error('Connection interrupted. We could not confirm a response from the classroom. Check your connection and try again. If you submitted a decision, retry that same decision to confirm its outcome safely.');
@@ -266,7 +268,7 @@ async function command(cmd) {
   try {
     if (testRoom) {
       if (testPending && JSON.stringify(testPending.command) !== JSON.stringify(cmd)) throw new Error('Retry the previous test decision before submitting another.');
-      testPending ||= {key:crypto.randomUUID(),revision:state.revision,command:cmd};
+      testPending ||= {key:crypto.randomUUID(),revision:state.revision,...(state.course?.teamVersion && {teamVersion:state.course.teamVersion}),command:cmd};
       try { const response = await testRoom.call('command',testPending); testPending = null; toast(response.message); await load(false,true); return true; }
       catch(e) { if(e.status >= 400 && e.status < 500 && ![408,429].includes(e.status)) testPending = null; if([403,409,410].includes(e.status)) await load(false,true); throw e; }
     }
@@ -274,7 +276,7 @@ async function command(cmd) {
       request = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
       retrying = !!request;
       if (request && JSON.stringify(request.command) !== JSON.stringify(cmd)) throw new Error('An earlier decision has an unknown response. Retry that same decision before starting another.');
-      request ||= { key: crypto.randomUUID(), revision: state.revision, command: cmd };
+      request ||= { key: crypto.randomUUID(), revision: state.revision, ...(state.course?.teamVersion && {teamVersion:state.course.teamVersion}), command: cmd };
       sessionStorage.setItem(storageKey, JSON.stringify(request));
     }
     const response = solo ? solo.command(cmd) : await api(`/sessions/${sessionId}/command`, request);
@@ -405,7 +407,7 @@ function renderWelcome() {
   }
 }
 async function getFirebase() {
-  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=78dc8abdd5d4')).firebase;
+  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=bf0482d7502e')).firebase;
   return firebaseClient;
 }
 async function enterFirebase() {
@@ -471,7 +473,7 @@ async function testStudents() {
 }
 function testOwner() { return JSON.stringify([backend, firebaseClient?.user?.uid || user.id]); }
 async function savedTests(source) {
-  const client = (await import('./src/test-client.mjs?v=78dc8abdd5d4')).testClient();
+  const client = (await import('./src/test-client.mjs?v=bf0482d7502e')).testClient();
   let saved;
   try { saved = await client.call('list',{owner:testOwner(),source}); } finally { client.close(); }
   modal('Saved test sessions', '<p>Saved on this device in this browser profile. Clearing site data removes these tests. Each session retains its students, decisions and results. Open a session to resume or delete it.</p>' + (saved.length ? table(['Session','Hour','Students',''],saved.map(s => {
@@ -488,7 +490,7 @@ async function startTestSetup(id) {
     // The first modal closes before its next form is opened.
     setTimeout(() => modal('Assign test students', '<p>Each student belongs to exactly one company. Choose 1–20 students per company (60 total maximum).</p>' + Array.from({length:count}, (_,i) => `<div class="form-grid">${field('company-'+i,'Company '+(i+1),template.companyNames[i] || 'Company '+(i+1),'text','maxlength="60"')}${field('students-'+i,'Test students', i === 0 ? 2 : 1,'number','min="1" max="20"')}</div>`).join(''), async f => {
       const groups = Array.from({length:count},(_,i) => ({name:f.get('company-'+i),students:value(f,'students-'+i)}));
-      const client = (await import('./src/test-client.mjs?v=78dc8abdd5d4')).testClient();
+      const client = (await import('./src/test-client.mjs?v=bf0482d7502e')).testClient();
       try { await navigator.storage?.persist?.().catch(() => false); await client.create(template,groups,{owner:testOwner(),source:id}); await enterTest(client); } catch(e) {client.close();throw e;}
     }, 'Start test round'), 0);
   }, 'Choose students');
@@ -514,10 +516,72 @@ function pricingInventoryFields() {
 function costOverrides(form, prefix, fields) {
   return Object.fromEntries(fields.map(([id]) => [id, form.get(prefix + id)]).filter(([, raw]) => raw != null && raw !== '').map(([id, raw]) => [id, Math.round(Number(raw) * 100)]));
 }
-function createSessionFields() { return `<div class="session-setup"><fieldset class="session-details"><legend>Session details</legend><p class="form-note">Give your class a name and a memorable session ID.</p>${field('name', 'Session name', 'Sustainability challenge', 'text', 'maxlength="120"')}${select('productId', 'Product', Object.entries(products).map(([id, p]) => [id, p.name]), 'earbuds')}<img data-product-preview src="earbuds.png" alt="Wireless Earbuds component guide" style="width:100%;height:auto">${select('sessionCity', 'Session ID', [...sessionCities.map(city => [city, city]), ['custom', 'Choose my own ID…']], 'athens')}<label data-custom-session hidden>Custom session ID<input name="customSessionId" disabled minlength="3" maxlength="32" pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*" placeholder="e.g. london-2026" autocapitalize="none" spellcheck="false"></label><p class="form-note">Choose a city or your own ID: 3–32 letters, numbers or hyphens. IDs must be unique. Students enter this ID, then their company code when joining for the first time.</p></fieldset><fieldset><legend>Class setup</legend><div class="form-grid">${field('days', 'Duration (days)', 30, 'number', 'min="1" max="180"')}</div><label>Company names (one per line)<textarea name="companies" required rows="4">Helio Works
+function phaseFields() {
+  const modes = [['team','Independent team vs AI'],['class','Class competition with shared clock']];
+  const providers = [['','Built-in practice opponent'],['openai','OpenAI'],['anthropic','Anthropic'],['google','Google Gemini'],['mistral','Mistral AI'],['xai','xAI'],['deepseek','DeepSeek'],['cohere','Cohere'],['moonshot','Moonshot AI'],['alibaba','Alibaba Cloud Qwen (US)'],['openrouter','OpenRouter · additional labs']];
+  return '<fieldset><legend>Phases and opponents</legend><p>Include the phases you plan to teach. Independent teams advance their own clock. The shared clock runs at the instructor’s pace.</p>' +
+    defaultPhases.map(p => '<div class="form-grid">' + check('include-'+p.id,phaseNames[p.id],true) + select('mode-'+p.id,phaseNames[p.id]+' play mode',modes,p.mode) + '</div>').join('') +
+    field('trainingHours','Training allowance (simulation hours)',48,'number','min="1" max="720"') +
+    '<p data-phase-allocation aria-live="polite">Each of the four non-training phases receives 72 simulation hours, or 48 minutes at the default shared clock speed.</p>' + check('benchmark','Add a shared benchmark for non-training phases',false) +
+    '<details><summary>Practice opponent model</summary><p>The built-in opponent acts every 8–16 simulation hours. A provider model can design the team profiles at setup. During play, each rival uses its assigned policy. Your key is used only for these setup requests.</p>' +
+    select('provider','AI provider',providers,'') + '<div data-provider-settings hidden><label>Provider API key<input name="providerKey" type="password" autocomplete="off" spellcheck="false"></label><button type="button" data-load-models>Load available models</button><label>Text-generation model<select name="providerModel"></select></label><p data-model-status role="status"></p></div></details></fieldset>';
+}
+function updateAllocation(form) {
+  const output = form?.querySelector('[data-phase-allocation]');
+  if (!output) return;
+  const count = defaultPhases.filter(p => p.id !== 'training' && form.elements['include-'+p.id]?.checked).length;
+  const total = Number(form.elements.days.value) * 24;
+  const lo = Math.floor(total/count), hi = Math.ceil(total/count);
+  output.textContent = count ? 'Each of the '+ count +' non-training phases receives '+lo+(hi !== lo ? '–'+hi : '')+' simulation hours. At 40 seconds per hour, a live phase takes about '+Math.round(hi*40/60)+' minutes.' : 'Only the training allowance applies.';
+}
+document.addEventListener('input', e => {
+  const form = e.target.form;
+  if (!form?.querySelector('[data-phase-allocation]')) return;
+  updateAllocation(form);
+  if (e.target.name === 'provider' || e.target.name === 'providerKey') {
+    form.querySelector('[data-provider-settings]').hidden = !form.elements.provider.value;
+    form.elements.providerModel.replaceChildren();
+    form.querySelector('[data-model-status]').textContent = '';
+  }
+});
+async function loadProviderModels(e) {
+  const button = e.target.closest('[data-load-models]');
+  if (!button) return;
+  const form = button.form, provider = form.elements.provider.value, key = form.elements.providerKey.value;
+  const status = form.querySelector('[data-model-status]');
+  button.disabled = true; status.textContent = 'Loading provider catalog…';
+  try {
+    const data = await api('/opponents/models', { provider, key });
+    if (provider !== form.elements.provider.value || key !== form.elements.providerKey.value) return;
+    form.elements.providerModel.replaceChildren(new Option('Select a text-generation model',''), ...data.models.map(id => new Option(id,id)));
+    status.textContent = data.models.length+' models available. Choose one that generates text.';
+  } catch (err) { status.textContent = err.message; } finally { button.disabled = false; }
+}
+document.addEventListener('click', loadProviderModels);
+function coursePanel(admin) {
+  if (!state.course) return '';
+  const course = state.course, phase = course.plan[course.index], team = phase.mode === 'team';
+  const conditions = { training:'Try pricing, sourcing and dispatch before the assessed phases.', main:'Manage your supply chain under baseline conditions.', supply:'New supplier orders face 70% on-time reliability and enabled carriers face 50%.', carbon:'Customers put greater weight on the carbon footprint of finished goods.', tariffs:'The classroom’s 5 April US tariff scenario increases eligible input quotes for new purchases.' };
+  const actions = state.status === 'completed' ? '' : team ? admin ? button('finish-team-block','End independent play for the class') : button('team-step','Advance 1 hour','1') + button('team-step','Advance 8 hours','8') + button('team-step','Advance 24 hours','24') : '';
+  const progress = admin && team ? '<p>'+course.progress.map(p => esc(p.name)+' · '+(p.index >= course.plan.length ? 'finished' : esc(phaseNames[course.plan[p.index].id])+' · '+p.hour+' h')).join(' / ')+'</p>' : '';
+  return '<section class="panel"><h2>'+esc(phaseNames[phase.id])+'</h2><p>'+conditions[phase.id]+'</p><p>'+ (course.waiting ? 'Your team has finished independent play. The next shared phase opens when all teams finish or the instructor ends independent play.' : team ? 'Independent team clock · '+course.elapsed+' / '+phase.hours+' hours. Make decisions, then advance to see the outcome.' : 'Shared class clock · '+course.elapsed+' / '+phase.hours+' hours.')+'</p>'+actions+progress+
+    (course.practice ? table(['Company','Current profit','Units received'],course.practice.map(c=>[esc(c.name),money(c.profit),c.received])) : '')+
+    '<details><summary>Phase schedule and results</summary><ol>'+course.plan.map(p=>'<li>'+esc(phaseNames[p.id])+' · '+p.hours+' h · '+(p.mode==='team'?'Team vs AI':'Class competition')+'</li>').join('')+'</ol>'+
+    (course.benchmark?'<p>The shared benchmark updates its prices hourly to maximize expected one-period contribution given competitors’ current offers. During independent play, one class benchmark faces all teams’ offers for each simulation hour once every team reaches it. Each team can continue at its own pace.</p>':'') +
+    (course.reference || []).map(r => '<p>Shared benchmark · '+esc(phaseNames[r.phase])+' · hour '+r.hour+' · cumulative profit '+money(r.profit)+'</p>').join('') +
+    (course.results.length ? table(['Phase','Company','Cumulative profit','Units received','CO₂e (kg)'],course.results.map(r=>[esc(phaseNames[r.phase])+(r.partial?' (partial)':''),esc(r.name),money(r.profit),r.received,number(r.emissions)])) : '')+'</details></section>';
+}
+function createSessionFields() { return `<div class="session-setup"><fieldset class="session-details"><legend>Session details</legend><p class="form-note">Give your class a name and a memorable session ID.</p>${field('name', 'Session name', 'Sustainability challenge', 'text', 'maxlength="120"')}${select('productId', 'Product', Object.entries(products).map(([id, p]) => [id, p.name]), 'earbuds')}<img data-product-preview src="earbuds.png" alt="Wireless Earbuds component guide" style="width:100%;height:auto">${select('sessionCity', 'Session ID', [...sessionCities.map(city => [city, city]), ['custom', 'Choose my own ID…']], 'athens')}<label data-custom-session hidden>Custom session ID<input name="customSessionId" disabled minlength="3" maxlength="32" pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*" placeholder="e.g. london-2026" autocapitalize="none" spellcheck="false"></label><p class="form-note">Choose a city or your own ID: 3–32 letters, numbers or hyphens. IDs must be unique. Students enter this ID, then their company code when joining for the first time.</p></fieldset>${phaseFields()}<fieldset><legend>Class setup</legend><div class="form-grid">${field('days', 'Total non-training simulation days', 12, 'number', 'min="1" max="180"')}</div><label>Company names (one per line)<textarea name="companies" required rows="4">Helio Works
 Northstar Works
 Verdant Energy</textarea></label></fieldset><details class="session-advanced"><summary>Advanced settings</summary>${field('seed', 'Random seed', 42, 'number', 'min="0" max="4294967295"')}<p class="form-note">Use the same seed to repeat the starting conditions.</p>${health?.classroomAccounting ? `<div class="form-grid">${select('revenueAt', 'Recognize sales revenue at', [['receipt', 'Customer receipt'], ['dispatch', 'Dispatch']], 'receipt')}${field('corporateOverhead', 'Daily corporate overhead (€ per company)', 0, 'number', 'min="0" max="1000000" step="0.01"')}</div><p class="form-note">Customer payment is due after receipt. Corporate overhead is charged at each daily close.</p>` : ''}${health?.operatingCostSettings ? `<div class="form-grid">${field('energyOverhead', 'Additional daily energy overhead (€ per company)', 0, 'number', 'min="0" max="1000000" step="0.01"')}<label>Fixed daily depreciation (€ per company)<input name="depreciation" type="number" min="0" max="1000000" step="0.01" placeholder="20% annual default"></label></div><p class="form-note">Energy overhead adds to electricity charges. Leave depreciation blank for the 20% annual declining-balance method. A fixed charge is capped by the remaining asset value.</p>` : ''}${health?.pricingInventorySettings ? pricingInventoryFields() : ''}</details></div>`; }
 async function createClassroom(f) {
+  const phases = defaultPhases.filter(p => f.has('include-'+p.id)).map(p => ({id:p.id, mode:f.get('mode-'+p.id)}));
+  if (!phases.length) throw new Error('Select at least one phase.');
+  const courseSettings = { phases, benchmark:f.has('benchmark'), trainingHours:value(f,'trainingHours') };
+  if (f.get('provider')) {
+    if (!f.get('providerModel')) throw new Error('Load the provider catalog and select a text-generation model.');
+    courseSettings.policy = await api('/opponents/profiles',{ provider:f.get('provider'), key:f.get('providerKey'), model:f.get('providerModel'), productId:f.get('productId'), count:f.get('companies').split('\n').filter(s=>s.trim()).length });
+  }
   const depreciation = f.get('depreciation');
   const operatingCosts = health?.operatingCostSettings ? {
     dailyEnergyOverhead: Math.round(value(f, 'energyOverhead') * 100),
@@ -528,7 +592,7 @@ async function createClassroom(f) {
     openingUnitCosts: costOverrides(f, 'cost-', inventoryCostFields),
     inventoryStatement: f.get('inventoryStatement')
   } : {};
-  const r = await api('/sessions', { productId: f.get('productId'), ...pricingInventory, ...operatingCosts, ...(health?.classroomAccounting ? { revenueAt: f.get('revenueAt'), dailyCorporateOverhead: Math.round(value(f, 'corporateOverhead') * 100) } : {}), id: f.get('sessionCity') === 'custom' ? f.get('customSessionId') : f.get('sessionCity'), name: f.get('name'), seed: value(f, 'seed'), days: value(f, 'days'), companyNames: f.get('companies').split('\n').map(x => x.trim()).filter(Boolean) }); selectSession(r.id); page = 'admin'; await enter(); }
+  const r = await api('/sessions', { courseSettings, productId: f.get('productId'), ...pricingInventory, ...operatingCosts, ...(health?.classroomAccounting ? { revenueAt: f.get('revenueAt'), dailyCorporateOverhead: Math.round(value(f, 'corporateOverhead') * 100) } : {}), id: f.get('sessionCity') === 'custom' ? f.get('customSessionId') : f.get('sessionCity'), name: f.get('name'), seed: value(f, 'seed'), days: value(f, 'days'), companyNames: f.get('companies').split('\n').map(x => x.trim()).filter(Boolean) }); selectSession(r.id); page = 'admin'; await enter(); }
 const sessionHints = {
   'open-session': 'Open session controls, company previews and reports. Effect on students: opening a session does not change their access or decisions.',
   'copy-session': 'Copy a link to this session. Effect on students: they still need to sign in and belong to a company; the link does not grant access.',
@@ -931,7 +995,7 @@ function render() {
   const scope = interactionScope(), interaction = captureInteraction(scope);
   const titles = { workspace: 'Decision workspace', overview: c ? `Let's make progress, ${c.name.split(' ')[0]}.` : 'A classroom in motion.', orders: 'From offer to arrival.', supply: 'Keep your business moving.', production: 'Make capacity count.', finance: 'Follow the money.', energy: 'Build a better footprint.', reports: 'See the whole picture.', messages: 'Better decisions, together.', help: 'Your guide to running the business.', admin: 'Set the pace of learning.' };
   const subtitles = { workspace: 'Open the panels you need and compare them side by side.', overview: 'Your business, at a glance. Every decision has a next step.', orders: 'Accepted terms stay with each order, from first dispatch to final payment.', supply: 'Balance availability, working capital, and the footprint of every component.', production: 'Coordinate materials, people, machines, and the hours they work.', finance: 'Cash is available money. Profit is revenue earned less costs incurred.', energy: 'Invest now. Track activation and the results over time.', reports: 'Comparable daily results, with every reporting boundary clearly marked.', messages: 'A shared space for announcements, questions, and team decisions.', help: 'Know what to check, which decisions to make, and what happens next.', admin: 'Control the shared clock, classroom access, and teaching parameters.' };
-  root.innerHTML = `<div class="layout">${!admin || preview ? workspaceNavigation(admin, visible) : ''}<div class="workspace"><header class="topbar"><div class="breadcrumb">Workspace &nbsp; / &nbsp; <strong>${pages[page] || "Decision workspace"}</strong></div><div class="top-actions">${user?.role === 'instructor' ? button('sessions', 'All sessions', '', 'small') : ''}${accountControls(actor)}</div></header>${testRoom ? `<div class="mode-banner"><span><strong>Saved test session</strong> · ${esc(actor.name)} · Saved in this browser profile. Close tabs and return later; delete only when finished.</span>${admin ? button('test-students', 'Open test student tabs') + button('test-end', 'Delete test session') : ''}${button('test-leave', 'Leave test')}</div>` : solo ? `<div class="mode-banner"><span><strong>Solo sandbox</strong> · ${solo.isTest ? 'Private test round · changes are discarded when you leave.' : 'Saved in this browser. Switch roles to rehearse; no other people are connected.'}</span>${button('switch-solo', admin ? 'Play a company' : 'Instructor view')}</div>` : health?.demo ? '<div class="mode-banner"><span><strong>Local classroom demo</strong> · Synthetic accounts share durable server state. Demo sign-in is enabled on this computer.</span></div>' : ''}<main id="content" class="content">${connectionNotice()}<div class="page-heading"><div><div class="eyebrow">${esc(state.name)}${c ? ` &nbsp; / &nbsp; ${esc(c.name)}` : ''}</div><h1 tabindex="-1">${esc(titles[page])}</h1><p>${subtitles[page]}</p></div>${page === 'admin' ? '' : `<div class="timebox">${shiftIndicator()}<span class="badge ${state.status === 'running' ? '' : 'amber'}">● ${esc(state.status)}</span><strong>${simDate(state.hour)} · simulation</strong><small>Day ${Math.floor(state.hour / 24) + 1} · ends ${simDate(state.endHour)}</small></div>`}</div>${state.status === 'completed' ? `<div class="advice warning"><strong>Session complete. ${state.events.filter(e => e.status === 'pending').length} scheduled events remain.</strong>${admin ? 'Pending deliveries, payments, and investments are preserved. The instructor can extend the end date to settle them.' : 'Final reports and CSV downloads remain available. New decisions are disabled.'}</div>` : ''}${admin ? `<div class="toolbar instructor-toolbar control-toolbar" aria-label="Instructor controls">${select('preview', 'Company preview · read-only', [['', 'All companies'], ...state.companies.map(x => [x.id, x.name])], preview || '')}<nav class="instructor-links" aria-label="Instructor pages">${button('nav', 'Session control', 'admin', 'small')}${button('nav', 'Class overview', 'overview', 'small')}${button('nav', 'Reports', 'reports', 'small')}${button('nav', 'Messages', 'messages', 'small')}</nav></div>` : ''}${!admin && !solo && !testRoom ? `<div class="toolbar" aria-label="Classroom access">${button('join', 'Join another class', '', 'small')}${button('sessions', 'Switch session', '', 'small')}</div>` : ''}${page === "workspace" ? studentWorkspace(visible) : pageBody()}<div class="footer-note">${button('nav', 'Help & guide', 'help', 'small')}<p>All amounts are simulated EUR · Emissions in kg CO₂e · Simulation dates use UTC · Live state at ${simDate(state.hour)} · Model v${state.schema}</p></div></main></div></div>`;
+  root.innerHTML = `<div class="layout">${!admin || preview ? workspaceNavigation(admin, visible) : ''}<div class="workspace"><header class="topbar"><div class="breadcrumb">Workspace &nbsp; / &nbsp; <strong>${pages[page] || "Decision workspace"}</strong></div><div class="top-actions">${user?.role === 'instructor' ? button('sessions', 'All sessions', '', 'small') : ''}${accountControls(actor)}</div></header>${testRoom ? `<div class="mode-banner"><span><strong>Saved test session</strong> · ${esc(actor.name)} · Saved in this browser profile. Close tabs and return later; delete only when finished.</span>${admin ? button('test-students', 'Open test student tabs') + button('test-end', 'Delete test session') : ''}${button('test-leave', 'Leave test')}</div>` : solo ? `<div class="mode-banner"><span><strong>Solo sandbox</strong> · ${solo.isTest ? 'Private test round · changes are discarded when you leave.' : 'Saved in this browser. Switch roles to rehearse; no other people are connected.'}</span>${button('switch-solo', admin ? 'Play a company' : 'Instructor view')}</div>` : health?.demo ? '<div class="mode-banner"><span><strong>Local classroom demo</strong> · Synthetic accounts share durable server state. Demo sign-in is enabled on this computer.</span></div>' : ''}<main id="content" class="content">${connectionNotice()}${coursePanel(admin)}<div class="page-heading"><div><div class="eyebrow">${esc(state.name)}${c ? ` &nbsp; / &nbsp; ${esc(c.name)}` : ''}</div><h1 tabindex="-1">${esc(titles[page])}</h1><p>${subtitles[page]}</p></div>${page === 'admin' ? '' : `<div class="timebox">${shiftIndicator()}<span class="badge ${state.status === 'running' ? '' : 'amber'}">● ${esc(state.status)}</span><strong>${simDate(state.hour)} · simulation</strong><small>Day ${Math.floor(state.hour / 24) + 1} · ends ${simDate(state.endHour)}</small></div>`}</div>${state.status === 'completed' ? `<div class="advice warning"><strong>Session complete. ${state.events.filter(e => e.status === 'pending').length} scheduled events remain.</strong>${admin ? 'Pending deliveries, payments, and investments are preserved. The instructor can extend the end date to settle them.' : 'Final reports and CSV downloads remain available. New decisions are disabled.'}</div>` : ''}${admin ? `<div class="toolbar instructor-toolbar control-toolbar" aria-label="Instructor controls">${select('preview', 'Company preview · read-only', [['', 'All companies'], ...state.companies.map(x => [x.id, x.name])], preview || '')}<nav class="instructor-links" aria-label="Instructor pages">${button('nav', 'Session control', 'admin', 'small')}${button('nav', 'Class overview', 'overview', 'small')}${button('nav', 'Reports', 'reports', 'small')}${button('nav', 'Messages', 'messages', 'small')}</nav></div>` : ''}${!admin && !solo && !testRoom ? `<div class="toolbar" aria-label="Classroom access">${button('join', 'Join another class', '', 'small')}${button('sessions', 'Switch session', '', 'small')}</div>` : ''}${page === "workspace" ? studentWorkspace(visible) : pageBody()}<div class="footer-note">${button('nav', 'Help & guide', 'help', 'small')}<p>All amounts are simulated EUR · Emissions in kg CO₂e · Simulation dates use UTC · Live state at ${simDate(state.hour)} · Model v${state.schema}</p></div></main></div></div>`;
   for (const pane of root.querySelectorAll?.('.student-pane') || []) applyPaneLayout(pane);
   rememberWorkspaceView();
   const pending = !solo && !testRoom && sessionStorage.getItem(`studio-pending:${backend}:${actor.id}:${sessionId}`);
@@ -1093,7 +1157,7 @@ function inventoryPanel(embedded = false) {
   return panel(embedded ? '' : 'Inventory', '', `${buildSummary}${filters}<div class="inventory-table">${table(['Item', 'Amount / capacity', `Needed / ${product}`, 'Avg cost / unit', 'Ordered', 'kg CO₂e / unit'], rows, 'Select Finished or Components to show stock.')}</div><p class="form-note inventory-note">Counts reflect materials only. The forecast adds all outstanding purchases to today’s stock, assuming no stock is used before receipt. Stock above capacity costs €0.05 per excess unit per day.</p>${wasteAction}`) + timeline;
 }
 function suppliersPanel(embedded = false) {
-  return `${panel(embedded ? '' : 'Supplier marketplace', 'All orders have a landed fixed fee. Supplier stock is shared across companies.', table(['Supplier / item', 'Unit price', 'Order fee', 'Lead / payment', 'Delivery accuracy', 'Component / freight CO₂e', 'Available / lot', ''], state.catalog.suppliers.filter(s => s.enabled).map(s => [`<strong>${esc(s.name)}</strong><small>${itemName(state, s.item)} · Origin: ${esc(sourcingOrigins[s.id] || "Unspecified")}</small>`, sortCell(exactMoney(s.price), s.price), sortCell(exactMoney(s.fee), s.fee), sortCell(`${s.lead} h / ${s.term} h<small>Payment after receipt</small>`, s.lead), sortCell(`${s.reliability}% on time<small>Up to ${s.maxDelay} h extra</small>`, s.reliability), sortCell(`${precise(s.carbon)} / ${precise(s.freight)} kg per unit<small>${precise(s.carbon + s.freight)} kg total per unit</small>`, s.carbon), sortCell(`${number(s.stock)}<small>Minimum ${s.min} · lot ${s.lot}</small>`, s.stock), button('purchase', 'Order', s.id, 'small', !permitted('purchasing'))])))}`;
+  return `${panel(embedded ? '' : 'Supplier marketplace', 'All orders have a landed fixed fee. Supplier stock is shared across companies.', table(['Supplier / item', 'Unit price', 'Order fee', 'Lead / payment', 'Delivery accuracy', 'Component / freight CO₂e', 'Available / lot', 'Simulated ESG follow-up', ''], state.catalog.suppliers.filter(s => s.enabled).map(s => [`<strong>${esc(s.name)}</strong><small>${itemName(state, s.item)} · Origin: ${esc(sourcingOrigins[s.id] || "Unspecified")}</small>`, sortCell(exactMoney(s.price), s.price), sortCell(exactMoney(s.fee), s.fee), sortCell(`${s.lead} h / ${s.term} h<small>Payment after receipt</small>`, s.lead), sortCell(`${s.reliability}% on time<small>Up to ${s.maxDelay} h extra</small>`, s.reliability), sortCell(`${precise(s.carbon)} / ${precise(s.freight)} kg per unit<small>${precise(s.carbon + s.freight)} kg total per unit</small>`, s.carbon), sortCell(`${number(s.stock)}<small>Minimum ${s.min} · lot ${s.lot}</small>`, s.stock), esc(supplierEvidence(s)[3]), button('purchase', 'Order', s.id, 'small', !permitted('purchasing'))])))}`;
 }
 function logisticsPanel(embedded = false) {
   return `${panel(embedded ? '' : 'Logistics services', 'Compare the enabled routes before dispatching a customer order.', table(['Route', 'Duration', 'Cost / shipment', 'Cost / unit', 'Delivery accuracy', 'Transport CO₂e'], state.catalog.routes.filter(r => r.enabled).map(r => [esc(r.name), sortCell(`${r.hours} h`, r.hours), sortCell(exactMoney(r.fixed), r.fixed), sortCell(exactMoney(r.unit), r.unit), sortCell(`${r.reliability}% on time<small>Up to ${r.maxDelay} h extra</small>`, r.reliability), sortCell(`${precise(r.carbonFixed)} kg / shipment<small>${precise(r.carbonUnit)} kg / unit</small>`, r.carbonFixed)]), 'No transport routes are enabled.'))}`;
@@ -1430,6 +1494,7 @@ const clockSpeedBands = [
 const clockSpeedBand = speed => clockSpeedBands.find(band => speed >= band.min && speed <= band.max);
 const clockBandMidpoint = band => Math.round((band.min + band.max) / 2);
 function adminClock() {
+  if (state.course?.plan[state.course.index]?.mode === 'team') return '<p>Teams control simulation time during independent play. Use the phase panel above to review progress.</p>';
   const date = new Date(Date.parse(state.startDate) + state.hour * 3600000);
   const dateLabel = date.toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
   const timeLabel = date.toLocaleTimeString('en-GB', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit', hourCycle: 'h12' }).replace(/(\d)\s+(am|pm)/i, '$1$2');
@@ -1638,10 +1703,16 @@ function updateDispatchContext(id, form, refreshRoutes = false) {
 function openPurchase(id) {
   const supplier = state.catalog.suppliers.find(s => s.id === id);
   if (!supplier) return;
-  modal(`Order ${itemName(state, supplier.item)}`, `<p id="purchase-context" class="form-note"></p>${field('qty', 'Quantity', supplier.min, 'number', `min="${supplier.min}" max="${supplier.stock}" step="${supplier.lot}"`)}<div id="purchase-quote" class="advice"></div>`, f => command({ type: 'purchase', supplierId: id, qty: value(f, 'qty') }), 'Place purchase');
+  modal(`Order ${itemName(state, supplier.item)}`, `${supplierDecisionEvidence(supplier)}<p id="purchase-context" class="form-note"></p>${field('qty', 'Quantity', supplier.min, 'number', `min="${supplier.min}" max="${supplier.stock}" step="${supplier.lot}"`)}<div id="purchase-quote" class="advice"></div>`, f => command({ type: 'purchase', supplierId: id, qty: value(f, 'qty') }), 'Place purchase');
   const form = dialog.querySelector('form');
   form.refreshContext = () => updatePurchaseContext(id, form);
   form.addEventListener('input', form.refreshContext); form.refreshContext();
+}
+function supplierDecisionEvidence(supplier) {
+  const [environment, social, governance, action] = supplierEvidence(supplier);
+  const due = company().purchases.filter(p => p.supplier === supplier.name && p.item === supplier.item && p.expectedAt <= state.hour);
+  const onTime = due.filter(p => p.receivedAt != null && p.receivedAt <= p.expectedAt).length;
+  return '<p class="form-note">Inbound orders received by their promised time: ' + onTime + ' of ' + due.length + ' due. Quoted lead: ' + supplier.lead + ' hours, plus up to ' + supplier.maxDelay + ' hours of delay. Late components can reduce customer on-time arrivals and units fulfilled. Landed cost affects profit as stock is sold. Component and inbound emissions contribute to total emissions and emissions per euro of sales.</p><p class="form-note"><strong>Simulated supplier evidence</strong> · Environment: ' + esc(environment) + ' · Social: ' + esc(social) + ' · Governance: ' + esc(governance) + '. Follow-up: ' + esc(action) + '.</p>';
 }
 function updatePurchaseContext(id, form) {
   const supplier = state.catalog.suppliers.find(s => s.id === id), quantity = form.querySelector('[name=qty]'), context = form.querySelector('#purchase-context'), quote = form.querySelector('#purchase-quote');
@@ -1681,6 +1752,8 @@ document.addEventListener('keydown', event => {
 });
 
 async function action(name, id) {
+  if (name === 'team-step') return command({type:'teamStep',hours:Number(id)});
+  if (name === 'finish-team-block') return modal('End independent play?', '<p>This closes the current block of independent phases for all teams and records unfinished results as partial.</p>', () => command({type:'finishTeamBlock'}), 'End independent play');
   if (name === 'tariff-preview' && Object.hasOwn(tariffHistory, id)) { previewTariff = id; render(); return; }
   if (name === 'disruption-tab' && Object.hasOwn(disruptionTabs, id)) { disruptionTab = id; render(); return; }
   if (name === 'disruption-preset') { await applyDisruption(id); return; }
@@ -1801,7 +1874,7 @@ async function action(name, id) {
     return;
   }
   if (name === 'nav') { page = id; if (id === 'admin' && preview) { preview = undefined; await load(); } else render(); return; }
-  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=78dc8abdd5d4')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
+  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=bf0482d7502e')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
   if (name === 'switch-solo') { solo.switchRole(isTeacher() ? 'student' : 'instructor'); preview = undefined; page = isTeacher() ? 'overview' : 'admin'; await load(); return; }
   if (name === 'demo') { await signIn(await api('/demo', { username: id })); return; }
   if (name === 'logout') { if (!solo && token) { try { await api('/logout', {}); } catch {} } if (firebaseClient?.user) await firebaseClient.logout(); solo = null; state = null; actor = null; user = null; token = ''; sessionId = null; sessionStorage.removeItem('studio-token'); selectSession(null); renderWelcome(); return; }
@@ -1845,7 +1918,7 @@ async function action(name, id) {
   if (name === 'join') { selectSession(null); renderLobby(); return; }
   if (name === 'roster') { roster = await api(`/sessions/${sessionId}/roster`); modal('Companies & join codes', `<p class="form-note">Share each code with that company’s students. Codes do not grant instructor access.</p>${table(['Company', 'Student join code', ''], roster.invites.map(i => [esc(state.companies.find(c => c.id === i.companyId)?.name), `<code>${esc(i.code)}</code>`, button('rename', 'Rename', i.companyId, 'small')]))}${table(['Participant', 'Company', ''], roster.members.filter(u => u.role === 'student').map(u => [esc(u.name), esc(state.companies.find(c => c.id === u.companyId)?.name), button('assign', 'Reassign', u.id, 'small')]))}`); }
   if (name === 'rename') modal('Rename company', field('name', 'Company name', state.companies.find(c => c.id === id).name, 'text', 'maxlength="60"'), f => command({ type: 'renameCompany', companyId: id, name: f.get('name') }));
-  if (name === 'assign') modal('Assign student to a company', `<p class="form-note">Previous team and peer channels will no longer be accessible. Membership is checked on each request.</p>${select('companyId', 'Company', state.companies.map(c => [c.id, c.name]), roster.members.find(u => u.id === id)?.companyId)}`, async f => { await api(`/sessions/${sessionId}/assign`, { userId: id, companyId: f.get('companyId') }); await load(false); });
+  if (name === 'assign') modal('Assign student to a company', `<p class="form-note">Previous team and peer channels will no longer be accessible. Membership is checked on each request.</p>${select('companyId', 'Company', state.companies.filter(c => c.id !== 'benchmark' && !c.id.startsWith('opponent-')).map(c => [c.id, c.name]), roster.members.find(u => u.id === id)?.companyId)}`, async f => { await api(`/sessions/${sessionId}/assign`, { userId: id, companyId: f.get('companyId') }); await load(false); });
   if (name === 'catalog-list') {
     const markets = id === 'markets';
     modal(`${id.charAt(0).toUpperCase() + id.slice(1)} catalogue`,
@@ -1980,7 +2053,7 @@ document.addEventListener('change', async event => {
 async function startWorkspace() {
   if (location.hash?.startsWith('#test=')) {
     const testLink = new URLSearchParams(location.hash.slice(1));
-    try { const client = (await import('./src/test-client.mjs?v=78dc8abdd5d4')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
+    try { const client = (await import('./src/test-client.mjs?v=bf0482d7502e')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
     catch(e) { root.innerHTML = '<main class="welcome"><h1>Test round unavailable</h1><p>' + esc(e.message) + '</p><div class="toolbar">' + (e.status === 403 ? button('retry-start', 'Try again', '', 'primary') : '') + button('test-leave','Return to classroom') + '</div></main>'; }
     return;
   }

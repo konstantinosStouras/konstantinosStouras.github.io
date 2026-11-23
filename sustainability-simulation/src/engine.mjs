@@ -1,3 +1,5 @@
+import { setupPhases, laneView, teamDecision, sharedHourFinished, courseView, finishBlock } from './phases.mjs?v=bf0482d7502e';
+import { opponentTurn, appeal } from './opponents.mjs?v=bf0482d7502e';
 // Keys identify products in saved sessions. Quantities are per sellable unit.
 export const products = {
   earbuds: {
@@ -133,7 +135,7 @@ export function catalog(productId = 'earbuds') {
     ]
   };
 }
-export function createSession({ productId = 'earbuds', id = 'session', name = 'The circular economy challenge', seed = 20261112, days = 30, companyNames = ['Helio Works', 'Northstar Works', 'Verdant Energy'], revenueAt = 'receipt', dailyCorporateOverhead = 0, dailyEnergyOverhead = 0, dailyDepreciation = null, startingPrices = {}, inventoryStatement = 'cogs', openingUnitCosts = {} } = {}) {
+export function createSession({ courseSettings, productId = 'earbuds', id = 'session', name = 'The circular economy challenge', seed = 20261112, days = 30, companyNames = ['Helio Works', 'Northstar Works', 'Verdant Energy'], revenueAt = 'receipt', dailyCorporateOverhead = 0, dailyEnergyOverhead = 0, dailyDepreciation = null, startingPrices = {}, inventoryStatement = 'cogs', openingUnitCosts = {} } = {}) {
   if (!Object.hasOwn(products, productId)) fail('Choose a supported product.');
   integer(seed, 'Seed', 0, 4294967295); integer(days, 'Duration in days', 1, 180);
   if (!['dispatch', 'receipt'].includes(revenueAt)) fail('Choose dispatch or customer receipt for revenue recognition.');
@@ -176,6 +178,7 @@ export function createSession({ productId = 'earbuds', id = 'session', name = 'T
     for (const market of s.catalog.markets) c.offers.push({ id: `${market.id}-standard`, marketId: market.id, price: startingPrices[market.id] ?? market.referencePrice, min: 1, max: 500, delivery: market.id === 'local' ? 60 : 96, payment: 72, enabled: true });
     s.companies.push(c);
   });
+  if (courseSettings) setupPhases(s, courseSettings);
   return s;
 }
 export function inventoryStatementValues(company) {
@@ -185,7 +188,7 @@ export function inventoryStatementValues(company) {
   return { purchases, inventoryChange };
 }
 function sampleDelay(s, obj) { return random(s) * 100 < obj.reliability ? 0 : 1 + Math.floor(random(s) * obj.maxDelay); }
-function purchase(s, c, a, automated = false) {
+export function purchase(s, c, a, automated = false) {
   const sup = s.catalog.suppliers.find(x => x.id === a.supplierId && x.enabled);
   if (!sup) fail('Choose an enabled supplier.');
   const qty = integer(a.qty, 'Purchase quantity', sup.min, 1000000);
@@ -203,7 +206,7 @@ function purchase(s, c, a, automated = false) {
   schedule(s, c, 'purchaseReceipt', p.expectedAt + sampleDelay(s, sup), { purchaseId: p.id }, `${qty} ${itemName(s, p.item)} arrive from ${sup.name}`);
   return `Purchase ${p.id} accepted. Expected in ${sup.lead} h; payment ${sup.term} h after receipt.`;
 }
-function dispatch(s, c, a) {
+export function dispatch(s, c, a) {
   const order = c.orders.find(x => x.id === a.orderId);
   if (!order) fail('Order not found.');
   const qty = integer(a.qty, 'Dispatch quantity', 1, order.remaining);
@@ -233,7 +236,7 @@ function requireCompany(s, actor, a) {
   if (actor.role !== 'student') fail('Instructor previews are read-only. Sign in as a student to make company decisions.', 403);
   if (a.companyId && a.companyId !== actor.companyId) fail('You cannot act for another company.', 403);
   const c = s.companies.find(x => x.id === actor.companyId);
-  if (!c) fail('Join a company first.', 403); return c;
+  if (!c || c.bot) fail('Join a company first.', 403); return c;
 }
 export function applyCommand(s, actor, a, realAt = '2026-01-01T00:00:00.000Z', { replay = false } = {}) {
   if (!s.productId) fail('Archived section is read-only.', 409);
@@ -244,13 +247,22 @@ export function applyCommand(s, actor, a, realAt = '2026-01-01T00:00:00.000Z', {
   for (const c of s.companies) c.energyTerms ||= structuredClone(s.catalog.energy.find(x => x.id === c.energy));
   for (const e of s.events) if (e.type === 'energy' && e.status === 'pending') e.data.terms ||= structuredClone(s.catalog.energy.find(x => x.id === e.data.energyId));
   let result;
-  if (['step', 'clock', 'configure', 'catalog', 'renameCompany', 'assignment', 'closeSession', 'deleteSession'].includes(a.type)) {
+  const decisionHour = actor.role === 'student' ? (s.course?.lanes[actor.companyId]?.world.hour ?? s.hour) : s.hour;
+  const teamPhase = s.course?.plan[s.course.index]?.mode === 'team';
+  if (teamPhase && actor.role === 'student' && a.type !== 'message') {
+    result = teamDecision(s, actor, a, realAt, { replay });
+  } else if (a.type === 'finishTeamBlock') {
+    if (actor.role !== 'instructor') fail('Instructor access required.', 403);
+    if (!teamPhase || s.status === 'completed') fail('No open team phase.', 409);
+    finishBlock(s); result = 'Independent play closed.';
+  } else if (['step', 'clock', 'configure', 'catalog', 'renameCompany', 'assignment', 'closeSession', 'deleteSession'].includes(a.type)) {
     if (actor.role !== 'instructor') fail('Instructor access required.', 403);
     // Store.assign updates membership in the same transaction. This deterministic
     // transition preserves its audit record and revision in exported replay.
+    if (teamPhase && (a.type === 'step' || a.type === 'clock' && a.status === 'running')) fail('End independent play before starting the shared clock.', 409);
     if (a.type === 'assignment') {
       cleanText(a.userId, 'Assigned user', 200);
-      if (!s.companies.some(c => c.id === a.companyId)) fail('Company not found.');
+      if (!s.companies.some(c => c.id === a.companyId && !c.bot)) fail('Company not found.');
       result = 'Student assignment updated.';
     }
     if (a.type === 'closeSession') { s.plannedEndHour ??= s.endHour; s.status = 'completed'; s.endHour = s.hour; result = 'Session closed.'; }
@@ -266,6 +278,7 @@ export function applyCommand(s, actor, a, realAt = '2026-01-01T00:00:00.000Z', {
       if (a.secondsPerHour !== undefined) s.secondsPerHour = integer(a.secondsPerHour, 'Seconds per hour', 1, 120);
       if (a.studentAccess !== undefined) s.studentAccess = bool(a.studentAccess, 'Student access');
       if (a.name !== undefined) s.name = cleanText(a.name, 'Session name');
+      if (a.endHour !== undefined && s.course) fail('Phase durations are fixed at session creation.');
       if (a.endHour !== undefined) { s.endHour = integer(a.endHour, 'End hour', Math.max(24, s.hour), 4320); if (s.hour >= s.endHour) s.status = 'completed'; else if (s.status === 'completed') s.status = 'paused'; }
       if (a.carbonDemand !== undefined) s.effects.carbonDemand = bool(a.carbonDemand, 'Carbon demand effect');
       if (a.feature !== undefined) { if (!FEATURES.includes(a.feature)) fail('Unknown capability.'); s.features[a.feature] = { visible: bool(a.visible, 'Visibility'), allowed: bool(a.allowed, 'Decision permission') }; }
@@ -395,7 +408,8 @@ export function applyCommand(s, actor, a, realAt = '2026-01-01T00:00:00.000Z', {
     }
     notice(s, c, result, 'decision');
   }
-  s.audit.push({ id: uid(s, 'audit'), hour: s.hour, realAt, actorId: actor.id, actorName: actor.name, role: actor.role, companyId: actor.companyId || null, command: structuredClone(a), result });
+  if (s.course && actor.role === 'instructor' && a.type !== 'message') s.course.controlVersion = s.revision + 1;
+  s.audit.push({ id: uid(s, 'audit'), hour: teamPhase ? decisionHour : s.hour, realAt, actorId: actor.id, actorName: actor.name, role: actor.role, companyId: actor.companyId || null, command: structuredClone(a), result });
   s.revision++; return result;
 }
 export function canMessage(s, actor, channel, sending = false) {
@@ -512,18 +526,20 @@ function demand(s) {
     const candidates = s.companies.map(c => {
       const offer = c.offers.filter(o => o.marketId === market.id && o.enabled).sort((a, b) => a.price - b.price || a.id.localeCompare(b.id))[0];
       if (!offer) return null;
-      const footprint = c.inventory.panel.qty ? c.inventory.panel.carbon / c.inventory.panel.qty : 75;
-      const green = s.effects.carbonDemand ? Math.exp(-market.greenWeight / 100 * footprint / 100) : 1;
-      const score = Math.pow(market.referencePrice / offer.price, 2) * c.satisfaction * c.quality * (1 + Math.sqrt(c.marketing / 10000) * 0.1) * green * (1 + offer.payment / 2400) / (1 + offer.delivery / 480);
+      const score = appeal(s, market, c, offer) / offer.price ** 2;
       return { c, offer, score };
     }).filter(Boolean);
+    for (const row of s.referenceQuotes ?? []) {
+      const score = row.scores[s.catalog.markets.indexOf(market)];
+      if (score > 0) candidates.push({ c: { id: row.id }, score });
+    }
     const total = sum(candidates.map(x => x.score));
     if (!total) continue;
     const allocated = candidates.map(x => ({ ...x, exact: units * x.score / total, qty: Math.floor(units * x.score / total) }));
     let left = units - sum(allocated.map(x => x.qty));
     for (const x of [...allocated].sort((a, b) => (b.exact - b.qty) - (a.exact - a.qty) || a.c.id.localeCompare(b.c.id))) if (left-- > 0) x.qty++;
     for (const { c, offer, qty } of allocated) {
-      if (qty < offer.min) continue; const accepted = Math.min(qty, offer.max);
+      if (!offer || qty < offer.min) continue; const accepted = Math.min(qty, offer.max);
       c.orders.push({ id: uid(s, 'order'), marketId: market.id, customer: `${market.name} · ${s.hour}h`, originalQty: accepted, remaining: accepted, received: 0, price: offer.price, payment: offer.payment, createdAt: s.hour, dueAt: s.hour + offer.delivery, reason: 'Weighted allocation: price, delivery promise, payment term, quality, reputation, marketing' + (s.effects.carbonDemand ? ' and module carbon intensity.' : '. Carbon effect is disabled.') }); c.demandUnits += accepted;
     }
   }
@@ -594,6 +610,7 @@ export function advance(s, hours) {
   integer(hours, 'Hours', 1, 168);
   if (s.status === 'completed') fail('Session completed. Extend its duration to continue.');
   for (let i = 0; i < hours && s.hour < s.endHour; i++) {
+    if (s.course && s.course.plan[s.course.index]?.mode !== 'class') break;
     s.hour++;
     // Production closes (hour - 1, hour]; boundary changes govern the next interval.
     const closingShifts = new Map(s.companies.map(c => [c.id, [...c.shifts]]));
@@ -601,11 +618,13 @@ export function advance(s, hours) {
     let due;
     while ((due = s.events.filter(e => e.status === 'pending' && e.at <= s.hour).sort((a, b) => a.at - b.at || Number(a.id.split('-')[1]) - Number(b.id.split('-')[1]))[0])) executeEvent(s, due);
     for (const c of s.companies) production(s, c, closingShifts.get(c.id));
+    for (const c of s.companies) if (c.bot) opponentTurn(s, c);
     demand(s);
     for (const c of s.companies) automated(s, c);
     if (s.hour % 24 === 0) dailyClose(s);
+    sharedHourFinished(s);
   }
-  if (s.hour >= s.endHour) s.status = 'completed';
+  if (!s.course && s.hour >= s.endHour) s.status = 'completed';
 }
 export function tick(s) { if (s.productId && s.status === 'running') { advance(s, 1); s.revision++; } }
 export function forecast(s, c) {
@@ -633,11 +652,16 @@ export function assertInvariants(s) {
       if (o.originalQty !== o.remaining + shipped || o.received > shipped) fail('Order conservation failed.', 500);
     }
   }
+  for (const lane of Object.values(s.course?.lanes ?? {})) assertInvariants(lane.world);
   return true;
 }
 function projectPublicView(s, actor, previewId) {
   // Select authorized data before cloning: every classroom poll should copy only
   // its response, not every company's growing private ledger and order history.
+  const parent = s, teamId = actor.role === 'instructor' ? previewId : actor.companyId;
+  const lane = laneView(parent, teamId);
+  const finalWorld = parent.status === 'completed' && parent.course?.lanes[teamId]?.world;
+  s = lane?.world || finalWorld || parent;
   const view = { ...s, status: s.productId ? s.status : 'archived' }, isTeacher = actor.role === 'instructor';
   const companyId = isTeacher ? previewId : actor.companyId;
   const company = s.companies.find(c => c.id === companyId);
@@ -646,6 +670,14 @@ function projectPublicView(s, actor, previewId) {
   view.events = view.events.filter(e => isTeacher || e.companyId === companyId);
   view.messages = view.messages.filter(m => canMessage(s, actor, m.channel));
   view.audit = view.audit.filter(a => isTeacher || a.companyId === companyId).map(a => ({ ...a, command: a.command.type === 'message' ? { type: 'message' } : a.command }));
+  if (parent.course) {
+    view.course = courseView(parent, actor, teamId, lane);
+    view.id = parent.id; view.name = parent.name; view.revision = parent.revision;
+    view.status = parent.status === 'completed' || lane?.waiting ? 'completed' : s.status;
+    view.features = parent.features; view.studentAccess = parent.studentAccess;
+    view.messages = parent.messages.filter(m => canMessage(parent, actor, m.channel));
+    view.audit = (isTeacher ? parent.audit : parent.audit.filter(a => a.companyId === teamId)).map(a => a.command.type === 'message' ? { ...a, command: { type: 'message' } } : a);
+  }
   delete view.rng; delete view.sequence;
   return view;
 }

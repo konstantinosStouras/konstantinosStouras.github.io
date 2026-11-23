@@ -1,7 +1,10 @@
-import { itemName } from './engine.mjs?v=78dc8abdd5d4';
+import { itemName } from './engine.mjs?v=bf0482d7502e';
+import { supplyChainRows, supplierEvidence } from './supply-performance.mjs?v=bf0482d7502e';
 // Original reports derived from the authorized company view. Never infer or
 // expose competitors' private orders, customers, contracts or purchase records.
 export const operationalReports = {
+  servicePerformance: ['Sales', 'Supply chain performance'],
+  esgEvidence: ['Purchases', 'Supplier ESG evidence and exposure'],
   profitability: ['Finances', 'Profitability metrics'],
   procurementCosts: ['Purchases', 'Average purchase price and ordering costs'],
   warehouseCosts: ['Inventory', 'Warehousing costs'],
@@ -110,6 +113,17 @@ export function buildOperationalReport(state, id, filters = {}) {
   const purchases = c.purchases.filter(p => during(p.orderedAt));
   const a = c.accounts;
   const make = (columns, rows, note = '', chart = null) => ({ ...result, columns, rows, note, chart });
+  if (id === 'servicePerformance') return make([col('KPI'), num('Value'), col('Basis')], supplyChainRows(c, c.orders.filter(matchesMarket), shipments, state.hour, since), 'Market filter applies to customer service. Financial measures cover the whole company. A dash means unavailable or undefined.');
+  if (id === 'esgEvidence') {
+    const rows = state.catalog.suppliers.map(supplier => {
+      const history = purchases.filter(p => p.supplier === supplier.name && p.item === supplier.item);
+      const [environment, social, governance, action, reviewed] = supplierEvidence(supplier);
+      return [supplier.name, environment, social, governance, action, sum(history, p => p.cost), sum(history, p => p.carbon), reviewed ? 'Yes' : 'No'];
+    });
+    const spend = rows.reduce((n, r) => n + r[5], 0);
+    const reviewed = rows.reduce((n, r) => n + (r[7] === 'Yes' ? r[5] : 0), 0);
+    return make([col('Supplier'), col('Environmental evidence'), col('Social evidence'), col('Governance evidence'), col('Follow-up'), eur('Committed spend'), num('Committed upstream kg CO₂e'), col('All three reviewed')], rows, 'Illustrative, simulated case files. Spend with evidence reviewed in all three areas / total committed spend: ' + (spend ? (100 * reviewed / spend).toFixed(1) + '%' : 'undefined (zero spend)') + '. Evidence coverage is not assurance of compliance.');
+  }
   const own = 'Company records only. Competitor transaction details are not shared.';
   const orderColumns = [col('Order'), date('Ordered'), col('Customer'), col('Market'), col('Product'), num('Original quantity'), num('Remaining to dispatch'), num('Arrived quantity'), eur('Unit price'), eur('Order value'), date('Promised arrival'), num('Payment term (hours)'), col('Status')];
   const orderRows = rows => rows.map(o => [o.id, o.createdAt, o.customer, market(o.marketId), product, o.originalQty, o.remaining, o.received, o.price, o.originalQty * o.price, o.dueAt, o.payment, o.received === o.originalQty ? 'Delivered' : o.remaining === 0 ? 'In transit' : o.remaining < o.originalQty ? 'Partly dispatched' : 'Open']);
