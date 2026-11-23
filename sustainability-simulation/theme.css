@@ -15,7 +15,7 @@ dialog .dialog-toolbar .close{position:static;min-width:44px;flex-shrink:0}
 [data-theme="dark"] :is(button.primary,.button.primary){background:#c4dda0;border-color:#c4dda0;color:#17291e}
 [data-theme="dark"] :is(button.primary,.button.primary):hover{background:#d5edb0}
 [data-theme="dark"] :is(.sidebar,.workspace-nav,.workspace-tool-label){background:#10291f;color:#e1eddc}
-[data-theme="dark"] :is(.brand-mark,.nav button.active,.workspace-tools button[aria-current="page"],.workspace-tools button[aria-pressed="true"]){background:var(--lime);color:#17291e}
+[data-theme="dark"] :is(.nav button.active,.workspace-tools button[aria-current="page"],.workspace-tools button[aria-pressed="true"]){background:var(--lime);color:#17291e}
 [data-theme="dark"] .workspace-tools button{background:transparent;color:#e4eee7}
 [data-theme="dark"] .workspace-tools > button.active{background:var(--lime);color:#17291e}
 [data-theme="dark"] .workspace-tools > :is(button,a):focus-visible{outline-color:var(--green)}
@@ -236,7 +236,7 @@ dialog .dialog-toolbar .close{position:static;min-width:44px;flex-shrink:0}
 }
 
 /* Keep the italic monogram optically centered independently of body leading. */
-.brand-mark{flex-shrink:0;line-height:1;letter-spacing:0;padding-bottom:.12em}
+
 
 :root[data-theme="dark"]{--chart-3:#79b9ef;--chart-4:#c29be2;--chart-5:#f48b9c;--chart-6:#6ed5da;--chart-7:#f4b477;--chart-8:#9daeff;--chart-9:#e88acb;--chart-10:#d1d881;--chart-11:#b9cad5}
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>SSCM</title>
+  <rect width="32" height="32" rx="6" fill="#daedaa"/>
+  <g fill="none" stroke="#173a31" stroke-width="2.8" stroke-linecap="square" stroke-linejoin="round">
+    <path d="M13 5H8a2.25 2.25 0 0 0 0 4.5h3a2.25 2.25 0 0 1 0 4.5H6"/>
+    <path d="M26 5h-5a2.25 2.25 0 0 0 0 4.5h3a2.25 2.25 0 0 1 0 4.5h-5"/>
+    <path d="M13 19h-3a4.5 4.5 0 0 0 0 9h3"/>
+    <path d="M18 28v-9l4.5 5.5L27 19v9"/>
+  </g>
+</svg>
