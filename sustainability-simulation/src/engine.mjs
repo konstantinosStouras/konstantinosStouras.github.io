@@ -27,6 +27,23 @@ export function cleanText(value, name, max = 120) {
 function bool(v, name) { if (typeof v !== 'boolean') fail(`${name} must be true or false.`); return v; }
 function uid(s, kind) { return `${kind}-${++s.sequence}`; }
 function random(s) { s.rng = (Math.imul(1664525, s.rng) + 1013904223) >>> 0; return s.rng / 4294967296; }
+function demandRate(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1000) fail('Demand rate λ must be a number between 0 and 1000 modules per simulation hour.');
+  return value;
+}
+export function samplePoisson(s, lambda) {
+  demandRate(lambda);
+  // Independent Poisson counts add. Small chunks keep exp(-rate) away from
+  // underflow, including at the maximum instructor rate; no normal approximation.
+  let count = 0;
+  for (let remaining = lambda; remaining > 0;) {
+    const rate = Math.min(remaining, 20), limit = Math.exp(-rate);
+    let product = 1, arrivals = -1;
+    do { product *= 1 - random(s); arrivals++; } while (product > limit);
+    count += arrivals; remaining -= rate;
+  }
+  return count;
+}
 const sum = values => values.reduce((a, b) => a + b, 0);
 export const balance = (c, account) => c.accounts[account] || 0;
 export const profit = c => -balance(c, 'revenue') - balance(c, 'interestIncome') - balance(c, 'cogs') - balance(c, 'expense');
@@ -52,7 +69,7 @@ function takeStock(c, item, qty) {
 function addStock(c, item, qty, value, carbon) {
   const stock = c.inventory[item]; stock.qty += qty; stock.value += value; stock.carbon += carbon;
 }
-function catalog() {
+export function catalog() {
   const suppliers = [];
   for (const [item, price, carbon, lot] of [['cell', 310, 2.2, 24], ['frame', 1800, 9, 1], ['controller', 2400, 6, 1]]) {
     suppliers.push({ id: `${item}-circular`, name: 'Circular Works · rail', item, price, carbon, freight: 0.3, fee: 4500, lead: 48, term: 120, reliability: 95, maxDelay: 6, stock: 1000 * lot, replenish: 150 * lot, min: 10 * lot, lot, enabled: true });
@@ -71,8 +88,8 @@ function catalog() {
       { id: 'solar', name: 'Solar cooperative', rates: [12, 24, 22], carbon: 0.055, fee: 30000, daily: 2400, delay: 24, enabled: true }
     ],
     markets: [
-      { id: 'local', name: 'Regional installers', volume: 95, referencePrice: 28500, greenWeight: 25, enabled: true },
-      { id: 'export', name: 'International projects', volume: 120, referencePrice: 30000, greenWeight: 40, enabled: true }
+      { id: 'local', name: 'Regional installers', lambda: 95 / 6, referencePrice: 28500, greenWeight: 25, enabled: true },
+      { id: 'export', name: 'International projects', lambda: 20, referencePrice: 30000, greenWeight: 40, enabled: true }
     ]
   };
 }
@@ -94,7 +111,7 @@ export function createSession({ id = 'session', name = 'The circular economy cha
     }
   }
   if (!Array.isArray(companyNames) || companyNames.length < 1 || companyNames.length > 12) fail('Choose 1–12 companies.');
-  const s = { id, name: cleanText(name, 'Session name'), schema: VERSION, seed, rng: seed >>> 0, sequence: 0, revision: 0, hour: 0, startDate: '2026-01-01T00:00:00.000Z', endHour: days * 24, status: 'paused', secondsPerHour: 4, features: Object.fromEntries(FEATURES.map(f => [f, { visible: true, allowed: true }])), effects: { carbonDemand: true }, catalog: catalog(), companies: [], events: [], snapshots: [], messages: [], audit: [] };
+  const s = { id, name: cleanText(name, 'Session name'), schema: VERSION, seed, rng: seed >>> 0, sequence: 0, revision: 0, hour: 0, startDate: '2026-01-01T00:00:00.000Z', endHour: days * 24, status: 'paused', secondsPerHour: 40, features: Object.fromEntries(FEATURES.map(f => [f, { visible: true, allowed: true }])), effects: { carbonDemand: true }, catalog: catalog(), companies: [], events: [], snapshots: [], messages: [], audit: [] };
   s.recipe = { ...RECIPE };
   s.accounting = { revenueAt, dailyCorporateOverhead };
   if (dailyEnergyOverhead) s.accounting.dailyEnergyOverhead = dailyEnergyOverhead;
@@ -127,10 +144,11 @@ function purchase(s, c, a, automated = false) {
   if (sup.stock < qty) fail(`Supplier has only ${sup.stock} units available.`);
   const inFlight = sum(c.purchases.filter(p => p.item === sup.item && p.receivedAt === null).map(p => p.qty));
   if (c.inventory[sup.item].qty + inFlight + qty > c.inventory[sup.item].capacity * 2) fail('Purchase would exceed the hard storage limit (twice base capacity including incoming stock).');
-  const cost = qty * sup.price + (automated ? Math.round(sup.fee / 2) : sup.fee);
+  const orderFee = automated ? Math.round(sup.fee / 2) : sup.fee;
+  const cost = qty * sup.price + orderFee;
   const commitments = -balance(c, 'payable');
   if (cost + commitments > balance(c, 'cash') + 8000000) fail('Supplier credit limit exceeded: cash plus €80,000 less current payables.');
-  const p = { id: uid(s, 'purchase'), supplier: sup.name, item: sup.item, qty, cost, carbon: qty * (sup.carbon + sup.freight), orderedAt: s.hour, expectedAt: s.hour + sup.lead, receivedAt: null, paidAt: null, term: sup.term };
+  const p = { id: uid(s, 'purchase'), supplier: sup.name, item: sup.item, qty, orderFee, cost, carbon: qty * (sup.carbon + sup.freight), orderedAt: s.hour, expectedAt: s.hour + sup.lead, receivedAt: null, paidAt: null, term: sup.term };
   sup.stock -= qty; c.purchases.push(p);
   post(s, c, `Purchase committed: ${p.id}`, { inbound: cost, payable: -cost });
   schedule(s, c, 'purchaseReceipt', p.expectedAt + sampleDelay(s, sup), { purchaseId: p.id }, `${qty} ${itemName(s, p.item)} arrive from ${sup.name}`);
@@ -206,10 +224,20 @@ export function applyCommand(s, actor, a, realAt = '2026-01-01T00:00:00.000Z', {
     if (a.type === 'renameCompany') { const c = s.companies.find(x => x.id === a.companyId); if (!c) fail('Company not found.'); c.name = cleanText(a.name, 'Company name', 60); result = 'Company renamed.'; }
     if (a.type === 'catalog') {
       const editable = { suppliers: { price: [1, 1000000], stock: [0, 10000000], replenish: [0, 1000000], lead: [1, 720], term: [0, 720], reliability: [0, 100] }, routes: { hours: [1, 720], term: [0, 720], fixed: [0, 1000000], unit: [0, 100000], reliability: [0, 100] }, markets: { volume: [0, 1000], referencePrice: [100, 1000000], greenWeight: [0, 100] }, energy: { fee: [0, 10000000], daily: [0, 1000000], delay: [1, 720] } };
-      const rules = editable[a.collection]; if (!rules) fail('Unknown catalog.');
+      if (typeof a.collection !== 'string' || !Object.hasOwn(editable, a.collection)) fail('Unknown catalog.');
+      const rules = editable[a.collection];
       const row = s.catalog[a.collection].find(x => x.id === a.id); if (!row) fail('Catalog row not found.');
-      if (!a.patch || typeof a.patch !== 'object') fail('Catalog changes required.');
-      for (const [key, value] of Object.entries(a.patch)) { if (key === 'enabled') row.enabled = bool(value, 'Enabled'); else if (rules[key]) row[key] = integer(value, key, ...rules[key]); else fail(`Field ${key} is not editable.`); }
+      if (!a.patch || typeof a.patch !== 'object' || Array.isArray(a.patch)) fail('Catalog changes required.');
+      if (a.collection === 'markets' && Object.hasOwn(a.patch, 'volume') && (row.lambda !== undefined || Object.hasOwn(a.patch, 'lambda'))) fail('Use demand rate λ instead of six-hour volume. Refresh the market editor.');
+      const patch = {};
+      for (const [key, value] of Object.entries(a.patch)) {
+        if (key === 'enabled') patch.enabled = bool(value, 'Enabled');
+        else if (a.collection === 'markets' && key === 'lambda') patch.lambda = demandRate(value);
+        else if (Object.hasOwn(rules, key)) patch[key] = integer(value, key, ...rules[key]);
+        else fail(`Field ${key} is not editable.`);
+      }
+      Object.assign(row, patch);
+      if (patch.lambda !== undefined) delete row.volume;
       result = 'Catalog updated; pending contracts retain their original terms.';
     }
   } else if (a.type === 'message') {
@@ -221,12 +249,20 @@ export function applyCommand(s, actor, a, realAt = '2026-01-01T00:00:00.000Z', {
     const message = { id: uid(s, 'message'), channel, text: cleanText(a.text, 'Message', 2000), senderId: actor.id, senderName: actor.name, role: actor.role, companyId: actor.companyId || null, hour: s.hour, realAt };
     s.messages.push(message); result = 'Message sent.';
   } else {
-    if (s.status === 'completed') fail('Session completed. Pending obligations are preserved; ask the instructor to extend it.');
+    if (s.status === 'completed') fail('Session completed. Final reports remain available; new decisions are disabled.', 409);
     const c = requireCompany(s, actor, a);
-    const groups = { offer: 'offers', purchase: 'purchasing', dispatch: 'offers', shifts: 'production', staff: 'production', loan: 'finance', deposit: 'finance', energy: 'energy', invest: 'investments', reorder: 'investments', budget: 'investments' };
-    if (!groups[a.type]) fail('Unknown command.');
+    const groups = { offer: 'offers', purchase: 'purchasing', writeOff: 'purchasing', dispatch: 'offers', shifts: 'production', staff: 'production', loan: 'finance', deposit: 'finance', energy: 'energy', invest: 'investments', reorder: 'investments', budget: 'investments' };
+    if (!Object.hasOwn(groups, a.type)) fail('Unknown command.');
     if (!s.features[groups[a.type]].allowed) fail(`The instructor has disabled ${groups[a.type]} decisions.`, 403);
     if (a.type === 'purchase') result = purchase(s, c, a);
+    if (a.type === 'writeOff') {
+      if (!Object.hasOwn(c.inventory, a.item)) fail('Choose an inventory item.');
+      const qty = integer(a.qty, 'Write-off quantity', 1, c.inventory[a.item].qty);
+      const removed = takeStock(c, a.item, qty);
+      post(s, c, 'Inventory write-off', { expense: removed.value, inventory: -removed.value });
+      (c.writeOffs ??= []).push({ hour: s.hour, item: a.item, qty, value: removed.value, carbon: removed.carbon });
+      result = 'Inventory written off at its weighted-average carrying value.';
+    }
     if (a.type === 'dispatch') result = dispatch(s, c, a);
     if (a.type === 'offer') {
       const offer = c.offers.find(x => x.id === a.offerId); if (!offer) fail('Offer not found.');
@@ -253,7 +289,8 @@ export function applyCommand(s, actor, a, realAt = '2026-01-01T00:00:00.000Z', {
       schedule(s, c, 'energy', s.hour + energy.delay, { energyId: energy.id, terms: structuredClone(energy) }, `Switch to ${energy.name}`); result = `Switch accepted. Current provider remains effective for ${energy.delay} h.`;
     }
     if (a.type === 'invest') {
-      const inv = INVESTMENTS[a.kind]; if (!inv) fail('Unknown investment.');
+      if (typeof a.kind !== 'string' || !Object.hasOwn(INVESTMENTS, a.kind)) fail('Unknown investment.');
+      const inv = INVESTMENTS[a.kind];
       if (c.investments.some(x => x.kind === a.kind) && !['machine', 'warehouse'].includes(a.kind)) fail('This investment is already active or pending.');
       const pending = c.investments.filter(x => x.kind === a.kind && x.activeAt === null).length;
       if (pending) fail('An investment of this type is already pending.');
@@ -415,9 +452,13 @@ function production(s, c, shifts) {
   c.production += qty; c.energyKwh += kwh; c.energyCost += energyCost; c.emissions += kwh * energy.carbon;
 }
 function demand(s) {
-  for (const market of s.catalog.markets.filter(m => m.enabled && m.volume > 0)) {
-    // Four opportunities per day; common random demand then weighted integer allocation.
-    const units = Math.round(market.volume * (0.8 + 0.4 * random(s)));
+  for (const market of s.catalog.markets.filter(m => m.enabled)) {
+    const poisson = market.lambda !== undefined;
+    // Old saved markets and replays retain their six-hour model until an
+    // instructor explicitly saves λ. New markets share one hourly Poisson draw.
+    if (poisson ? market.lambda <= 0 : s.hour % 6 !== 0 || !(market.volume > 0)) continue;
+    const units = poisson ? samplePoisson(s, market.lambda) : Math.round(market.volume * (0.8 + 0.4 * random(s)));
+    if (!units) continue;
     const candidates = s.companies.map(c => {
       const offer = c.offers.filter(o => o.marketId === market.id && o.enabled).sort((a, b) => a.price - b.price || a.id.localeCompare(b.id))[0];
       if (!offer) return null;
@@ -509,7 +550,7 @@ export function advance(s, hours) {
     let due;
     while ((due = s.events.filter(e => e.status === 'pending' && e.at <= s.hour).sort((a, b) => a.at - b.at || Number(a.id.split('-')[1]) - Number(b.id.split('-')[1]))[0])) executeEvent(s, due);
     for (const c of s.companies) production(s, c, closingShifts.get(c.id));
-    if (s.hour % 6 === 0) demand(s);
+    demand(s);
     for (const c of s.companies) automated(s, c);
     if (s.hour % 24 === 0) dailyClose(s);
   }
@@ -534,22 +575,34 @@ export function assertInvariants(s) {
     if (balance(c, 'cash') < 0) fail('Cash cannot be negative.', 500);
     if (sum(Object.values(c.inventory).map(i => i.value)) !== balance(c, 'inventory')) fail('Inventory valuation does not reconcile.', 500);
     for (const stock of Object.values(c.inventory)) if (!Number.isSafeInteger(stock.qty) || stock.qty < 0 || stock.value < 0) fail('Invalid stock.', 500);
+    const shippedByOrder = new Map();
+    for (const sh of c.shipments) shippedByOrder.set(sh.orderId, (shippedByOrder.get(sh.orderId) || 0) + sh.qty);
     for (const o of c.orders) {
-      const shipped = sum(c.shipments.filter(sh => sh.orderId === o.id).map(sh => sh.qty));
+      const shipped = shippedByOrder.get(o.id) || 0;
       if (o.originalQty !== o.remaining + shipped || o.received > shipped) fail('Order conservation failed.', 500);
     }
   }
   return true;
 }
-export function publicView(s, actor, previewId) {
-  const view = structuredClone(s), isTeacher = actor.role === 'instructor';
+function projectPublicView(s, actor, previewId) {
+  // Select authorized data before cloning: every classroom poll should copy only
+  // its response, not every company's growing private ledger and order history.
+  const view = { ...s }, isTeacher = actor.role === 'instructor';
   const companyId = isTeacher ? previewId : actor.companyId;
-  view.company = view.companies.find(c => c.id === companyId) || null;
-  if (view.company) { view.company.profit = profit(view.company); view.company.forecast = forecast(s, view.company); }
+  const company = s.companies.find(c => c.id === companyId);
+  view.company = company ? { ...company, profit: profit(company), forecast: forecast(s, company) } : null;
   view.companies = view.companies.map(c => ({ id: c.id, name: c.name, ...(isTeacher ? { cash: balance(c, 'cash'), profit: profit(c), inventory: c.inventory.panel.qty, openUnits: sum(c.orders.map(o => o.remaining)), emissions: c.emissions } : {}) }));
   view.events = view.events.filter(e => isTeacher || e.companyId === companyId);
   view.messages = view.messages.filter(m => canMessage(s, actor, m.channel));
   view.audit = view.audit.filter(a => isTeacher || a.companyId === companyId).map(a => ({ ...a, command: a.command.type === 'message' ? { type: 'message' } : a.command }));
   delete view.rng; delete view.sequence;
   return view;
+}
+export function publicView(s, actor, previewId) {
+  return structuredClone(projectPublicView(s, actor, previewId));
+}
+export function publicViewJSON(s, actor, previewId) {
+  // Serialize synchronously while the projection's references remain private.
+  // HTTP responses need immutable text, not a second copy of every ledger row.
+  return JSON.stringify(projectPublicView(s, actor, previewId));
 }
