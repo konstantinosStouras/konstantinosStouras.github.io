@@ -1,8 +1,8 @@
-import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=dc55f1df16a9';
-import { createMessageSounds } from './src/message-sounds.mjs?v=dc55f1df16a9';
-import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=dc55f1df16a9';
-import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=dc55f1df16a9';
-import { watchSession } from './src/session-updates.mjs?v=dc55f1df16a9';
+import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=fe5c389c14ff';
+import { createMessageSounds } from './src/message-sounds.mjs?v=fe5c389c14ff';
+import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=fe5c389c14ff';
+import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=fe5c389c14ff';
+import { watchSession } from './src/session-updates.mjs?v=fe5c389c14ff';
 const root = document.querySelector('#app'), dialog = document.querySelector('#dialog');
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format((n || 0) / 100);
@@ -13,7 +13,8 @@ const total = (list, key) => list.reduce((sum, x) => sum + (x[key] || 0), 0);
 const icon = (name, graphic) => `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${graphic || ({ overview: '<path d="M3 10 12 3l9 7v11h-7v-7h-4v7H3Z"/>', orders: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>', supply: '<path d="m3 7 9-4 9 4v11l-9 4-9-4ZM3 7l9 5 9-5M12 12v10"/>', production: '<path d="M3 21V10l6 4V8l6 5V3h5v18ZM7 18h1m4 0h1m4 0h1"/>', finance: '<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18m-6 5h6"/>', energy: '<path d="m13 2-9 12h7l-1 8 10-13h-7Z"/>', reports: '<path d="M4 20V12h4v8m4 0V4h4v16m4 0v-9M2 21h20"/>', messages: '<path d="M4 4h16v12H9l-5 5Z"/><path d="M8 8h8m-8 4h5"/>', admin: '<circle cx="12" cy="12" r="3"/><path d="m9 3 1-1h4l1 3 3 1 3-1 1 5-3 2 1 3 1 2-4 4-3-2-3 1-2 1-4-4 2-3-1-3-1-2 4-4Z"/>' })[name] || '<path d="M12 3v18M3 12h18"/>'}</svg>`;
 const brand = `<div class="brand"><img class="brand-mark" src="sscm-circle.svg" width="40" height="40" alt=""><span>Sustainable Supply Chain <small>Management</small></span></div>`;
 const localWorkspace = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-const savedBackend = localStorage.getItem('studio-backend') || '';
+const storedBackend = localStorage.getItem('studio-backend') || '';
+const savedBackend = storedBackend === 'https://stouras-sustainability-2026.web.app' ? classroomBackend : storedBackend;
 // Old loopback testing preferences must not strand returning public-site users.
 let backend = localWorkspace ? savedBackend : (/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(savedBackend) ? classroomBackend : savedBackend || classroomBackend), token = sessionStorage.getItem('studio-token') || '';
 let state, actor, user, sessions = [], sessionId, preview, page = 'overview', channel = 'all', report = 'profit', reportRange = 30, selectedCompanies = new Set(), solo = null, health = null, roster = null, busy = false, online = true, firebaseClient = null;
@@ -404,7 +405,7 @@ function renderWelcome() {
   }
 }
 async function getFirebase() {
-  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=dc55f1df16a9')).firebase;
+  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=fe5c389c14ff')).firebase;
   return firebaseClient;
 }
 async function enterFirebase() {
@@ -470,7 +471,7 @@ async function testStudents() {
 }
 function testOwner() { return JSON.stringify([backend, firebaseClient?.user?.uid || user.id]); }
 async function savedTests(source) {
-  const client = (await import('./src/test-client.mjs?v=dc55f1df16a9')).testClient();
+  const client = (await import('./src/test-client.mjs?v=fe5c389c14ff')).testClient();
   let saved;
   try { saved = await client.call('list',{owner:testOwner(),source}); } finally { client.close(); }
   modal('Saved test sessions', '<p>Saved on this device in this browser profile. Clearing site data removes these tests. Each session retains its students, decisions and results. Open a session to resume or delete it.</p>' + (saved.length ? table(['Session','Hour','Students',''],saved.map(s => {
@@ -487,7 +488,7 @@ async function startTestSetup(id) {
     // The first modal closes before its next form is opened.
     setTimeout(() => modal('Assign test students', '<p>Each student belongs to exactly one company. Choose 1–20 students per company (60 total maximum).</p>' + Array.from({length:count}, (_,i) => `<div class="form-grid">${field('company-'+i,'Company '+(i+1),template.companyNames[i] || 'Company '+(i+1),'text','maxlength="60"')}${field('students-'+i,'Test students', i === 0 ? 2 : 1,'number','min="1" max="20"')}</div>`).join(''), async f => {
       const groups = Array.from({length:count},(_,i) => ({name:f.get('company-'+i),students:value(f,'students-'+i)}));
-      const client = (await import('./src/test-client.mjs?v=dc55f1df16a9')).testClient();
+      const client = (await import('./src/test-client.mjs?v=fe5c389c14ff')).testClient();
       try { await navigator.storage?.persist?.().catch(() => false); await client.create(template,groups,{owner:testOwner(),source:id}); await enterTest(client); } catch(e) {client.close();throw e;}
     }, 'Start test round'), 0);
   }, 'Choose students');
@@ -1112,7 +1113,7 @@ function productionPage() {
   const c = company(), pendingShift = state.events.find(e => e.companyId === c.id && e.type === 'shifts' && e.status === 'pending');
   const shiftLabels = ['12:00am–8:00am', '8:00am–4:00pm', '4:00pm–12:00am'];
   const describeShifts = shifts => shiftLabels.filter((_, i) => shifts[i]).join(', ') || 'No shifts';
-  return `<div class="metrics">${metric('Machine capacity', `${c.machines * 6} / h`, `${c.machines} assembly lines`, 'production')}${metric('Staff capacity', `${c.workers * 2} / h`, `${c.workers} workers`, 'overview')}${metric('Units produced', number(c.production), 'Cumulative completed output', 'supply')}${metric('Electricity consumed', number(c.energyKwh), 'kWh · cumulative production', 'energy')}</div><div class="advice"><strong>Current bottleneck: ${esc(c.lastBottleneck)}</strong>Each ${itemName(state, "panel").toLowerCase()} uses ${Object.entries(productionRecipe(state)).map(([item, qty]) => qty + " " + itemName(state, item).toLowerCase() + (qty === 1 ? "" : item === "controller" && state.recipe ? "es" : "s")).join(", ")}. Output is limited by materials, staff, machines, storage space, and cash. Active shifts incur wages even when materials run out.</div><div class="grid2">${panel('Production schedule', 'Changes take effect at the next 8-hour boundary.', `<p class="form-note"><strong>Active schedule:</strong> ${describeShifts(c.shifts)} UTC.</p>${pendingShift ? `<div class="advice"><strong>Saved schedule pending: ${describeShifts(pendingShift.data.shifts)} UTC.</strong>Effective ${simDate(pendingShift.at)}. The active schedule continues until then.</div>` : ''}<form id="shifts-form">${shiftLabels.map((s, i) => check(`shift${i}`, s + ' UTC simulation time', pendingShift ? pendingShift.data.shifts[i] : c.shifts[i], !!pendingShift)).join('')}<p class="form-note">Wages: €13.50 per worker per active hour. Electricity: 3 kWh per unit before efficiency upgrades.</p>${button('submit', pendingShift ? 'Shift change pending' : 'Save shift schedule', '', 'primary', !permitted('production') || !!pendingShift)}<div class="error" role="alert"></div></form>`)}${panel('People & equipment', 'Recruitment and reductions take 48 h; machinery takes 72 h.', `<div class="value-list"><div><span>Workers</span><strong>${c.workers}</strong></div><div><span>Assembly lines</span><strong>${c.machines}</strong></div><div><span>Energy efficiency factor</span><strong>${c.efficiency}</strong></div></div><div class="toolbar">${button('staff', 'Change staffing', '', '', !permitted('production'))}${button('invest', 'Add assembly line', 'machine', '', !permitted('investments'))}</div>`)}</div>${panel('Production trend', 'Units completed each day · immutable closes', chart('dailyProduction', 'units'))}`;
+  return `<div class="metrics">${metric('Machine capacity', `${c.machines * 6} / h`, `${c.machines} assembly lines`, 'production')}${metric('Staff capacity', `${c.workers * 2} / h`, `${c.workers} workers`, 'overview')}${metric('Units produced', number(c.production), 'Cumulative completed output', 'supply')}${metric('Electricity consumed', number(c.energyKwh), 'kWh · cumulative production', 'energy')}</div><div class="advice"><strong>Current bottleneck: ${esc(c.lastBottleneck)}</strong>Each ${itemName(state, "panel").toLowerCase()} uses ${Object.entries(productionRecipe(state)).map(([item, qty]) => qty + " × " + itemName(state, item)).join(", ")}. Output is limited by materials, staff, machines, storage space, and cash. Active shifts incur wages even when materials run out.</div><div class="grid2">${panel('Production schedule', 'Changes take effect at the next 8-hour boundary.', `<p class="form-note"><strong>Active schedule:</strong> ${describeShifts(c.shifts)} UTC.</p>${pendingShift ? `<div class="advice"><strong>Saved schedule pending: ${describeShifts(pendingShift.data.shifts)} UTC.</strong>Effective ${simDate(pendingShift.at)}. The active schedule continues until then.</div>` : ''}<form id="shifts-form">${shiftLabels.map((s, i) => check(`shift${i}`, s + ' UTC simulation time', pendingShift ? pendingShift.data.shifts[i] : c.shifts[i], !!pendingShift)).join('')}<p class="form-note">Wages: €13.50 per worker per active hour. Electricity: 3 kWh per unit before efficiency upgrades.</p>${button('submit', pendingShift ? 'Shift change pending' : 'Save shift schedule', '', 'primary', !permitted('production') || !!pendingShift)}<div class="error" role="alert"></div></form>`)}${panel('People & equipment', 'Recruitment and reductions take 48 h; machinery takes 72 h.', `<div class="value-list"><div><span>Workers</span><strong>${c.workers}</strong></div><div><span>Assembly lines</span><strong>${c.machines}</strong></div><div><span>Energy efficiency factor</span><strong>${c.efficiency}</strong></div></div><div class="toolbar">${button('staff', 'Change staffing', '', '', !permitted('production'))}${button('invest', 'Add assembly line', 'machine', '', !permitted('investments'))}</div>`)}</div>${panel('Production trend', 'Units completed each day · immutable closes', chart('dailyProduction', 'units'))}`;
 }
 function expenseBreakdown(ledger) {
   const totals = new Map();
@@ -1800,7 +1801,7 @@ async function action(name, id) {
     return;
   }
   if (name === 'nav') { page = id; if (id === 'admin' && preview) { preview = undefined; await load(); } else render(); return; }
-  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=dc55f1df16a9')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
+  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=fe5c389c14ff')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
   if (name === 'switch-solo') { solo.switchRole(isTeacher() ? 'student' : 'instructor'); preview = undefined; page = isTeacher() ? 'overview' : 'admin'; await load(); return; }
   if (name === 'demo') { await signIn(await api('/demo', { username: id })); return; }
   if (name === 'logout') { if (!solo && token) { try { await api('/logout', {}); } catch {} } if (firebaseClient?.user) await firebaseClient.logout(); solo = null; state = null; actor = null; user = null; token = ''; sessionId = null; sessionStorage.removeItem('studio-token'); selectSession(null); renderWelcome(); return; }
@@ -1979,7 +1980,7 @@ document.addEventListener('change', async event => {
 async function startWorkspace() {
   if (location.hash?.startsWith('#test=')) {
     const testLink = new URLSearchParams(location.hash.slice(1));
-    try { const client = (await import('./src/test-client.mjs?v=dc55f1df16a9')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
+    try { const client = (await import('./src/test-client.mjs?v=fe5c389c14ff')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
     catch(e) { root.innerHTML = '<main class="welcome"><h1>Test round unavailable</h1><p>' + esc(e.message) + '</p><div class="toolbar">' + (e.status === 403 ? button('retry-start', 'Try again', '', 'primary') : '') + button('test-leave','Return to classroom') + '</div></main>'; }
     return;
   }
