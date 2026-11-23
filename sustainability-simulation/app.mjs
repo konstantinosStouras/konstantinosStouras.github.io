@@ -1,8 +1,8 @@
-import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=317270bf4d8f';
-import { createMessageSounds } from './src/message-sounds.mjs?v=317270bf4d8f';
-import { catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=317270bf4d8f';
-import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=317270bf4d8f';
-import { watchSession } from './src/session-updates.mjs?v=317270bf4d8f';
+import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=4651dc6dd6e7';
+import { createMessageSounds } from './src/message-sounds.mjs?v=4651dc6dd6e7';
+import { catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=4651dc6dd6e7';
+import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=4651dc6dd6e7';
+import { watchSession } from './src/session-updates.mjs?v=4651dc6dd6e7';
 const root = document.querySelector('#app'), dialog = document.querySelector('#dialog');
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format((n || 0) / 100);
@@ -11,7 +11,7 @@ const number = n => new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 })
 const precise = n => new Intl.NumberFormat('en-GB', { maximumFractionDigits: 3 }).format(n || 0);
 const total = (list, key) => list.reduce((sum, x) => sum + (x[key] || 0), 0);
 const icon = (name, graphic) => `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${graphic || ({ overview: '<path d="M3 10 12 3l9 7v11h-7v-7h-4v7H3Z"/>', orders: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>', supply: '<path d="m3 7 9-4 9 4v11l-9 4-9-4ZM3 7l9 5 9-5M12 12v10"/>', production: '<path d="M3 21V10l6 4V8l6 5V3h5v18ZM7 18h1m4 0h1m4 0h1"/>', finance: '<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18m-6 5h6"/>', energy: '<path d="m13 2-9 12h7l-1 8 10-13h-7Z"/>', reports: '<path d="M4 20V12h4v8m4 0V4h4v16m4 0v-9M2 21h20"/>', messages: '<path d="M4 4h16v12H9l-5 5Z"/><path d="M8 8h8m-8 4h5"/>', admin: '<circle cx="12" cy="12" r="3"/><path d="m9 3 1-1h4l1 3 3 1 3-1 1 5-3 2 1 3 1 2-4 4-3-2-3 1-2 1-4-4 2-3-1-3-1-2 4-4Z"/>' })[name] || '<path d="M12 3v18M3 12h18"/>'}</svg>`;
-const brand = `<div class="brand"><img class="brand-mark" src="sscm-mark.svg" width="40" height="40" alt=""><span>Sustainable Supply Chain <small>Management</small></span></div>`;
+const brand = `<div class="brand"><img class="brand-mark" src="sscm-circle.svg" width="40" height="40" alt=""><span>Sustainable Supply Chain <small>Management</small></span></div>`;
 const localWorkspace = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const savedBackend = localStorage.getItem('studio-backend') || '';
 // Old loopback testing preferences must not strand returning public-site users.
@@ -368,7 +368,7 @@ async function enter() {
 function renderLocalWelcome() {
   const currentYear = new Date().getFullYear();
   const footerYear = currentYear > 2026 ? '2026–' + currentYear : '2026';
-  root.innerHTML = `<main class="welcome studio-landing" id="content"><header class="welcome-nav">${brand}</header><div class="welcome-layout"><section class="studio-intro" aria-labelledby="studio-title"><p class="eyebrow">A living business classroom</p><h1 id="studio-title">Good business.<br><span>A better footprint.</span></h1><p class="lead">Run a solar company and see how your decisions shape cash, customer service and carbon emissions.</p><div class="studio-solar" aria-hidden="true"></div></section><section class="panel studio-access"><p class="eyebrow">Classroom workspace</p><h2>${health ? 'Join your simulation' : 'Connect your classroom'}</h2>${health?.demo ? `<p class="form-note">Local demonstration · independent roles, one shared simulation.</p><div class="demo-choices">${button('demo', 'Open instructor workspace', 'demo-instructor', 'primary')}${[1, 2, 3].map(i => button('demo', `Student · ${['Helio', 'Northstar', 'Verdant'][i - 1]}`, `demo-student-${i}`)).join('')}</div><hr>` : ''}${health ? `<form id="login-form">${field('username', 'Username', '', 'text', 'autocomplete="username"')}${field('password', 'Password', '', 'password', 'autocomplete="current-password"')}${button('submit', 'Sign in', '', 'primary')}<div class="error" role="alert"></div></form><details><summary>New student? Join with a company code</summary><form id="register-form">${field('name', 'Display name', '', 'text', 'maxlength="80"')}${field('username', 'Username', '', 'text', 'autocomplete="username"')}${field('password', 'Password (at least 10 characters)', '', 'password', 'minlength="10" autocomplete="new-password"')}${field('code', 'Company join code', '', 'text')}${button('submit', 'Create student account', '', 'primary')}<div class="error" role="alert"></div></form></details>` : `<p class="muted">To play with a class, connect the address of a running Sustainable Supply Chain Management server.</p><p class="form-note">For local shared play, run <code>npm run demo</code> in the project and open <a href="http://127.0.0.1:3000">the local workspace</a>.</p>`}<details ${health ? '' : 'open'}><summary>Server connection</summary><form id="backend-form">${field('backend', 'Server URL', backend || location.origin, 'url', 'placeholder="https://your-classroom.example"')}${button('submit', 'Connect server')}<div class="error" role="alert"></div></form></details></section></div><footer class="welcome-foot"><span><a href="https://www.stouras.com/">Konstantinos Stouras</a> · ${footerYear}</span></footer></main>`;
+  root.innerHTML = `<main class="welcome studio-landing" id="content"><header class="welcome-nav">${brand}</header><div class="welcome-layout"><section class="studio-intro" aria-labelledby="studio-title"><p class="eyebrow">A living business classroom</p><h1 id="studio-title">Good business.<br><span>A better footprint.</span></h1><p class="lead">Manage a supply chain efficiently and sustainably. See how your decisions affect cash flow, customer service and carbon emissions.</p><div class="studio-solar" aria-hidden="true"></div></section><section class="panel studio-access"><p class="eyebrow">Classroom workspace</p><h2>${health ? 'Join your simulation' : 'Connect your classroom'}</h2>${health?.demo ? `<p class="form-note">Local demonstration · independent roles, one shared simulation.</p><div class="demo-choices">${button('demo', 'Open instructor workspace', 'demo-instructor', 'primary')}${[1, 2, 3].map(i => button('demo', `Student · ${['Helio', 'Northstar', 'Verdant'][i - 1]}`, `demo-student-${i}`)).join('')}</div><hr>` : ''}${health ? `<form id="login-form">${field('username', 'Username', '', 'text', 'autocomplete="username"')}${field('password', 'Password', '', 'password', 'autocomplete="current-password"')}${button('submit', 'Sign in', '', 'primary')}<div class="error" role="alert"></div></form><details><summary>New student? Join with a company code</summary><form id="register-form">${field('name', 'Display name', '', 'text', 'maxlength="80"')}${field('username', 'Username', '', 'text', 'autocomplete="username"')}${field('password', 'Password (at least 10 characters)', '', 'password', 'minlength="10" autocomplete="new-password"')}${field('code', 'Company join code', '', 'text')}${button('submit', 'Create student account', '', 'primary')}<div class="error" role="alert"></div></form></details>` : `<p class="muted">To play with a class, connect the address of a running Sustainable Supply Chain Management server.</p><p class="form-note">For local shared play, run <code>npm run demo</code> in the project and open <a href="http://127.0.0.1:3000">the local workspace</a>.</p>`}<details ${health ? '' : 'open'}><summary>Server connection</summary><form id="backend-form">${field('backend', 'Server URL', backend || location.origin, 'url', 'placeholder="https://your-classroom.example"')}${button('submit', 'Connect server')}<div class="error" role="alert"></div></form></details></section></div><footer class="welcome-foot"><span><a href="https://www.stouras.com/">Konstantinos Stouras</a> · ${footerYear}</span></footer></main>`;
 }
 function firebaseForm() {
   return `<h2>Sign in to your workspace</h2>
@@ -404,7 +404,7 @@ function renderWelcome() {
   }
 }
 async function getFirebase() {
-  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=317270bf4d8f')).firebase;
+  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=4651dc6dd6e7')).firebase;
   return firebaseClient;
 }
 async function enterFirebase() {
@@ -470,7 +470,7 @@ async function testStudents() {
 }
 function testOwner() { return JSON.stringify([backend, firebaseClient?.user?.uid || user.id]); }
 async function savedTests(source) {
-  const client = (await import('./src/test-client.mjs?v=317270bf4d8f')).testClient();
+  const client = (await import('./src/test-client.mjs?v=4651dc6dd6e7')).testClient();
   let saved;
   try { saved = await client.call('list',{owner:testOwner(),source}); } finally { client.close(); }
   modal('Saved test sessions', '<p>Saved on this device in this browser profile. Clearing site data removes these tests. Each session retains its students, decisions and results. Open a session to resume or delete it.</p>' + (saved.length ? table(['Session','Hour','Students',''],saved.map(s => {
@@ -487,7 +487,7 @@ async function startTestSetup(id) {
     // The first modal closes before its next form is opened.
     setTimeout(() => modal('Assign test students', '<p>Each student belongs to exactly one company. Choose 1–20 students per company (60 total maximum).</p>' + Array.from({length:count}, (_,i) => `<div class="form-grid">${field('company-'+i,'Company '+(i+1),template.companyNames[i] || 'Company '+(i+1),'text','maxlength="60"')}${field('students-'+i,'Test students', i === 0 ? 2 : 1,'number','min="1" max="20"')}</div>`).join(''), async f => {
       const groups = Array.from({length:count},(_,i) => ({name:f.get('company-'+i),students:value(f,'students-'+i)}));
-      const client = (await import('./src/test-client.mjs?v=317270bf4d8f')).testClient();
+      const client = (await import('./src/test-client.mjs?v=4651dc6dd6e7')).testClient();
       try { await navigator.storage?.persist?.().catch(() => false); await client.create(template,groups,{owner:testOwner(),source:id}); await enterTest(client); } catch(e) {client.close();throw e;}
     }, 'Start test round'), 0);
   }, 'Choose students');
@@ -1800,7 +1800,7 @@ async function action(name, id) {
     return;
   }
   if (name === 'nav') { page = id; if (id === 'admin' && preview) { preview = undefined; await load(); } else render(); return; }
-  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=317270bf4d8f')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
+  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=4651dc6dd6e7')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
   if (name === 'switch-solo') { solo.switchRole(isTeacher() ? 'student' : 'instructor'); preview = undefined; page = isTeacher() ? 'overview' : 'admin'; await load(); return; }
   if (name === 'demo') { await signIn(await api('/demo', { username: id })); return; }
   if (name === 'logout') { if (!solo && token) { try { await api('/logout', {}); } catch {} } if (firebaseClient?.user) await firebaseClient.logout(); solo = null; state = null; actor = null; user = null; token = ''; sessionId = null; sessionStorage.removeItem('studio-token'); selectSession(null); renderWelcome(); return; }
@@ -1978,7 +1978,7 @@ document.addEventListener('change', async event => {
 async function startWorkspace() {
   if (location.hash?.startsWith('#test=')) {
     const testLink = new URLSearchParams(location.hash.slice(1));
-    try { const client = (await import('./src/test-client.mjs?v=317270bf4d8f')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
+    try { const client = (await import('./src/test-client.mjs?v=4651dc6dd6e7')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
     catch(e) { root.innerHTML = '<main class="welcome"><h1>Test round unavailable</h1><p>' + esc(e.message) + '</p><div class="toolbar">' + (e.status === 403 ? button('retry-start', 'Try again', '', 'primary') : '') + button('test-leave','Return to classroom') + '</div></main>'; }
     return;
   }
