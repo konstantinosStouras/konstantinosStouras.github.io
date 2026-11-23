@@ -1,5 +1,5 @@
-import { quoteScores } from './opponents.mjs?v=45131ea3ceb0';
-import { advance, applyCommand, createSession, fail, integer, profit } from './engine.mjs?v=45131ea3ceb0';
+import { quoteScores } from './opponents.mjs?v=b6c679bc9e11';
+import { advance, applyCommand, createSession, fail, integer, profit } from './engine.mjs?v=b6c679bc9e11';
 
 export const phaseNames = {
   training: 'Training', main: 'Main play', supply: 'Supply chain disruptions',

@@ -1,11 +1,11 @@
-import { modelLabel, availableChoices } from './src/model-choices.mjs?v=45131ea3ceb0';
-import { supplierEvidence } from './src/supply-performance.mjs?v=45131ea3ceb0';
-import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=45131ea3ceb0';
-import { createMessageSounds } from './src/message-sounds.mjs?v=45131ea3ceb0';
-import { phaseNames, defaultPhases } from './src/phases.mjs?v=45131ea3ceb0';
-import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=45131ea3ceb0';
-import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=45131ea3ceb0';
-import { watchSession } from './src/session-updates.mjs?v=45131ea3ceb0';
+import { modelLabel, availableChoices } from './src/model-choices.mjs?v=b6c679bc9e11';
+import { supplierEvidence } from './src/supply-performance.mjs?v=b6c679bc9e11';
+import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=b6c679bc9e11';
+import { createMessageSounds } from './src/message-sounds.mjs?v=b6c679bc9e11';
+import { phaseNames, defaultPhases } from './src/phases.mjs?v=b6c679bc9e11';
+import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=b6c679bc9e11';
+import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=b6c679bc9e11';
+import { watchSession } from './src/session-updates.mjs?v=b6c679bc9e11';
 const root = document.querySelector('#app'), dialog = document.querySelector('#dialog');
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format((n || 0) / 100);
@@ -408,7 +408,7 @@ function renderWelcome() {
   }
 }
 async function getFirebase() {
-  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=45131ea3ceb0')).firebase;
+  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=b6c679bc9e11')).firebase;
   return firebaseClient;
 }
 async function enterFirebase() {
@@ -474,7 +474,7 @@ async function testStudents() {
 }
 function testOwner() { return JSON.stringify([backend, firebaseClient?.user?.uid || user.id]); }
 async function savedTests(source) {
-  const client = (await import('./src/test-client.mjs?v=45131ea3ceb0')).testClient();
+  const client = (await import('./src/test-client.mjs?v=b6c679bc9e11')).testClient();
   let saved;
   try { saved = await client.call('list',{owner:testOwner(),source}); } finally { client.close(); }
   modal('Saved test sessions', '<p>Saved on this device in this browser profile. Clearing site data removes these tests. Each session retains its students, decisions and results. Open a session to resume or delete it.</p>' + (saved.length ? table(['Session','Hour','Students',''],saved.map(s => {
@@ -491,7 +491,7 @@ async function startTestSetup(id) {
     // The first modal closes before its next form is opened.
     setTimeout(() => modal('Assign test students', '<p>Each student belongs to exactly one company. Choose 1–20 students per company (60 total maximum).</p>' + Array.from({length:count}, (_,i) => `<div class="form-grid">${field('company-'+i,'Company '+(i+1),template.companyNames[i] || 'Company '+(i+1),'text','maxlength="60"')}${field('students-'+i,'Test students', i === 0 ? 2 : 1,'number','min="1" max="20"')}</div>`).join(''), async f => {
       const groups = Array.from({length:count},(_,i) => ({name:f.get('company-'+i),students:value(f,'students-'+i)}));
-      const client = (await import('./src/test-client.mjs?v=45131ea3ceb0')).testClient();
+      const client = (await import('./src/test-client.mjs?v=b6c679bc9e11')).testClient();
       try { await navigator.storage?.persist?.().catch(() => false); await client.create(template,groups,{owner:testOwner(),source:id}); await enterTest(client); } catch(e) {client.close();throw e;}
     }, 'Start test round'), 0);
   }, 'Choose students');
@@ -845,6 +845,12 @@ function orderedOperationalRows(data, id) {
   const current = tableSorts.get(tableKey(data.columns.map(c => esc(c.label)), 'operational-' + id));
   return current ? data.rows.map((row, i) => ({row, i})).sort((a, b) => compareTableValues(a.row[current.column], b.row[current.column], current.direction) || a.i - b.i).map(x => x.row) : data.rows;
 }
+function supplierAuditGuide() {
+  return '<details><summary>How to assess supplier ESG evidence</summary>' +
+    '<p><a href="https://www.cfainstitute.org/programs/sustainable-investing-certificate/curriculum">CFA Institute · Sustainable Investing Certificate</a> — Which issue could affect your business? For example, excessive overtime could interrupt supply and put delivery promises at risk.</p>' +
+    '<p><a href="https://mneguidelines.oecd.org/OECD-Due-Diligence-Guidance-for-Responsible-Business-Conduct.pdf">OECD · Due Diligence Guidance</a> — Who might be harmed, what evidence supports the finding, and did the remedy work? Compare an overtime policy with time records and confidential worker interviews. Follow up to check whether hours and pay actually changed.</p>' +
+    '<p><a href="https://www.globalreporting.org/publications/documents/english/gri-414-supplier-social-assessment-2016/">GRI 414 · Supplier Social Assessment</a> — What can you report? Count new suppliers screened, identify significant impacts and record actions taken. The game reports spending against fixed teaching case files. It does not record completed student audits.</p></details>';
+}
 function operationalReportPanel(id) {
   const filters = reportFilters(id), data = buildOperationalReport(state, id, filters);
   const format = (value, column) => value == null ? '—' : column.type === 'time' ? simDate(value) : column.type === 'money' ? exactMoney(value) : column.type === 'number' ? precise(value) : String(value);
@@ -860,10 +866,10 @@ function operationalReportPanel(id) {
   const rows = orderedOperationalRows(data, id), pageCount = Math.max(1, Math.ceil(rows.length / 100));
   filters.page = Math.min(filters.page || 0, pageCount - 1);
   const shown = rows.slice(filters.page * 100, (filters.page + 1) * 100);
-  const totalIndex = data.columns.findIndex(c => c.label === 'Value' || c.label === 'Order value' || c.label === 'Committed cost');
+  const totalIndex = data.columns.findIndex(c => c.type === 'money' && ['Value', 'Order value', 'Committed cost'].includes(c.label));
   const totals = totalIndex < 0 ? '' : ' · Total value: ' + exactMoney(data.rows.reduce((n, row) => n + row[totalIndex], 0));
   const paging = '<div class="toolbar"><span class="form-note">' + number(rows.length) + ' rows' + totals + (pageCount > 1 ? ' · Page ' + (filters.page + 1) + ' of ' + pageCount : '') + '</span>' + (pageCount > 1 ? button('report-prev', 'Previous', id, 'small', filters.page === 0) + button('report-next', 'Next', id, 'small', filters.page === pageCount - 1) : '') + '</div>';
-  return '<div data-operational-report="' + id + '">' + controls + (fixedDays ? '<p class="form-note">Last ' + fixedDays + ' days.</p>' : '') + panel('', data.note + ' · View at ' + simDate(state.hour), chart + table(data.columns.map(c => esc(c.label)), shown.map(row => row.map((value, i) => sortCell(esc(format(value, data.columns[i])), value))), 'No matching records yet.', 'operational-' + id)) + paging + '</div>';
+  return '<div data-operational-report="' + id + '">' + controls + (fixedDays ? '<p class="form-note">Last ' + fixedDays + ' days.</p>' : '') + panel('', data.note + ' · View at ' + simDate(state.hour), chart + table(data.columns.map(c => esc(c.label)), shown.map(row => row.map((value, i) => sortCell(esc(format(value, data.columns[i])), value))), 'No matching records yet.', 'operational-' + id)) + paging + (id === 'esgEvidence' ? supplierAuditGuide() : '') + '</div>';
 }
 
 function workspaceFeatureVisible(key) {
@@ -1900,7 +1906,7 @@ async function action(name, id) {
     return;
   }
   if (name === 'nav') { page = id; if (id === 'admin' && preview) { preview = undefined; await load(); } else render(); return; }
-  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=45131ea3ceb0')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
+  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=b6c679bc9e11')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
   if (name === 'switch-solo') { solo.switchRole(isTeacher() ? 'student' : 'instructor'); preview = undefined; page = isTeacher() ? 'overview' : 'admin'; await load(); return; }
   if (name === 'demo') { await signIn(await api('/demo', { username: id })); return; }
   if (name === 'logout') { if (!solo && token) { try { await api('/logout', {}); } catch {} } if (firebaseClient?.user) await firebaseClient.logout(); solo = null; state = null; actor = null; user = null; token = ''; sessionId = null; sessionStorage.removeItem('studio-token'); selectSession(null); renderWelcome(); return; }
@@ -2083,7 +2089,7 @@ document.addEventListener('change', async event => {
 async function startWorkspace() {
   if (location.hash?.startsWith('#test=')) {
     const testLink = new URLSearchParams(location.hash.slice(1));
-    try { const client = (await import('./src/test-client.mjs?v=45131ea3ceb0')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
+    try { const client = (await import('./src/test-client.mjs?v=b6c679bc9e11')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
     catch(e) { root.innerHTML = '<main class="welcome"><h1>Test round unavailable</h1><p>' + esc(e.message) + '</p><div class="toolbar">' + (e.status === 403 ? button('retry-start', 'Try again', '', 'primary') : '') + button('test-leave','Return to classroom') + '</div></main>'; }
     return;
   }

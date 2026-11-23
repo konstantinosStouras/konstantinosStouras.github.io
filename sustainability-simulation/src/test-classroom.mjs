@@ -1,6 +1,6 @@
-import { teamVersions, sameTeamDecision } from './phases.mjs?v=45131ea3ceb0';
-import { createSession, applyCommand, tick, publicView, assertInvariants, fail } from './engine.mjs?v=45131ea3ceb0';
-import { typingPresence } from './typing-presence.mjs?v=45131ea3ceb0';
+import { teamVersions, sameTeamDecision } from './phases.mjs?v=b6c679bc9e11';
+import { createSession, applyCommand, tick, publicView, assertInvariants, fail } from './engine.mjs?v=b6c679bc9e11';
+import { typingPresence } from './typing-presence.mjs?v=b6c679bc9e11';
 
 // Shared simulation model; durable snapshots are managed by the worker.
 export class TestClassroom {
