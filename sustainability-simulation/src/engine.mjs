@@ -1,5 +1,5 @@
-import { setupPhases, laneView, teamDecision, sharedHourFinished, courseView, finishBlock } from './phases.mjs?v=bf0482d7502e';
-import { opponentTurn, appeal } from './opponents.mjs?v=bf0482d7502e';
+import { setupPhases, laneView, teamDecision, sharedHourFinished, courseView, finishBlock } from './phases.mjs?v=6f29d502ed18';
+import { opponentTurn, appeal } from './opponents.mjs?v=6f29d502ed18';
 // Keys identify products in saved sessions. Quantities are per sellable unit.
 export const products = {
   earbuds: {

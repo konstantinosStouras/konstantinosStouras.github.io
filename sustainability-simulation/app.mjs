@@ -1,10 +1,10 @@
-import { supplierEvidence } from './src/supply-performance.mjs?v=bf0482d7502e';
-import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=bf0482d7502e';
-import { createMessageSounds } from './src/message-sounds.mjs?v=bf0482d7502e';
-import { phaseNames, defaultPhases } from './src/phases.mjs?v=bf0482d7502e';
-import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=bf0482d7502e';
-import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=bf0482d7502e';
-import { watchSession } from './src/session-updates.mjs?v=bf0482d7502e';
+import { supplierEvidence } from './src/supply-performance.mjs?v=6f29d502ed18';
+import { operationalReports, buildOperationalReport, businessUpdates } from './src/operational-reports.mjs?v=6f29d502ed18';
+import { createMessageSounds } from './src/message-sounds.mjs?v=6f29d502ed18';
+import { phaseNames, defaultPhases } from './src/phases.mjs?v=6f29d502ed18';
+import { products, catalog, itemName, productionRecipe, inventoryStatementValues, INVESTMENTS, FEATURES } from './src/engine.mjs?v=6f29d502ed18';
+import { firebaseConfig, classroomBackend } from './firebase-config.mjs?v=6f29d502ed18';
+import { watchSession } from './src/session-updates.mjs?v=6f29d502ed18';
 const root = document.querySelector('#app'), dialog = document.querySelector('#dialog');
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format((n || 0) / 100);
@@ -349,7 +349,7 @@ function rememberWorkspaceView() {
 }
 async function enter() {
   sessionId = null; state = null; actor = null; root.innerHTML = '<main class="welcome"><p role="status">Loading your classroom…</p></main>';
-  const me = await api('/me'); user = me.user; sessions = me.sessions;
+  const me = await api('/me'); user = me.user; sessions = me.sessions; aiSettings = me.aiSettings || {defaultProvider:'',models:{}};
   const requested = new URL(location.href).searchParams.get('session')?.trim().toLowerCase();
   state = null; actor = null; preview = undefined; roster = null;
   if (!requested) { sessionId = null; if (user.role === 'instructor') { page = 'sessions'; renderAdminHome(); } else renderLobby(); return; }
@@ -407,7 +407,7 @@ function renderWelcome() {
   }
 }
 async function getFirebase() {
-  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=bf0482d7502e')).firebase;
+  if (!firebaseClient) firebaseClient = (await import('./src/firebase-client.mjs?v=6f29d502ed18')).firebase;
   return firebaseClient;
 }
 async function enterFirebase() {
@@ -473,7 +473,7 @@ async function testStudents() {
 }
 function testOwner() { return JSON.stringify([backend, firebaseClient?.user?.uid || user.id]); }
 async function savedTests(source) {
-  const client = (await import('./src/test-client.mjs?v=bf0482d7502e')).testClient();
+  const client = (await import('./src/test-client.mjs?v=6f29d502ed18')).testClient();
   let saved;
   try { saved = await client.call('list',{owner:testOwner(),source}); } finally { client.close(); }
   modal('Saved test sessions', '<p>Saved on this device in this browser profile. Clearing site data removes these tests. Each session retains its students, decisions and results. Open a session to resume or delete it.</p>' + (saved.length ? table(['Session','Hour','Students',''],saved.map(s => {
@@ -490,7 +490,7 @@ async function startTestSetup(id) {
     // The first modal closes before its next form is opened.
     setTimeout(() => modal('Assign test students', '<p>Each student belongs to exactly one company. Choose 1–20 students per company (60 total maximum).</p>' + Array.from({length:count}, (_,i) => `<div class="form-grid">${field('company-'+i,'Company '+(i+1),template.companyNames[i] || 'Company '+(i+1),'text','maxlength="60"')}${field('students-'+i,'Test students', i === 0 ? 2 : 1,'number','min="1" max="20"')}</div>`).join(''), async f => {
       const groups = Array.from({length:count},(_,i) => ({name:f.get('company-'+i),students:value(f,'students-'+i)}));
-      const client = (await import('./src/test-client.mjs?v=bf0482d7502e')).testClient();
+      const client = (await import('./src/test-client.mjs?v=6f29d502ed18')).testClient();
       try { await navigator.storage?.persist?.().catch(() => false); await client.create(template,groups,{owner:testOwner(),source:id}); await enterTest(client); } catch(e) {client.close();throw e;}
     }, 'Start test round'), 0);
   }, 'Choose students');
@@ -516,15 +516,27 @@ function pricingInventoryFields() {
 function costOverrides(form, prefix, fields) {
   return Object.fromEntries(fields.map(([id]) => [id, form.get(prefix + id)]).filter(([, raw]) => raw != null && raw !== '').map(([id, raw]) => [id, Math.round(Number(raw) * 100)]));
 }
+let aiSettings = {defaultProvider:'',models:{}};
+const providers = [['','Built-in practice opponent'],['openai','OpenAI'],['anthropic','Anthropic'],['google','Google Gemini'],['mistral','Mistral AI'],['xai','xAI'],['deepseek','DeepSeek'],['cohere','Cohere'],['moonshot','Moonshot AI'],['alibaba','Alibaba Cloud Qwen (US)'],['openrouter','OpenRouter · additional labs']];
+function providerFields(account = false) {
+  const provider = aiSettings.defaultProvider || (account ? 'openai' : '');
+  const model = aiSettings.models[provider];
+  return select('provider','AI provider',account ? providers.slice(1) : providers,provider) +
+    '<div data-provider-settings '+(provider?'':'hidden')+'><label>Provider API key<input name="providerKey" type="password" autocomplete="off" placeholder="'+(model?'Saved for your account':'Enter API key')+'"></label><button type="button" data-load-models>Load available models</button><label>Text-generation model<select name="providerModel">'+(model?'<option>'+esc(model)+'</option>':'')+'</select></label><p data-model-status role="status"></p></div>';
+}
+function aiSettingsPanel() {
+  if (health?.auth !== 'firebase') return '';
+  return '<details class="panel"><summary>Account AI settings</summary><form id="ai-settings-form"><p>Save one key per provider. Saving a provider and model makes them the default for your new sessions.</p>'+providerFields(true)+button('submit','Save as default','','primary')+'<button type="button" data-remove-provider>Remove selected saved key</button><div class="error" role="alert"></div></form></details>';
+}
 function phaseFields() {
   const modes = [['team','Independent team vs AI'],['class','Class competition with shared clock']];
-  const providers = [['','Built-in practice opponent'],['openai','OpenAI'],['anthropic','Anthropic'],['google','Google Gemini'],['mistral','Mistral AI'],['xai','xAI'],['deepseek','DeepSeek'],['cohere','Cohere'],['moonshot','Moonshot AI'],['alibaba','Alibaba Cloud Qwen (US)'],['openrouter','OpenRouter · additional labs']];
+
   return '<fieldset><legend>Phases and opponents</legend><p>Include the phases you plan to teach. Independent teams advance their own clock. The shared clock runs at the instructor’s pace.</p>' +
     defaultPhases.map(p => '<div class="form-grid">' + check('include-'+p.id,phaseNames[p.id],true) + select('mode-'+p.id,phaseNames[p.id]+' play mode',modes,p.mode) + '</div>').join('') +
     field('trainingHours','Training allowance (simulation hours)',48,'number','min="1" max="720"') +
     '<p data-phase-allocation aria-live="polite">Each of the four non-training phases receives 72 simulation hours, or 48 minutes at the default shared clock speed.</p>' + check('benchmark','Add a shared benchmark for non-training phases',false) +
     '<details><summary>Practice opponent model</summary><p>The built-in opponent acts every 8–16 simulation hours. A provider model can design the team profiles at setup. During play, each rival uses its assigned policy. Your key is used only for these setup requests.</p>' +
-    select('provider','AI provider',providers,'') + '<div data-provider-settings hidden><label>Provider API key<input name="providerKey" type="password" autocomplete="off" spellcheck="false"></label><button type="button" data-load-models>Load available models</button><label>Text-generation model<select name="providerModel"></select></label><p data-model-status role="status"></p></div></details></fieldset>';
+    providerFields() + '</details></fieldset>';
 }
 function updateAllocation(form) {
   const output = form?.querySelector('[data-phase-allocation]');
@@ -536,15 +548,25 @@ function updateAllocation(form) {
 }
 document.addEventListener('input', e => {
   const form = e.target.form;
-  if (!form?.querySelector('[data-phase-allocation]')) return;
+  if (!form?.querySelector('[data-provider-settings]')) return;
   updateAllocation(form);
   if (e.target.name === 'provider' || e.target.name === 'providerKey') {
     form.querySelector('[data-provider-settings]').hidden = !form.elements.provider.value;
-    form.elements.providerModel.replaceChildren();
+    if (e.target.name === 'provider') form.elements.providerKey.value = '';
+    const saved = aiSettings.models[form.elements.provider.value];
+    form.elements.providerKey.placeholder = saved ? 'Saved for your account' : 'Enter API key';
+    form.elements.providerModel.replaceChildren(...(saved ? [new Option(saved,saved)] : []));
     form.querySelector('[data-model-status]').textContent = '';
   }
 });
 async function loadProviderModels(e) {
+  const remove = e.target.closest('[data-remove-provider]');
+  if (remove) {
+    const provider=remove.form.elements.provider.value;
+    if (!aiSettings.models[provider] || !confirm('Remove this provider key from your account?')) return;
+    try { aiSettings=await api('/opponents/settings',{provider,remove:true});renderAdminHome();toast('Saved key removed.'); } catch(error){reportFormError(remove.form,error);}
+    return;
+  }
   const button = e.target.closest('[data-load-models]');
   if (!button) return;
   const form = button.form, provider = form.elements.provider.value, key = form.elements.providerKey.value;
@@ -611,7 +633,7 @@ function renderAdminHome() {
   stopSessionUpdates();
   const past = sessions.filter(s => ['completed', 'archived'].includes(s.status)), active = sessions.filter(s => !past.includes(s));
   const cards = list => list.map(s => `<article class="session-card"><div class="session-card-heading"><h3>${esc(s.name)}</h3><span class="badge session-status">${esc(s.status === 'completed' ? 'Closed' : s.status)}</span></div><p class="session-meta">Simulation hour ${number(s.hour)}</p><div class="session-actions" role="group" aria-label="Actions for ${esc(s.name)}">${sessionButton('open-session', 'Open', s.id, 'session-open')}${sessionButton('copy-session', 'Copy link', s.id)}${sessionButton('session-export', '↓ Export data', s.id, 'session-export')}${sessionButton('session-test', 'Test', s.id)}${s.status !== 'completed' ? sessionButton('session-close', 'Close', s.id) : ''}${sessionButton('session-delete', 'Delete', s.id, 'session-danger')}</div><div class="session-access">${sessionButton('session-codes', 'Company join codes ↗', s.id, 'session-access-button')}<small>Session ${esc(s.id)}</small></div></article>`).join('') || '<p class="empty">No sessions here yet.</p>';
-  root.innerHTML = `<div class="admin-home"><header class="admin-header">${brand}${accountControls(user)}</header><main id="content"><div class="page-heading"><div><p class="eyebrow">Instructor workspace</p><h1>Sustainable Supply Chain Management admin</h1><p>Manage your sessions and set up each learning task.</p>${button('saved-tests', 'Saved test sessions')}</div></div><div class="admin-columns"><aside><details class="panel"><summary>Create session</summary><form id="create-session-form">${createSessionFields()}${button('submit', 'Create session', '', 'primary')}<div class="error" role="alert"></div></form></details></aside><div><details class="panel" open><summary>Active sessions <span>${active.length} sessions</span></summary><p class="form-note">Open a session to manage your classroom. Paused sessions appear here too.</p>${active.length ? sessionButton('sessions-delete', 'Delete all active sessions', '', 'session-danger session-bulk') : ''}${cards(active)}</details><details class="panel"><summary>Past sessions <span>${past.length} sessions</span></summary>${cards(past)}</details></div></div></main></div>`;
+  root.innerHTML = `<div class="admin-home"><header class="admin-header">${brand}${accountControls(user)}</header><main id="content"><div class="page-heading"><div><p class="eyebrow">Instructor workspace</p><h1>Sustainable Supply Chain Management admin</h1><p>Manage your sessions and set up each learning task.</p>${button('saved-tests', 'Saved test sessions')}</div></div><div class="admin-columns"><aside>${aiSettingsPanel()}<details class="panel"><summary>Create session</summary><form id="create-session-form">${createSessionFields()}${button('submit', 'Create session', '', 'primary')}<div class="error" role="alert"></div></form></details></aside><div><details class="panel" open><summary>Active sessions <span>${active.length} sessions</span></summary><p class="form-note">Open a session to manage your classroom. Paused sessions appear here too.</p>${active.length ? sessionButton('sessions-delete', 'Delete all active sessions', '', 'session-danger session-bulk') : ''}${cards(active)}</details><details class="panel"><summary>Past sessions <span>${past.length} sessions</span></summary>${cards(past)}</details></div></div></main></div>`;
 }
 
 function renderLobby(error = '', requested = '', needsCompany = false) {
@@ -1874,7 +1896,7 @@ async function action(name, id) {
     return;
   }
   if (name === 'nav') { page = id; if (id === 'admin' && preview) { preview = undefined; await load(); } else render(); return; }
-  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=bf0482d7502e')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
+  if (name === 'solo') { solo = (await import('./src/solo.mjs?v=6f29d502ed18')).soloAdapter(); sessionId = 'solo'; page = 'overview'; preview = undefined; await load(); return; }
   if (name === 'switch-solo') { solo.switchRole(isTeacher() ? 'student' : 'instructor'); preview = undefined; page = isTeacher() ? 'overview' : 'admin'; await load(); return; }
   if (name === 'demo') { await signIn(await api('/demo', { username: id })); return; }
   if (name === 'logout') { if (!solo && token) { try { await api('/logout', {}); } catch {} } if (firebaseClient?.user) await firebaseClient.logout(); solo = null; state = null; actor = null; user = null; token = ''; sessionId = null; sessionStorage.removeItem('studio-token'); selectSession(null); renderWelcome(); return; }
@@ -1997,6 +2019,10 @@ document.addEventListener('submit', async event => {
       if (result.requiresCompanyCode) { renderLobby('', requested, true); return; }
       selectSession(result.sessionId); await enter();
     }
+    if (form.id === 'ai-settings-form') {
+      aiSettings=await api('/opponents/settings',{provider:f.get('provider'),model:f.get('providerModel'),key:f.get('providerKey')});
+      renderAdminHome();toast('Account AI settings saved.');
+    }
     if (form.id === 'create-session-form') await createClassroom(f);
     if (form.id === 'login-form') await signIn(await api('/login', Object.fromEntries(f)));
     if (form.id === 'register-form') await signIn(await api('/register', Object.fromEntries(f)));
@@ -2053,7 +2079,7 @@ document.addEventListener('change', async event => {
 async function startWorkspace() {
   if (location.hash?.startsWith('#test=')) {
     const testLink = new URLSearchParams(location.hash.slice(1));
-    try { const client = (await import('./src/test-client.mjs?v=bf0482d7502e')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
+    try { const client = (await import('./src/test-client.mjs?v=6f29d502ed18')).testClient({roomId:testLink.get('test'),key:testLink.get('key')}); await enterTest(client); }
     catch(e) { root.innerHTML = '<main class="welcome"><h1>Test round unavailable</h1><p>' + esc(e.message) + '</p><div class="toolbar">' + (e.status === 403 ? button('retry-start', 'Try again', '', 'primary') : '') + button('test-leave','Return to classroom') + '</div></main>'; }
     return;
   }

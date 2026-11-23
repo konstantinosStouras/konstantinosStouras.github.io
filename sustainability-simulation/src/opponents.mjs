@@ -1,4 +1,4 @@
-import { purchase, dispatch } from './engine.mjs?v=bf0482d7502e';
+import { purchase, dispatch } from './engine.mjs?v=6f29d502ed18';
 
 export function appeal(s, market, c, offer) {
   const footprint = c.inventory.panel.qty ? c.inventory.panel.carbon / c.inventory.panel.qty : 75;
