@@ -1,4 +1,4 @@
-import { itemName } from './engine.mjs?v=fe5c389c14ff';
+import { itemName } from './engine.mjs?v=78dc8abdd5d4';
 // Original reports derived from the authorized company view. Never infer or
 // expose competitors' private orders, customers, contracts or purchase records.
 export const operationalReports = {
