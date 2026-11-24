@@ -180,3 +180,8 @@
 	path = platform
 	url = https://github.com/konstantinosStouras/platform.git
 	branch = main
+
+[submodule "ai-tutor"]
+	path = ai-tutor
+	url = https://github.com/konstantinosStouras/ai-tutor.git
+	branch = main

@@ -6,6 +6,15 @@
   },
   "projects": [
     {
+      "name": "ai-tutor",
+      "path": "ai-tutor",
+      "url": "https://github.com/konstantinosStouras/ai-tutor.git",
+      "branch": "main",
+      "kind": "website",
+      "publishes": true,
+      "checkDeployment": false
+    },
+    {
       "name": "wearwell",
       "path": "wearwell",
       "url": "https://github.com/konstantinosStouras/wearwell.git",
