@@ -32,6 +32,10 @@
 
     <script>
       var path = window.location.pathname;
+      var tutorLink = /^\/ai-tutor\/([a-z0-9][a-z0-9_-]{0,63})\/?$/i.exec(path);
+      if (tutorLink) {
+        window.location.replace('/ai-tutor/?student=' + encodeURIComponent(tutorLink[1].toLowerCase()) + window.location.hash);
+      }
       // UCD blog (/ucd-blog/, repo konstantinosStouras/blog-posting) uses clean
       // URLs with no server: a deep link such as /ucd-blog/blog/project-management
       // has no file of its own, so it arrives here. Hand the address to the app
