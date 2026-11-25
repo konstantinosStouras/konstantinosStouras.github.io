@@ -29,9 +29,8 @@ on:
       # emit-db) is run over the committed INFORMS papers files, and the check
       # pins that every consumer loads that one file
       - 'lit/_scraper/abstract-display-selftest.mjs'
-      - 'lit/lit-abstract.js'
-      - 'lit/lit-news.js'
-      - 'lit/lit-acct-nav.js'
+      - 'lit/*.css'
+      - 'lit/*.js'
       # share-check.mjs measures the real pixels of every og:image against the
       # numbers the pages declare, so a card regenerated at a new size has to
       # run the checks even when no HTML moved.
@@ -57,9 +56,8 @@ on:
       - 'lit/_firestore.rules'
       - 'lit/_scraper/users-selftest.mjs'
       - 'lit/_scraper/abstract-display-selftest.mjs'
-      - 'lit/lit-abstract.js'
-      - 'lit/lit-news.js'
-      - 'lit/lit-acct-nav.js'
+      - 'lit/*.css'
+      - 'lit/*.js'
       - 'images/**'
       - 'robots.txt'
       - 'fun/capitals/**'
@@ -170,3 +168,8 @@ jobs:
       # another. Text checks only here; the browser half runs locally.
       - name: The shared account widget is the same in every page
         run: node tools/account-widget-guard.mjs --static
+
+      - name: Desktop and mobile dropdowns cover the sort control and filters
+        run: |
+          npm install --prefix "$RUNNER_TEMP/lit-menu-test" --no-save --ignore-scripts --no-audit --no-fund playwright-core@1.65.0
+          NODE_PATH="$RUNNER_TEMP/lit-menu-test/node_modules" node --test tools/lit-menu-overlay-test.cjs
