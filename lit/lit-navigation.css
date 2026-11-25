@@ -1,5 +1,6 @@
 /* Shared site navigation. Research workspaces keep their existing styles. */
-.header.lit-shared-header { position:relative; background:linear-gradient(110deg,#7d1d3f,#591428); color:#fff; }
+/* Keep both navigation menus above search controls (100–200) and below dialogs (1000). */
+.header.lit-shared-header { position:relative; z-index:300; background:linear-gradient(110deg,#7d1d3f,#591428); color:#fff; }
 .header.lit-shared-header .header-inner { position:static; max-width:1280px; width:100%; margin:0 auto; padding:20px 32px; display:flex; flex-direction:row; align-items:center; justify-content:space-between; flex-wrap:nowrap; gap:24px; }
 .header.lit-shared-header .lit-brand { display:inline-flex; flex:none; align-items:baseline; gap:7px; font:400 34px/1.2 'Fraunces',Georgia,serif; letter-spacing:-.8px; color:#fff; text-decoration:none; white-space:nowrap; }
 .header.lit-shared-header .lit-brand em { color:#d9b867; font-weight:400; }

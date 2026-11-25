@@ -5,7 +5,7 @@
   if (menu) {
     document.addEventListener('click', function (event) {
       if (!menu.contains(event.target)) menu.open = false;
-    });
+    }, true); // The account toggle stops bubbling after it opens its own menu.
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && menu.open) {
         menu.open = false;
