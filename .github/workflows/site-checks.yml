@@ -169,7 +169,7 @@ jobs:
       - name: The shared account widget is the same in every page
         run: node tools/account-widget-guard.mjs --static
 
-      - name: Desktop and mobile dropdowns cover the sort control and filters
+      - name: Account and Resources menus cover page content throughout The Lit on desktop and mobile
         run: |
           npm install --prefix "$RUNNER_TEMP/lit-menu-test" --no-save --ignore-scripts --no-audit --no-fund playwright-core@1.65.0
           NODE_PATH="$RUNNER_TEMP/lit-menu-test/node_modules" node --test tools/lit-menu-overlay-test.cjs

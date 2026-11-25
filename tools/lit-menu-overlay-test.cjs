@@ -4,31 +4,45 @@ const path = require('node:path');
 const { before, after, test } = require('node:test');
 const { chromium } = require('playwright-core');
 
-const browse = 'http://lit.test/lit/';
+const base = 'http://lit.test/lit/';
+const routes = ['', 'analytics/', 'about/', 'feedback/', 'use-cases/', 'whats-new/', 'privacy/', 'admin/website-analytics/'];
 const root = path.join(__dirname, '..', 'lit');
 
-// Load the actual Browse page and its local assets. A signed-in fixture exercises
+// Load the requested production page and its local assets. A signed-in fixture exercises
 // the full account menu without contacting Firebase or downloading the catalogue.
-async function loadBrowse(page) {
+async function loadPage(page, directory) {
+  const address = new URL(directory, base);
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
-    if (url.href === browse) return route.fulfill({ path: path.join(root, 'index.html'), contentType: 'text/html' });
-    if (url.origin === new URL(browse).origin && /^\/lit\/[\w-]+\.(js|css)$/.test(url.pathname)) {
+    if (url.href === address.href) {
+      return route.fulfill({ path: path.join(root, directory, 'index.html'), contentType: 'text/html' });
+    }
+    if (url.origin === address.origin && url.pathname === '/lit/analytics/data.json') {
+      return route.fulfill({ json: { journals: [], types: [] } });
+    }
+    if (url.origin === address.origin && /^\/lit\/[\w-]+\.(js|css)$/.test(url.pathname)) {
       return route.fulfill({ path: path.join(root, path.basename(url.pathname)) });
     }
     return route.abort();
   });
-  await page.addInitScript(() => {
+  await page.addInitScript(isAdmin => {
     const user = { uid: 'menu-fixture', email: 'reader@example.org', displayName: 'Literature Reader' };
+    if (isAdmin) Object.assign(user, { email: 'kstouras@gmail.com', emailVerified: true });
     localStorage.setItem('litProfHint', JSON.stringify({ u: user.uid, ol: true, n: user.displayName, pc: 3 }));
     const auth = { onAuthStateChanged: callback => setTimeout(() => callback(user), 0) };
-    const ref = {
-      doc: () => ref, collection: () => ref, onSnapshot: () => () => {},
-      get: async () => ({ exists: false }), set: async () => {}
+    const profileSnapshot = {
+      exists: true, data: () => ({ orcid: 'fixture', orcidLinked: true, myPubCount: 3, savedCount: 0, alertCount: 0 })
     };
-    window.firebase = { initializeApp: () => ({}), auth: () => auth, firestore: () => ref };
-  });
-  await page.goto(browse);
+    const ref = {
+      doc: id => id === 'main' ? { ...ref, get: async () => profileSnapshot } : ref,
+      collection: () => ref, onSnapshot: () => () => {},
+      get: async () => ({ exists: false, docs: [], size: 0 }), set: async () => {}
+    };
+    window.firebase = { apps: [{}], app: () => ({}), initializeApp: () => ({}), auth: () => auth, firestore: () => ref };
+  }, directory === 'admin/website-analytics/');
+  await page.goto(address.href);
+  if (directory === 'analytics/') await page.locator('#app').waitFor();
+  if (directory === 'admin/website-analytics/') await page.locator('#usagePanel').waitFor();
 }
 
 // Check real hit targets inside the visible intersection. A missing intersection
@@ -55,9 +69,7 @@ async function assertMenuOnTop(page, menu, control) {
   assert.equal(result, 'menu', `${page.viewportSize().width}px: ${menu} over ${control}: ${result}`);
 }
 
-async function checkMenu(page, trigger, menu, desktop) {
-  await page.locator(trigger).click();
-  await page.locator(menu).waitFor();
+async function checkBrowseControls(page, menu, desktop) {
   // The ordinary Browse form already intersects both menus. Check every
   // visible input or trigger in that region at its unmodified position.
   const filters = await page.locator('.filters-bar input[id], .filters-bar .custom-select[id]').evaluateAll((nodes, menu) => {
@@ -71,7 +83,7 @@ async function checkMenu(page, trigger, menu, desktop) {
   assert.ok(filters.length, `Expected Browse filters under ${menu} at ${page.viewportSize().width}px`);
   for (const filter of filters) await assertMenuOnTop(page, menu, filter);
 
-  if (desktop && menu === '#acctMenu.open') {
+  if (desktop && menu === '.acct-menu.open') {
     // Reproduce the original Browse layout before adjusting any geometry.
     await assertMenuOnTop(page, menu, '#sortBy');
   }
@@ -108,19 +120,40 @@ before(async () => { browser = await chromium.launch({ channel: 'chrome' }); });
 after(async () => { await browser?.close(); });
 
 for (const [device, viewport] of [['desktop', { width: 1450, height: 800 }], ['mobile', { width: 390, height: 844 }]]) {
-  for (const [name, trigger, menu] of [
-    ['Account', '.acct-user', '#acctMenu.open'],
-    ['Resources', '.lit-site-nav summary', 'details[open] .lit-resource-links']
-  ]) {
-    test(`${device}: ${name} covers the Year sort control and Browse filters`, async () => {
-      const mobile = device === 'mobile';
-      const page = await browser.newPage({ viewport, isMobile: mobile, hasTouch: mobile });
-      try {
-        await loadBrowse(page);
-        await checkMenu(page, trigger, menu, !mobile);
-      } finally {
-        await page.close();
-      }
-    });
+  const mobile = device === 'mobile';
+  for (const directory of routes) {
+    for (const [name, trigger, menu, itemSelector] of [
+      ['Account', '.acct-user', '.acct-menu.open', '.acct-menu-item'],
+      ['Resources', '.lit-site-nav summary', 'details[open] .lit-resource-links', 'a']
+    ]) {
+      test(`${device} /lit/${directory} — ${name} menu covers page content`, async () => {
+        const page = await browser.newPage({ viewport, isMobile: mobile, hasTouch: mobile });
+        page.setDefaultTimeout(5000);
+        try {
+          await loadPage(page, directory);
+          const toggle = page.locator(trigger);
+          if (mobile) await toggle.tap();
+          else await toggle.click();
+          const panel = page.locator(menu);
+          await panel.waitFor();
+
+          if (directory) {
+            await assertMenuOnTop(page, menu, directory === 'analytics/' ? '.wrap' : 'main');
+          } else {
+            await checkBrowseControls(page, menu, !mobile);
+          }
+          // Trial interactions check that even items requiring scrolling can
+          // receive a pointer or touch event without activating their actions.
+          const items = await panel.locator(itemSelector).all();
+          assert.ok(items.length, `Expected actions in the ${name} menu`);
+          for (const item of items) {
+            if (mobile) await item.tap({ trial: true });
+            else await item.click({ trial: true });
+          }
+        } finally {
+          await page.close();
+        }
+      });
+    }
   }
 }
