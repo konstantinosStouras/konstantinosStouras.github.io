@@ -678,5 +678,44 @@
     ],
     "publisher": "Wiley",
     "aia": true
+  },
+  {
+    "key": "jpsp",
+    "name": "Journal of Personality and Social Psychology",
+    "short": "JPSP",
+    "issns": [
+      "0022-3514",
+      "1939-1315"
+    ],
+    "publisher": "American Psychological Association",
+    "aia": true,
+    "notFT": true,
+    "addedBy": "abs4-extra"
+  },
+  {
+    "key": "jesp",
+    "name": "Journal of Experimental Social Psychology",
+    "short": "JESP",
+    "issns": [
+      "0022-1031",
+      "1096-0465"
+    ],
+    "publisher": "Elsevier",
+    "aia": true,
+    "notFT": true,
+    "addedBy": "abs4-extra"
+  },
+  {
+    "key": "jepa",
+    "name": "Journal of Experimental Psychology: Applied",
+    "short": "JEP: Applied",
+    "issns": [
+      "1076-898X",
+      "1939-2192"
+    ],
+    "publisher": "American Psychological Association",
+    "aia": true,
+    "notFT": true,
+    "addedBy": "abs4-extra"
   }
 ]
